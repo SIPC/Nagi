@@ -9,3 +9,7 @@ plugins:
   - local: protoc-gen-connect-go
     out: internal/proto
     opt: paths=source_relative
+  - local: [node, web/node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es]
+    out: web/src/gen
+    opt:
+      - target=ts

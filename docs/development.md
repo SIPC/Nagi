@@ -65,6 +65,29 @@ web/                  前端
 - Tailwind + shadcn/ui，支持深浅色，适配移动端
 - 接口客户端由 buf 从 proto 生成
 
+## 本地开发
+
+需要 Go、Node.js + pnpm、Docker（含 compose 插件）。
+
+```bash
+# 生成 proto 代码（Go 与 TypeScript），需要先 go install buf 和 protoc-gen-go / -go-grpc / -connect-go
+buf generate
+
+# 生成数据库代码（用 Docker 运行 sqlc，不需要本地安装）
+docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc generate
+
+# 构建前端，产物会被打包进二进制
+pnpm -C web install && pnpm -C web build
+
+# 构建并运行（单机：面板 + 内嵌节点）
+go build -o bin/nagi ./cmd/nagi
+./bin/nagi server --data-dir .nagi-dev --port 28443
+```
+
+前端开发时可以用 `pnpm -C web dev`，它会把接口请求转发到 `https://127.0.0.1:28443`（可用 `NAGI_PANEL` 环境变量修改），浏览器打开 `http://localhost:5173`。
+
+**当前前端只是用来测试后端的临时界面，之后会重写。**
+
 ## 第 1 步的完成标准
 
 **目标：单机跑通一条完整链路。** 每一层都有最简实现，之后每一步往里填。

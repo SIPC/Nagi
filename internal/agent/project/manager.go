@@ -33,6 +33,16 @@ var (
 	ErrConflict        = errors.New("项目已被其他人修改，请刷新后重试")
 )
 
+// invalidError 是参数错误：errors.Is 能识别为 ErrInvalidArgument，但消息只包含具体原因。
+type invalidError struct{ msg string }
+
+func (e invalidError) Error() string        { return e.msg }
+func (e invalidError) Is(target error) bool { return target == ErrInvalidArgument }
+
+func invalid(format string, args ...any) error {
+	return invalidError{msg: fmt.Sprintf(format, args...)}
+}
+
 // DefaultSubnetPool 是节点本地的容器网段池，每个项目分一个 /26。
 const DefaultSubnetPool = "10.200.0.0/16"
 
@@ -111,10 +121,10 @@ const (
 func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*nagiv1.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > 64 {
-		return nil, fmt.Errorf("%w：项目名不能为空，且不超过 64 个字符", ErrInvalidArgument)
+		return nil, invalid("项目名不能为空，且不超过 64 个字符")
 	}
 	if strings.TrimSpace(composeText) == "" {
-		return nil, fmt.Errorf("%w：compose 不能为空", ErrInvalidArgument)
+		return nil, invalid("compose 不能为空")
 	}
 	dir, err := m.checkDir(ctx, dir)
 	if err != nil {
@@ -146,7 +156,7 @@ func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*n
 	}
 	if _, err := load(ctx, p, composeProjectName(id)); err != nil {
 		cleanup()
-		return nil, fmt.Errorf("%w：compose 无法解析：%v", ErrInvalidArgument, err)
+		return nil, invalid("compose 无法解析：%v", err)
 	}
 
 	subnet, err := m.allocateSubnet(ctx)
@@ -195,14 +205,14 @@ func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*n
 func (m *Manager) checkDir(ctx context.Context, dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" || !filepath.IsAbs(dir) {
-		return "", fmt.Errorf("%w：项目目录必须是绝对路径", ErrInvalidArgument)
+		return "", invalid("项目目录必须是绝对路径")
 	}
 	dir = filepath.Clean(dir)
 	if dir == filepath.Dir(dir) {
-		return "", fmt.Errorf("%w：不能使用根目录作为项目目录", ErrInvalidArgument)
+		return "", invalid("不能使用根目录作为项目目录")
 	}
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return "", fmt.Errorf("%w：目录 %s 已存在且不为空", ErrInvalidArgument, dir)
+		return "", invalid("目录 %s 已存在且不为空", dir)
 	}
 	existing, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
@@ -210,7 +220,7 @@ func (m *Manager) checkDir(ctx context.Context, dir string) (string, error) {
 	}
 	for _, e := range existing {
 		if within(dir, e.Dir) || within(e.Dir, dir) {
-			return "", fmt.Errorf("%w：目录和已有项目的目录 %s 重叠", ErrInvalidArgument, e.Dir)
+			return "", invalid("目录和已有项目的目录 %s 重叠", e.Dir)
 		}
 	}
 	return dir, nil
@@ -225,11 +235,15 @@ func within(child, parent string) bool {
 	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
 }
 
-// allocateSubnet 从容器网段池里找第一个没用过的 /26。
+// allocateSubnet 从容器网段池里找第一个没用过、也不和 Docker 现有网络重叠的 /26。
 func (m *Manager) allocateSubnet(ctx context.Context) (string, error) {
 	used, err := m.nodeQ.ListSubnets(ctx)
 	if err != nil {
 		return "", err
+	}
+	existing, err := m.docker.NetworkSubnets(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取 Docker 网络: %w", err)
 	}
 	taken := make(map[string]bool, len(used))
 	for _, s := range used {
@@ -242,12 +256,22 @@ func (m *Manager) allocateSubnet(ctx context.Context) (string, error) {
 	for i := uint32(0); i < count; i++ {
 		v := start + i*size
 		addr := netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
-		s := netip.PrefixFrom(addr, projectSubnetBits).String()
-		if !taken[s] {
-			return s, nil
+		p := netip.PrefixFrom(addr, projectSubnetBits)
+		if taken[p.String()] || overlapsAny(p, existing) {
+			continue
 		}
+		return p.String(), nil
 	}
 	return "", fmt.Errorf("容器网段池 %s 已用完", m.pool)
+}
+
+func overlapsAny(p netip.Prefix, list []netip.Prefix) bool {
+	for _, q := range list {
+		if p.Overlaps(q) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- 读取 ----

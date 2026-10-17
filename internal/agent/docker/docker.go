@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,6 +47,23 @@ func (d *Client) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return v.Version, nil
+}
+
+// NetworkSubnets 返回 Docker 里所有网络已占用的网段，分配项目网段时要避开。
+func (d *Client) NetworkSubnets(ctx context.Context) ([]netip.Prefix, error) {
+	list, err := d.c.NetworkList(ctx, client.NetworkListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var out []netip.Prefix
+	for _, n := range list.Items {
+		for _, c := range n.IPAM.Config {
+			if c.Subnet.IsValid() {
+				out = append(out, c.Subnet)
+			}
+		}
+	}
+	return out, nil
 }
 
 // Container 是一个 compose 服务对应的容器。

@@ -1,0 +1,274 @@
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
+import { errorMessage, projectClient, toDate } from "@/lib/api";
+import { cn, timeAgo } from "@/lib/utils";
+import { PageHeader } from "@/pages/layout";
+import { ProjectState, ServiceState } from "@/components/status";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select, Spinner } from "@/components/ui";
+
+export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: string }) {
+  const project = useQuery({
+    queryKey: ["project", nodeId, projectId],
+    queryFn: () => projectClient.getNodeProject({ nodeId, projectId }),
+    refetchInterval: 5000,
+  });
+
+  if (project.isPending) return <Spinner />;
+  if (project.error) {
+    return (
+      <>
+        <BackLink />
+        <Alert>{errorMessage(project.error)}</Alert>
+      </>
+    );
+  }
+  const p = project.data.project?.project;
+  const services = project.data.project?.status?.services ?? [];
+  if (!p) return null;
+
+  return (
+    <>
+      <BackLink />
+      <PageHeader
+        title={
+          <span className="flex items-center gap-3">
+            {p.name}
+            <ProjectState services={services} deployed={p.deployedVersion > 0n} />
+          </span>
+        }
+        description={
+          <span className="font-mono text-xs">
+            {p.dir} · 版本 {p.latestVersion.toString()}
+            {p.deployedVersion > 0n ? `（已部署 ${p.deployedVersion}）` : "（尚未部署）"} · 创建于 {timeAgo(toDate(p.createdAt))}
+          </span>
+        }
+      />
+
+      <div className="grid gap-6">
+        <DeployCard nodeId={nodeId} projectId={projectId} revision={p.revision} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>服务</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="py-2 pr-4 font-medium">服务</th>
+                    <th className="py-2 pr-4 font-medium">状态</th>
+                    <th className="py-2 pr-4 font-medium">镜像</th>
+                    <th className="py-2 font-medium">详情</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {services.map((s) => (
+                    <tr key={s.name + s.containerId} className="border-b last:border-0">
+                      <td className="py-2.5 pr-4 font-medium">{s.name}</td>
+                      <td className="py-2.5 pr-4">
+                        <ServiceState service={s} />
+                      </td>
+                      <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">{s.image}</td>
+                      <td className="py-2.5 text-xs text-muted-foreground">{s.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <LogsCard
+          nodeId={nodeId}
+          projectId={projectId}
+          services={services.map((s) => s.name)}
+          containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
+        />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>compose</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="overflow-x-auto rounded-md bg-muted p-4 font-mono text-[13px] leading-relaxed">{p.compose}</pre>
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link to="/projects" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <ArrowLeft className="size-4" />
+      所有项目
+    </Link>
+  );
+}
+
+type DeployState = { running: boolean; lines: string[]; result?: { success: boolean; error: string } };
+
+function DeployCard({ nodeId, projectId, revision }: { nodeId: string; projectId: string; revision: bigint }) {
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<DeployState>({ running: false, lines: [] });
+  const outRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    outRef.current?.scrollTo({ top: outRef.current.scrollHeight });
+  }, [state.lines.length]);
+
+  const deploy = async () => {
+    setState({ running: true, lines: [] });
+    try {
+      for await (const ev of projectClient.deployNodeProject({ nodeId, projectId, baseRevision: revision })) {
+        if (ev.event.case === "output") {
+          const line = ev.event.value;
+          setState((s) => ({ ...s, lines: [...s.lines, line] }));
+        } else if (ev.event.case === "result") {
+          const r = ev.event.value;
+          setState((s) => ({ ...s, result: { success: r.success, error: r.error } }));
+        }
+      }
+    } catch (err) {
+      setState((s) => ({ ...s, result: { success: false, error: errorMessage(err) } }));
+    } finally {
+      setState((s) => ({ ...s, running: false }));
+      queryClient.invalidateQueries({ queryKey: ["project", nodeId, projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-4">
+        <div className="grid gap-1">
+          <CardTitle>部署</CardTitle>
+          <p className="text-sm text-muted-foreground">按当前版本执行 docker compose up。</p>
+        </div>
+        <Button onClick={deploy} disabled={state.running}>
+          {state.running ? <Spinner /> : <Rocket />}
+          {state.running ? "部署中" : "部署"}
+        </Button>
+      </CardHeader>
+      {(state.lines.length > 0 || state.result) && (
+        <CardContent className="grid gap-3">
+          {state.result &&
+            (state.result.success ? (
+              <Badge tone="success" dot className="w-fit">
+                部署成功
+              </Badge>
+            ) : (
+              <Alert>{state.result.error || "部署失败"}</Alert>
+            ))}
+          {state.lines.length > 0 && (
+            <pre
+              ref={outRef}
+              className="max-h-72 overflow-auto rounded-md bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-200"
+            >
+              {state.lines.join("\n")}
+            </pre>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+type Line = { key: number; service: string; stream: string; text: string };
+
+const maxLines = 2000;
+
+function LogsCard({
+  nodeId,
+  projectId,
+  services,
+  containers,
+}: {
+  nodeId: string;
+  projectId: string;
+  services: string[];
+  containers: string;
+}) {
+  const [service, setService] = useState("");
+  const [lines, setLines] = useState<Line[]>([]);
+  const [error, setError] = useState("");
+  const boxRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    let n = 0;
+    setLines([]);
+    setError("");
+    (async () => {
+      try {
+        const stream = projectClient.streamNodeProjectLogs(
+          { nodeId, projectId, service, tail: 200, follow: true },
+          { signal: abort.signal },
+        );
+        for await (const l of stream) {
+          const line = { key: n++, service: l.service, stream: l.stream, text: l.text };
+          setLines((prev) => {
+            const next = prev.length >= maxLines ? prev.slice(prev.length - maxLines + 1) : prev.slice();
+            next.push(line);
+            return next;
+          });
+        }
+      } catch (err) {
+        if (!abort.signal.aborted) setError(errorMessage(err));
+      }
+    })();
+    return () => abort.abort();
+    // 容器变化（例如部署后容器被重建）时重新订阅。
+  }, [nodeId, projectId, service, containers]);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (box && stick.current) box.scrollTop = box.scrollHeight;
+  }, [lines]);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-4">
+        <CardTitle className="flex items-center gap-2">
+          <ScrollText className="size-4" />
+          日志
+        </CardTitle>
+        <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40">
+          <option value="">全部服务</option>
+          {services.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      </CardHeader>
+      <CardContent>
+        {error && <Alert className="mb-3">{error}</Alert>}
+        <div
+          ref={boxRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+          className="h-96 overflow-auto rounded-md bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-200"
+        >
+          {lines.length === 0 ? (
+            <span className="text-zinc-500">暂无日志</span>
+          ) : (
+            lines.map((l) => (
+              <div key={l.key} className="whitespace-pre-wrap break-all">
+                {!service && <span className="mr-2 text-sky-400">{l.service}</span>}
+                <span className={cn(l.stream === "stderr" && "text-amber-200")}>{l.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
