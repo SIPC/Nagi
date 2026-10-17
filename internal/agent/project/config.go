@@ -129,7 +129,8 @@ func volumeName(target string, used map[string]bool) string {
 	return name
 }
 
-// validate 校验配置：compose 能解析、变量名合法、服务级变量对应的服务存在。
+// validate 校验配置：compose 能解析、变量名合法、服务级变量对应的服务存在、开放设置有效。
+// 会把 compose 里的 ports 补进 cfg.Exposures。
 func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composeProject string) (*types.Project, error) {
 	text, err := composeText(cfg)
 	if err != nil {
@@ -154,6 +155,11 @@ func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composePr
 		if _, ok := proj.Services[name]; !ok {
 			return nil, invalid("服务级环境变量里的服务 %q 不在 compose 中", name)
 		}
+	}
+	// compose 里的 ports 自动转成开放设置，写回配置里，界面上能看到并修改。
+	cfg.Exposures = materializeExposures(proj, cfg)
+	if err := checkExposures(proj, cfg.Exposures); err != nil {
+		return nil, err
 	}
 	return proj, nil
 }

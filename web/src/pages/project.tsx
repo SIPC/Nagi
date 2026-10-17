@@ -290,6 +290,20 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
     Object.fromEntries(services.map((s) => [s, envToText(base?.serviceEnv[s]?.vars)])),
   );
   const [formEnv, setFormEnv] = useState(envToText(base?.form?.env));
+  const [exposures, setExposures] = useState(() =>
+    JSON.stringify(
+      (base?.exposures ?? []).map((e) => ({
+        service: e.service,
+        target: e.target,
+        protocol: e.protocol,
+        ...(e.published ? { published: e.published } : {}),
+        ...(e.domains.length ? { domains: e.domains } : {}),
+        ...(e.httpOnly ? { httpOnly: true } : {}),
+      })),
+      null,
+      2,
+    ),
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -301,16 +315,25 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
   const save = async () => {
     setBusy(true);
     setError("");
+    let parsedExposures: { service: string; target: number; protocol: string; published?: number; domains?: string[]; httpOnly?: boolean }[];
+    try {
+      parsedExposures = JSON.parse(exposures || "[]");
+    } catch {
+      setError("开放设置不是有效的 JSON");
+      setBusy(false);
+      return;
+    }
     try {
       await projectClient.saveNodeProjectDraft({
         nodeId,
         projectId: project.id,
         baseRevision: project.revision,
         config: isForm
-          ? { env: textToEnv(env), form: { ...base!.form!, env: textToEnv(formEnv) } }
+          ? { env: textToEnv(env), form: { ...base!.form!, env: textToEnv(formEnv) }, exposures: parsedExposures }
           : {
               compose,
               env: textToEnv(env),
+              exposures: parsedExposures,
               serviceEnv: Object.fromEntries(
                 Object.entries(serviceEnv)
                   .map(([s, t]) => [s, { vars: textToEnv(t) }] as const)
@@ -375,6 +398,12 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
             />
           </div>
         )}
+        <div className="grid gap-1.5">
+          <span className="text-sm font-medium">
+            对外开放（JSON）：protocol 为 http / tcp / udp；http 可填 domains（经 80/443，自动证书），或填 published 端口；httpOnly 表示不申请证书
+          </span>
+          <Textarea value={exposures} onChange={(e) => setExposures(e.target.value)} spellCheck={false} className="min-h-32 font-mono text-[13px]" />
+        </div>
         <div className="grid gap-1.5">
           <span className="text-sm font-medium">项目级变量（替换 compose 里的 ${"{变量}"}，KEY=VALUE 每行一个）</span>
           <Textarea value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />

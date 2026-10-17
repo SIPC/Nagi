@@ -74,6 +74,8 @@ type Container struct {
 	State   string
 	Status  string
 	Health  string
+	// IPs 是容器在各个网络里的地址，键是网络名。
+	IPs map[string]netip.Addr
 }
 
 // ProjectContainers 列出某个 compose 项目的全部容器（包括已停止的）。
@@ -87,6 +89,14 @@ func (d *Client) ProjectContainers(ctx context.Context, composeProject string) (
 	}
 	out := make([]Container, 0, len(list.Items))
 	for _, c := range list.Items {
+		ips := map[string]netip.Addr{}
+		if c.NetworkSettings != nil {
+			for name, ep := range c.NetworkSettings.Networks {
+				if ep != nil && ep.IPAddress.IsValid() {
+					ips[name] = ep.IPAddress
+				}
+			}
+		}
 		out = append(out, Container{
 			ID:      c.ID,
 			Service: c.Labels[labelService],
@@ -94,6 +104,7 @@ func (d *Client) ProjectContainers(ctx context.Context, composeProject string) (
 			State:   string(c.State),
 			Status:  c.Status,
 			Health:  health(c.Health),
+			IPs:     ips,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })

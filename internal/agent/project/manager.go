@@ -127,6 +127,9 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 	if _, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id)); err != nil {
 		return nil, err
 	}
+	if err := m.checkConflicts(ctx, id, cfg.GetExposures()); err != nil {
+		return nil, err
+	}
 	subnet, err := m.allocateSubnet(ctx)
 	if err != nil {
 		return nil, err
@@ -389,6 +392,9 @@ func (m *Manager) SaveDraft(ctx context.Context, id string, baseRevision int64, 
 	if _, err := validate(ctx, cfg, paths{root: row.Dir}.dataDir(), composeProjectName(id)); err != nil {
 		return nil, err
 	}
+	if err := m.checkConflicts(ctx, id, cfg.GetExposures()); err != nil {
+		return nil, err
+	}
 	if err := pdb.setDraft(ctx, cfg); err != nil {
 		return nil, err
 	}
@@ -479,6 +485,9 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onL
 		DeployedAt: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, Version: version,
 	}); err != nil {
 		return version, err
+	}
+	for _, e := range cfg.GetExposures() {
+		onLine("对外开放：" + exposureLabel(e))
 	}
 	return version, pdb.setMeta(ctx, metaDeployedVersion, strconv.FormatInt(version, 10))
 }

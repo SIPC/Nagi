@@ -83,6 +83,20 @@ func (p *projectDB) latest(ctx context.Context) (*nagiv1.ProjectConfig, int64, e
 	return cfg, v.Version, nil
 }
 
+// deployed 返回最近一次部署的版本的配置；从未部署时返回 nil。
+func (p *projectDB) deployed(ctx context.Context) (*nagiv1.ProjectConfig, error) {
+	n, _ := strconv.ParseInt(p.meta(ctx, metaDeployedVersion), 10, 64)
+	if n == 0 {
+		return nil, nil
+	}
+	v, err := p.q.GetVersion(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	cfg := &nagiv1.ProjectConfig{}
+	return cfg, proto.Unmarshal(v.Config, cfg)
+}
+
 // draft 返回草稿；没有草稿时返回 nil。
 func (p *projectDB) draft(ctx context.Context) (*nagiv1.ProjectConfig, error) {
 	d, err := p.q.GetDraft(ctx)

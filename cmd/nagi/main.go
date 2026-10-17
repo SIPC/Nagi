@@ -42,6 +42,7 @@ func serverCmd() *cobra.Command {
 		dataDir string
 		port    int
 		noAgent bool
+		noProxy bool
 	)
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -64,7 +65,7 @@ func serverCmd() *cobra.Command {
 			go func() { errc <- srv.Run(ctx) }()
 
 			if !noAgent {
-				go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, log) }()
+				go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, noProxy, log) }()
 			}
 
 			err = <-errc
@@ -78,18 +79,20 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录")
 	cmd.Flags().IntVar(&port, "port", 0, "面板端口（默认首次启动时随机选择并记住）")
 	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "只运行面板，不启动内嵌节点")
+	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
 	return cmd
 }
 
 // runEmbeddedAgent 启动面板自带的节点。它和远程节点走完全相同的加入流程和控制连接。
-func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, log *slog.Logger) error {
+func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, noProxy bool, log *slog.Logger) error {
 	agentDir := filepath.Join(dataDir, "agent")
 	cfg := agent.Config{
-		DataDir:     agentDir,
-		Panel:       srv.LocalAddr(),
-		Fingerprint: srv.Fingerprint(),
-		Version:     version,
-		Logger:      log.With("component", "agent"),
+		DataDir:      agentDir,
+		Panel:        srv.LocalAddr(),
+		Fingerprint:  srv.Fingerprint(),
+		Version:      version,
+		DisableProxy: noProxy,
+		Logger:       log.With("component", "agent"),
 	}
 	if !agent.Enrolled(agentDir, srv.Fingerprint()) {
 		token, err := srv.CreateEnrollToken(ctx)
@@ -118,6 +121,7 @@ func agentCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.Panel, "server", "", "面板地址，例如 203.0.113.10:34567（首次加入时需要）")
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹（首次加入时需要）")
 	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（首次加入时需要）")
+	cmd.Flags().BoolVar(&cfg.DisableProxy, "no-proxy", false, "不启动 Caddy（仅用于开发）")
 	return cmd
 }
 

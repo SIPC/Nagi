@@ -38,6 +38,10 @@ func buildOverride(proj *types.Project, p paths, projectID string, version int64
 		if svc.Restart == "" && !hasRestartPolicy {
 			s["restart"] = "unless-stopped"
 		}
+		// 对外访问统一由 Caddy 负责，去掉容器自己的端口映射（需要 compose 2.24+ 的 !reset）。
+		if len(svc.Ports) > 0 && svc.NetworkMode != "host" {
+			s["ports"] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!reset", Style: yaml.FlowStyle}
+		}
 		if len(senv[name]) > 0 {
 			s["env_file"] = []string{filepath.ToSlash(p.serviceEnvFile(name))}
 		}

@@ -40,6 +40,24 @@ message ProjectConfig {
   map<string, EnvList> service_env = 3;
   // 用镜像表单创建的项目才有。有它时 compose 由它生成。
   ImageForm form = 4;
+  // 对外开放设置。所有对外流量都经节点上的 Caddy 进入，容器自身不映射端口。
+  // compose 里写的 ports 会自动转成开放设置。
+  repeated Exposure exposures = 5;
+}
+
+// Exposure 是一个服务端口的对外开放方式。
+message Exposure {
+  string service = 1;
+  // 容器内的端口。
+  uint32 target = 2;
+  // http、tcp 或 udp。
+  string protocol = 3;
+  // 节点上对外的端口。tcp/udp 必填；http 没绑域名时必填。
+  uint32 published = 4;
+  // 绑定的域名，只用于 http。绑了域名后经 80/443 访问，自动申请证书并跳转 HTTPS。
+  repeated string domains = 5;
+  // 只开 HTTP，不申请证书、不跳转（例如前面还有 CDN 终结 HTTPS）。
+  bool http_only = 6;
 }
 
 message EnvVar {
