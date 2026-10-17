@@ -40,7 +40,12 @@ mesh 坏了只影响数据传输和投票，不影响管理。
 
 ### mesh 上的服务
 
-每个成员在自己 mesh 地址的 7000 端口提供 `MeshService`（gRPC）。流量已经由 WireGuard 加密和认证，gRPC 不再加 TLS；调用方身份就是来源 mesh 地址对应的公钥。目前只有 `Ping`，面板上可以查看每个节点的 mesh 状态（到每个成员走哪条路径、握手时间、收发字节）并测试连通。
+每个成员在自己 mesh 地址的 7000 端口提供 `MeshService`（gRPC）。流量已经由 WireGuard 加密和认证，gRPC 不再加 TLS；调用方身份就是来源 mesh 地址对应的公钥。方法有：
+
+- `Ping`：连通测试。面板上可以查看每个节点的 mesh 状态（到每个成员走哪条路径、握手时间、收发字节）并测试连通。
+- `Upload`：面板把项目文件上传到节点（客户端流）。
+- `ReplicaManifest` / `ReplicaPut` / `ReplicaCommit`：把项目同步给顶替节点或备份节点（见 [snapshot.md](snapshot.md#备份节点的实现)）。
+- `LeaseVote`：顶替的租约投票（见 [failover.md](failover.md#实现)）。
 
 ## 地址
 
