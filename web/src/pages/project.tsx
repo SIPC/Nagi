@@ -93,6 +93,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         />
 
         <TerminalCard nodeId={nodeId} projectId={projectId} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+        <RoutesCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <DeleteCard nodeId={nodeId} project={p} />
       </div>
@@ -303,20 +304,6 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
     Object.fromEntries(services.map((s) => [s, envToText(base?.serviceEnv[s]?.vars)])),
   );
   const [formEnv, setFormEnv] = useState(envToText(base?.form?.env));
-  const [exposures, setExposures] = useState(() =>
-    JSON.stringify(
-      (base?.exposures ?? []).map((e) => ({
-        service: e.service,
-        target: e.target,
-        protocol: e.protocol,
-        ...(e.published ? { published: e.published } : {}),
-        ...(e.domains.length ? { domains: e.domains } : {}),
-        ...(e.httpOnly ? { httpOnly: true } : {}),
-      })),
-      null,
-      2,
-    ),
-  );
   const [gitUrl, setGitUrl] = useState(base?.source?.gitUrl ?? "");
   const [gitRef, setGitRef] = useState(base?.source?.gitRef ?? "");
   const [preserve, setPreserve] = useState((base?.preserve ?? []).join("\n"));
@@ -331,14 +318,6 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
   const save = async () => {
     setBusy(true);
     setError("");
-    let parsedExposures: { service: string; target: number; protocol: string; published?: number; domains?: string[]; httpOnly?: boolean }[];
-    try {
-      parsedExposures = JSON.parse(exposures || "[]");
-    } catch {
-      setError("开放设置不是有效的 JSON");
-      setBusy(false);
-      return;
-    }
     try {
       await projectClient.saveNodeProjectDraft({
         nodeId,
@@ -348,7 +327,6 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
           ? {
               env: textToEnv(env),
               form: { ...base!.form!, env: textToEnv(formEnv) },
-              exposures: parsedExposures,
               source: { gitUrl, gitRef },
               preserve: lines(preserve),
             }
@@ -357,7 +335,6 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
               preserve: lines(preserve),
               compose,
               env: textToEnv(env),
-              exposures: parsedExposures,
               serviceEnv: Object.fromEntries(
                 Object.entries(serviceEnv)
                   .map(([s, t]) => [s, { vars: textToEnv(t) }] as const)
@@ -435,12 +412,6 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
         <div className="grid gap-1.5">
           <span className="text-sm font-medium">更新文件时保留的路径（相对 data/，每行一个；挂载进容器的目录会自动保留）</span>
           <Textarea value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
-        </div>
-        <div className="grid gap-1.5">
-          <span className="text-sm font-medium">
-            对外开放（JSON）：protocol 为 http / tcp / udp；http 可填 domains（经 80/443，自动证书），或填 published 端口；httpOnly 表示不申请证书
-          </span>
-          <Textarea value={exposures} onChange={(e) => setExposures(e.target.value)} spellCheck={false} className="min-h-32 font-mono text-[13px]" />
         </div>
         <div className="grid gap-1.5">
           <span className="text-sm font-medium">项目级变量（替换 compose 里的 ${"{变量}"}，KEY=VALUE 每行一个）</span>
@@ -539,6 +510,125 @@ function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
           <Button variant="destructive" size="sm" onClick={remove}>
             删除项目
           </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Project; services: string[] }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ name: "", service: "", target: "", protocol: "http", published: "", domains: "", httpOnly: false });
+  const [error, setError] = useState("");
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+
+  const save = async () => {
+    setError("");
+    try {
+      await projectClient.saveNodeProjectRoute({
+        nodeId,
+        projectId: project.id,
+        route: {
+          name: form.name,
+          service: form.service || services[0] || "",
+          target: Number(form.target),
+          protocol: form.protocol,
+          published: Number(form.published || 0),
+          domains: form.domains.split(/[\s,]+/).filter(Boolean),
+          httpOnly: form.httpOnly,
+        },
+      });
+      setForm({ name: "", service: "", target: "", protocol: "http", published: "", domains: "", httpOnly: false });
+      refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  const remove = async (name: string) => {
+    setError("");
+    try {
+      await projectClient.deleteNodeProjectRoute({ nodeId, projectId: project.id, name });
+      refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>端口映射</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          保存后立即生效，不需要重新部署。文件在 {project.dir}/config/routes/，也可以直接在节点上修改。compose 里新出现的 ports 会在部署时自动导入。
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        {error && <Alert>{error}</Alert>}
+        {project.routes.length === 0 ? (
+          <p className="text-muted-foreground">还没有映射。</p>
+        ) : (
+          <table className="w-full">
+            <tbody>
+              {project.routes.map((r) => (
+                <tr key={r.name} className="border-b last:border-0">
+                  <td className="py-2 pr-3 font-mono text-xs">{r.name}</td>
+                  <td className="py-2 pr-3">
+                    {r.error ? (
+                      <span className="text-destructive">{r.error}</span>
+                    ) : (
+                      <span className="font-mono text-xs">
+                        {r.service}:{r.target} → {r.domains.length ? r.domains.join(", ") + (r.httpOnly ? "（仅 HTTP）" : "") : `${r.protocol}/${r.published}`}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setForm({
+                          name: r.name,
+                          service: r.service,
+                          target: String(r.target),
+                          protocol: r.protocol || "http",
+                          published: r.published ? String(r.published) : "",
+                          domains: r.domains.join(", "),
+                          httpOnly: r.httpOnly,
+                        })
+                      }
+                    >
+                      编辑
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove(r.name)}>
+                      删除
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-6">
+          <Select value={form.service || services[0] || ""} onChange={(e) => setForm({ ...form, service: e.target.value })}>
+            {services.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </Select>
+          <Input placeholder="容器端口" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} />
+          <Select value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value })}>
+            <option value="http">http</option>
+            <option value="tcp">tcp</option>
+            <option value="udp">udp</option>
+          </Select>
+          <Input placeholder="节点端口" value={form.published} onChange={(e) => setForm({ ...form, published: e.target.value })} />
+          <Input placeholder="域名，逗号分隔" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
+          <Button size="sm" onClick={save}>
+            {form.name ? `保存 ${form.name}` : "添加映射"}
+          </Button>
+          <label className="flex items-center gap-2 sm:col-span-6">
+            <input type="checkbox" checked={form.httpOnly} onChange={(e) => setForm({ ...form, httpOnly: e.target.checked })} />
+            只开 HTTP，不申请证书
+          </label>
         </div>
       </CardContent>
     </Card>

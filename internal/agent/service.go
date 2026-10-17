@@ -62,6 +62,24 @@ func (s *agentService) DiscardDraft(ctx context.Context, req *nagiv1.DiscardDraf
 	return &nagiv1.DiscardDraftResponse{Project: p}, nil
 }
 
+func (s *agentService) SaveRoute(ctx context.Context, req *nagiv1.SaveRouteRequest) (*nagiv1.SaveRouteResponse, error) {
+	p, err := s.projects.SaveRoute(ctx, req.GetProjectId(), req.GetRoute())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	s.changed()
+	return &nagiv1.SaveRouteResponse{Project: p}, nil
+}
+
+func (s *agentService) DeleteRoute(ctx context.Context, req *nagiv1.DeleteRouteRequest) (*nagiv1.DeleteRouteResponse, error) {
+	p, err := s.projects.DeleteRoute(ctx, req.GetProjectId(), req.GetName())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	s.changed()
+	return &nagiv1.DeleteRouteResponse{Project: p}, nil
+}
+
 func (s *agentService) DeleteProject(ctx context.Context, req *nagiv1.DeleteProjectRequest) (*nagiv1.DeleteProjectResponse, error) {
 	err := s.projects.Delete(ctx, req.GetId(), req.GetBaseRevision(), req.GetDeleteDir(), req.GetConfirmName(), func(string) {})
 	s.changed()

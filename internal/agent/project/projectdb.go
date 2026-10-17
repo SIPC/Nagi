@@ -149,6 +149,7 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 		DeployKey:       readDeployKey(paths{root: dir}),
 		WebhookToken:    p.meta(ctx, metaWebhookToken),
 		LastCommit:      p.meta(ctx, metaLastCommit),
+		Routes:          readRoutes(paths{root: dir}),
 	}, nil
 }
 

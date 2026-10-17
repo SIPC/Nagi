@@ -282,6 +282,30 @@ func (s *projectService) DiscardNodeProjectDraft(ctx context.Context, req *conne
 	return connect.NewResponse(&nagiv1.DiscardNodeProjectDraftResponse{Project: resp.GetProject()}), nil
 }
 
+func (s *projectService) SaveNodeProjectRoute(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectRouteRequest]) (*connect.Response[nagiv1.SaveNodeProjectRouteResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.SaveRoute(ctx, &nagiv1.SaveRouteRequest{ProjectId: req.Msg.GetProjectId(), Route: req.Msg.GetRoute()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(&nagiv1.SaveNodeProjectRouteResponse{Project: resp.GetProject()}), nil
+}
+
+func (s *projectService) DeleteNodeProjectRoute(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRouteRequest]) (*connect.Response[nagiv1.DeleteNodeProjectRouteResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.DeleteRoute(ctx, &nagiv1.DeleteRouteRequest{ProjectId: req.Msg.GetProjectId(), Name: req.Msg.GetName()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(&nagiv1.DeleteNodeProjectRouteResponse{Project: resp.GetProject()}), nil
+}
+
 func (s *projectService) DeleteNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRequest]) (*connect.Response[nagiv1.DeleteNodeProjectResponse], error) {
 	agent, err := s.agent(req.Msg.GetNodeId())
 	if err != nil {

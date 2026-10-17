@@ -665,6 +665,8 @@ const (
 	ProjectService_SaveNodeProjectDraft_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
 	ProjectService_DiscardNodeProjectDraft_FullMethodName = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
 	ProjectService_DeleteNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeleteNodeProject"
+	ProjectService_SaveNodeProjectRoute_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
+	ProjectService_DeleteNodeProjectRoute_FullMethodName  = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
 	ProjectService_DeployNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeployNodeProject"
 	ProjectService_StreamNodeProjectLogs_FullMethodName   = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
 )
@@ -679,6 +681,8 @@ type ProjectServiceClient interface {
 	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
 	DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error)
+	SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error)
+	DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 }
@@ -751,6 +755,26 @@ func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, in *Delete
 	return out, nil
 }
 
+func (c *projectServiceClient) SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveNodeProjectRouteResponse)
+	err := c.cc.Invoke(ctx, ProjectService_SaveNodeProjectRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNodeProjectRouteResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProjectRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_DeployNodeProject_FullMethodName, cOpts...)
@@ -799,6 +823,8 @@ type ProjectServiceServer interface {
 	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
 	DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error)
+	SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error)
+	DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	mustEmbedUnimplementedProjectServiceServer()
@@ -828,6 +854,12 @@ func (UnimplementedProjectServiceServer) DiscardNodeProjectDraft(context.Context
 }
 func (UnimplementedProjectServiceServer) DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProject not implemented")
+}
+func (UnimplementedProjectServiceServer) SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectRoute not implemented")
+}
+func (UnimplementedProjectServiceServer) DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProjectRoute not implemented")
 }
 func (UnimplementedProjectServiceServer) DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployNodeProject not implemented")
@@ -964,6 +996,42 @@ func _ProjectService_DeleteNodeProject_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_SaveNodeProjectRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveNodeProjectRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SaveNodeProjectRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SaveNodeProjectRoute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SaveNodeProjectRoute(ctx, req.(*SaveNodeProjectRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_DeleteNodeProjectRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeProjectRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DeleteNodeProjectRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DeleteNodeProjectRoute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DeleteNodeProjectRoute(ctx, req.(*DeleteNodeProjectRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_DeployNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DeployNodeProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1016,6 +1084,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteNodeProject",
 			Handler:    _ProjectService_DeleteNodeProject_Handler,
+		},
+		{
+			MethodName: "SaveNodeProjectRoute",
+			Handler:    _ProjectService_SaveNodeProjectRoute_Handler,
+		},
+		{
+			MethodName: "DeleteNodeProjectRoute",
+			Handler:    _ProjectService_DeleteNodeProjectRoute_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

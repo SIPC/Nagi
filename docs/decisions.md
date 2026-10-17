@@ -21,6 +21,7 @@
 | 镜像加速 | **按节点配置，用户配置后才写入 Docker 配置** | 国内外节点需求不同；不擅自改 Docker | [agent.md](agent.md#镜像) |
 | host 网络 | **允许，界面醒目提示** | 部分应用只能用 host 网络 | [agent.md](agent.md#部署方式) |
 | 对外访问 | **全部经 Caddy（含 layer4），容器不映射端口** | 出口统一，不会绕过 ufw；以后切换流量只改 Caddy | [exposure.md](exposure.md) |
+| 端口映射 | **项目目录 config/routes/ 每条一个文件，立即生效；部署时只导入 compose 新增的端口** | 有些镜像要手动加映射；映射不动容器，不必重新部署；用户改过或删掉的不会被覆盖 | [exposure.md](exposure.md#端口映射目录) |
 
 ## 通信与网络
 

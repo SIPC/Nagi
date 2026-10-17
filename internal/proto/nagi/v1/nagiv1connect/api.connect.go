@@ -83,6 +83,12 @@ const (
 	// ProjectServiceDeleteNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeleteNodeProject RPC.
 	ProjectServiceDeleteNodeProjectProcedure = "/nagi.v1.ProjectService/DeleteNodeProject"
+	// ProjectServiceSaveNodeProjectRouteProcedure is the fully-qualified name of the ProjectService's
+	// SaveNodeProjectRoute RPC.
+	ProjectServiceSaveNodeProjectRouteProcedure = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
+	// ProjectServiceDeleteNodeProjectRouteProcedure is the fully-qualified name of the ProjectService's
+	// DeleteNodeProjectRoute RPC.
+	ProjectServiceDeleteNodeProjectRouteProcedure = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
 	// ProjectServiceDeployNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeployNodeProject RPC.
 	ProjectServiceDeployNodeProjectProcedure = "/nagi.v1.ProjectService/DeployNodeProject"
@@ -539,6 +545,8 @@ type ProjectServiceClient interface {
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
+	SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error)
+	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 }
@@ -590,6 +598,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		saveNodeProjectRoute: connect.NewClient[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse](
+			httpClient,
+			baseURL+ProjectServiceSaveNodeProjectRouteProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeProjectRoute: connect.NewClient[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteNodeProjectRouteProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProjectRoute")),
+			connect.WithClientOptions(opts...),
+		),
 		deployNodeProject: connect.NewClient[v1.DeployNodeProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceDeployNodeProjectProcedure,
@@ -613,6 +633,8 @@ type projectServiceClient struct {
 	saveNodeProjectDraft    *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
 	discardNodeProjectDraft *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
 	deleteNodeProject       *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
+	saveNodeProjectRoute    *connect.Client[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse]
+	deleteNodeProjectRoute  *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
 	deployNodeProject       *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
 	streamNodeProjectLogs   *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
 }
@@ -647,6 +669,16 @@ func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, req *conne
 	return c.deleteNodeProject.CallUnary(ctx, req)
 }
 
+// SaveNodeProjectRoute calls nagi.v1.ProjectService.SaveNodeProjectRoute.
+func (c *projectServiceClient) SaveNodeProjectRoute(ctx context.Context, req *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error) {
+	return c.saveNodeProjectRoute.CallUnary(ctx, req)
+}
+
+// DeleteNodeProjectRoute calls nagi.v1.ProjectService.DeleteNodeProjectRoute.
+func (c *projectServiceClient) DeleteNodeProjectRoute(ctx context.Context, req *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error) {
+	return c.deleteNodeProjectRoute.CallUnary(ctx, req)
+}
+
 // DeployNodeProject calls nagi.v1.ProjectService.DeployNodeProject.
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, req *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployNodeProject.CallServerStream(ctx, req)
@@ -665,6 +697,8 @@ type ProjectServiceHandler interface {
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
+	SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error)
+	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest], *connect.ServerStream[v1.LogLine]) error
 }
@@ -712,6 +746,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSaveNodeProjectRouteHandler := connect.NewUnaryHandler(
+		ProjectServiceSaveNodeProjectRouteProcedure,
+		svc.SaveNodeProjectRoute,
+		connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDeleteNodeProjectRouteHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteNodeProjectRouteProcedure,
+		svc.DeleteNodeProjectRoute,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProjectRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceDeployNodeProjectHandler := connect.NewServerStreamHandler(
 		ProjectServiceDeployNodeProjectProcedure,
 		svc.DeployNodeProject,
@@ -738,6 +784,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceDiscardNodeProjectDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteNodeProjectProcedure:
 			projectServiceDeleteNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceSaveNodeProjectRouteProcedure:
+			projectServiceSaveNodeProjectRouteHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteNodeProjectRouteProcedure:
+			projectServiceDeleteNodeProjectRouteHandler.ServeHTTP(w, r)
 		case ProjectServiceDeployNodeProjectProcedure:
 			projectServiceDeployNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceStreamNodeProjectLogsProcedure:
@@ -773,6 +823,14 @@ func (UnimplementedProjectServiceHandler) DiscardNodeProjectDraft(context.Contex
 
 func (UnimplementedProjectServiceHandler) DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SaveNodeProjectRoute is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProjectRoute is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

@@ -121,6 +121,8 @@ service ProjectService {
   rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
   rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
   rpc DeleteNodeProject(DeleteNodeProjectRequest) returns (DeleteNodeProjectResponse);
+  rpc SaveNodeProjectRoute(SaveNodeProjectRouteRequest) returns (SaveNodeProjectRouteResponse);
+  rpc DeleteNodeProjectRoute(DeleteNodeProjectRouteRequest) returns (DeleteNodeProjectRouteResponse);
   rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
   rpc StreamNodeProjectLogs(StreamNodeProjectLogsRequest) returns (stream LogLine);
 }
@@ -162,6 +164,26 @@ message DiscardNodeProjectDraftRequest {
 }
 
 message DiscardNodeProjectDraftResponse {
+  Project project = 1;
+}
+
+message SaveNodeProjectRouteRequest {
+  string node_id = 1;
+  string project_id = 2;
+  Exposure route = 3;
+}
+
+message SaveNodeProjectRouteResponse {
+  Project project = 1;
+}
+
+message DeleteNodeProjectRouteRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string name = 3;
+}
+
+message DeleteNodeProjectRouteResponse {
   Project project = 1;
 }
 

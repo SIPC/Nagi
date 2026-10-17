@@ -6,7 +6,7 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { DeployEventSchema, LogLineSchema, NodeInfo, Project, ProjectConfig, ProjectSummary } from "./common_pb";
+import type { DeployEventSchema, Exposure, LogLineSchema, NodeInfo, Project, ProjectConfig, ProjectSummary } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/api.proto.
  */
 export const file_nagi_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChFuYWdpL3YxL2FwaS5wcm90bxIHbmFnaS52MSIWChRHZXRTZXR1cFN0YXRlUmVxdWVzdCIsChVHZXRTZXR1cFN0YXRlUmVzcG9uc2USEwoLaW5pdGlhbGl6ZWQYASABKAgiQQoMU2V0dXBSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJIg8KDVNldHVwUmVzcG9uc2UiMgoMTG9naW5SZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIg8KDUxvZ2luUmVzcG9uc2UiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSILCglNZVJlcXVlc3QiHgoKTWVSZXNwb25zZRIQCgh1c2VybmFtZRgBIAEoCSIkChFSZW1vdmVOb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIhQKElJlbW92ZU5vZGVSZXNwb25zZSIcChpDcmVhdGVFbnJvbGxDb21tYW5kUmVxdWVzdCJeChtDcmVhdGVFbnJvbGxDb21tYW5kUmVzcG9uc2USDwoHY29tbWFuZBgBIAEoCRIuCgpleHBpcmVzX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJKCg1QYW5lbFNldHRpbmdzEhYKDnB1YmxpY19hZGRyZXNzGAEgASgJEgwKBHBvcnQYAiABKA0SEwoLZmluZ2VycHJpbnQYAyABKAkiFAoSR2V0U2V0dGluZ3NSZXF1ZXN0Ij8KE0dldFNldHRpbmdzUmVzcG9uc2USKAoIc2V0dGluZ3MYASABKAsyFi5uYWdpLnYxLlBhbmVsU2V0dGluZ3MiLwoVVXBkYXRlU2V0dGluZ3NSZXF1ZXN0EhYKDnB1YmxpY19hZGRyZXNzGAEgASgJIkIKFlVwZGF0ZVNldHRpbmdzUmVzcG9uc2USKAoIc2V0dGluZ3MYASABKAsyFi5uYWdpLnYxLlBhbmVsU2V0dGluZ3MigAEKBE5vZGUSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIOCgZvbmxpbmUYAyABKAgSLQoJbGFzdF9zZWVuGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIfCgRpbmZvGAUgASgLMhEubmFnaS52MS5Ob2RlSW5mbyISChBMaXN0Tm9kZXNSZXF1ZXN0IjEKEUxpc3ROb2Rlc1Jlc3BvbnNlEhwKBW5vZGVzGAEgAygLMg0ubmFnaS52MS5Ob2RlIkgKC05vZGVQcm9qZWN0Eg8KB25vZGVfaWQYASABKAkSKAoHcHJvamVjdBgCIAEoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkiGAoWTGlzdEFsbFByb2plY3RzUmVxdWVzdCJBChdMaXN0QWxsUHJvamVjdHNSZXNwb25zZRImCghwcm9qZWN0cxgBIAMoCzIULm5hZ2kudjEuTm9kZVByb2plY3QidAoYQ3JlYXRlTm9kZVByb2plY3RSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSDAoEbmFtZRgCIAEoCRILCgNkaXIYAyABKAkSJgoGY29uZmlnGAUgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnSgQIBBAFIoEBChtTYXZlTm9kZVByb2plY3REcmFmdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMSJgoGY29uZmlnGAQgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnIkEKHFNhdmVOb2RlUHJvamVjdERyYWZ0UmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCJcCh5EaXNjYXJkTm9kZVByb2plY3REcmFmdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMiRAofRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IoABChhEZWxldGVOb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMSEgoKZGVsZXRlX2RpchgEIAEoCBIUCgxjb25maXJtX25hbWUYBSABKAkiGwoZRGVsZXRlTm9kZVByb2plY3RSZXNwb25zZSI+ChlDcmVhdGVOb2RlUHJvamVjdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiPAoVR2V0Tm9kZVByb2plY3RSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCSJCChZHZXROb2RlUHJvamVjdFJlc3BvbnNlEigKB3Byb2plY3QYASABKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5ImQKGERlcGxveU5vZGVQcm9qZWN0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSFQoNYmFzZV9yZXZpc2lvbhgDIAEoAxIMCgRwdWxsGAQgASgIInIKHFN0cmVhbU5vZGVQcm9qZWN0TG9nc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSDAoEdGFpbBgEIAEoBRIOCgZmb2xsb3cYBSABKAgylgEKDFNldHVwU2VydmljZRJOCg1HZXRTZXR1cFN0YXRlEh0ubmFnaS52MS5HZXRTZXR1cFN0YXRlUmVxdWVzdBoeLm5hZ2kudjEuR2V0U2V0dXBTdGF0ZVJlc3BvbnNlEjYKBVNldHVwEhUubmFnaS52MS5TZXR1cFJlcXVlc3QaFi5uYWdpLnYxLlNldHVwUmVzcG9uc2UyrwEKC0F1dGhTZXJ2aWNlEjYKBUxvZ2luEhUubmFnaS52MS5Mb2dpblJlcXVlc3QaFi5uYWdpLnYxLkxvZ2luUmVzcG9uc2USOQoGTG9nb3V0EhYubmFnaS52MS5Mb2dvdXRSZXF1ZXN0GhcubmFnaS52MS5Mb2dvdXRSZXNwb25zZRItCgJNZRISLm5hZ2kudjEuTWVSZXF1ZXN0GhMubmFnaS52MS5NZVJlc3BvbnNlMvoBCgtOb2RlU2VydmljZRJCCglMaXN0Tm9kZXMSGS5uYWdpLnYxLkxpc3ROb2Rlc1JlcXVlc3QaGi5uYWdpLnYxLkxpc3ROb2Rlc1Jlc3BvbnNlEmAKE0NyZWF0ZUVucm9sbENvbW1hbmQSIy5uYWdpLnYxLkNyZWF0ZUVucm9sbENvbW1hbmRSZXF1ZXN0GiQubmFnaS52MS5DcmVhdGVFbnJvbGxDb21tYW5kUmVzcG9uc2USRQoKUmVtb3ZlTm9kZRIaLm5hZ2kudjEuUmVtb3ZlTm9kZVJlcXVlc3QaGy5uYWdpLnYxLlJlbW92ZU5vZGVSZXNwb25zZTKuAQoPU2V0dGluZ3NTZXJ2aWNlEkgKC0dldFNldHRpbmdzEhsubmFnaS52MS5HZXRTZXR0aW5nc1JlcXVlc3QaHC5uYWdpLnYxLkdldFNldHRpbmdzUmVzcG9uc2USUQoOVXBkYXRlU2V0dGluZ3MSHi5uYWdpLnYxLlVwZGF0ZVNldHRpbmdzUmVxdWVzdBofLm5hZ2kudjEuVXBkYXRlU2V0dGluZ3NSZXNwb25zZTLoBQoOUHJvamVjdFNlcnZpY2USVAoPTGlzdEFsbFByb2plY3RzEh8ubmFnaS52MS5MaXN0QWxsUHJvamVjdHNSZXF1ZXN0GiAubmFnaS52MS5MaXN0QWxsUHJvamVjdHNSZXNwb25zZRJaChFDcmVhdGVOb2RlUHJvamVjdBIhLm5hZ2kudjEuQ3JlYXRlTm9kZVByb2plY3RSZXF1ZXN0GiIubmFnaS52MS5DcmVhdGVOb2RlUHJvamVjdFJlc3BvbnNlElEKDkdldE5vZGVQcm9qZWN0Eh4ubmFnaS52MS5HZXROb2RlUHJvamVjdFJlcXVlc3QaHy5uYWdpLnYxLkdldE5vZGVQcm9qZWN0UmVzcG9uc2USYwoUU2F2ZU5vZGVQcm9qZWN0RHJhZnQSJC5uYWdpLnYxLlNhdmVOb2RlUHJvamVjdERyYWZ0UmVxdWVzdBolLm5hZ2kudjEuU2F2ZU5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRJsChdEaXNjYXJkTm9kZVByb2plY3REcmFmdBInLm5hZ2kudjEuRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnRSZXF1ZXN0GigubmFnaS52MS5EaXNjYXJkTm9kZVByb2plY3REcmFmdFJlc3BvbnNlEloKEURlbGV0ZU5vZGVQcm9qZWN0EiEubmFnaS52MS5EZWxldGVOb2RlUHJvamVjdFJlcXVlc3QaIi5uYWdpLnYxLkRlbGV0ZU5vZGVQcm9qZWN0UmVzcG9uc2USTgoRRGVwbG95Tm9kZVByb2plY3QSIS5uYWdpLnYxLkRlcGxveU5vZGVQcm9qZWN0UmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJSChVTdHJlYW1Ob2RlUHJvamVjdExvZ3MSJS5uYWdpLnYxLlN0cmVhbU5vZGVQcm9qZWN0TG9nc1JlcXVlc3QaEC5uYWdpLnYxLkxvZ0xpbmUwAUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChFuYWdpL3YxL2FwaS5wcm90bxIHbmFnaS52MSIWChRHZXRTZXR1cFN0YXRlUmVxdWVzdCIsChVHZXRTZXR1cFN0YXRlUmVzcG9uc2USEwoLaW5pdGlhbGl6ZWQYASABKAgiQQoMU2V0dXBSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJIg8KDVNldHVwUmVzcG9uc2UiMgoMTG9naW5SZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIg8KDUxvZ2luUmVzcG9uc2UiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSILCglNZVJlcXVlc3QiHgoKTWVSZXNwb25zZRIQCgh1c2VybmFtZRgBIAEoCSIkChFSZW1vdmVOb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIhQKElJlbW92ZU5vZGVSZXNwb25zZSIcChpDcmVhdGVFbnJvbGxDb21tYW5kUmVxdWVzdCJeChtDcmVhdGVFbnJvbGxDb21tYW5kUmVzcG9uc2USDwoHY29tbWFuZBgBIAEoCRIuCgpleHBpcmVzX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJKCg1QYW5lbFNldHRpbmdzEhYKDnB1YmxpY19hZGRyZXNzGAEgASgJEgwKBHBvcnQYAiABKA0SEwoLZmluZ2VycHJpbnQYAyABKAkiFAoSR2V0U2V0dGluZ3NSZXF1ZXN0Ij8KE0dldFNldHRpbmdzUmVzcG9uc2USKAoIc2V0dGluZ3MYASABKAsyFi5uYWdpLnYxLlBhbmVsU2V0dGluZ3MiLwoVVXBkYXRlU2V0dGluZ3NSZXF1ZXN0EhYKDnB1YmxpY19hZGRyZXNzGAEgASgJIkIKFlVwZGF0ZVNldHRpbmdzUmVzcG9uc2USKAoIc2V0dGluZ3MYASABKAsyFi5uYWdpLnYxLlBhbmVsU2V0dGluZ3MigAEKBE5vZGUSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIOCgZvbmxpbmUYAyABKAgSLQoJbGFzdF9zZWVuGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIfCgRpbmZvGAUgASgLMhEubmFnaS52MS5Ob2RlSW5mbyISChBMaXN0Tm9kZXNSZXF1ZXN0IjEKEUxpc3ROb2Rlc1Jlc3BvbnNlEhwKBW5vZGVzGAEgAygLMg0ubmFnaS52MS5Ob2RlIkgKC05vZGVQcm9qZWN0Eg8KB25vZGVfaWQYASABKAkSKAoHcHJvamVjdBgCIAEoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkiGAoWTGlzdEFsbFByb2plY3RzUmVxdWVzdCJBChdMaXN0QWxsUHJvamVjdHNSZXNwb25zZRImCghwcm9qZWN0cxgBIAMoCzIULm5hZ2kudjEuTm9kZVByb2plY3QidAoYQ3JlYXRlTm9kZVByb2plY3RSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSDAoEbmFtZRgCIAEoCRILCgNkaXIYAyABKAkSJgoGY29uZmlnGAUgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnSgQIBBAFIoEBChtTYXZlTm9kZVByb2plY3REcmFmdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMSJgoGY29uZmlnGAQgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnIkEKHFNhdmVOb2RlUHJvamVjdERyYWZ0UmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCJcCh5EaXNjYXJkTm9kZVByb2plY3REcmFmdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMiRAofRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0ImQKG1NhdmVOb2RlUHJvamVjdFJvdXRlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSIAoFcm91dGUYAyABKAsyES5uYWdpLnYxLkV4cG9zdXJlIkEKHFNhdmVOb2RlUHJvamVjdFJvdXRlUmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCJSCh1EZWxldGVOb2RlUHJvamVjdFJvdXRlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDAoEbmFtZRgDIAEoCSJDCh5EZWxldGVOb2RlUHJvamVjdFJvdXRlUmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCKAAQoYRGVsZXRlTm9kZVByb2plY3RSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIVCg1iYXNlX3JldmlzaW9uGAMgASgDEhIKCmRlbGV0ZV9kaXIYBCABKAgSFAoMY29uZmlybV9uYW1lGAUgASgJIhsKGURlbGV0ZU5vZGVQcm9qZWN0UmVzcG9uc2UiPgoZQ3JlYXRlTm9kZVByb2plY3RSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjwKFUdldE5vZGVQcm9qZWN0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkiQgoWR2V0Tm9kZVByb2plY3RSZXNwb25zZRIoCgdwcm9qZWN0GAEgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJkChhEZXBsb3lOb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMSDAoEcHVsbBgEIAEoCCJyChxTdHJlYW1Ob2RlUHJvamVjdExvZ3NSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIPCgdzZXJ2aWNlGAMgASgJEgwKBHRhaWwYBCABKAUSDgoGZm9sbG93GAUgASgIMpYBCgxTZXR1cFNlcnZpY2USTgoNR2V0U2V0dXBTdGF0ZRIdLm5hZ2kudjEuR2V0U2V0dXBTdGF0ZVJlcXVlc3QaHi5uYWdpLnYxLkdldFNldHVwU3RhdGVSZXNwb25zZRI2CgVTZXR1cBIVLm5hZ2kudjEuU2V0dXBSZXF1ZXN0GhYubmFnaS52MS5TZXR1cFJlc3BvbnNlMq8BCgtBdXRoU2VydmljZRI2CgVMb2dpbhIVLm5hZ2kudjEuTG9naW5SZXF1ZXN0GhYubmFnaS52MS5Mb2dpblJlc3BvbnNlEjkKBkxvZ291dBIWLm5hZ2kudjEuTG9nb3V0UmVxdWVzdBoXLm5hZ2kudjEuTG9nb3V0UmVzcG9uc2USLQoCTWUSEi5uYWdpLnYxLk1lUmVxdWVzdBoTLm5hZ2kudjEuTWVSZXNwb25zZTL6AQoLTm9kZVNlcnZpY2USQgoJTGlzdE5vZGVzEhkubmFnaS52MS5MaXN0Tm9kZXNSZXF1ZXN0GhoubmFnaS52MS5MaXN0Tm9kZXNSZXNwb25zZRJgChNDcmVhdGVFbnJvbGxDb21tYW5kEiMubmFnaS52MS5DcmVhdGVFbnJvbGxDb21tYW5kUmVxdWVzdBokLm5hZ2kudjEuQ3JlYXRlRW5yb2xsQ29tbWFuZFJlc3BvbnNlEkUKClJlbW92ZU5vZGUSGi5uYWdpLnYxLlJlbW92ZU5vZGVSZXF1ZXN0GhsubmFnaS52MS5SZW1vdmVOb2RlUmVzcG9uc2UyrgEKD1NldHRpbmdzU2VydmljZRJICgtHZXRTZXR0aW5ncxIbLm5hZ2kudjEuR2V0U2V0dGluZ3NSZXF1ZXN0GhwubmFnaS52MS5HZXRTZXR0aW5nc1Jlc3BvbnNlElEKDlVwZGF0ZVNldHRpbmdzEh4ubmFnaS52MS5VcGRhdGVTZXR0aW5nc1JlcXVlc3QaHy5uYWdpLnYxLlVwZGF0ZVNldHRpbmdzUmVzcG9uc2UyuAcKDlByb2plY3RTZXJ2aWNlElQKD0xpc3RBbGxQcm9qZWN0cxIfLm5hZ2kudjEuTGlzdEFsbFByb2plY3RzUmVxdWVzdBogLm5hZ2kudjEuTGlzdEFsbFByb2plY3RzUmVzcG9uc2USWgoRQ3JlYXRlTm9kZVByb2plY3QSIS5uYWdpLnYxLkNyZWF0ZU5vZGVQcm9qZWN0UmVxdWVzdBoiLm5hZ2kudjEuQ3JlYXRlTm9kZVByb2plY3RSZXNwb25zZRJRCg5HZXROb2RlUHJvamVjdBIeLm5hZ2kudjEuR2V0Tm9kZVByb2plY3RSZXF1ZXN0Gh8ubmFnaS52MS5HZXROb2RlUHJvamVjdFJlc3BvbnNlEmMKFFNhdmVOb2RlUHJvamVjdERyYWZ0EiQubmFnaS52MS5TYXZlTm9kZVByb2plY3REcmFmdFJlcXVlc3QaJS5uYWdpLnYxLlNhdmVOb2RlUHJvamVjdERyYWZ0UmVzcG9uc2USbAoXRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnQSJy5uYWdpLnYxLkRpc2NhcmROb2RlUHJvamVjdERyYWZ0UmVxdWVzdBooLm5hZ2kudjEuRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRJaChFEZWxldGVOb2RlUHJvamVjdBIhLm5hZ2kudjEuRGVsZXRlTm9kZVByb2plY3RSZXF1ZXN0GiIubmFnaS52MS5EZWxldGVOb2RlUHJvamVjdFJlc3BvbnNlEmMKFFNhdmVOb2RlUHJvamVjdFJvdXRlEiQubmFnaS52MS5TYXZlTm9kZVByb2plY3RSb3V0ZVJlcXVlc3QaJS5uYWdpLnYxLlNhdmVOb2RlUHJvamVjdFJvdXRlUmVzcG9uc2USaQoWRGVsZXRlTm9kZVByb2plY3RSb3V0ZRImLm5hZ2kudjEuRGVsZXRlTm9kZVByb2plY3RSb3V0ZVJlcXVlc3QaJy5uYWdpLnYxLkRlbGV0ZU5vZGVQcm9qZWN0Um91dGVSZXNwb25zZRJOChFEZXBsb3lOb2RlUHJvamVjdBIhLm5hZ2kudjEuRGVwbG95Tm9kZVByb2plY3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABElIKFVN0cmVhbU5vZGVQcm9qZWN0TG9ncxIlLm5hZ2kudjEuU3RyZWFtTm9kZVByb2plY3RMb2dzUmVxdWVzdBoQLm5hZ2kudjEuTG9nTGluZTABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.GetSetupStateRequest
@@ -584,6 +584,94 @@ export const DiscardNodeProjectDraftResponseSchema: GenMessage<DiscardNodeProjec
   messageDesc(file_nagi_v1_api, 29);
 
 /**
+ * @generated from message nagi.v1.SaveNodeProjectRouteRequest
+ */
+export type SaveNodeProjectRouteRequest = Message<"nagi.v1.SaveNodeProjectRouteRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: nagi.v1.Exposure route = 3;
+   */
+  route?: Exposure | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveNodeProjectRouteRequest.
+ * Use `create(SaveNodeProjectRouteRequestSchema)` to create a new message.
+ */
+export const SaveNodeProjectRouteRequestSchema: GenMessage<SaveNodeProjectRouteRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 30);
+
+/**
+ * @generated from message nagi.v1.SaveNodeProjectRouteResponse
+ */
+export type SaveNodeProjectRouteResponse = Message<"nagi.v1.SaveNodeProjectRouteResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveNodeProjectRouteResponse.
+ * Use `create(SaveNodeProjectRouteResponseSchema)` to create a new message.
+ */
+export const SaveNodeProjectRouteResponseSchema: GenMessage<SaveNodeProjectRouteResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 31);
+
+/**
+ * @generated from message nagi.v1.DeleteNodeProjectRouteRequest
+ */
+export type DeleteNodeProjectRouteRequest = Message<"nagi.v1.DeleteNodeProjectRouteRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message nagi.v1.DeleteNodeProjectRouteRequest.
+ * Use `create(DeleteNodeProjectRouteRequestSchema)` to create a new message.
+ */
+export const DeleteNodeProjectRouteRequestSchema: GenMessage<DeleteNodeProjectRouteRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 32);
+
+/**
+ * @generated from message nagi.v1.DeleteNodeProjectRouteResponse
+ */
+export type DeleteNodeProjectRouteResponse = Message<"nagi.v1.DeleteNodeProjectRouteResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.DeleteNodeProjectRouteResponse.
+ * Use `create(DeleteNodeProjectRouteResponseSchema)` to create a new message.
+ */
+export const DeleteNodeProjectRouteResponseSchema: GenMessage<DeleteNodeProjectRouteResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 33);
+
+/**
  * @generated from message nagi.v1.DeleteNodeProjectRequest
  */
 export type DeleteNodeProjectRequest = Message<"nagi.v1.DeleteNodeProjectRequest"> & {
@@ -618,7 +706,7 @@ export type DeleteNodeProjectRequest = Message<"nagi.v1.DeleteNodeProjectRequest
  * Use `create(DeleteNodeProjectRequestSchema)` to create a new message.
  */
 export const DeleteNodeProjectRequestSchema: GenMessage<DeleteNodeProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 30);
+  messageDesc(file_nagi_v1_api, 34);
 
 /**
  * @generated from message nagi.v1.DeleteNodeProjectResponse
@@ -631,7 +719,7 @@ export type DeleteNodeProjectResponse = Message<"nagi.v1.DeleteNodeProjectRespon
  * Use `create(DeleteNodeProjectResponseSchema)` to create a new message.
  */
 export const DeleteNodeProjectResponseSchema: GenMessage<DeleteNodeProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 31);
+  messageDesc(file_nagi_v1_api, 35);
 
 /**
  * @generated from message nagi.v1.CreateNodeProjectResponse
@@ -648,7 +736,7 @@ export type CreateNodeProjectResponse = Message<"nagi.v1.CreateNodeProjectRespon
  * Use `create(CreateNodeProjectResponseSchema)` to create a new message.
  */
 export const CreateNodeProjectResponseSchema: GenMessage<CreateNodeProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 32);
+  messageDesc(file_nagi_v1_api, 36);
 
 /**
  * @generated from message nagi.v1.GetNodeProjectRequest
@@ -670,7 +758,7 @@ export type GetNodeProjectRequest = Message<"nagi.v1.GetNodeProjectRequest"> & {
  * Use `create(GetNodeProjectRequestSchema)` to create a new message.
  */
 export const GetNodeProjectRequestSchema: GenMessage<GetNodeProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 33);
+  messageDesc(file_nagi_v1_api, 37);
 
 /**
  * @generated from message nagi.v1.GetNodeProjectResponse
@@ -687,7 +775,7 @@ export type GetNodeProjectResponse = Message<"nagi.v1.GetNodeProjectResponse"> &
  * Use `create(GetNodeProjectResponseSchema)` to create a new message.
  */
 export const GetNodeProjectResponseSchema: GenMessage<GetNodeProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 34);
+  messageDesc(file_nagi_v1_api, 38);
 
 /**
  * @generated from message nagi.v1.DeployNodeProjectRequest
@@ -721,7 +809,7 @@ export type DeployNodeProjectRequest = Message<"nagi.v1.DeployNodeProjectRequest
  * Use `create(DeployNodeProjectRequestSchema)` to create a new message.
  */
 export const DeployNodeProjectRequestSchema: GenMessage<DeployNodeProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 35);
+  messageDesc(file_nagi_v1_api, 39);
 
 /**
  * @generated from message nagi.v1.StreamNodeProjectLogsRequest
@@ -758,7 +846,7 @@ export type StreamNodeProjectLogsRequest = Message<"nagi.v1.StreamNodeProjectLog
  * Use `create(StreamNodeProjectLogsRequestSchema)` to create a new message.
  */
 export const StreamNodeProjectLogsRequestSchema: GenMessage<StreamNodeProjectLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 36);
+  messageDesc(file_nagi_v1_api, 40);
 
 /**
  * @generated from service nagi.v1.SetupService
@@ -923,6 +1011,22 @@ export const ProjectService: GenService<{
     methodKind: "unary";
     input: typeof DeleteNodeProjectRequestSchema;
     output: typeof DeleteNodeProjectResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.ProjectService.SaveNodeProjectRoute
+   */
+  saveNodeProjectRoute: {
+    methodKind: "unary";
+    input: typeof SaveNodeProjectRouteRequestSchema;
+    output: typeof SaveNodeProjectRouteResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.ProjectService.DeleteNodeProjectRoute
+   */
+  deleteNodeProjectRoute: {
+    methodKind: "unary";
+    input: typeof DeleteNodeProjectRouteRequestSchema;
+    output: typeof DeleteNodeProjectRouteResponseSchema;
   },
   /**
    * @generated from rpc nagi.v1.ProjectService.DeployNodeProject

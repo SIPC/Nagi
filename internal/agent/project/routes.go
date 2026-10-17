@@ -8,7 +8,8 @@ import (
 	"github.com/SIPC/nagi/internal/agent/proxy"
 )
 
-// Routes 汇总本节点所有已部署项目的对外开放规则，上游是正在运行的容器的地址。
+// Routes 汇总本节点所有项目的映射文件，生成 Caddy 的转发规则，上游是正在运行的容器的地址。
+// 无效的映射文件跳过。
 func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
@@ -16,13 +17,8 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 	}
 	var routes []proxy.Route
 	for _, r := range rows {
-		pdb, err := openProject(ctx, r.Dir)
-		if err != nil {
-			continue
-		}
-		cfg, err := pdb.deployed(ctx)
-		pdb.Close()
-		if err != nil || cfg == nil || len(cfg.GetExposures()) == 0 {
+		files := readRoutes(paths{root: r.Dir})
+		if len(files) == 0 {
 			continue
 		}
 		containers, err := m.docker.ProjectContainers(ctx, composeProjectName(r.ID))
@@ -30,7 +26,10 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 			return nil, err
 		}
 		defaultNet := composeProjectName(r.ID) + "_default"
-		for _, e := range cfg.GetExposures() {
+		for _, e := range files {
+			if e.GetError() != "" {
+				continue
+			}
 			route := proxy.Route{
 				Project:   r.ID,
 				Service:   e.GetService(),

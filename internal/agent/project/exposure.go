@@ -2,15 +2,24 @@ package project
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
+	"gopkg.in/yaml.v3"
 )
+
+// 端口映射：每条映射是项目目录 config/routes/<名字>.yml 一个文件。
+// 节点汇总所有项目的映射生成 Caddy 配置；文件改了（界面上改或者直接在节点上改）立即生效，不需要重新部署。
 
 // 对外开放的协议。
 const (
@@ -19,103 +28,123 @@ const (
 	ProtoUDP  = "udp"
 )
 
-var domainRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
+var (
+	domainRe    = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
+	routeNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
+)
 
-// materializeExposures 返回完整的开放设置：用户已有的设置，加上 compose 里写了 ports、
-// 但还没有对应开放设置的端口（按 tcp/udp 原样开放）。这样 compose 里的 ports 自动转成开放设置。
-func materializeExposures(proj *types.Project, cfg *nagiv1.ProjectConfig) []*nagiv1.Exposure {
-	out := append([]*nagiv1.Exposure(nil), cfg.GetExposures()...)
-	has := map[string]bool{}
-	for _, e := range out {
-		has[e.GetService()+"/"+strconv.Itoa(int(e.GetTarget()))] = true
+// metaImportedPorts 记录已经从 compose 导入过的端口，被用户删掉的映射不会再导入。
+const metaImportedPorts = "imported_ports"
+
+func (p paths) routesDir() string { return filepath.Join(p.configDir(), "routes") }
+
+// routeFile 是映射文件的格式。
+type routeFile struct {
+	Service   string   `yaml:"service"`
+	Port      uint32   `yaml:"port"`
+	Protocol  string   `yaml:"protocol"`
+	Published uint32   `yaml:"published,omitempty"`
+	Domains   []string `yaml:"domains,omitempty"`
+	HTTPOnly  bool     `yaml:"http_only,omitempty"`
+}
+
+const routeHeader = `# Nagi 端口映射。可以直接修改，保存后立即生效。
+# service：服务名；port：容器内端口；protocol：http、tcp 或 udp
+# published：节点上对外的端口（tcp/udp 必填；http 没绑域名时必填）
+# domains：绑定的域名（只用于 http，经 80/443 访问，拿到证书后自动跳转 HTTPS）
+# http_only：只开 HTTP，不申请证书
+`
+
+// readRoutes 读取项目的所有映射。无效的文件也会返回，Error 里写明原因，不会生效。
+func readRoutes(p paths) []*nagiv1.Exposure {
+	entries, err := os.ReadDir(p.routesDir())
+	if err != nil {
+		return nil
 	}
-	for _, name := range proj.ServiceNames() {
-		svc := proj.Services[name]
-		if svc.NetworkMode == "host" {
+	var out []*nagiv1.Exposure
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".yml")
+		if e.IsDir() || !ok {
 			continue
 		}
-		for _, p := range svc.Ports {
-			key := name + "/" + strconv.Itoa(int(p.Target))
-			if has[key] {
-				continue
-			}
-			published, _ := strconv.Atoi(strings.Split(p.Published, "-")[0])
-			if published == 0 {
-				continue
-			}
-			proto := ProtoTCP
-			if p.Protocol == ProtoUDP {
-				proto = ProtoUDP
-			}
-			out = append(out, &nagiv1.Exposure{
-				Service: name, Target: p.Target, Protocol: proto, Published: uint32(published),
-			})
-			has[key] = true
+		r := &nagiv1.Exposure{Name: name}
+		data, err := os.ReadFile(filepath.Join(p.routesDir(), e.Name()))
+		var f routeFile
+		if err == nil {
+			err = yaml.Unmarshal(data, &f)
 		}
+		if err != nil {
+			r.Error = "文件无法解析：" + err.Error()
+			out = append(out, r)
+			continue
+		}
+		r.Service, r.Target, r.Protocol = f.Service, f.Port, strings.ToLower(f.Protocol)
+		r.Published, r.Domains, r.HttpOnly = f.Published, f.Domains, f.HTTPOnly
+		if err := checkRoute(r); err != nil {
+			r.Error = err.Error()
+		}
+		out = append(out, r)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].GetName() < out[j].GetName() })
+	markDuplicates(out)
 	return out
 }
 
-// checkExposures 校验一个项目自身的开放设置。
-func checkExposures(proj *types.Project, exposures []*nagiv1.Exposure) error {
-	tcpPorts, udpPorts, domains := map[uint32]bool{}, map[uint32]bool{}, map[string]bool{}
-	for _, e := range exposures {
-		svc, ok := proj.Services[e.GetService()]
-		if !ok {
-			return invalid("开放设置里的服务 %q 不在 compose 中", e.GetService())
+// markDuplicates 标出同一个项目里重复的端口和域名，重复的那条不生效。
+func markDuplicates(routes []*nagiv1.Exposure) {
+	ports, domains := map[portKey]string{}, map[string]string{}
+	for _, r := range routes {
+		if r.GetError() != "" {
+			continue
 		}
-		if svc.NetworkMode == "host" {
-			return invalid("服务 %s 使用 host 网络，端口直接对外，不能再经 Caddy 开放", e.GetService())
+		for k := range usedPorts([]*nagiv1.Exposure{r}) {
+			if other, ok := ports[k]; ok {
+				r.Error = fmt.Sprintf("%s 端口 %d 和映射 %s 重复", k.proto, k.port, other)
+			}
+			ports[k] = r.GetName()
 		}
-		if e.GetTarget() == 0 || e.GetTarget() > 65535 {
-			return invalid("服务 %s 的容器端口无效", e.GetService())
+		for _, d := range r.GetDomains() {
+			if other, ok := domains[d]; ok {
+				r.Error = fmt.Sprintf("域名 %s 和映射 %s 重复", d, other)
+			}
+			domains[d] = r.GetName()
 		}
-		switch e.GetProtocol() {
-		case ProtoHTTP:
-			for _, d := range e.GetDomains() {
-				if !domainRe.MatchString(d) {
-					return invalid("域名 %q 无效（只能用小写字母、数字和连字符）", d)
-				}
-				if domains[d] {
-					return invalid("域名 %s 重复", d)
-				}
-				domains[d] = true
+	}
+}
+
+// checkRoute 校验一条映射本身的格式。
+func checkRoute(r *nagiv1.Exposure) error {
+	if strings.TrimSpace(r.GetService()) == "" {
+		return invalid("需要填写服务名")
+	}
+	if r.GetTarget() == 0 || r.GetTarget() > 65535 {
+		return invalid("服务 %s 的容器端口无效", r.GetService())
+	}
+	switch r.GetProtocol() {
+	case ProtoHTTP:
+		for _, d := range r.GetDomains() {
+			if !domainRe.MatchString(d) {
+				return invalid("域名 %q 无效（只能用小写字母、数字和连字符）", d)
 			}
-			if len(e.GetDomains()) == 0 {
-				if err := checkPublished(e); err != nil {
-					return err
-				}
-				if tcpPorts[e.GetPublished()] {
-					return invalid("端口 %d 重复", e.GetPublished())
-				}
-				tcpPorts[e.GetPublished()] = true
-			}
-		case ProtoTCP, ProtoUDP:
-			if len(e.GetDomains()) > 0 {
-				return invalid("只有 http 才能绑定域名")
-			}
-			if err := checkPublished(e); err != nil {
-				return err
-			}
-			used := tcpPorts
-			if e.GetProtocol() == ProtoUDP {
-				used = udpPorts
-			}
-			if used[e.GetPublished()] {
-				return invalid("%s 端口 %d 重复", e.GetProtocol(), e.GetPublished())
-			}
-			used[e.GetPublished()] = true
-		default:
-			return invalid("开放方式只能是 http、tcp 或 udp")
 		}
+		if len(r.GetDomains()) == 0 {
+			return checkPublished(r)
+		}
+	case ProtoTCP, ProtoUDP:
+		if len(r.GetDomains()) > 0 {
+			return invalid("只有 http 才能绑定域名")
+		}
+		return checkPublished(r)
+	default:
+		return invalid("开放方式只能是 http、tcp 或 udp")
 	}
 	return nil
 }
 
-func checkPublished(e *nagiv1.Exposure) error {
-	p := e.GetPublished()
+func checkPublished(r *nagiv1.Exposure) error {
+	p := r.GetPublished()
 	if p == 0 || p > 65535 {
-		return invalid("服务 %s 需要填写节点上对外的端口", e.GetService())
+		return invalid("服务 %s 需要填写节点上对外的端口", r.GetService())
 	}
 	if p == 80 || p == 443 {
 		return invalid("端口 80 和 443 留给域名访问，请换一个端口，或者绑定域名")
@@ -123,84 +152,103 @@ func checkPublished(e *nagiv1.Exposure) error {
 	return nil
 }
 
+func writeRoute(p paths, r *nagiv1.Exposure) error {
+	if err := os.MkdirAll(p.routesDir(), 0o755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(routeFile{
+		Service: r.GetService(), Port: r.GetTarget(), Protocol: r.GetProtocol(),
+		Published: r.GetPublished(), Domains: r.GetDomains(), HTTPOnly: r.GetHttpOnly(),
+	})
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(filepath.Join(p.routesDir(), r.GetName()+".yml"), append([]byte(routeHeader), data...), 0o644)
+}
+
+// newRouteName 生成映射文件名，例如 web-80、web-80-2。
+func newRouteName(p paths, r *nagiv1.Exposure) string {
+	base := strings.ToLower(fmt.Sprintf("%s-%d", r.GetService(), r.GetTarget()))
+	base = strings.Map(func(c rune) rune {
+		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_' {
+			return c
+		}
+		return '-'
+	}, base)
+	name := base
+	for n := 2; ; n++ {
+		if _, err := os.Stat(filepath.Join(p.routesDir(), name+".yml")); errors.Is(err, os.ErrNotExist) {
+			return name
+		}
+		name = fmt.Sprintf("%s-%d", base, n)
+	}
+}
+
+// ---- 冲突检查 ----
+
 // portKey 是端口在节点上的唯一标识，例如 tcp/8080。http 没绑域名时也占用 tcp 端口。
 type portKey struct {
 	proto string
 	port  uint32
 }
 
-func usedPorts(exposures []*nagiv1.Exposure) map[portKey]bool {
+func usedPorts(routes []*nagiv1.Exposure) map[portKey]bool {
 	out := map[portKey]bool{}
-	for _, e := range exposures {
+	for _, r := range routes {
+		if r.GetError() != "" {
+			continue
+		}
 		switch {
-		case e.GetProtocol() == ProtoUDP:
-			out[portKey{ProtoUDP, e.GetPublished()}] = true
-		case e.GetProtocol() == ProtoTCP || len(e.GetDomains()) == 0:
-			out[portKey{ProtoTCP, e.GetPublished()}] = true
+		case r.GetProtocol() == ProtoUDP:
+			out[portKey{ProtoUDP, r.GetPublished()}] = true
+		case r.GetProtocol() == ProtoTCP || len(r.GetDomains()) == 0:
+			out[portKey{ProtoTCP, r.GetPublished()}] = true
 		}
 	}
 	return out
 }
 
-func usedDomains(exposures []*nagiv1.Exposure) map[string]bool {
-	out := map[string]bool{}
-	for _, e := range exposures {
-		for _, d := range e.GetDomains() {
-			out[d] = true
-		}
-	}
-	return out
-}
-
-// checkConflicts 检查开放设置和本节点其他项目、其他程序是否冲突。
-func (m *Manager) checkConflicts(ctx context.Context, id string, exposures []*nagiv1.Exposure) error {
-	ports, domains := usedPorts(exposures), usedDomains(exposures)
+// checkConflicts 检查一条映射和本节点所有项目的其他映射、以及节点上其他程序是否冲突。
+// skipProject/skipName 是正在修改的这条映射本身。
+func (m *Manager) checkConflicts(ctx context.Context, skipProject, skipName string, r *nagiv1.Exposure) error {
+	ports := usedPorts([]*nagiv1.Exposure{r})
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
 		return err
 	}
-	ownDeployed := map[portKey]bool{}
-	for _, r := range rows {
-		pdb, err := openProject(ctx, r.Dir)
-		if err != nil {
-			continue
+	inUse := map[portKey]bool{} // 已经由 Caddy 监听的端口，不用再探测
+	for _, row := range rows {
+		name := row.ID
+		if pdb, err := openProject(ctx, row.Dir); err == nil {
+			name = pdb.meta(ctx, metaName)
+			pdb.Close()
 		}
-		var configs []*nagiv1.ProjectConfig
-		if cfg, _, err := pdb.latest(ctx); err == nil {
-			configs = append(configs, cfg)
-		}
-		if d, err := pdb.draft(ctx); err == nil && d != nil {
-			configs = append(configs, d)
-		}
-		deployed, _ := pdb.deployed(ctx)
-		name := pdb.meta(ctx, metaName)
-		pdb.Close()
-
-		if r.ID == id {
-			if deployed != nil {
-				ownDeployed = usedPorts(deployed.GetExposures())
+		for _, other := range readRoutes(paths{root: row.Dir}) {
+			if other.GetError() != "" {
+				continue
 			}
-			continue
-		}
-		for _, cfg := range configs {
-			for k := range usedPorts(cfg.GetExposures()) {
+			for k := range usedPorts([]*nagiv1.Exposure{other}) {
+				inUse[k] = true
+			}
+			if row.ID == skipProject && other.GetName() == skipName {
+				continue
+			}
+			for k := range usedPorts([]*nagiv1.Exposure{other}) {
 				if ports[k] {
-					return invalid("%s 端口 %d 已被项目 %s 使用", k.proto, k.port, name)
+					return invalid("%s 端口 %d 已被项目 %s 的映射 %s 使用", k.proto, k.port, name, other.GetName())
 				}
 			}
-			for d := range usedDomains(cfg.GetExposures()) {
-				if domains[d] {
-					return invalid("域名 %s 已被项目 %s 使用", d, name)
+			for _, d := range other.GetDomains() {
+				for _, mine := range r.GetDomains() {
+					if d == mine {
+						return invalid("域名 %s 已被项目 %s 的映射 %s 使用", d, name, other.GetName())
+					}
 				}
 			}
 		}
 	}
-	// 本项目已经在用的端口由 Caddy 占着，不用再探测。
 	for k := range ports {
-		if ownDeployed[k] {
-			continue
-		}
-		if !portFree(k) {
+		if !inUse[k] && !portFree(k) {
 			return invalid("%s 端口 %d 已被节点上的其他程序占用", k.proto, k.port)
 		}
 	}
@@ -226,11 +274,182 @@ func portFree(k portKey) bool {
 	return true
 }
 
-// exposureLabel 用于日志和错误信息，例如 web:80 → https://example.com。
-func exposureLabel(e *nagiv1.Exposure) string {
-	target := fmt.Sprintf("%s:%d", e.GetService(), e.GetTarget())
-	if len(e.GetDomains()) > 0 {
-		return target + " → " + strings.Join(e.GetDomains(), ", ")
+// ---- 修改 ----
+
+// SaveRoute 新建或修改一条映射，立即生效。
+func (m *Manager) SaveRoute(ctx context.Context, id string, r *nagiv1.Exposure) (*nagiv1.Project, error) {
+	if r == nil {
+		return nil, invalid("缺少映射")
 	}
-	return fmt.Sprintf("%s → %s/%d", target, e.GetProtocol(), e.GetPublished())
+	l := m.lock(id)
+	l.Lock()
+	defer l.Unlock()
+	row, err := m.projectRow(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	p := paths{root: row.Dir}
+	r = &nagiv1.Exposure{
+		Name: r.GetName(), Service: strings.TrimSpace(r.GetService()), Target: r.GetTarget(),
+		Protocol: strings.ToLower(r.GetProtocol()), Published: r.GetPublished(),
+		Domains: normalizeDomains(r.GetDomains()), HttpOnly: r.GetHttpOnly(),
+	}
+	if r.GetProtocol() == ProtoHTTP && len(r.GetDomains()) > 0 {
+		r.Published = 0
+	}
+	if err := checkRoute(r); err != nil {
+		return nil, err
+	}
+	if r.GetName() == "" {
+		r.Name = newRouteName(p, r)
+	} else if !routeNameRe.MatchString(r.GetName()) {
+		return nil, invalid("映射名只能包含小写字母、数字、- 和 _")
+	}
+	if err := m.checkService(ctx, row.Dir, id, r.GetService()); err != nil {
+		return nil, err
+	}
+	if err := m.checkConflicts(ctx, id, r.GetName(), r); err != nil {
+		return nil, err
+	}
+	if err := writeRoute(p, r); err != nil {
+		return nil, err
+	}
+	return m.readProject(ctx, id, row.Dir)
+}
+
+// DeleteRoute 删除一条映射，立即生效。
+func (m *Manager) DeleteRoute(ctx context.Context, id, name string) (*nagiv1.Project, error) {
+	l := m.lock(id)
+	l.Lock()
+	defer l.Unlock()
+	row, err := m.projectRow(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !routeNameRe.MatchString(name) {
+		return nil, invalid("映射名无效")
+	}
+	if err := os.Remove(filepath.Join(paths{root: row.Dir}.routesDir(), name+".yml")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	return m.readProject(ctx, id, row.Dir)
+}
+
+// checkService 检查服务在项目的 compose（最新版本或草稿）里存在，且不是 host 网络。
+func (m *Manager) checkService(ctx context.Context, dir, id, service string) error {
+	pdb, err := openProject(ctx, dir)
+	if err != nil {
+		return err
+	}
+	defer pdb.Close()
+	var cfgs []*nagiv1.ProjectConfig
+	if cfg, _, err := pdb.latest(ctx); err == nil {
+		cfgs = append(cfgs, cfg)
+	}
+	if d, err := pdb.draft(ctx); err == nil && d != nil {
+		cfgs = append(cfgs, d)
+	}
+	for _, cfg := range cfgs {
+		text, err := composeText(cfg)
+		if err != nil {
+			continue
+		}
+		proj, err := loadCompose(ctx, text, cfg.GetEnv(), paths{root: dir}.dataDir(), composeProjectName(id))
+		if err != nil {
+			continue
+		}
+		if svc, ok := proj.Services[service]; ok {
+			if svc.NetworkMode == "host" {
+				return invalid("服务 %s 使用 host 网络，端口直接对外，不能再经 Caddy 开放", service)
+			}
+			return nil
+		}
+	}
+	return invalid("服务 %s 不在项目的 compose 中", service)
+}
+
+func normalizeDomains(list []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range list {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// ---- 从 compose 导入 ----
+
+// importPorts 把 compose 里新出现的 ports 导入成映射文件（按 tcp/udp 原样开放）。
+// 导入过的端口记在 project.db 里：用户改过或删掉的映射不会被覆盖或加回来。
+// 和其他项目冲突的端口不导入，只在部署日志里提示。
+func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id string, proj *types.Project, onLine func(string)) error {
+	imported := map[string]bool{}
+	if v := pdb.meta(ctx, metaImportedPorts); v != "" {
+		var list []string
+		if err := json.Unmarshal([]byte(v), &list); err == nil {
+			for _, k := range list {
+				imported[k] = true
+			}
+		}
+	}
+	changed := false
+	for _, name := range proj.ServiceNames() {
+		svc := proj.Services[name]
+		if svc.NetworkMode == "host" {
+			continue
+		}
+		for _, port := range svc.Ports {
+			proto := ProtoTCP
+			if port.Protocol == ProtoUDP {
+				proto = ProtoUDP
+			}
+			key := fmt.Sprintf("%s/%d/%s", name, port.Target, proto)
+			if imported[key] {
+				continue
+			}
+			imported[key], changed = true, true
+			published, _ := strconv.Atoi(strings.Split(port.Published, "-")[0])
+			if published == 0 {
+				onLine(fmt.Sprintf("compose 里 %s 的端口 %d 没有指定对外端口，未开放，可以手动添加映射", name, port.Target))
+				continue
+			}
+			r := &nagiv1.Exposure{Service: name, Target: port.Target, Protocol: proto, Published: uint32(published)}
+			if err := checkRoute(r); err != nil {
+				onLine(fmt.Sprintf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err))
+				continue
+			}
+			if err := m.checkConflicts(ctx, id, "", r); err != nil {
+				onLine(fmt.Sprintf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err))
+				continue
+			}
+			r.Name = newRouteName(p, r)
+			if err := writeRoute(p, r); err != nil {
+				return err
+			}
+			onLine("已从 compose 导入映射：" + routeLabel(r))
+		}
+	}
+	if !changed {
+		return nil
+	}
+	list := make([]string, 0, len(imported))
+	for k := range imported {
+		list = append(list, k)
+	}
+	sort.Strings(list)
+	data, _ := json.Marshal(list)
+	return pdb.setMeta(ctx, metaImportedPorts, string(data))
+}
+
+// routeLabel 用于日志，例如 web:80 → example.com、web:80 → tcp/8080。
+func routeLabel(r *nagiv1.Exposure) string {
+	target := fmt.Sprintf("%s:%d", r.GetService(), r.GetTarget())
+	if len(r.GetDomains()) > 0 {
+		return target + " → " + strings.Join(r.GetDomains(), ", ")
+	}
+	return fmt.Sprintf("%s → %s/%d", target, r.GetProtocol(), r.GetPublished())
 }

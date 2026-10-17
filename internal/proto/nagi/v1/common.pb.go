@@ -49,7 +49,9 @@ type Project struct {
 	// webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署。
 	WebhookToken string `protobuf:"bytes,13,opt,name=webhook_token,json=webhookToken,proto3" json:"webhook_token,omitempty"`
 	// 最近一次拉取到的 git 提交。
-	LastCommit    string `protobuf:"bytes,14,opt,name=last_commit,json=lastCommit,proto3" json:"last_commit,omitempty"`
+	LastCommit string `protobuf:"bytes,14,opt,name=last_commit,json=lastCommit,proto3" json:"last_commit,omitempty"`
+	// 端口映射（config/routes/ 下的文件）。
+	Routes        []*Exposure `protobuf:"bytes,15,rep,name=routes,proto3" json:"routes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -175,6 +177,13 @@ func (x *Project) GetLastCommit() string {
 	return ""
 }
 
+func (x *Project) GetRoutes() []*Exposure {
+	if x != nil {
+		return x.Routes
+	}
+	return nil
+}
+
 // ProjectConfig 是一个版本的完整配置。
 type ProjectConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -186,9 +195,6 @@ type ProjectConfig struct {
 	ServiceEnv map[string]*EnvList `protobuf:"bytes,3,rep,name=service_env,json=serviceEnv,proto3" json:"service_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// 用镜像表单创建的项目才有。有它时 compose 由它生成。
 	Form *ImageForm `protobuf:"bytes,4,opt,name=form,proto3" json:"form,omitempty"`
-	// 对外开放设置。所有对外流量都经节点上的 Caddy 进入，容器自身不映射端口。
-	// compose 里写的 ports 会自动转成开放设置。
-	Exposures []*Exposure `protobuf:"bytes,5,rep,name=exposures,proto3" json:"exposures,omitempty"`
 	// 项目文件的来源。为空表示文件由用户自己放进 data/。
 	Source *Source `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
 	// 更新文件时保留不动的路径（相对 data/），例如 uploads/。
@@ -252,13 +258,6 @@ func (x *ProjectConfig) GetServiceEnv() map[string]*EnvList {
 func (x *ProjectConfig) GetForm() *ImageForm {
 	if x != nil {
 		return x.Form
-	}
-	return nil
-}
-
-func (x *ProjectConfig) GetExposures() []*Exposure {
-	if x != nil {
-		return x.Exposures
 	}
 	return nil
 }
@@ -331,7 +330,8 @@ func (x *Source) GetGitRef() string {
 	return ""
 }
 
-// Exposure 是一个服务端口的对外开放方式。
+// Exposure 是一条端口映射：一个服务端口的对外开放方式。
+// 每条映射是项目目录 config/routes/<name>.yml 一个文件，改了立即生效，不需要重新部署。
 type Exposure struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Service string                 `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
@@ -344,7 +344,11 @@ type Exposure struct {
 	// 绑定的域名，只用于 http。绑了域名后经 80/443 访问，自动申请证书并跳转 HTTPS。
 	Domains []string `protobuf:"bytes,5,rep,name=domains,proto3" json:"domains,omitempty"`
 	// 只开 HTTP，不申请证书、不跳转（例如前面还有 CDN 终结 HTTPS）。
-	HttpOnly      bool `protobuf:"varint,6,opt,name=http_only,json=httpOnly,proto3" json:"http_only,omitempty"`
+	HttpOnly bool `protobuf:"varint,6,opt,name=http_only,json=httpOnly,proto3" json:"http_only,omitempty"`
+	// 映射文件名（不含 .yml）。新建时为空，由节点生成。
+	Name string `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
+	// 文件无效时的原因，这条映射不会生效。只读。
+	Error         string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -419,6 +423,20 @@ func (x *Exposure) GetHttpOnly() bool {
 		return x.HttpOnly
 	}
 	return false
+}
+
+func (x *Exposure) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Exposure) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
 }
 
 type EnvVar struct {
@@ -1161,7 +1179,7 @@ var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xce\x03\n" +
+	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x03\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -1179,29 +1197,31 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"deploy_key\x18\f \x01(\tR\tdeployKey\x12#\n" +
 	"\rwebhook_token\x18\r \x01(\tR\fwebhookToken\x12\x1f\n" +
 	"\vlast_commit\x18\x0e \x01(\tR\n" +
-	"lastCommitJ\x04\b\a\x10\b\"\x84\x03\n" +
+	"lastCommit\x12)\n" +
+	"\x06routes\x18\x0f \x03(\v2\x11.nagi.v1.ExposureR\x06routesJ\x04\b\a\x10\b\"\xd9\x02\n" +
 	"\rProjectConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12G\n" +
 	"\vservice_env\x18\x03 \x03(\v2&.nagi.v1.ProjectConfig.ServiceEnvEntryR\n" +
 	"serviceEnv\x12&\n" +
-	"\x04form\x18\x04 \x01(\v2\x12.nagi.v1.ImageFormR\x04form\x12/\n" +
-	"\texposures\x18\x05 \x03(\v2\x11.nagi.v1.ExposureR\texposures\x12'\n" +
+	"\x04form\x18\x04 \x01(\v2\x12.nagi.v1.ImageFormR\x04form\x12'\n" +
 	"\x06source\x18\x06 \x01(\v2\x0f.nagi.v1.SourceR\x06source\x12\x1a\n" +
 	"\bpreserve\x18\a \x03(\tR\bpreserve\x1aO\n" +
 	"\x0fServiceEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.nagi.v1.EnvListR\x05value:\x028\x01\":\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.nagi.v1.EnvListR\x05value:\x028\x01J\x04\b\x05\x10\x06\":\n" +
 	"\x06Source\x12\x17\n" +
 	"\agit_url\x18\x01 \x01(\tR\x06gitUrl\x12\x17\n" +
-	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xad\x01\n" +
+	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xd7\x01\n" +
 	"\bExposure\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
 	"\bprotocol\x18\x03 \x01(\tR\bprotocol\x12\x1c\n" +
 	"\tpublished\x18\x04 \x01(\rR\tpublished\x12\x18\n" +
 	"\adomains\x18\x05 \x03(\tR\adomains\x12\x1b\n" +
-	"\thttp_only\x18\x06 \x01(\bR\bhttpOnly\"H\n" +
+	"\thttp_only\x18\x06 \x01(\bR\bhttpOnly\x12\x12\n" +
+	"\x04name\x18\a \x01(\tR\x04name\x12\x14\n" +
+	"\x05error\x18\b \x01(\tR\x05error\"H\n" +
 	"\x06EnvVar\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
@@ -1288,10 +1308,10 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	16, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	1,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
-	4,  // 3: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	15, // 4: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
-	6,  // 5: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
-	3,  // 6: nagi.v1.ProjectConfig.exposures:type_name -> nagi.v1.Exposure
+	3,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
+	4,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
+	15, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	6,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	2,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	4,  // 8: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	7,  // 9: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping

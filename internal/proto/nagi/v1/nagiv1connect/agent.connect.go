@@ -46,6 +46,11 @@ const (
 	// AgentServiceDiscardDraftProcedure is the fully-qualified name of the AgentService's DiscardDraft
 	// RPC.
 	AgentServiceDiscardDraftProcedure = "/nagi.v1.AgentService/DiscardDraft"
+	// AgentServiceSaveRouteProcedure is the fully-qualified name of the AgentService's SaveRoute RPC.
+	AgentServiceSaveRouteProcedure = "/nagi.v1.AgentService/SaveRoute"
+	// AgentServiceDeleteRouteProcedure is the fully-qualified name of the AgentService's DeleteRoute
+	// RPC.
+	AgentServiceDeleteRouteProcedure = "/nagi.v1.AgentService/DeleteRoute"
 	// AgentServiceDeleteProjectProcedure is the fully-qualified name of the AgentService's
 	// DeleteProject RPC.
 	AgentServiceDeleteProjectProcedure = "/nagi.v1.AgentService/DeleteProject"
@@ -65,6 +70,9 @@ type AgentServiceClient interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 新建或修改一条端口映射，立即生效。
+	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
+	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -114,6 +122,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
 			connect.WithClientOptions(opts...),
 		),
+		saveRoute: connect.NewClient[v1.SaveRouteRequest, v1.SaveRouteResponse](
+			httpClient,
+			baseURL+AgentServiceSaveRouteProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SaveRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteRoute: connect.NewClient[v1.DeleteRouteRequest, v1.DeleteRouteResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteRouteProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteRoute")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteProject: connect.NewClient[v1.DeleteProjectRequest, v1.DeleteProjectResponse](
 			httpClient,
 			baseURL+AgentServiceDeleteProjectProcedure,
@@ -148,6 +168,8 @@ type agentServiceClient struct {
 	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
 	saveDraft     *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
 	discardDraft  *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
+	saveRoute     *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
+	deleteRoute   *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
 	deleteProject *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	deployProject *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs    *connect.Client[v1.StreamLogsRequest, v1.LogLine]
@@ -179,6 +201,16 @@ func (c *agentServiceClient) DiscardDraft(ctx context.Context, req *connect.Requ
 	return c.discardDraft.CallUnary(ctx, req)
 }
 
+// SaveRoute calls nagi.v1.AgentService.SaveRoute.
+func (c *agentServiceClient) SaveRoute(ctx context.Context, req *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error) {
+	return c.saveRoute.CallUnary(ctx, req)
+}
+
+// DeleteRoute calls nagi.v1.AgentService.DeleteRoute.
+func (c *agentServiceClient) DeleteRoute(ctx context.Context, req *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error) {
+	return c.deleteRoute.CallUnary(ctx, req)
+}
+
 // DeleteProject calls nagi.v1.AgentService.DeleteProject.
 func (c *agentServiceClient) DeleteProject(ctx context.Context, req *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
 	return c.deleteProject.CallUnary(ctx, req)
@@ -206,6 +238,9 @@ type AgentServiceHandler interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 新建或修改一条端口映射，立即生效。
+	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
+	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -251,6 +286,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSaveRouteHandler := connect.NewUnaryHandler(
+		AgentServiceSaveRouteProcedure,
+		svc.SaveRoute,
+		connect.WithSchema(agentServiceMethods.ByName("SaveRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteRouteHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteRouteProcedure,
+		svc.DeleteRoute,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceDeleteProjectHandler := connect.NewUnaryHandler(
 		AgentServiceDeleteProjectProcedure,
 		svc.DeleteProject,
@@ -287,6 +334,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSaveDraftHandler.ServeHTTP(w, r)
 		case AgentServiceDiscardDraftProcedure:
 			agentServiceDiscardDraftHandler.ServeHTTP(w, r)
+		case AgentServiceSaveRouteProcedure:
+			agentServiceSaveRouteHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteRouteProcedure:
+			agentServiceDeleteRouteHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteProjectProcedure:
 			agentServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
@@ -322,6 +373,14 @@ func (UnimplementedAgentServiceHandler) SaveDraft(context.Context, *connect.Requ
 
 func (UnimplementedAgentServiceHandler) DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DiscardDraft is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SaveRoute is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteRoute is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {

@@ -13,6 +13,9 @@ service AgentService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
   rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
+  // 新建或修改一条端口映射，立即生效。
+  rpc SaveRoute(SaveRouteRequest) returns (SaveRouteResponse);
+  rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
   // 删除项目：停止并删除容器。项目目录默认保留。
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
@@ -79,6 +82,25 @@ message DiscardDraftRequest {
 }
 
 message DiscardDraftResponse {
+  Project project = 1;
+}
+
+message SaveRouteRequest {
+  string project_id = 1;
+  // name 为空表示新建。
+  Exposure route = 2;
+}
+
+message SaveRouteResponse {
+  Project project = 1;
+}
+
+message DeleteRouteRequest {
+  string project_id = 1;
+  string name = 2;
+}
+
+message DeleteRouteResponse {
   Project project = 1;
 }
 

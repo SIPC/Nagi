@@ -127,9 +127,6 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 	if _, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id)); err != nil {
 		return nil, err
 	}
-	if err := m.checkConflicts(ctx, id, cfg.GetExposures()); err != nil {
-		return nil, err
-	}
 	subnet, err := m.allocateSubnet(ctx)
 	if err != nil {
 		return nil, err
@@ -284,6 +281,15 @@ func (m *Manager) List(ctx context.Context) ([]*nagiv1.ProjectSummary, error) {
 	return out, nil
 }
 
+// projectRow 返回节点数据库里的项目记录。
+func (m *Manager) projectRow(ctx context.Context, id string) (nodestore.Project, error) {
+	row, err := m.nodeQ.GetProject(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return row, ErrNotFound
+	}
+	return row, err
+}
+
 // Get 返回单个项目及其状态。
 func (m *Manager) Get(ctx context.Context, id string) (*nagiv1.ProjectSummary, error) {
 	row, err := m.nodeQ.GetProject(ctx, id)
@@ -400,9 +406,6 @@ func (m *Manager) SaveDraft(ctx context.Context, id string, baseRevision int64, 
 	defer unlock()
 	defer pdb.Close()
 	if _, err := validate(ctx, cfg, paths{root: row.Dir}.dataDir(), composeProjectName(id)); err != nil {
-		return nil, err
-	}
-	if err := m.checkConflicts(ctx, id, cfg.GetExposures()); err != nil {
 		return nil, err
 	}
 	if err := pdb.setDraft(ctx, cfg); err != nil {
@@ -522,6 +525,9 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doP
 	if err := writeConfigFiles(p, cfg); err != nil {
 		return version, err
 	}
+	if err := m.importPorts(ctx, pdb, p, id, proj, onLine); err != nil {
+		return version, err
+	}
 	override, err := buildOverride(proj, p, id, version, row.Subnet, serviceEnv(cfg))
 	if err != nil {
 		return version, err
@@ -553,8 +559,12 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doP
 	}); err != nil {
 		return version, err
 	}
-	for _, e := range cfg.GetExposures() {
-		onLine("对外开放：" + exposureLabel(e))
+	for _, r := range readRoutes(p) {
+		if r.GetError() != "" {
+			onLine("映射 " + r.GetName() + " 无效，未生效：" + r.GetError())
+		} else {
+			onLine("对外开放：" + routeLabel(r))
+		}
 	}
 	return version, pdb.setMeta(ctx, metaDeployedVersion, strconv.FormatInt(version, 10))
 }
