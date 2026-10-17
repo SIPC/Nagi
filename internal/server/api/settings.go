@@ -30,6 +30,8 @@ type PanelInfo struct {
 	Port        int
 	Fingerprint string
 	Version     string
+	// OnDomainChange 在面板域名改变时调用（纯面板自己申请证书时用）。
+	OnDomainChange func(domain string)
 	// NewEnrollToken 生成一次性加入令牌，返回令牌和过期时间。
 	NewEnrollToken func(ctx context.Context) (string, time.Time, error)
 }
@@ -40,6 +42,15 @@ func (p *PanelInfo) PublicAddress(ctx context.Context) string {
 	if err != nil || v == "" {
 		return "127.0.0.1"
 	}
+	return v
+}
+
+// SettingDomain 是面板绑定的域名在 settings 表里的键。
+const SettingDomain = "panel_domain"
+
+// Domain 返回面板绑定的域名，没绑定时为空。
+func (p *PanelInfo) Domain(ctx context.Context) string {
+	v, _ := p.Q.GetSetting(ctx, SettingDomain)
 	return v
 }
 
@@ -54,6 +65,7 @@ func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
 		Port:          uint32(p.Port),
 		Fingerprint:   p.Fingerprint,
 		Version:       p.Version,
+		Domain:        p.Domain(ctx),
 	}
 }
 
@@ -73,6 +85,28 @@ func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Reque
 	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPublicAddress, Value: addr}); err != nil {
 		return nil, err
 	}
+	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
+}
+
+func (s *settingsService) SetPanelDomain(ctx context.Context, req *connect.Request[nagiv1.SetPanelDomainApiRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
+	d := strings.ToLower(strings.TrimSpace(req.Msg.GetDomain()))
+	if d != "" && (net.ParseIP(d) != nil || !hostnameRe.MatchString(d) || !strings.Contains(d, ".")) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("请填写域名，例如 panel.example.com"))
+	}
+	var err error
+	if d == "" {
+		err = s.Q.DeleteSetting(ctx, SettingDomain)
+	} else {
+		err = s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingDomain, Value: d})
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.Nodes.PushPanelDomain(d)
+	if s.Panel.OnDomainChange != nil {
+		s.Panel.OnDomainChange(d)
+	}
+	s.Log.Info("面板域名已更新", "domain", d)
 	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
 }
 

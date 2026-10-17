@@ -1199,6 +1199,7 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 const (
 	SettingsService_GetSettings_FullMethodName       = "/nagi.v1.SettingsService/GetSettings"
 	SettingsService_UpdateSettings_FullMethodName    = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_SetPanelDomain_FullMethodName    = "/nagi.v1.SettingsService/SetPanelDomain"
 	SettingsService_GetAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/GetAlertConfig"
 	SettingsService_UpdateAlertConfig_FullMethodName = "/nagi.v1.SettingsService/UpdateAlertConfig"
 	SettingsService_TestAlertChannel_FullMethodName  = "/nagi.v1.SettingsService/TestAlertChannel"
@@ -1218,6 +1219,8 @@ const (
 type SettingsServiceClient interface {
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error)
 	UpdateSettings(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
+	SetPanelDomain(ctx context.Context, in *SetPanelDomainApiRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -1261,6 +1264,16 @@ func (c *settingsServiceClient) UpdateSettings(ctx context.Context, in *UpdateSe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateSettingsResponse)
 	err := c.cc.Invoke(ctx, SettingsService_UpdateSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetPanelDomain(ctx context.Context, in *SetPanelDomainApiRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_SetPanelDomain_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1383,6 +1396,8 @@ func (c *settingsServiceClient) SetEntrance(ctx context.Context, in *SetEntrance
 type SettingsServiceServer interface {
 	GetSettings(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error)
 	UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error)
+	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
+	SetPanelDomain(context.Context, *SetPanelDomainApiRequest) (*UpdateSettingsResponse, error)
 	GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -1417,6 +1432,9 @@ func (UnimplementedSettingsServiceServer) GetSettings(context.Context, *GetSetti
 }
 func (UnimplementedSettingsServiceServer) UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetPanelDomain(context.Context, *SetPanelDomainApiRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPanelDomain not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAlertConfig not implemented")
@@ -1504,6 +1522,24 @@ func _SettingsService_UpdateSettings_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SettingsServiceServer).UpdateSettings(ctx, req.(*UpdateSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetPanelDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPanelDomainApiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetPanelDomain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetPanelDomain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetPanelDomain(ctx, req.(*SetPanelDomainApiRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1720,6 +1756,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateSettings",
 			Handler:    _SettingsService_UpdateSettings_Handler,
+		},
+		{
+			MethodName: "SetPanelDomain",
+			Handler:    _SettingsService_SetPanelDomain_Handler,
 		},
 		{
 			MethodName: "GetAlertConfig",

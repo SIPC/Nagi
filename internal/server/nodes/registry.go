@@ -55,6 +55,8 @@ type Conn struct {
 	name   string
 	remote netip.Addr
 	mesh   *nagiv1.MeshInfo
+
+	domainSent bool
 }
 
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
@@ -215,7 +217,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	if req.GetMesh() != nil {
 		p.conn.mesh = req.GetMesh()
 	}
+	pushDomain := req.GetNode().GetEmbedded() && !p.conn.domainSent
+	p.conn.domainSent = p.conn.domainSent || pushDomain
 	p.conn.mu.Unlock()
+	if pushDomain {
+		// 面板自带的节点连上后，把面板域名告诉它（可能在节点离线时改过）。
+		go p.r.pushDomain(p.conn)
+	}
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
@@ -301,4 +309,31 @@ func NodeID(spki []byte) string {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+// settingDomain 和 api.SettingDomain 相同（面板绑定的域名）。
+const settingDomain = "panel_domain"
+
+func (r *Registry) pushDomain(c *Conn) {
+	d, _ := r.q.GetSetting(context.Background(), settingDomain)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := c.Agent.SetPanelDomain(ctx, &nagiv1.SetPanelDomainRequest{Domain: d}); err != nil {
+		r.log.Warn("把面板域名告诉自带节点失败", "err", err)
+	}
+}
+
+// PushPanelDomain 把新的面板域名告诉面板自带的节点（它的 Caddy 负责反代面板）。
+func (r *Registry) PushPanelDomain(string) {
+	r.mu.RLock()
+	conns := make([]*Conn, 0, len(r.conns))
+	for _, c := range r.conns {
+		conns = append(conns, c)
+	}
+	r.mu.RUnlock()
+	for _, c := range conns {
+		if c.LastReport().GetNode().GetEmbedded() {
+			go r.pushDomain(c)
+		}
+	}
 }

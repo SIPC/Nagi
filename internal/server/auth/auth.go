@@ -303,6 +303,20 @@ func SessionToken(h http.Header) string {
 }
 
 // ClientIP 从 "ip:port" 形式的地址中取出 IP。
+// RequestIP 返回客户端 IP。请求来自本机（面板绑定域名后经本机 Caddy 转发）时，用 X-Forwarded-For 里的第一个地址。
+func RequestIP(addr string, h http.Header) string {
+	ip := ClientIP(addr)
+	if p := net.ParseIP(ip); p != nil && p.IsLoopback() {
+		if xff := h.Get("X-Forwarded-For"); xff != "" {
+			first, _, _ := strings.Cut(xff, ",")
+			if fp := net.ParseIP(strings.TrimSpace(first)); fp != nil {
+				return fp.String()
+			}
+		}
+	}
+	return ip
+}
+
 func ClientIP(addr string) string {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {

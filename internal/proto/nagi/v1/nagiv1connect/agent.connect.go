@@ -134,6 +134,9 @@ const (
 	AgentServiceGetMirrorsProcedure = "/nagi.v1.AgentService/GetMirrors"
 	// AgentServiceSetMirrorsProcedure is the fully-qualified name of the AgentService's SetMirrors RPC.
 	AgentServiceSetMirrorsProcedure = "/nagi.v1.AgentService/SetMirrors"
+	// AgentServiceSetPanelDomainProcedure is the fully-qualified name of the AgentService's
+	// SetPanelDomain RPC.
+	AgentServiceSetPanelDomainProcedure = "/nagi.v1.AgentService/SetPanelDomain"
 	// AgentServiceUpgradeProcedure is the fully-qualified name of the AgentService's Upgrade RPC.
 	AgentServiceUpgradeProcedure = "/nagi.v1.AgentService/Upgrade"
 	// AgentServiceListRegistriesProcedure is the fully-qualified name of the AgentService's
@@ -224,6 +227,8 @@ type AgentServiceClient interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
+	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
 	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
@@ -480,6 +485,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
 			connect.WithClientOptions(opts...),
 		),
+		setPanelDomain: connect.NewClient[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse](
+			httpClient,
+			baseURL+AgentServiceSetPanelDomainProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetPanelDomain")),
+			connect.WithClientOptions(opts...),
+		),
 		upgrade: connect.NewClient[v1.UpgradeRequest, v1.UpgradeResponse](
 			httpClient,
 			baseURL+AgentServiceUpgradeProcedure,
@@ -571,6 +582,7 @@ type agentServiceClient struct {
 	checkImages          *connect.Client[v1.ReplicaRef, v1.CheckImagesResponse]
 	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
 	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
+	setPanelDomain       *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
 	upgrade              *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	listRegistries       *connect.Client[v1.ReplicaRef, v1.RegistriesResponse]
 	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.RegistriesResponse]
@@ -771,6 +783,11 @@ func (c *agentServiceClient) SetMirrors(ctx context.Context, req *connect.Reques
 	return c.setMirrors.CallUnary(ctx, req)
 }
 
+// SetPanelDomain calls nagi.v1.AgentService.SetPanelDomain.
+func (c *agentServiceClient) SetPanelDomain(ctx context.Context, req *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error) {
+	return c.setPanelDomain.CallUnary(ctx, req)
+}
+
 // Upgrade calls nagi.v1.AgentService.Upgrade.
 func (c *agentServiceClient) Upgrade(ctx context.Context, req *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
 	return c.upgrade.CallUnary(ctx, req)
@@ -876,6 +893,8 @@ type AgentServiceHandler interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
+	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
 	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
@@ -1128,6 +1147,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetPanelDomainHandler := connect.NewUnaryHandler(
+		AgentServiceSetPanelDomainProcedure,
+		svc.SetPanelDomain,
+		connect.WithSchema(agentServiceMethods.ByName("SetPanelDomain")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceUpgradeHandler := connect.NewUnaryHandler(
 		AgentServiceUpgradeProcedure,
 		svc.Upgrade,
@@ -1254,6 +1279,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetMirrorsHandler.ServeHTTP(w, r)
 		case AgentServiceSetMirrorsProcedure:
 			agentServiceSetMirrorsHandler.ServeHTTP(w, r)
+		case AgentServiceSetPanelDomainProcedure:
+			agentServiceSetPanelDomainHandler.ServeHTTP(w, r)
 		case AgentServiceUpgradeProcedure:
 			agentServiceUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceListRegistriesProcedure:
@@ -1429,6 +1456,10 @@ func (UnimplementedAgentServiceHandler) GetMirrors(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMirrors is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetPanelDomain is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {

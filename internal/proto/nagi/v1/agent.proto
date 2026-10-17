@@ -77,6 +77,8 @@ service AgentService {
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);
 
+  // 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
+  rpc SetPanelDomain(SetPanelDomainRequest) returns (SetPanelDomainResponse);
   // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
 
@@ -95,6 +97,12 @@ service AgentService {
   // 热备：用户确认顶替（有状态项目默认要确认）。
   rpc ConfirmTakeover(ReplicaRef) returns (FailoverStatus);
 }
+
+message SetPanelDomainRequest {
+  string domain = 1;
+}
+
+message SetPanelDomainResponse {}
 
 message UpgradeRequest {
   // 二进制的 SHA-256（十六进制），节点下载后核对。

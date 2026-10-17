@@ -139,6 +139,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.failovers.loadAll()
 	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
 	projects.ManagedRestart = func(id string) bool { return a.failovers.get(id) != nil }
+	projects.ReservedDomain = func(d string) bool { return d != "" && d == a.panelDomain() }
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 
@@ -289,6 +290,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		routes, err := a.projects.Routes(ctx)
+		routes = append(routes, a.panelRoutes()...)
 		if err == nil {
 			err = a.proxy.Apply(routes)
 		}
@@ -347,6 +349,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		Os:       runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		Version:  a.cfg.Version,
+		Embedded: a.cfg.Embedded,
 	}
 	if v, err := a.docker.Version(ctx); err == nil {
 		info.DockerVersion = v

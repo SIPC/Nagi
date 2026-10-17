@@ -4,6 +4,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -33,6 +34,14 @@ type Route struct {
 	HTTPOnly  bool
 	// 上游地址，例如 10.200.0.2:80。容器没运行时为空。
 	Upstreams []string
+	// UpstreamTLS 不为空时用 HTTPS 连上游（反代面板时用面板的 CA 校验）。
+	UpstreamTLS *UpstreamTLS
+}
+
+// UpstreamTLS 是连上游时用的 TLS 设置。
+type UpstreamTLS struct {
+	CA         []byte // 信任的 CA 证书（DER）
+	ServerName string
 }
 
 // Proxy 管理进程内的 Caddy。
@@ -206,12 +215,23 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 func handlers(r Route) []obj {
 	return []obj{
 		{"handler": "log_append", "key": logRouteKey, "value": r.Project + "/" + r.Name},
-		reverseProxy(r.Upstreams),
+		reverseProxyTLS(r.Upstreams, r.UpstreamTLS),
 	}
 }
 
 func notFound() obj {
 	return obj{"handle": []obj{{"handler": "static_response", "status_code": 404, "body": "未找到这个域名对应的服务"}}}
+}
+
+func reverseProxyTLS(upstreams []string, t *UpstreamTLS) obj {
+	h := reverseProxy(upstreams)
+	if t != nil && h["handler"] == "reverse_proxy" {
+		h["transport"] = obj{"protocol": "http", "tls": obj{
+			"ca":          obj{"provider": "inline", "trusted_ca_certs": []string{base64.StdEncoding.EncodeToString(t.CA)}},
+			"server_name": t.ServerName,
+		}}
+	}
+	return h
 }
 
 // reverseProxy 返回反向代理处理器；容器没运行时返回 502 提示。

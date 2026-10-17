@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/caddyserver/caddy/v2 v2.11.7
+	github.com/caddyserver/certmagic v0.25.6
 	github.com/coder/websocket v1.8.15
 	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/distribution/reference v0.6.0
@@ -49,7 +50,6 @@ require (
 	github.com/aryann/difflib v0.0.0-20210328193216-ff5ff6dc229b // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.25.0 // indirect
-	github.com/caddyserver/certmagic v0.25.6 // indirect
 	github.com/caddyserver/zerossl v0.1.6 // indirect
 	github.com/ccoveille/go-safecast/v2 v2.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect

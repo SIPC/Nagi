@@ -40,6 +40,8 @@ type Config struct {
 	Logger *slog.Logger
 	// Version 是面板（也是它提供给节点的 nagi）的版本。
 	Version string
+	// SelfTLS：本机没有 Caddy（--no-agent 或 --no-proxy），绑定域名时由面板自己申请证书、监听 80/443。
+	SelfTLS bool
 }
 
 const (
@@ -61,9 +63,10 @@ type Server struct {
 	publicAddress string
 	listener      net.Listener
 
-	auth   *auth.Service
-	nodes  *nodes.Registry
-	sealer *sealer.Sealer
+	auth     *auth.Service
+	nodes    *nodes.Registry
+	sealer   *sealer.Sealer
+	domainCh chan string
 }
 
 // New 打开数据库、准备证书、监听面板端口。
@@ -76,7 +79,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("打开面板数据库: %w", err)
 	}
-	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d)}
+	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d), domainCh: make(chan string, 1)}
 
 	s.publicAddress, err = s.setting(ctx, api.SettingPublicAddress, detectAddress)
 	if err != nil {
@@ -147,6 +150,9 @@ func (s *Server) LocalAddr() string { return net.JoinHostPort("127.0.0.1", strco
 
 // URL 返回面板的对外访问地址。
 func (s *Server) URL() string {
+	if d, err := s.q.GetSetting(context.Background(), api.SettingDomain); err == nil && d != "" {
+		return "https://" + d
+	}
 	addr := s.publicAddress
 	if v, err := s.q.GetSetting(context.Background(), api.SettingPublicAddress); err == nil && v != "" {
 		addr = v
@@ -185,6 +191,12 @@ func (s *Server) Run(ctx context.Context) error {
 		Port:        s.port,
 		Fingerprint: s.fingerprint,
 		Version:     s.cfg.Version,
+		OnDomainChange: func(d string) {
+			select {
+			case s.domainCh <- d:
+			default:
+			}
+		},
 		NewEnrollToken: func(ctx context.Context) (string, time.Time, error) {
 			token, err := s.CreateEnrollToken(ctx)
 			return token, time.Now().Add(enrollTokenTTL), err
@@ -203,6 +215,7 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.acceptLoop(ctx, httpLn)
 	go s.nodes.RunOfflineAlerts(ctx)
 	go s.nodes.ServeMesh(ctx)
+	go s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
 	if m := s.nodes.Mesh(); m != nil {
 		defer m.Close()
 	}

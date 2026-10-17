@@ -117,7 +117,7 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 type authService struct{ *API }
 
 func (s *authService) Login(ctx context.Context, req *connect.Request[nagiv1.LoginRequest]) (*connect.Response[nagiv1.LoginResponse], error) {
-	cookie, err := s.Auth.Login(ctx, auth.ClientIP(req.Peer().Addr), strings.TrimSpace(req.Msg.GetUsername()), req.Msg.GetPassword(), req.Msg.GetTotpCode())
+	cookie, err := s.Auth.Login(ctx, auth.RequestIP(req.Peer().Addr, req.Header()), strings.TrimSpace(req.Msg.GetUsername()), req.Msg.GetPassword(), req.Msg.GetTotpCode())
 	if err != nil {
 		return nil, err
 	}

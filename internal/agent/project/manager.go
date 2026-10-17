@@ -61,6 +61,8 @@ type Manager struct {
 	FastSnapshot func(id string) bool
 	// ManagedRestart 返回 true 的项目由节点代管重启，容器的重启策略写成 no（设置了顶替的项目）。
 	ManagedRestart func(id string) bool
+	// ReservedDomain 返回 true 的域名已经被面板使用（面板绑定的域名），项目不能再用。
+	ReservedDomain func(domain string) bool
 
 	restarts managedRestarts
 	images   imageUpdates

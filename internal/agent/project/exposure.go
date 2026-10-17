@@ -212,6 +212,11 @@ func usedPorts(routes []*nagiv1.Exposure) map[portKey]bool {
 // skipProject/skipName 是正在修改的这条映射本身。
 func (m *Manager) checkConflicts(ctx context.Context, skipProject, skipName string, r *nagiv1.Exposure) error {
 	ports := usedPorts([]*nagiv1.Exposure{r})
+	for _, d := range r.GetDomains() {
+		if m.ReservedDomain != nil && m.ReservedDomain(d) {
+			return invalid("域名 %s 已经绑定给面板", d)
+		}
+	}
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
 		return err

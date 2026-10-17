@@ -204,6 +204,8 @@ message NodeInfo {
   string version = 4;
   string docker_version = 5;
   string compose_version = 6;
+  // 面板自带的节点（面板绑定域名时由它的 Caddy 反代面板）。
+  bool embedded = 7;
 }
 
 message LogLine {

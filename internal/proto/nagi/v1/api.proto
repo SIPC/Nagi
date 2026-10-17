@@ -180,6 +180,8 @@ message CreateEnrollCommandResponse {
 service SettingsService {
   rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
   rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+  // 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
+  rpc SetPanelDomain(SetPanelDomainApiRequest) returns (UpdateSettingsResponse);
   rpc GetAlertConfig(GetAlertConfigRequest) returns (GetAlertConfigResponse);
   rpc UpdateAlertConfig(UpdateAlertConfigRequest) returns (UpdateAlertConfigResponse);
   // 用面板发一条测试消息到某个渠道。
@@ -284,9 +286,15 @@ message PanelSettings {
   string fingerprint = 3;
   // 面板的版本，节点版本和它不一样时可以升级。
   string version = 4;
+  // 面板绑定的域名，为空表示没绑定。
+  string domain = 5;
 }
 
 message GetSettingsRequest {}
+
+message SetPanelDomainApiRequest {
+  string domain = 1;
+}
 
 message GetSettingsResponse {
   PanelSettings settings = 1;

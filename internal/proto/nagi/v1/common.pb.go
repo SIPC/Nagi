@@ -1262,8 +1262,10 @@ type NodeInfo struct {
 	Version        string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
 	DockerVersion  string                 `protobuf:"bytes,5,opt,name=docker_version,json=dockerVersion,proto3" json:"docker_version,omitempty"`
 	ComposeVersion string                 `protobuf:"bytes,6,opt,name=compose_version,json=composeVersion,proto3" json:"compose_version,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 面板自带的节点（面板绑定域名时由它的 Caddy 反代面板）。
+	Embedded      bool `protobuf:"varint,7,opt,name=embedded,proto3" json:"embedded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -1336,6 +1338,13 @@ func (x *NodeInfo) GetComposeVersion() string {
 		return x.ComposeVersion
 	}
 	return ""
+}
+
+func (x *NodeInfo) GetEmbedded() bool {
+	if x != nil {
+		return x.Embedded
+	}
+	return false
 }
 
 type LogLine struct {
@@ -2954,14 +2963,15 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\rlatest_digest\x18\x04 \x01(\tR\flatestDigest\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xb4\x01\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd0\x01\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
 	"\x04arch\x18\x03 \x01(\tR\x04arch\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\tR\aversion\x12%\n" +
 	"\x0edocker_version\x18\x05 \x01(\tR\rdockerVersion\x12'\n" +
-	"\x0fcompose_version\x18\x06 \x01(\tR\x0ecomposeVersion\"\x7f\n" +
+	"\x0fcompose_version\x18\x06 \x01(\tR\x0ecomposeVersion\x12\x1a\n" +
+	"\bembedded\x18\a \x01(\bR\bembedded\"\x7f\n" +
 	"\aLogLine\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06stream\x18\x02 \x01(\tR\x06stream\x12\x12\n" +

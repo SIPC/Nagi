@@ -58,6 +58,7 @@ func serverCmd() *cobra.Command {
 				Port:    port,
 				Logger:  log.With("component", "panel"),
 				Version: version,
+				SelfTLS: noAgent || noProxy,
 			})
 			if err != nil {
 				return err
