@@ -117,6 +117,9 @@ const (
 	// AgentServiceRemovePanelProcedure is the fully-qualified name of the AgentService's RemovePanel
 	// RPC.
 	AgentServiceRemovePanelProcedure = "/nagi.v1.AgentService/RemovePanel"
+	// AgentServiceCheckRemovePanelProcedure is the fully-qualified name of the AgentService's
+	// CheckRemovePanel RPC.
+	AgentServiceCheckRemovePanelProcedure = "/nagi.v1.AgentService/CheckRemovePanel"
 	// AgentServiceGetMeshStatusProcedure is the fully-qualified name of the AgentService's
 	// GetMeshStatus RPC.
 	AgentServiceGetMeshStatusProcedure = "/nagi.v1.AgentService/GetMeshStatus"
@@ -243,6 +246,8 @@ type AgentServiceClient interface {
 	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
+	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
+	CheckRemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 	// mesh 状态：到每个成员走哪条路径。
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
@@ -491,6 +496,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
 			connect.WithClientOptions(opts...),
 		),
+		checkRemovePanel: connect.NewClient[v1.RemovePanelRequest, v1.RemovePanelResponse](
+			httpClient,
+			baseURL+AgentServiceCheckRemovePanelProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CheckRemovePanel")),
+			connect.WithClientOptions(opts...),
+		),
 		getMeshStatus: connect.NewClient[v1.MeshStatusRequest, v1.MeshStatus](
 			httpClient,
 			baseURL+AgentServiceGetMeshStatusProcedure,
@@ -683,6 +694,7 @@ type agentServiceClient struct {
 	listPanels            *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
 	addPanel              *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
 	removePanel           *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	checkRemovePanel      *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
 	getMeshStatus         *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
 	meshPing              *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
 	setBackupTarget       *connect.Client[v1.SetBackupTargetRequest, v1.BackupStatus]
@@ -864,6 +876,11 @@ func (c *agentServiceClient) AddPanel(ctx context.Context, req *connect.Request[
 // RemovePanel calls nagi.v1.AgentService.RemovePanel.
 func (c *agentServiceClient) RemovePanel(ctx context.Context, req *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
 	return c.removePanel.CallUnary(ctx, req)
+}
+
+// CheckRemovePanel calls nagi.v1.AgentService.CheckRemovePanel.
+func (c *agentServiceClient) CheckRemovePanel(ctx context.Context, req *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
+	return c.checkRemovePanel.CallUnary(ctx, req)
 }
 
 // GetMeshStatus calls nagi.v1.AgentService.GetMeshStatus.
@@ -1048,6 +1065,8 @@ type AgentServiceHandler interface {
 	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
+	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
+	CheckRemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 	// mesh 状态：到每个成员走哪条路径。
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
@@ -1292,6 +1311,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCheckRemovePanelHandler := connect.NewUnaryHandler(
+		AgentServiceCheckRemovePanelProcedure,
+		svc.CheckRemovePanel,
+		connect.WithSchema(agentServiceMethods.ByName("CheckRemovePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceGetMeshStatusHandler := connect.NewUnaryHandler(
 		AgentServiceGetMeshStatusProcedure,
 		svc.GetMeshStatus,
@@ -1512,6 +1537,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceAddPanelHandler.ServeHTTP(w, r)
 		case AgentServiceRemovePanelProcedure:
 			agentServiceRemovePanelHandler.ServeHTTP(w, r)
+		case AgentServiceCheckRemovePanelProcedure:
+			agentServiceCheckRemovePanelHandler.ServeHTTP(w, r)
 		case AgentServiceGetMeshStatusProcedure:
 			agentServiceGetMeshStatusHandler.ServeHTTP(w, r)
 		case AgentServiceMeshPingProcedure:
@@ -1695,6 +1722,10 @@ func (UnimplementedAgentServiceHandler) AddPanel(context.Context, *connect.Reque
 
 func (UnimplementedAgentServiceHandler) RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RemovePanel is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CheckRemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckRemovePanel is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error) {

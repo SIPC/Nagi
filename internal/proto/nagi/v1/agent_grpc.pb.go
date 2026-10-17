@@ -50,6 +50,7 @@ const (
 	AgentService_ListPanels_FullMethodName            = "/nagi.v1.AgentService/ListPanels"
 	AgentService_AddPanel_FullMethodName              = "/nagi.v1.AgentService/AddPanel"
 	AgentService_RemovePanel_FullMethodName           = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_CheckRemovePanel_FullMethodName      = "/nagi.v1.AgentService/CheckRemovePanel"
 	AgentService_GetMeshStatus_FullMethodName         = "/nagi.v1.AgentService/GetMeshStatus"
 	AgentService_MeshPing_FullMethodName              = "/nagi.v1.AgentService/MeshPing"
 	AgentService_SetBackupTarget_FullMethodName       = "/nagi.v1.AgentService/SetBackupTarget"
@@ -134,6 +135,8 @@ type AgentServiceClient interface {
 	AddPanel(ctx context.Context, in *AddPanelRequest, opts ...grpc.CallOption) (*AddPanelResponse, error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
+	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
+	CheckRemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
 	// mesh 状态：到每个成员走哪条路径。
 	GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
@@ -560,6 +563,16 @@ func (c *agentServiceClient) RemovePanel(ctx context.Context, in *RemovePanelReq
 	return out, nil
 }
 
+func (c *agentServiceClient) CheckRemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePanelResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckRemovePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MeshStatus)
@@ -903,6 +916,8 @@ type AgentServiceServer interface {
 	AddPanel(context.Context, *AddPanelRequest) (*AddPanelResponse, error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
+	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
+	CheckRemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
 	// mesh 状态：到每个成员走哪条路径。
 	GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
@@ -1054,6 +1069,9 @@ func (UnimplementedAgentServiceServer) AddPanel(context.Context, *AddPanelReques
 }
 func (UnimplementedAgentServiceServer) RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemovePanel not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckRemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRemovePanel not implemented")
 }
 func (UnimplementedAgentServiceServer) GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMeshStatus not implemented")
@@ -1659,6 +1677,24 @@ func _AgentService_RemovePanel_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CheckRemovePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckRemovePanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckRemovePanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckRemovePanel(ctx, req.(*RemovePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_GetMeshStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MeshStatusRequest)
 	if err := dec(in); err != nil {
@@ -2208,6 +2244,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemovePanel",
 			Handler:    _AgentService_RemovePanel_Handler,
+		},
+		{
+			MethodName: "CheckRemovePanel",
+			Handler:    _AgentService_CheckRemovePanel_Handler,
 		},
 		{
 			MethodName: "GetMeshStatus",

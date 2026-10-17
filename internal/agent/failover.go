@@ -584,14 +584,19 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 		return nil, status.Error(codes.FailedPrecondition, "mesh 没有启动")
 	}
 	me, _ := a.selfMember(cfg)
-	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && !a.projects.Has(ctx, id) {
+	// 新设置时 A 上必须有项目；已有设置（例如顶替之后更换见证人）时 A 可能已经退位成了热备。
+	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && f.get(id) == nil && !a.projects.Has(ctx, id) {
 		return nil, status.Error(codes.FailedPrecondition, "A 节点上没有这个项目")
 	}
-	// 初始租约归 A，第 1 轮。已经有设置时（修改参数）保留当前的持有者和轮次。
+	// 初始租约归 A，第 1 轮；更换见证人时新见证人从当前的持有者和轮次开始。
+	// 已经有设置时（修改参数、更换见证人）保留当前的持有者和轮次。
 	f.mu.Lock()
 	st := f.m[id]
 	if st == nil {
 		st = &failoverState{holder: cfg.GetA().GetKey(), epoch: 1}
+		if h := req.GetSeedHolder(); req.GetSeedEpoch() > 0 && (bytes.Equal(h, cfg.GetA().GetKey()) || bytes.Equal(h, cfg.GetB().GetKey())) {
+			st.holder, st.epoch = h, req.GetSeedEpoch()
+		}
 		f.m[id] = st
 	}
 	st.cfg = cfg
@@ -631,13 +636,17 @@ func (a *agent) failoverStatus(ctx context.Context, id string) *nagiv1.FailoverS
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := &nagiv1.FailoverStatus{
-		Config: st.cfg, HolderName: memberName(st.cfg, st.holder), Epoch: st.epoch,
+		Config: st.cfg, HolderName: memberName(st.cfg, st.holder), HolderKey: st.holder, Epoch: st.epoch,
 		PendingConfirm: st.pending, LastError: st.lastError,
 	}
 	me, _ := a.selfMember(st.cfg)
 	switch {
 	case me == nil:
 		out.Role = "witness"
+		// 见证人只投票：持有者和轮次以自己的票为准。
+		if h, e, _ := f.voter.State(id, leaseOf(st.cfg)); len(h) > 0 {
+			out.HolderName, out.HolderKey, out.Epoch = memberName(st.cfg, h), h, e
+		}
 	case bytes.Equal(me.GetKey(), st.holder):
 		out.Role = "holder"
 		if !st.fenced {

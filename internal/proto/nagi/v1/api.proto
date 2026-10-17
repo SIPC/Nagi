@@ -368,6 +368,16 @@ service ProjectService {
   // 设置顶替（standby_node_id 为空表示取消）。
   rpc SetNodeProjectFailover(SetNodeProjectFailoverRequest) returns (FailoverStatus);
   rpc GetNodeProjectFailover(NodeProjectRef) returns (FailoverStatus);
+  // 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
+  rpc ChangeNodeProjectWitness(ChangeNodeProjectWitnessRequest) returns (FailoverStatus);
+}
+
+message ChangeNodeProjectWitnessRequest {
+  // 项目所在的节点（A 或 B 都行）。
+  string node_id = 1;
+  string project_id = 2;
+  // 新见证人节点；为空表示由本面板担任。
+  string witness_node_id = 3;
 }
 
 message SetNodeProjectFailoverRequest {

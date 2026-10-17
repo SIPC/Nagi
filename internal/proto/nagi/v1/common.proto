@@ -479,4 +479,6 @@ message FailoverStatus {
   google.protobuf.Timestamp last_sync = 7;
   string last_error = 8;
   bool stateful = 9;
+  // 当前持有租约的节点的 mesh 公钥。
+  bytes holder_key = 10;
 }

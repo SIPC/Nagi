@@ -57,6 +57,11 @@ func leaseDuration(cfg *nagiv1.FailoverConfig) time.Duration {
 
 // SetWitness 保存本面板担任见证人的顶替设置。初始租约归 A，第 1 轮；已有设置时保留当前的票。
 func (r *Registry) SetWitness(cfg *nagiv1.FailoverConfig) error {
+	return r.SetWitnessFrom(cfg, cfg.GetA().GetKey(), 1)
+}
+
+// SetWitnessFrom 同 SetWitness，但新设置从 holder 的第 epoch 轮开始投票（更换见证人时用当前的持有者和轮次）。
+func (r *Registry) SetWitnessFrom(cfg *nagiv1.FailoverConfig, holder []byte, epoch uint64) error {
 	w := r.witness
 	id := cfg.GetProjectId()
 	if w == nil || !witnessIDRe.MatchString(id) {
@@ -77,9 +82,26 @@ func (r *Registry) SetWitness(cfg *nagiv1.FailoverConfig) error {
 	w.cfgs[id] = cfg
 	w.mu.Unlock()
 	if !existed {
-		return w.voter.Set(id, cfg.GetA().GetKey(), 1, leaseDuration(cfg))
+		return w.voter.Set(id, holder, epoch, leaseDuration(cfg))
 	}
 	return nil
+}
+
+// WitnessProjects 返回本面板担任见证人、而且 nodeID 是 A 或 B 的项目名。移除面板或忘记节点前检查用。
+func (r *Registry) WitnessProjects(nodeID string) []string {
+	w := r.witness
+	if w == nil {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []string
+	for _, cfg := range w.cfgs {
+		if nodeID == "" || cfg.GetA().GetNodeId() == nodeID || cfg.GetB().GetNodeId() == nodeID {
+			out = append(out, cfg.GetProjectName())
+		}
+	}
+	return out
 }
 
 // ClearWitness 删除本面板担任见证人的顶替设置。

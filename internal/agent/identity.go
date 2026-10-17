@@ -193,14 +193,23 @@ func (id *identity) addPanel(p trustedPanel) error {
 // errLastPanel 表示要移除的是最后一个面板：移除后节点不再被任何面板管理。
 var errLastPanel = errors.New("这是节点信任的最后一个面板，移除后节点将不受任何面板管理")
 
+// errFailoverPanel 表示移除这个面板后，顶替的参与方之间联系不上（见 witnessguard.go）。
+var errFailoverPanel = errors.New("移除后，这些项目的顶替参与方之间联系不上")
+
 // removePanel 从信任列表移除面板。which 是公钥指纹或地址。force 时允许移除最后一个面板。
-func (id *identity) removePanel(which string, force bool) (trustedPanel, error) {
+// guard 不为 nil 时先检查这个面板能不能移除（见证人保护）。
+func (id *identity) removePanel(which string, force bool, guard func(fingerprint string) error) (trustedPanel, error) {
 	var removed trustedPanel
 	err := id.update(func(panels []trustedPanel) ([]trustedPanel, error) {
 		for i, p := range panels {
 			if p.Fingerprint == which || p.Address == which {
 				if len(panels) == 1 && !force {
 					return nil, errLastPanel
+				}
+				if guard != nil {
+					if err := guard(p.Fingerprint); err != nil {
+						return nil, err
+					}
 				}
 				removed = p
 				return append(panels[:i:i], panels[i+1:]...), nil

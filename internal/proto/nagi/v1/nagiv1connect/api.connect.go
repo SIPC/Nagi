@@ -258,6 +258,9 @@ const (
 	// ProjectServiceGetNodeProjectFailoverProcedure is the fully-qualified name of the ProjectService's
 	// GetNodeProjectFailover RPC.
 	ProjectServiceGetNodeProjectFailoverProcedure = "/nagi.v1.ProjectService/GetNodeProjectFailover"
+	// ProjectServiceChangeNodeProjectWitnessProcedure is the fully-qualified name of the
+	// ProjectService's ChangeNodeProjectWitness RPC.
+	ProjectServiceChangeNodeProjectWitnessProcedure = "/nagi.v1.ProjectService/ChangeNodeProjectWitness"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -1623,6 +1626,8 @@ type ProjectServiceClient interface {
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
+	ChangeNodeProjectWitness(context.Context, *connect.Request[v1.ChangeNodeProjectWitnessRequest]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewProjectServiceClient constructs a client for the nagi.v1.ProjectService service. By default,
@@ -1834,6 +1839,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectFailover")),
 			connect.WithClientOptions(opts...),
 		),
+		changeNodeProjectWitness: connect.NewClient[v1.ChangeNodeProjectWitnessRequest, v1.FailoverStatus](
+			httpClient,
+			baseURL+ProjectServiceChangeNodeProjectWitnessProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ChangeNodeProjectWitness")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1872,6 +1883,7 @@ type projectServiceClient struct {
 	migrateNodeProject           *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
 	setNodeProjectFailover       *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
 	getNodeProjectFailover       *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
+	changeNodeProjectWitness     *connect.Client[v1.ChangeNodeProjectWitnessRequest, v1.FailoverStatus]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -2039,6 +2051,11 @@ func (c *projectServiceClient) GetNodeProjectFailover(ctx context.Context, req *
 	return c.getNodeProjectFailover.CallUnary(ctx, req)
 }
 
+// ChangeNodeProjectWitness calls nagi.v1.ProjectService.ChangeNodeProjectWitness.
+func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, req *connect.Request[v1.ChangeNodeProjectWitnessRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.changeNodeProjectWitness.CallUnary(ctx, req)
+}
+
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
@@ -2082,6 +2099,8 @@ type ProjectServiceHandler interface {
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
+	ChangeNodeProjectWitness(context.Context, *connect.Request[v1.ChangeNodeProjectWitnessRequest]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewProjectServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2289,6 +2308,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectFailover")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceChangeNodeProjectWitnessHandler := connect.NewUnaryHandler(
+		ProjectServiceChangeNodeProjectWitnessProcedure,
+		svc.ChangeNodeProjectWitness,
+		connect.WithSchema(projectServiceMethods.ByName("ChangeNodeProjectWitness")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.ProjectService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProjectServiceListAllProjectsProcedure:
@@ -2357,6 +2382,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSetNodeProjectFailoverHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectFailoverProcedure:
 			projectServiceGetNodeProjectFailoverHandler.ServeHTTP(w, r)
+		case ProjectServiceChangeNodeProjectWitnessProcedure:
+			projectServiceChangeNodeProjectWitnessHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2496,4 +2523,8 @@ func (UnimplementedProjectServiceHandler) SetNodeProjectFailover(context.Context
 
 func (UnimplementedProjectServiceHandler) GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProjectFailover is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ChangeNodeProjectWitness(context.Context, *connect.Request[v1.ChangeNodeProjectWitnessRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ChangeNodeProjectWitness is not implemented"))
 }

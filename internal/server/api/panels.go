@@ -103,6 +103,12 @@ func (s *nodeService) AddNodePanel(ctx context.Context, req *connect.Request[nag
 	if err != nil {
 		return nil, err
 	}
+	// 移交会把本面板从节点上移除：先检查见证人，免得已经加入了新面板才发现移除不了。
+	if req.Msg.GetRemoveSelf() {
+		if err := s.checkWitness(ctx, nodeID); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := agent.AddPanel(ctx, &nagiv1.AddPanelRequest{
 		Address: inv.Address, Fingerprint: inv.Fingerprint, Token: inv.Token,
 	}); err != nil {

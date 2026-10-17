@@ -24,16 +24,16 @@ func TestTrustList(t *testing.T) {
 		t.Fatalf("地址没更新：%+v", p)
 	}
 
-	if _, err := id.removePanel("b:1", false); err != nil {
+	if _, err := id.removePanel("b:1", false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := id.removePanel("fa", false); !errors.Is(err, errLastPanel) {
+	if _, err := id.removePanel("fa", false, nil); !errors.Is(err, errLastPanel) {
 		t.Fatalf("不应该能移除最后一个面板：%v", err)
 	}
-	if _, err := id.removePanel("nope", true); err == nil {
+	if _, err := id.removePanel("nope", true, nil); err == nil {
 		t.Fatal("移除不存在的面板应该报错")
 	}
-	if _, err := id.removePanel("fa", true); err != nil || len(id.Panels()) != 0 {
+	if _, err := id.removePanel("fa", true, nil); err != nil || len(id.Panels()) != 0 {
 		t.Fatalf("force 应该能移除最后一个：%v", err)
 	}
 	if err := cli.reload(); err != nil || len(cli.Panels()) != 0 {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/SIPC/nagi/internal/agent"
@@ -210,15 +211,19 @@ func panelCmd() *cobra.Command {
 		Short: "从信任列表移除一个面板",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := agent.RemovePanel(dataDir, args[0], force)
+			p, witnessOf, err := agent.RemovePanel(dataDir, args[0], force)
 			if err != nil {
 				return err
 			}
 			fmt.Println("已移除面板", p.Address)
+			if len(witnessOf) > 0 {
+				fmt.Println("注意：移除后这些项目的顶替参与方之间联系不上：" + strings.Join(witnessOf, "、") +
+					"。在新面板上更换见证人、或者让相关节点都加入新面板之前，所在节点挂了没法顶替。")
+			}
 			return nil
 		},
 	}
-	remove.Flags().BoolVar(&force, "force", false, "允许移除最后一个面板")
+	remove.Flags().BoolVar(&force, "force", false, "允许移除最后一个面板，或者移除后顶替参与方之间联系不上的面板")
 
 	cmd.AddCommand(list, add, remove)
 	return cmd

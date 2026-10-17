@@ -199,10 +199,30 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 	} else if err != nil {
 		return nil, err
 	}
+	if err := s.checkWitness(ctx, id); err != nil {
+		return nil, err
+	}
 	if err := s.forgetNode(ctx, id); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
+}
+
+// checkWitness 面板和节点断开（移交、忘记节点）之前检查顶替：
+//   - 本面板担任见证人、而且这个节点是 A 或 B 的项目：断开后面板连不上节点，三票只剩两票；
+//   - 节点在线时再问节点：断开后它和其他顶替参与方之间还能不能经别的面板连上（见 agent/witnessguard.go）。
+func (s *nodeService) checkWitness(ctx context.Context, nodeID string) error {
+	if names := s.Nodes.WitnessProjects(nodeID); len(names) > 0 {
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+			"本面板是这些项目的顶替见证人：%s。断开后它们在所在节点挂掉时没法顶替，请先在项目的顶替设置里更换见证人，或者取消顶替",
+			strings.Join(names, "、")))
+	}
+	if conn, err := s.Nodes.Get(nodeID); err == nil {
+		if _, err := conn.Agent.CheckRemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); err != nil {
+			return fromGRPC(err)
+		}
+	}
+	return nil
 }
 
 // forgetNode 让面板忘记节点：拒绝它再连接，删除它的配置备份和 webhook。节点上的项目照常运行。

@@ -471,7 +471,27 @@ export function FailoverCard({
               </div>
               {s.lastError && <Alert>{s.lastError}</Alert>}
             </div>
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select className="w-44" value={witness} onChange={(e) => setWitness(e.target.value)}>
+                <option value="">本面板</option>
+                {nodes.data?.nodes
+                  .filter((n) => n.id !== cfg.a?.nodeId && n.id !== cfg.b?.nodeId)
+                  .map((n) => (
+                    <option key={n.id} value={n.id} disabled={!n.online}>
+                      节点 {n.name}
+                    </option>
+                  ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  run(() => projectClient.changeNodeProjectWitness({ nodeId, projectId, witnessNodeId: witness }))
+                }
+              >
+                更换见证人
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

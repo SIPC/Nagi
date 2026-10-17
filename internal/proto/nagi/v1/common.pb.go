@@ -3230,9 +3230,11 @@ type FailoverStatus struct {
 	// 热备：持有者失联，等待用户确认顶替（有状态项目）。
 	PendingConfirm bool `protobuf:"varint,6,opt,name=pending_confirm,json=pendingConfirm,proto3" json:"pending_confirm,omitempty"`
 	// 热备最近一次收到同步的时间（热备上）或最近一次同步给热备的时间（持有者上）。
-	LastSync      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
-	LastError     string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
-	Stateful      bool                   `protobuf:"varint,9,opt,name=stateful,proto3" json:"stateful,omitempty"`
+	LastSync  *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
+	LastError string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	Stateful  bool                   `protobuf:"varint,9,opt,name=stateful,proto3" json:"stateful,omitempty"`
+	// 当前持有租约的节点的 mesh 公钥。
+	HolderKey     []byte `protobuf:"bytes,10,opt,name=holder_key,json=holderKey,proto3" json:"holder_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3328,6 +3330,13 @@ func (x *FailoverStatus) GetStateful() bool {
 		return x.Stateful
 	}
 	return false
+}
+
+func (x *FailoverStatus) GetHolderKey() []byte {
+	if x != nil {
+		return x.HolderKey
+	}
+	return nil
 }
 
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
@@ -3617,7 +3626,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\awitness\x18\x05 \x01(\v2\x17.nagi.v1.FailoverMemberR\awitness\x12(\n" +
 	"\x10witness_is_panel\x18\x06 \x01(\bR\x0ewitnessIsPanel\x12#\n" +
 	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
-	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\"\xd7\x02\n" +
+	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\"\xf6\x02\n" +
 	"\x0eFailoverStatus\x12/\n" +
 	"\x06config\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\x06config\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1f\n" +
@@ -3629,7 +3638,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tlast_sync\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x1d\n" +
 	"\n" +
 	"last_error\x18\b \x01(\tR\tlastError\x12\x1a\n" +
-	"\bstateful\x18\t \x01(\bR\bstateful*@\n" +
+	"\bstateful\x18\t \x01(\bR\bstateful\x12\x1d\n" +
+	"\n" +
+	"holder_key\x18\n" +
+	" \x01(\fR\tholderKey*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +

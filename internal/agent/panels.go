@@ -60,8 +60,8 @@ func (s *agentService) AddPanel(ctx context.Context, req *nagiv1.AddPanelRequest
 
 func (s *agentService) RemovePanel(_ context.Context, req *nagiv1.RemovePanelRequest) (*nagiv1.RemovePanelResponse, error) {
 	a := s.node
-	removed, err := a.id.removePanel(req.GetFingerprint(), false)
-	if errors.Is(err, errLastPanel) {
+	removed, err := a.id.removePanel(req.GetFingerprint(), false, failoverGuard(a.cfg.DataDir))
+	if errors.Is(err, errLastPanel) || errors.Is(err, errFailoverPanel) {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	if err != nil {
@@ -73,6 +73,13 @@ func (s *agentService) RemovePanel(_ context.Context, req *nagiv1.RemovePanelReq
 		time.Sleep(time.Second)
 		a.reloadPanels()
 	}()
+	return &nagiv1.RemovePanelResponse{}, nil
+}
+
+func (s *agentService) CheckRemovePanel(_ context.Context, req *nagiv1.RemovePanelRequest) (*nagiv1.RemovePanelResponse, error) {
+	if err := failoverGuard(s.node.cfg.DataDir)(req.GetFingerprint()); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	return &nagiv1.RemovePanelResponse{}, nil
 }
 
@@ -126,15 +133,24 @@ func AddPanel(ctx context.Context, dataDir, address, fingerprint, token string) 
 	return id.enroll(ctx, address, fingerprint, token, hostname)
 }
 
-// RemovePanel 从信任列表移除面板。which 是公钥指纹或地址；force 时允许移除最后一个面板。
-func RemovePanel(dataDir, which string, force bool) (PanelInfo, error) {
+// RemovePanel 从信任列表移除面板。which 是公钥指纹或地址。force 时允许移除最后一个面板，
+// 以及移除后顶替参与方之间会联系不上的面板（旧面板已经挂了时只能这样）；这时返回受影响的项目，由调用方提示用户。
+func RemovePanel(dataDir, which string, force bool) (PanelInfo, []string, error) {
 	id, err := openIdentity(dataDir)
 	if err != nil {
-		return PanelInfo{}, err
+		return PanelInfo{}, nil, err
 	}
-	p, err := id.removePanel(which, force)
-	if errors.Is(err, errLastPanel) {
-		return PanelInfo{}, errors.New(err.Error() + "（确实要移除请加 --force）")
+	var witnessOf []string
+	guard := failoverGuard(dataDir)
+	if force {
+		guard = func(fp string) error {
+			witnessOf = failoverBreaks(dataDir, fp)
+			return nil
+		}
 	}
-	return PanelInfo{Address: p.Address, Fingerprint: p.Fingerprint, NodeID: p.NodeID}, err
+	p, err := id.removePanel(which, force, guard)
+	if errors.Is(err, errLastPanel) || errors.Is(err, errFailoverPanel) {
+		return PanelInfo{}, nil, errors.New(err.Error() + "（确实要移除请加 --force）")
+	}
+	return PanelInfo{Address: p.Address, Fingerprint: p.Fingerprint, NodeID: p.NodeID}, witnessOf, err
 }

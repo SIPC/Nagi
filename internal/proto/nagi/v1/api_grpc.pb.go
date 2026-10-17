@@ -1960,6 +1960,7 @@ const (
 	ProjectService_MigrateNodeProject_FullMethodName           = "/nagi.v1.ProjectService/MigrateNodeProject"
 	ProjectService_SetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectFailover"
 	ProjectService_GetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectFailover"
+	ProjectService_ChangeNodeProjectWitness_FullMethodName     = "/nagi.v1.ProjectService/ChangeNodeProjectWitness"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -2007,6 +2008,8 @@ type ProjectServiceClient interface {
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(ctx context.Context, in *SetNodeProjectFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
 	GetNodeProjectFailover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
+	ChangeNodeProjectWitness(ctx context.Context, in *ChangeNodeProjectWitnessRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
 }
 
 type projectServiceClient struct {
@@ -2410,6 +2413,16 @@ func (c *projectServiceClient) GetNodeProjectFailover(ctx context.Context, in *N
 	return out, nil
 }
 
+func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, in *ChangeNodeProjectWitnessRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, ProjectService_ChangeNodeProjectWitness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProjectServiceServer is the server API for ProjectService service.
 // All implementations must embed UnimplementedProjectServiceServer
 // for forward compatibility.
@@ -2455,6 +2468,8 @@ type ProjectServiceServer interface {
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *SetNodeProjectFailoverRequest) (*FailoverStatus, error)
 	GetNodeProjectFailover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
+	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
+	ChangeNodeProjectWitness(context.Context, *ChangeNodeProjectWitnessRequest) (*FailoverStatus, error)
 	mustEmbedUnimplementedProjectServiceServer()
 }
 
@@ -2563,6 +2578,9 @@ func (UnimplementedProjectServiceServer) SetNodeProjectFailover(context.Context,
 }
 func (UnimplementedProjectServiceServer) GetNodeProjectFailover(context.Context, *NodeProjectRef) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectFailover not implemented")
+}
+func (UnimplementedProjectServiceServer) ChangeNodeProjectWitness(context.Context, *ChangeNodeProjectWitnessRequest) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeNodeProjectWitness not implemented")
 }
 func (UnimplementedProjectServiceServer) mustEmbedUnimplementedProjectServiceServer() {}
 func (UnimplementedProjectServiceServer) testEmbeddedByValue()                        {}
@@ -3130,6 +3148,24 @@ func _ProjectService_GetNodeProjectFailover_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_ChangeNodeProjectWitness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeNodeProjectWitnessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ChangeNodeProjectWitness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ChangeNodeProjectWitness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ChangeNodeProjectWitness(ctx, req.(*ChangeNodeProjectWitnessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProjectService_ServiceDesc is the grpc.ServiceDesc for ProjectService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3240,6 +3276,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeProjectFailover",
 			Handler:    _ProjectService_GetNodeProjectFailover_Handler,
+		},
+		{
+			MethodName: "ChangeNodeProjectWitness",
+			Handler:    _ProjectService_ChangeNodeProjectWitness_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

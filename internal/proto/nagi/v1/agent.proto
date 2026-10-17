@@ -59,6 +59,8 @@ service AgentService {
   rpc AddPanel(AddPanelRequest) returns (AddPanelResponse);
   // 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
   rpc RemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
+  // 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
+  rpc CheckRemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
   // mesh 状态：到每个成员走哪条路径。
   rpc GetMeshStatus(MeshStatusRequest) returns (MeshStatus);
   // 经 mesh 连一下某个成员，测往返时间。
@@ -168,6 +170,10 @@ message SetFailoverRequest {
   // 删除这个项目的顶替设置。
   bool clear = 2;
   string project_id = 3;
+  // 更换见证人时，新见证人从当前的持有者和轮次开始投票（不填时初始租约归 A、第 1 轮）。
+  // 已经有设置的参与者忽略这两项，保留自己的持有者和轮次。
+  bytes seed_holder = 4;
+  uint64 seed_epoch = 5;
 }
 
 message ListFailoversRequest {}

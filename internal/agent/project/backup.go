@@ -394,16 +394,23 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 		if err == nil && len(list) > 0 {
 			snapshotID = list[0].ID
 			onLine(fmt.Sprintf("使用最新的快照（%s）", list[0].Time.Local().Format("2006-01-02 15:04:05")))
-		} else if len(members) > 0 {
-			rep.Close(ctx)
-			return fail(errors.New("副本里没有含数据的快照"))
 		}
 	}
 	for _, mem := range members {
-		if snapshotID == "" {
-			break
-		}
 		mp := p.member(mem.Name)
+		if snapshotID == "" {
+			// 还没有定时快照（例如项目刚创建就要顶替）：用部署的版本的文件恢复 data/，没有运行数据。
+			v, err := pdb.deployed(ctx, mem)
+			if err != nil || v == nil || v.FilesSnapshot == "" {
+				continue
+			}
+			onLine("副本里还没有定时快照，用版本文件恢复成员 " + mem.Name + " 的 data/（没有运行数据）")
+			if err := rep.Restore(ctx, v.FilesSnapshot, "data", mp.dataDir()); err != nil {
+				rep.Close(ctx)
+				return fail(fmt.Errorf("恢复成员 %s 的版本文件: %w", mem.Name, err))
+			}
+			continue
+		}
 		onLine("恢复成员 " + mem.Name + " 的 data/ 和 volumes/")
 		if err := rep.Restore(ctx, snapshotID, "member."+mem.Name+"/data", mp.dataDir()); err != nil {
 			onLine("快照里没有成员 " + mem.Name + " 的数据，跳过：" + err.Error())
