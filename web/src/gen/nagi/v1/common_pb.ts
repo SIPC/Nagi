@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKMAgoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgHEAgiiAIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEiQKCWV4cG9zdXJlcxgFIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUaQwoPU2VydmljZUVudkVudHJ5EgsKA2tleRgBIAEoCRIfCgV2YWx1ZRgCIAEoCzIQLm5hZ2kudjEuRW52TGlzdDoCOAEidAoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIIjQKBkVudlZhchILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGc2VjcmV0GAMgASgIIigKB0Vudkxpc3QSHQoEdmFycxgBIAMoCzIPLm5hZ2kudjEuRW52VmFyIpABCglJbWFnZUZvcm0SDQoFaW1hZ2UYASABKAkSDwoHY29tbWFuZBgCIAEoCRIjCgVwb3J0cxgDIAMoCzIULm5hZ2kudjEuUG9ydE1hcHBpbmcSDwoHdm9sdW1lcxgEIAMoCRIPCgd3b3JrZGlyGAUgASgJEhwKA2VudhgGIAMoCzIPLm5hZ2kudjEuRW52VmFyIkIKC1BvcnRNYXBwaW5nEhEKCXB1Ymxpc2hlZBgBIAEoDRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkicQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJIjkKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMiWwoOUHJvamVjdFN1bW1hcnkSIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdBImCgZzdGF0dXMYAiABKAsyFi5uYWdpLnYxLlByb2plY3RTdGF0dXMieAoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCSJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSLMAgoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJSgQIBxAIIrsCCg1Qcm9qZWN0Q29uZmlnEg8KB2NvbXBvc2UYASABKAkSHAoDZW52GAIgAygLMg8ubmFnaS52MS5FbnZWYXISOwoLc2VydmljZV9lbnYYAyADKAsyJi5uYWdpLnYxLlByb2plY3RDb25maWcuU2VydmljZUVudkVudHJ5EiAKBGZvcm0YBCABKAsyEi5uYWdpLnYxLkltYWdlRm9ybRIkCglleHBvc3VyZXMYBSADKAsyES5uYWdpLnYxLkV4cG9zdXJlEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBIioKBlNvdXJjZRIPCgdnaXRfdXJsGAEgASgJEg8KB2dpdF9yZWYYAiABKAkidAoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIIjQKBkVudlZhchILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGc2VjcmV0GAMgASgIIigKB0Vudkxpc3QSHQoEdmFycxgBIAMoCzIPLm5hZ2kudjEuRW52VmFyIpABCglJbWFnZUZvcm0SDQoFaW1hZ2UYASABKAkSDwoHY29tbWFuZBgCIAEoCRIjCgVwb3J0cxgDIAMoCzIULm5hZ2kudjEuUG9ydE1hcHBpbmcSDwoHdm9sdW1lcxgEIAMoCRIPCgd3b3JrZGlyGAUgASgJEhwKA2VudhgGIAMoCzIPLm5hZ2kudjEuRW52VmFyIkIKC1BvcnRNYXBwaW5nEhEKCXB1Ymxpc2hlZBgBIAEoDRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkicQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJIjkKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMiWwoOUHJvamVjdFN1bW1hcnkSIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdBImCgZzdGF0dXMYAiABKAsyFi5uYWdpLnYxLlByb2plY3RTdGF0dXMieAoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCSJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -87,6 +87,27 @@ export type Project = Message<"nagi.v1.Project"> & {
    * @generated from field: nagi.v1.ProjectConfig draft = 11;
    */
   draft?: ProjectConfig | undefined;
+
+  /**
+   * 项目的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
+   *
+   * @generated from field: string deploy_key = 12;
+   */
+  deployKey: string;
+
+  /**
+   * webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署。
+   *
+   * @generated from field: string webhook_token = 13;
+   */
+  webhookToken: string;
+
+  /**
+   * 最近一次拉取到的 git 提交。
+   *
+   * @generated from field: string last_commit = 14;
+   */
+  lastCommit: string;
 };
 
 /**
@@ -137,6 +158,21 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
    * @generated from field: repeated nagi.v1.Exposure exposures = 5;
    */
   exposures: Exposure[];
+
+  /**
+   * 项目文件的来源。为空表示文件由用户自己放进 data/。
+   *
+   * @generated from field: nagi.v1.Source source = 6;
+   */
+  source?: Source | undefined;
+
+  /**
+   * 更新文件时保留不动的路径（相对 data/），例如 uploads/。
+   * compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
+   *
+   * @generated from field: repeated string preserve = 7;
+   */
+  preserve: string[];
 };
 
 /**
@@ -145,6 +181,32 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
  */
 export const ProjectConfigSchema: GenMessage<ProjectConfig> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 1);
+
+/**
+ * @generated from message nagi.v1.Source
+ */
+export type Source = Message<"nagi.v1.Source"> & {
+  /**
+   * git 仓库地址，支持 SSH（用项目的 deploy key）和 HTTPS（公开仓库）。
+   *
+   * @generated from field: string git_url = 1;
+   */
+  gitUrl: string;
+
+  /**
+   * 分支或标签，为空时用仓库默认分支。
+   *
+   * @generated from field: string git_ref = 2;
+   */
+  gitRef: string;
+};
+
+/**
+ * Describes the message nagi.v1.Source.
+ * Use `create(SourceSchema)` to create a new message.
+ */
+export const SourceSchema: GenMessage<Source> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 2);
 
 /**
  * Exposure 是一个服务端口的对外开放方式。
@@ -198,7 +260,7 @@ export type Exposure = Message<"nagi.v1.Exposure"> & {
  * Use `create(ExposureSchema)` to create a new message.
  */
 export const ExposureSchema: GenMessage<Exposure> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 2);
+  messageDesc(file_nagi_v1_common, 3);
 
 /**
  * @generated from message nagi.v1.EnvVar
@@ -227,7 +289,7 @@ export type EnvVar = Message<"nagi.v1.EnvVar"> & {
  * Use `create(EnvVarSchema)` to create a new message.
  */
 export const EnvVarSchema: GenMessage<EnvVar> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 3);
+  messageDesc(file_nagi_v1_common, 4);
 
 /**
  * @generated from message nagi.v1.EnvList
@@ -244,7 +306,7 @@ export type EnvList = Message<"nagi.v1.EnvList"> & {
  * Use `create(EnvListSchema)` to create a new message.
  */
 export const EnvListSchema: GenMessage<EnvList> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 4);
+  messageDesc(file_nagi_v1_common, 5);
 
 /**
  * ImageForm：直接运行一个镜像，文件可选。
@@ -296,7 +358,7 @@ export type ImageForm = Message<"nagi.v1.ImageForm"> & {
  * Use `create(ImageFormSchema)` to create a new message.
  */
 export const ImageFormSchema: GenMessage<ImageForm> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 5);
+  messageDesc(file_nagi_v1_common, 6);
 
 /**
  * @generated from message nagi.v1.PortMapping
@@ -329,7 +391,7 @@ export type PortMapping = Message<"nagi.v1.PortMapping"> & {
  * Use `create(PortMappingSchema)` to create a new message.
  */
 export const PortMappingSchema: GenMessage<PortMapping> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 6);
+  messageDesc(file_nagi_v1_common, 7);
 
 /**
  * @generated from message nagi.v1.ServiceStatus
@@ -377,7 +439,7 @@ export type ServiceStatus = Message<"nagi.v1.ServiceStatus"> & {
  * Use `create(ServiceStatusSchema)` to create a new message.
  */
 export const ServiceStatusSchema: GenMessage<ServiceStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 7);
+  messageDesc(file_nagi_v1_common, 8);
 
 /**
  * @generated from message nagi.v1.ProjectStatus
@@ -394,7 +456,7 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
  * Use `create(ProjectStatusSchema)` to create a new message.
  */
 export const ProjectStatusSchema: GenMessage<ProjectStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 8);
+  messageDesc(file_nagi_v1_common, 9);
 
 /**
  * @generated from message nagi.v1.ProjectSummary
@@ -416,7 +478,7 @@ export type ProjectSummary = Message<"nagi.v1.ProjectSummary"> & {
  * Use `create(ProjectSummarySchema)` to create a new message.
  */
 export const ProjectSummarySchema: GenMessage<ProjectSummary> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 9);
+  messageDesc(file_nagi_v1_common, 10);
 
 /**
  * @generated from message nagi.v1.NodeInfo
@@ -458,7 +520,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
  * Use `create(NodeInfoSchema)` to create a new message.
  */
 export const NodeInfoSchema: GenMessage<NodeInfo> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 10);
+  messageDesc(file_nagi_v1_common, 11);
 
 /**
  * @generated from message nagi.v1.LogLine
@@ -492,7 +554,7 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
  * Use `create(LogLineSchema)` to create a new message.
  */
 export const LogLineSchema: GenMessage<LogLine> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 11);
+  messageDesc(file_nagi_v1_common, 12);
 
 /**
  * @generated from message nagi.v1.DeployEvent
@@ -523,7 +585,7 @@ export type DeployEvent = Message<"nagi.v1.DeployEvent"> & {
  * Use `create(DeployEventSchema)` to create a new message.
  */
 export const DeployEventSchema: GenMessage<DeployEvent> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 12);
+  messageDesc(file_nagi_v1_common, 13);
 
 /**
  * @generated from message nagi.v1.DeployResult
@@ -550,5 +612,5 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  * Use `create(DeployResultSchema)` to create a new message.
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 13);
+  messageDesc(file_nagi_v1_common, 14);
 

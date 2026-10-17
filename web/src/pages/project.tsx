@@ -6,8 +6,8 @@ import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select, Spinner, Textarea } from "@/components/ui";
-import { envToText, textToEnv } from "@/lib/config";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Spinner, Textarea } from "@/components/ui";
+import { envToText, lines, textToEnv } from "@/lib/config";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 
 export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: string }) {
@@ -49,7 +49,8 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
       />
 
       <div className="grid gap-6">
-        <DeployCard nodeId={nodeId} projectId={projectId} revision={p.revision} hasDraft={p.hasDraft} />
+        <DeployCard nodeId={nodeId} projectId={projectId} revision={p.revision} hasDraft={p.hasDraft} hasGit={!!(p.draft ?? p.config)?.source?.gitUrl} />
+        <SourceInfo project={p} />
 
         <Card>
           <CardHeader>
@@ -112,11 +113,13 @@ function DeployCard({
   projectId,
   revision,
   hasDraft,
+  hasGit,
 }: {
   nodeId: string;
   projectId: string;
   revision: bigint;
   hasDraft: boolean;
+  hasGit: boolean;
 }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<DeployState>({ running: false, lines: [] });
@@ -126,10 +129,10 @@ function DeployCard({
     outRef.current?.scrollTo({ top: outRef.current.scrollHeight });
   }, [state.lines.length]);
 
-  const deploy = async () => {
+  const deploy = async (pull: boolean) => {
     setState({ running: true, lines: [] });
     try {
-      for await (const ev of projectClient.deployNodeProject({ nodeId, projectId, baseRevision: revision })) {
+      for await (const ev of projectClient.deployNodeProject({ nodeId, projectId, baseRevision: revision, pull })) {
         if (ev.event.case === "output") {
           const line = ev.event.value;
           setState((s) => ({ ...s, lines: [...s.lines, line] }));
@@ -156,10 +159,17 @@ function DeployCard({
             {hasDraft ? "有未部署的修改：部署时会把草稿保存为新版本。" : "按当前版本执行 docker compose up。"}
           </p>
         </div>
-        <Button onClick={deploy} disabled={state.running}>
-          {state.running ? <Spinner /> : <Rocket />}
-          {state.running ? "部署中" : hasDraft ? "部署草稿" : "重新部署"}
-        </Button>
+        <div className="flex gap-2">
+          {hasGit && (
+            <Button variant="outline" onClick={() => deploy(true)} disabled={state.running}>
+              拉取并部署
+            </Button>
+          )}
+          <Button onClick={() => deploy(false)} disabled={state.running}>
+            {state.running ? <Spinner /> : <Rocket />}
+            {state.running ? "部署中" : hasDraft ? "部署草稿" : "重新部署"}
+          </Button>
+        </div>
       </CardHeader>
       {(state.lines.length > 0 || state.result) && (
         <CardContent className="grid gap-3">
@@ -304,6 +314,9 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
       2,
     ),
   );
+  const [gitUrl, setGitUrl] = useState(base?.source?.gitUrl ?? "");
+  const [gitRef, setGitRef] = useState(base?.source?.gitRef ?? "");
+  const [preserve, setPreserve] = useState((base?.preserve ?? []).join("\n"));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -329,8 +342,16 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
         projectId: project.id,
         baseRevision: project.revision,
         config: isForm
-          ? { env: textToEnv(env), form: { ...base!.form!, env: textToEnv(formEnv) }, exposures: parsedExposures }
+          ? {
+              env: textToEnv(env),
+              form: { ...base!.form!, env: textToEnv(formEnv) },
+              exposures: parsedExposures,
+              source: { gitUrl, gitRef },
+              preserve: lines(preserve),
+            }
           : {
+              source: { gitUrl, gitRef },
+              preserve: lines(preserve),
               compose,
               env: textToEnv(env),
               exposures: parsedExposures,
@@ -398,6 +419,20 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
             />
           </div>
         )}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1.5 sm:col-span-2">
+            <span className="text-sm font-medium">git 仓库（SSH 用 deploy key，HTTPS 只支持公开仓库；为空表示文件自己放进 data/）</span>
+            <Input value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:you/app.git" className="font-mono" />
+          </div>
+          <div className="grid gap-1.5">
+            <span className="text-sm font-medium">分支或标签</span>
+            <Input value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="默认分支" className="font-mono" />
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <span className="text-sm font-medium">更新文件时保留的路径（相对 data/，每行一个；挂载进容器的目录会自动保留）</span>
+          <Textarea value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
+        </div>
         <div className="grid gap-1.5">
           <span className="text-sm font-medium">
             对外开放（JSON）：protocol 为 http / tcp / udp；http 可填 domains（经 80/443，自动证书），或填 published 端口；httpOnly 表示不申请证书
@@ -426,6 +461,33 @@ function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Pr
             </div>
           ))
         )}
+      </CardContent>
+    </Card>
+  );
+}
+function SourceInfo({ project }: { project: Project }) {
+  const cfg = project.draft ?? project.config;
+  if (!cfg?.source?.gitUrl) return null;
+  const hook = `${location.origin}/hooks/${project.webhookToken}`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>git</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <div>
+          仓库 <span className="font-mono">{cfg.source.gitUrl}</span>
+          {cfg.source.gitRef && <span className="font-mono"> @ {cfg.source.gitRef}</span>}
+          {project.lastCommit && <span className="text-muted-foreground">，当前提交 {project.lastCommit.slice(0, 12)}</span>}
+        </div>
+        <div className="grid gap-1">
+          <span className="font-medium">deploy key（加到仓库的只读 deploy key）</span>
+          <code className="break-all rounded bg-muted p-2 text-xs">{project.deployKey}</code>
+        </div>
+        <div className="grid gap-1">
+          <span className="font-medium">webhook 地址（push 后自动拉取并部署）</span>
+          <code className="break-all rounded bg-muted p-2 text-xs">{hook}</code>
+        </div>
       </CardContent>
     </Card>
   );

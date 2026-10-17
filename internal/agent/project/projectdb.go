@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/store/projectstore"
@@ -21,6 +23,8 @@ const (
 	metaRevision        = "revision"
 	metaDeployedVersion = "deployed_version"
 	metaCreatedAt       = "created_at"
+	metaWebhookToken    = "webhook_token"
+	metaLastCommit      = "last_commit"
 )
 
 // projectDB 是项目目录里的 config/project.db。
@@ -142,5 +146,16 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 		Config:          cfg,
 		HasDraft:        draft != nil,
 		Draft:           draft,
+		DeployKey:       readDeployKey(paths{root: dir}),
+		WebhookToken:    p.meta(ctx, metaWebhookToken),
+		LastCommit:      p.meta(ctx, metaLastCommit),
 	}, nil
+}
+
+func readDeployKey(p paths) string {
+	b, err := os.ReadFile(p.deployKeyPub())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }

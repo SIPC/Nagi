@@ -67,7 +67,7 @@ func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream na
 	send := func(line string) {
 		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	}
-	version, err := s.projects.Deploy(ctx, req.GetId(), req.GetBaseRevision(), send)
+	version, err := s.projects.Deploy(ctx, req.GetId(), req.GetBaseRevision(), req.GetPull(), send)
 	s.changed()
 	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)

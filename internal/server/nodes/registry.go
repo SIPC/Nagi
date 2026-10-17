@@ -3,8 +3,10 @@ package nodes
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"sync"
@@ -178,6 +180,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		if err != nil {
 			continue
 		}
+		if t := proj.GetWebhookToken(); t != "" {
+			if err := p.r.q.UpsertWebhook(ctx, store.UpsertWebhookParams{
+				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(),
+			}); err != nil {
+				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
+			}
+		}
 		if err := p.r.q.UpsertProjectBackup(ctx, store.UpsertProjectBackupParams{
 			NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Revision: proj.GetRevision(), Data: data, UpdatedAt: now,
 		}); err != nil {
@@ -185,4 +194,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		}
 	}
 	return &nagiv1.ReportResponse{}, nil
+}
+
+// hashToken 与 auth.HashToken 相同；这里单独写一份，避免 nodes 依赖 auth。
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

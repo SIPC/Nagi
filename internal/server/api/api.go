@@ -268,7 +268,7 @@ func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Req
 		return err
 	}
 	stream, err := agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{
-		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(),
+		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Pull: req.Msg.GetPull(),
 	})
 	if err != nil {
 		return fromGRPC(err)

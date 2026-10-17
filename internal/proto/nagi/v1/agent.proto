@@ -66,6 +66,8 @@ message DeployProjectRequest {
   string id = 1;
   // 面板基于的修订号；节点上已经不是这个修订号时拒绝。
   int64 base_revision = 2;
+  // 部署前先从 git 拉取文件。
+  bool pull = 3;
 }
 
 message StreamLogsRequest {

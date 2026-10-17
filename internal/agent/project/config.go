@@ -156,6 +156,16 @@ func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composePr
 			return nil, invalid("服务级环境变量里的服务 %q 不在 compose 中", name)
 		}
 	}
+	if url := strings.TrimSpace(cfg.GetSource().GetGitUrl()); url != "" {
+		if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") && !isSSHURL(url) {
+			return nil, invalid("git 仓库地址只支持 SSH（git@host:repo.git、ssh://）和 HTTPS")
+		}
+		cfg.Source.GitUrl = url
+		cfg.Source.GitRef = strings.TrimSpace(cfg.Source.GetGitRef())
+	} else {
+		cfg.Source = nil
+	}
+	cfg.Preserve = normalizePreserve(cfg.GetPreserve())
 	// compose 里的 ports 自动转成开放设置，写回配置里，界面上能看到并修改。
 	cfg.Exposures = materializeExposures(proj, cfg)
 	if err := checkExposures(proj, cfg.Exposures); err != nil {

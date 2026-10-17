@@ -28,6 +28,12 @@ message Project {
   bool has_draft = 10;
   // 草稿内容，has_draft 为 false 时为空。
   ProjectConfig draft = 11;
+  // 项目的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
+  string deploy_key = 12;
+  // webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署。
+  string webhook_token = 13;
+  // 最近一次拉取到的 git 提交。
+  string last_commit = 14;
 }
 
 // ProjectConfig 是一个版本的完整配置。
@@ -43,6 +49,18 @@ message ProjectConfig {
   // 对外开放设置。所有对外流量都经节点上的 Caddy 进入，容器自身不映射端口。
   // compose 里写的 ports 会自动转成开放设置。
   repeated Exposure exposures = 5;
+  // 项目文件的来源。为空表示文件由用户自己放进 data/。
+  Source source = 6;
+  // 更新文件时保留不动的路径（相对 data/），例如 uploads/。
+  // compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
+  repeated string preserve = 7;
+}
+
+message Source {
+  // git 仓库地址，支持 SSH（用项目的 deploy key）和 HTTPS（公开仓库）。
+  string git_url = 1;
+  // 分支或标签，为空时用仓库默认分支。
+  string git_ref = 2;
 }
 
 // Exposure 是一个服务端口的对外开放方式。

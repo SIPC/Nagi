@@ -50,3 +50,9 @@ type User struct {
 	PasswordHash string
 	CreatedAt    int64
 }
+
+type Webhook struct {
+	TokenHash string
+	NodeID    string
+	ProjectID string
+}

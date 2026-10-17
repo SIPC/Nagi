@@ -182,6 +182,17 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getWebhook = `-- name: GetWebhook :one
+SELECT token_hash, node_id, project_id FROM webhooks WHERE token_hash = ?
+`
+
+func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, error) {
+	row := q.db.QueryRowContext(ctx, getWebhook, tokenHash)
+	var i Webhook
+	err := row.Scan(&i.TokenHash, &i.NodeID, &i.ProjectID)
+	return i, err
+}
+
 const listNodes = `-- name: ListNodes :many
 SELECT id, name, created_at, last_seen, info, revoked FROM nodes WHERE revoked = 0 ORDER BY created_at
 `
@@ -303,6 +314,22 @@ func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBack
 		arg.Data,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const upsertWebhook = `-- name: UpsertWebhook :exec
+INSERT INTO webhooks (token_hash, node_id, project_id) VALUES (?, ?, ?)
+ON CONFLICT (node_id, project_id) DO UPDATE SET token_hash = excluded.token_hash
+`
+
+type UpsertWebhookParams struct {
+	TokenHash string
+	NodeID    string
+	ProjectID string
+}
+
+func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWebhook, arg.TokenHash, arg.NodeID, arg.ProjectID)
 	return err
 }
 

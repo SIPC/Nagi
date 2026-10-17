@@ -1152,10 +1152,12 @@ func (x *GetNodeProjectResponse) GetProject() *ProjectSummary {
 }
 
 type DeployNodeProjectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	BaseRevision  int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	NodeId       string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId    string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	BaseRevision int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	// 部署前先从 git 拉取文件。
+	Pull          bool `protobuf:"varint,4,opt,name=pull,proto3" json:"pull,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1209,6 +1211,13 @@ func (x *DeployNodeProjectRequest) GetBaseRevision() int64 {
 		return x.BaseRevision
 	}
 	return 0
+}
+
+func (x *DeployNodeProjectRequest) GetPull() bool {
+	if x != nil {
+		return x.Pull
+	}
+	return false
 }
 
 type StreamNodeProjectLogsRequest struct {
@@ -1352,12 +1361,13 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\"K\n" +
 	"\x16GetNodeProjectResponse\x121\n" +
-	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"w\n" +
+	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"\x8b\x01\n" +
 	"\x18DeployNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\"\x9c\x01\n" +
+	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x12\x12\n" +
+	"\x04pull\x18\x04 \x01(\bR\x04pull\"\x9c\x01\n" +
 	"\x1cStreamNodeProjectLogsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +

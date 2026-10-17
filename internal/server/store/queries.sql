@@ -61,3 +61,10 @@ ON CONFLICT (node_id, project_id) DO UPDATE SET
 
 -- name: ListProjectBackups :many
 SELECT * FROM project_backups WHERE node_id = ? ORDER BY project_id;
+
+-- name: UpsertWebhook :exec
+INSERT INTO webhooks (token_hash, node_id, project_id) VALUES (?, ?, ?)
+ON CONFLICT (node_id, project_id) DO UPDATE SET token_hash = excluded.token_hash;
+
+-- name: GetWebhook :one
+SELECT * FROM webhooks WHERE token_hash = ?;

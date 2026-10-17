@@ -151,6 +151,15 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 		return nil, err
 	}
 	defer pdb.Close()
+	if _, err := ensureDeployKey(p); err != nil {
+		cleanup()
+		return nil, err
+	}
+	webhook, err := randomToken()
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
 	now := time.Now()
 	for k, v := range map[string]string{
 		metaID:              id,
@@ -158,6 +167,7 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 		metaRevision:        "1",
 		metaDeployedVersion: "0",
 		metaCreatedAt:       strconv.FormatInt(now.Unix(), 10),
+		metaWebhookToken:    webhook,
 	} {
 		if err := pdb.setMeta(ctx, k, v); err != nil {
 			cleanup()
@@ -425,7 +435,7 @@ func (m *Manager) DiscardDraft(ctx context.Context, id string, baseRevision int6
 
 // Deploy 部署项目。有草稿时先把草稿记为新版本；没有草稿时重新部署最新版本。
 // baseRevision 不为 0 时，必须和节点上的修订号一致。
-func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onLine func(string)) (int64, error) {
+func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull bool, onLine func(string)) (int64, error) {
 	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
 	if err != nil {
 		return 0, err
@@ -459,6 +469,16 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onL
 	if err != nil {
 		return version, err
 	}
+	if doPull {
+		preserve := normalizePreserve(append(append([]string(nil), cfg.GetPreserve()...), bindMountPaths(proj, p.dataDir())...))
+		commit, err := pull(ctx, p, cfg.GetSource(), preserve, onLine)
+		if err != nil {
+			return version, err
+		}
+		if err := pdb.setMeta(ctx, metaLastCommit, commit); err != nil {
+			return version, err
+		}
+	}
 	if err := writeConfigFiles(p, cfg); err != nil {
 		return version, err
 	}
@@ -471,15 +491,22 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onL
 	}
 
 	onLine(fmt.Sprintf("部署版本 %d", version))
-	err = compose.Up(ctx, compose.Files{
+	files := compose.Files{
 		ProjectName: composeProjectName(id),
 		ProjectDir:  p.dataDir(),
 		ComposeFile: p.composeFile(),
 		Override:    p.overrideFile(),
 		EnvFile:     p.envFile(),
-	}, onLine)
-	if err != nil {
+	}
+	if err := compose.Up(ctx, files, onLine); err != nil {
 		return version, err
+	}
+	// 文件更新了但 compose 没变时，compose 不会重建容器，挂载了 data/ 的服务要强制重建。
+	if svcs := dataServices(proj, p.dataDir()); doPull && len(svcs) > 0 {
+		onLine("文件已更新，重建服务：" + strings.Join(svcs, "、"))
+		if err := compose.Recreate(ctx, files, svcs, onLine); err != nil {
+			return version, err
+		}
 	}
 	if err := pdb.q.MarkDeployed(ctx, projectstore.MarkDeployedParams{
 		DeployedAt: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, Version: version,
@@ -526,6 +553,15 @@ func (m *Manager) Logs(ctx context.Context, id, service string, tail int, follow
 }
 
 // ---- 工具 ----
+
+// randomToken 生成 32 字节的随机令牌（十六进制）。
+func randomToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 // newID 生成全局唯一的项目 ID：16 个十六进制字符。
 func newID() (string, error) {

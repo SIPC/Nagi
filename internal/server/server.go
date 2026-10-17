@@ -131,7 +131,9 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.auth.CleanupLoop(ctx)
 
 	mux := http.NewServeMux()
-	(&api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log}).Mount(mux)
+	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log}
+	a.Mount(mux)
+	mux.Handle("/hooks/", a.WebhookHandler())
 	mux.Handle("/", web.Handler())
 
 	httpLn := newChanListener(s.listener.Addr())

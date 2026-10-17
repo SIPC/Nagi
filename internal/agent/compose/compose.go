@@ -38,6 +38,11 @@ func Up(ctx context.Context, f Files, onLine func(string)) error {
 	return run(ctx, f.args("up", "-d", "--remove-orphans"), onLine)
 }
 
+// Recreate 强制重建指定服务的容器（不影响它依赖的服务）。
+func Recreate(ctx context.Context, f Files, services []string, onLine func(string)) error {
+	return run(ctx, f.args(append([]string{"up", "-d", "--force-recreate", "--no-deps"}, services...)...), onLine)
+}
+
 // Version 返回 docker compose 插件的版本号，例如 "2.39.1"。
 func Version(ctx context.Context) (string, error) {
 	out, err := exec.CommandContext(ctx, "docker", "compose", "version", "--short").Output()

@@ -498,7 +498,9 @@ type DeployProjectRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// 面板基于的修订号；节点上已经不是这个修订号时拒绝。
-	BaseRevision  int64 `protobuf:"varint,2,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	BaseRevision int64 `protobuf:"varint,2,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	// 部署前先从 git 拉取文件。
+	Pull          bool `protobuf:"varint,3,opt,name=pull,proto3" json:"pull,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -545,6 +547,13 @@ func (x *DeployProjectRequest) GetBaseRevision() int64 {
 		return x.BaseRevision
 	}
 	return 0
+}
+
+func (x *DeployProjectRequest) GetPull() bool {
+	if x != nil {
+		return x.Pull
+	}
+	return false
 }
 
 type StreamLogsRequest struct {
@@ -645,10 +654,11 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x11GetProjectRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"G\n" +
 	"\x12GetProjectResponse\x121\n" +
-	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"K\n" +
+	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"_\n" +
 	"\x14DeployProjectRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
-	"\rbase_revision\x18\x02 \x01(\x03R\fbaseRevision\"i\n" +
+	"\rbase_revision\x18\x02 \x01(\x03R\fbaseRevision\x12\x12\n" +
+	"\x04pull\x18\x03 \x01(\bR\x04pull\"i\n" +
 	"\x11StreamLogsRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\x12\x12\n" +

@@ -137,6 +137,8 @@ message DeployNodeProjectRequest {
   string node_id = 1;
   string project_id = 2;
   int64 base_revision = 3;
+  // 部署前先从 git 拉取文件。
+  bool pull = 4;
 }
 
 message StreamNodeProjectLogsRequest {
