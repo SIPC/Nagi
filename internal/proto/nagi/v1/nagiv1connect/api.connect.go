@@ -169,6 +169,9 @@ const (
 	// ProjectServiceSyncNodeProjectBackupProcedure is the fully-qualified name of the ProjectService's
 	// SyncNodeProjectBackup RPC.
 	ProjectServiceSyncNodeProjectBackupProcedure = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
+	// ProjectServiceMigrateNodeProjectProcedure is the fully-qualified name of the ProjectService's
+	// MigrateNodeProject RPC.
+	ProjectServiceMigrateNodeProjectProcedure = "/nagi.v1.ProjectService/MigrateNodeProject"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -1098,6 +1101,9 @@ type ProjectServiceClient interface {
 	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
+	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
+	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 }
 
 // NewProjectServiceClient constructs a client for the nagi.v1.ProjectService service. By default,
@@ -1219,6 +1225,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
 			connect.WithClientOptions(opts...),
 		),
+		migrateNodeProject: connect.NewClient[v1.MigrateNodeProjectRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceMigrateNodeProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1242,6 +1254,7 @@ type projectServiceClient struct {
 	setNodeProjectBackup       *connect.Client[v1.SetNodeProjectBackupRequest, v1.BackupStatus]
 	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
+	migrateNodeProject         *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -1334,6 +1347,11 @@ func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, req *c
 	return c.syncNodeProjectBackup.CallUnary(ctx, req)
 }
 
+// MigrateNodeProject calls nagi.v1.ProjectService.MigrateNodeProject.
+func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, req *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateNodeProject.CallServerStream(ctx, req)
+}
+
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
@@ -1355,6 +1373,9 @@ type ProjectServiceHandler interface {
 	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
+	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
+	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 }
 
 // NewProjectServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1472,6 +1493,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceMigrateNodeProjectHandler := connect.NewServerStreamHandler(
+		ProjectServiceMigrateNodeProjectProcedure,
+		svc.MigrateNodeProject,
+		connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.ProjectService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProjectServiceListAllProjectsProcedure:
@@ -1510,6 +1537,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceGetNodeProjectBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncNodeProjectBackupProcedure:
 			projectServiceSyncNodeProjectBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceMigrateNodeProjectProcedure:
+			projectServiceMigrateNodeProjectHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1589,4 +1618,8 @@ func (UnimplementedProjectServiceHandler) GetNodeProjectBackup(context.Context, 
 
 func (UnimplementedProjectServiceHandler) SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncNodeProjectBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.MigrateNodeProject is not implemented"))
 }

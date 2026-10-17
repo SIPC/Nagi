@@ -428,10 +428,7 @@ func (m *Manager) TakeSnapshot(ctx context.Context, id string, kind snapshot.Kin
 		return "", err
 	}
 	defer rep.Close(ctx)
-	sid, err := m.snapshotWithPause(ctx, rep, id, kind,
-		[]snapshot.Dir{{Name: "data", Path: p.dataDir()}, {Name: "volumes", Path: p.volumesDir()}, {Name: "config", Path: p.configDir()}},
-		[]string{"/config/.checkout/", "/config/.restore/", "/config/*.tmp", "/config/project.db-wal", "/config/project.db-shm"},
-		nil, stateful, onLine)
+	sid, err := m.snapshotWithPause(ctx, rep, id, kind, snapshotDirs(p), snapshotIgnore, nil, stateful, onLine)
 	if err != nil {
 		return "", err
 	}

@@ -286,3 +286,102 @@ function RestoreReplica({
     </div>
   );
 }
+
+// MigrateCard：把项目迁移到另一个节点。
+export function MigrateCard({
+  nodeId,
+  projectId,
+  name,
+}: {
+  nodeId: string;
+  projectId: string;
+  name: string;
+}) {
+  const queryClient = useQueryClient();
+  const nodes = useQuery({
+    queryKey: ["nodes"],
+    queryFn: () => nodeClient.listNodes({}),
+  });
+  const [target, setTarget] = useState("");
+  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [lines, setLines] = useState<string[]>([]);
+  const [result, setResult] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const migrate = async () => {
+    if (!confirm(`把 ${name} 迁移到另一个节点？迁移最后阶段项目会短暂停止。`))
+      return;
+    setBusy(true);
+    setLines([]);
+    setResult("");
+    try {
+      for await (const ev of projectClient.migrateNodeProject({
+        nodeId,
+        projectId,
+        targetNodeId: target,
+        dir,
+      })) {
+        if (ev.event.case === "output") {
+          const l = ev.event.value;
+          setLines((x) => [...x, l]);
+        } else if (ev.event.case === "result") {
+          setResult(
+            ev.event.value.success
+              ? "✅ 迁移完成，到项目列表里查看新节点上的项目"
+              : `❌ ${ev.event.value.error}`,
+          );
+        }
+      }
+    } catch (err) {
+      setResult(`❌ ${errorMessage(err)}`);
+    } finally {
+      setBusy(false);
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    }
+  };
+
+  const others = nodes.data?.nodes.filter((n) => n.id !== nodeId) ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>迁移到其他节点</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p className="text-muted-foreground">
+          先在项目运行时同步一次，再停止项目、同步最后的数据，在目标节点上启动。不丢数据；成功后原节点上的项目移出，目录保留。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            className="w-48"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            disabled={busy}
+          >
+            <option value="">选择目标节点</option>
+            {others.map((n) => (
+              <option key={n.id} value={n.id} disabled={!n.online}>
+                {n.name}
+                {!n.online && "（离线）"}
+              </option>
+            ))}
+          </Select>
+          <Input
+            className="w-72 font-mono"
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            disabled={busy}
+          />
+          <Button size="sm" disabled={busy || !target} onClick={migrate}>
+            {busy ? <Spinner /> : null}迁移
+          </Button>
+        </div>
+        {result && <div>{result}</div>}
+        {lines.length > 0 && (
+          <pre className="max-h-60 overflow-auto rounded bg-zinc-950 p-3 font-mono text-xs text-zinc-200">
+            {lines.join("\n")}
+          </pre>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

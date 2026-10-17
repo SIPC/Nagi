@@ -410,6 +410,9 @@ func (m *Manager) projectForUpdate(ctx context.Context, id string, baseRevision 
 	if err != nil {
 		return row, nil, 0, unlock, err
 	}
+	if pdb.meta(ctx, metaMigrating) == "1" {
+		return row, pdb, 0, unlock, invalid("项目正在迁移到其他节点，暂时不能修改")
+	}
 	revision, err = pdb.revision(ctx)
 	if err != nil {
 		return row, pdb, 0, unlock, err

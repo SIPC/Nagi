@@ -60,6 +60,35 @@ service AgentService {
   // 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
   rpc RestoreReplica(RestoreReplicaRequest) returns (stream DeployEvent);
   rpc DeleteReplica(ReplicaRef) returns (DeleteReplicaResponse);
+  // 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
+  rpc CheckRestore(CheckRestoreRequest) returns (CheckRestoreResponse);
+
+  // ---- 手动迁移：源节点一侧 ----
+  // 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
+  rpc MigrateOut(MigrateOutRequest) returns (stream DeployEvent);
+  // 迁移失败时取消迁移，在本节点上重新启动项目。
+  rpc MigrateResume(ReplicaRef) returns (stream DeployEvent);
+  // 迁移成功后把项目移出本节点（目录保留）。
+  rpc MigrateFinish(ReplicaRef) returns (MigrateFinishResponse);
+}
+
+message CheckRestoreRequest {
+  string project_id = 1;
+  string dir = 2;
+}
+
+message CheckRestoreResponse {}
+
+message MigrateOutRequest {
+  string project_id = 1;
+  bytes target_key = 2;
+  string target_node_id = 3;
+  string target_name = 4;
+}
+
+message MigrateFinishResponse {
+  // 保留在磁盘上的原项目目录。
+  string dir = 1;
 }
 
 message SetBackupTargetRequest {

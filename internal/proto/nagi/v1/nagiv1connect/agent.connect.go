@@ -116,6 +116,17 @@ const (
 	// AgentServiceDeleteReplicaProcedure is the fully-qualified name of the AgentService's
 	// DeleteReplica RPC.
 	AgentServiceDeleteReplicaProcedure = "/nagi.v1.AgentService/DeleteReplica"
+	// AgentServiceCheckRestoreProcedure is the fully-qualified name of the AgentService's CheckRestore
+	// RPC.
+	AgentServiceCheckRestoreProcedure = "/nagi.v1.AgentService/CheckRestore"
+	// AgentServiceMigrateOutProcedure is the fully-qualified name of the AgentService's MigrateOut RPC.
+	AgentServiceMigrateOutProcedure = "/nagi.v1.AgentService/MigrateOut"
+	// AgentServiceMigrateResumeProcedure is the fully-qualified name of the AgentService's
+	// MigrateResume RPC.
+	AgentServiceMigrateResumeProcedure = "/nagi.v1.AgentService/MigrateResume"
+	// AgentServiceMigrateFinishProcedure is the fully-qualified name of the AgentService's
+	// MigrateFinish RPC.
+	AgentServiceMigrateFinishProcedure = "/nagi.v1.AgentService/MigrateFinish"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -169,6 +180,15 @@ type AgentServiceClient interface {
 	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
 	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
+	CheckRestore(context.Context, *connect.Request[v1.CheckRestoreRequest]) (*connect.Response[v1.CheckRestoreResponse], error)
+	// ---- 手动迁移：源节点一侧 ----
+	// 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
+	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 迁移失败时取消迁移，在本节点上重新启动项目。
+	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 迁移成功后把项目移出本节点（目录保留）。
+	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -368,6 +388,30 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
 			connect.WithClientOptions(opts...),
 		),
+		checkRestore: connect.NewClient[v1.CheckRestoreRequest, v1.CheckRestoreResponse](
+			httpClient,
+			baseURL+AgentServiceCheckRestoreProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CheckRestore")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateOut: connect.NewClient[v1.MigrateOutRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceMigrateOutProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MigrateOut")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateResume: connect.NewClient[v1.ReplicaRef, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceMigrateResumeProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateFinish: connect.NewClient[v1.ReplicaRef, v1.MigrateFinishResponse](
+			httpClient,
+			baseURL+AgentServiceMigrateFinishProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -404,6 +448,10 @@ type agentServiceClient struct {
 	listReplicaSnapshots *connect.Client[v1.ReplicaRef, v1.ListSnapshotsResponse]
 	restoreReplica       *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
 	deleteReplica        *connect.Client[v1.ReplicaRef, v1.DeleteReplicaResponse]
+	checkRestore         *connect.Client[v1.CheckRestoreRequest, v1.CheckRestoreResponse]
+	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
+	migrateResume        *connect.Client[v1.ReplicaRef, v1.DeployEvent]
+	migrateFinish        *connect.Client[v1.ReplicaRef, v1.MigrateFinishResponse]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -561,6 +609,26 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, req *connect.Req
 	return c.deleteReplica.CallUnary(ctx, req)
 }
 
+// CheckRestore calls nagi.v1.AgentService.CheckRestore.
+func (c *agentServiceClient) CheckRestore(ctx context.Context, req *connect.Request[v1.CheckRestoreRequest]) (*connect.Response[v1.CheckRestoreResponse], error) {
+	return c.checkRestore.CallUnary(ctx, req)
+}
+
+// MigrateOut calls nagi.v1.AgentService.MigrateOut.
+func (c *agentServiceClient) MigrateOut(ctx context.Context, req *connect.Request[v1.MigrateOutRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateOut.CallServerStream(ctx, req)
+}
+
+// MigrateResume calls nagi.v1.AgentService.MigrateResume.
+func (c *agentServiceClient) MigrateResume(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateResume.CallServerStream(ctx, req)
+}
+
+// MigrateFinish calls nagi.v1.AgentService.MigrateFinish.
+func (c *agentServiceClient) MigrateFinish(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error) {
+	return c.migrateFinish.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -612,6 +680,15 @@ type AgentServiceHandler interface {
 	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
 	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
 	DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
+	CheckRestore(context.Context, *connect.Request[v1.CheckRestoreRequest]) (*connect.Response[v1.CheckRestoreResponse], error)
+	// ---- 手动迁移：源节点一侧 ----
+	// 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
+	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 迁移失败时取消迁移，在本节点上重新启动项目。
+	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef], *connect.ServerStream[v1.DeployEvent]) error
+	// 迁移成功后把项目移出本节点（目录保留）。
+	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -807,6 +884,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCheckRestoreHandler := connect.NewUnaryHandler(
+		AgentServiceCheckRestoreProcedure,
+		svc.CheckRestore,
+		connect.WithSchema(agentServiceMethods.ByName("CheckRestore")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMigrateOutHandler := connect.NewServerStreamHandler(
+		AgentServiceMigrateOutProcedure,
+		svc.MigrateOut,
+		connect.WithSchema(agentServiceMethods.ByName("MigrateOut")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMigrateResumeHandler := connect.NewServerStreamHandler(
+		AgentServiceMigrateResumeProcedure,
+		svc.MigrateResume,
+		connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMigrateFinishHandler := connect.NewUnaryHandler(
+		AgentServiceMigrateFinishProcedure,
+		svc.MigrateFinish,
+		connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -871,6 +972,14 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceRestoreReplicaHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteReplicaProcedure:
 			agentServiceDeleteReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceCheckRestoreProcedure:
+			agentServiceCheckRestoreHandler.ServeHTTP(w, r)
+		case AgentServiceMigrateOutProcedure:
+			agentServiceMigrateOutHandler.ServeHTTP(w, r)
+		case AgentServiceMigrateResumeProcedure:
+			agentServiceMigrateResumeHandler.ServeHTTP(w, r)
+		case AgentServiceMigrateFinishProcedure:
+			agentServiceMigrateFinishHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1002,4 +1111,20 @@ func (UnimplementedAgentServiceHandler) RestoreReplica(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CheckRestore(context.Context, *connect.Request[v1.CheckRestoreRequest]) (*connect.Response[v1.CheckRestoreResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckRestore is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateOut is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MigrateResume(context.Context, *connect.Request[v1.ReplicaRef], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateResume is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateFinish is not implemented"))
 }

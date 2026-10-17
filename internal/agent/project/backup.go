@@ -233,6 +233,15 @@ func ReplicaSnapshots(ctx context.Context, id, root, stateDir string) ([]*nagiv1
 	return snapshotsProto(list), nil
 }
 
+// CheckRestore 检查能不能把项目恢复到 dir：本节点还没有这个项目，目录可用。
+func (m *Manager) CheckRestore(ctx context.Context, id, dir string) error {
+	if _, err := m.projectRow(ctx, id); err == nil {
+		return invalid("目标节点上已经有这个项目")
+	}
+	_, err := m.checkDir(ctx, dir)
+	return err
+}
+
 // RestoreReplica 把副本恢复成本节点上的项目：项目 ID 不变，复制快照仓库和配置，
 // 恢复快照里的 data/ 和 volumes/，然后部署。snapshotID 为空时用最新的含数据的快照。
 func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID string, onLine func(string)) (*nagiv1.Project, error) {

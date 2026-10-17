@@ -295,22 +295,28 @@ func (a *agent) syncBackup(ctx context.Context, id string) error {
 	if st.Target == nil {
 		return errNoBackupTarget
 	}
+	_, err = a.syncTo(ctx, id, st.Target)
+	return err
+}
+
+// syncTo 把项目的副本增量同步到目标节点，返回传输的字节数。备份和迁移共用。
+func (a *agent) syncTo(ctx context.Context, id string, target *project.BackupTarget) (int64, error) {
 	if a.mesh == nil {
-		return errors.New("mesh 没有启动")
+		return 0, errors.New("mesh 没有启动")
 	}
-	key, err := mesh.ParseKey(st.Target.Key)
+	key, err := mesh.ParseKey(target.Key)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cc, err := mesh.Client(a.mesh.m, key)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer cc.Close()
 	c := nagiv1.NewMeshServiceClient(cc)
 	man, err := c.ReplicaManifest(ctx, &nagiv1.ReplicaManifestRequest{ProjectId: id})
 	if err != nil {
-		return fmt.Errorf("连接备份节点 %s: %w", st.Target.Name, err)
+		return 0, fmt.Errorf("连接节点 %s: %w", target.Name, err)
 	}
 	remote := map[string]int64{}
 	for _, f := range man.GetFiles() {
@@ -318,12 +324,12 @@ func (a *agent) syncBackup(ctx context.Context, id string) error {
 	}
 	files, name, err := a.projects.ReplicaFiles(ctx, id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	put, err := c.ReplicaPut(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var paths []string
 	var sent int64
@@ -366,13 +372,13 @@ func (a *agent) syncBackup(ctx context.Context, id string) error {
 		paths = append(paths, f.Path)
 	}
 	if _, err := put.CloseAndRecv(); err != nil {
-		return fmt.Errorf("传输文件: %w", err)
+		return sent, fmt.Errorf("传输文件: %w", err)
 	}
 	if _, err := c.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: id, Paths: paths, ProjectName: name}); err != nil {
-		return fmt.Errorf("提交: %w", err)
+		return sent, fmt.Errorf("提交: %w", err)
 	}
-	a.log.Info("已同步到备份节点", "project", id, "target", st.Target.Name, "bytes", sent)
-	return nil
+	a.log.Info("已同步副本", "project", id, "target", target.Name, "bytes", sent)
+	return sent, nil
 }
 
 func (a *agent) backupStatus(ctx context.Context, id string) (*nagiv1.BackupStatus, error) {
@@ -522,4 +528,69 @@ func (s *agentService) DeleteReplica(_ context.Context, req *nagiv1.ReplicaRef) 
 	}
 	os.RemoveAll(s.node.replicaStateDir(req.GetProjectId()))
 	return &nagiv1.DeleteReplicaResponse{}, nil
+}
+
+func (s *agentService) CheckRestore(ctx context.Context, req *nagiv1.CheckRestoreRequest) (*nagiv1.CheckRestoreResponse, error) {
+	if err := s.projects.CheckRestore(ctx, req.GetProjectId(), req.GetDir()); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.CheckRestoreResponse{}, nil
+}
+
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%d B", n)
+}
+
+// ---- 手动迁移：源节点一侧 ----
+
+func (s *agentService) MigrateOut(req *nagiv1.MigrateOutRequest, stream nagiv1.AgentService_MigrateOutServer) error {
+	defer s.changed()
+	id := req.GetProjectId()
+	if _, err := mesh.ParseKey(req.GetTargetKey()); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	target := &project.BackupTarget{NodeID: req.GetTargetNodeId(), Name: req.GetTargetName(), Key: req.GetTargetKey()}
+	ctx := stream.Context()
+	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
+		onLine("第一次同步到 " + target.Name + "（项目照常运行）")
+		n, err := s.node.syncTo(ctx, id, target)
+		if err != nil {
+			return 0, err
+		}
+		onLine("已同步 " + humanBytes(n))
+		if _, err := s.projects.MigrateStop(ctx, id, onLine); err != nil {
+			return 0, err
+		}
+		onLine("增量同步最后的数据")
+		if n, err = s.node.syncTo(ctx, id, target); err != nil {
+			return 0, err
+		}
+		onLine("已同步 " + humanBytes(n))
+		return 0, nil
+	})
+}
+
+func (s *agentService) MigrateResume(req *nagiv1.ReplicaRef, stream nagiv1.AgentService_MigrateResumeServer) error {
+	defer s.changed()
+	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
+		return 0, s.projects.MigrateResume(stream.Context(), req.GetProjectId(), onLine)
+	})
+}
+
+func (s *agentService) MigrateFinish(ctx context.Context, req *nagiv1.ReplicaRef) (*nagiv1.MigrateFinishResponse, error) {
+	defer s.changed()
+	dir, err := s.projects.MigrateFinish(ctx, req.GetProjectId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	s.node.log.Info("项目已迁移到其他节点，目录保留", "project", req.GetProjectId(), "dir", dir)
+	return &nagiv1.MigrateFinishResponse{Dir: dir}, nil
 }

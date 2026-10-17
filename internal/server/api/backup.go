@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"connectrpc.com/connect"
@@ -152,4 +153,119 @@ func (s *nodeService) DeleteNodeReplica(ctx context.Context, req *connect.Reques
 		return nil, fromGRPC(err)
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// ---- 手动迁移 ----
+
+// deployStream 是节点返回 DeployEvent 流的调用。
+type deployStream interface {
+	Recv() (*nagiv1.DeployEvent, error)
+}
+
+// forward 把节点的输出转给浏览器，返回最终结果。
+func forward(stream deployStream, err error, out *connect.ServerStream[nagiv1.DeployEvent]) *nagiv1.DeployResult {
+	if err != nil {
+		return &nagiv1.DeployResult{Error: fromGRPC(err).Error()}
+	}
+	for {
+		ev, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return &nagiv1.DeployResult{Error: "节点没有返回结果"}
+		}
+		if err != nil {
+			return &nagiv1.DeployResult{Error: connectMessage(fromGRPC(err))}
+		}
+		if r := ev.GetResult(); r != nil {
+			return r
+		}
+		_ = out.Send(ev)
+	}
+}
+
+func connectMessage(err error) string {
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		return ce.Message()
+	}
+	return err.Error()
+}
+
+// MigrateNodeProject 把项目从 A 迁移到 C：C 登记副本 → A 同步、停止、最后一次增量同步 → C 恢复并启动 →
+// A 移出项目（目录保留）。任何一步失败都撤销：C 上删掉恢复了一半的项目，A 重新启动项目。
+func (s *projectService) MigrateNodeProject(ctx context.Context, req *connect.Request[nagiv1.MigrateNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	srcID, dstID, id := req.Msg.GetNodeId(), req.Msg.GetTargetNodeId(), req.Msg.GetProjectId()
+	if srcID == dstID {
+		return connect.NewError(connect.CodeInvalidArgument, errors.New("目标节点不能是项目所在的节点"))
+	}
+	src, err := s.agent(srcID)
+	if err != nil {
+		return err
+	}
+	dst, err := s.agent(dstID)
+	if err != nil {
+		return err
+	}
+	srcKey, err := s.Nodes.NodeMeshKey(srcID)
+	if err != nil {
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	dstKey, err := s.Nodes.NodeMeshKey(dstID)
+	if err != nil {
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	proj, err := src.GetProject(ctx, &nagiv1.GetProjectRequest{Id: id})
+	if err != nil {
+		return fromGRPC(err)
+	}
+	name := proj.GetProject().GetProject().GetName()
+	srcName, dstName := s.nodeName(ctx, srcID), s.nodeName(ctx, dstID)
+	line := func(l string) { _ = out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: l}}) }
+	finish := func(r *nagiv1.DeployResult) error {
+		return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: r}})
+	}
+	fwd := func(st deployStream, err error) *nagiv1.DeployResult { return forward(st, err, out) }
+	// 迁移一旦开始就要走完撤销，浏览器断开也不中断。
+	ctx = context.WithoutCancel(ctx)
+	resume := func() {
+		line("撤销：在 " + srcName + " 上重新启动项目")
+		if r := fwd(src.MigrateResume(ctx, &nagiv1.ReplicaRef{ProjectId: id})); !r.GetSuccess() {
+			line("重新启动失败：" + r.GetError())
+		}
+	}
+
+	line(fmt.Sprintf("把 %s 从 %s 迁移到 %s", name, srcName, dstName))
+	// 先检查目标节点，有问题当场失败，项目不用停。
+	if _, err := dst.CheckRestore(ctx, &nagiv1.CheckRestoreRequest{ProjectId: id, Dir: req.Msg.GetDir()}); err != nil {
+		return finish(&nagiv1.DeployResult{Error: "目标节点检查不通过：" + connectMessage(fromGRPC(err))})
+	}
+	if _, err := dst.AcceptReplica(ctx, &nagiv1.AcceptReplicaRequest{
+		ProjectId: id, ProjectName: name, SourceKey: srcKey[:], SourceNodeId: srcID, SourceName: srcName,
+	}); err != nil {
+		return finish(&nagiv1.DeployResult{Error: connectMessage(fromGRPC(err))})
+	}
+	if r := fwd(src.MigrateOut(ctx, &nagiv1.MigrateOutRequest{
+		ProjectId: id, TargetKey: dstKey[:], TargetNodeId: dstID, TargetName: dstName,
+	})); !r.GetSuccess() {
+		_, _ = dst.DeleteReplica(ctx, &nagiv1.ReplicaRef{ProjectId: id})
+		resume()
+		return finish(&nagiv1.DeployResult{Error: "迁移失败：" + r.GetError()})
+	}
+	line("在 " + dstName + " 上恢复项目")
+	if r := fwd(dst.RestoreReplica(ctx, &nagiv1.RestoreReplicaRequest{ProjectId: id, Dir: req.Msg.GetDir()})); !r.GetSuccess() {
+		if _, err := dst.GetProject(ctx, &nagiv1.GetProjectRequest{Id: id}); err == nil {
+			line("撤销：删除 " + dstName + " 上恢复了一半的项目")
+			_, _ = dst.DeleteProject(ctx, &nagiv1.DeleteProjectRequest{Id: id, DeleteDir: true, ConfirmName: name})
+		}
+		_, _ = dst.DeleteReplica(ctx, &nagiv1.ReplicaRef{ProjectId: id})
+		resume()
+		return finish(&nagiv1.DeployResult{Error: "迁移失败：" + r.GetError()})
+	}
+	fin, err := src.MigrateFinish(ctx, &nagiv1.ReplicaRef{ProjectId: id})
+	if err != nil {
+		line("项目已在 " + dstName + " 上运行，但从 " + srcName + " 移出失败：" + connectMessage(fromGRPC(err)))
+	} else {
+		line(fmt.Sprintf("已从 %s 移出项目，原目录保留在 %s，确认没问题后可以手动删除", srcName, fin.GetDir()))
+	}
+	s.Log.Info("项目已迁移", "project", id, "from", srcID, "to", dstID)
+	return finish(&nagiv1.DeployResult{Success: true})
 }

@@ -1351,6 +1351,7 @@ const (
 	ProjectService_SetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectBackup"
 	ProjectService_GetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectBackup"
 	ProjectService_SyncNodeProjectBackup_FullMethodName      = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
+	ProjectService_MigrateNodeProject_FullMethodName         = "/nagi.v1.ProjectService/MigrateNodeProject"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -1376,6 +1377,9 @@ type ProjectServiceClient interface {
 	SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error)
 	GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
 	SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
+	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
+	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
+	MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 }
 
 type projectServiceClient struct {
@@ -1611,6 +1615,25 @@ func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, in *No
 	return out, nil
 }
 
+func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_MigrateNodeProject_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MigrateNodeProjectRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MigrateNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
+
 // ProjectServiceServer is the server API for ProjectService service.
 // All implementations must embed UnimplementedProjectServiceServer
 // for forward compatibility.
@@ -1634,6 +1657,9 @@ type ProjectServiceServer interface {
 	SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error)
 	GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
 	SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
+	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
+	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
+	MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	mustEmbedUnimplementedProjectServiceServer()
 }
 
@@ -1697,6 +1723,9 @@ func (UnimplementedProjectServiceServer) GetNodeProjectBackup(context.Context, *
 }
 func (UnimplementedProjectServiceServer) SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncNodeProjectBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateNodeProject not implemented")
 }
 func (UnimplementedProjectServiceServer) mustEmbedUnimplementedProjectServiceServer() {}
 func (UnimplementedProjectServiceServer) testEmbeddedByValue()                        {}
@@ -2008,6 +2037,17 @@ func _ProjectService_SyncNodeProjectBackup_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_MigrateNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MigrateNodeProjectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).MigrateNodeProject(m, &grpc.GenericServerStream[MigrateNodeProjectRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MigrateNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
+
 // ProjectService_ServiceDesc is the grpc.ServiceDesc for ProjectService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2092,6 +2132,11 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamNodeProjectLogs",
 			Handler:       _ProjectService_StreamNodeProjectLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateNodeProject",
+			Handler:       _ProjectService_MigrateNodeProject_Handler,
 			ServerStreams: true,
 		},
 	},

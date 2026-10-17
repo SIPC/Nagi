@@ -50,6 +50,10 @@ const (
 	AgentService_ListReplicaSnapshots_FullMethodName = "/nagi.v1.AgentService/ListReplicaSnapshots"
 	AgentService_RestoreReplica_FullMethodName       = "/nagi.v1.AgentService/RestoreReplica"
 	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
+	AgentService_CheckRestore_FullMethodName         = "/nagi.v1.AgentService/CheckRestore"
+	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
+	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_MigrateFinish_FullMethodName        = "/nagi.v1.AgentService/MigrateFinish"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -107,6 +111,15 @@ type AgentServiceClient interface {
 	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
 	RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	DeleteReplica(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error)
+	// 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
+	CheckRestore(ctx context.Context, in *CheckRestoreRequest, opts ...grpc.CallOption) (*CheckRestoreResponse, error)
+	// ---- 手动迁移：源节点一侧 ----
+	// 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
+	MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 迁移失败时取消迁移，在本节点上重新启动项目。
+	MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 迁移成功后把项目移出本节点（目录保留）。
+	MigrateFinish(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*MigrateFinishResponse, error)
 }
 
 type agentServiceClient struct {
@@ -484,6 +497,64 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ReplicaRef, 
 	return out, nil
 }
 
+func (c *agentServiceClient) CheckRestore(ctx context.Context, in *CheckRestoreRequest, opts ...grpc.CallOption) (*CheckRestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRestoreResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_MigrateOut_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MigrateOutRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateResume_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReplicaRef, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateResumeClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) MigrateFinish(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*MigrateFinishResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MigrateFinishResponse)
+	err := c.cc.Invoke(ctx, AgentService_MigrateFinish_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -539,6 +610,15 @@ type AgentServiceServer interface {
 	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
 	RestoreReplica(*RestoreReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	DeleteReplica(context.Context, *ReplicaRef) (*DeleteReplicaResponse, error)
+	// 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
+	CheckRestore(context.Context, *CheckRestoreRequest) (*CheckRestoreResponse, error)
+	// ---- 手动迁移：源节点一侧 ----
+	// 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
+	MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 迁移失败时取消迁移，在本节点上重新启动项目。
+	MigrateResume(*ReplicaRef, grpc.ServerStreamingServer[DeployEvent]) error
+	// 迁移成功后把项目移出本节点（目录保留）。
+	MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -641,6 +721,18 @@ func (UnimplementedAgentServiceServer) RestoreReplica(*RestoreReplicaRequest, gr
 }
 func (UnimplementedAgentServiceServer) DeleteReplica(context.Context, *ReplicaRef) (*DeleteReplicaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckRestore(context.Context, *CheckRestoreRequest) (*CheckRestoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRestore not implemented")
+}
+func (UnimplementedAgentServiceServer) MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateOut not implemented")
+}
+func (UnimplementedAgentServiceServer) MigrateResume(*ReplicaRef, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateResume not implemented")
+}
+func (UnimplementedAgentServiceServer) MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MigrateFinish not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -1168,6 +1260,64 @@ func _AgentService_DeleteReplica_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CheckRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckRestore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckRestore(ctx, req.(*CheckRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_MigrateOut_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MigrateOutRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).MigrateOut(m, &grpc.GenericServerStream[MigrateOutRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateOutServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_MigrateResume_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReplicaRef)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).MigrateResume(m, &grpc.GenericServerStream[ReplicaRef, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateResumeServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_MigrateFinish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).MigrateFinish(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_MigrateFinish_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).MigrateFinish(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1271,6 +1421,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeleteReplica",
 			Handler:    _AgentService_DeleteReplica_Handler,
 		},
+		{
+			MethodName: "CheckRestore",
+			Handler:    _AgentService_CheckRestore_Handler,
+		},
+		{
+			MethodName: "MigrateFinish",
+			Handler:    _AgentService_MigrateFinish_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1307,6 +1465,16 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RestoreReplica",
 			Handler:       _AgentService_RestoreReplica_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateOut",
+			Handler:       _AgentService_MigrateOut_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateResume",
+			Handler:       _AgentService_MigrateResume_Handler,
 			ServerStreams: true,
 		},
 	},
