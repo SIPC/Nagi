@@ -19,8 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MeshService_Ping_FullMethodName   = "/nagi.v1.MeshService/Ping"
-	MeshService_Upload_FullMethodName = "/nagi.v1.MeshService/Upload"
+	MeshService_Ping_FullMethodName            = "/nagi.v1.MeshService/Ping"
+	MeshService_Upload_FullMethodName          = "/nagi.v1.MeshService/Upload"
+	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
+	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
+	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -33,6 +36,11 @@ type MeshServiceClient interface {
 	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带 project_id。
 	Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadChunk, UploadResponse], error)
+	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+	// 只接受备份节点登记过的源节点。
+	ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error)
+	ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error)
+	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
 }
 
 type meshServiceClient struct {
@@ -66,6 +74,39 @@ func (c *meshServiceClient) Upload(ctx context.Context, opts ...grpc.CallOption)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_UploadClient = grpc.ClientStreamingClient[UploadChunk, UploadResponse]
 
+func (c *meshServiceClient) ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplicaManifestResponse)
+	err := c.cc.Invoke(ctx, MeshService_ReplicaManifest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[1], MeshService_ReplicaPut_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReplicaChunk, ReplicaPutResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_ReplicaPutClient = grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse]
+
+func (c *meshServiceClient) ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplicaCommitResponse)
+	err := c.cc.Invoke(ctx, MeshService_ReplicaCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MeshServiceServer is the server API for MeshService service.
 // All implementations must embed UnimplementedMeshServiceServer
 // for forward compatibility.
@@ -76,6 +117,11 @@ type MeshServiceServer interface {
 	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带 project_id。
 	Upload(grpc.ClientStreamingServer[UploadChunk, UploadResponse]) error
+	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+	// 只接受备份节点登记过的源节点。
+	ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error)
+	ReplicaPut(grpc.ClientStreamingServer[ReplicaChunk, ReplicaPutResponse]) error
+	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }
 
@@ -91,6 +137,15 @@ func (UnimplementedMeshServiceServer) Ping(context.Context, *PingRequest) (*Ping
 }
 func (UnimplementedMeshServiceServer) Upload(grpc.ClientStreamingServer[UploadChunk, UploadResponse]) error {
 	return status.Error(codes.Unimplemented, "method Upload not implemented")
+}
+func (UnimplementedMeshServiceServer) ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReplicaManifest not implemented")
+}
+func (UnimplementedMeshServiceServer) ReplicaPut(grpc.ClientStreamingServer[ReplicaChunk, ReplicaPutResponse]) error {
+	return status.Error(codes.Unimplemented, "method ReplicaPut not implemented")
+}
+func (UnimplementedMeshServiceServer) ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReplicaCommit not implemented")
 }
 func (UnimplementedMeshServiceServer) mustEmbedUnimplementedMeshServiceServer() {}
 func (UnimplementedMeshServiceServer) testEmbeddedByValue()                     {}
@@ -138,6 +193,49 @@ func _MeshService_Upload_Handler(srv interface{}, stream grpc.ServerStream) erro
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_UploadServer = grpc.ClientStreamingServer[UploadChunk, UploadResponse]
 
+func _MeshService_ReplicaManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaManifestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).ReplicaManifest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_ReplicaManifest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).ReplicaManifest(ctx, req.(*ReplicaManifestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_ReplicaPut_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MeshServiceServer).ReplicaPut(&grpc.GenericServerStream[ReplicaChunk, ReplicaPutResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_ReplicaPutServer = grpc.ClientStreamingServer[ReplicaChunk, ReplicaPutResponse]
+
+func _MeshService_ReplicaCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).ReplicaCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_ReplicaCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).ReplicaCommit(ctx, req.(*ReplicaCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MeshService_ServiceDesc is the grpc.ServiceDesc for MeshService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -149,11 +247,24 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Ping",
 			Handler:    _MeshService_Ping_Handler,
 		},
+		{
+			MethodName: "ReplicaManifest",
+			Handler:    _MeshService_ReplicaManifest_Handler,
+		},
+		{
+			MethodName: "ReplicaCommit",
+			Handler:    _MeshService_ReplicaCommit_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Upload",
 			Handler:       _MeshService_Upload_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReplicaPut",
+			Handler:       _MeshService_ReplicaPut_Handler,
 			ClientStreams: true,
 		},
 	},

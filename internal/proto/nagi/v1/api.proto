@@ -67,6 +67,12 @@ service NodeService {
   rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
   // 面板自己的 mesh 状态。
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
+  // 节点作为备份节点保存的项目副本。
+  rpc ListNodeReplicas(ListNodeReplicasRequest) returns (ListReplicasResponse);
+  rpc ListNodeReplicaSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
+  // 把副本恢复成这个节点上的项目。
+  rpc RestoreNodeReplica(RestoreNodeReplicaRequest) returns (stream DeployEvent);
+  rpc DeleteNodeReplica(NodeProjectRef) returns (DeleteReplicaResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -99,6 +105,17 @@ message PingNodeMeshRequest {
 }
 
 message GetPanelMeshRequest {}
+
+message ListNodeReplicasRequest {
+  string node_id = 1;
+}
+
+message RestoreNodeReplicaRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string dir = 3;
+  string snapshot_id = 4;
+}
 
 message ListNodePanelsRequest {
   string node_id = 1;
@@ -243,6 +260,16 @@ service ProjectService {
   rpc DeleteNodeProjectRoute(DeleteNodeProjectRouteRequest) returns (DeleteNodeProjectRouteResponse);
   rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
   rpc StreamNodeProjectLogs(StreamNodeProjectLogsRequest) returns (stream LogLine);
+  // 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
+  rpc SetNodeProjectBackup(SetNodeProjectBackupRequest) returns (BackupStatus);
+  rpc GetNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
+  rpc SyncNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
+}
+
+message SetNodeProjectBackupRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string backup_node_id = 3;
 }
 
 message NodeProject {

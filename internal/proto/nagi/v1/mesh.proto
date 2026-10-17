@@ -10,7 +10,45 @@ service MeshService {
   // 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
   // 只接受节点信任的面板。第一条消息带 project_id。
   rpc Upload(stream UploadChunk) returns (UploadResponse);
+  // 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+  // 只接受备份节点登记过的源节点。
+  rpc ReplicaManifest(ReplicaManifestRequest) returns (ReplicaManifestResponse);
+  rpc ReplicaPut(stream ReplicaChunk) returns (ReplicaPutResponse);
+  rpc ReplicaCommit(ReplicaCommitRequest) returns (ReplicaCommitResponse);
 }
+
+message ReplicaManifestRequest {
+  string project_id = 1;
+}
+
+message ReplicaFile {
+  string path = 1;
+  int64 size = 2;
+}
+
+message ReplicaManifestResponse {
+  repeated ReplicaFile files = 1;
+}
+
+// ReplicaChunk：path 变了表示开始一个新文件。
+message ReplicaChunk {
+  string project_id = 1;
+  string path = 2;
+  bytes data = 3;
+}
+
+message ReplicaPutResponse {
+  uint32 files = 1;
+}
+
+message ReplicaCommitRequest {
+  string project_id = 1;
+  // 源节点上现在的完整文件列表，备份节点删除不在列表里的文件。
+  repeated string paths = 2;
+  string project_name = 3;
+}
+
+message ReplicaCommitResponse {}
 
 message UploadChunk {
   string project_id = 1;

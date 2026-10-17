@@ -337,16 +337,20 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
-	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
-	NodeService_AddNodePanel_FullMethodName        = "/nagi.v1.NodeService/AddNodePanel"
-	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
-	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
-	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
-	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
-	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
-	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
-	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
+	NodeService_ListNodes_FullMethodName                = "/nagi.v1.NodeService/ListNodes"
+	NodeService_ListNodePanels_FullMethodName           = "/nagi.v1.NodeService/ListNodePanels"
+	NodeService_AddNodePanel_FullMethodName             = "/nagi.v1.NodeService/AddNodePanel"
+	NodeService_RemoveNodePanel_FullMethodName          = "/nagi.v1.NodeService/RemoveNodePanel"
+	NodeService_GetNodeMesh_FullMethodName              = "/nagi.v1.NodeService/GetNodeMesh"
+	NodeService_PingNodeMesh_FullMethodName             = "/nagi.v1.NodeService/PingNodeMesh"
+	NodeService_GetPanelMesh_FullMethodName             = "/nagi.v1.NodeService/GetPanelMesh"
+	NodeService_ListNodeReplicas_FullMethodName         = "/nagi.v1.NodeService/ListNodeReplicas"
+	NodeService_ListNodeReplicaSnapshots_FullMethodName = "/nagi.v1.NodeService/ListNodeReplicaSnapshots"
+	NodeService_RestoreNodeReplica_FullMethodName       = "/nagi.v1.NodeService/RestoreNodeReplica"
+	NodeService_DeleteNodeReplica_FullMethodName        = "/nagi.v1.NodeService/DeleteNodeReplica"
+	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
+	NodeService_QueryNodeMetrics_FullMethodName         = "/nagi.v1.NodeService/QueryNodeMetrics"
+	NodeService_RemoveNode_FullMethodName               = "/nagi.v1.NodeService/RemoveNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -366,6 +370,12 @@ type NodeServiceClient interface {
 	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
+	// 节点作为备份节点保存的项目副本。
+	ListNodeReplicas(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error)
+	ListNodeReplicaSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 把副本恢复成这个节点上的项目。
+	RestoreNodeReplica(ctx context.Context, in *RestoreNodeReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	DeleteNodeReplica(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -451,6 +461,55 @@ func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, in *GetPanelMeshRe
 	return out, nil
 }
 
+func (c *nodeServiceClient) ListNodeReplicas(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReplicasResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeReplicas_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListNodeReplicaSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeReplicaSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RestoreNodeReplica(ctx context.Context, in *RestoreNodeReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_RestoreNodeReplica_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreNodeReplicaRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_RestoreNodeReplicaClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteReplicaResponse)
+	err := c.cc.Invoke(ctx, NodeService_DeleteNodeReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEnrollCommandResponse)
@@ -498,6 +557,12 @@ type NodeServiceServer interface {
 	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
+	// 节点作为备份节点保存的项目副本。
+	ListNodeReplicas(context.Context, *ListNodeReplicasRequest) (*ListReplicasResponse, error)
+	ListNodeReplicaSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error)
+	// 把副本恢复成这个节点上的项目。
+	RestoreNodeReplica(*RestoreNodeReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	DeleteNodeReplica(context.Context, *NodeProjectRef) (*DeleteReplicaResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -533,6 +598,18 @@ func (UnimplementedNodeServiceServer) PingNodeMesh(context.Context, *PingNodeMes
 }
 func (UnimplementedNodeServiceServer) GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPanelMesh not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeReplicas(context.Context, *ListNodeReplicasRequest) (*ListReplicasResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeReplicas not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeReplicaSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeReplicaSnapshots not implemented")
+}
+func (UnimplementedNodeServiceServer) RestoreNodeReplica(*RestoreNodeReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreNodeReplica not implemented")
+}
+func (UnimplementedNodeServiceServer) DeleteNodeReplica(context.Context, *NodeProjectRef) (*DeleteReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeReplica not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -690,6 +767,71 @@ func _NodeService_GetPanelMesh_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_ListNodeReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodeReplicasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeReplicas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeReplicas_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeReplicas(ctx, req.(*ListNodeReplicasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListNodeReplicaSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeReplicaSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeReplicaSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeReplicaSnapshots(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RestoreNodeReplica_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreNodeReplicaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).RestoreNodeReplica(m, &grpc.GenericServerStream[RestoreNodeReplicaRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_RestoreNodeReplicaServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _NodeService_DeleteNodeReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_DeleteNodeReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEnrollCommandRequest)
 	if err := dec(in); err != nil {
@@ -780,6 +922,18 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_GetPanelMesh_Handler,
 		},
 		{
+			MethodName: "ListNodeReplicas",
+			Handler:    _NodeService_ListNodeReplicas_Handler,
+		},
+		{
+			MethodName: "ListNodeReplicaSnapshots",
+			Handler:    _NodeService_ListNodeReplicaSnapshots_Handler,
+		},
+		{
+			MethodName: "DeleteNodeReplica",
+			Handler:    _NodeService_DeleteNodeReplica_Handler,
+		},
+		{
 			MethodName: "CreateEnrollCommand",
 			Handler:    _NodeService_CreateEnrollCommand_Handler,
 		},
@@ -792,7 +946,13 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_RemoveNode_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "RestoreNodeReplica",
+			Handler:       _NodeService_RestoreNodeReplica_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/api.proto",
 }
 
@@ -1188,6 +1348,9 @@ const (
 	ProjectService_DeleteNodeProjectRoute_FullMethodName     = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
 	ProjectService_DeployNodeProject_FullMethodName          = "/nagi.v1.ProjectService/DeployNodeProject"
 	ProjectService_StreamNodeProjectLogs_FullMethodName      = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
+	ProjectService_SetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectBackup"
+	ProjectService_GetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectBackup"
+	ProjectService_SyncNodeProjectBackup_FullMethodName      = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -1209,6 +1372,10 @@ type ProjectServiceClient interface {
 	DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
+	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
+	SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error)
+	GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
+	SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
 }
 
 type projectServiceClient struct {
@@ -1414,6 +1581,36 @@ func (c *projectServiceClient) StreamNodeProjectLogs(ctx context.Context, in *St
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_StreamNodeProjectLogsClient = grpc.ServerStreamingClient[LogLine]
 
+func (c *projectServiceClient) SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, ProjectService_SetNodeProjectBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, ProjectService_GetNodeProjectBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, ProjectService_SyncNodeProjectBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProjectServiceServer is the server API for ProjectService service.
 // All implementations must embed UnimplementedProjectServiceServer
 // for forward compatibility.
@@ -1433,6 +1630,10 @@ type ProjectServiceServer interface {
 	DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error
+	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
+	SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error)
+	GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
+	SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
 	mustEmbedUnimplementedProjectServiceServer()
 }
 
@@ -1487,6 +1688,15 @@ func (UnimplementedProjectServiceServer) DeployNodeProject(*DeployNodeProjectReq
 }
 func (UnimplementedProjectServiceServer) StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
 	return status.Error(codes.Unimplemented, "method StreamNodeProjectLogs not implemented")
+}
+func (UnimplementedProjectServiceServer) SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncNodeProjectBackup not implemented")
 }
 func (UnimplementedProjectServiceServer) mustEmbedUnimplementedProjectServiceServer() {}
 func (UnimplementedProjectServiceServer) testEmbeddedByValue()                        {}
@@ -1744,6 +1954,60 @@ func _ProjectService_StreamNodeProjectLogs_Handler(srv interface{}, stream grpc.
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_StreamNodeProjectLogsServer = grpc.ServerStreamingServer[LogLine]
 
+func _ProjectService_SetNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeProjectBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetNodeProjectBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetNodeProjectBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetNodeProjectBackup(ctx, req.(*SetNodeProjectBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_GetNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).GetNodeProjectBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_GetNodeProjectBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).GetNodeProjectBackup(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_SyncNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SyncNodeProjectBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SyncNodeProjectBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SyncNodeProjectBackup(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProjectService_ServiceDesc is the grpc.ServiceDesc for ProjectService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1790,6 +2054,18 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteNodeProjectRoute",
 			Handler:    _ProjectService_DeleteNodeProjectRoute_Handler,
+		},
+		{
+			MethodName: "SetNodeProjectBackup",
+			Handler:    _ProjectService_SetNodeProjectBackup_Handler,
+		},
+		{
+			MethodName: "GetNodeProjectBackup",
+			Handler:    _ProjectService_GetNodeProjectBackup_Handler,
+		},
+		{
+			MethodName: "SyncNodeProjectBackup",
+			Handler:    _ProjectService_SyncNodeProjectBackup_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

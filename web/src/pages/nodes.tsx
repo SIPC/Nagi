@@ -6,6 +6,7 @@ import { PageHeader } from "@/pages/layout";
 import { AlertSettings, NodeMetrics } from "@/pages/alerts";
 import { HandOverCard, InviteCard, NodePanels } from "@/pages/panels";
 import { NodeMesh, PanelMeshCard } from "@/pages/mesh";
+import { NodeReplicas } from "@/pages/backup";
 import {
   Alert,
   Badge,
@@ -27,10 +28,12 @@ export function NodesPage() {
   });
   const [open, setOpen] = useState<{
     id: string;
-    tab: "metrics" | "panels" | "mesh";
+    tab: "metrics" | "panels" | "mesh" | "replicas";
   } | null>(null);
-  const toggle = (id: string, tab: "metrics" | "panels" | "mesh") =>
-    setOpen(open?.id === id && open.tab === tab ? null : { id, tab });
+  const toggle = (
+    id: string,
+    tab: "metrics" | "panels" | "mesh" | "replicas",
+  ) => setOpen(open?.id === id && open.tab === tab ? null : { id, tab });
 
   return (
     <>
@@ -120,6 +123,13 @@ export function NodesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => toggle(n.id, "replicas")}
+                        >
+                          副本
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={async () => {
                             if (
                               !confirm(
@@ -143,6 +153,8 @@ export function NodesPage() {
                               <NodeMetrics nodeId={n.id} />
                             ) : open.tab === "mesh" ? (
                               <NodeMesh nodeId={n.id} />
+                            ) : open.tab === "replicas" ? (
+                              <NodeReplicas nodeId={n.id} />
                             ) : (
                               <NodePanels nodeId={n.id} />
                             )

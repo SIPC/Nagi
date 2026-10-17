@@ -317,3 +317,25 @@ message MeshPingRequest {
 message MeshPingResponse {
   double rtt_ms = 1;
 }
+
+// BackupStatus 是项目同步到备份节点的状态（在源节点上）。
+message BackupStatus {
+  // 没有设置备份节点时为空。
+  string target_node_id = 1;
+  string target_name = 2;
+  google.protobuf.Timestamp last_sync = 3;
+  // 最近一次同步失败的原因，成功时为空。
+  string last_error = 4;
+  // 正在同步。
+  bool syncing = 5;
+}
+
+// Replica 是备份节点上保存的一个项目副本。
+message Replica {
+  string project_id = 1;
+  string project_name = 2;
+  string source_node_id = 3;
+  string source_name = 4;
+  google.protobuf.Timestamp last_sync = 5;
+  int64 bytes = 6;
+}

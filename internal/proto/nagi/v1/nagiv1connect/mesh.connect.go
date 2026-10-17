@@ -37,6 +37,14 @@ const (
 	MeshServicePingProcedure = "/nagi.v1.MeshService/Ping"
 	// MeshServiceUploadProcedure is the fully-qualified name of the MeshService's Upload RPC.
 	MeshServiceUploadProcedure = "/nagi.v1.MeshService/Upload"
+	// MeshServiceReplicaManifestProcedure is the fully-qualified name of the MeshService's
+	// ReplicaManifest RPC.
+	MeshServiceReplicaManifestProcedure = "/nagi.v1.MeshService/ReplicaManifest"
+	// MeshServiceReplicaPutProcedure is the fully-qualified name of the MeshService's ReplicaPut RPC.
+	MeshServiceReplicaPutProcedure = "/nagi.v1.MeshService/ReplicaPut"
+	// MeshServiceReplicaCommitProcedure is the fully-qualified name of the MeshService's ReplicaCommit
+	// RPC.
+	MeshServiceReplicaCommitProcedure = "/nagi.v1.MeshService/ReplicaCommit"
 )
 
 // MeshServiceClient is a client for the nagi.v1.MeshService service.
@@ -45,6 +53,11 @@ type MeshServiceClient interface {
 	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带 project_id。
 	Upload(context.Context) *connect.ClientStreamForClient[v1.UploadChunk, v1.UploadResponse]
+	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+	// 只接受备份节点登记过的源节点。
+	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
+	ReplicaPut(context.Context) *connect.ClientStreamForClient[v1.ReplicaChunk, v1.ReplicaPutResponse]
+	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 }
 
 // NewMeshServiceClient constructs a client for the nagi.v1.MeshService service. By default, it uses
@@ -70,13 +83,34 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("Upload")),
 			connect.WithClientOptions(opts...),
 		),
+		replicaManifest: connect.NewClient[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse](
+			httpClient,
+			baseURL+MeshServiceReplicaManifestProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("ReplicaManifest")),
+			connect.WithClientOptions(opts...),
+		),
+		replicaPut: connect.NewClient[v1.ReplicaChunk, v1.ReplicaPutResponse](
+			httpClient,
+			baseURL+MeshServiceReplicaPutProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("ReplicaPut")),
+			connect.WithClientOptions(opts...),
+		),
+		replicaCommit: connect.NewClient[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse](
+			httpClient,
+			baseURL+MeshServiceReplicaCommitProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("ReplicaCommit")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // meshServiceClient implements MeshServiceClient.
 type meshServiceClient struct {
-	ping   *connect.Client[v1.PingRequest, v1.PingResponse]
-	upload *connect.Client[v1.UploadChunk, v1.UploadResponse]
+	ping            *connect.Client[v1.PingRequest, v1.PingResponse]
+	upload          *connect.Client[v1.UploadChunk, v1.UploadResponse]
+	replicaManifest *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
+	replicaPut      *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
+	replicaCommit   *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
 }
 
 // Ping calls nagi.v1.MeshService.Ping.
@@ -89,12 +123,32 @@ func (c *meshServiceClient) Upload(ctx context.Context) *connect.ClientStreamFor
 	return c.upload.CallClientStream(ctx)
 }
 
+// ReplicaManifest calls nagi.v1.MeshService.ReplicaManifest.
+func (c *meshServiceClient) ReplicaManifest(ctx context.Context, req *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error) {
+	return c.replicaManifest.CallUnary(ctx, req)
+}
+
+// ReplicaPut calls nagi.v1.MeshService.ReplicaPut.
+func (c *meshServiceClient) ReplicaPut(ctx context.Context) *connect.ClientStreamForClient[v1.ReplicaChunk, v1.ReplicaPutResponse] {
+	return c.replicaPut.CallClientStream(ctx)
+}
+
+// ReplicaCommit calls nagi.v1.MeshService.ReplicaCommit.
+func (c *meshServiceClient) ReplicaCommit(ctx context.Context, req *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error) {
+	return c.replicaCommit.CallUnary(ctx, req)
+}
+
 // MeshServiceHandler is an implementation of the nagi.v1.MeshService service.
 type MeshServiceHandler interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
 	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带 project_id。
 	Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error)
+	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+	// 只接受备份节点登记过的源节点。
+	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
+	ReplicaPut(context.Context, *connect.ClientStream[v1.ReplicaChunk]) (*connect.Response[v1.ReplicaPutResponse], error)
+	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 }
 
 // NewMeshServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -116,12 +170,36 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(meshServiceMethods.ByName("Upload")),
 		connect.WithHandlerOptions(opts...),
 	)
+	meshServiceReplicaManifestHandler := connect.NewUnaryHandler(
+		MeshServiceReplicaManifestProcedure,
+		svc.ReplicaManifest,
+		connect.WithSchema(meshServiceMethods.ByName("ReplicaManifest")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceReplicaPutHandler := connect.NewClientStreamHandler(
+		MeshServiceReplicaPutProcedure,
+		svc.ReplicaPut,
+		connect.WithSchema(meshServiceMethods.ByName("ReplicaPut")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceReplicaCommitHandler := connect.NewUnaryHandler(
+		MeshServiceReplicaCommitProcedure,
+		svc.ReplicaCommit,
+		connect.WithSchema(meshServiceMethods.ByName("ReplicaCommit")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.MeshService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MeshServicePingProcedure:
 			meshServicePingHandler.ServeHTTP(w, r)
 		case MeshServiceUploadProcedure:
 			meshServiceUploadHandler.ServeHTTP(w, r)
+		case MeshServiceReplicaManifestProcedure:
+			meshServiceReplicaManifestHandler.ServeHTTP(w, r)
+		case MeshServiceReplicaPutProcedure:
+			meshServiceReplicaPutHandler.ServeHTTP(w, r)
+		case MeshServiceReplicaCommitProcedure:
+			meshServiceReplicaCommitHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -137,4 +215,16 @@ func (UnimplementedMeshServiceHandler) Ping(context.Context, *connect.Request[v1
 
 func (UnimplementedMeshServiceHandler) Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.Upload is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.ReplicaManifest is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) ReplicaPut(context.Context, *connect.ClientStream[v1.ReplicaChunk]) (*connect.Response[v1.ReplicaPutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.ReplicaPut is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.ReplicaCommit is not implemented"))
 }

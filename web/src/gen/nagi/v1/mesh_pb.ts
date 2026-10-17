@@ -10,7 +10,151 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/mesh.proto.
  */
 export const file_nagi_v1_mesh: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiLwoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMIkAKDlVwbG9hZFJlc3BvbnNlEg0KBWJ5dGVzGAEgASgEEg0KBWZpbGVzGAIgASgNEhAKCHN0cmlwcGVkGAMgASgJIg0KC1BpbmdSZXF1ZXN0Ih4KDFBpbmdSZXNwb25zZRIOCgZjYWxsZXIYASABKAwyfQoLTWVzaFNlcnZpY2USMwoEUGluZxIULm5hZ2kudjEuUGluZ1JlcXVlc3QaFS5uYWdpLnYxLlBpbmdSZXNwb25zZRI5CgZVcGxvYWQSFC5uYWdpLnYxLlVwbG9hZENodW5rGhcubmFnaS52MS5VcGxvYWRSZXNwb25zZSgBQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM");
+  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiLAoWUmVwbGljYU1hbmlmZXN0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIikKC1JlcGxpY2FGaWxlEgwKBHBhdGgYASABKAkSDAoEc2l6ZRgCIAEoAyI+ChdSZXBsaWNhTWFuaWZlc3RSZXNwb25zZRIjCgVmaWxlcxgBIAMoCzIULm5hZ2kudjEuUmVwbGljYUZpbGUiPgoMUmVwbGljYUNodW5rEhIKCnByb2plY3RfaWQYASABKAkSDAoEcGF0aBgCIAEoCRIMCgRkYXRhGAMgASgMIiMKElJlcGxpY2FQdXRSZXNwb25zZRINCgVmaWxlcxgBIAEoDSJPChRSZXBsaWNhQ29tbWl0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg0KBXBhdGhzGAIgAygJEhQKDHByb2plY3RfbmFtZRgDIAEoCSIXChVSZXBsaWNhQ29tbWl0UmVzcG9uc2UiLwoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMIkAKDlVwbG9hZFJlc3BvbnNlEg0KBWJ5dGVzGAEgASgEEg0KBWZpbGVzGAIgASgNEhAKCHN0cmlwcGVkGAMgASgJIg0KC1BpbmdSZXF1ZXN0Ih4KDFBpbmdSZXNwb25zZRIOCgZjYWxsZXIYASABKAwy5wIKC01lc2hTZXJ2aWNlEjMKBFBpbmcSFC5uYWdpLnYxLlBpbmdSZXF1ZXN0GhUubmFnaS52MS5QaW5nUmVzcG9uc2USOQoGVXBsb2FkEhQubmFnaS52MS5VcGxvYWRDaHVuaxoXLm5hZ2kudjEuVXBsb2FkUmVzcG9uc2UoARJUCg9SZXBsaWNhTWFuaWZlc3QSHy5uYWdpLnYxLlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QaIC5uYWdpLnYxLlJlcGxpY2FNYW5pZmVzdFJlc3BvbnNlEkIKClJlcGxpY2FQdXQSFS5uYWdpLnYxLlJlcGxpY2FDaHVuaxobLm5hZ2kudjEuUmVwbGljYVB1dFJlc3BvbnNlKAESTgoNUmVwbGljYUNvbW1pdBIdLm5hZ2kudjEuUmVwbGljYUNvbW1pdFJlcXVlc3QaHi5uYWdpLnYxLlJlcGxpY2FDb21taXRSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z");
+
+/**
+ * @generated from message nagi.v1.ReplicaManifestRequest
+ */
+export type ReplicaManifestRequest = Message<"nagi.v1.ReplicaManifestRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaManifestRequest.
+ * Use `create(ReplicaManifestRequestSchema)` to create a new message.
+ */
+export const ReplicaManifestRequestSchema: GenMessage<ReplicaManifestRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 0);
+
+/**
+ * @generated from message nagi.v1.ReplicaFile
+ */
+export type ReplicaFile = Message<"nagi.v1.ReplicaFile"> & {
+  /**
+   * @generated from field: string path = 1;
+   */
+  path: string;
+
+  /**
+   * @generated from field: int64 size = 2;
+   */
+  size: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaFile.
+ * Use `create(ReplicaFileSchema)` to create a new message.
+ */
+export const ReplicaFileSchema: GenMessage<ReplicaFile> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 1);
+
+/**
+ * @generated from message nagi.v1.ReplicaManifestResponse
+ */
+export type ReplicaManifestResponse = Message<"nagi.v1.ReplicaManifestResponse"> & {
+  /**
+   * @generated from field: repeated nagi.v1.ReplicaFile files = 1;
+   */
+  files: ReplicaFile[];
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaManifestResponse.
+ * Use `create(ReplicaManifestResponseSchema)` to create a new message.
+ */
+export const ReplicaManifestResponseSchema: GenMessage<ReplicaManifestResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 2);
+
+/**
+ * ReplicaChunk：path 变了表示开始一个新文件。
+ *
+ * @generated from message nagi.v1.ReplicaChunk
+ */
+export type ReplicaChunk = Message<"nagi.v1.ReplicaChunk"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string path = 2;
+   */
+  path: string;
+
+  /**
+   * @generated from field: bytes data = 3;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaChunk.
+ * Use `create(ReplicaChunkSchema)` to create a new message.
+ */
+export const ReplicaChunkSchema: GenMessage<ReplicaChunk> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 3);
+
+/**
+ * @generated from message nagi.v1.ReplicaPutResponse
+ */
+export type ReplicaPutResponse = Message<"nagi.v1.ReplicaPutResponse"> & {
+  /**
+   * @generated from field: uint32 files = 1;
+   */
+  files: number;
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaPutResponse.
+ * Use `create(ReplicaPutResponseSchema)` to create a new message.
+ */
+export const ReplicaPutResponseSchema: GenMessage<ReplicaPutResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 4);
+
+/**
+ * @generated from message nagi.v1.ReplicaCommitRequest
+ */
+export type ReplicaCommitRequest = Message<"nagi.v1.ReplicaCommitRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * 源节点上现在的完整文件列表，备份节点删除不在列表里的文件。
+   *
+   * @generated from field: repeated string paths = 2;
+   */
+  paths: string[];
+
+  /**
+   * @generated from field: string project_name = 3;
+   */
+  projectName: string;
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaCommitRequest.
+ * Use `create(ReplicaCommitRequestSchema)` to create a new message.
+ */
+export const ReplicaCommitRequestSchema: GenMessage<ReplicaCommitRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 5);
+
+/**
+ * @generated from message nagi.v1.ReplicaCommitResponse
+ */
+export type ReplicaCommitResponse = Message<"nagi.v1.ReplicaCommitResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.ReplicaCommitResponse.
+ * Use `create(ReplicaCommitResponseSchema)` to create a new message.
+ */
+export const ReplicaCommitResponseSchema: GenMessage<ReplicaCommitResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 6);
 
 /**
  * @generated from message nagi.v1.UploadChunk
@@ -32,7 +176,7 @@ export type UploadChunk = Message<"nagi.v1.UploadChunk"> & {
  * Use `create(UploadChunkSchema)` to create a new message.
  */
 export const UploadChunkSchema: GenMessage<UploadChunk> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 0);
+  messageDesc(file_nagi_v1_mesh, 7);
 
 /**
  * @generated from message nagi.v1.UploadResponse
@@ -61,7 +205,7 @@ export type UploadResponse = Message<"nagi.v1.UploadResponse"> & {
  * Use `create(UploadResponseSchema)` to create a new message.
  */
 export const UploadResponseSchema: GenMessage<UploadResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 1);
+  messageDesc(file_nagi_v1_mesh, 8);
 
 /**
  * @generated from message nagi.v1.PingRequest
@@ -74,7 +218,7 @@ export type PingRequest = Message<"nagi.v1.PingRequest"> & {
  * Use `create(PingRequestSchema)` to create a new message.
  */
 export const PingRequestSchema: GenMessage<PingRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 2);
+  messageDesc(file_nagi_v1_mesh, 9);
 
 /**
  * @generated from message nagi.v1.PingResponse
@@ -93,7 +237,7 @@ export type PingResponse = Message<"nagi.v1.PingResponse"> & {
  * Use `create(PingResponseSchema)` to create a new message.
  */
 export const PingResponseSchema: GenMessage<PingResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 3);
+  messageDesc(file_nagi_v1_mesh, 10);
 
 /**
  * MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
@@ -119,6 +263,33 @@ export const MeshService: GenService<{
     methodKind: "client_streaming";
     input: typeof UploadChunkSchema;
     output: typeof UploadResponseSchema;
+  },
+  /**
+   * 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
+   * 只接受备份节点登记过的源节点。
+   *
+   * @generated from rpc nagi.v1.MeshService.ReplicaManifest
+   */
+  replicaManifest: {
+    methodKind: "unary";
+    input: typeof ReplicaManifestRequestSchema;
+    output: typeof ReplicaManifestResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.ReplicaPut
+   */
+  replicaPut: {
+    methodKind: "client_streaming";
+    input: typeof ReplicaChunkSchema;
+    output: typeof ReplicaPutResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.ReplicaCommit
+   */
+  replicaCommit: {
+    methodKind: "unary";
+    input: typeof ReplicaCommitRequestSchema;
+    output: typeof ReplicaCommitResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_mesh, 0);

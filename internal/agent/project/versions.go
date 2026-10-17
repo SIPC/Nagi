@@ -601,6 +601,10 @@ func (m *Manager) Snapshots(ctx context.Context, id string) ([]*nagiv1.Snapshot,
 	if err != nil {
 		return nil, err
 	}
+	return snapshotsProto(list), nil
+}
+
+func snapshotsProto(list []snapshot.Info) []*nagiv1.Snapshot {
 	out := make([]*nagiv1.Snapshot, 0, len(list))
 	for _, s := range list {
 		snap := &nagiv1.Snapshot{Id: s.ID, Kind: string(s.Kind), Time: timestamppb.New(s.Time), Size: s.Size}
@@ -611,5 +615,5 @@ func (m *Manager) Snapshots(ctx context.Context, id string) ([]*nagiv1.Snapshot,
 		snap.Version, _ = strconv.ParseInt(v, 10, 64)
 		out = append(out, snap)
 	}
-	return out, nil
+	return out
 }

@@ -71,6 +71,18 @@ const (
 	// NodeServiceGetPanelMeshProcedure is the fully-qualified name of the NodeService's GetPanelMesh
 	// RPC.
 	NodeServiceGetPanelMeshProcedure = "/nagi.v1.NodeService/GetPanelMesh"
+	// NodeServiceListNodeReplicasProcedure is the fully-qualified name of the NodeService's
+	// ListNodeReplicas RPC.
+	NodeServiceListNodeReplicasProcedure = "/nagi.v1.NodeService/ListNodeReplicas"
+	// NodeServiceListNodeReplicaSnapshotsProcedure is the fully-qualified name of the NodeService's
+	// ListNodeReplicaSnapshots RPC.
+	NodeServiceListNodeReplicaSnapshotsProcedure = "/nagi.v1.NodeService/ListNodeReplicaSnapshots"
+	// NodeServiceRestoreNodeReplicaProcedure is the fully-qualified name of the NodeService's
+	// RestoreNodeReplica RPC.
+	NodeServiceRestoreNodeReplicaProcedure = "/nagi.v1.NodeService/RestoreNodeReplica"
+	// NodeServiceDeleteNodeReplicaProcedure is the fully-qualified name of the NodeService's
+	// DeleteNodeReplica RPC.
+	NodeServiceDeleteNodeReplicaProcedure = "/nagi.v1.NodeService/DeleteNodeReplica"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -148,6 +160,15 @@ const (
 	// ProjectServiceStreamNodeProjectLogsProcedure is the fully-qualified name of the ProjectService's
 	// StreamNodeProjectLogs RPC.
 	ProjectServiceStreamNodeProjectLogsProcedure = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
+	// ProjectServiceSetNodeProjectBackupProcedure is the fully-qualified name of the ProjectService's
+	// SetNodeProjectBackup RPC.
+	ProjectServiceSetNodeProjectBackupProcedure = "/nagi.v1.ProjectService/SetNodeProjectBackup"
+	// ProjectServiceGetNodeProjectBackupProcedure is the fully-qualified name of the ProjectService's
+	// GetNodeProjectBackup RPC.
+	ProjectServiceGetNodeProjectBackupProcedure = "/nagi.v1.ProjectService/GetNodeProjectBackup"
+	// ProjectServiceSyncNodeProjectBackupProcedure is the fully-qualified name of the ProjectService's
+	// SyncNodeProjectBackup RPC.
+	ProjectServiceSyncNodeProjectBackupProcedure = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -383,6 +404,12 @@ type NodeServiceClient interface {
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 节点作为备份节点保存的项目副本。
+	ListNodeReplicas(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListNodeReplicaSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 把副本恢复成这个节点上的项目。
+	RestoreNodeReplica(context.Context, *connect.Request[v1.RestoreNodeReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -443,6 +470,30 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("GetPanelMesh")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeReplicas: connect.NewClient[v1.ListNodeReplicasRequest, v1.ListReplicasResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeReplicasProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicas")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeReplicaSnapshots: connect.NewClient[v1.NodeProjectRef, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeReplicaSnapshotsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicaSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreNodeReplica: connect.NewClient[v1.RestoreNodeReplicaRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+NodeServiceRestoreNodeReplicaProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeReplica: connect.NewClient[v1.NodeProjectRef, v1.DeleteReplicaResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeReplicaProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -466,16 +517,20 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
-	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
-	addNodePanel        *connect.Client[v1.AddNodePanelRequest, v1.AddNodePanelResponse]
-	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
-	getNodeMesh         *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
-	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
-	getPanelMesh        *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
-	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
-	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
-	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
+	listNodes                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	listNodePanels           *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
+	addNodePanel             *connect.Client[v1.AddNodePanelRequest, v1.AddNodePanelResponse]
+	removeNodePanel          *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
+	getNodeMesh              *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
+	pingNodeMesh             *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
+	getPanelMesh             *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
+	listNodeReplicas         *connect.Client[v1.ListNodeReplicasRequest, v1.ListReplicasResponse]
+	listNodeReplicaSnapshots *connect.Client[v1.NodeProjectRef, v1.ListSnapshotsResponse]
+	restoreNodeReplica       *connect.Client[v1.RestoreNodeReplicaRequest, v1.DeployEvent]
+	deleteNodeReplica        *connect.Client[v1.NodeProjectRef, v1.DeleteReplicaResponse]
+	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
+	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
+	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -513,6 +568,26 @@ func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, req *connect.Reque
 	return c.getPanelMesh.CallUnary(ctx, req)
 }
 
+// ListNodeReplicas calls nagi.v1.NodeService.ListNodeReplicas.
+func (c *nodeServiceClient) ListNodeReplicas(ctx context.Context, req *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return c.listNodeReplicas.CallUnary(ctx, req)
+}
+
+// ListNodeReplicaSnapshots calls nagi.v1.NodeService.ListNodeReplicaSnapshots.
+func (c *nodeServiceClient) ListNodeReplicaSnapshots(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listNodeReplicaSnapshots.CallUnary(ctx, req)
+}
+
+// RestoreNodeReplica calls nagi.v1.NodeService.RestoreNodeReplica.
+func (c *nodeServiceClient) RestoreNodeReplica(ctx context.Context, req *connect.Request[v1.RestoreNodeReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreNodeReplica.CallServerStream(ctx, req)
+}
+
+// DeleteNodeReplica calls nagi.v1.NodeService.DeleteNodeReplica.
+func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return c.deleteNodeReplica.CallUnary(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -543,6 +618,12 @@ type NodeServiceHandler interface {
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 节点作为备份节点保存的项目副本。
+	ListNodeReplicas(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListNodeReplicaSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 把副本恢复成这个节点上的项目。
+	RestoreNodeReplica(context.Context, *connect.Request[v1.RestoreNodeReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
+	DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -599,6 +680,30 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("GetPanelMesh")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceListNodeReplicasHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeReplicasProcedure,
+		svc.ListNodeReplicas,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicas")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodeReplicaSnapshotsHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeReplicaSnapshotsProcedure,
+		svc.ListNodeReplicaSnapshots,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicaSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRestoreNodeReplicaHandler := connect.NewServerStreamHandler(
+		NodeServiceRestoreNodeReplicaProcedure,
+		svc.RestoreNodeReplica,
+		connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeReplicaHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeReplicaProcedure,
+		svc.DeleteNodeReplica,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -633,6 +738,14 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServicePingNodeMeshHandler.ServeHTTP(w, r)
 		case NodeServiceGetPanelMeshProcedure:
 			nodeServiceGetPanelMeshHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeReplicasProcedure:
+			nodeServiceListNodeReplicasHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeReplicaSnapshotsProcedure:
+			nodeServiceListNodeReplicaSnapshotsHandler.ServeHTTP(w, r)
+		case NodeServiceRestoreNodeReplicaProcedure:
+			nodeServiceRestoreNodeReplicaHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeReplicaProcedure:
+			nodeServiceDeleteNodeReplicaHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -674,6 +787,22 @@ func (UnimplementedNodeServiceHandler) PingNodeMesh(context.Context, *connect.Re
 
 func (UnimplementedNodeServiceHandler) GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetPanelMesh is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeReplicas(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeReplicas is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeReplicaSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeReplicaSnapshots is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RestoreNodeReplica(context.Context, *connect.Request[v1.RestoreNodeReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RestoreNodeReplica is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeReplica is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -965,6 +1094,10 @@ type ProjectServiceClient interface {
 	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
+	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
+	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
+	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 }
 
 // NewProjectServiceClient constructs a client for the nagi.v1.ProjectService service. By default,
@@ -1068,6 +1201,24 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("StreamNodeProjectLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeProjectBackup: connect.NewClient[v1.SetNodeProjectBackupRequest, v1.BackupStatus](
+			httpClient,
+			baseURL+ProjectServiceSetNodeProjectBackupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetNodeProjectBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		getNodeProjectBackup: connect.NewClient[v1.NodeProjectRef, v1.BackupStatus](
+			httpClient,
+			baseURL+ProjectServiceGetNodeProjectBackupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		syncNodeProjectBackup: connect.NewClient[v1.NodeProjectRef, v1.BackupStatus](
+			httpClient,
+			baseURL+ProjectServiceSyncNodeProjectBackupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1088,6 +1239,9 @@ type projectServiceClient struct {
 	deleteNodeProjectRoute     *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
 	deployNodeProject          *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
 	streamNodeProjectLogs      *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
+	setNodeProjectBackup       *connect.Client[v1.SetNodeProjectBackupRequest, v1.BackupStatus]
+	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
+	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -1165,6 +1319,21 @@ func (c *projectServiceClient) StreamNodeProjectLogs(ctx context.Context, req *c
 	return c.streamNodeProjectLogs.CallServerStream(ctx, req)
 }
 
+// SetNodeProjectBackup calls nagi.v1.ProjectService.SetNodeProjectBackup.
+func (c *projectServiceClient) SetNodeProjectBackup(ctx context.Context, req *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return c.setNodeProjectBackup.CallUnary(ctx, req)
+}
+
+// GetNodeProjectBackup calls nagi.v1.ProjectService.GetNodeProjectBackup.
+func (c *projectServiceClient) GetNodeProjectBackup(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
+	return c.getNodeProjectBackup.CallUnary(ctx, req)
+}
+
+// SyncNodeProjectBackup calls nagi.v1.ProjectService.SyncNodeProjectBackup.
+func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
+	return c.syncNodeProjectBackup.CallUnary(ctx, req)
+}
+
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
@@ -1182,6 +1351,10 @@ type ProjectServiceHandler interface {
 	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest], *connect.ServerStream[v1.LogLine]) error
+	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
+	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
+	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 }
 
 // NewProjectServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1281,6 +1454,24 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("StreamNodeProjectLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetNodeProjectBackupHandler := connect.NewUnaryHandler(
+		ProjectServiceSetNodeProjectBackupProcedure,
+		svc.SetNodeProjectBackup,
+		connect.WithSchema(projectServiceMethods.ByName("SetNodeProjectBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceGetNodeProjectBackupHandler := connect.NewUnaryHandler(
+		ProjectServiceGetNodeProjectBackupProcedure,
+		svc.GetNodeProjectBackup,
+		connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSyncNodeProjectBackupHandler := connect.NewUnaryHandler(
+		ProjectServiceSyncNodeProjectBackupProcedure,
+		svc.SyncNodeProjectBackup,
+		connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.ProjectService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProjectServiceListAllProjectsProcedure:
@@ -1313,6 +1504,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceDeployNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceStreamNodeProjectLogsProcedure:
 			projectServiceStreamNodeProjectLogsHandler.ServeHTTP(w, r)
+		case ProjectServiceSetNodeProjectBackupProcedure:
+			projectServiceSetNodeProjectBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceGetNodeProjectBackupProcedure:
+			projectServiceGetNodeProjectBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceSyncNodeProjectBackupProcedure:
+			projectServiceSyncNodeProjectBackupHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1380,4 +1577,16 @@ func (UnimplementedProjectServiceHandler) DeployNodeProject(context.Context, *co
 
 func (UnimplementedProjectServiceHandler) StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest], *connect.ServerStream[v1.LogLine]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.StreamNodeProjectLogs is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetNodeProjectBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProjectBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncNodeProjectBackup is not implemented"))
 }

@@ -5,6 +5,7 @@ import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { ProjectMetrics } from "@/pages/alerts";
+import { BackupCard } from "@/pages/backup";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Spinner, Textarea } from "@/components/ui";
@@ -105,6 +106,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         <RoutesCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <HistoryCard nodeId={nodeId} project={p} />
+        <BackupCard nodeId={nodeId} projectId={projectId} />
         <DeleteCard nodeId={nodeId} project={p} />
       </div>
     </>

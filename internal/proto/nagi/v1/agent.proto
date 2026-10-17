@@ -44,7 +44,64 @@ service AgentService {
   rpc GetMeshStatus(MeshStatusRequest) returns (MeshStatus);
   // 经 mesh 连一下某个成员，测往返时间。
   rpc MeshPing(MeshPingRequest) returns (MeshPingResponse);
+
+  // ---- 备份节点：源节点一侧 ----
+  // 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
+  rpc SetBackupTarget(SetBackupTargetRequest) returns (BackupStatus);
+  rpc GetBackupStatus(GetBackupStatusRequest) returns (BackupStatus);
+  // 立即同步一次，完成后返回。
+  rpc SyncBackup(GetBackupStatusRequest) returns (BackupStatus);
+
+  // ---- 备份节点：备份节点一侧 ----
+  // 同意接收某个项目的副本，只接受来自 source_key 的同步。
+  rpc AcceptReplica(AcceptReplicaRequest) returns (AcceptReplicaResponse);
+  rpc ListReplicas(ListReplicasRequest) returns (ListReplicasResponse);
+  rpc ListReplicaSnapshots(ReplicaRef) returns (ListSnapshotsResponse);
+  // 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
+  rpc RestoreReplica(RestoreReplicaRequest) returns (stream DeployEvent);
+  rpc DeleteReplica(ReplicaRef) returns (DeleteReplicaResponse);
 }
+
+message SetBackupTargetRequest {
+  string project_id = 1;
+  bytes target_key = 2;
+  string target_node_id = 3;
+  string target_name = 4;
+}
+
+message GetBackupStatusRequest {
+  string project_id = 1;
+}
+
+message AcceptReplicaRequest {
+  string project_id = 1;
+  string project_name = 2;
+  bytes source_key = 3;
+  string source_node_id = 4;
+  string source_name = 5;
+}
+
+message AcceptReplicaResponse {}
+
+message ListReplicasRequest {}
+
+message ListReplicasResponse {
+  repeated Replica replicas = 1;
+}
+
+message ReplicaRef {
+  string project_id = 1;
+}
+
+message RestoreReplicaRequest {
+  string project_id = 1;
+  // 恢复到的项目目录，规则和新建项目一样。
+  string dir = 2;
+  // 为空时用最新的含数据的快照。
+  string snapshot_id = 3;
+}
+
+message DeleteReplicaResponse {}
 
 message MeshStatusRequest {}
 

@@ -19,29 +19,37 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_ListProjects_FullMethodName    = "/nagi.v1.AgentService/ListProjects"
-	AgentService_CreateProject_FullMethodName   = "/nagi.v1.AgentService/CreateProject"
-	AgentService_GetProject_FullMethodName      = "/nagi.v1.AgentService/GetProject"
-	AgentService_SaveDraft_FullMethodName       = "/nagi.v1.AgentService/SaveDraft"
-	AgentService_DiscardDraft_FullMethodName    = "/nagi.v1.AgentService/DiscardDraft"
-	AgentService_SaveRoute_FullMethodName       = "/nagi.v1.AgentService/SaveRoute"
-	AgentService_DeleteRoute_FullMethodName     = "/nagi.v1.AgentService/DeleteRoute"
-	AgentService_ListVersions_FullMethodName    = "/nagi.v1.AgentService/ListVersions"
-	AgentService_Rollback_FullMethodName        = "/nagi.v1.AgentService/Rollback"
-	AgentService_ListSnapshots_FullMethodName   = "/nagi.v1.AgentService/ListSnapshots"
-	AgentService_CreateSnapshot_FullMethodName  = "/nagi.v1.AgentService/CreateSnapshot"
-	AgentService_RestoreSnapshot_FullMethodName = "/nagi.v1.AgentService/RestoreSnapshot"
-	AgentService_SetAlertConfig_FullMethodName  = "/nagi.v1.AgentService/SetAlertConfig"
-	AgentService_QueryMetrics_FullMethodName    = "/nagi.v1.AgentService/QueryMetrics"
-	AgentService_DeleteProject_FullMethodName   = "/nagi.v1.AgentService/DeleteProject"
-	AgentService_DeployProject_FullMethodName   = "/nagi.v1.AgentService/DeployProject"
-	AgentService_StreamLogs_FullMethodName      = "/nagi.v1.AgentService/StreamLogs"
-	AgentService_Exec_FullMethodName            = "/nagi.v1.AgentService/Exec"
-	AgentService_ListPanels_FullMethodName      = "/nagi.v1.AgentService/ListPanels"
-	AgentService_AddPanel_FullMethodName        = "/nagi.v1.AgentService/AddPanel"
-	AgentService_RemovePanel_FullMethodName     = "/nagi.v1.AgentService/RemovePanel"
-	AgentService_GetMeshStatus_FullMethodName   = "/nagi.v1.AgentService/GetMeshStatus"
-	AgentService_MeshPing_FullMethodName        = "/nagi.v1.AgentService/MeshPing"
+	AgentService_ListProjects_FullMethodName         = "/nagi.v1.AgentService/ListProjects"
+	AgentService_CreateProject_FullMethodName        = "/nagi.v1.AgentService/CreateProject"
+	AgentService_GetProject_FullMethodName           = "/nagi.v1.AgentService/GetProject"
+	AgentService_SaveDraft_FullMethodName            = "/nagi.v1.AgentService/SaveDraft"
+	AgentService_DiscardDraft_FullMethodName         = "/nagi.v1.AgentService/DiscardDraft"
+	AgentService_SaveRoute_FullMethodName            = "/nagi.v1.AgentService/SaveRoute"
+	AgentService_DeleteRoute_FullMethodName          = "/nagi.v1.AgentService/DeleteRoute"
+	AgentService_ListVersions_FullMethodName         = "/nagi.v1.AgentService/ListVersions"
+	AgentService_Rollback_FullMethodName             = "/nagi.v1.AgentService/Rollback"
+	AgentService_ListSnapshots_FullMethodName        = "/nagi.v1.AgentService/ListSnapshots"
+	AgentService_CreateSnapshot_FullMethodName       = "/nagi.v1.AgentService/CreateSnapshot"
+	AgentService_RestoreSnapshot_FullMethodName      = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
+	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
+	AgentService_DeleteProject_FullMethodName        = "/nagi.v1.AgentService/DeleteProject"
+	AgentService_DeployProject_FullMethodName        = "/nagi.v1.AgentService/DeployProject"
+	AgentService_StreamLogs_FullMethodName           = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName                 = "/nagi.v1.AgentService/Exec"
+	AgentService_ListPanels_FullMethodName           = "/nagi.v1.AgentService/ListPanels"
+	AgentService_AddPanel_FullMethodName             = "/nagi.v1.AgentService/AddPanel"
+	AgentService_RemovePanel_FullMethodName          = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_GetMeshStatus_FullMethodName        = "/nagi.v1.AgentService/GetMeshStatus"
+	AgentService_MeshPing_FullMethodName             = "/nagi.v1.AgentService/MeshPing"
+	AgentService_SetBackupTarget_FullMethodName      = "/nagi.v1.AgentService/SetBackupTarget"
+	AgentService_GetBackupStatus_FullMethodName      = "/nagi.v1.AgentService/GetBackupStatus"
+	AgentService_SyncBackup_FullMethodName           = "/nagi.v1.AgentService/SyncBackup"
+	AgentService_AcceptReplica_FullMethodName        = "/nagi.v1.AgentService/AcceptReplica"
+	AgentService_ListReplicas_FullMethodName         = "/nagi.v1.AgentService/ListReplicas"
+	AgentService_ListReplicaSnapshots_FullMethodName = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	AgentService_RestoreReplica_FullMethodName       = "/nagi.v1.AgentService/RestoreReplica"
+	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -85,6 +93,20 @@ type AgentServiceClient interface {
 	GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
+	// ---- 备份节点：源节点一侧 ----
+	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
+	SetBackupTarget(ctx context.Context, in *SetBackupTargetRequest, opts ...grpc.CallOption) (*BackupStatus, error)
+	GetBackupStatus(ctx context.Context, in *GetBackupStatusRequest, opts ...grpc.CallOption) (*BackupStatus, error)
+	// 立即同步一次，完成后返回。
+	SyncBackup(ctx context.Context, in *GetBackupStatusRequest, opts ...grpc.CallOption) (*BackupStatus, error)
+	// ---- 备份节点：备份节点一侧 ----
+	// 同意接收某个项目的副本，只接受来自 source_key 的同步。
+	AcceptReplica(ctx context.Context, in *AcceptReplicaRequest, opts ...grpc.CallOption) (*AcceptReplicaResponse, error)
+	ListReplicas(ctx context.Context, in *ListReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error)
+	ListReplicaSnapshots(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
+	RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	DeleteReplica(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error)
 }
 
 type agentServiceClient struct {
@@ -373,6 +395,95 @@ func (c *agentServiceClient) MeshPing(ctx context.Context, in *MeshPingRequest, 
 	return out, nil
 }
 
+func (c *agentServiceClient) SetBackupTarget(ctx context.Context, in *SetBackupTargetRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, AgentService_SetBackupTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) GetBackupStatus(ctx context.Context, in *GetBackupStatusRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, AgentService_GetBackupStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SyncBackup(ctx context.Context, in *GetBackupStatusRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, AgentService_SyncBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) AcceptReplica(ctx context.Context, in *AcceptReplicaRequest, opts ...grpc.CallOption) (*AcceptReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptReplicaResponse)
+	err := c.cc.Invoke(ctx, AgentService_AcceptReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListReplicas(ctx context.Context, in *ListReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReplicasResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListReplicas_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListReplicaSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreReplicaRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreReplicaClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteReplicaResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -414,6 +525,20 @@ type AgentServiceServer interface {
 	GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error)
+	// ---- 备份节点：源节点一侧 ----
+	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
+	SetBackupTarget(context.Context, *SetBackupTargetRequest) (*BackupStatus, error)
+	GetBackupStatus(context.Context, *GetBackupStatusRequest) (*BackupStatus, error)
+	// 立即同步一次，完成后返回。
+	SyncBackup(context.Context, *GetBackupStatusRequest) (*BackupStatus, error)
+	// ---- 备份节点：备份节点一侧 ----
+	// 同意接收某个项目的副本，只接受来自 source_key 的同步。
+	AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error)
+	ListReplicas(context.Context, *ListReplicasRequest) (*ListReplicasResponse, error)
+	ListReplicaSnapshots(context.Context, *ReplicaRef) (*ListSnapshotsResponse, error)
+	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
+	RestoreReplica(*RestoreReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	DeleteReplica(context.Context, *ReplicaRef) (*DeleteReplicaResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -492,6 +617,30 @@ func (UnimplementedAgentServiceServer) GetMeshStatus(context.Context, *MeshStatu
 }
 func (UnimplementedAgentServiceServer) MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MeshPing not implemented")
+}
+func (UnimplementedAgentServiceServer) SetBackupTarget(context.Context, *SetBackupTargetRequest) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBackupTarget not implemented")
+}
+func (UnimplementedAgentServiceServer) GetBackupStatus(context.Context, *GetBackupStatusRequest) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBackupStatus not implemented")
+}
+func (UnimplementedAgentServiceServer) SyncBackup(context.Context, *GetBackupStatusRequest) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
+}
+func (UnimplementedAgentServiceServer) AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) ListReplicas(context.Context, *ListReplicasRequest) (*ListReplicasResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplicas not implemented")
+}
+func (UnimplementedAgentServiceServer) ListReplicaSnapshots(context.Context, *ReplicaRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplicaSnapshots not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreReplica(*RestoreReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteReplica(context.Context, *ReplicaRef) (*DeleteReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteReplica not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -882,6 +1031,143 @@ func _AgentService_MeshPing_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SetBackupTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBackupTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetBackupTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetBackupTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetBackupTarget(ctx, req.(*SetBackupTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetBackupStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackupStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetBackupStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetBackupStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetBackupStatus(ctx, req.(*GetBackupStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackupStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SyncBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SyncBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SyncBackup(ctx, req.(*GetBackupStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_AcceptReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptReplicaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).AcceptReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_AcceptReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).AcceptReplica(ctx, req.(*AcceptReplicaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReplicasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListReplicas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListReplicas_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListReplicas(ctx, req.(*ListReplicasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListReplicaSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListReplicaSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListReplicaSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListReplicaSnapshots(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestoreReplica_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreReplicaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).RestoreReplica(m, &grpc.GenericServerStream[RestoreReplicaRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreReplicaServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_DeleteReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteReplica(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -957,6 +1243,34 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "MeshPing",
 			Handler:    _AgentService_MeshPing_Handler,
 		},
+		{
+			MethodName: "SetBackupTarget",
+			Handler:    _AgentService_SetBackupTarget_Handler,
+		},
+		{
+			MethodName: "GetBackupStatus",
+			Handler:    _AgentService_GetBackupStatus_Handler,
+		},
+		{
+			MethodName: "SyncBackup",
+			Handler:    _AgentService_SyncBackup_Handler,
+		},
+		{
+			MethodName: "AcceptReplica",
+			Handler:    _AgentService_AcceptReplica_Handler,
+		},
+		{
+			MethodName: "ListReplicas",
+			Handler:    _AgentService_ListReplicas_Handler,
+		},
+		{
+			MethodName: "ListReplicaSnapshots",
+			Handler:    _AgentService_ListReplicaSnapshots_Handler,
+		},
+		{
+			MethodName: "DeleteReplica",
+			Handler:    _AgentService_DeleteReplica_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -989,6 +1303,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _AgentService_Exec_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "RestoreReplica",
+			Handler:       _AgentService_RestoreReplica_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "nagi/v1/agent.proto",

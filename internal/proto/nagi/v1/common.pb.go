@@ -2266,6 +2266,171 @@ func (x *MeshPingResponse) GetRttMs() float64 {
 	return 0
 }
 
+// BackupStatus 是项目同步到备份节点的状态（在源节点上）。
+type BackupStatus struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 没有设置备份节点时为空。
+	TargetNodeId string                 `protobuf:"bytes,1,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	TargetName   string                 `protobuf:"bytes,2,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	LastSync     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
+	// 最近一次同步失败的原因，成功时为空。
+	LastError string `protobuf:"bytes,4,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	// 正在同步。
+	Syncing       bool `protobuf:"varint,5,opt,name=syncing,proto3" json:"syncing,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackupStatus) Reset() {
+	*x = BackupStatus{}
+	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackupStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackupStatus) ProtoMessage() {}
+
+func (x *BackupStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackupStatus.ProtoReflect.Descriptor instead.
+func (*BackupStatus) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *BackupStatus) GetTargetNodeId() string {
+	if x != nil {
+		return x.TargetNodeId
+	}
+	return ""
+}
+
+func (x *BackupStatus) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *BackupStatus) GetLastSync() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSync
+	}
+	return nil
+}
+
+func (x *BackupStatus) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *BackupStatus) GetSyncing() bool {
+	if x != nil {
+		return x.Syncing
+	}
+	return false
+}
+
+// Replica 是备份节点上保存的一个项目副本。
+type Replica struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProjectName   string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
+	SourceNodeId  string                 `protobuf:"bytes,3,opt,name=source_node_id,json=sourceNodeId,proto3" json:"source_node_id,omitempty"`
+	SourceName    string                 `protobuf:"bytes,4,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
+	LastSync      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
+	Bytes         int64                  `protobuf:"varint,6,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Replica) Reset() {
+	*x = Replica{}
+	mi := &file_nagi_v1_common_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Replica) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Replica) ProtoMessage() {}
+
+func (x *Replica) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Replica.ProtoReflect.Descriptor instead.
+func (*Replica) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *Replica) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *Replica) GetProjectName() string {
+	if x != nil {
+		return x.ProjectName
+	}
+	return ""
+}
+
+func (x *Replica) GetSourceNodeId() string {
+	if x != nil {
+		return x.SourceNodeId
+	}
+	return ""
+}
+
+func (x *Replica) GetSourceName() string {
+	if x != nil {
+		return x.SourceName
+	}
+	return ""
+}
+
+func (x *Replica) GetLastSync() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSync
+	}
+	return nil
+}
+
+func (x *Replica) GetBytes() int64 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
@@ -2456,7 +2621,24 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\")\n" +
 	"\x10MeshPingResponse\x12\x15\n" +
-	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs*@\n" +
+	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs\"\xc7\x01\n" +
+	"\fBackupStatus\x12$\n" +
+	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
+	"\vtarget_name\x18\x02 \x01(\tR\n" +
+	"targetName\x127\n" +
+	"\tlast_sync\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\x04 \x01(\tR\tlastError\x12\x18\n" +
+	"\asyncing\x18\x05 \x01(\bR\asyncing\"\xe1\x01\n" +
+	"\aReplica\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
+	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12$\n" +
+	"\x0esource_node_id\x18\x03 \x01(\tR\fsourceNodeId\x12\x1f\n" +
+	"\vsource_name\x18\x04 \x01(\tR\n" +
+	"sourceName\x127\n" +
+	"\tlast_sync\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x14\n" +
+	"\x05bytes\x18\x06 \x01(\x03R\x05bytes*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
@@ -2475,7 +2657,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -2506,43 +2688,47 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*MeshStatus)(nil),            // 26: nagi.v1.MeshStatus
 	(*MeshPingRequest)(nil),       // 27: nagi.v1.MeshPingRequest
 	(*MeshPingResponse)(nil),      // 28: nagi.v1.MeshPingResponse
-	nil,                           // 29: nagi.v1.ProjectConfig.ServiceEnvEntry
-	nil,                           // 30: nagi.v1.Version.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
+	(*BackupStatus)(nil),          // 29: nagi.v1.BackupStatus
+	(*Replica)(nil),               // 30: nagi.v1.Replica
+	nil,                           // 31: nagi.v1.ProjectConfig.ServiceEnvEntry
+	nil,                           // 32: nagi.v1.Version.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 33: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	31, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	33, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	2,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
 	6,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	29, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	31, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
 	9,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	5,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	0,  // 8: nagi.v1.ProjectConfig.stateful:type_name -> nagi.v1.Stateful
-	31, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	31, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	30, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	31, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	33, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	33, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	32, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	33, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	7,  // 13: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	10, // 14: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	7,  // 15: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	11, // 16: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	1,  // 17: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	12, // 18: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	31, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	33, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	17, // 20: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
 	19, // 21: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	20, // 22: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	31, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	31, // 24: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	33, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	33, // 24: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
 	25, // 25: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	8,  // 26: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	33, // 26: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	33, // 27: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	8,  // 28: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	29, // [29:29] is the sub-list for method output_type
+	29, // [29:29] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -2560,7 +2746,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

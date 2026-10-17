@@ -93,6 +93,29 @@ const (
 	AgentServiceGetMeshStatusProcedure = "/nagi.v1.AgentService/GetMeshStatus"
 	// AgentServiceMeshPingProcedure is the fully-qualified name of the AgentService's MeshPing RPC.
 	AgentServiceMeshPingProcedure = "/nagi.v1.AgentService/MeshPing"
+	// AgentServiceSetBackupTargetProcedure is the fully-qualified name of the AgentService's
+	// SetBackupTarget RPC.
+	AgentServiceSetBackupTargetProcedure = "/nagi.v1.AgentService/SetBackupTarget"
+	// AgentServiceGetBackupStatusProcedure is the fully-qualified name of the AgentService's
+	// GetBackupStatus RPC.
+	AgentServiceGetBackupStatusProcedure = "/nagi.v1.AgentService/GetBackupStatus"
+	// AgentServiceSyncBackupProcedure is the fully-qualified name of the AgentService's SyncBackup RPC.
+	AgentServiceSyncBackupProcedure = "/nagi.v1.AgentService/SyncBackup"
+	// AgentServiceAcceptReplicaProcedure is the fully-qualified name of the AgentService's
+	// AcceptReplica RPC.
+	AgentServiceAcceptReplicaProcedure = "/nagi.v1.AgentService/AcceptReplica"
+	// AgentServiceListReplicasProcedure is the fully-qualified name of the AgentService's ListReplicas
+	// RPC.
+	AgentServiceListReplicasProcedure = "/nagi.v1.AgentService/ListReplicas"
+	// AgentServiceListReplicaSnapshotsProcedure is the fully-qualified name of the AgentService's
+	// ListReplicaSnapshots RPC.
+	AgentServiceListReplicaSnapshotsProcedure = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	// AgentServiceRestoreReplicaProcedure is the fully-qualified name of the AgentService's
+	// RestoreReplica RPC.
+	AgentServiceRestoreReplicaProcedure = "/nagi.v1.AgentService/RestoreReplica"
+	// AgentServiceDeleteReplicaProcedure is the fully-qualified name of the AgentService's
+	// DeleteReplica RPC.
+	AgentServiceDeleteReplicaProcedure = "/nagi.v1.AgentService/DeleteReplica"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -132,6 +155,20 @@ type AgentServiceClient interface {
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// ---- 备份节点：源节点一侧 ----
+	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
+	SetBackupTarget(context.Context, *connect.Request[v1.SetBackupTargetRequest]) (*connect.Response[v1.BackupStatus], error)
+	GetBackupStatus(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error)
+	// 立即同步一次，完成后返回。
+	SyncBackup(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error)
+	// ---- 备份节点：备份节点一侧 ----
+	// 同意接收某个项目的副本，只接受来自 source_key 的同步。
+	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
+	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListReplicaSnapshots(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
+	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -283,34 +320,90 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
 			connect.WithClientOptions(opts...),
 		),
+		setBackupTarget: connect.NewClient[v1.SetBackupTargetRequest, v1.BackupStatus](
+			httpClient,
+			baseURL+AgentServiceSetBackupTargetProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetBackupTarget")),
+			connect.WithClientOptions(opts...),
+		),
+		getBackupStatus: connect.NewClient[v1.GetBackupStatusRequest, v1.BackupStatus](
+			httpClient,
+			baseURL+AgentServiceGetBackupStatusProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetBackupStatus")),
+			connect.WithClientOptions(opts...),
+		),
+		syncBackup: connect.NewClient[v1.GetBackupStatusRequest, v1.BackupStatus](
+			httpClient,
+			baseURL+AgentServiceSyncBackupProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SyncBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		acceptReplica: connect.NewClient[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse](
+			httpClient,
+			baseURL+AgentServiceAcceptReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("AcceptReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		listReplicas: connect.NewClient[v1.ListReplicasRequest, v1.ListReplicasResponse](
+			httpClient,
+			baseURL+AgentServiceListReplicasProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListReplicas")),
+			connect.WithClientOptions(opts...),
+		),
+		listReplicaSnapshots: connect.NewClient[v1.ReplicaRef, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+AgentServiceListReplicaSnapshotsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListReplicaSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreReplica: connect.NewClient[v1.RestoreReplicaRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRestoreReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteReplica: connect.NewClient[v1.ReplicaRef, v1.DeleteReplicaResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	listProjects    *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	createProject   *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject      *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	saveDraft       *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
-	discardDraft    *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
-	saveRoute       *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
-	deleteRoute     *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
-	listVersions    *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
-	rollback        *connect.Client[v1.RollbackRequest, v1.DeployEvent]
-	listSnapshots   *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
-	createSnapshot  *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
-	restoreSnapshot *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
-	setAlertConfig  *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
-	queryMetrics    *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
-	deleteProject   *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
-	deployProject   *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
-	streamLogs      *connect.Client[v1.StreamLogsRequest, v1.LogLine]
-	exec            *connect.Client[v1.ExecInput, v1.ExecOutput]
-	listPanels      *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
-	addPanel        *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
-	removePanel     *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
-	getMeshStatus   *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
-	meshPing        *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	listProjects         *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	createProject        *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject           *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	saveDraft            *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
+	discardDraft         *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
+	saveRoute            *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
+	deleteRoute          *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
+	listVersions         *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
+	rollback             *connect.Client[v1.RollbackRequest, v1.DeployEvent]
+	listSnapshots        *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
+	createSnapshot       *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
+	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	deleteProject        *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
+	deployProject        *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
+	streamLogs           *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec                 *connect.Client[v1.ExecInput, v1.ExecOutput]
+	listPanels           *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
+	addPanel             *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
+	removePanel          *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	getMeshStatus        *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
+	meshPing             *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	setBackupTarget      *connect.Client[v1.SetBackupTargetRequest, v1.BackupStatus]
+	getBackupStatus      *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
+	syncBackup           *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
+	acceptReplica        *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
+	listReplicas         *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
+	listReplicaSnapshots *connect.Client[v1.ReplicaRef, v1.ListSnapshotsResponse]
+	restoreReplica       *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
+	deleteReplica        *connect.Client[v1.ReplicaRef, v1.DeleteReplicaResponse]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -428,6 +521,46 @@ func (c *agentServiceClient) MeshPing(ctx context.Context, req *connect.Request[
 	return c.meshPing.CallUnary(ctx, req)
 }
 
+// SetBackupTarget calls nagi.v1.AgentService.SetBackupTarget.
+func (c *agentServiceClient) SetBackupTarget(ctx context.Context, req *connect.Request[v1.SetBackupTargetRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return c.setBackupTarget.CallUnary(ctx, req)
+}
+
+// GetBackupStatus calls nagi.v1.AgentService.GetBackupStatus.
+func (c *agentServiceClient) GetBackupStatus(ctx context.Context, req *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return c.getBackupStatus.CallUnary(ctx, req)
+}
+
+// SyncBackup calls nagi.v1.AgentService.SyncBackup.
+func (c *agentServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return c.syncBackup.CallUnary(ctx, req)
+}
+
+// AcceptReplica calls nagi.v1.AgentService.AcceptReplica.
+func (c *agentServiceClient) AcceptReplica(ctx context.Context, req *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error) {
+	return c.acceptReplica.CallUnary(ctx, req)
+}
+
+// ListReplicas calls nagi.v1.AgentService.ListReplicas.
+func (c *agentServiceClient) ListReplicas(ctx context.Context, req *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return c.listReplicas.CallUnary(ctx, req)
+}
+
+// ListReplicaSnapshots calls nagi.v1.AgentService.ListReplicaSnapshots.
+func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listReplicaSnapshots.CallUnary(ctx, req)
+}
+
+// RestoreReplica calls nagi.v1.AgentService.RestoreReplica.
+func (c *agentServiceClient) RestoreReplica(ctx context.Context, req *connect.Request[v1.RestoreReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreReplica.CallServerStream(ctx, req)
+}
+
+// DeleteReplica calls nagi.v1.AgentService.DeleteReplica.
+func (c *agentServiceClient) DeleteReplica(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return c.deleteReplica.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -465,6 +598,20 @@ type AgentServiceHandler interface {
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// ---- 备份节点：源节点一侧 ----
+	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
+	SetBackupTarget(context.Context, *connect.Request[v1.SetBackupTargetRequest]) (*connect.Response[v1.BackupStatus], error)
+	GetBackupStatus(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error)
+	// 立即同步一次，完成后返回。
+	SyncBackup(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error)
+	// ---- 备份节点：备份节点一侧 ----
+	// 同意接收某个项目的副本，只接受来自 source_key 的同步。
+	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
+	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListReplicaSnapshots(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
+	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
+	DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -612,6 +759,54 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetBackupTargetHandler := connect.NewUnaryHandler(
+		AgentServiceSetBackupTargetProcedure,
+		svc.SetBackupTarget,
+		connect.WithSchema(agentServiceMethods.ByName("SetBackupTarget")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceGetBackupStatusHandler := connect.NewUnaryHandler(
+		AgentServiceGetBackupStatusProcedure,
+		svc.GetBackupStatus,
+		connect.WithSchema(agentServiceMethods.ByName("GetBackupStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSyncBackupHandler := connect.NewUnaryHandler(
+		AgentServiceSyncBackupProcedure,
+		svc.SyncBackup,
+		connect.WithSchema(agentServiceMethods.ByName("SyncBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceAcceptReplicaHandler := connect.NewUnaryHandler(
+		AgentServiceAcceptReplicaProcedure,
+		svc.AcceptReplica,
+		connect.WithSchema(agentServiceMethods.ByName("AcceptReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListReplicasHandler := connect.NewUnaryHandler(
+		AgentServiceListReplicasProcedure,
+		svc.ListReplicas,
+		connect.WithSchema(agentServiceMethods.ByName("ListReplicas")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListReplicaSnapshotsHandler := connect.NewUnaryHandler(
+		AgentServiceListReplicaSnapshotsProcedure,
+		svc.ListReplicaSnapshots,
+		connect.WithSchema(agentServiceMethods.ByName("ListReplicaSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreReplicaHandler := connect.NewServerStreamHandler(
+		AgentServiceRestoreReplicaProcedure,
+		svc.RestoreReplica,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteReplicaHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteReplicaProcedure,
+		svc.DeleteReplica,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -660,6 +855,22 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetMeshStatusHandler.ServeHTTP(w, r)
 		case AgentServiceMeshPingProcedure:
 			agentServiceMeshPingHandler.ServeHTTP(w, r)
+		case AgentServiceSetBackupTargetProcedure:
+			agentServiceSetBackupTargetHandler.ServeHTTP(w, r)
+		case AgentServiceGetBackupStatusProcedure:
+			agentServiceGetBackupStatusHandler.ServeHTTP(w, r)
+		case AgentServiceSyncBackupProcedure:
+			agentServiceSyncBackupHandler.ServeHTTP(w, r)
+		case AgentServiceAcceptReplicaProcedure:
+			agentServiceAcceptReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceListReplicasProcedure:
+			agentServiceListReplicasHandler.ServeHTTP(w, r)
+		case AgentServiceListReplicaSnapshotsProcedure:
+			agentServiceListReplicaSnapshotsHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreReplicaProcedure:
+			agentServiceRestoreReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteReplicaProcedure:
+			agentServiceDeleteReplicaHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -759,4 +970,36 @@ func (UnimplementedAgentServiceHandler) GetMeshStatus(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MeshPing is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetBackupTarget(context.Context, *connect.Request[v1.SetBackupTargetRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetBackupTarget is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetBackupStatus(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetBackupStatus is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SyncBackup(context.Context, *connect.Request[v1.GetBackupStatusRequest]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SyncBackup is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AcceptReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListReplicas is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListReplicaSnapshots(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListReplicaSnapshots is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteReplica(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteReplica is not implemented"))
 }

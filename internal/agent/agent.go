@@ -130,6 +130,7 @@ func Run(ctx context.Context, cfg Config) error {
 		projects: projects,
 		hostname: hostname,
 		reload:   make(chan struct{}, 1),
+		replicas: &replicas{dir: filepath.Join(cfg.DataDir, "replicas")},
 	}
 	a.info = a.nodeInfo(ctx)
 
@@ -182,11 +183,13 @@ type agent struct {
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
 	mesh      *meshNode
+	replicas  *replicas
 
 	mu       sync.Mutex
 	subs     []chan struct{}
 	panels   map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
 	sessions map[string]context.CancelFunc        // 面板指纹 → 停止连接
+	syncing  map[string]bool                      // 正在同步到备份节点的项目
 	reload   chan struct{}
 }
 
@@ -532,6 +535,8 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 		a.projects.SnapshotDue(ctx, func(id string, err error) {
 			if err == nil {
 				a.alerts.Resolve(ctx, "snapshot:"+id)
+				// 定时快照成功后同步到备份节点（没设置时什么都不做）。
+				go a.runBackupSync(ctx, id)
 				return
 			}
 			a.log.Warn("定时快照失败", "project", id, "err", err)

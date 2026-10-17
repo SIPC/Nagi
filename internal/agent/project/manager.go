@@ -117,11 +117,16 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 	if cfg == nil {
 		return nil, invalid("缺少项目配置")
 	}
-	dir, err := m.checkDir(ctx, dir)
+	id, err := newID()
 	if err != nil {
 		return nil, err
 	}
-	id, err := newID()
+	return m.create(ctx, id, name, dir, cfg, nil)
+}
+
+// create 建立项目目录和记录。prepare 在目录建好、生成密钥之前调用，用于放入已有的文件（从副本恢复时）。
+func (m *Manager) create(ctx context.Context, id, name, dir string, cfg *nagiv1.ProjectConfig, prepare func(p paths) error) (*nagiv1.Project, error) {
+	dir, err := m.checkDir(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +148,12 @@ func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.Proj
 		return nil, err
 	}
 	cleanup := func() { os.RemoveAll(dir) }
+	if prepare != nil {
+		if err := prepare(p); err != nil {
+			cleanup()
+			return nil, err
+		}
+	}
 
 	pdb, err := openProject(ctx, dir)
 	if err != nil {
