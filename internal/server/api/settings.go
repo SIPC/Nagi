@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/server/auth"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -142,4 +143,48 @@ func randomID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// ---- 账号安全 ----
+
+func (s *settingsService) security(ctx context.Context) *nagiv1.Security {
+	return &nagiv1.Security{TotpEnabled: s.Auth.TOTPEnabled(ctx, auth.CurrentUser(ctx).ID), Entrance: s.Auth.Entrance(ctx)}
+}
+
+func (s *settingsService) GetSecurity(ctx context.Context, _ *connect.Request[nagiv1.GetSecurityRequest]) (*connect.Response[nagiv1.Security], error) {
+	return connect.NewResponse(s.security(ctx)), nil
+}
+
+func (s *settingsService) BeginTOTP(ctx context.Context, _ *connect.Request[nagiv1.BeginTOTPRequest]) (*connect.Response[nagiv1.BeginTOTPResponse], error) {
+	u := auth.CurrentUser(ctx)
+	secret, err := s.Auth.BeginTOTP(u.ID)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.BeginTOTPResponse{Secret: secret, Uri: auth.TOTPURI(secret, u.Name, "Nagi")}), nil
+}
+
+func (s *settingsService) EnableTOTP(ctx context.Context, req *connect.Request[nagiv1.EnableTOTPRequest]) (*connect.Response[nagiv1.Security], error) {
+	u := auth.CurrentUser(ctx)
+	if err := s.Auth.EnableTOTP(ctx, u.ID, req.Msg.GetCode()); err != nil {
+		return nil, err
+	}
+	s.Log.Info("已开启两步验证", "user", u.Name)
+	return connect.NewResponse(s.security(ctx)), nil
+}
+
+func (s *settingsService) DisableTOTP(ctx context.Context, req *connect.Request[nagiv1.DisableTOTPRequest]) (*connect.Response[nagiv1.Security], error) {
+	u := auth.CurrentUser(ctx)
+	if err := s.Auth.DisableTOTP(ctx, u.ID, req.Msg.GetCode(), req.Msg.GetPassword()); err != nil {
+		return nil, err
+	}
+	s.Log.Info("已关闭两步验证", "user", u.Name)
+	return connect.NewResponse(s.security(ctx)), nil
+}
+
+func (s *settingsService) SetEntrance(ctx context.Context, req *connect.Request[nagiv1.SetEntranceRequest]) (*connect.Response[nagiv1.Security], error) {
+	if _, err := s.Auth.SetEntrance(ctx, req.Msg.GetEnabled()); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(s.security(ctx)), nil
 }

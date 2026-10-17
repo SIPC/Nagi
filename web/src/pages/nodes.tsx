@@ -7,6 +7,7 @@ import { AlertSettings, NodeMetrics } from "@/pages/alerts";
 import { HandOverCard, InviteCard, NodePanels } from "@/pages/panels";
 import { NodeMesh, PanelMeshCard } from "@/pages/mesh";
 import { NodeReplicas } from "@/pages/backup";
+import { SecurityCard } from "@/pages/security";
 import {
   Alert,
   Badge,
@@ -42,6 +43,7 @@ export function NodesPage() {
         description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。"
       />
       <AddNode />
+      <SecurityCard />
       <AlertSettings />
       <PanelMeshCard />
       <InviteCard />

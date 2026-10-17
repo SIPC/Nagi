@@ -31,15 +31,27 @@ message SetupRequest {
 message SetupResponse {}
 
 service AuthService {
+  // 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Me(MeRequest) returns (MeResponse);
+  // 修改密码。成功后其他地方的登录全部失效。
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
 }
 
 message LoginRequest {
   string username = 1;
   string password = 2;
+  // 两步验证码（开启了才需要）。
+  string totp_code = 3;
 }
+
+message ChangePasswordRequest {
+  string current = 1;
+  string new_password = 2;
+}
+
+message ChangePasswordResponse {}
 
 message LoginResponse {}
 
@@ -51,6 +63,7 @@ message MeRequest {}
 
 message MeResponse {
   string username = 1;
+  bool totp_enabled = 2;
 }
 
 service NodeService {
@@ -163,6 +176,43 @@ service SettingsService {
   rpc ListInvites(ListInvitesRequest) returns (ListInvitesResponse);
   // 提前作废接入码。
   rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse);
+  // 账号安全：两步验证和安全入口。
+  rpc GetSecurity(GetSecurityRequest) returns (Security);
+  // 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
+  rpc BeginTOTP(BeginTOTPRequest) returns (BeginTOTPResponse);
+  rpc EnableTOTP(EnableTOTPRequest) returns (Security);
+  // 关闭两步验证，需要当前的验证码或者密码。
+  rpc DisableTOTP(DisableTOTPRequest) returns (Security);
+  // 开启（生成新的随机路径）或关闭安全入口。
+  rpc SetEntrance(SetEntranceRequest) returns (Security);
+}
+
+message GetSecurityRequest {}
+
+message Security {
+  bool totp_enabled = 1;
+  // 安全入口路径（不含 /），没开启时为空。开启后要先打开 https://<面板>/<路径> 才能看到登录页。
+  string entrance = 2;
+}
+
+message BeginTOTPRequest {}
+
+message BeginTOTPResponse {
+  string secret = 1;
+  string uri = 2;
+}
+
+message EnableTOTPRequest {
+  string code = 1;
+}
+
+message DisableTOTPRequest {
+  string code = 1;
+  string password = 2;
+}
+
+message SetEntranceRequest {
+  bool enabled = 1;
 }
 
 message CreateInviteRequest {}

@@ -33,12 +33,27 @@ var ErrBadCredentials = errors.New("用户名或密码错误")
 // Service 管理用户和会话。
 type Service struct {
 	q       *store.Queries
+	sealer  Sealer
 	limiter *limiter
+
+	mu      sync.Mutex
+	pending map[int64]pendingTOTP // 正在开启两步验证、还没确认的密钥
+}
+
+// Sealer 加密两步验证的密钥（面板主密钥）。
+type Sealer interface {
+	Seal(plaintext, additional []byte) ([]byte, error)
+	Open(ciphertext, additional []byte) ([]byte, error)
+}
+
+type pendingTOTP struct {
+	secret  string
+	expires time.Time
 }
 
 // New 创建登录服务。
-func New(q *store.Queries) *Service {
-	return &Service{q: q, limiter: newLimiter()}
+func New(q *store.Queries, sealer Sealer) *Service {
+	return &Service{q: q, sealer: sealer, limiter: newLimiter(), pending: map[int64]pendingTOTP{}}
 }
 
 // ---- 密码 ----
@@ -104,8 +119,11 @@ func (s *Service) CreateUser(ctx context.Context, username, password string) (in
 	})
 }
 
-// Login 校验用户名和密码，成功时返回新会话的 cookie。按客户端 IP 限速。
-func (s *Service) Login(ctx context.Context, ip, username, password string) (*http.Cookie, error) {
+// ErrTOTPRequired 表示密码正确，但还需要两步验证码。
+var ErrTOTPRequired = errors.New("请输入两步验证码")
+
+// Login 校验用户名、密码和两步验证码（开启了的话），成功时返回新会话的 cookie。按客户端 IP 限速。
+func (s *Service) Login(ctx context.Context, ip, username, password, code string) (*http.Cookie, error) {
 	if wait := s.limiter.wait(ip); wait > 0 {
 		return nil, connect.NewError(connect.CodeResourceExhausted,
 			fmt.Errorf("登录失败次数过多，请 %d 秒后再试", int(wait.Seconds())+1))
@@ -117,6 +135,15 @@ func (s *Service) Login(ctx context.Context, ip, username, password string) (*ht
 	if err != nil || !VerifyPassword(password, user.PasswordHash) {
 		s.limiter.fail(ip)
 		return nil, connect.NewError(connect.CodeUnauthenticated, ErrBadCredentials)
+	}
+	if user.TotpSecret != "" {
+		if strings.TrimSpace(code) == "" {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, ErrTOTPRequired)
+		}
+		if err := s.useTOTP(ctx, user, code); err != nil {
+			s.limiter.fail(ip)
+			return nil, connect.NewError(connect.CodeUnauthenticated, err)
+		}
 	}
 	s.limiter.reset(ip)
 	return s.NewSession(ctx, user.ID)
@@ -158,18 +185,29 @@ func (s *Service) Logout(ctx context.Context, token string) *http.Cookie {
 
 // Authenticate 根据会话 token 返回用户名。
 func (s *Service) Authenticate(ctx context.Context, token string) (string, error) {
+	u, err := s.session(ctx, token)
+	return u.Name, err
+}
+
+// User 是当前登录的用户。
+type User struct {
+	ID   int64
+	Name string
+}
+
+func (s *Service) session(ctx context.Context, token string) (User, error) {
 	if token == "" {
-		return "", errors.New("未登录")
+		return User{}, errors.New("未登录")
 	}
 	row, err := s.q.GetSession(ctx, HashToken(token))
 	if err != nil {
-		return "", errors.New("未登录")
+		return User{}, errors.New("未登录")
 	}
 	if row.ExpiresAt < time.Now().Unix() {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
-		return "", errors.New("登录已过期")
+		return User{}, errors.New("登录已过期")
 	}
-	return row.Username, nil
+	return User{ID: row.UserID, Name: row.Username}, nil
 }
 
 // CleanupLoop 定期清理过期会话，直到 ctx 取消。
@@ -191,8 +229,11 @@ func (s *Service) CleanupLoop(ctx context.Context) {
 type userKey struct{}
 
 // Username 返回当前请求的登录用户名。
-func Username(ctx context.Context) string {
-	u, _ := ctx.Value(userKey{}).(string)
+func Username(ctx context.Context) string { return CurrentUser(ctx).Name }
+
+// CurrentUser 返回当前请求的登录用户。
+func CurrentUser(ctx context.Context) User {
+	u, _ := ctx.Value(userKey{}).(User)
 	return u
 }
 
@@ -214,7 +255,7 @@ func (i *interceptor) check(ctx context.Context, procedure string, h http.Header
 	if i.public[procedure] {
 		return ctx, nil
 	}
-	user, err := i.s.Authenticate(ctx, SessionToken(h))
+	user, err := i.s.session(ctx, SessionToken(h))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}

@@ -117,7 +117,7 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 type authService struct{ *API }
 
 func (s *authService) Login(ctx context.Context, req *connect.Request[nagiv1.LoginRequest]) (*connect.Response[nagiv1.LoginResponse], error) {
-	cookie, err := s.Auth.Login(ctx, auth.ClientIP(req.Peer().Addr), strings.TrimSpace(req.Msg.GetUsername()), req.Msg.GetPassword())
+	cookie, err := s.Auth.Login(ctx, auth.ClientIP(req.Peer().Addr), strings.TrimSpace(req.Msg.GetUsername()), req.Msg.GetPassword(), req.Msg.GetTotpCode())
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,17 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 }
 
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
-	return connect.NewResponse(&nagiv1.MeResponse{Username: auth.Username(ctx)}), nil
+	u := auth.CurrentUser(ctx)
+	return connect.NewResponse(&nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID)}), nil
+}
+
+func (s *authService) ChangePassword(ctx context.Context, req *connect.Request[nagiv1.ChangePasswordRequest]) (*connect.Response[nagiv1.ChangePasswordResponse], error) {
+	u := auth.CurrentUser(ctx)
+	if err := s.Auth.ChangePassword(ctx, u.ID, auth.SessionToken(req.Header()), req.Msg.GetCurrent(), req.Msg.GetNewPassword()); err != nil {
+		return nil, err
+	}
+	s.Log.Info("密码已修改", "user", u.Name)
+	return connect.NewResponse(&nagiv1.ChangePasswordResponse{}), nil
 }
 
 // ---- 节点 ----

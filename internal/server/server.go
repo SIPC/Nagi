@@ -93,7 +93,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)
 	}
-	s.auth = auth.New(s.q)
+	s.auth = auth.New(s.q, s.sealer)
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	if m, err := s.startMesh(); err != nil {
@@ -192,7 +192,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler:           securityHeaders(mux),
+		Handler:           securityHeaders(s.auth.EntranceMiddleware(mux)),
 		TLSConfig:         s.tlsConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
@@ -207,6 +207,9 @@ func (s *Server) Run(ctx context.Context) error {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(httpLn) }()
 	s.log.Info("面板已启动", "url", s.URL(), "fingerprint", s.fingerprint)
+	if e := s.auth.Entrance(ctx); e != "" {
+		s.log.Info("安全入口已开启，先打开这个地址才能看到登录页", "url", s.URL()+"/"+e)
+	}
 
 	select {
 	case <-ctx.Done():

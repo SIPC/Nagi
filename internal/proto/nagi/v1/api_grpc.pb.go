@@ -159,18 +159,22 @@ var SetupService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Login_FullMethodName  = "/nagi.v1.AuthService/Login"
-	AuthService_Logout_FullMethodName = "/nagi.v1.AuthService/Logout"
-	AuthService_Me_FullMethodName     = "/nagi.v1.AuthService/Me"
+	AuthService_Login_FullMethodName          = "/nagi.v1.AuthService/Login"
+	AuthService_Logout_FullMethodName         = "/nagi.v1.AuthService/Logout"
+	AuthService_Me_FullMethodName             = "/nagi.v1.AuthService/Me"
+	AuthService_ChangePassword_FullMethodName = "/nagi.v1.AuthService/ChangePassword"
 )
 
 // AuthServiceClient is the client API for AuthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuthServiceClient interface {
+	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	Me(ctx context.Context, in *MeRequest, opts ...grpc.CallOption) (*MeResponse, error)
+	// 修改密码。成功后其他地方的登录全部失效。
+	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 }
 
 type authServiceClient struct {
@@ -211,13 +215,26 @@ func (c *authServiceClient) Me(ctx context.Context, in *MeRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *authServiceClient) ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangePasswordResponse)
+	err := c.cc.Invoke(ctx, AuthService_ChangePassword_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
 type AuthServiceServer interface {
+	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	Me(context.Context, *MeRequest) (*MeResponse, error)
+	// 修改密码。成功后其他地方的登录全部失效。
+	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -236,6 +253,9 @@ func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*
 }
 func (UnimplementedAuthServiceServer) Me(context.Context, *MeRequest) (*MeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Me not implemented")
+}
+func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -312,6 +332,24 @@ func _AuthService_Me_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_ChangePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangePasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ChangePassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ChangePassword_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ChangePassword(ctx, req.(*ChangePasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -330,6 +368,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Me",
 			Handler:    _AuthService_Me_Handler,
+		},
+		{
+			MethodName: "ChangePassword",
+			Handler:    _AuthService_ChangePassword_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1045,6 +1087,11 @@ const (
 	SettingsService_CreateInvite_FullMethodName      = "/nagi.v1.SettingsService/CreateInvite"
 	SettingsService_ListInvites_FullMethodName       = "/nagi.v1.SettingsService/ListInvites"
 	SettingsService_RevokeInvite_FullMethodName      = "/nagi.v1.SettingsService/RevokeInvite"
+	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
+	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
+	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
+	SettingsService_DisableTOTP_FullMethodName       = "/nagi.v1.SettingsService/DisableTOTP"
+	SettingsService_SetEntrance_FullMethodName       = "/nagi.v1.SettingsService/SetEntrance"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -1063,6 +1110,15 @@ type SettingsServiceClient interface {
 	ListInvites(ctx context.Context, in *ListInvitesRequest, opts ...grpc.CallOption) (*ListInvitesResponse, error)
 	// 提前作废接入码。
 	RevokeInvite(ctx context.Context, in *RevokeInviteRequest, opts ...grpc.CallOption) (*RevokeInviteResponse, error)
+	// 账号安全：两步验证和安全入口。
+	GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error)
+	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
+	BeginTOTP(ctx context.Context, in *BeginTOTPRequest, opts ...grpc.CallOption) (*BeginTOTPResponse, error)
+	EnableTOTP(ctx context.Context, in *EnableTOTPRequest, opts ...grpc.CallOption) (*Security, error)
+	// 关闭两步验证，需要当前的验证码或者密码。
+	DisableTOTP(ctx context.Context, in *DisableTOTPRequest, opts ...grpc.CallOption) (*Security, error)
+	// 开启（生成新的随机路径）或关闭安全入口。
+	SetEntrance(ctx context.Context, in *SetEntranceRequest, opts ...grpc.CallOption) (*Security, error)
 }
 
 type settingsServiceClient struct {
@@ -1153,6 +1209,56 @@ func (c *settingsServiceClient) RevokeInvite(ctx context.Context, in *RevokeInvi
 	return out, nil
 }
 
+func (c *settingsServiceClient) GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_GetSecurity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) BeginTOTP(ctx context.Context, in *BeginTOTPRequest, opts ...grpc.CallOption) (*BeginTOTPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginTOTPResponse)
+	err := c.cc.Invoke(ctx, SettingsService_BeginTOTP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) EnableTOTP(ctx context.Context, in *EnableTOTPRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_EnableTOTP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) DisableTOTP(ctx context.Context, in *DisableTOTPRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_DisableTOTP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetEntrance(ctx context.Context, in *SetEntranceRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_SetEntrance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -1169,6 +1275,15 @@ type SettingsServiceServer interface {
 	ListInvites(context.Context, *ListInvitesRequest) (*ListInvitesResponse, error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error)
+	// 账号安全：两步验证和安全入口。
+	GetSecurity(context.Context, *GetSecurityRequest) (*Security, error)
+	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
+	BeginTOTP(context.Context, *BeginTOTPRequest) (*BeginTOTPResponse, error)
+	EnableTOTP(context.Context, *EnableTOTPRequest) (*Security, error)
+	// 关闭两步验证，需要当前的验证码或者密码。
+	DisableTOTP(context.Context, *DisableTOTPRequest) (*Security, error)
+	// 开启（生成新的随机路径）或关闭安全入口。
+	SetEntrance(context.Context, *SetEntranceRequest) (*Security, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -1202,6 +1317,21 @@ func (UnimplementedSettingsServiceServer) ListInvites(context.Context, *ListInvi
 }
 func (UnimplementedSettingsServiceServer) RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeInvite not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetSecurity(context.Context, *GetSecurityRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSecurity not implemented")
+}
+func (UnimplementedSettingsServiceServer) BeginTOTP(context.Context, *BeginTOTPRequest) (*BeginTOTPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginTOTP not implemented")
+}
+func (UnimplementedSettingsServiceServer) EnableTOTP(context.Context, *EnableTOTPRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnableTOTP not implemented")
+}
+func (UnimplementedSettingsServiceServer) DisableTOTP(context.Context, *DisableTOTPRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisableTOTP not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetEntrance(context.Context, *SetEntranceRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetEntrance not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -1368,6 +1498,96 @@ func _SettingsService_RevokeInvite_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_GetSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSecurityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetSecurity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetSecurity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetSecurity(ctx, req.(*GetSecurityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_BeginTOTP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginTOTPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).BeginTOTP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_BeginTOTP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).BeginTOTP(ctx, req.(*BeginTOTPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_EnableTOTP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableTOTPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).EnableTOTP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_EnableTOTP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).EnableTOTP(ctx, req.(*EnableTOTPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_DisableTOTP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableTOTPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).DisableTOTP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_DisableTOTP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).DisableTOTP(ctx, req.(*DisableTOTPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetEntrance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEntranceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetEntrance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetEntrance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetEntrance(ctx, req.(*SetEntranceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1406,6 +1626,26 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeInvite",
 			Handler:    _SettingsService_RevokeInvite_Handler,
+		},
+		{
+			MethodName: "GetSecurity",
+			Handler:    _SettingsService_GetSecurity_Handler,
+		},
+		{
+			MethodName: "BeginTOTP",
+			Handler:    _SettingsService_BeginTOTP_Handler,
+		},
+		{
+			MethodName: "EnableTOTP",
+			Handler:    _SettingsService_EnableTOTP_Handler,
+		},
+		{
+			MethodName: "DisableTOTP",
+			Handler:    _SettingsService_DisableTOTP_Handler,
+		},
+		{
+			MethodName: "SetEntrance",
+			Handler:    _SettingsService_SetEntrance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

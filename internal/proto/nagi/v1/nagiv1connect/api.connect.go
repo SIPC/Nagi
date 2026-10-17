@@ -52,6 +52,9 @@ const (
 	AuthServiceLogoutProcedure = "/nagi.v1.AuthService/Logout"
 	// AuthServiceMeProcedure is the fully-qualified name of the AuthService's Me RPC.
 	AuthServiceMeProcedure = "/nagi.v1.AuthService/Me"
+	// AuthServiceChangePasswordProcedure is the fully-qualified name of the AuthService's
+	// ChangePassword RPC.
+	AuthServiceChangePasswordProcedure = "/nagi.v1.AuthService/ChangePassword"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
@@ -121,6 +124,21 @@ const (
 	// SettingsServiceRevokeInviteProcedure is the fully-qualified name of the SettingsService's
 	// RevokeInvite RPC.
 	SettingsServiceRevokeInviteProcedure = "/nagi.v1.SettingsService/RevokeInvite"
+	// SettingsServiceGetSecurityProcedure is the fully-qualified name of the SettingsService's
+	// GetSecurity RPC.
+	SettingsServiceGetSecurityProcedure = "/nagi.v1.SettingsService/GetSecurity"
+	// SettingsServiceBeginTOTPProcedure is the fully-qualified name of the SettingsService's BeginTOTP
+	// RPC.
+	SettingsServiceBeginTOTPProcedure = "/nagi.v1.SettingsService/BeginTOTP"
+	// SettingsServiceEnableTOTPProcedure is the fully-qualified name of the SettingsService's
+	// EnableTOTP RPC.
+	SettingsServiceEnableTOTPProcedure = "/nagi.v1.SettingsService/EnableTOTP"
+	// SettingsServiceDisableTOTPProcedure is the fully-qualified name of the SettingsService's
+	// DisableTOTP RPC.
+	SettingsServiceDisableTOTPProcedure = "/nagi.v1.SettingsService/DisableTOTP"
+	// SettingsServiceSetEntranceProcedure is the fully-qualified name of the SettingsService's
+	// SetEntrance RPC.
+	SettingsServiceSetEntranceProcedure = "/nagi.v1.SettingsService/SetEntrance"
 	// ProjectServiceListAllProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListAllProjects RPC.
 	ProjectServiceListAllProjectsProcedure = "/nagi.v1.ProjectService/ListAllProjects"
@@ -284,9 +302,12 @@ func (UnimplementedSetupServiceHandler) Setup(context.Context, *connect.Request[
 
 // AuthServiceClient is a client for the nagi.v1.AuthService service.
 type AuthServiceClient interface {
+	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
+	// 修改密码。成功后其他地方的登录全部失效。
+	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -318,14 +339,21 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("Me")),
 			connect.WithClientOptions(opts...),
 		),
+		changePassword: connect.NewClient[v1.ChangePasswordRequest, v1.ChangePasswordResponse](
+			httpClient,
+			baseURL+AuthServiceChangePasswordProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login  *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	me     *connect.Client[v1.MeRequest, v1.MeResponse]
+	login          *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout         *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	me             *connect.Client[v1.MeRequest, v1.MeResponse]
+	changePassword *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -343,11 +371,19 @@ func (c *authServiceClient) Me(ctx context.Context, req *connect.Request[v1.MeRe
 	return c.me.CallUnary(ctx, req)
 }
 
+// ChangePassword calls nagi.v1.AuthService.ChangePassword.
+func (c *authServiceClient) ChangePassword(ctx context.Context, req *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
+	return c.changePassword.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
+	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
+	// 修改密码。成功后其他地方的登录全部失效。
+	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -375,6 +411,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("Me")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceChangePasswordHandler := connect.NewUnaryHandler(
+		AuthServiceChangePasswordProcedure,
+		svc.ChangePassword,
+		connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -383,6 +425,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceLogoutHandler.ServeHTTP(w, r)
 		case AuthServiceMeProcedure:
 			authServiceMeHandler.ServeHTTP(w, r)
+		case AuthServiceChangePasswordProcedure:
+			authServiceChangePasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -402,6 +446,10 @@ func (UnimplementedAuthServiceHandler) Logout(context.Context, *connect.Request[
 
 func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Me is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ChangePassword is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
@@ -902,6 +950,15 @@ type SettingsServiceClient interface {
 	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
+	// 账号安全：两步验证和安全入口。
+	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
+	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
+	BeginTOTP(context.Context, *connect.Request[v1.BeginTOTPRequest]) (*connect.Response[v1.BeginTOTPResponse], error)
+	EnableTOTP(context.Context, *connect.Request[v1.EnableTOTPRequest]) (*connect.Response[v1.Security], error)
+	// 关闭两步验证，需要当前的验证码或者密码。
+	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error)
+	// 开启（生成新的随机路径）或关闭安全入口。
+	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -963,6 +1020,36 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
 			connect.WithClientOptions(opts...),
 		),
+		getSecurity: connect.NewClient[v1.GetSecurityRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceGetSecurityProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetSecurity")),
+			connect.WithClientOptions(opts...),
+		),
+		beginTOTP: connect.NewClient[v1.BeginTOTPRequest, v1.BeginTOTPResponse](
+			httpClient,
+			baseURL+SettingsServiceBeginTOTPProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("BeginTOTP")),
+			connect.WithClientOptions(opts...),
+		),
+		enableTOTP: connect.NewClient[v1.EnableTOTPRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceEnableTOTPProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("EnableTOTP")),
+			connect.WithClientOptions(opts...),
+		),
+		disableTOTP: connect.NewClient[v1.DisableTOTPRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceDisableTOTPProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("DisableTOTP")),
+			connect.WithClientOptions(opts...),
+		),
+		setEntrance: connect.NewClient[v1.SetEntranceRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceSetEntranceProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetEntrance")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -976,6 +1063,11 @@ type settingsServiceClient struct {
 	createInvite      *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
 	listInvites       *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
 	revokeInvite      *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
+	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
+	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
+	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
+	disableTOTP       *connect.Client[v1.DisableTOTPRequest, v1.Security]
+	setEntrance       *connect.Client[v1.SetEntranceRequest, v1.Security]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -1018,6 +1110,31 @@ func (c *settingsServiceClient) RevokeInvite(ctx context.Context, req *connect.R
 	return c.revokeInvite.CallUnary(ctx, req)
 }
 
+// GetSecurity calls nagi.v1.SettingsService.GetSecurity.
+func (c *settingsServiceClient) GetSecurity(ctx context.Context, req *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
+	return c.getSecurity.CallUnary(ctx, req)
+}
+
+// BeginTOTP calls nagi.v1.SettingsService.BeginTOTP.
+func (c *settingsServiceClient) BeginTOTP(ctx context.Context, req *connect.Request[v1.BeginTOTPRequest]) (*connect.Response[v1.BeginTOTPResponse], error) {
+	return c.beginTOTP.CallUnary(ctx, req)
+}
+
+// EnableTOTP calls nagi.v1.SettingsService.EnableTOTP.
+func (c *settingsServiceClient) EnableTOTP(ctx context.Context, req *connect.Request[v1.EnableTOTPRequest]) (*connect.Response[v1.Security], error) {
+	return c.enableTOTP.CallUnary(ctx, req)
+}
+
+// DisableTOTP calls nagi.v1.SettingsService.DisableTOTP.
+func (c *settingsServiceClient) DisableTOTP(ctx context.Context, req *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error) {
+	return c.disableTOTP.CallUnary(ctx, req)
+}
+
+// SetEntrance calls nagi.v1.SettingsService.SetEntrance.
+func (c *settingsServiceClient) SetEntrance(ctx context.Context, req *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error) {
+	return c.setEntrance.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -1032,6 +1149,15 @@ type SettingsServiceHandler interface {
 	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
+	// 账号安全：两步验证和安全入口。
+	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
+	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
+	BeginTOTP(context.Context, *connect.Request[v1.BeginTOTPRequest]) (*connect.Response[v1.BeginTOTPResponse], error)
+	EnableTOTP(context.Context, *connect.Request[v1.EnableTOTPRequest]) (*connect.Response[v1.Security], error)
+	// 关闭两步验证，需要当前的验证码或者密码。
+	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error)
+	// 开启（生成新的随机路径）或关闭安全入口。
+	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1089,6 +1215,36 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetSecurityHandler := connect.NewUnaryHandler(
+		SettingsServiceGetSecurityProcedure,
+		svc.GetSecurity,
+		connect.WithSchema(settingsServiceMethods.ByName("GetSecurity")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceBeginTOTPHandler := connect.NewUnaryHandler(
+		SettingsServiceBeginTOTPProcedure,
+		svc.BeginTOTP,
+		connect.WithSchema(settingsServiceMethods.ByName("BeginTOTP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceEnableTOTPHandler := connect.NewUnaryHandler(
+		SettingsServiceEnableTOTPProcedure,
+		svc.EnableTOTP,
+		connect.WithSchema(settingsServiceMethods.ByName("EnableTOTP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceDisableTOTPHandler := connect.NewUnaryHandler(
+		SettingsServiceDisableTOTPProcedure,
+		svc.DisableTOTP,
+		connect.WithSchema(settingsServiceMethods.ByName("DisableTOTP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetEntranceHandler := connect.NewUnaryHandler(
+		SettingsServiceSetEntranceProcedure,
+		svc.SetEntrance,
+		connect.WithSchema(settingsServiceMethods.ByName("SetEntrance")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -1107,6 +1263,16 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceListInvitesHandler.ServeHTTP(w, r)
 		case SettingsServiceRevokeInviteProcedure:
 			settingsServiceRevokeInviteHandler.ServeHTTP(w, r)
+		case SettingsServiceGetSecurityProcedure:
+			settingsServiceGetSecurityHandler.ServeHTTP(w, r)
+		case SettingsServiceBeginTOTPProcedure:
+			settingsServiceBeginTOTPHandler.ServeHTTP(w, r)
+		case SettingsServiceEnableTOTPProcedure:
+			settingsServiceEnableTOTPHandler.ServeHTTP(w, r)
+		case SettingsServiceDisableTOTPProcedure:
+			settingsServiceDisableTOTPHandler.ServeHTTP(w, r)
+		case SettingsServiceSetEntranceProcedure:
+			settingsServiceSetEntranceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1146,6 +1312,26 @@ func (UnimplementedSettingsServiceHandler) ListInvites(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeInvite is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetSecurity is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) BeginTOTP(context.Context, *connect.Request[v1.BeginTOTPRequest]) (*connect.Response[v1.BeginTOTPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.BeginTOTP is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) EnableTOTP(context.Context, *connect.Request[v1.EnableTOTPRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.EnableTOTP is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.DisableTOTP is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetEntrance is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

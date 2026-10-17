@@ -132,6 +132,20 @@ func (q *Queries) DeleteNodeWebhooks(ctx context.Context, nodeID string) error {
 	return err
 }
 
+const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
+DELETE FROM sessions WHERE user_id = ? AND token_hash != ?
+`
+
+type DeleteOtherSessionsParams struct {
+	UserID    int64
+	TokenHash string
+}
+
+func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessionsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOtherSessions, arg.UserID, arg.TokenHash)
+	return err
+}
+
 const deleteProjectBackup = `-- name: DeleteProjectBackup :exec
 DELETE FROM project_backups WHERE node_id = ? AND project_id = ?
 `
@@ -175,6 +189,15 @@ DELETE FROM settings WHERE key = ?
 
 func (q *Queries) DeleteSetting(ctx context.Context, key string) error {
 	_, err := q.db.ExecContext(ctx, deleteSetting, key)
+	return err
+}
+
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUserSessions, userID)
 	return err
 }
 
@@ -227,8 +250,26 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (string, error) {
 	return value, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users WHERE id = ?
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.TotpSecret,
+		&i.TotpLastStep,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -239,6 +280,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Username,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.TotpSecret,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
@@ -361,6 +404,40 @@ func (q *Queries) ListProjectBackups(ctx context.Context, nodeID string) ([]Proj
 	return items, nil
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users ORDER BY id
+`
+
+func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.CreatedAt,
+			&i.TotpSecret,
+			&i.TotpLastStep,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWebhookProjects = `-- name: ListWebhookProjects :many
 SELECT project_id FROM webhooks WHERE node_id = ?
 `
@@ -424,6 +501,20 @@ func (q *Queries) SetSetting(ctx context.Context, arg SetSettingParams) error {
 	return err
 }
 
+const setTOTP = `-- name: SetTOTP :exec
+UPDATE users SET totp_secret = ?, totp_last_step = 0 WHERE id = ?
+`
+
+type SetTOTPParams struct {
+	TotpSecret string
+	ID         int64
+}
+
+func (q *Queries) SetTOTP(ctx context.Context, arg SetTOTPParams) error {
+	_, err := q.db.ExecContext(ctx, setTOTP, arg.TotpSecret, arg.ID)
+	return err
+}
+
 const unrevokeNode = `-- name: UnrevokeNode :exec
 UPDATE nodes SET revoked = 0 WHERE id = ?
 `
@@ -445,6 +536,20 @@ type UpdateNodeSeenParams struct {
 
 func (q *Queries) UpdateNodeSeen(ctx context.Context, arg UpdateNodeSeenParams) error {
 	_, err := q.db.ExecContext(ctx, updateNodeSeen, arg.LastSeen, arg.Info, arg.ID)
+	return err
+}
+
+const updatePassword = `-- name: UpdatePassword :exec
+UPDATE users SET password_hash = ? WHERE id = ?
+`
+
+type UpdatePasswordParams struct {
+	PasswordHash string
+	ID           int64
+}
+
+func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error {
+	_, err := q.db.ExecContext(ctx, updatePassword, arg.PasswordHash, arg.ID)
 	return err
 }
 
@@ -504,6 +609,24 @@ type UseEnrollTokenParams struct {
 
 func (q *Queries) UseEnrollToken(ctx context.Context, arg UseEnrollTokenParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, useEnrollToken, arg.UsedAt, arg.TokenHash, arg.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const useTOTPStep = `-- name: UseTOTPStep :execrows
+UPDATE users SET totp_last_step = ? WHERE id = ? AND totp_last_step < ?
+`
+
+type UseTOTPStepParams struct {
+	TotpLastStep   int64
+	ID             int64
+	TotpLastStep_2 int64
+}
+
+func (q *Queries) UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, useTOTPStep, arg.TotpLastStep, arg.ID, arg.TotpLastStep_2)
 	if err != nil {
 		return 0, err
 	}

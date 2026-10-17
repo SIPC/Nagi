@@ -51,6 +51,8 @@ type User struct {
 	Username     string
 	PasswordHash string
 	CreatedAt    int64
+	TotpSecret   string
+	TotpLastStep int64
 }
 
 type Webhook struct {

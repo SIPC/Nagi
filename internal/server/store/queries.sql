@@ -99,3 +99,23 @@ DELETE FROM webhooks WHERE node_id = ? AND project_id = ?;
 
 -- name: ListWebhookProjects :many
 SELECT project_id FROM webhooks WHERE node_id = ?;
+-- name: GetUserByID :one
+SELECT * FROM users WHERE id = ?;
+
+-- name: ListUsers :many
+SELECT * FROM users ORDER BY id;
+
+-- name: UpdatePassword :exec
+UPDATE users SET password_hash = ? WHERE id = ?;
+
+-- name: SetTOTP :exec
+UPDATE users SET totp_secret = ?, totp_last_step = 0 WHERE id = ?;
+
+-- name: UseTOTPStep :execrows
+UPDATE users SET totp_last_step = ? WHERE id = ? AND totp_last_step < ?;
+
+-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = ?;
+
+-- name: DeleteOtherSessions :exec
+DELETE FROM sessions WHERE user_id = ? AND token_hash != ?;

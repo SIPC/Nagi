@@ -27,7 +27,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), versionCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), resetCmd(), versionCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -218,6 +218,65 @@ func panelCmd() *cobra.Command {
 	remove.Flags().BoolVar(&force, "force", false, "允许移除最后一个面板")
 
 	cmd.AddCommand(list, add, remove)
+	return cmd
+}
+
+// resetCmd 是面板本地命令：在面板机器上用 root 重置密码、两步验证或安全入口。
+func resetCmd() *cobra.Command {
+	var dataDir string
+	cmd := &cobra.Command{
+		Use:   "reset",
+		Short: "在面板机器上重置登录：密码、两步验证、安全入口",
+	}
+	cmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录（和 nagi server 的相同）")
+	panelDir := func() string { return filepath.Join(dataDir, "panel") }
+
+	var user string
+	password := &cobra.Command{
+		Use:   "password",
+		Short: "生成一个新的随机密码，并让所有登录失效",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			name, pw, err := server.ResetPassword(cmd.Context(), panelDir(), user)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("用户 %s 的新密码：%s", name, pw)
+			fmt.Println()
+			fmt.Println("登录后请在设置里修改。")
+			return nil
+		},
+	}
+	password.Flags().StringVar(&user, "user", "", "用户名（只有一个用户时可以不填）")
+
+	totp := &cobra.Command{
+		Use:   "2fa",
+		Short: "关闭两步验证",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := server.ResetTOTP(cmd.Context(), panelDir()); err != nil {
+				return err
+			}
+			fmt.Println("已关闭两步验证。")
+			return nil
+		},
+	}
+
+	entrance := &cobra.Command{
+		Use:   "entrance",
+		Short: "关闭安全入口",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			old, err := server.ResetEntrance(cmd.Context(), panelDir())
+			if err != nil {
+				return err
+			}
+			if old == "" {
+				fmt.Println("安全入口本来就没有开启。")
+			} else {
+				fmt.Println("已关闭安全入口（原来是 /" + old + "）。")
+			}
+			return nil
+		},
+	}
+	cmd.AddCommand(password, totp, entrance)
 	return cmd
 }
 
