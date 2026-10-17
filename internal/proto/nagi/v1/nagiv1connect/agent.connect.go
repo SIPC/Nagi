@@ -127,6 +127,18 @@ const (
 	// AgentServiceMigrateFinishProcedure is the fully-qualified name of the AgentService's
 	// MigrateFinish RPC.
 	AgentServiceMigrateFinishProcedure = "/nagi.v1.AgentService/MigrateFinish"
+	// AgentServiceSetFailoverProcedure is the fully-qualified name of the AgentService's SetFailover
+	// RPC.
+	AgentServiceSetFailoverProcedure = "/nagi.v1.AgentService/SetFailover"
+	// AgentServiceGetFailoverProcedure is the fully-qualified name of the AgentService's GetFailover
+	// RPC.
+	AgentServiceGetFailoverProcedure = "/nagi.v1.AgentService/GetFailover"
+	// AgentServiceListFailoversProcedure is the fully-qualified name of the AgentService's
+	// ListFailovers RPC.
+	AgentServiceListFailoversProcedure = "/nagi.v1.AgentService/ListFailovers"
+	// AgentServiceConfirmTakeoverProcedure is the fully-qualified name of the AgentService's
+	// ConfirmTakeover RPC.
+	AgentServiceConfirmTakeoverProcedure = "/nagi.v1.AgentService/ConfirmTakeover"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -189,6 +201,14 @@ type AgentServiceClient interface {
 	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
+	// ---- 顶替 ----
+	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
+	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
+	GetFailover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 本节点参与的所有顶替设置。
+	ListFailovers(context.Context, *connect.Request[v1.ListFailoversRequest]) (*connect.Response[v1.ListFailoversResponse], error)
+	// 热备：用户确认顶替（有状态项目默认要确认）。
+	ConfirmTakeover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -412,6 +432,30 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
 			connect.WithClientOptions(opts...),
 		),
+		setFailover: connect.NewClient[v1.SetFailoverRequest, v1.FailoverStatus](
+			httpClient,
+			baseURL+AgentServiceSetFailoverProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetFailover")),
+			connect.WithClientOptions(opts...),
+		),
+		getFailover: connect.NewClient[v1.ReplicaRef, v1.FailoverStatus](
+			httpClient,
+			baseURL+AgentServiceGetFailoverProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetFailover")),
+			connect.WithClientOptions(opts...),
+		),
+		listFailovers: connect.NewClient[v1.ListFailoversRequest, v1.ListFailoversResponse](
+			httpClient,
+			baseURL+AgentServiceListFailoversProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListFailovers")),
+			connect.WithClientOptions(opts...),
+		),
+		confirmTakeover: connect.NewClient[v1.ReplicaRef, v1.FailoverStatus](
+			httpClient,
+			baseURL+AgentServiceConfirmTakeoverProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ConfirmTakeover")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -452,6 +496,10 @@ type agentServiceClient struct {
 	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
 	migrateResume        *connect.Client[v1.ReplicaRef, v1.DeployEvent]
 	migrateFinish        *connect.Client[v1.ReplicaRef, v1.MigrateFinishResponse]
+	setFailover          *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
+	getFailover          *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
+	listFailovers        *connect.Client[v1.ListFailoversRequest, v1.ListFailoversResponse]
+	confirmTakeover      *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -629,6 +677,26 @@ func (c *agentServiceClient) MigrateFinish(ctx context.Context, req *connect.Req
 	return c.migrateFinish.CallUnary(ctx, req)
 }
 
+// SetFailover calls nagi.v1.AgentService.SetFailover.
+func (c *agentServiceClient) SetFailover(ctx context.Context, req *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.setFailover.CallUnary(ctx, req)
+}
+
+// GetFailover calls nagi.v1.AgentService.GetFailover.
+func (c *agentServiceClient) GetFailover(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.getFailover.CallUnary(ctx, req)
+}
+
+// ListFailovers calls nagi.v1.AgentService.ListFailovers.
+func (c *agentServiceClient) ListFailovers(ctx context.Context, req *connect.Request[v1.ListFailoversRequest]) (*connect.Response[v1.ListFailoversResponse], error) {
+	return c.listFailovers.CallUnary(ctx, req)
+}
+
+// ConfirmTakeover calls nagi.v1.AgentService.ConfirmTakeover.
+func (c *agentServiceClient) ConfirmTakeover(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.confirmTakeover.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -689,6 +757,14 @@ type AgentServiceHandler interface {
 	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
+	// ---- 顶替 ----
+	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
+	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
+	GetFailover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 本节点参与的所有顶替设置。
+	ListFailovers(context.Context, *connect.Request[v1.ListFailoversRequest]) (*connect.Response[v1.ListFailoversResponse], error)
+	// 热备：用户确认顶替（有状态项目默认要确认）。
+	ConfirmTakeover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -908,6 +984,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetFailoverHandler := connect.NewUnaryHandler(
+		AgentServiceSetFailoverProcedure,
+		svc.SetFailover,
+		connect.WithSchema(agentServiceMethods.ByName("SetFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceGetFailoverHandler := connect.NewUnaryHandler(
+		AgentServiceGetFailoverProcedure,
+		svc.GetFailover,
+		connect.WithSchema(agentServiceMethods.ByName("GetFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListFailoversHandler := connect.NewUnaryHandler(
+		AgentServiceListFailoversProcedure,
+		svc.ListFailovers,
+		connect.WithSchema(agentServiceMethods.ByName("ListFailovers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceConfirmTakeoverHandler := connect.NewUnaryHandler(
+		AgentServiceConfirmTakeoverProcedure,
+		svc.ConfirmTakeover,
+		connect.WithSchema(agentServiceMethods.ByName("ConfirmTakeover")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -980,6 +1080,14 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceMigrateResumeHandler.ServeHTTP(w, r)
 		case AgentServiceMigrateFinishProcedure:
 			agentServiceMigrateFinishHandler.ServeHTTP(w, r)
+		case AgentServiceSetFailoverProcedure:
+			agentServiceSetFailoverHandler.ServeHTTP(w, r)
+		case AgentServiceGetFailoverProcedure:
+			agentServiceGetFailoverHandler.ServeHTTP(w, r)
+		case AgentServiceListFailoversProcedure:
+			agentServiceListFailoversHandler.ServeHTTP(w, r)
+		case AgentServiceConfirmTakeoverProcedure:
+			agentServiceConfirmTakeoverHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1127,4 +1235,20 @@ func (UnimplementedAgentServiceHandler) MigrateResume(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateFinish is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetFailover is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetFailover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetFailover is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListFailovers(context.Context, *connect.Request[v1.ListFailoversRequest]) (*connect.Response[v1.ListFailoversResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListFailovers is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ConfirmTakeover(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ConfirmTakeover is not implemented"))
 }

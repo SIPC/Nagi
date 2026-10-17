@@ -56,6 +56,9 @@ type Manager struct {
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+
+	// FastSnapshot 返回 true 的项目每 15 分钟做一次定时快照（设置了顶替的项目）。
+	FastSnapshot func(id string) bool
 }
 
 // NewManager 创建项目管理器。

@@ -390,3 +390,35 @@ func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
 	}
 	return info.Container.RestartCount, nil
 }
+
+// KillProject 立即结束项目所有正在运行的容器（SIGKILL）。顶替时来不及优雅停止才用。
+func (d *Client) KillProject(ctx context.Context, composeProject string) error {
+	containers, err := d.ProjectContainers(ctx, composeProject)
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	for _, c := range containers {
+		if c.State != "running" && c.State != "paused" && c.State != "restarting" {
+			continue
+		}
+		if _, err := d.c.ContainerKill(ctx, c.ID, client.ContainerKillOptions{Signal: "KILL"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// ProjectRunning 判断项目是否有正在运行的容器。
+func (d *Client) ProjectRunning(ctx context.Context, composeProject string) (bool, error) {
+	containers, err := d.ProjectContainers(ctx, composeProject)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range containers {
+		if c.State == "running" || c.State == "restarting" {
+			return true, nil
+		}
+	}
+	return false, nil
+}

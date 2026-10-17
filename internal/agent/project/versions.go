@@ -29,13 +29,14 @@ import (
 //   - 定时快照和手动快照保存 data/、volumes/、config/。
 
 const (
-	versionsKept       = 20
-	pauseLimit         = 30 * time.Second
-	defaultSnapshotGap = 60 * time.Minute
-	metaLastFilesRoot  = "last_files_root"
-	metaLastSnapshot   = "last_snapshot"
-	metaLastMaintain   = "last_maintenance"
-	maintainGap        = 24 * time.Hour
+	versionsKept        = 20
+	pauseLimit          = 30 * time.Second
+	defaultSnapshotGap  = 60 * time.Minute
+	failoverSnapshotGap = 15 * time.Minute
+	metaLastFilesRoot   = "last_files_root"
+	metaLastSnapshot    = "last_snapshot"
+	metaLastMaintain    = "last_maintenance"
+	maintainGap         = 24 * time.Hour
 )
 
 func (p paths) passwordFile() string { return filepath.Join(p.configDir(), "backup.key") }
@@ -458,6 +459,10 @@ func (m *Manager) SnapshotDue(ctx context.Context, onResult func(id string, err 
 		gap := defaultSnapshotGap
 		if n := cfg.GetSnapshotIntervalMinutes(); n > 0 {
 			gap = time.Duration(n) * time.Minute
+		}
+		// 设置了顶替的项目每 15 分钟一次（与同步给热备的频率一致），除非用户设得更短。
+		if m.FastSnapshot != nil && m.FastSnapshot(r.ID) && gap > failoverSnapshotGap {
+			gap = failoverSnapshotGap
 		}
 		if time.Since(time.Unix(last, 0)) < gap {
 			continue

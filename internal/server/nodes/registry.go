@@ -40,6 +40,7 @@ type Registry struct {
 	conns    map[string]*Conn
 	mesh     *mesh.Mesh
 	meshName string
+	witness  *witness
 }
 
 // Conn 是一个在线节点的控制连接。

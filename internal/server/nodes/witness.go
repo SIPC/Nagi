@@ -1,0 +1,122 @@
+package nodes
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/lease"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+)
+
+// 面板作为顶替的见证人：只投票，不运行项目。设置和票存在 <面板数据目录>/witness 下，面板重启后照常投票。
+
+var witnessIDRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+type witness struct {
+	dir   string
+	voter *lease.Voter
+	mu    sync.Mutex
+	cfgs  map[string]*nagiv1.FailoverConfig
+}
+
+// SetWitnessDir 设置见证人数据目录并读取已有的设置。
+func (r *Registry) SetWitnessDir(dir string) {
+	w := &witness{dir: dir, voter: lease.NewVoter(filepath.Join(dir, "votes")), cfgs: map[string]*nagiv1.FailoverConfig{}}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		id, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok || !witnessIDRe.MatchString(id) {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		cfg := &nagiv1.FailoverConfig{}
+		if err == nil && protojson.Unmarshal(b, cfg) == nil {
+			w.cfgs[id] = cfg
+		}
+	}
+	r.mu.Lock()
+	r.witness = w
+	r.mu.Unlock()
+}
+
+func leaseDuration(cfg *nagiv1.FailoverConfig) time.Duration {
+	if s := cfg.GetLeaseSeconds(); s >= 9 {
+		return time.Duration(s) * time.Second
+	}
+	return 30 * time.Second
+}
+
+// SetWitness 保存本面板担任见证人的顶替设置。初始租约归 A，第 1 轮；已有设置时保留当前的票。
+func (r *Registry) SetWitness(cfg *nagiv1.FailoverConfig) error {
+	w := r.witness
+	id := cfg.GetProjectId()
+	if w == nil || !witnessIDRe.MatchString(id) {
+		return status.Error(codes.InvalidArgument, "顶替设置无效")
+	}
+	b, err := protojson.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(w.dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(w.dir, id+".json"), b, 0o600); err != nil {
+		return err
+	}
+	w.mu.Lock()
+	_, existed := w.cfgs[id]
+	w.cfgs[id] = cfg
+	w.mu.Unlock()
+	if !existed {
+		return w.voter.Set(id, cfg.GetA().GetKey(), 1, leaseDuration(cfg))
+	}
+	return nil
+}
+
+// ClearWitness 删除本面板担任见证人的顶替设置。
+func (r *Registry) ClearWitness(id string) {
+	w := r.witness
+	if w == nil || !witnessIDRe.MatchString(id) {
+		return
+	}
+	w.mu.Lock()
+	delete(w.cfgs, id)
+	w.mu.Unlock()
+	os.Remove(filepath.Join(w.dir, id+".json"))
+	w.voter.Forget(id)
+}
+
+// panelMesh 是面板在 mesh 上的服务：Ping 和见证人投票。
+type panelMesh struct {
+	mesh.Service
+	r *Registry
+}
+
+func (p *panelMesh) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteRequest) (*nagiv1.LeaseVoteResponse, error) {
+	caller, ok := mesh.Caller(ctx, p.M)
+	if !ok {
+		return nil, status.Error(codes.PermissionDenied, "无法确认调用方")
+	}
+	w := p.r.witness
+	if w == nil {
+		return nil, status.Error(codes.NotFound, "面板不是这个项目的见证人")
+	}
+	w.mu.Lock()
+	cfg := w.cfgs[req.GetProjectId()]
+	w.mu.Unlock()
+	if cfg == nil {
+		return nil, status.Error(codes.NotFound, "面板不是这个项目的见证人")
+	}
+	granted, holder, epoch := w.voter.Vote(req.GetProjectId(), [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()},
+		caller[:], req.GetEpoch(), leaseDuration(cfg))
+	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+}

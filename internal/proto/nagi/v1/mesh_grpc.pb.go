@@ -24,6 +24,7 @@ const (
 	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
 	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
 	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
+	MeshService_LeaseVote_FullMethodName       = "/nagi.v1.MeshService/LeaseVote"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -41,6 +42,8 @@ type MeshServiceClient interface {
 	ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error)
 	ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error)
 	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
+	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error)
 }
 
 type meshServiceClient struct {
@@ -107,6 +110,16 @@ func (c *meshServiceClient) ReplicaCommit(ctx context.Context, in *ReplicaCommit
 	return out, nil
 }
 
+func (c *meshServiceClient) LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LeaseVoteResponse)
+	err := c.cc.Invoke(ctx, MeshService_LeaseVote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MeshServiceServer is the server API for MeshService service.
 // All implementations must embed UnimplementedMeshServiceServer
 // for forward compatibility.
@@ -122,6 +135,8 @@ type MeshServiceServer interface {
 	ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error)
 	ReplicaPut(grpc.ClientStreamingServer[ReplicaChunk, ReplicaPutResponse]) error
 	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
+	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }
 
@@ -146,6 +161,9 @@ func (UnimplementedMeshServiceServer) ReplicaPut(grpc.ClientStreamingServer[Repl
 }
 func (UnimplementedMeshServiceServer) ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReplicaCommit not implemented")
+}
+func (UnimplementedMeshServiceServer) LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LeaseVote not implemented")
 }
 func (UnimplementedMeshServiceServer) mustEmbedUnimplementedMeshServiceServer() {}
 func (UnimplementedMeshServiceServer) testEmbeddedByValue()                     {}
@@ -236,6 +254,24 @@ func _MeshService_ReplicaCommit_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MeshService_LeaseVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaseVoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).LeaseVote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_LeaseVote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).LeaseVote(ctx, req.(*LeaseVoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MeshService_ServiceDesc is the grpc.ServiceDesc for MeshService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +290,10 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReplicaCommit",
 			Handler:    _MeshService_ReplicaCommit_Handler,
+		},
+		{
+			MethodName: "LeaseVote",
+			Handler:    _MeshService_LeaseVote_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -385,3 +385,234 @@ export function MigrateCard({
     </Card>
   );
 }
+
+const roleLabel: Record<string, string> = {
+  holder: "运行中（持有租约）",
+  standby: "热备",
+  witness: "见证人",
+};
+
+// FailoverCard：项目页上设置顶替、查看租约状态。
+export function FailoverCard({
+  nodeId,
+  projectId,
+  name,
+}: {
+  nodeId: string;
+  projectId: string;
+  name: string;
+}) {
+  const nodes = useQuery({
+    queryKey: ["nodes"],
+    queryFn: () => nodeClient.listNodes({}),
+  });
+  const st = useQuery({
+    queryKey: ["failover", nodeId, projectId],
+    queryFn: () => projectClient.getNodeProjectFailover({ nodeId, projectId }),
+    refetchInterval: 3000,
+  });
+  const [standby, setStandby] = useState("");
+  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [witness, setWitness] = useState("");
+  const [auto, setAuto] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError("");
+    setBusy(true);
+    try {
+      await fn();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+      st.refetch();
+    }
+  };
+
+  const others = nodes.data?.nodes.filter((n) => n.id !== nodeId) ?? [];
+  const s = st.data;
+  const cfg = s?.config;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>顶替</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        {error && <Alert>{error}</Alert>}
+        {cfg ? (
+          <>
+            <div className="grid gap-1 text-xs">
+              <div>
+                {cfg.a?.name} ⇄ {cfg.b?.name}，见证人 {cfg.witness?.name}，租约{" "}
+                {cfg.leaseSeconds || 30} 秒
+                {s.stateful &&
+                  (cfg.autoStateful
+                    ? "，有状态项目自动顶替"
+                    : "，有状态项目顶替前需要确认")}
+              </div>
+              <div>
+                本节点：<Badge>{roleLabel[s.role] ?? s.role}</Badge> 持有者{" "}
+                {s.holderName}（第 {s.epoch.toString()} 轮）
+                {s.role === "holder" &&
+                  (s.leaseRemainingMs > 0n ? (
+                    <Badge tone="success">
+                      租约剩 {(Number(s.leaseRemainingMs) / 1000).toFixed(0)} 秒
+                    </Badge>
+                  ) : (
+                    <Badge>续不上租约，已停止</Badge>
+                  ))}
+              </div>
+              <div className="text-muted-foreground">
+                {s.lastSync
+                  ? `最近一次同步给热备 ${toDate(s.lastSync)?.toLocaleString()}`
+                  : "还没有同步给热备"}
+              </div>
+              {s.lastError && <Alert>{s.lastError}</Alert>}
+            </div>
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  if (confirm("取消顶替？热备上已有的副本保留。"))
+                    run(() =>
+                      projectClient.setNodeProjectFailover({
+                        nodeId,
+                        projectId,
+                        standbyNodeId: "",
+                      }),
+                    );
+                }}
+              >
+                取消顶替
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-muted-foreground">
+              指定一个顶替节点：这个节点失联约 40
+              秒后，由顶替节点用最近一次同步的数据启动项目。见证人负责投第三票。
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                className="w-44"
+                value={standby}
+                onChange={(e) => setStandby(e.target.value)}
+              >
+                <option value="">选择顶替节点</option>
+                {others.map((n) => (
+                  <option key={n.id} value={n.id} disabled={!n.online}>
+                    {n.name}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                className="w-64 font-mono"
+                value={dir}
+                onChange={(e) => setDir(e.target.value)}
+              />
+              <Select
+                className="w-44"
+                value={witness}
+                onChange={(e) => setWitness(e.target.value)}
+              >
+                <option value="">见证人：面板</option>
+                {others
+                  .filter((n) => n.id !== standby)
+                  .map((n) => (
+                    <option key={n.id} value={n.id} disabled={!n.online}>
+                      见证人：{n.name}
+                    </option>
+                  ))}
+              </Select>
+              <label className="text-xs">
+                <input
+                  type="checkbox"
+                  className="mr-1"
+                  checked={auto}
+                  onChange={(e) => setAuto(e.target.checked)}
+                />
+                有状态项目也自动顶替
+              </label>
+              <Button
+                size="sm"
+                disabled={busy || !standby}
+                onClick={() =>
+                  run(() =>
+                    projectClient.setNodeProjectFailover({
+                      nodeId,
+                      projectId,
+                      standbyNodeId: standby,
+                      standbyDir: dir,
+                      witnessNodeId: witness,
+                      autoStateful: auto,
+                    }),
+                  )
+                }
+              >
+                设置顶替
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// NodeFailovers：节点参与的顶替（热备节点上可以确认顶替）。
+export function NodeFailovers({ nodeId }: { nodeId: string }) {
+  const q = useQuery({
+    queryKey: ["node-failovers", nodeId],
+    queryFn: () => nodeClient.listNodeFailovers({ nodeId }),
+    refetchInterval: 3000,
+  });
+  const [error, setError] = useState("");
+  if (!q.data || q.data.failovers.length === 0) return null;
+  return (
+    <div className="grid gap-1 py-2 text-xs">
+      <div className="font-medium">顶替</div>
+      {error && <Alert>{error}</Alert>}
+      {q.data.failovers.map((f) => (
+        <div
+          key={f.config?.projectId}
+          className="flex flex-wrap items-center gap-3"
+        >
+          <span>{f.config?.projectName}</span>
+          <Badge>{roleLabel[f.role] ?? f.role}</Badge>
+          <span>
+            持有者 {f.holderName}（第 {f.epoch.toString()} 轮）
+          </span>
+          {f.pendingConfirm && (
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (!confirm("确认顶替？会丢失最后一次同步之后写入的数据。"))
+                  return;
+                setError("");
+                try {
+                  await nodeClient.confirmNodeTakeover({
+                    nodeId,
+                    projectId: f.config?.projectId ?? "",
+                  });
+                  q.refetch();
+                } catch (err) {
+                  setError(errorMessage(err));
+                }
+              }}
+            >
+              原节点失联，确认顶替
+            </Button>
+          )}
+          {f.lastError && (
+            <span className="text-destructive">{f.lastError}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

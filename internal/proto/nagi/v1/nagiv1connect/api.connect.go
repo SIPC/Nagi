@@ -83,6 +83,12 @@ const (
 	// NodeServiceDeleteNodeReplicaProcedure is the fully-qualified name of the NodeService's
 	// DeleteNodeReplica RPC.
 	NodeServiceDeleteNodeReplicaProcedure = "/nagi.v1.NodeService/DeleteNodeReplica"
+	// NodeServiceListNodeFailoversProcedure is the fully-qualified name of the NodeService's
+	// ListNodeFailovers RPC.
+	NodeServiceListNodeFailoversProcedure = "/nagi.v1.NodeService/ListNodeFailovers"
+	// NodeServiceConfirmNodeTakeoverProcedure is the fully-qualified name of the NodeService's
+	// ConfirmNodeTakeover RPC.
+	NodeServiceConfirmNodeTakeoverProcedure = "/nagi.v1.NodeService/ConfirmNodeTakeover"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -172,6 +178,12 @@ const (
 	// ProjectServiceMigrateNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// MigrateNodeProject RPC.
 	ProjectServiceMigrateNodeProjectProcedure = "/nagi.v1.ProjectService/MigrateNodeProject"
+	// ProjectServiceSetNodeProjectFailoverProcedure is the fully-qualified name of the ProjectService's
+	// SetNodeProjectFailover RPC.
+	ProjectServiceSetNodeProjectFailoverProcedure = "/nagi.v1.ProjectService/SetNodeProjectFailover"
+	// ProjectServiceGetNodeProjectFailoverProcedure is the fully-qualified name of the ProjectService's
+	// GetNodeProjectFailover RPC.
+	ProjectServiceGetNodeProjectFailoverProcedure = "/nagi.v1.ProjectService/GetNodeProjectFailover"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -413,6 +425,10 @@ type NodeServiceClient interface {
 	// 把副本恢复成这个节点上的项目。
 	RestoreNodeReplica(context.Context, *connect.Request[v1.RestoreNodeReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 节点参与的顶替设置（运行、热备或见证）。
+	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
+	// 在热备节点上确认顶替。
+	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -497,6 +513,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeFailovers: connect.NewClient[v1.ListNodeReplicasRequest, v1.ListFailoversResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeFailoversProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeFailovers")),
+			connect.WithClientOptions(opts...),
+		),
+		confirmNodeTakeover: connect.NewClient[v1.NodeProjectRef, v1.FailoverStatus](
+			httpClient,
+			baseURL+NodeServiceConfirmNodeTakeoverProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -531,6 +559,8 @@ type nodeServiceClient struct {
 	listNodeReplicaSnapshots *connect.Client[v1.NodeProjectRef, v1.ListSnapshotsResponse]
 	restoreNodeReplica       *connect.Client[v1.RestoreNodeReplicaRequest, v1.DeployEvent]
 	deleteNodeReplica        *connect.Client[v1.NodeProjectRef, v1.DeleteReplicaResponse]
+	listNodeFailovers        *connect.Client[v1.ListNodeReplicasRequest, v1.ListFailoversResponse]
+	confirmNodeTakeover      *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -591,6 +621,16 @@ func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, req *connect.
 	return c.deleteNodeReplica.CallUnary(ctx, req)
 }
 
+// ListNodeFailovers calls nagi.v1.NodeService.ListNodeFailovers.
+func (c *nodeServiceClient) ListNodeFailovers(ctx context.Context, req *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error) {
+	return c.listNodeFailovers.CallUnary(ctx, req)
+}
+
+// ConfirmNodeTakeover calls nagi.v1.NodeService.ConfirmNodeTakeover.
+func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.confirmNodeTakeover.CallUnary(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -627,6 +667,10 @@ type NodeServiceHandler interface {
 	// 把副本恢复成这个节点上的项目。
 	RestoreNodeReplica(context.Context, *connect.Request[v1.RestoreNodeReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
 	DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 节点参与的顶替设置（运行、热备或见证）。
+	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
+	// 在热备节点上确认顶替。
+	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -707,6 +751,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceListNodeFailoversHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeFailoversProcedure,
+		svc.ListNodeFailovers,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeFailovers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceConfirmNodeTakeoverHandler := connect.NewUnaryHandler(
+		NodeServiceConfirmNodeTakeoverProcedure,
+		svc.ConfirmNodeTakeover,
+		connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -749,6 +805,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceRestoreNodeReplicaHandler.ServeHTTP(w, r)
 		case NodeServiceDeleteNodeReplicaProcedure:
 			nodeServiceDeleteNodeReplicaHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeFailoversProcedure:
+			nodeServiceListNodeFailoversHandler.ServeHTTP(w, r)
+		case NodeServiceConfirmNodeTakeoverProcedure:
+			nodeServiceConfirmNodeTakeoverHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -806,6 +866,14 @@ func (UnimplementedNodeServiceHandler) RestoreNodeReplica(context.Context, *conn
 
 func (UnimplementedNodeServiceHandler) DeleteNodeReplica(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeReplica is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeFailovers is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ConfirmNodeTakeover is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -1104,6 +1172,9 @@ type ProjectServiceClient interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 设置顶替（standby_node_id 为空表示取消）。
+	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
+	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewProjectServiceClient constructs a client for the nagi.v1.ProjectService service. By default,
@@ -1231,6 +1302,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeProjectFailover: connect.NewClient[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus](
+			httpClient,
+			baseURL+ProjectServiceSetNodeProjectFailoverProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetNodeProjectFailover")),
+			connect.WithClientOptions(opts...),
+		),
+		getNodeProjectFailover: connect.NewClient[v1.NodeProjectRef, v1.FailoverStatus](
+			httpClient,
+			baseURL+ProjectServiceGetNodeProjectFailoverProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectFailover")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1255,6 +1338,8 @@ type projectServiceClient struct {
 	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	migrateNodeProject         *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
+	setNodeProjectFailover     *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
+	getNodeProjectFailover     *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -1352,6 +1437,16 @@ func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, req *conn
 	return c.migrateNodeProject.CallServerStream(ctx, req)
 }
 
+// SetNodeProjectFailover calls nagi.v1.ProjectService.SetNodeProjectFailover.
+func (c *projectServiceClient) SetNodeProjectFailover(ctx context.Context, req *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.setNodeProjectFailover.CallUnary(ctx, req)
+}
+
+// GetNodeProjectFailover calls nagi.v1.ProjectService.GetNodeProjectFailover.
+func (c *projectServiceClient) GetNodeProjectFailover(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return c.getNodeProjectFailover.CallUnary(ctx, req)
+}
+
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
@@ -1376,6 +1471,9 @@ type ProjectServiceHandler interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 设置顶替（standby_node_id 为空表示取消）。
+	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
+	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
 }
 
 // NewProjectServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1499,6 +1597,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetNodeProjectFailoverHandler := connect.NewUnaryHandler(
+		ProjectServiceSetNodeProjectFailoverProcedure,
+		svc.SetNodeProjectFailover,
+		connect.WithSchema(projectServiceMethods.ByName("SetNodeProjectFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceGetNodeProjectFailoverHandler := connect.NewUnaryHandler(
+		ProjectServiceGetNodeProjectFailoverProcedure,
+		svc.GetNodeProjectFailover,
+		connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.ProjectService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProjectServiceListAllProjectsProcedure:
@@ -1539,6 +1649,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSyncNodeProjectBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceMigrateNodeProjectProcedure:
 			projectServiceMigrateNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceSetNodeProjectFailoverProcedure:
+			projectServiceSetNodeProjectFailoverHandler.ServeHTTP(w, r)
+		case ProjectServiceGetNodeProjectFailoverProcedure:
+			projectServiceGetNodeProjectFailoverHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1622,4 +1736,12 @@ func (UnimplementedProjectServiceHandler) SyncNodeProjectBackup(context.Context,
 
 func (UnimplementedProjectServiceHandler) MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.MigrateNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetNodeProjectFailover is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProjectFailover is not implemented"))
 }

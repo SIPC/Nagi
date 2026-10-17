@@ -54,6 +54,10 @@ const (
 	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
 	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
 	AgentService_MigrateFinish_FullMethodName        = "/nagi.v1.AgentService/MigrateFinish"
+	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
+	AgentService_GetFailover_FullMethodName          = "/nagi.v1.AgentService/GetFailover"
+	AgentService_ListFailovers_FullMethodName        = "/nagi.v1.AgentService/ListFailovers"
+	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -120,6 +124,14 @@ type AgentServiceClient interface {
 	MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*MigrateFinishResponse, error)
+	// ---- 顶替 ----
+	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
+	SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
+	GetFailover(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 本节点参与的所有顶替设置。
+	ListFailovers(ctx context.Context, in *ListFailoversRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error)
+	// 热备：用户确认顶替（有状态项目默认要确认）。
+	ConfirmTakeover(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*FailoverStatus, error)
 }
 
 type agentServiceClient struct {
@@ -555,6 +567,46 @@ func (c *agentServiceClient) MigrateFinish(ctx context.Context, in *ReplicaRef, 
 	return out, nil
 }
 
+func (c *agentServiceClient) SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, AgentService_SetFailover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) GetFailover(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, AgentService_GetFailover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListFailovers(ctx context.Context, in *ListFailoversRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFailoversResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListFailovers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ConfirmTakeover(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, AgentService_ConfirmTakeover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -619,6 +671,14 @@ type AgentServiceServer interface {
 	MigrateResume(*ReplicaRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error)
+	// ---- 顶替 ----
+	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
+	SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error)
+	GetFailover(context.Context, *ReplicaRef) (*FailoverStatus, error)
+	// 本节点参与的所有顶替设置。
+	ListFailovers(context.Context, *ListFailoversRequest) (*ListFailoversResponse, error)
+	// 热备：用户确认顶替（有状态项目默认要确认）。
+	ConfirmTakeover(context.Context, *ReplicaRef) (*FailoverStatus, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -733,6 +793,18 @@ func (UnimplementedAgentServiceServer) MigrateResume(*ReplicaRef, grpc.ServerStr
 }
 func (UnimplementedAgentServiceServer) MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateFinish not implemented")
+}
+func (UnimplementedAgentServiceServer) SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFailover not implemented")
+}
+func (UnimplementedAgentServiceServer) GetFailover(context.Context, *ReplicaRef) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFailover not implemented")
+}
+func (UnimplementedAgentServiceServer) ListFailovers(context.Context, *ListFailoversRequest) (*ListFailoversResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFailovers not implemented")
+}
+func (UnimplementedAgentServiceServer) ConfirmTakeover(context.Context, *ReplicaRef) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmTakeover not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -1318,6 +1390,78 @@ func _AgentService_MigrateFinish_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFailoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetFailover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetFailover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetFailover(ctx, req.(*SetFailoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetFailover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetFailover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetFailover(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListFailovers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFailoversRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListFailovers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListFailovers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListFailovers(ctx, req.(*ListFailoversRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ConfirmTakeover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ConfirmTakeover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ConfirmTakeover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ConfirmTakeover(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1428,6 +1572,22 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MigrateFinish",
 			Handler:    _AgentService_MigrateFinish_Handler,
+		},
+		{
+			MethodName: "SetFailover",
+			Handler:    _AgentService_SetFailover_Handler,
+		},
+		{
+			MethodName: "GetFailover",
+			Handler:    _AgentService_GetFailover_Handler,
+		},
+		{
+			MethodName: "ListFailovers",
+			Handler:    _AgentService_ListFailovers_Handler,
+		},
+		{
+			MethodName: "ConfirmTakeover",
+			Handler:    _AgentService_ConfirmTakeover_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

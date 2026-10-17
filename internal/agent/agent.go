@@ -123,15 +123,19 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	a := &agent{
-		cfg:      cfg,
-		log:      log,
-		id:       id,
-		docker:   dc,
-		projects: projects,
-		hostname: hostname,
-		reload:   make(chan struct{}, 1),
-		replicas: &replicas{dir: filepath.Join(cfg.DataDir, "replicas")},
+		cfg:       cfg,
+		log:       log,
+		id:        id,
+		docker:    dc,
+		projects:  projects,
+		hostname:  hostname,
+		reload:    make(chan struct{}, 1),
+		replicas:  &replicas{dir: filepath.Join(cfg.DataDir, "replicas")},
+		failovers: newFailovers(cfg.DataDir),
+		ctx:       ctx,
 	}
+	a.failovers.loadAll()
+	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
 	a.info = a.nodeInfo(ctx)
 
 	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
@@ -146,6 +150,10 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.alerts.Run(ctx)
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
+	} else {
+		for id := range a.failovers.m {
+			a.startFailover(ctx, id)
+		}
 	}
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
@@ -184,6 +192,8 @@ type agent struct {
 	alerts    *alerts.Engine
 	mesh      *meshNode
 	replicas  *replicas
+	failovers *failovers
+	ctx       context.Context
 
 	mu       sync.Mutex
 	subs     []chan struct{}
@@ -535,8 +545,11 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 		a.projects.SnapshotDue(ctx, func(id string, err error) {
 			if err == nil {
 				a.alerts.Resolve(ctx, "snapshot:"+id)
-				// 定时快照成功后同步到备份节点（没设置时什么都不做）。
+				// 定时快照成功后同步到备份节点和热备（没设置时什么都不做）。
 				go a.runBackupSync(ctx, id)
+				if st := a.failovers.get(id); st != nil {
+					go a.syncStandby(ctx, id)
+				}
 				return
 			}
 			a.log.Warn("定时快照失败", "project", id, "err", err)

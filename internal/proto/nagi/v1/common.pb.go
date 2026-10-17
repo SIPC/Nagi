@@ -2431,6 +2431,297 @@ func (x *Replica) GetBytes() int64 {
 	return 0
 }
 
+// FailoverMember 是顶替设置里的一个参与者。
+type FailoverMember struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// mesh 公钥。
+	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// 节点 ID；面板为空。
+	NodeId string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Name   string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// 项目在这个节点上的目录（只有 A、B 有）。
+	Dir           string `protobuf:"bytes,4,opt,name=dir,proto3" json:"dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailoverMember) Reset() {
+	*x = FailoverMember{}
+	mi := &file_nagi_v1_common_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailoverMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailoverMember) ProtoMessage() {}
+
+func (x *FailoverMember) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailoverMember.ProtoReflect.Descriptor instead.
+func (*FailoverMember) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *FailoverMember) GetKey() []byte {
+	if x != nil {
+		return x.Key
+	}
+	return nil
+}
+
+func (x *FailoverMember) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *FailoverMember) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FailoverMember) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+// FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
+type FailoverConfig struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId   string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProjectName string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
+	// 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
+	A *FailoverMember `protobuf:"bytes,3,opt,name=a,proto3" json:"a,omitempty"`
+	B *FailoverMember `protobuf:"bytes,4,opt,name=b,proto3" json:"b,omitempty"`
+	// 见证人：一个面板或另一台节点，只投票。
+	Witness        *FailoverMember `protobuf:"bytes,5,opt,name=witness,proto3" json:"witness,omitempty"`
+	WitnessIsPanel bool            `protobuf:"varint,6,opt,name=witness_is_panel,json=witnessIsPanel,proto3" json:"witness_is_panel,omitempty"`
+	// 租约时长（秒），默认 30，每 1/3 续约一次。
+	LeaseSeconds uint32 `protobuf:"varint,7,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
+	// 有状态项目也自动顶替（接受丢失最后一次快照之后的数据）。默认只告警，等用户确认。
+	AutoStateful  bool `protobuf:"varint,8,opt,name=auto_stateful,json=autoStateful,proto3" json:"auto_stateful,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailoverConfig) Reset() {
+	*x = FailoverConfig{}
+	mi := &file_nagi_v1_common_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailoverConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailoverConfig) ProtoMessage() {}
+
+func (x *FailoverConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailoverConfig.ProtoReflect.Descriptor instead.
+func (*FailoverConfig) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *FailoverConfig) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *FailoverConfig) GetProjectName() string {
+	if x != nil {
+		return x.ProjectName
+	}
+	return ""
+}
+
+func (x *FailoverConfig) GetA() *FailoverMember {
+	if x != nil {
+		return x.A
+	}
+	return nil
+}
+
+func (x *FailoverConfig) GetB() *FailoverMember {
+	if x != nil {
+		return x.B
+	}
+	return nil
+}
+
+func (x *FailoverConfig) GetWitness() *FailoverMember {
+	if x != nil {
+		return x.Witness
+	}
+	return nil
+}
+
+func (x *FailoverConfig) GetWitnessIsPanel() bool {
+	if x != nil {
+		return x.WitnessIsPanel
+	}
+	return false
+}
+
+func (x *FailoverConfig) GetLeaseSeconds() uint32 {
+	if x != nil {
+		return x.LeaseSeconds
+	}
+	return 0
+}
+
+func (x *FailoverConfig) GetAutoStateful() bool {
+	if x != nil {
+		return x.AutoStateful
+	}
+	return false
+}
+
+// FailoverStatus 是某个参与者看到的顶替状态。
+type FailoverStatus struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Config *FailoverConfig        `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	// holder（运行项目）、standby（热备）或 witness（见证人）。
+	Role string `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	// 当前持有租约的节点。
+	HolderName string `protobuf:"bytes,3,opt,name=holder_name,json=holderName,proto3" json:"holder_name,omitempty"`
+	Epoch      uint64 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	// 持有者：租约还剩多久（毫秒），0 表示已经续不上、项目已停止。
+	LeaseRemainingMs int64 `protobuf:"varint,5,opt,name=lease_remaining_ms,json=leaseRemainingMs,proto3" json:"lease_remaining_ms,omitempty"`
+	// 热备：持有者失联，等待用户确认顶替（有状态项目）。
+	PendingConfirm bool `protobuf:"varint,6,opt,name=pending_confirm,json=pendingConfirm,proto3" json:"pending_confirm,omitempty"`
+	// 热备最近一次收到同步的时间（热备上）或最近一次同步给热备的时间（持有者上）。
+	LastSync      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
+	LastError     string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	Stateful      bool                   `protobuf:"varint,9,opt,name=stateful,proto3" json:"stateful,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailoverStatus) Reset() {
+	*x = FailoverStatus{}
+	mi := &file_nagi_v1_common_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailoverStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailoverStatus) ProtoMessage() {}
+
+func (x *FailoverStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailoverStatus.ProtoReflect.Descriptor instead.
+func (*FailoverStatus) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *FailoverStatus) GetConfig() *FailoverConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *FailoverStatus) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *FailoverStatus) GetHolderName() string {
+	if x != nil {
+		return x.HolderName
+	}
+	return ""
+}
+
+func (x *FailoverStatus) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *FailoverStatus) GetLeaseRemainingMs() int64 {
+	if x != nil {
+		return x.LeaseRemainingMs
+	}
+	return 0
+}
+
+func (x *FailoverStatus) GetPendingConfirm() bool {
+	if x != nil {
+		return x.PendingConfirm
+	}
+	return false
+}
+
+func (x *FailoverStatus) GetLastSync() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSync
+	}
+	return nil
+}
+
+func (x *FailoverStatus) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *FailoverStatus) GetStateful() bool {
+	if x != nil {
+		return x.Stateful
+	}
+	return false
+}
+
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
@@ -2638,7 +2929,34 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vsource_name\x18\x04 \x01(\tR\n" +
 	"sourceName\x127\n" +
 	"\tlast_sync\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x14\n" +
-	"\x05bytes\x18\x06 \x01(\x03R\x05bytes*@\n" +
+	"\x05bytes\x18\x06 \x01(\x03R\x05bytes\"a\n" +
+	"\x0eFailoverMember\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x10\n" +
+	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xc7\x02\n" +
+	"\x0eFailoverConfig\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
+	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12%\n" +
+	"\x01a\x18\x03 \x01(\v2\x17.nagi.v1.FailoverMemberR\x01a\x12%\n" +
+	"\x01b\x18\x04 \x01(\v2\x17.nagi.v1.FailoverMemberR\x01b\x121\n" +
+	"\awitness\x18\x05 \x01(\v2\x17.nagi.v1.FailoverMemberR\awitness\x12(\n" +
+	"\x10witness_is_panel\x18\x06 \x01(\bR\x0ewitnessIsPanel\x12#\n" +
+	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
+	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\"\xd7\x02\n" +
+	"\x0eFailoverStatus\x12/\n" +
+	"\x06config\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\x06config\x12\x12\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1f\n" +
+	"\vholder_name\x18\x03 \x01(\tR\n" +
+	"holderName\x12\x14\n" +
+	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12,\n" +
+	"\x12lease_remaining_ms\x18\x05 \x01(\x03R\x10leaseRemainingMs\x12'\n" +
+	"\x0fpending_confirm\x18\x06 \x01(\bR\x0ependingConfirm\x127\n" +
+	"\tlast_sync\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\b \x01(\tR\tlastError\x12\x1a\n" +
+	"\bstateful\x18\t \x01(\bR\bstateful*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
@@ -2657,7 +2975,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -2690,45 +3008,53 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*MeshPingResponse)(nil),      // 28: nagi.v1.MeshPingResponse
 	(*BackupStatus)(nil),          // 29: nagi.v1.BackupStatus
 	(*Replica)(nil),               // 30: nagi.v1.Replica
-	nil,                           // 31: nagi.v1.ProjectConfig.ServiceEnvEntry
-	nil,                           // 32: nagi.v1.Version.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 33: google.protobuf.Timestamp
+	(*FailoverMember)(nil),        // 31: nagi.v1.FailoverMember
+	(*FailoverConfig)(nil),        // 32: nagi.v1.FailoverConfig
+	(*FailoverStatus)(nil),        // 33: nagi.v1.FailoverStatus
+	nil,                           // 34: nagi.v1.ProjectConfig.ServiceEnvEntry
+	nil,                           // 35: nagi.v1.Version.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 36: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	33, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	36, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	2,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
 	6,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	31, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	34, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
 	9,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	5,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	0,  // 8: nagi.v1.ProjectConfig.stateful:type_name -> nagi.v1.Stateful
-	33, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	33, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	32, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	33, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	36, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	36, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	35, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	36, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	7,  // 13: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	10, // 14: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	7,  // 15: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	11, // 16: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	1,  // 17: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	12, // 18: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	33, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	36, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	17, // 20: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
 	19, // 21: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	20, // 22: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	33, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	33, // 24: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	36, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	36, // 24: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
 	25, // 25: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	33, // 26: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	33, // 27: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	8,  // 28: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	36, // 26: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	36, // 27: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	31, // 28: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverMember
+	31, // 29: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverMember
+	31, // 30: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverMember
+	32, // 31: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	36, // 32: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	8,  // 33: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -2746,7 +3072,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   32,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

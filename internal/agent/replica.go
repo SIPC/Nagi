@@ -248,6 +248,10 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 	if err := s.a.replicas.save(m); err != nil {
 		return nil, err
 	}
+	// 热备：提前拉好镜像，顶替时只需要启动容器。
+	if s.a.failovers.get(req.GetProjectId()) != nil {
+		go s.a.prePull(context.WithoutCancel(ctx), req.GetProjectId())
+	}
 	return &nagiv1.ReplicaCommitResponse{}, nil
 }
 
@@ -497,22 +501,12 @@ func (s *agentService) ListReplicaSnapshots(ctx context.Context, req *nagiv1.Rep
 }
 
 func (s *agentService) RestoreReplica(req *nagiv1.RestoreReplicaRequest, stream nagiv1.AgentService_RestoreReplicaServer) error {
-	id := req.GetProjectId()
-	_, root, err := s.node.replicas.load(id)
-	if err != nil {
+	if _, _, err := s.node.replicas.load(req.GetProjectId()); err != nil {
 		return err
 	}
 	defer s.changed()
-	unlock := s.node.replicas.lock(id)
-	defer unlock()
 	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		proj, err := s.projects.RestoreReplica(stream.Context(), id, filepath.Join(root, "files"), req.GetDir(), req.GetSnapshotId(), onLine)
-		if proj != nil {
-			// 项目已经有了自己的快照仓库，副本不再需要；源节点如果还在同步，会被拒绝并告警。
-			os.RemoveAll(root)
-			os.RemoveAll(s.node.replicaStateDir(id))
-			onLine("已删除副本，项目使用自己的快照仓库")
-		}
+		_, err := s.node.restoreReplica(stream.Context(), req.GetProjectId(), req.GetDir(), req.GetSnapshotId(), onLine)
 		return 0, err
 	})
 }

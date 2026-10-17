@@ -99,8 +99,11 @@ var httpClient = &http.Client{Timeout: 15 * time.Second}
 // Text 返回告警的纯文本内容。
 func Text(a *nagiv1.Alert) string {
 	prefix := "🔴 "
-	if a.GetStatus() == "resolved" {
+	switch a.GetStatus() {
+	case "resolved":
 		prefix = "✅ 已恢复："
+	case "info":
+		prefix = "ℹ️ "
 	}
 	var b strings.Builder
 	b.WriteString(prefix + a.GetTitle())

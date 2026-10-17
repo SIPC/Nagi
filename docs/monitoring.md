@@ -82,7 +82,7 @@ webhook 收到 POST JSON：
 }
 ```
 
-`status` 是 `firing` 或 `resolved`；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<服务>`、`health:<项目 ID>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`offline`。Telegram 收到的是 `text` 的内容。
+`status` 是 `firing`、`resolved`，或者一次性通知 `info`（例如"已顶替项目"，没有对应的恢复）；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<服务>`、`health:<项目 ID>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`offline`。Telegram 收到的是 `text` 的内容。
 
 ### 还没有实现的规则
 

@@ -45,6 +45,8 @@ const (
 	// MeshServiceReplicaCommitProcedure is the fully-qualified name of the MeshService's ReplicaCommit
 	// RPC.
 	MeshServiceReplicaCommitProcedure = "/nagi.v1.MeshService/ReplicaCommit"
+	// MeshServiceLeaseVoteProcedure is the fully-qualified name of the MeshService's LeaseVote RPC.
+	MeshServiceLeaseVoteProcedure = "/nagi.v1.MeshService/LeaseVote"
 )
 
 // MeshServiceClient is a client for the nagi.v1.MeshService service.
@@ -58,6 +60,8 @@ type MeshServiceClient interface {
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
 	ReplicaPut(context.Context) *connect.ClientStreamForClient[v1.ReplicaChunk, v1.ReplicaPutResponse]
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
+	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
 }
 
 // NewMeshServiceClient constructs a client for the nagi.v1.MeshService service. By default, it uses
@@ -101,6 +105,12 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("ReplicaCommit")),
 			connect.WithClientOptions(opts...),
 		),
+		leaseVote: connect.NewClient[v1.LeaseVoteRequest, v1.LeaseVoteResponse](
+			httpClient,
+			baseURL+MeshServiceLeaseVoteProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("LeaseVote")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -111,6 +121,7 @@ type meshServiceClient struct {
 	replicaManifest *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
 	replicaPut      *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
 	replicaCommit   *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
+	leaseVote       *connect.Client[v1.LeaseVoteRequest, v1.LeaseVoteResponse]
 }
 
 // Ping calls nagi.v1.MeshService.Ping.
@@ -138,6 +149,11 @@ func (c *meshServiceClient) ReplicaCommit(ctx context.Context, req *connect.Requ
 	return c.replicaCommit.CallUnary(ctx, req)
 }
 
+// LeaseVote calls nagi.v1.MeshService.LeaseVote.
+func (c *meshServiceClient) LeaseVote(ctx context.Context, req *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error) {
+	return c.leaseVote.CallUnary(ctx, req)
+}
+
 // MeshServiceHandler is an implementation of the nagi.v1.MeshService service.
 type MeshServiceHandler interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
@@ -149,6 +165,8 @@ type MeshServiceHandler interface {
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
 	ReplicaPut(context.Context, *connect.ClientStream[v1.ReplicaChunk]) (*connect.Response[v1.ReplicaPutResponse], error)
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
+	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
 }
 
 // NewMeshServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -188,6 +206,12 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(meshServiceMethods.ByName("ReplicaCommit")),
 		connect.WithHandlerOptions(opts...),
 	)
+	meshServiceLeaseVoteHandler := connect.NewUnaryHandler(
+		MeshServiceLeaseVoteProcedure,
+		svc.LeaseVote,
+		connect.WithSchema(meshServiceMethods.ByName("LeaseVote")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.MeshService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MeshServicePingProcedure:
@@ -200,6 +224,8 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 			meshServiceReplicaPutHandler.ServeHTTP(w, r)
 		case MeshServiceReplicaCommitProcedure:
 			meshServiceReplicaCommitHandler.ServeHTTP(w, r)
+		case MeshServiceLeaseVoteProcedure:
+			meshServiceLeaseVoteHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -227,4 +253,8 @@ func (UnimplementedMeshServiceHandler) ReplicaPut(context.Context, *connect.Clie
 
 func (UnimplementedMeshServiceHandler) ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.ReplicaCommit is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.LeaseVote is not implemented"))
 }

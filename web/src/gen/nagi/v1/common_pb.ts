@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIImIKCE1lc2hQZWVyEhIKCnB1YmxpY19rZXkYASABKAwSEQoJZW5kcG9pbnRzGAIgAygJEgwKBG5hbWUYAyABKAkSDwoHbm9kZV9pZBgEIAEoCRIQCghpc19wYW5lbBgFIAEoCCLYAQoOTWVzaFBlZXJTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIMCgRuYW1lGAIgASgJEg8KB2FkZHJlc3MYAyABKAkSDAoEcGF0aBgEIAEoCRIQCghlbmRwb2ludBgFIAEoCRILCgN2aWEYBiABKAkSDgoGcnR0X21zGAcgASgBEjIKDmxhc3RfaGFuZHNoYWtlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyeF9ieXRlcxgJIAEoBBIQCgh0eF9ieXRlcxgKIAEoBCJ6CgpNZXNoU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEhEKCWVuZHBvaW50cxgEIAMoCRImCgVwZWVycxgFIAMoCzIXLm5hZ2kudjEuTWVzaFBlZXJTdGF0dXMiJQoPTWVzaFBpbmdSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAwiIgoQTWVzaFBpbmdSZXNwb25zZRIOCgZydHRfbXMYASABKAEijwEKDEJhY2t1cFN0YXR1cxIWCg50YXJnZXRfbm9kZV9pZBgBIAEoCRITCgt0YXJnZXRfbmFtZRgCIAEoCRItCglsYXN0X3N5bmMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhIKCmxhc3RfZXJyb3IYBCABKAkSDwoHc3luY2luZxgFIAEoCCKeAQoHUmVwbGljYRISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIWCg5zb3VyY2Vfbm9kZV9pZBgDIAEoCRITCgtzb3VyY2VfbmFtZRgEIAEoCRItCglsYXN0X3N5bmMYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWJ5dGVzGAYgASgDKkAKCFN0YXRlZnVsEhEKDVNUQVRFRlVMX0FVVE8QABIQCgxTVEFURUZVTF9ZRVMQARIPCgtTVEFURUZVTF9OTxACQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIImIKCE1lc2hQZWVyEhIKCnB1YmxpY19rZXkYASABKAwSEQoJZW5kcG9pbnRzGAIgAygJEgwKBG5hbWUYAyABKAkSDwoHbm9kZV9pZBgEIAEoCRIQCghpc19wYW5lbBgFIAEoCCLYAQoOTWVzaFBlZXJTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIMCgRuYW1lGAIgASgJEg8KB2FkZHJlc3MYAyABKAkSDAoEcGF0aBgEIAEoCRIQCghlbmRwb2ludBgFIAEoCRILCgN2aWEYBiABKAkSDgoGcnR0X21zGAcgASgBEjIKDmxhc3RfaGFuZHNoYWtlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyeF9ieXRlcxgJIAEoBBIQCgh0eF9ieXRlcxgKIAEoBCJ6CgpNZXNoU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEhEKCWVuZHBvaW50cxgEIAMoCRImCgVwZWVycxgFIAMoCzIXLm5hZ2kudjEuTWVzaFBlZXJTdGF0dXMiJQoPTWVzaFBpbmdSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAwiIgoQTWVzaFBpbmdSZXNwb25zZRIOCgZydHRfbXMYASABKAEijwEKDEJhY2t1cFN0YXR1cxIWCg50YXJnZXRfbm9kZV9pZBgBIAEoCRITCgt0YXJnZXRfbmFtZRgCIAEoCRItCglsYXN0X3N5bmMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhIKCmxhc3RfZXJyb3IYBCABKAkSDwoHc3luY2luZxgFIAEoCCKeAQoHUmVwbGljYRISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIWCg5zb3VyY2Vfbm9kZV9pZBgDIAEoCRITCgtzb3VyY2VfbmFtZRgEIAEoCRItCglsYXN0X3N5bmMYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWJ5dGVzGAYgASgDIkkKDkZhaWxvdmVyTWVtYmVyEgsKA2tleRgBIAEoDBIPCgdub2RlX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSCwoDZGlyGAQgASgJIvQBCg5GYWlsb3ZlckNvbmZpZxISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIiCgFhGAMgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIiCgFiGAQgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIoCgd3aXRuZXNzGAUgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIYChB3aXRuZXNzX2lzX3BhbmVsGAYgASgIEhUKDWxlYXNlX3NlY29uZHMYByABKA0SFQoNYXV0b19zdGF0ZWZ1bBgIIAEoCCL1AQoORmFpbG92ZXJTdGF0dXMSJwoGY29uZmlnGAEgASgLMhcubmFnaS52MS5GYWlsb3ZlckNvbmZpZxIMCgRyb2xlGAIgASgJEhMKC2hvbGRlcl9uYW1lGAMgASgJEg0KBWVwb2NoGAQgASgEEhoKEmxlYXNlX3JlbWFpbmluZ19tcxgFIAEoAxIXCg9wZW5kaW5nX2NvbmZpcm0YBiABKAgSLQoJbGFzdF9zeW5jGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpsYXN0X2Vycm9yGAggASgJEhAKCHN0YXRlZnVsGAkgASgIKkAKCFN0YXRlZnVsEhEKDVNUQVRFRlVMX0FVVE8QABIQCgxTVEFURUZVTF9ZRVMQARIPCgtTVEFURUZVTF9OTxACQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -1283,6 +1283,177 @@ export type Replica = Message<"nagi.v1.Replica"> & {
  */
 export const ReplicaSchema: GenMessage<Replica> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 29);
+
+/**
+ * FailoverMember 是顶替设置里的一个参与者。
+ *
+ * @generated from message nagi.v1.FailoverMember
+ */
+export type FailoverMember = Message<"nagi.v1.FailoverMember"> & {
+  /**
+   * mesh 公钥。
+   *
+   * @generated from field: bytes key = 1;
+   */
+  key: Uint8Array;
+
+  /**
+   * 节点 ID；面板为空。
+   *
+   * @generated from field: string node_id = 2;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * 项目在这个节点上的目录（只有 A、B 有）。
+   *
+   * @generated from field: string dir = 4;
+   */
+  dir: string;
+};
+
+/**
+ * Describes the message nagi.v1.FailoverMember.
+ * Use `create(FailoverMemberSchema)` to create a new message.
+ */
+export const FailoverMemberSchema: GenMessage<FailoverMember> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 30);
+
+/**
+ * FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
+ *
+ * @generated from message nagi.v1.FailoverConfig
+ */
+export type FailoverConfig = Message<"nagi.v1.FailoverConfig"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string project_name = 2;
+   */
+  projectName: string;
+
+  /**
+   * 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
+   *
+   * @generated from field: nagi.v1.FailoverMember a = 3;
+   */
+  a?: FailoverMember | undefined;
+
+  /**
+   * @generated from field: nagi.v1.FailoverMember b = 4;
+   */
+  b?: FailoverMember | undefined;
+
+  /**
+   * 见证人：一个面板或另一台节点，只投票。
+   *
+   * @generated from field: nagi.v1.FailoverMember witness = 5;
+   */
+  witness?: FailoverMember | undefined;
+
+  /**
+   * @generated from field: bool witness_is_panel = 6;
+   */
+  witnessIsPanel: boolean;
+
+  /**
+   * 租约时长（秒），默认 30，每 1/3 续约一次。
+   *
+   * @generated from field: uint32 lease_seconds = 7;
+   */
+  leaseSeconds: number;
+
+  /**
+   * 有状态项目也自动顶替（接受丢失最后一次快照之后的数据）。默认只告警，等用户确认。
+   *
+   * @generated from field: bool auto_stateful = 8;
+   */
+  autoStateful: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.FailoverConfig.
+ * Use `create(FailoverConfigSchema)` to create a new message.
+ */
+export const FailoverConfigSchema: GenMessage<FailoverConfig> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 31);
+
+/**
+ * FailoverStatus 是某个参与者看到的顶替状态。
+ *
+ * @generated from message nagi.v1.FailoverStatus
+ */
+export type FailoverStatus = Message<"nagi.v1.FailoverStatus"> & {
+  /**
+   * @generated from field: nagi.v1.FailoverConfig config = 1;
+   */
+  config?: FailoverConfig | undefined;
+
+  /**
+   * holder（运行项目）、standby（热备）或 witness（见证人）。
+   *
+   * @generated from field: string role = 2;
+   */
+  role: string;
+
+  /**
+   * 当前持有租约的节点。
+   *
+   * @generated from field: string holder_name = 3;
+   */
+  holderName: string;
+
+  /**
+   * @generated from field: uint64 epoch = 4;
+   */
+  epoch: bigint;
+
+  /**
+   * 持有者：租约还剩多久（毫秒），0 表示已经续不上、项目已停止。
+   *
+   * @generated from field: int64 lease_remaining_ms = 5;
+   */
+  leaseRemainingMs: bigint;
+
+  /**
+   * 热备：持有者失联，等待用户确认顶替（有状态项目）。
+   *
+   * @generated from field: bool pending_confirm = 6;
+   */
+  pendingConfirm: boolean;
+
+  /**
+   * 热备最近一次收到同步的时间（热备上）或最近一次同步给热备的时间（持有者上）。
+   *
+   * @generated from field: google.protobuf.Timestamp last_sync = 7;
+   */
+  lastSync?: Timestamp | undefined;
+
+  /**
+   * @generated from field: string last_error = 8;
+   */
+  lastError: string;
+
+  /**
+   * @generated from field: bool stateful = 9;
+   */
+  stateful: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.FailoverStatus.
+ * Use `create(FailoverStatusSchema)` to create a new message.
+ */
+export const FailoverStatusSchema: GenMessage<FailoverStatus> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 32);
 
 /**
  * @generated from enum nagi.v1.Stateful

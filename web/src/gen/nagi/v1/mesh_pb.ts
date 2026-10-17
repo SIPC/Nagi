@@ -10,7 +10,58 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/mesh.proto.
  */
 export const file_nagi_v1_mesh: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiLAoWUmVwbGljYU1hbmlmZXN0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIikKC1JlcGxpY2FGaWxlEgwKBHBhdGgYASABKAkSDAoEc2l6ZRgCIAEoAyI+ChdSZXBsaWNhTWFuaWZlc3RSZXNwb25zZRIjCgVmaWxlcxgBIAMoCzIULm5hZ2kudjEuUmVwbGljYUZpbGUiPgoMUmVwbGljYUNodW5rEhIKCnByb2plY3RfaWQYASABKAkSDAoEcGF0aBgCIAEoCRIMCgRkYXRhGAMgASgMIiMKElJlcGxpY2FQdXRSZXNwb25zZRINCgVmaWxlcxgBIAEoDSJPChRSZXBsaWNhQ29tbWl0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg0KBXBhdGhzGAIgAygJEhQKDHByb2plY3RfbmFtZRgDIAEoCSIXChVSZXBsaWNhQ29tbWl0UmVzcG9uc2UiLwoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMIkAKDlVwbG9hZFJlc3BvbnNlEg0KBWJ5dGVzGAEgASgEEg0KBWZpbGVzGAIgASgNEhAKCHN0cmlwcGVkGAMgASgJIg0KC1BpbmdSZXF1ZXN0Ih4KDFBpbmdSZXNwb25zZRIOCgZjYWxsZXIYASABKAwy5wIKC01lc2hTZXJ2aWNlEjMKBFBpbmcSFC5uYWdpLnYxLlBpbmdSZXF1ZXN0GhUubmFnaS52MS5QaW5nUmVzcG9uc2USOQoGVXBsb2FkEhQubmFnaS52MS5VcGxvYWRDaHVuaxoXLm5hZ2kudjEuVXBsb2FkUmVzcG9uc2UoARJUCg9SZXBsaWNhTWFuaWZlc3QSHy5uYWdpLnYxLlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QaIC5uYWdpLnYxLlJlcGxpY2FNYW5pZmVzdFJlc3BvbnNlEkIKClJlcGxpY2FQdXQSFS5uYWdpLnYxLlJlcGxpY2FDaHVuaxobLm5hZ2kudjEuUmVwbGljYVB1dFJlc3BvbnNlKAESTgoNUmVwbGljYUNvbW1pdBIdLm5hZ2kudjEuUmVwbGljYUNvbW1pdFJlcXVlc3QaHi5uYWdpLnYxLlJlcGxpY2FDb21taXRSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z");
+  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiNQoQTGVhc2VWb3RlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg0KBWVwb2NoGAIgASgEIkMKEUxlYXNlVm90ZVJlc3BvbnNlEg8KB2dyYW50ZWQYASABKAgSDgoGaG9sZGVyGAIgASgMEg0KBWVwb2NoGAMgASgEIiwKFlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSIpCgtSZXBsaWNhRmlsZRIMCgRwYXRoGAEgASgJEgwKBHNpemUYAiABKAMiPgoXUmVwbGljYU1hbmlmZXN0UmVzcG9uc2USIwoFZmlsZXMYASADKAsyFC5uYWdpLnYxLlJlcGxpY2FGaWxlIj4KDFJlcGxpY2FDaHVuaxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBHBhdGgYAiABKAkSDAoEZGF0YRgDIAEoDCIjChJSZXBsaWNhUHV0UmVzcG9uc2USDQoFZmlsZXMYASABKA0iTwoUUmVwbGljYUNvbW1pdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRINCgVwYXRocxgCIAMoCRIUCgxwcm9qZWN0X25hbWUYAyABKAkiFwoVUmVwbGljYUNvbW1pdFJlc3BvbnNlIi8KC1VwbG9hZENodW5rEhIKCnByb2plY3RfaWQYASABKAkSDAoEZGF0YRgCIAEoDCJACg5VcGxvYWRSZXNwb25zZRINCgVieXRlcxgBIAEoBBINCgVmaWxlcxgCIAEoDRIQCghzdHJpcHBlZBgDIAEoCSINCgtQaW5nUmVxdWVzdCIeCgxQaW5nUmVzcG9uc2USDgoGY2FsbGVyGAEgASgMMqsDCgtNZXNoU2VydmljZRIzCgRQaW5nEhQubmFnaS52MS5QaW5nUmVxdWVzdBoVLm5hZ2kudjEuUGluZ1Jlc3BvbnNlEjkKBlVwbG9hZBIULm5hZ2kudjEuVXBsb2FkQ2h1bmsaFy5uYWdpLnYxLlVwbG9hZFJlc3BvbnNlKAESVAoPUmVwbGljYU1hbmlmZXN0Eh8ubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXF1ZXN0GiAubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXNwb25zZRJCCgpSZXBsaWNhUHV0EhUubmFnaS52MS5SZXBsaWNhQ2h1bmsaGy5uYWdpLnYxLlJlcGxpY2FQdXRSZXNwb25zZSgBEk4KDVJlcGxpY2FDb21taXQSHS5uYWdpLnYxLlJlcGxpY2FDb21taXRSZXF1ZXN0Gh4ubmFnaS52MS5SZXBsaWNhQ29tbWl0UmVzcG9uc2USQgoJTGVhc2VWb3RlEhkubmFnaS52MS5MZWFzZVZvdGVSZXF1ZXN0GhoubmFnaS52MS5MZWFzZVZvdGVSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z");
+
+/**
+ * @generated from message nagi.v1.LeaseVoteRequest
+ */
+export type LeaseVoteRequest = Message<"nagi.v1.LeaseVoteRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: uint64 epoch = 2;
+   */
+  epoch: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.LeaseVoteRequest.
+ * Use `create(LeaseVoteRequestSchema)` to create a new message.
+ */
+export const LeaseVoteRequestSchema: GenMessage<LeaseVoteRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 0);
+
+/**
+ * @generated from message nagi.v1.LeaseVoteResponse
+ */
+export type LeaseVoteResponse = Message<"nagi.v1.LeaseVoteResponse"> & {
+  /**
+   * @generated from field: bool granted = 1;
+   */
+  granted: boolean;
+
+  /**
+   * 这个投票者当前投给的一方和轮次。
+   *
+   * @generated from field: bytes holder = 2;
+   */
+  holder: Uint8Array;
+
+  /**
+   * @generated from field: uint64 epoch = 3;
+   */
+  epoch: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.LeaseVoteResponse.
+ * Use `create(LeaseVoteResponseSchema)` to create a new message.
+ */
+export const LeaseVoteResponseSchema: GenMessage<LeaseVoteResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 1);
 
 /**
  * @generated from message nagi.v1.ReplicaManifestRequest
@@ -27,7 +78,7 @@ export type ReplicaManifestRequest = Message<"nagi.v1.ReplicaManifestRequest"> &
  * Use `create(ReplicaManifestRequestSchema)` to create a new message.
  */
 export const ReplicaManifestRequestSchema: GenMessage<ReplicaManifestRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 0);
+  messageDesc(file_nagi_v1_mesh, 2);
 
 /**
  * @generated from message nagi.v1.ReplicaFile
@@ -49,7 +100,7 @@ export type ReplicaFile = Message<"nagi.v1.ReplicaFile"> & {
  * Use `create(ReplicaFileSchema)` to create a new message.
  */
 export const ReplicaFileSchema: GenMessage<ReplicaFile> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 1);
+  messageDesc(file_nagi_v1_mesh, 3);
 
 /**
  * @generated from message nagi.v1.ReplicaManifestResponse
@@ -66,7 +117,7 @@ export type ReplicaManifestResponse = Message<"nagi.v1.ReplicaManifestResponse">
  * Use `create(ReplicaManifestResponseSchema)` to create a new message.
  */
 export const ReplicaManifestResponseSchema: GenMessage<ReplicaManifestResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 2);
+  messageDesc(file_nagi_v1_mesh, 4);
 
 /**
  * ReplicaChunk：path 变了表示开始一个新文件。
@@ -95,7 +146,7 @@ export type ReplicaChunk = Message<"nagi.v1.ReplicaChunk"> & {
  * Use `create(ReplicaChunkSchema)` to create a new message.
  */
 export const ReplicaChunkSchema: GenMessage<ReplicaChunk> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 3);
+  messageDesc(file_nagi_v1_mesh, 5);
 
 /**
  * @generated from message nagi.v1.ReplicaPutResponse
@@ -112,7 +163,7 @@ export type ReplicaPutResponse = Message<"nagi.v1.ReplicaPutResponse"> & {
  * Use `create(ReplicaPutResponseSchema)` to create a new message.
  */
 export const ReplicaPutResponseSchema: GenMessage<ReplicaPutResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 4);
+  messageDesc(file_nagi_v1_mesh, 6);
 
 /**
  * @generated from message nagi.v1.ReplicaCommitRequest
@@ -141,7 +192,7 @@ export type ReplicaCommitRequest = Message<"nagi.v1.ReplicaCommitRequest"> & {
  * Use `create(ReplicaCommitRequestSchema)` to create a new message.
  */
 export const ReplicaCommitRequestSchema: GenMessage<ReplicaCommitRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 5);
+  messageDesc(file_nagi_v1_mesh, 7);
 
 /**
  * @generated from message nagi.v1.ReplicaCommitResponse
@@ -154,7 +205,7 @@ export type ReplicaCommitResponse = Message<"nagi.v1.ReplicaCommitResponse"> & {
  * Use `create(ReplicaCommitResponseSchema)` to create a new message.
  */
 export const ReplicaCommitResponseSchema: GenMessage<ReplicaCommitResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 6);
+  messageDesc(file_nagi_v1_mesh, 8);
 
 /**
  * @generated from message nagi.v1.UploadChunk
@@ -176,7 +227,7 @@ export type UploadChunk = Message<"nagi.v1.UploadChunk"> & {
  * Use `create(UploadChunkSchema)` to create a new message.
  */
 export const UploadChunkSchema: GenMessage<UploadChunk> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 7);
+  messageDesc(file_nagi_v1_mesh, 9);
 
 /**
  * @generated from message nagi.v1.UploadResponse
@@ -205,7 +256,7 @@ export type UploadResponse = Message<"nagi.v1.UploadResponse"> & {
  * Use `create(UploadResponseSchema)` to create a new message.
  */
 export const UploadResponseSchema: GenMessage<UploadResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 8);
+  messageDesc(file_nagi_v1_mesh, 10);
 
 /**
  * @generated from message nagi.v1.PingRequest
@@ -218,7 +269,7 @@ export type PingRequest = Message<"nagi.v1.PingRequest"> & {
  * Use `create(PingRequestSchema)` to create a new message.
  */
 export const PingRequestSchema: GenMessage<PingRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 9);
+  messageDesc(file_nagi_v1_mesh, 11);
 
 /**
  * @generated from message nagi.v1.PingResponse
@@ -237,7 +288,7 @@ export type PingResponse = Message<"nagi.v1.PingResponse"> & {
  * Use `create(PingResponseSchema)` to create a new message.
  */
 export const PingResponseSchema: GenMessage<PingResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 10);
+  messageDesc(file_nagi_v1_mesh, 12);
 
 /**
  * MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
@@ -290,6 +341,16 @@ export const MeshService: GenService<{
     methodKind: "unary";
     input: typeof ReplicaCommitRequestSchema;
     output: typeof ReplicaCommitResponseSchema;
+  },
+  /**
+   * 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
+   *
+   * @generated from rpc nagi.v1.MeshService.LeaseVote
+   */
+  leaseVote: {
+    methodKind: "unary";
+    input: typeof LeaseVoteRequestSchema;
+    output: typeof LeaseVoteResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_mesh, 0);

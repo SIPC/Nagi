@@ -178,7 +178,7 @@ func (p *panelService) MeshRelay(stream nagiv1.PanelService_MeshRelayServer) err
 // ServeMesh 在面板的 mesh 地址上提供 MeshService，直到 ctx 取消。
 func (r *Registry) ServeMesh(ctx context.Context) {
 	if m := r.Mesh(); m != nil {
-		if err := mesh.Serve(ctx, m, nil); err != nil && ctx.Err() == nil {
+		if err := mesh.Serve(ctx, m, &panelMesh{Service: mesh.Service{M: m}, r: r}); err != nil && ctx.Err() == nil {
 			r.log.Warn("mesh 服务停止", "err", err)
 		}
 	}

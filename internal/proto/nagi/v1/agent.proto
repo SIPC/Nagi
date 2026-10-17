@@ -70,6 +70,28 @@ service AgentService {
   rpc MigrateResume(ReplicaRef) returns (stream DeployEvent);
   // 迁移成功后把项目移出本节点（目录保留）。
   rpc MigrateFinish(ReplicaRef) returns (MigrateFinishResponse);
+
+  // ---- 顶替 ----
+  // 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
+  rpc SetFailover(SetFailoverRequest) returns (FailoverStatus);
+  rpc GetFailover(ReplicaRef) returns (FailoverStatus);
+  // 本节点参与的所有顶替设置。
+  rpc ListFailovers(ListFailoversRequest) returns (ListFailoversResponse);
+  // 热备：用户确认顶替（有状态项目默认要确认）。
+  rpc ConfirmTakeover(ReplicaRef) returns (FailoverStatus);
+}
+
+message SetFailoverRequest {
+  FailoverConfig config = 1;
+  // 删除这个项目的顶替设置。
+  bool clear = 2;
+  string project_id = 3;
+}
+
+message ListFailoversRequest {}
+
+message ListFailoversResponse {
+  repeated FailoverStatus failovers = 1;
 }
 
 message CheckRestoreRequest {

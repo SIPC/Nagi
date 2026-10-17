@@ -73,6 +73,10 @@ service NodeService {
   // 把副本恢复成这个节点上的项目。
   rpc RestoreNodeReplica(RestoreNodeReplicaRequest) returns (stream DeployEvent);
   rpc DeleteNodeReplica(NodeProjectRef) returns (DeleteReplicaResponse);
+  // 节点参与的顶替设置（运行、热备或见证）。
+  rpc ListNodeFailovers(ListNodeReplicasRequest) returns (ListFailoversResponse);
+  // 在热备节点上确认顶替。
+  rpc ConfirmNodeTakeover(NodeProjectRef) returns (FailoverStatus);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -267,6 +271,22 @@ service ProjectService {
   // 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
   // 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
   rpc MigrateNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
+  // 设置顶替（standby_node_id 为空表示取消）。
+  rpc SetNodeProjectFailover(SetNodeProjectFailoverRequest) returns (FailoverStatus);
+  rpc GetNodeProjectFailover(NodeProjectRef) returns (FailoverStatus);
+}
+
+message SetNodeProjectFailoverRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string standby_node_id = 3;
+  // 项目在顶替节点上的目录。
+  string standby_dir = 4;
+  // 见证人节点；为空表示由本面板担任。
+  string witness_node_id = 5;
+  bool auto_stateful = 6;
+  // 租约时长（秒），0 表示默认 30。
+  uint32 lease_seconds = 7;
 }
 
 message MigrateNodeProjectRequest {

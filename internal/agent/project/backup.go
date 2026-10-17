@@ -16,6 +16,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // 备份节点：项目的快照仓库和恢复项目所需的配置，同步到另一个节点（见 docs/snapshot.md）。
@@ -129,6 +130,8 @@ type replicaInfo struct {
 	Config json.RawMessage `json:"config"`
 	// 已经导入过的 compose 端口，恢复后不再重复导入（映射文件已经随 config/routes 复制过去）。
 	ImportedPorts string `json:"imported_ports,omitempty"`
+	// 是否有状态：顶替时有状态项目默认要用户确认。
+	Stateful bool `json:"stateful,omitempty"`
 }
 
 // ReplicaFiles 返回要同步的文件：快照仓库、配置文件和 project.json。
@@ -195,7 +198,11 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 			return nil
 		})
 	}
-	info, _ := json.Marshal(replicaInfo{Name: name, Config: cfgJSON, ImportedPorts: imported})
+	stateful := false
+	if proj, err := validate(ctx, proto.Clone(cfg).(*nagiv1.ProjectConfig), p.dataDir(), composeProjectName(id)); err == nil {
+		stateful = isStateful(cfg, proj, preservePaths(cfg, proj, p.dataDir()))
+	}
+	info, _ := json.Marshal(replicaInfo{Name: name, Config: cfgJSON, ImportedPorts: imported, Stateful: stateful})
 	out := append(append(append(packs, others...), config...), ReplicaFile{Path: "project.json", Data: info, Size: int64(len(info))})
 	return out, name, nil
 }

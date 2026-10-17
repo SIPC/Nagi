@@ -57,6 +57,11 @@ func Down(ctx context.Context, f Files, removeVolumes bool, onLine func(string))
 	return run(ctx, f.args(args...), onLine)
 }
 
+// Pull 拉取项目用到的镜像（本地构建的服务跳过）。
+func Pull(ctx context.Context, f Files, onLine func(string)) error {
+	return run(ctx, f.args("pull", "--ignore-buildable"), onLine)
+}
+
 // Version 返回 docker compose 插件的版本号，例如 "2.39.1"。
 func Version(ctx context.Context) (string, error) {
 	out, err := exec.CommandContext(ctx, "docker", "compose", "version", "--short").Output()

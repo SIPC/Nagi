@@ -388,6 +388,15 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 	}
 }
 
+// Notify 发一条一次性的通知（例如"已顶替项目"），不跟踪状态，也没有"已恢复"。
+func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
+	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: e.node, Time: timestamppb.Now()}
+	if projectID != "" {
+		a.Project = e.projectName(projectID)
+	}
+	e.dispatch(ctx, a)
+}
+
 // Resolve 报告事件类告警已恢复。
 func (e *Engine) Resolve(ctx context.Context, key string) {
 	e.mu.Lock()

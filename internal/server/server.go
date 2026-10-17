@@ -95,6 +95,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s.auth = auth.New(s.q)
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
+	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	} else {
