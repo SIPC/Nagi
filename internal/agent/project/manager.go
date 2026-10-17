@@ -552,6 +552,33 @@ func (m *Manager) Logs(ctx context.Context, id, service string, tail int, follow
 	return nil
 }
 
+// ---- 终端 ----
+
+// defaultShell 优先用 bash，没有 bash 就用 sh。
+var defaultShell = []string{"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi"}
+
+// Exec 在服务正在运行的容器里打开交互式终端。
+func (m *Manager) Exec(ctx context.Context, id, service string, cmd []string, cols, rows uint) (*docker.Exec, error) {
+	if _, err := m.nodeQ.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range containers {
+		if c.Service == service && c.State == "running" {
+			if len(cmd) == 0 {
+				cmd = defaultShell
+			}
+			return m.docker.StartExec(ctx, c.ID, cmd, cols, rows)
+		}
+	}
+	return nil, invalid("服务 %s 没有正在运行的容器", service)
+}
+
 // ---- 工具 ----
 
 // randomToken 生成 32 字节的随机令牌（十六进制）。

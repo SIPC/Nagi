@@ -12,7 +12,129 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/agent.proto.
  */
 export const file_nagi_v1_agent: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIhUKE0xpc3RQcm9qZWN0c1JlcXVlc3QiQQoUTGlzdFByb2plY3RzUmVzcG9uc2USKQoIcHJvamVjdHMYASADKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5Il8KFENyZWF0ZVByb2plY3RSZXF1ZXN0EgwKBG5hbWUYASABKAkSCwoDZGlyGAIgASgJEiYKBmNvbmZpZxgEIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZ0oECAMQBCJdChBTYXZlRHJhZnRSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMSJgoGY29uZmlnGAMgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnIjYKEVNhdmVEcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiOAoTRGlzY2FyZERyYWZ0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDIjkKFERpc2NhcmREcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiOgoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiHwoRR2V0UHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkiPgoSR2V0UHJvamVjdFJlc3BvbnNlEigKB3Byb2plY3QYASABKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IkcKFERlcGxveVByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMSDAoEcHVsbBgDIAEoCCJOChFTdHJlYW1Mb2dzUmVxdWVzdBIKCgJpZBgBIAEoCRIPCgdzZXJ2aWNlGAIgASgJEgwKBHRhaWwYAyABKAUSDgoGZm9sbG93GAQgASgIMokECgxBZ2VudFNlcnZpY2USSwoMTGlzdFByb2plY3RzEhwubmFnaS52MS5MaXN0UHJvamVjdHNSZXF1ZXN0Gh0ubmFnaS52MS5MaXN0UHJvamVjdHNSZXNwb25zZRJOCg1DcmVhdGVQcm9qZWN0Eh0ubmFnaS52MS5DcmVhdGVQcm9qZWN0UmVxdWVzdBoeLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlc3BvbnNlEkUKCkdldFByb2plY3QSGi5uYWdpLnYxLkdldFByb2plY3RSZXF1ZXN0GhsubmFnaS52MS5HZXRQcm9qZWN0UmVzcG9uc2USQgoJU2F2ZURyYWZ0EhkubmFnaS52MS5TYXZlRHJhZnRSZXF1ZXN0GhoubmFnaS52MS5TYXZlRHJhZnRSZXNwb25zZRJLCgxEaXNjYXJkRHJhZnQSHC5uYWdpLnYxLkRpc2NhcmREcmFmdFJlcXVlc3QaHS5uYWdpLnYxLkRpc2NhcmREcmFmdFJlc3BvbnNlEkYKDURlcGxveVByb2plY3QSHS5uYWdpLnYxLkRlcGxveVByb2plY3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0ImYKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSDwoHY29tbWFuZBgDIAMoCRIjCgRzaXplGAQgASgLMhUubmFnaS52MS5UZXJtaW5hbFNpemUiKgoMVGVybWluYWxTaXplEgwKBGNvbHMYASABKA0SDAoEcm93cxgCIAEoDSI9CgpFeGVjT3V0cHV0EhAKBnN0ZG91dBgBIAEoDEgAEhMKCWV4aXRfY29kZRgCIAEoBUgAQggKBm91dHB1dCIVChNMaXN0UHJvamVjdHNSZXF1ZXN0IkEKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEikKCHByb2plY3RzGAEgAygLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJfChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRuYW1lGAEgASgJEgsKA2RpchgCIAEoCRImCgZjb25maWcYBCABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgDEAQiXQoQU2F2ZURyYWZ0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEiYKBmNvbmZpZxgDIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZyI2ChFTYXZlRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjgKE0Rpc2NhcmREcmFmdFJlcXVlc3QSCgoCaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyI5ChREaXNjYXJkRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjoKFUNyZWF0ZVByb2plY3RSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0Ih8KEUdldFByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJIj4KEkdldFByb2plY3RSZXNwb25zZRIoCgdwcm9qZWN0GAEgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJHChREZXBsb3lQcm9qZWN0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEgwKBHB1bGwYAyABKAgiTgoRU3RyZWFtTG9nc1JlcXVlc3QSCgoCaWQYASABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDK+BAoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEkIKCVNhdmVEcmFmdBIZLm5hZ2kudjEuU2F2ZURyYWZ0UmVxdWVzdBoaLm5hZ2kudjEuU2F2ZURyYWZ0UmVzcG9uc2USSwoMRGlzY2FyZERyYWZ0EhwubmFnaS52MS5EaXNjYXJkRHJhZnRSZXF1ZXN0Gh0ubmFnaS52MS5EaXNjYXJkRHJhZnRSZXNwb25zZRJGCg1EZXBsb3lQcm9qZWN0Eh0ubmFnaS52MS5EZXBsb3lQcm9qZWN0UmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARI8CgpTdHJlYW1Mb2dzEhoubmFnaS52MS5TdHJlYW1Mb2dzUmVxdWVzdBoQLm5hZ2kudjEuTG9nTGluZTABEjMKBEV4ZWMSEi5uYWdpLnYxLkV4ZWNJbnB1dBoTLm5hZ2kudjEuRXhlY091dHB1dCgBMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+
+/**
+ * @generated from message nagi.v1.ExecInput
+ */
+export type ExecInput = Message<"nagi.v1.ExecInput"> & {
+  /**
+   * @generated from oneof nagi.v1.ExecInput.input
+   */
+  input: {
+    /**
+     * @generated from field: nagi.v1.ExecStart start = 1;
+     */
+    value: ExecStart;
+    case: "start";
+  } | {
+    /**
+     * @generated from field: bytes stdin = 2;
+     */
+    value: Uint8Array;
+    case: "stdin";
+  } | {
+    /**
+     * @generated from field: nagi.v1.TerminalSize resize = 3;
+     */
+    value: TerminalSize;
+    case: "resize";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message nagi.v1.ExecInput.
+ * Use `create(ExecInputSchema)` to create a new message.
+ */
+export const ExecInputSchema: GenMessage<ExecInput> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 0);
+
+/**
+ * @generated from message nagi.v1.ExecStart
+ */
+export type ExecStart = Message<"nagi.v1.ExecStart"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string service = 2;
+   */
+  service: string;
+
+  /**
+   * 为空时优先用 bash，没有 bash 就用 sh。
+   *
+   * @generated from field: repeated string command = 3;
+   */
+  command: string[];
+
+  /**
+   * @generated from field: nagi.v1.TerminalSize size = 4;
+   */
+  size?: TerminalSize | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.ExecStart.
+ * Use `create(ExecStartSchema)` to create a new message.
+ */
+export const ExecStartSchema: GenMessage<ExecStart> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 1);
+
+/**
+ * @generated from message nagi.v1.TerminalSize
+ */
+export type TerminalSize = Message<"nagi.v1.TerminalSize"> & {
+  /**
+   * @generated from field: uint32 cols = 1;
+   */
+  cols: number;
+
+  /**
+   * @generated from field: uint32 rows = 2;
+   */
+  rows: number;
+};
+
+/**
+ * Describes the message nagi.v1.TerminalSize.
+ * Use `create(TerminalSizeSchema)` to create a new message.
+ */
+export const TerminalSizeSchema: GenMessage<TerminalSize> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 2);
+
+/**
+ * @generated from message nagi.v1.ExecOutput
+ */
+export type ExecOutput = Message<"nagi.v1.ExecOutput"> & {
+  /**
+   * @generated from oneof nagi.v1.ExecOutput.output
+   */
+  output: {
+    /**
+     * @generated from field: bytes stdout = 1;
+     */
+    value: Uint8Array;
+    case: "stdout";
+  } | {
+    /**
+     * 进程退出，终端结束。
+     *
+     * @generated from field: int32 exit_code = 2;
+     */
+    value: number;
+    case: "exitCode";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message nagi.v1.ExecOutput.
+ * Use `create(ExecOutputSchema)` to create a new message.
+ */
+export const ExecOutputSchema: GenMessage<ExecOutput> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 3);
 
 /**
  * @generated from message nagi.v1.ListProjectsRequest
@@ -25,7 +147,7 @@ export type ListProjectsRequest = Message<"nagi.v1.ListProjectsRequest"> & {
  * Use `create(ListProjectsRequestSchema)` to create a new message.
  */
 export const ListProjectsRequestSchema: GenMessage<ListProjectsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 0);
+  messageDesc(file_nagi_v1_agent, 4);
 
 /**
  * @generated from message nagi.v1.ListProjectsResponse
@@ -42,7 +164,7 @@ export type ListProjectsResponse = Message<"nagi.v1.ListProjectsResponse"> & {
  * Use `create(ListProjectsResponseSchema)` to create a new message.
  */
 export const ListProjectsResponseSchema: GenMessage<ListProjectsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 1);
+  messageDesc(file_nagi_v1_agent, 5);
 
 /**
  * @generated from message nagi.v1.CreateProjectRequest
@@ -69,7 +191,7 @@ export type CreateProjectRequest = Message<"nagi.v1.CreateProjectRequest"> & {
  * Use `create(CreateProjectRequestSchema)` to create a new message.
  */
 export const CreateProjectRequestSchema: GenMessage<CreateProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 2);
+  messageDesc(file_nagi_v1_agent, 6);
 
 /**
  * @generated from message nagi.v1.SaveDraftRequest
@@ -96,7 +218,7 @@ export type SaveDraftRequest = Message<"nagi.v1.SaveDraftRequest"> & {
  * Use `create(SaveDraftRequestSchema)` to create a new message.
  */
 export const SaveDraftRequestSchema: GenMessage<SaveDraftRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 3);
+  messageDesc(file_nagi_v1_agent, 7);
 
 /**
  * @generated from message nagi.v1.SaveDraftResponse
@@ -113,7 +235,7 @@ export type SaveDraftResponse = Message<"nagi.v1.SaveDraftResponse"> & {
  * Use `create(SaveDraftResponseSchema)` to create a new message.
  */
 export const SaveDraftResponseSchema: GenMessage<SaveDraftResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 4);
+  messageDesc(file_nagi_v1_agent, 8);
 
 /**
  * @generated from message nagi.v1.DiscardDraftRequest
@@ -135,7 +257,7 @@ export type DiscardDraftRequest = Message<"nagi.v1.DiscardDraftRequest"> & {
  * Use `create(DiscardDraftRequestSchema)` to create a new message.
  */
 export const DiscardDraftRequestSchema: GenMessage<DiscardDraftRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 5);
+  messageDesc(file_nagi_v1_agent, 9);
 
 /**
  * @generated from message nagi.v1.DiscardDraftResponse
@@ -152,7 +274,7 @@ export type DiscardDraftResponse = Message<"nagi.v1.DiscardDraftResponse"> & {
  * Use `create(DiscardDraftResponseSchema)` to create a new message.
  */
 export const DiscardDraftResponseSchema: GenMessage<DiscardDraftResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 6);
+  messageDesc(file_nagi_v1_agent, 10);
 
 /**
  * @generated from message nagi.v1.CreateProjectResponse
@@ -169,7 +291,7 @@ export type CreateProjectResponse = Message<"nagi.v1.CreateProjectResponse"> & {
  * Use `create(CreateProjectResponseSchema)` to create a new message.
  */
 export const CreateProjectResponseSchema: GenMessage<CreateProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 7);
+  messageDesc(file_nagi_v1_agent, 11);
 
 /**
  * @generated from message nagi.v1.GetProjectRequest
@@ -186,7 +308,7 @@ export type GetProjectRequest = Message<"nagi.v1.GetProjectRequest"> & {
  * Use `create(GetProjectRequestSchema)` to create a new message.
  */
 export const GetProjectRequestSchema: GenMessage<GetProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 8);
+  messageDesc(file_nagi_v1_agent, 12);
 
 /**
  * @generated from message nagi.v1.GetProjectResponse
@@ -203,7 +325,7 @@ export type GetProjectResponse = Message<"nagi.v1.GetProjectResponse"> & {
  * Use `create(GetProjectResponseSchema)` to create a new message.
  */
 export const GetProjectResponseSchema: GenMessage<GetProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 9);
+  messageDesc(file_nagi_v1_agent, 13);
 
 /**
  * 有草稿时先把草稿记为新版本再部署；没有草稿时重新部署最新版本。
@@ -236,7 +358,7 @@ export type DeployProjectRequest = Message<"nagi.v1.DeployProjectRequest"> & {
  * Use `create(DeployProjectRequestSchema)` to create a new message.
  */
 export const DeployProjectRequestSchema: GenMessage<DeployProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 10);
+  messageDesc(file_nagi_v1_agent, 14);
 
 /**
  * @generated from message nagi.v1.StreamLogsRequest
@@ -272,7 +394,7 @@ export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
  * Use `create(StreamLogsRequestSchema)` to create a new message.
  */
 export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 11);
+  messageDesc(file_nagi_v1_agent, 15);
 
 /**
  * AgentService：面板调用节点（反向 gRPC），走控制连接。
@@ -335,6 +457,16 @@ export const AgentService: GenService<{
     methodKind: "server_streaming";
     input: typeof StreamLogsRequestSchema;
     output: typeof LogLineSchema;
+  },
+  /**
+   * 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
+   *
+   * @generated from rpc nagi.v1.AgentService.Exec
+   */
+  exec: {
+    methodKind: "bidi_streaming";
+    input: typeof ExecInputSchema;
+    output: typeof ExecOutputSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_agent, 0);

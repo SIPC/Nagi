@@ -88,6 +88,59 @@ func (s *agentService) StreamLogs(req *nagiv1.StreamLogsRequest, stream nagiv1.A
 	return toStatus(err)
 }
 
+func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
+	ctx := stream.Context()
+	first, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	start := first.GetStart()
+	if start == nil {
+		return status.Error(codes.InvalidArgument, "第一条消息必须是 start")
+	}
+	size := start.GetSize()
+	ex, err := s.projects.Exec(ctx, start.GetProjectId(), start.GetService(), start.GetCommand(), uint(size.GetCols()), uint(size.GetRows()))
+	if err != nil {
+		return toStatus(err)
+	}
+	defer ex.Close()
+
+	// 输入：面板 → 终端
+	go func() {
+		for {
+			in, err := stream.Recv()
+			if err != nil {
+				ex.Close()
+				return
+			}
+			switch v := in.Input.(type) {
+			case *nagiv1.ExecInput_Stdin:
+				if _, err := ex.Write(v.Stdin); err != nil {
+					return
+				}
+			case *nagiv1.ExecInput_Resize:
+				_ = ex.Resize(ctx, uint(v.Resize.GetCols()), uint(v.Resize.GetRows()))
+			}
+		}
+	}()
+
+	// 输出：终端 → 面板
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := ex.Read(buf)
+		if n > 0 {
+			if err := stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_Stdout{Stdout: append([]byte(nil), buf[:n]...)}}); err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	code := ex.ExitCode(context.WithoutCancel(ctx))
+	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
+}
+
 func toStatus(err error) error {
 	switch {
 	case err == nil:

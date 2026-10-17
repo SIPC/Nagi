@@ -21,6 +21,308 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ExecInput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Input:
+	//
+	//	*ExecInput_Start
+	//	*ExecInput_Stdin
+	//	*ExecInput_Resize
+	Input         isExecInput_Input `protobuf_oneof:"input"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecInput) Reset() {
+	*x = ExecInput{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecInput) ProtoMessage() {}
+
+func (x *ExecInput) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecInput.ProtoReflect.Descriptor instead.
+func (*ExecInput) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ExecInput) GetInput() isExecInput_Input {
+	if x != nil {
+		return x.Input
+	}
+	return nil
+}
+
+func (x *ExecInput) GetStart() *ExecStart {
+	if x != nil {
+		if x, ok := x.Input.(*ExecInput_Start); ok {
+			return x.Start
+		}
+	}
+	return nil
+}
+
+func (x *ExecInput) GetStdin() []byte {
+	if x != nil {
+		if x, ok := x.Input.(*ExecInput_Stdin); ok {
+			return x.Stdin
+		}
+	}
+	return nil
+}
+
+func (x *ExecInput) GetResize() *TerminalSize {
+	if x != nil {
+		if x, ok := x.Input.(*ExecInput_Resize); ok {
+			return x.Resize
+		}
+	}
+	return nil
+}
+
+type isExecInput_Input interface {
+	isExecInput_Input()
+}
+
+type ExecInput_Start struct {
+	Start *ExecStart `protobuf:"bytes,1,opt,name=start,proto3,oneof"`
+}
+
+type ExecInput_Stdin struct {
+	Stdin []byte `protobuf:"bytes,2,opt,name=stdin,proto3,oneof"`
+}
+
+type ExecInput_Resize struct {
+	Resize *TerminalSize `protobuf:"bytes,3,opt,name=resize,proto3,oneof"`
+}
+
+func (*ExecInput_Start) isExecInput_Input() {}
+
+func (*ExecInput_Stdin) isExecInput_Input() {}
+
+func (*ExecInput_Resize) isExecInput_Input() {}
+
+type ExecStart struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Service   string                 `protobuf:"bytes,2,opt,name=service,proto3" json:"service,omitempty"`
+	// 为空时优先用 bash，没有 bash 就用 sh。
+	Command       []string      `protobuf:"bytes,3,rep,name=command,proto3" json:"command,omitempty"`
+	Size          *TerminalSize `protobuf:"bytes,4,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecStart) Reset() {
+	*x = ExecStart{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecStart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecStart) ProtoMessage() {}
+
+func (x *ExecStart) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecStart.ProtoReflect.Descriptor instead.
+func (*ExecStart) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ExecStart) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ExecStart) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *ExecStart) GetCommand() []string {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+func (x *ExecStart) GetSize() *TerminalSize {
+	if x != nil {
+		return x.Size
+	}
+	return nil
+}
+
+type TerminalSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cols          uint32                 `protobuf:"varint,1,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows          uint32                 `protobuf:"varint,2,opt,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TerminalSize) Reset() {
+	*x = TerminalSize{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TerminalSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TerminalSize) ProtoMessage() {}
+
+func (x *TerminalSize) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TerminalSize.ProtoReflect.Descriptor instead.
+func (*TerminalSize) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TerminalSize) GetCols() uint32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *TerminalSize) GetRows() uint32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+type ExecOutput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Output:
+	//
+	//	*ExecOutput_Stdout
+	//	*ExecOutput_ExitCode
+	Output        isExecOutput_Output `protobuf_oneof:"output"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecOutput) Reset() {
+	*x = ExecOutput{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecOutput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecOutput) ProtoMessage() {}
+
+func (x *ExecOutput) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecOutput.ProtoReflect.Descriptor instead.
+func (*ExecOutput) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ExecOutput) GetOutput() isExecOutput_Output {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+func (x *ExecOutput) GetStdout() []byte {
+	if x != nil {
+		if x, ok := x.Output.(*ExecOutput_Stdout); ok {
+			return x.Stdout
+		}
+	}
+	return nil
+}
+
+func (x *ExecOutput) GetExitCode() int32 {
+	if x != nil {
+		if x, ok := x.Output.(*ExecOutput_ExitCode); ok {
+			return x.ExitCode
+		}
+	}
+	return 0
+}
+
+type isExecOutput_Output interface {
+	isExecOutput_Output()
+}
+
+type ExecOutput_Stdout struct {
+	Stdout []byte `protobuf:"bytes,1,opt,name=stdout,proto3,oneof"`
+}
+
+type ExecOutput_ExitCode struct {
+	// 进程退出，终端结束。
+	ExitCode int32 `protobuf:"varint,2,opt,name=exit_code,json=exitCode,proto3,oneof"`
+}
+
+func (*ExecOutput_Stdout) isExecOutput_Output() {}
+
+func (*ExecOutput_ExitCode) isExecOutput_Output() {}
+
 type ListProjectsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -29,7 +331,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[0]
+	mi := &file_nagi_v1_agent_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -41,7 +343,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[0]
+	mi := &file_nagi_v1_agent_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54,7 +356,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{0}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{4}
 }
 
 type ListProjectsResponse struct {
@@ -66,7 +368,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[1]
+	mi := &file_nagi_v1_agent_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -78,7 +380,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[1]
+	mi := &file_nagi_v1_agent_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -91,7 +393,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{1}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*ProjectSummary {
@@ -112,7 +414,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[2]
+	mi := &file_nagi_v1_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -124,7 +426,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[2]
+	mi := &file_nagi_v1_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -137,7 +439,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{2}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateProjectRequest) GetName() string {
@@ -172,7 +474,7 @@ type SaveDraftRequest struct {
 
 func (x *SaveDraftRequest) Reset() {
 	*x = SaveDraftRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[3]
+	mi := &file_nagi_v1_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -184,7 +486,7 @@ func (x *SaveDraftRequest) String() string {
 func (*SaveDraftRequest) ProtoMessage() {}
 
 func (x *SaveDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[3]
+	mi := &file_nagi_v1_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -197,7 +499,7 @@ func (x *SaveDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveDraftRequest.ProtoReflect.Descriptor instead.
 func (*SaveDraftRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{3}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SaveDraftRequest) GetId() string {
@@ -230,7 +532,7 @@ type SaveDraftResponse struct {
 
 func (x *SaveDraftResponse) Reset() {
 	*x = SaveDraftResponse{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[4]
+	mi := &file_nagi_v1_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -242,7 +544,7 @@ func (x *SaveDraftResponse) String() string {
 func (*SaveDraftResponse) ProtoMessage() {}
 
 func (x *SaveDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[4]
+	mi := &file_nagi_v1_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -255,7 +557,7 @@ func (x *SaveDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveDraftResponse.ProtoReflect.Descriptor instead.
 func (*SaveDraftResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SaveDraftResponse) GetProject() *Project {
@@ -275,7 +577,7 @@ type DiscardDraftRequest struct {
 
 func (x *DiscardDraftRequest) Reset() {
 	*x = DiscardDraftRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[5]
+	mi := &file_nagi_v1_agent_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -287,7 +589,7 @@ func (x *DiscardDraftRequest) String() string {
 func (*DiscardDraftRequest) ProtoMessage() {}
 
 func (x *DiscardDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[5]
+	mi := &file_nagi_v1_agent_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -300,7 +602,7 @@ func (x *DiscardDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardDraftRequest.ProtoReflect.Descriptor instead.
 func (*DiscardDraftRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{5}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DiscardDraftRequest) GetId() string {
@@ -326,7 +628,7 @@ type DiscardDraftResponse struct {
 
 func (x *DiscardDraftResponse) Reset() {
 	*x = DiscardDraftResponse{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[6]
+	mi := &file_nagi_v1_agent_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -338,7 +640,7 @@ func (x *DiscardDraftResponse) String() string {
 func (*DiscardDraftResponse) ProtoMessage() {}
 
 func (x *DiscardDraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[6]
+	mi := &file_nagi_v1_agent_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -351,7 +653,7 @@ func (x *DiscardDraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardDraftResponse.ProtoReflect.Descriptor instead.
 func (*DiscardDraftResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{6}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DiscardDraftResponse) GetProject() *Project {
@@ -370,7 +672,7 @@ type CreateProjectResponse struct {
 
 func (x *CreateProjectResponse) Reset() {
 	*x = CreateProjectResponse{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[7]
+	mi := &file_nagi_v1_agent_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -382,7 +684,7 @@ func (x *CreateProjectResponse) String() string {
 func (*CreateProjectResponse) ProtoMessage() {}
 
 func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[7]
+	mi := &file_nagi_v1_agent_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -395,7 +697,7 @@ func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{7}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateProjectResponse) GetProject() *Project {
@@ -414,7 +716,7 @@ type GetProjectRequest struct {
 
 func (x *GetProjectRequest) Reset() {
 	*x = GetProjectRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[8]
+	mi := &file_nagi_v1_agent_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -426,7 +728,7 @@ func (x *GetProjectRequest) String() string {
 func (*GetProjectRequest) ProtoMessage() {}
 
 func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[8]
+	mi := &file_nagi_v1_agent_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -439,7 +741,7 @@ func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{8}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetProjectRequest) GetId() string {
@@ -458,7 +760,7 @@ type GetProjectResponse struct {
 
 func (x *GetProjectResponse) Reset() {
 	*x = GetProjectResponse{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[9]
+	mi := &file_nagi_v1_agent_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -470,7 +772,7 @@ func (x *GetProjectResponse) String() string {
 func (*GetProjectResponse) ProtoMessage() {}
 
 func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[9]
+	mi := &file_nagi_v1_agent_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -483,7 +785,7 @@ func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{9}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetProjectResponse) GetProject() *ProjectSummary {
@@ -507,7 +809,7 @@ type DeployProjectRequest struct {
 
 func (x *DeployProjectRequest) Reset() {
 	*x = DeployProjectRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[10]
+	mi := &file_nagi_v1_agent_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -519,7 +821,7 @@ func (x *DeployProjectRequest) String() string {
 func (*DeployProjectRequest) ProtoMessage() {}
 
 func (x *DeployProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[10]
+	mi := &file_nagi_v1_agent_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -532,7 +834,7 @@ func (x *DeployProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeployProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{10}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeployProjectRequest) GetId() string {
@@ -570,7 +872,7 @@ type StreamLogsRequest struct {
 
 func (x *StreamLogsRequest) Reset() {
 	*x = StreamLogsRequest{}
-	mi := &file_nagi_v1_agent_proto_msgTypes[11]
+	mi := &file_nagi_v1_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -582,7 +884,7 @@ func (x *StreamLogsRequest) String() string {
 func (*StreamLogsRequest) ProtoMessage() {}
 
 func (x *StreamLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_agent_proto_msgTypes[11]
+	mi := &file_nagi_v1_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -595,7 +897,7 @@ func (x *StreamLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamLogsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{11}
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *StreamLogsRequest) GetId() string {
@@ -630,7 +932,26 @@ var File_nagi_v1_agent_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x13nagi/v1/agent.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\"\x15\n" +
+	"\x13nagi/v1/agent.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\"\x89\x01\n" +
+	"\tExecInput\x12*\n" +
+	"\x05start\x18\x01 \x01(\v2\x12.nagi.v1.ExecStartH\x00R\x05start\x12\x16\n" +
+	"\x05stdin\x18\x02 \x01(\fH\x00R\x05stdin\x12/\n" +
+	"\x06resize\x18\x03 \x01(\v2\x15.nagi.v1.TerminalSizeH\x00R\x06resizeB\a\n" +
+	"\x05input\"\x89\x01\n" +
+	"\tExecStart\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x18\n" +
+	"\aservice\x18\x02 \x01(\tR\aservice\x12\x18\n" +
+	"\acommand\x18\x03 \x03(\tR\acommand\x12)\n" +
+	"\x04size\x18\x04 \x01(\v2\x15.nagi.v1.TerminalSizeR\x04size\"6\n" +
+	"\fTerminalSize\x12\x12\n" +
+	"\x04cols\x18\x01 \x01(\rR\x04cols\x12\x12\n" +
+	"\x04rows\x18\x02 \x01(\rR\x04rows\"O\n" +
+	"\n" +
+	"ExecOutput\x12\x18\n" +
+	"\x06stdout\x18\x01 \x01(\fH\x00R\x06stdout\x12\x1d\n" +
+	"\texit_code\x18\x02 \x01(\x05H\x00R\bexitCodeB\b\n" +
+	"\x06output\"\x15\n" +
 	"\x13ListProjectsRequest\"K\n" +
 	"\x14ListProjectsResponse\x123\n" +
 	"\bprojects\x18\x01 \x03(\v2\x17.nagi.v1.ProjectSummaryR\bprojects\"r\n" +
@@ -663,7 +984,7 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\x12\x12\n" +
 	"\x04tail\x18\x03 \x01(\x05R\x04tail\x12\x16\n" +
-	"\x06follow\x18\x04 \x01(\bR\x06follow2\x89\x04\n" +
+	"\x06follow\x18\x04 \x01(\bR\x06follow2\xbe\x04\n" +
 	"\fAgentService\x12K\n" +
 	"\fListProjects\x12\x1c.nagi.v1.ListProjectsRequest\x1a\x1d.nagi.v1.ListProjectsResponse\x12N\n" +
 	"\rCreateProject\x12\x1d.nagi.v1.CreateProjectRequest\x1a\x1e.nagi.v1.CreateProjectResponse\x12E\n" +
@@ -673,7 +994,8 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\fDiscardDraft\x12\x1c.nagi.v1.DiscardDraftRequest\x1a\x1d.nagi.v1.DiscardDraftResponse\x12F\n" +
 	"\rDeployProject\x12\x1d.nagi.v1.DeployProjectRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12<\n" +
 	"\n" +
-	"StreamLogs\x12\x1a.nagi.v1.StreamLogsRequest\x1a\x10.nagi.v1.LogLine0\x01B4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"StreamLogs\x12\x1a.nagi.v1.StreamLogsRequest\x1a\x10.nagi.v1.LogLine0\x01\x123\n" +
+	"\x04Exec\x12\x12.nagi.v1.ExecInput\x1a\x13.nagi.v1.ExecOutput(\x010\x01B4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_agent_proto_rawDescOnce sync.Once
@@ -687,53 +1009,62 @@ func file_nagi_v1_agent_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_agent_proto_rawDescData
 }
 
-var file_nagi_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_nagi_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_nagi_v1_agent_proto_goTypes = []any{
-	(*ListProjectsRequest)(nil),   // 0: nagi.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),  // 1: nagi.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),  // 2: nagi.v1.CreateProjectRequest
-	(*SaveDraftRequest)(nil),      // 3: nagi.v1.SaveDraftRequest
-	(*SaveDraftResponse)(nil),     // 4: nagi.v1.SaveDraftResponse
-	(*DiscardDraftRequest)(nil),   // 5: nagi.v1.DiscardDraftRequest
-	(*DiscardDraftResponse)(nil),  // 6: nagi.v1.DiscardDraftResponse
-	(*CreateProjectResponse)(nil), // 7: nagi.v1.CreateProjectResponse
-	(*GetProjectRequest)(nil),     // 8: nagi.v1.GetProjectRequest
-	(*GetProjectResponse)(nil),    // 9: nagi.v1.GetProjectResponse
-	(*DeployProjectRequest)(nil),  // 10: nagi.v1.DeployProjectRequest
-	(*StreamLogsRequest)(nil),     // 11: nagi.v1.StreamLogsRequest
-	(*ProjectSummary)(nil),        // 12: nagi.v1.ProjectSummary
-	(*ProjectConfig)(nil),         // 13: nagi.v1.ProjectConfig
-	(*Project)(nil),               // 14: nagi.v1.Project
-	(*DeployEvent)(nil),           // 15: nagi.v1.DeployEvent
-	(*LogLine)(nil),               // 16: nagi.v1.LogLine
+	(*ExecInput)(nil),             // 0: nagi.v1.ExecInput
+	(*ExecStart)(nil),             // 1: nagi.v1.ExecStart
+	(*TerminalSize)(nil),          // 2: nagi.v1.TerminalSize
+	(*ExecOutput)(nil),            // 3: nagi.v1.ExecOutput
+	(*ListProjectsRequest)(nil),   // 4: nagi.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),  // 5: nagi.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),  // 6: nagi.v1.CreateProjectRequest
+	(*SaveDraftRequest)(nil),      // 7: nagi.v1.SaveDraftRequest
+	(*SaveDraftResponse)(nil),     // 8: nagi.v1.SaveDraftResponse
+	(*DiscardDraftRequest)(nil),   // 9: nagi.v1.DiscardDraftRequest
+	(*DiscardDraftResponse)(nil),  // 10: nagi.v1.DiscardDraftResponse
+	(*CreateProjectResponse)(nil), // 11: nagi.v1.CreateProjectResponse
+	(*GetProjectRequest)(nil),     // 12: nagi.v1.GetProjectRequest
+	(*GetProjectResponse)(nil),    // 13: nagi.v1.GetProjectResponse
+	(*DeployProjectRequest)(nil),  // 14: nagi.v1.DeployProjectRequest
+	(*StreamLogsRequest)(nil),     // 15: nagi.v1.StreamLogsRequest
+	(*ProjectSummary)(nil),        // 16: nagi.v1.ProjectSummary
+	(*ProjectConfig)(nil),         // 17: nagi.v1.ProjectConfig
+	(*Project)(nil),               // 18: nagi.v1.Project
+	(*DeployEvent)(nil),           // 19: nagi.v1.DeployEvent
+	(*LogLine)(nil),               // 20: nagi.v1.LogLine
 }
 var file_nagi_v1_agent_proto_depIdxs = []int32{
-	12, // 0: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
-	13, // 1: nagi.v1.CreateProjectRequest.config:type_name -> nagi.v1.ProjectConfig
-	13, // 2: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ProjectConfig
-	14, // 3: nagi.v1.SaveDraftResponse.project:type_name -> nagi.v1.Project
-	14, // 4: nagi.v1.DiscardDraftResponse.project:type_name -> nagi.v1.Project
-	14, // 5: nagi.v1.CreateProjectResponse.project:type_name -> nagi.v1.Project
-	12, // 6: nagi.v1.GetProjectResponse.project:type_name -> nagi.v1.ProjectSummary
-	0,  // 7: nagi.v1.AgentService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
-	2,  // 8: nagi.v1.AgentService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
-	8,  // 9: nagi.v1.AgentService.GetProject:input_type -> nagi.v1.GetProjectRequest
-	3,  // 10: nagi.v1.AgentService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
-	5,  // 11: nagi.v1.AgentService.DiscardDraft:input_type -> nagi.v1.DiscardDraftRequest
-	10, // 12: nagi.v1.AgentService.DeployProject:input_type -> nagi.v1.DeployProjectRequest
-	11, // 13: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
-	1,  // 14: nagi.v1.AgentService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
-	7,  // 15: nagi.v1.AgentService.CreateProject:output_type -> nagi.v1.CreateProjectResponse
-	9,  // 16: nagi.v1.AgentService.GetProject:output_type -> nagi.v1.GetProjectResponse
-	4,  // 17: nagi.v1.AgentService.SaveDraft:output_type -> nagi.v1.SaveDraftResponse
-	6,  // 18: nagi.v1.AgentService.DiscardDraft:output_type -> nagi.v1.DiscardDraftResponse
-	15, // 19: nagi.v1.AgentService.DeployProject:output_type -> nagi.v1.DeployEvent
-	16, // 20: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	1,  // 0: nagi.v1.ExecInput.start:type_name -> nagi.v1.ExecStart
+	2,  // 1: nagi.v1.ExecInput.resize:type_name -> nagi.v1.TerminalSize
+	2,  // 2: nagi.v1.ExecStart.size:type_name -> nagi.v1.TerminalSize
+	16, // 3: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
+	17, // 4: nagi.v1.CreateProjectRequest.config:type_name -> nagi.v1.ProjectConfig
+	17, // 5: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ProjectConfig
+	18, // 6: nagi.v1.SaveDraftResponse.project:type_name -> nagi.v1.Project
+	18, // 7: nagi.v1.DiscardDraftResponse.project:type_name -> nagi.v1.Project
+	18, // 8: nagi.v1.CreateProjectResponse.project:type_name -> nagi.v1.Project
+	16, // 9: nagi.v1.GetProjectResponse.project:type_name -> nagi.v1.ProjectSummary
+	4,  // 10: nagi.v1.AgentService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
+	6,  // 11: nagi.v1.AgentService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
+	12, // 12: nagi.v1.AgentService.GetProject:input_type -> nagi.v1.GetProjectRequest
+	7,  // 13: nagi.v1.AgentService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
+	9,  // 14: nagi.v1.AgentService.DiscardDraft:input_type -> nagi.v1.DiscardDraftRequest
+	14, // 15: nagi.v1.AgentService.DeployProject:input_type -> nagi.v1.DeployProjectRequest
+	15, // 16: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
+	0,  // 17: nagi.v1.AgentService.Exec:input_type -> nagi.v1.ExecInput
+	5,  // 18: nagi.v1.AgentService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
+	11, // 19: nagi.v1.AgentService.CreateProject:output_type -> nagi.v1.CreateProjectResponse
+	13, // 20: nagi.v1.AgentService.GetProject:output_type -> nagi.v1.GetProjectResponse
+	8,  // 21: nagi.v1.AgentService.SaveDraft:output_type -> nagi.v1.SaveDraftResponse
+	10, // 22: nagi.v1.AgentService.DiscardDraft:output_type -> nagi.v1.DiscardDraftResponse
+	19, // 23: nagi.v1.AgentService.DeployProject:output_type -> nagi.v1.DeployEvent
+	20, // 24: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
+	3,  // 25: nagi.v1.AgentService.Exec:output_type -> nagi.v1.ExecOutput
+	18, // [18:26] is the sub-list for method output_type
+	10, // [10:18] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_agent_proto_init() }
@@ -742,13 +1073,22 @@ func file_nagi_v1_agent_proto_init() {
 		return
 	}
 	file_nagi_v1_common_proto_init()
+	file_nagi_v1_agent_proto_msgTypes[0].OneofWrappers = []any{
+		(*ExecInput_Start)(nil),
+		(*ExecInput_Stdin)(nil),
+		(*ExecInput_Resize)(nil),
+	}
+	file_nagi_v1_agent_proto_msgTypes[3].OneofWrappers = []any{
+		(*ExecOutput_Stdout)(nil),
+		(*ExecOutput_ExitCode)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_agent_proto_rawDesc), len(file_nagi_v1_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

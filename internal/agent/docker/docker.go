@@ -220,3 +220,58 @@ func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange fu
 		}
 	}
 }
+
+// Exec 是容器里一个交互式终端会话。
+type Exec struct {
+	c    *client.Client
+	id   string
+	conn client.HijackedResponse
+}
+
+// StartExec 在容器里启动一个带 TTY 的进程。
+func (d *Client) StartExec(ctx context.Context, containerID string, cmd []string, cols, rows uint) (*Exec, error) {
+	created, err := d.c.ExecCreate(ctx, containerID, client.ExecCreateOptions{
+		Cmd:          cmd,
+		TTY:          true,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		ConsoleSize:  client.ConsoleSize{Height: rows, Width: cols},
+		Env:          []string{"TERM=xterm-256color"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	att, err := d.c.ExecAttach(ctx, created.ID, client.ExecAttachOptions{
+		TTY:         true,
+		ConsoleSize: client.ConsoleSize{Height: rows, Width: cols},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Exec{c: d.c, id: created.ID, conn: att.HijackedResponse}, nil
+}
+
+// Read 读取终端输出。
+func (e *Exec) Read(p []byte) (int, error) { return e.conn.Reader.Read(p) }
+
+// Write 写入终端输入。
+func (e *Exec) Write(p []byte) (int, error) { return e.conn.Conn.Write(p) }
+
+// Resize 调整终端大小。
+func (e *Exec) Resize(ctx context.Context, cols, rows uint) error {
+	_, err := e.c.ExecResize(ctx, e.id, client.ExecResizeOptions{Width: cols, Height: rows})
+	return err
+}
+
+// ExitCode 返回进程的退出码。
+func (e *Exec) ExitCode(ctx context.Context) int {
+	r, err := e.c.ExecInspect(ctx, e.id, client.ExecInspectOptions{})
+	if err != nil {
+		return -1
+	}
+	return r.ExitCode
+}
+
+// Close 关闭终端连接。
+func (e *Exec) Close() { e.conn.Close() }

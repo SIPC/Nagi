@@ -51,6 +51,8 @@ const (
 	AgentServiceDeployProjectProcedure = "/nagi.v1.AgentService/DeployProject"
 	// AgentServiceStreamLogsProcedure is the fully-qualified name of the AgentService's StreamLogs RPC.
 	AgentServiceStreamLogsProcedure = "/nagi.v1.AgentService/StreamLogs"
+	// AgentServiceExecProcedure is the fully-qualified name of the AgentService's Exec RPC.
+	AgentServiceExecProcedure = "/nagi.v1.AgentService/Exec"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -62,6 +64,8 @@ type AgentServiceClient interface {
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
+	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
+	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -117,6 +121,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("StreamLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		exec: connect.NewClient[v1.ExecInput, v1.ExecOutput](
+			httpClient,
+			baseURL+AgentServiceExecProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("Exec")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -129,6 +139,7 @@ type agentServiceClient struct {
 	discardDraft  *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
 	deployProject *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs    *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec          *connect.Client[v1.ExecInput, v1.ExecOutput]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -166,6 +177,11 @@ func (c *agentServiceClient) StreamLogs(ctx context.Context, req *connect.Reques
 	return c.streamLogs.CallServerStream(ctx, req)
 }
 
+// Exec calls nagi.v1.AgentService.Exec.
+func (c *agentServiceClient) Exec(ctx context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput] {
+	return c.exec.CallBidiStream(ctx)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -175,6 +191,8 @@ type AgentServiceHandler interface {
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
+	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
+	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -226,6 +244,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("StreamLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceExecHandler := connect.NewBidiStreamHandler(
+		AgentServiceExecProcedure,
+		svc.Exec,
+		connect.WithSchema(agentServiceMethods.ByName("Exec")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -242,6 +266,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceDeployProjectHandler.ServeHTTP(w, r)
 		case AgentServiceStreamLogsProcedure:
 			agentServiceStreamLogsHandler.ServeHTTP(w, r)
+		case AgentServiceExecProcedure:
+			agentServiceExecHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -277,4 +303,8 @@ func (UnimplementedAgentServiceHandler) DeployProject(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.StreamLogs is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Exec is not implemented"))
 }

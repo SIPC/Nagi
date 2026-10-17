@@ -26,6 +26,7 @@ const (
 	AgentService_DiscardDraft_FullMethodName  = "/nagi.v1.AgentService/DiscardDraft"
 	AgentService_DeployProject_FullMethodName = "/nagi.v1.AgentService/DeployProject"
 	AgentService_StreamLogs_FullMethodName    = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName          = "/nagi.v1.AgentService/Exec"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -41,6 +42,8 @@ type AgentServiceClient interface {
 	DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
+	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
+	Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error)
 }
 
 type agentServiceClient struct {
@@ -139,6 +142,19 @@ func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsReque
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
+func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_Exec_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ExecInput, ExecOutput]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExecClient = grpc.BidiStreamingClient[ExecInput, ExecOutput]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -152,6 +168,8 @@ type AgentServiceServer interface {
 	DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
+	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
+	Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -182,6 +200,9 @@ func (UnimplementedAgentServiceServer) DeployProject(*DeployProjectRequest, grpc
 }
 func (UnimplementedAgentServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
+}
+func (UnimplementedAgentServiceServer) Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error {
+	return status.Error(codes.Unimplemented, "method Exec not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -316,6 +337,13 @@ func _AgentService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_StreamLogsServer = grpc.ServerStreamingServer[LogLine]
 
+func _AgentService_Exec_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AgentServiceServer).Exec(&grpc.GenericServerStream[ExecInput, ExecOutput]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExecServer = grpc.BidiStreamingServer[ExecInput, ExecOutput]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -354,6 +382,12 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "StreamLogs",
 			Handler:       _AgentService_StreamLogs_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "Exec",
+			Handler:       _AgentService_Exec_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "nagi/v1/agent.proto",

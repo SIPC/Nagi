@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/caddyserver/caddy/v2 v2.11.7
+	github.com/coder/websocket v1.8.15
 	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/hashicorp/yamux v0.1.2

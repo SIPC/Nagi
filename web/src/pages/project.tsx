@@ -8,6 +8,7 @@ import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { envToText, lines, textToEnv } from "@/lib/config";
+import { TerminalCard } from "@/components/terminal";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 
 export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: string }) {
@@ -91,6 +92,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
           containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
         />
 
+        <TerminalCard nodeId={nodeId} projectId={projectId} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
       </div>
     </>
