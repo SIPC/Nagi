@@ -78,6 +78,24 @@ func BackupContext(nodeID, projectID string) []byte {
 	return []byte(nodeID + "/" + projectID)
 }
 
+// BackupKeyContext 是加密项目快照密码时绑定的上下文。
+func BackupKeyContext(nodeID, projectID string) []byte {
+	return []byte(nodeID + "/" + projectID + "/backup.key")
+}
+
+// BackupKey 返回面板保存的项目快照密码。
+func (r *Registry) BackupKey(ctx context.Context, nodeID, projectID string) (string, error) {
+	sealed, err := r.q.GetProjectBackupKey(ctx, store.GetProjectBackupKeyParams{NodeID: nodeID, ProjectID: projectID})
+	if err != nil || len(sealed) == 0 {
+		return "", errors.New("面板上没有这个项目的快照密码（节点还没有上报过）")
+	}
+	plain, err := r.sealer.Open(sealed, BackupKeyContext(nodeID, projectID))
+	if err != nil {
+		return "", err
+	}
+	return string(plain), nil
+}
+
 // Get 返回在线节点的连接。
 func (r *Registry) Get(nodeID string) (*Conn, error) {
 	r.mu.RLock()
@@ -241,8 +259,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
 			}
 		}
+		var key []byte
+		if k := req.GetBackupKeys()[proj.GetId()]; k != "" {
+			key, _ = p.r.sealer.Seal([]byte(k), BackupKeyContext(p.conn.NodeID, proj.GetId()))
+		}
 		if err := p.r.q.UpsertProjectBackup(ctx, store.UpsertProjectBackupParams{
 			NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Revision: proj.GetRevision(), Data: data, UpdatedAt: now,
+			BackupKey: key,
 		}); err != nil {
 			p.r.log.Warn("保存项目配置备份失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
 		}

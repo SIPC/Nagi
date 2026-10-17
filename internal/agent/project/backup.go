@@ -110,6 +110,21 @@ func (m *Manager) RecordBackupSync(ctx context.Context, id string, syncErr error
 	_ = pdb.setMeta(ctx, metaBackupLastSync, strconv.FormatInt(time.Now().Unix(), 10))
 }
 
+// BackupKeys 返回所有项目快照仓库的密码（项目 ID → 密码），上报给面板备份。
+func (m *Manager) BackupKeys(ctx context.Context) map[string]string {
+	rows, err := m.nodeQ.ListProjects(ctx)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, r := range rows {
+		if b, err := os.ReadFile(paths{root: r.Dir}.passwordFile()); err == nil {
+			out[r.ID] = strings.TrimSpace(string(b))
+		}
+	}
+	return out
+}
+
 // ReplicaFile 是要同步到备份节点的一个文件。
 type ReplicaFile struct {
 	Path string // 副本里的相对路径：repo/...、config/... 或 project.json

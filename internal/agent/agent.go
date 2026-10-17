@@ -465,7 +465,8 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*n
 	if err != nil {
 		a.log.Warn("读取项目列表失败", "err", err)
 	}
-	return panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects, Mesh: a.mesh.info()})
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects, Mesh: a.mesh.info(),
+		BackupKeys: a.projects.BackupKeys(ctx)})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

@@ -63,11 +63,15 @@ SELECT * FROM nodes WHERE revoked = 0 ORDER BY created_at;
 UPDATE nodes SET last_seen = ?, info = ? WHERE id = ?;
 
 -- name: UpsertProjectBackup :exec
-INSERT INTO project_backups (node_id, project_id, revision, data, updated_at) VALUES (?, ?, ?, ?, ?)
+INSERT INTO project_backups (node_id, project_id, revision, data, updated_at, backup_key) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (node_id, project_id) DO UPDATE SET
     revision = excluded.revision,
     data = excluded.data,
-    updated_at = excluded.updated_at;
+    updated_at = excluded.updated_at,
+    backup_key = coalesce(excluded.backup_key, project_backups.backup_key);
+
+-- name: GetProjectBackupKey :one
+SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?;
 
 -- name: ListProjectBackups :many
 SELECT * FROM project_backups WHERE node_id = ? ORDER BY project_id;

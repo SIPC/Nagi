@@ -57,6 +57,8 @@ message ReportRequest {
   NodeInfo node = 1;
   repeated ProjectSummary projects = 2;
   MeshInfo mesh = 3;
+  // 每个项目快照仓库的密码（项目 ID → config/backup.key 的内容）。单独放，不进 Project，不会返回给浏览器。
+  map<string, string> backup_keys = 4;
 }
 
 message ReportResponse {

@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/auth"
 )
 
 // 备份节点：面板只负责登记（两边节点都必须是本面板的在线节点），同步和恢复由节点经 mesh 完成。
@@ -268,4 +269,13 @@ func (s *projectService) MigrateNodeProject(ctx context.Context, req *connect.Re
 	}
 	s.Log.Info("项目已迁移", "project", id, "from", srcID, "to", dstID)
 	return finish(&nagiv1.DeployResult{Success: true})
+}
+
+func (s *projectService) GetNodeProjectBackupKey(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.GetNodeProjectBackupKeyResponse], error) {
+	key, err := s.Nodes.BackupKey(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	s.Log.Info("查看了项目快照密码", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "user", auth.Username(ctx))
+	return connect.NewResponse(&nagiv1.GetNodeProjectBackupKeyResponse{Key: key}), nil
 }

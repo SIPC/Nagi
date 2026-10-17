@@ -1671,6 +1671,7 @@ const (
 	ProjectService_SetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectBackup"
 	ProjectService_GetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectBackup"
 	ProjectService_SyncNodeProjectBackup_FullMethodName      = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
+	ProjectService_GetNodeProjectBackupKey_FullMethodName    = "/nagi.v1.ProjectService/GetNodeProjectBackupKey"
 	ProjectService_MigrateNodeProject_FullMethodName         = "/nagi.v1.ProjectService/MigrateNodeProject"
 	ProjectService_SetNodeProjectFailover_FullMethodName     = "/nagi.v1.ProjectService/SetNodeProjectFailover"
 	ProjectService_GetNodeProjectFailover_FullMethodName     = "/nagi.v1.ProjectService/GetNodeProjectFailover"
@@ -1699,6 +1700,8 @@ type ProjectServiceClient interface {
 	SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error)
 	GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
 	SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
+	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetNodeProjectBackupKey(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*GetNodeProjectBackupKeyResponse, error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
@@ -1940,6 +1943,16 @@ func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, in *No
 	return out, nil
 }
 
+func (c *projectServiceClient) GetNodeProjectBackupKey(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*GetNodeProjectBackupKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeProjectBackupKeyResponse)
+	err := c.cc.Invoke(ctx, ProjectService_GetNodeProjectBackupKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_MigrateNodeProject_FullMethodName, cOpts...)
@@ -2002,6 +2015,8 @@ type ProjectServiceServer interface {
 	SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error)
 	GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
 	SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
+	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
@@ -2071,6 +2086,9 @@ func (UnimplementedProjectServiceServer) GetNodeProjectBackup(context.Context, *
 }
 func (UnimplementedProjectServiceServer) SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncNodeProjectBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectBackupKey not implemented")
 }
 func (UnimplementedProjectServiceServer) MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method MigrateNodeProject not implemented")
@@ -2391,6 +2409,24 @@ func _ProjectService_SyncNodeProjectBackup_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_GetNodeProjectBackupKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).GetNodeProjectBackupKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_GetNodeProjectBackupKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).GetNodeProjectBackupKey(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_MigrateNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(MigrateNodeProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -2496,6 +2532,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SyncNodeProjectBackup",
 			Handler:    _ProjectService_SyncNodeProjectBackup_Handler,
+		},
+		{
+			MethodName: "GetNodeProjectBackupKey",
+			Handler:    _ProjectService_GetNodeProjectBackupKey_Handler,
 		},
 		{
 			MethodName: "SetNodeProjectFailover",

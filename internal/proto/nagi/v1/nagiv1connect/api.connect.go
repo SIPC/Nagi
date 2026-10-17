@@ -193,6 +193,9 @@ const (
 	// ProjectServiceSyncNodeProjectBackupProcedure is the fully-qualified name of the ProjectService's
 	// SyncNodeProjectBackup RPC.
 	ProjectServiceSyncNodeProjectBackupProcedure = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
+	// ProjectServiceGetNodeProjectBackupKeyProcedure is the fully-qualified name of the
+	// ProjectService's GetNodeProjectBackupKey RPC.
+	ProjectServiceGetNodeProjectBackupKeyProcedure = "/nagi.v1.ProjectService/GetNodeProjectBackupKey"
 	// ProjectServiceMigrateNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// MigrateNodeProject RPC.
 	ProjectServiceMigrateNodeProjectProcedure = "/nagi.v1.ProjectService/MigrateNodeProject"
@@ -1355,6 +1358,8 @@ type ProjectServiceClient interface {
 	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -1482,6 +1487,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeProjectBackupKey: connect.NewClient[v1.NodeProjectRef, v1.GetNodeProjectBackupKeyResponse](
+			httpClient,
+			baseURL+ProjectServiceGetNodeProjectBackupKeyProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackupKey")),
+			connect.WithClientOptions(opts...),
+		),
 		migrateNodeProject: connect.NewClient[v1.MigrateNodeProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceMigrateNodeProjectProcedure,
@@ -1523,6 +1534,7 @@ type projectServiceClient struct {
 	setNodeProjectBackup       *connect.Client[v1.SetNodeProjectBackupRequest, v1.BackupStatus]
 	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
+	getNodeProjectBackupKey    *connect.Client[v1.NodeProjectRef, v1.GetNodeProjectBackupKeyResponse]
 	migrateNodeProject         *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
 	setNodeProjectFailover     *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
 	getNodeProjectFailover     *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
@@ -1618,6 +1630,11 @@ func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, req *c
 	return c.syncNodeProjectBackup.CallUnary(ctx, req)
 }
 
+// GetNodeProjectBackupKey calls nagi.v1.ProjectService.GetNodeProjectBackupKey.
+func (c *projectServiceClient) GetNodeProjectBackupKey(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error) {
+	return c.getNodeProjectBackupKey.CallUnary(ctx, req)
+}
+
 // MigrateNodeProject calls nagi.v1.ProjectService.MigrateNodeProject.
 func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, req *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.migrateNodeProject.CallServerStream(ctx, req)
@@ -1654,6 +1671,8 @@ type ProjectServiceHandler interface {
 	SetNodeProjectBackup(context.Context, *connect.Request[v1.SetNodeProjectBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	GetNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
+	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -1777,6 +1796,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("SyncNodeProjectBackup")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceGetNodeProjectBackupKeyHandler := connect.NewUnaryHandler(
+		ProjectServiceGetNodeProjectBackupKeyProcedure,
+		svc.GetNodeProjectBackupKey,
+		connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackupKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceMigrateNodeProjectHandler := connect.NewServerStreamHandler(
 		ProjectServiceMigrateNodeProjectProcedure,
 		svc.MigrateNodeProject,
@@ -1833,6 +1858,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceGetNodeProjectBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncNodeProjectBackupProcedure:
 			projectServiceSyncNodeProjectBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceGetNodeProjectBackupKeyProcedure:
+			projectServiceGetNodeProjectBackupKeyHandler.ServeHTTP(w, r)
 		case ProjectServiceMigrateNodeProjectProcedure:
 			projectServiceMigrateNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceSetNodeProjectFailoverProcedure:
@@ -1918,6 +1945,10 @@ func (UnimplementedProjectServiceHandler) GetNodeProjectBackup(context.Context, 
 
 func (UnimplementedProjectServiceHandler) SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncNodeProjectBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProjectBackupKey is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

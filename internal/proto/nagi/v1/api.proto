@@ -318,6 +318,8 @@ service ProjectService {
   rpc SetNodeProjectBackup(SetNodeProjectBackupRequest) returns (BackupStatus);
   rpc GetNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
   rpc SyncNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
+  // 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+  rpc GetNodeProjectBackupKey(NodeProjectRef) returns (GetNodeProjectBackupKeyResponse);
   // 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
   // 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
   rpc MigrateNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
@@ -345,6 +347,10 @@ message MigrateNodeProjectRequest {
   string target_node_id = 3;
   // 目标节点上的项目目录。
   string dir = 4;
+}
+
+message GetNodeProjectBackupKeyResponse {
+  string key = 1;
 }
 
 message SetNodeProjectBackupRequest {

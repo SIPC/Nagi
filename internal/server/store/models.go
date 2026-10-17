@@ -32,6 +32,7 @@ type ProjectBackup struct {
 	Revision  int64
 	Data      []byte
 	UpdatedAt int64
+	BackupKey []byte
 }
 
 type Session struct {

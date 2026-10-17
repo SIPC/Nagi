@@ -219,6 +219,22 @@ func (q *Queries) GetNode(ctx context.Context, id string) (Node, error) {
 	return i, err
 }
 
+const getProjectBackupKey = `-- name: GetProjectBackupKey :one
+SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?
+`
+
+type GetProjectBackupKeyParams struct {
+	NodeID    string
+	ProjectID string
+}
+
+func (q *Queries) GetProjectBackupKey(ctx context.Context, arg GetProjectBackupKeyParams) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getProjectBackupKey, arg.NodeID, arg.ProjectID)
+	var backup_key []byte
+	err := row.Scan(&backup_key)
+	return backup_key, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT s.user_id, s.expires_at, u.username
 FROM sessions s
@@ -372,7 +388,7 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 }
 
 const listProjectBackups = `-- name: ListProjectBackups :many
-SELECT node_id, project_id, revision, data, updated_at FROM project_backups WHERE node_id = ? ORDER BY project_id
+SELECT node_id, project_id, revision, data, updated_at, backup_key FROM project_backups WHERE node_id = ? ORDER BY project_id
 `
 
 func (q *Queries) ListProjectBackups(ctx context.Context, nodeID string) ([]ProjectBackup, error) {
@@ -390,6 +406,7 @@ func (q *Queries) ListProjectBackups(ctx context.Context, nodeID string) ([]Proj
 			&i.Revision,
 			&i.Data,
 			&i.UpdatedAt,
+			&i.BackupKey,
 		); err != nil {
 			return nil, err
 		}
@@ -554,11 +571,12 @@ func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) 
 }
 
 const upsertProjectBackup = `-- name: UpsertProjectBackup :exec
-INSERT INTO project_backups (node_id, project_id, revision, data, updated_at) VALUES (?, ?, ?, ?, ?)
+INSERT INTO project_backups (node_id, project_id, revision, data, updated_at, backup_key) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (node_id, project_id) DO UPDATE SET
     revision = excluded.revision,
     data = excluded.data,
-    updated_at = excluded.updated_at
+    updated_at = excluded.updated_at,
+    backup_key = coalesce(excluded.backup_key, project_backups.backup_key)
 `
 
 type UpsertProjectBackupParams struct {
@@ -567,6 +585,7 @@ type UpsertProjectBackupParams struct {
 	Revision  int64
 	Data      []byte
 	UpdatedAt int64
+	BackupKey []byte
 }
 
 func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBackupParams) error {
@@ -576,6 +595,7 @@ func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBack
 		arg.Revision,
 		arg.Data,
 		arg.UpdatedAt,
+		arg.BackupKey,
 	)
 	return err
 }
