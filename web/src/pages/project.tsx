@@ -691,7 +691,7 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
 function HistoryCard({ nodeId, project }: { nodeId: string; project: Project }) {
   const queryClient = useQueryClient();
   const ref = { nodeId, projectId: project.id };
-  const versions = useQuery({ queryKey: ["versions", nodeId, project.id, project.revision], queryFn: () => projectClient.listNodeProjectVersions(ref) });
+  const versions = useQuery({ queryKey: ["versions", nodeId, project.id, String(project.revision)], queryFn: () => projectClient.listNodeProjectVersions(ref) });
   const snapshots = useQuery({ queryKey: ["snapshots", nodeId, project.id], queryFn: () => projectClient.listNodeProjectSnapshots(ref) });
   const [restoreData, setRestoreData] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
