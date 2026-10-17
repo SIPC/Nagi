@@ -34,6 +34,8 @@ const (
 	defaultSnapshotGap = 60 * time.Minute
 	metaLastFilesRoot  = "last_files_root"
 	metaLastSnapshot   = "last_snapshot"
+	metaLastMaintain   = "last_maintenance"
+	maintainGap        = 24 * time.Hour
 )
 
 func (p paths) passwordFile() string { return filepath.Join(p.configDir(), "backup.key") }
@@ -448,7 +450,39 @@ func (m *Manager) SnapshotDue(ctx context.Context, onError func(id string, err e
 		if _, err := m.TakeSnapshot(ctx, r.ID, snapshot.Scheduled, func(string) {}); err != nil && onError != nil {
 			onError(r.ID, err)
 		}
+		if err := m.maintainIfDue(ctx, r.ID); err != nil && onError != nil {
+			onError(r.ID, fmt.Errorf("快照仓库维护: %w", err))
+		}
 	}
+}
+
+// maintainIfDue 每个项目每天运行一次快照仓库维护，回收过期快照占用的空间。
+func (m *Manager) maintainIfDue(ctx context.Context, id string) error {
+	l := m.lock(id)
+	l.Lock()
+	defer l.Unlock()
+	row, err := m.projectRow(ctx, id)
+	if err != nil {
+		return err
+	}
+	pdb, err := openProject(ctx, row.Dir)
+	if err != nil {
+		return err
+	}
+	defer pdb.Close()
+	last, _ := strconv.ParseInt(pdb.meta(ctx, metaLastMaintain), 10, 64)
+	if time.Since(time.Unix(last, 0)) < maintainGap {
+		return nil
+	}
+	rep, err := m.openRepo(ctx, id, paths{root: row.Dir})
+	if err != nil {
+		return err
+	}
+	defer rep.Close(ctx)
+	if err := rep.Maintain(ctx, false); err != nil {
+		return err
+	}
+	return pdb.setMeta(ctx, metaLastMaintain, strconv.FormatInt(time.Now().Unix(), 10))
 }
 
 // RestoreSnapshot 从定时或手动快照恢复 data/ 和 volumes/：停止服务、恢复、重新启动。配置不变。

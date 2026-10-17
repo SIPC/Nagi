@@ -21,11 +21,13 @@ import (
 	"github.com/kopia/kopia/repo"
 	"github.com/kopia/kopia/repo/blob/filesystem"
 	"github.com/kopia/kopia/repo/content"
+	"github.com/kopia/kopia/repo/maintenance"
 	"github.com/kopia/kopia/repo/manifest"
 	"github.com/kopia/kopia/snapshot"
 	"github.com/kopia/kopia/snapshot/policy"
 	"github.com/kopia/kopia/snapshot/restore"
 	"github.com/kopia/kopia/snapshot/snapshotfs"
+	"github.com/kopia/kopia/snapshot/snapshotmaintenance"
 	"github.com/kopia/kopia/snapshot/upload"
 )
 
@@ -280,6 +282,24 @@ func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
 	// RestoreDirEntryAtDepth 默认 0 表示"浅恢复"（只生成占位文件），这里要完整恢复。
 	_, err = restore.Entry(ctx, r.rep, out, child, restore.Options{Parallel: 4, DeleteExtra: true, RestoreDirEntryAtDepth: math.MaxInt32})
 	return err
+}
+
+// Maintain 运行 kopia 的完整维护：回收已经没有快照引用的数据，释放磁盘空间。
+// 默认使用 kopia 的安全参数，被删除的数据要过一段时间（约一两天）才真正删掉，避免影响正在进行的快照。
+// immediate 只用于测试，立即回收。
+func (r *Repo) Maintain(ctx context.Context, immediate bool) error {
+	dr, ok := r.rep.(repo.DirectRepository)
+	if !ok {
+		return errors.New("快照仓库不支持维护")
+	}
+	safety := maintenance.SafetyFull
+	if immediate {
+		safety = maintenance.SafetyNone
+	}
+	return repo.DirectWriteSession(ctx, dr, repo.WriteSessionOptions{Purpose: "nagi maintenance"}, func(ctx context.Context, dw repo.DirectRepositoryWriter) error {
+		// 这个仓库只有本节点在写，force 跳过"维护所有者"的检查（项目迁移到新节点后所有者会变）。
+		return snapshotmaintenance.Run(ctx, dw, maintenance.ModeFull, true, safety)
+	})
 }
 
 // Tags 返回快照的标签。
