@@ -95,6 +95,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         <TerminalCard nodeId={nodeId} projectId={projectId} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         <RoutesCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
+        <HistoryCard nodeId={nodeId} project={p} />
         <DeleteCard nodeId={nodeId} project={p} />
       </div>
     </>
@@ -629,6 +630,116 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
             <input type="checkbox" checked={form.httpOnly} onChange={(e) => setForm({ ...form, httpOnly: e.target.checked })} />
             只开 HTTP，不申请证书
           </label>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function HistoryCard({ nodeId, project }: { nodeId: string; project: Project }) {
+  const queryClient = useQueryClient();
+  const ref = { nodeId, projectId: project.id };
+  const versions = useQuery({ queryKey: ["versions", nodeId, project.id, project.revision], queryFn: () => projectClient.listNodeProjectVersions(ref) });
+  const snapshots = useQuery({ queryKey: ["snapshots", nodeId, project.id], queryFn: () => projectClient.listNodeProjectSnapshots(ref) });
+  const [restoreData, setRestoreData] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (stream: AsyncIterable<{ event: { case: string | undefined; value?: unknown } }>) => {
+    setBusy(true);
+    setLines([]);
+    try {
+      for await (const ev of stream) {
+        if (ev.event.case === "output") setLines((l) => [...l, ev.event.value as string]);
+        if (ev.event.case === "result") {
+          const r = ev.event.value as { success: boolean; error: string };
+          setLines((l) => [...l, r.success ? "✓ 完成" : "✗ " + r.error]);
+        }
+      }
+    } catch (err) {
+      setLines((l) => [...l, "✗ " + errorMessage(err)]);
+    } finally {
+      setBusy(false);
+      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      snapshots.refetch();
+      versions.refetch();
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-4">
+        <CardTitle>版本与快照</CardTitle>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => run(projectClient.createNodeProjectSnapshot(ref))}>
+          立即快照
+        </Button>
+      </CardHeader>
+      <CardContent className="grid gap-4 text-sm">
+        {lines.length > 0 && (
+          <pre className="max-h-48 overflow-auto rounded-md bg-zinc-950 p-3 font-mono text-xs text-zinc-200">{lines.join("\n")}</pre>
+        )}
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">版本（每次部署一个）</span>
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={restoreData} onChange={(e) => setRestoreData(e.target.checked)} />
+              回滚时同时恢复数据
+            </label>
+          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {versions.data?.versions.map((v) => (
+                <tr key={String(v.version)} className="border-b last:border-0">
+                  <td className="py-1.5 pr-3 font-mono">v{String(v.version)}</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">
+                    {v.deployedAt ? timeAgo(toDate(v.deployedAt)) : "未部署成功"}
+                    {v.rollbackOf > 0n && ` · 回滚自 v${v.rollbackOf}`}
+                    {v.commit && ` · ${v.commit.slice(0, 8)}`}
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono text-muted-foreground">{Object.values(v.images).join(", ").slice(0, 80)}</td>
+                  <td className="py-1.5 text-right">
+                    {v.version !== project.deployedVersion && v.deployedAt && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => run(projectClient.rollbackNodeProject({ ...ref, version: v.version, restoreData }))}
+                      >
+                        回滚到这里
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-2">
+          <span className="font-medium">快照</span>
+          <table className="w-full text-xs">
+            <tbody>
+              {snapshots.data?.snapshots.map((sn) => (
+                <tr key={sn.id} className="border-b last:border-0">
+                  <td className="py-1.5 pr-3">{sn.kind}</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">{timeAgo(toDate(sn.time))}</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">
+                    {sn.version > 0n && `v${sn.version}`} {(Number(sn.size) / 1024).toFixed(1)} KB
+                  </td>
+                  <td className="py-1.5 text-right">
+                    {(sn.kind === "scheduled" || sn.kind === "manual") && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => confirm("从这个快照恢复 data/ 和 volumes/？会先停止服务。") && run(projectClient.restoreNodeProjectSnapshot({ ...ref, snapshotId: sn.id }))}
+                      >
+                        恢复
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </CardContent>
     </Card>

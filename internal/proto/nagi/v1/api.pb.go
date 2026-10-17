@@ -1617,6 +1617,186 @@ func (x *DeleteNodeProjectRouteResponse) GetProject() *Project {
 	return nil
 }
 
+type NodeProjectRef struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeProjectRef) Reset() {
+	*x = NodeProjectRef{}
+	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeProjectRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeProjectRef) ProtoMessage() {}
+
+func (x *NodeProjectRef) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeProjectRef.ProtoReflect.Descriptor instead.
+func (*NodeProjectRef) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *NodeProjectRef) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *NodeProjectRef) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+type RollbackNodeProjectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Version       int64                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
+	RestoreData   bool                   `protobuf:"varint,4,opt,name=restore_data,json=restoreData,proto3" json:"restore_data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RollbackNodeProjectRequest) Reset() {
+	*x = RollbackNodeProjectRequest{}
+	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RollbackNodeProjectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RollbackNodeProjectRequest) ProtoMessage() {}
+
+func (x *RollbackNodeProjectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RollbackNodeProjectRequest.ProtoReflect.Descriptor instead.
+func (*RollbackNodeProjectRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *RollbackNodeProjectRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RollbackNodeProjectRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *RollbackNodeProjectRequest) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RollbackNodeProjectRequest) GetRestoreData() bool {
+	if x != nil {
+		return x.RestoreData
+	}
+	return false
+}
+
+type RestoreNodeProjectSnapshotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	SnapshotId    string                 `protobuf:"bytes,3,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreNodeProjectSnapshotRequest) Reset() {
+	*x = RestoreNodeProjectSnapshotRequest{}
+	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreNodeProjectSnapshotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreNodeProjectSnapshotRequest) ProtoMessage() {}
+
+func (x *RestoreNodeProjectSnapshotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreNodeProjectSnapshotRequest.ProtoReflect.Descriptor instead.
+func (*RestoreNodeProjectSnapshotRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *RestoreNodeProjectSnapshotRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RestoreNodeProjectSnapshotRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *RestoreNodeProjectSnapshotRequest) GetSnapshotId() string {
+	if x != nil {
+		return x.SnapshotId
+	}
+	return ""
+}
+
 type DeleteNodeProjectRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -1630,7 +1810,7 @@ type DeleteNodeProjectRequest struct {
 
 func (x *DeleteNodeProjectRequest) Reset() {
 	*x = DeleteNodeProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	mi := &file_nagi_v1_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1642,7 +1822,7 @@ func (x *DeleteNodeProjectRequest) String() string {
 func (*DeleteNodeProjectRequest) ProtoMessage() {}
 
 func (x *DeleteNodeProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	mi := &file_nagi_v1_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1655,7 +1835,7 @@ func (x *DeleteNodeProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNodeProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{34}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *DeleteNodeProjectRequest) GetNodeId() string {
@@ -1701,7 +1881,7 @@ type DeleteNodeProjectResponse struct {
 
 func (x *DeleteNodeProjectResponse) Reset() {
 	*x = DeleteNodeProjectResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	mi := &file_nagi_v1_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1713,7 +1893,7 @@ func (x *DeleteNodeProjectResponse) String() string {
 func (*DeleteNodeProjectResponse) ProtoMessage() {}
 
 func (x *DeleteNodeProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	mi := &file_nagi_v1_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1726,7 +1906,7 @@ func (x *DeleteNodeProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeProjectResponse.ProtoReflect.Descriptor instead.
 func (*DeleteNodeProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{35}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{38}
 }
 
 type CreateNodeProjectResponse struct {
@@ -1738,7 +1918,7 @@ type CreateNodeProjectResponse struct {
 
 func (x *CreateNodeProjectResponse) Reset() {
 	*x = CreateNodeProjectResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	mi := &file_nagi_v1_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1750,7 +1930,7 @@ func (x *CreateNodeProjectResponse) String() string {
 func (*CreateNodeProjectResponse) ProtoMessage() {}
 
 func (x *CreateNodeProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	mi := &file_nagi_v1_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1763,7 +1943,7 @@ func (x *CreateNodeProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNodeProjectResponse.ProtoReflect.Descriptor instead.
 func (*CreateNodeProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{36}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateNodeProjectResponse) GetProject() *Project {
@@ -1783,7 +1963,7 @@ type GetNodeProjectRequest struct {
 
 func (x *GetNodeProjectRequest) Reset() {
 	*x = GetNodeProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[37]
+	mi := &file_nagi_v1_api_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1795,7 +1975,7 @@ func (x *GetNodeProjectRequest) String() string {
 func (*GetNodeProjectRequest) ProtoMessage() {}
 
 func (x *GetNodeProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[37]
+	mi := &file_nagi_v1_api_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1808,7 +1988,7 @@ func (x *GetNodeProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeProjectRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{37}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetNodeProjectRequest) GetNodeId() string {
@@ -1834,7 +2014,7 @@ type GetNodeProjectResponse struct {
 
 func (x *GetNodeProjectResponse) Reset() {
 	*x = GetNodeProjectResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[38]
+	mi := &file_nagi_v1_api_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1846,7 +2026,7 @@ func (x *GetNodeProjectResponse) String() string {
 func (*GetNodeProjectResponse) ProtoMessage() {}
 
 func (x *GetNodeProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[38]
+	mi := &file_nagi_v1_api_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1859,7 +2039,7 @@ func (x *GetNodeProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeProjectResponse.ProtoReflect.Descriptor instead.
 func (*GetNodeProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{38}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetNodeProjectResponse) GetProject() *ProjectSummary {
@@ -1882,7 +2062,7 @@ type DeployNodeProjectRequest struct {
 
 func (x *DeployNodeProjectRequest) Reset() {
 	*x = DeployNodeProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[39]
+	mi := &file_nagi_v1_api_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1894,7 +2074,7 @@ func (x *DeployNodeProjectRequest) String() string {
 func (*DeployNodeProjectRequest) ProtoMessage() {}
 
 func (x *DeployNodeProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[39]
+	mi := &file_nagi_v1_api_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1907,7 +2087,7 @@ func (x *DeployNodeProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployNodeProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeployNodeProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{39}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *DeployNodeProjectRequest) GetNodeId() string {
@@ -1951,7 +2131,7 @@ type StreamNodeProjectLogsRequest struct {
 
 func (x *StreamNodeProjectLogsRequest) Reset() {
 	*x = StreamNodeProjectLogsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[40]
+	mi := &file_nagi_v1_api_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1963,7 +2143,7 @@ func (x *StreamNodeProjectLogsRequest) String() string {
 func (*StreamNodeProjectLogsRequest) ProtoMessage() {}
 
 func (x *StreamNodeProjectLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[40]
+	mi := &file_nagi_v1_api_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1976,7 +2156,7 @@ func (x *StreamNodeProjectLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamNodeProjectLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamNodeProjectLogsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{40}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *StreamNodeProjectLogsRequest) GetNodeId() string {
@@ -2018,7 +2198,7 @@ var File_nagi_v1_api_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
-	"\x11nagi/v1/api.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x14nagi/v1/common.proto\"\x16\n" +
+	"\x11nagi/v1/api.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x13nagi/v1/agent.proto\x1a\x14nagi/v1/common.proto\"\x16\n" +
 	"\x14GetSetupStateRequest\"9\n" +
 	"\x15GetSetupStateResponse\x12 \n" +
 	"\vinitialized\x18\x01 \x01(\bR\vinitialized\"\\\n" +
@@ -2104,7 +2284,23 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"L\n" +
 	"\x1eDeleteNodeProjectRouteResponse\x12*\n" +
-	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\"\xb9\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\"H\n" +
+	"\x0eNodeProjectRef\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\"\x91\x01\n" +
+	"\x1aRollbackNodeProjectRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x03R\aversion\x12!\n" +
+	"\frestore_data\x18\x04 \x01(\bR\vrestoreData\"|\n" +
+	"!RestoreNodeProjectSnapshotRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1f\n" +
+	"\vsnapshot_id\x18\x03 \x01(\tR\n" +
+	"snapshotId\"\xb9\x01\n" +
 	"\x18DeleteNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -2149,14 +2345,20 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"RemoveNode\x12\x1a.nagi.v1.RemoveNodeRequest\x1a\x1b.nagi.v1.RemoveNodeResponse2\xae\x01\n" +
 	"\x0fSettingsService\x12H\n" +
 	"\vGetSettings\x12\x1b.nagi.v1.GetSettingsRequest\x1a\x1c.nagi.v1.GetSettingsResponse\x12Q\n" +
-	"\x0eUpdateSettings\x12\x1e.nagi.v1.UpdateSettingsRequest\x1a\x1f.nagi.v1.UpdateSettingsResponse2\xb8\a\n" +
+	"\x0eUpdateSettings\x12\x1e.nagi.v1.UpdateSettingsRequest\x1a\x1f.nagi.v1.UpdateSettingsResponse2\xe4\n" +
+	"\n" +
 	"\x0eProjectService\x12T\n" +
 	"\x0fListAllProjects\x12\x1f.nagi.v1.ListAllProjectsRequest\x1a .nagi.v1.ListAllProjectsResponse\x12Z\n" +
 	"\x11CreateNodeProject\x12!.nagi.v1.CreateNodeProjectRequest\x1a\".nagi.v1.CreateNodeProjectResponse\x12Q\n" +
 	"\x0eGetNodeProject\x12\x1e.nagi.v1.GetNodeProjectRequest\x1a\x1f.nagi.v1.GetNodeProjectResponse\x12c\n" +
 	"\x14SaveNodeProjectDraft\x12$.nagi.v1.SaveNodeProjectDraftRequest\x1a%.nagi.v1.SaveNodeProjectDraftResponse\x12l\n" +
 	"\x17DiscardNodeProjectDraft\x12'.nagi.v1.DiscardNodeProjectDraftRequest\x1a(.nagi.v1.DiscardNodeProjectDraftResponse\x12Z\n" +
-	"\x11DeleteNodeProject\x12!.nagi.v1.DeleteNodeProjectRequest\x1a\".nagi.v1.DeleteNodeProjectResponse\x12c\n" +
+	"\x11DeleteNodeProject\x12!.nagi.v1.DeleteNodeProjectRequest\x1a\".nagi.v1.DeleteNodeProjectResponse\x12Q\n" +
+	"\x17ListNodeProjectVersions\x12\x17.nagi.v1.NodeProjectRef\x1a\x1d.nagi.v1.ListVersionsResponse\x12R\n" +
+	"\x13RollbackNodeProject\x12#.nagi.v1.RollbackNodeProjectRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12S\n" +
+	"\x18ListNodeProjectSnapshots\x12\x17.nagi.v1.NodeProjectRef\x1a\x1e.nagi.v1.ListSnapshotsResponse\x12L\n" +
+	"\x19CreateNodeProjectSnapshot\x12\x17.nagi.v1.NodeProjectRef\x1a\x14.nagi.v1.DeployEvent0\x01\x12`\n" +
+	"\x1aRestoreNodeProjectSnapshot\x12*.nagi.v1.RestoreNodeProjectSnapshotRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12c\n" +
 	"\x14SaveNodeProjectRoute\x12$.nagi.v1.SaveNodeProjectRouteRequest\x1a%.nagi.v1.SaveNodeProjectRouteResponse\x12i\n" +
 	"\x16DeleteNodeProjectRoute\x12&.nagi.v1.DeleteNodeProjectRouteRequest\x1a'.nagi.v1.DeleteNodeProjectRouteResponse\x12N\n" +
 	"\x11DeployNodeProject\x12!.nagi.v1.DeployNodeProjectRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12R\n" +
@@ -2174,76 +2376,81 @@ func file_nagi_v1_api_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_api_proto_rawDescData
 }
 
-var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
+var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_nagi_v1_api_proto_goTypes = []any{
-	(*GetSetupStateRequest)(nil),            // 0: nagi.v1.GetSetupStateRequest
-	(*GetSetupStateResponse)(nil),           // 1: nagi.v1.GetSetupStateResponse
-	(*SetupRequest)(nil),                    // 2: nagi.v1.SetupRequest
-	(*SetupResponse)(nil),                   // 3: nagi.v1.SetupResponse
-	(*LoginRequest)(nil),                    // 4: nagi.v1.LoginRequest
-	(*LoginResponse)(nil),                   // 5: nagi.v1.LoginResponse
-	(*LogoutRequest)(nil),                   // 6: nagi.v1.LogoutRequest
-	(*LogoutResponse)(nil),                  // 7: nagi.v1.LogoutResponse
-	(*MeRequest)(nil),                       // 8: nagi.v1.MeRequest
-	(*MeResponse)(nil),                      // 9: nagi.v1.MeResponse
-	(*RemoveNodeRequest)(nil),               // 10: nagi.v1.RemoveNodeRequest
-	(*RemoveNodeResponse)(nil),              // 11: nagi.v1.RemoveNodeResponse
-	(*CreateEnrollCommandRequest)(nil),      // 12: nagi.v1.CreateEnrollCommandRequest
-	(*CreateEnrollCommandResponse)(nil),     // 13: nagi.v1.CreateEnrollCommandResponse
-	(*PanelSettings)(nil),                   // 14: nagi.v1.PanelSettings
-	(*GetSettingsRequest)(nil),              // 15: nagi.v1.GetSettingsRequest
-	(*GetSettingsResponse)(nil),             // 16: nagi.v1.GetSettingsResponse
-	(*UpdateSettingsRequest)(nil),           // 17: nagi.v1.UpdateSettingsRequest
-	(*UpdateSettingsResponse)(nil),          // 18: nagi.v1.UpdateSettingsResponse
-	(*Node)(nil),                            // 19: nagi.v1.Node
-	(*ListNodesRequest)(nil),                // 20: nagi.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),               // 21: nagi.v1.ListNodesResponse
-	(*NodeProject)(nil),                     // 22: nagi.v1.NodeProject
-	(*ListAllProjectsRequest)(nil),          // 23: nagi.v1.ListAllProjectsRequest
-	(*ListAllProjectsResponse)(nil),         // 24: nagi.v1.ListAllProjectsResponse
-	(*CreateNodeProjectRequest)(nil),        // 25: nagi.v1.CreateNodeProjectRequest
-	(*SaveNodeProjectDraftRequest)(nil),     // 26: nagi.v1.SaveNodeProjectDraftRequest
-	(*SaveNodeProjectDraftResponse)(nil),    // 27: nagi.v1.SaveNodeProjectDraftResponse
-	(*DiscardNodeProjectDraftRequest)(nil),  // 28: nagi.v1.DiscardNodeProjectDraftRequest
-	(*DiscardNodeProjectDraftResponse)(nil), // 29: nagi.v1.DiscardNodeProjectDraftResponse
-	(*SaveNodeProjectRouteRequest)(nil),     // 30: nagi.v1.SaveNodeProjectRouteRequest
-	(*SaveNodeProjectRouteResponse)(nil),    // 31: nagi.v1.SaveNodeProjectRouteResponse
-	(*DeleteNodeProjectRouteRequest)(nil),   // 32: nagi.v1.DeleteNodeProjectRouteRequest
-	(*DeleteNodeProjectRouteResponse)(nil),  // 33: nagi.v1.DeleteNodeProjectRouteResponse
-	(*DeleteNodeProjectRequest)(nil),        // 34: nagi.v1.DeleteNodeProjectRequest
-	(*DeleteNodeProjectResponse)(nil),       // 35: nagi.v1.DeleteNodeProjectResponse
-	(*CreateNodeProjectResponse)(nil),       // 36: nagi.v1.CreateNodeProjectResponse
-	(*GetNodeProjectRequest)(nil),           // 37: nagi.v1.GetNodeProjectRequest
-	(*GetNodeProjectResponse)(nil),          // 38: nagi.v1.GetNodeProjectResponse
-	(*DeployNodeProjectRequest)(nil),        // 39: nagi.v1.DeployNodeProjectRequest
-	(*StreamNodeProjectLogsRequest)(nil),    // 40: nagi.v1.StreamNodeProjectLogsRequest
-	(*timestamppb.Timestamp)(nil),           // 41: google.protobuf.Timestamp
-	(*NodeInfo)(nil),                        // 42: nagi.v1.NodeInfo
-	(*ProjectSummary)(nil),                  // 43: nagi.v1.ProjectSummary
-	(*ProjectConfig)(nil),                   // 44: nagi.v1.ProjectConfig
-	(*Project)(nil),                         // 45: nagi.v1.Project
-	(*Exposure)(nil),                        // 46: nagi.v1.Exposure
-	(*DeployEvent)(nil),                     // 47: nagi.v1.DeployEvent
-	(*LogLine)(nil),                         // 48: nagi.v1.LogLine
+	(*GetSetupStateRequest)(nil),              // 0: nagi.v1.GetSetupStateRequest
+	(*GetSetupStateResponse)(nil),             // 1: nagi.v1.GetSetupStateResponse
+	(*SetupRequest)(nil),                      // 2: nagi.v1.SetupRequest
+	(*SetupResponse)(nil),                     // 3: nagi.v1.SetupResponse
+	(*LoginRequest)(nil),                      // 4: nagi.v1.LoginRequest
+	(*LoginResponse)(nil),                     // 5: nagi.v1.LoginResponse
+	(*LogoutRequest)(nil),                     // 6: nagi.v1.LogoutRequest
+	(*LogoutResponse)(nil),                    // 7: nagi.v1.LogoutResponse
+	(*MeRequest)(nil),                         // 8: nagi.v1.MeRequest
+	(*MeResponse)(nil),                        // 9: nagi.v1.MeResponse
+	(*RemoveNodeRequest)(nil),                 // 10: nagi.v1.RemoveNodeRequest
+	(*RemoveNodeResponse)(nil),                // 11: nagi.v1.RemoveNodeResponse
+	(*CreateEnrollCommandRequest)(nil),        // 12: nagi.v1.CreateEnrollCommandRequest
+	(*CreateEnrollCommandResponse)(nil),       // 13: nagi.v1.CreateEnrollCommandResponse
+	(*PanelSettings)(nil),                     // 14: nagi.v1.PanelSettings
+	(*GetSettingsRequest)(nil),                // 15: nagi.v1.GetSettingsRequest
+	(*GetSettingsResponse)(nil),               // 16: nagi.v1.GetSettingsResponse
+	(*UpdateSettingsRequest)(nil),             // 17: nagi.v1.UpdateSettingsRequest
+	(*UpdateSettingsResponse)(nil),            // 18: nagi.v1.UpdateSettingsResponse
+	(*Node)(nil),                              // 19: nagi.v1.Node
+	(*ListNodesRequest)(nil),                  // 20: nagi.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),                 // 21: nagi.v1.ListNodesResponse
+	(*NodeProject)(nil),                       // 22: nagi.v1.NodeProject
+	(*ListAllProjectsRequest)(nil),            // 23: nagi.v1.ListAllProjectsRequest
+	(*ListAllProjectsResponse)(nil),           // 24: nagi.v1.ListAllProjectsResponse
+	(*CreateNodeProjectRequest)(nil),          // 25: nagi.v1.CreateNodeProjectRequest
+	(*SaveNodeProjectDraftRequest)(nil),       // 26: nagi.v1.SaveNodeProjectDraftRequest
+	(*SaveNodeProjectDraftResponse)(nil),      // 27: nagi.v1.SaveNodeProjectDraftResponse
+	(*DiscardNodeProjectDraftRequest)(nil),    // 28: nagi.v1.DiscardNodeProjectDraftRequest
+	(*DiscardNodeProjectDraftResponse)(nil),   // 29: nagi.v1.DiscardNodeProjectDraftResponse
+	(*SaveNodeProjectRouteRequest)(nil),       // 30: nagi.v1.SaveNodeProjectRouteRequest
+	(*SaveNodeProjectRouteResponse)(nil),      // 31: nagi.v1.SaveNodeProjectRouteResponse
+	(*DeleteNodeProjectRouteRequest)(nil),     // 32: nagi.v1.DeleteNodeProjectRouteRequest
+	(*DeleteNodeProjectRouteResponse)(nil),    // 33: nagi.v1.DeleteNodeProjectRouteResponse
+	(*NodeProjectRef)(nil),                    // 34: nagi.v1.NodeProjectRef
+	(*RollbackNodeProjectRequest)(nil),        // 35: nagi.v1.RollbackNodeProjectRequest
+	(*RestoreNodeProjectSnapshotRequest)(nil), // 36: nagi.v1.RestoreNodeProjectSnapshotRequest
+	(*DeleteNodeProjectRequest)(nil),          // 37: nagi.v1.DeleteNodeProjectRequest
+	(*DeleteNodeProjectResponse)(nil),         // 38: nagi.v1.DeleteNodeProjectResponse
+	(*CreateNodeProjectResponse)(nil),         // 39: nagi.v1.CreateNodeProjectResponse
+	(*GetNodeProjectRequest)(nil),             // 40: nagi.v1.GetNodeProjectRequest
+	(*GetNodeProjectResponse)(nil),            // 41: nagi.v1.GetNodeProjectResponse
+	(*DeployNodeProjectRequest)(nil),          // 42: nagi.v1.DeployNodeProjectRequest
+	(*StreamNodeProjectLogsRequest)(nil),      // 43: nagi.v1.StreamNodeProjectLogsRequest
+	(*timestamppb.Timestamp)(nil),             // 44: google.protobuf.Timestamp
+	(*NodeInfo)(nil),                          // 45: nagi.v1.NodeInfo
+	(*ProjectSummary)(nil),                    // 46: nagi.v1.ProjectSummary
+	(*ProjectConfig)(nil),                     // 47: nagi.v1.ProjectConfig
+	(*Project)(nil),                           // 48: nagi.v1.Project
+	(*Exposure)(nil),                          // 49: nagi.v1.Exposure
+	(*ListVersionsResponse)(nil),              // 50: nagi.v1.ListVersionsResponse
+	(*DeployEvent)(nil),                       // 51: nagi.v1.DeployEvent
+	(*ListSnapshotsResponse)(nil),             // 52: nagi.v1.ListSnapshotsResponse
+	(*LogLine)(nil),                           // 53: nagi.v1.LogLine
 }
 var file_nagi_v1_api_proto_depIdxs = []int32{
-	41, // 0: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
+	44, // 0: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
 	14, // 1: nagi.v1.GetSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
 	14, // 2: nagi.v1.UpdateSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
-	41, // 3: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
-	42, // 4: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
+	44, // 3: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
+	45, // 4: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
 	19, // 5: nagi.v1.ListNodesResponse.nodes:type_name -> nagi.v1.Node
-	43, // 6: nagi.v1.NodeProject.project:type_name -> nagi.v1.ProjectSummary
+	46, // 6: nagi.v1.NodeProject.project:type_name -> nagi.v1.ProjectSummary
 	22, // 7: nagi.v1.ListAllProjectsResponse.projects:type_name -> nagi.v1.NodeProject
-	44, // 8: nagi.v1.CreateNodeProjectRequest.config:type_name -> nagi.v1.ProjectConfig
-	44, // 9: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.ProjectConfig
-	45, // 10: nagi.v1.SaveNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
-	45, // 11: nagi.v1.DiscardNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
-	46, // 12: nagi.v1.SaveNodeProjectRouteRequest.route:type_name -> nagi.v1.Exposure
-	45, // 13: nagi.v1.SaveNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
-	45, // 14: nagi.v1.DeleteNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
-	45, // 15: nagi.v1.CreateNodeProjectResponse.project:type_name -> nagi.v1.Project
-	43, // 16: nagi.v1.GetNodeProjectResponse.project:type_name -> nagi.v1.ProjectSummary
+	47, // 8: nagi.v1.CreateNodeProjectRequest.config:type_name -> nagi.v1.ProjectConfig
+	47, // 9: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.ProjectConfig
+	48, // 10: nagi.v1.SaveNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
+	48, // 11: nagi.v1.DiscardNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
+	49, // 12: nagi.v1.SaveNodeProjectRouteRequest.route:type_name -> nagi.v1.Exposure
+	48, // 13: nagi.v1.SaveNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
+	48, // 14: nagi.v1.DeleteNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
+	48, // 15: nagi.v1.CreateNodeProjectResponse.project:type_name -> nagi.v1.Project
+	46, // 16: nagi.v1.GetNodeProjectResponse.project:type_name -> nagi.v1.ProjectSummary
 	0,  // 17: nagi.v1.SetupService.GetSetupState:input_type -> nagi.v1.GetSetupStateRequest
 	2,  // 18: nagi.v1.SetupService.Setup:input_type -> nagi.v1.SetupRequest
 	4,  // 19: nagi.v1.AuthService.Login:input_type -> nagi.v1.LoginRequest
@@ -2256,36 +2463,46 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	17, // 26: nagi.v1.SettingsService.UpdateSettings:input_type -> nagi.v1.UpdateSettingsRequest
 	23, // 27: nagi.v1.ProjectService.ListAllProjects:input_type -> nagi.v1.ListAllProjectsRequest
 	25, // 28: nagi.v1.ProjectService.CreateNodeProject:input_type -> nagi.v1.CreateNodeProjectRequest
-	37, // 29: nagi.v1.ProjectService.GetNodeProject:input_type -> nagi.v1.GetNodeProjectRequest
+	40, // 29: nagi.v1.ProjectService.GetNodeProject:input_type -> nagi.v1.GetNodeProjectRequest
 	26, // 30: nagi.v1.ProjectService.SaveNodeProjectDraft:input_type -> nagi.v1.SaveNodeProjectDraftRequest
 	28, // 31: nagi.v1.ProjectService.DiscardNodeProjectDraft:input_type -> nagi.v1.DiscardNodeProjectDraftRequest
-	34, // 32: nagi.v1.ProjectService.DeleteNodeProject:input_type -> nagi.v1.DeleteNodeProjectRequest
-	30, // 33: nagi.v1.ProjectService.SaveNodeProjectRoute:input_type -> nagi.v1.SaveNodeProjectRouteRequest
-	32, // 34: nagi.v1.ProjectService.DeleteNodeProjectRoute:input_type -> nagi.v1.DeleteNodeProjectRouteRequest
-	39, // 35: nagi.v1.ProjectService.DeployNodeProject:input_type -> nagi.v1.DeployNodeProjectRequest
-	40, // 36: nagi.v1.ProjectService.StreamNodeProjectLogs:input_type -> nagi.v1.StreamNodeProjectLogsRequest
-	1,  // 37: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
-	3,  // 38: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
-	5,  // 39: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
-	7,  // 40: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
-	9,  // 41: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
-	21, // 42: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
-	13, // 43: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
-	11, // 44: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
-	16, // 45: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
-	18, // 46: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
-	24, // 47: nagi.v1.ProjectService.ListAllProjects:output_type -> nagi.v1.ListAllProjectsResponse
-	36, // 48: nagi.v1.ProjectService.CreateNodeProject:output_type -> nagi.v1.CreateNodeProjectResponse
-	38, // 49: nagi.v1.ProjectService.GetNodeProject:output_type -> nagi.v1.GetNodeProjectResponse
-	27, // 50: nagi.v1.ProjectService.SaveNodeProjectDraft:output_type -> nagi.v1.SaveNodeProjectDraftResponse
-	29, // 51: nagi.v1.ProjectService.DiscardNodeProjectDraft:output_type -> nagi.v1.DiscardNodeProjectDraftResponse
-	35, // 52: nagi.v1.ProjectService.DeleteNodeProject:output_type -> nagi.v1.DeleteNodeProjectResponse
-	31, // 53: nagi.v1.ProjectService.SaveNodeProjectRoute:output_type -> nagi.v1.SaveNodeProjectRouteResponse
-	33, // 54: nagi.v1.ProjectService.DeleteNodeProjectRoute:output_type -> nagi.v1.DeleteNodeProjectRouteResponse
-	47, // 55: nagi.v1.ProjectService.DeployNodeProject:output_type -> nagi.v1.DeployEvent
-	48, // 56: nagi.v1.ProjectService.StreamNodeProjectLogs:output_type -> nagi.v1.LogLine
-	37, // [37:57] is the sub-list for method output_type
-	17, // [17:37] is the sub-list for method input_type
+	37, // 32: nagi.v1.ProjectService.DeleteNodeProject:input_type -> nagi.v1.DeleteNodeProjectRequest
+	34, // 33: nagi.v1.ProjectService.ListNodeProjectVersions:input_type -> nagi.v1.NodeProjectRef
+	35, // 34: nagi.v1.ProjectService.RollbackNodeProject:input_type -> nagi.v1.RollbackNodeProjectRequest
+	34, // 35: nagi.v1.ProjectService.ListNodeProjectSnapshots:input_type -> nagi.v1.NodeProjectRef
+	34, // 36: nagi.v1.ProjectService.CreateNodeProjectSnapshot:input_type -> nagi.v1.NodeProjectRef
+	36, // 37: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:input_type -> nagi.v1.RestoreNodeProjectSnapshotRequest
+	30, // 38: nagi.v1.ProjectService.SaveNodeProjectRoute:input_type -> nagi.v1.SaveNodeProjectRouteRequest
+	32, // 39: nagi.v1.ProjectService.DeleteNodeProjectRoute:input_type -> nagi.v1.DeleteNodeProjectRouteRequest
+	42, // 40: nagi.v1.ProjectService.DeployNodeProject:input_type -> nagi.v1.DeployNodeProjectRequest
+	43, // 41: nagi.v1.ProjectService.StreamNodeProjectLogs:input_type -> nagi.v1.StreamNodeProjectLogsRequest
+	1,  // 42: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
+	3,  // 43: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
+	5,  // 44: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
+	7,  // 45: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
+	9,  // 46: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
+	21, // 47: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
+	13, // 48: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
+	11, // 49: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
+	16, // 50: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
+	18, // 51: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
+	24, // 52: nagi.v1.ProjectService.ListAllProjects:output_type -> nagi.v1.ListAllProjectsResponse
+	39, // 53: nagi.v1.ProjectService.CreateNodeProject:output_type -> nagi.v1.CreateNodeProjectResponse
+	41, // 54: nagi.v1.ProjectService.GetNodeProject:output_type -> nagi.v1.GetNodeProjectResponse
+	27, // 55: nagi.v1.ProjectService.SaveNodeProjectDraft:output_type -> nagi.v1.SaveNodeProjectDraftResponse
+	29, // 56: nagi.v1.ProjectService.DiscardNodeProjectDraft:output_type -> nagi.v1.DiscardNodeProjectDraftResponse
+	38, // 57: nagi.v1.ProjectService.DeleteNodeProject:output_type -> nagi.v1.DeleteNodeProjectResponse
+	50, // 58: nagi.v1.ProjectService.ListNodeProjectVersions:output_type -> nagi.v1.ListVersionsResponse
+	51, // 59: nagi.v1.ProjectService.RollbackNodeProject:output_type -> nagi.v1.DeployEvent
+	52, // 60: nagi.v1.ProjectService.ListNodeProjectSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	51, // 61: nagi.v1.ProjectService.CreateNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
+	51, // 62: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
+	31, // 63: nagi.v1.ProjectService.SaveNodeProjectRoute:output_type -> nagi.v1.SaveNodeProjectRouteResponse
+	33, // 64: nagi.v1.ProjectService.DeleteNodeProjectRoute:output_type -> nagi.v1.DeleteNodeProjectRouteResponse
+	51, // 65: nagi.v1.ProjectService.DeployNodeProject:output_type -> nagi.v1.DeployEvent
+	53, // 66: nagi.v1.ProjectService.StreamNodeProjectLogs:output_type -> nagi.v1.LogLine
+	42, // [42:67] is the sub-list for method output_type
+	17, // [17:42] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name
@@ -2296,6 +2513,7 @@ func file_nagi_v1_api_proto_init() {
 	if File_nagi_v1_api_proto != nil {
 		return
 	}
+	file_nagi_v1_agent_proto_init()
 	file_nagi_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2303,7 +2521,7 @@ func file_nagi_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_api_proto_rawDesc), len(file_nagi_v1_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   41,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

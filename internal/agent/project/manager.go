@@ -20,7 +20,6 @@ import (
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
-	"github.com/SIPC/nagi/internal/agent/store/projectstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -52,13 +51,15 @@ type Manager struct {
 	nodeQ  *nodestore.Queries
 	docker *docker.Client
 	pool   netip.Prefix
+	// stateDir 是节点目录下存放快照仓库连接配置和缓存的地方。
+	stateDir string
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
 }
 
 // NewManager 创建项目管理器。
-func NewManager(nodeDB *sql.DB, dc *docker.Client, pool string) (*Manager, error) {
+func NewManager(nodeDB *sql.DB, dc *docker.Client, pool, stateDir string) (*Manager, error) {
 	pfx, err := netip.ParsePrefix(pool)
 	if err != nil {
 		return nil, fmt.Errorf("容器网段池 %q 无效: %w", pool, err)
@@ -67,11 +68,12 @@ func NewManager(nodeDB *sql.DB, dc *docker.Client, pool string) (*Manager, error
 		return nil, fmt.Errorf("容器网段池 %q 必须是 IPv4 且不小于 /%d", pool, projectSubnetBits)
 	}
 	return &Manager{
-		nodeDB: nodeDB,
-		nodeQ:  nodestore.New(nodeDB),
-		docker: dc,
-		pool:   pfx.Masked(),
-		locks:  map[string]*sync.Mutex{},
+		nodeDB:   nodeDB,
+		nodeQ:    nodestore.New(nodeDB),
+		docker:   dc,
+		pool:     pfx.Masked(),
+		stateDir: stateDir,
+		locks:    map[string]*sync.Mutex{},
 	}, nil
 }
 
@@ -472,101 +474,6 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 		}
 	}
 	return nil
-}
-
-// ---- 部署 ----
-
-// Deploy 部署项目。有草稿时先把草稿记为新版本；没有草稿时重新部署最新版本。
-// baseRevision 不为 0 时，必须和节点上的修订号一致。
-func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull bool, onLine func(string)) (int64, error) {
-	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
-	if err != nil {
-		return 0, err
-	}
-	defer unlock()
-	defer pdb.Close()
-	p := paths{root: row.Dir}
-
-	cfg, version, err := pdb.latest(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if draft, err := pdb.draft(ctx); err != nil {
-		return 0, err
-	} else if draft != nil {
-		version++
-		if err := pdb.insertVersion(ctx, version, draft); err != nil {
-			return 0, err
-		}
-		if err := pdb.q.DeleteDraft(ctx); err != nil {
-			return 0, err
-		}
-		cfg = draft
-		onLine(fmt.Sprintf("草稿已保存为版本 %d", version))
-	}
-	if err := pdb.setRevision(ctx, revision+1); err != nil {
-		return 0, err
-	}
-
-	proj, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id))
-	if err != nil {
-		return version, err
-	}
-	if doPull {
-		preserve := normalizePreserve(append(append([]string(nil), cfg.GetPreserve()...), bindMountPaths(proj, p.dataDir())...))
-		commit, err := pull(ctx, p, cfg.GetSource(), preserve, onLine)
-		if err != nil {
-			return version, err
-		}
-		if err := pdb.setMeta(ctx, metaLastCommit, commit); err != nil {
-			return version, err
-		}
-	}
-	if err := writeConfigFiles(p, cfg); err != nil {
-		return version, err
-	}
-	if err := m.importPorts(ctx, pdb, p, id, proj, onLine); err != nil {
-		return version, err
-	}
-	override, err := buildOverride(proj, p, id, version, row.Subnet, serviceEnv(cfg))
-	if err != nil {
-		return version, err
-	}
-	if err := writeOverride(p.overrideFile(), override); err != nil {
-		return version, err
-	}
-
-	onLine(fmt.Sprintf("部署版本 %d", version))
-	files := compose.Files{
-		ProjectName: composeProjectName(id),
-		ProjectDir:  p.dataDir(),
-		ComposeFile: p.composeFile(),
-		Override:    p.overrideFile(),
-		EnvFile:     p.envFile(),
-	}
-	if err := compose.Up(ctx, files, onLine); err != nil {
-		return version, err
-	}
-	// 文件更新了但 compose 没变时，compose 不会重建容器，挂载了 data/ 的服务要强制重建。
-	if svcs := dataServices(proj, p.dataDir()); doPull && len(svcs) > 0 {
-		onLine("文件已更新，重建服务：" + strings.Join(svcs, "、"))
-		if err := compose.Recreate(ctx, files, svcs, onLine); err != nil {
-			return version, err
-		}
-	}
-	if err := pdb.q.MarkDeployed(ctx, projectstore.MarkDeployedParams{
-		DeployedAt: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, Version: version,
-	}); err != nil {
-		return version, err
-	}
-	for _, r := range readRoutes(p) {
-		if r.GetError() != "" {
-			onLine("映射 " + r.GetName() + " 无效，未生效：" + r.GetError())
-		} else {
-			onLine("对外开放：" + routeLabel(r))
-		}
-	}
-	return version, pdb.setMeta(ctx, metaDeployedVersion, strconv.FormatInt(version, 10))
 }
 
 // ---- 日志 ----

@@ -9,6 +9,7 @@ require (
 	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/hashicorp/yamux v0.1.2
+	github.com/kopia/kopia v0.23.1
 	github.com/mholt/caddy-l4 v0.1.2
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.6.2
@@ -30,6 +31,9 @@ require (
 	filippo.io/bigmod v0.1.0 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.7.0 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/DeRuina/timberjack v1.4.8 // indirect
 	github.com/KimMachineGun/automemlimit v1.0.0 // indirect
@@ -49,6 +53,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/chmduquesne/rollinghash v4.0.0+incompatible // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cloudflare/circl v1.6.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
@@ -67,6 +72,7 @@ require (
 	github.com/dunglas/go-urlpattern v1.0.0 // indirect
 	github.com/dunglas/httpsfv v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/edsrzf/mmap-go v1.2.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
@@ -77,6 +83,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.5 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
@@ -90,6 +97,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.22 // indirect
 	github.com/googleapis/gax-go/v2 v2.25.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+	github.com/hashicorp/cronexpr v1.1.3 // indirect
 	github.com/huandu/xstrings v1.6.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -100,6 +108,8 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/klauspost/pgzip v1.2.6 // indirect
+	github.com/klauspost/reedsolomon v1.14.0 // indirect
 	github.com/libdns/libdns v1.1.1 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
@@ -113,11 +123,14 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/mxk/go-vss v1.2.1 // indirect
+	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/nlnwa/whatwg-url v0.6.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
+	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9 // indirect
 	github.com/pires/go-proxyproto v0.15.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -156,6 +169,7 @@ require (
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc // indirect
+	github.com/zeebo/assert v1.3.0 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.etcd.io/bbolt v1.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

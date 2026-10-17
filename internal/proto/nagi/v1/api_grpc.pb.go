@@ -659,16 +659,21 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ProjectService_ListAllProjects_FullMethodName         = "/nagi.v1.ProjectService/ListAllProjects"
-	ProjectService_CreateNodeProject_FullMethodName       = "/nagi.v1.ProjectService/CreateNodeProject"
-	ProjectService_GetNodeProject_FullMethodName          = "/nagi.v1.ProjectService/GetNodeProject"
-	ProjectService_SaveNodeProjectDraft_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
-	ProjectService_DiscardNodeProjectDraft_FullMethodName = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
-	ProjectService_DeleteNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeleteNodeProject"
-	ProjectService_SaveNodeProjectRoute_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
-	ProjectService_DeleteNodeProjectRoute_FullMethodName  = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
-	ProjectService_DeployNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeployNodeProject"
-	ProjectService_StreamNodeProjectLogs_FullMethodName   = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
+	ProjectService_ListAllProjects_FullMethodName            = "/nagi.v1.ProjectService/ListAllProjects"
+	ProjectService_CreateNodeProject_FullMethodName          = "/nagi.v1.ProjectService/CreateNodeProject"
+	ProjectService_GetNodeProject_FullMethodName             = "/nagi.v1.ProjectService/GetNodeProject"
+	ProjectService_SaveNodeProjectDraft_FullMethodName       = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
+	ProjectService_DiscardNodeProjectDraft_FullMethodName    = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
+	ProjectService_DeleteNodeProject_FullMethodName          = "/nagi.v1.ProjectService/DeleteNodeProject"
+	ProjectService_ListNodeProjectVersions_FullMethodName    = "/nagi.v1.ProjectService/ListNodeProjectVersions"
+	ProjectService_RollbackNodeProject_FullMethodName        = "/nagi.v1.ProjectService/RollbackNodeProject"
+	ProjectService_ListNodeProjectSnapshots_FullMethodName   = "/nagi.v1.ProjectService/ListNodeProjectSnapshots"
+	ProjectService_CreateNodeProjectSnapshot_FullMethodName  = "/nagi.v1.ProjectService/CreateNodeProjectSnapshot"
+	ProjectService_RestoreNodeProjectSnapshot_FullMethodName = "/nagi.v1.ProjectService/RestoreNodeProjectSnapshot"
+	ProjectService_SaveNodeProjectRoute_FullMethodName       = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
+	ProjectService_DeleteNodeProjectRoute_FullMethodName     = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
+	ProjectService_DeployNodeProject_FullMethodName          = "/nagi.v1.ProjectService/DeployNodeProject"
+	ProjectService_StreamNodeProjectLogs_FullMethodName      = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -681,6 +686,11 @@ type ProjectServiceClient interface {
 	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
 	DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error)
+	ListNodeProjectVersions(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
+	RollbackNodeProject(ctx context.Context, in *RollbackNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	ListNodeProjectSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	CreateNodeProjectSnapshot(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	RestoreNodeProjectSnapshot(ctx context.Context, in *RestoreNodeProjectSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error)
 	DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
@@ -755,6 +765,83 @@ func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, in *Delete
 	return out, nil
 }
 
+func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVersionsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RollbackNodeProject(ctx context.Context, in *RollbackNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_RollbackNodeProject_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RollbackNodeProjectRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RollbackNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *projectServiceClient) ListNodeProjectSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) CreateNodeProjectSnapshot(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_CreateNodeProjectSnapshot_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeProjectRef, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CreateNodeProjectSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *projectServiceClient) RestoreNodeProjectSnapshot(ctx context.Context, in *RestoreNodeProjectSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_RestoreNodeProjectSnapshot_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreNodeProjectSnapshotRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RestoreNodeProjectSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *projectServiceClient) SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SaveNodeProjectRouteResponse)
@@ -777,7 +864,7 @@ func (c *projectServiceClient) DeleteNodeProjectRoute(ctx context.Context, in *D
 
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_DeployNodeProject_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_DeployNodeProject_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -796,7 +883,7 @@ type ProjectService_DeployNodeProjectClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_StreamNodeProjectLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_StreamNodeProjectLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -823,6 +910,11 @@ type ProjectServiceServer interface {
 	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
 	DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error)
+	ListNodeProjectVersions(context.Context, *NodeProjectRef) (*ListVersionsResponse, error)
+	RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	ListNodeProjectSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error)
+	CreateNodeProjectSnapshot(*NodeProjectRef, grpc.ServerStreamingServer[DeployEvent]) error
+	RestoreNodeProjectSnapshot(*RestoreNodeProjectSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error)
 	DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error)
 	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
@@ -854,6 +946,21 @@ func (UnimplementedProjectServiceServer) DiscardNodeProjectDraft(context.Context
 }
 func (UnimplementedProjectServiceServer) DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProject not implemented")
+}
+func (UnimplementedProjectServiceServer) ListNodeProjectVersions(context.Context, *NodeProjectRef) (*ListVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectVersions not implemented")
+}
+func (UnimplementedProjectServiceServer) RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RollbackNodeProject not implemented")
+}
+func (UnimplementedProjectServiceServer) ListNodeProjectSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectSnapshots not implemented")
+}
+func (UnimplementedProjectServiceServer) CreateNodeProjectSnapshot(*NodeProjectRef, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method CreateNodeProjectSnapshot not implemented")
+}
+func (UnimplementedProjectServiceServer) RestoreNodeProjectSnapshot(*RestoreNodeProjectSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreNodeProjectSnapshot not implemented")
 }
 func (UnimplementedProjectServiceServer) SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectRoute not implemented")
@@ -996,6 +1103,75 @@ func _ProjectService_DeleteNodeProject_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_ListNodeProjectVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListNodeProjectVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RollbackNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RollbackNodeProjectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).RollbackNodeProject(m, &grpc.GenericServerStream[RollbackNodeProjectRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RollbackNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _ProjectService_ListNodeProjectSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListNodeProjectSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListNodeProjectSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListNodeProjectSnapshots(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_CreateNodeProjectSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeProjectRef)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).CreateNodeProjectSnapshot(m, &grpc.GenericServerStream[NodeProjectRef, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CreateNodeProjectSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _ProjectService_RestoreNodeProjectSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreNodeProjectSnapshotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).RestoreNodeProjectSnapshot(m, &grpc.GenericServerStream[RestoreNodeProjectSnapshotRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RestoreNodeProjectSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _ProjectService_SaveNodeProjectRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SaveNodeProjectRouteRequest)
 	if err := dec(in); err != nil {
@@ -1086,6 +1262,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_DeleteNodeProject_Handler,
 		},
 		{
+			MethodName: "ListNodeProjectVersions",
+			Handler:    _ProjectService_ListNodeProjectVersions_Handler,
+		},
+		{
+			MethodName: "ListNodeProjectSnapshots",
+			Handler:    _ProjectService_ListNodeProjectSnapshots_Handler,
+		},
+		{
 			MethodName: "SaveNodeProjectRoute",
 			Handler:    _ProjectService_SaveNodeProjectRoute_Handler,
 		},
@@ -1095,6 +1279,21 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "RollbackNodeProject",
+			Handler:       _ProjectService_RollbackNodeProject_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CreateNodeProjectSnapshot",
+			Handler:       _ProjectService_CreateNodeProjectSnapshot_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreNodeProjectSnapshot",
+			Handler:       _ProjectService_RestoreNodeProjectSnapshot_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "DeployNodeProject",
 			Handler:       _ProjectService_DeployNodeProject_Handler,

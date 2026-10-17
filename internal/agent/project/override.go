@@ -19,7 +19,7 @@ const (
 
 // buildOverride 生成 Nagi 的叠加配置。override 里写的值会覆盖用户的值，
 // 所以默认值只补在用户没写的地方。
-func buildOverride(proj *types.Project, p paths, projectID string, version int64, subnet string, senv map[string][]*nagiv1.EnvVar) (map[string]any, error) {
+func buildOverride(proj *types.Project, p paths, projectID string, version int64, subnet string, senv map[string][]*nagiv1.EnvVar, pins map[string]string) (map[string]any, error) {
 	services := map[string]any{}
 	for name, svc := range proj.Services {
 		s := map[string]any{
@@ -41,6 +41,10 @@ func buildOverride(proj *types.Project, p paths, projectID string, version int64
 		// 对外访问统一由 Caddy 负责，去掉容器自己的端口映射（需要 compose 2.24+ 的 !reset）。
 		if len(svc.Ports) > 0 && svc.NetworkMode != "host" {
 			s["ports"] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!reset", Style: yaml.FlowStyle}
+		}
+		// 回滚时固定使用当时的镜像（带摘要），即使标签是 latest 也能回到那一份镜像。
+		if img := pins[name]; img != "" {
+			s["image"] = img
 		}
 		if len(senv[name]) > 0 {
 			s["env_file"] = []string{filepath.ToSlash(p.serviceEnvFile(name))}

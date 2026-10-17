@@ -275,3 +275,57 @@ func (e *Exec) ExitCode(ctx context.Context) int {
 
 // Close 关闭终端连接。
 func (e *Exec) Close() { e.conn.Close() }
+
+// PauseProject 暂停项目所有正在运行的容器，返回恢复函数。用于快照时保证数据一致。
+func (d *Client) PauseProject(ctx context.Context, composeProject string) (func(), error) {
+	containers, err := d.ProjectContainers(ctx, composeProject)
+	if err != nil {
+		return nil, err
+	}
+	var paused []string
+	resume := func() {
+		// 恢复不受调用方 ctx 取消的影响，一定要执行。
+		bg := context.WithoutCancel(ctx)
+		for _, id := range paused {
+			_, _ = d.c.ContainerUnpause(bg, id, client.ContainerUnpauseOptions{})
+		}
+	}
+	for _, c := range containers {
+		if c.State != "running" {
+			continue
+		}
+		if _, err := d.c.ContainerPause(ctx, c.ID, client.ContainerPauseOptions{}); err != nil {
+			resume()
+			return nil, err
+		}
+		paused = append(paused, c.ID)
+	}
+	return resume, nil
+}
+
+// ProjectImages 返回项目每个服务正在使用的镜像，优先用带摘要的形式（repo@sha256:...），
+// 没有摘要（本地构建的镜像）时用镜像 ID。
+func (d *Client) ProjectImages(ctx context.Context, composeProject string) (map[string]string, error) {
+	list, err := d.c.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: make(client.Filters).Add("label", labelProject+"="+composeProject),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, c := range list.Items {
+		svc := c.Labels[labelService]
+		img, err := d.c.ImageInspect(ctx, c.ImageID)
+		if err != nil {
+			out[svc] = c.ImageID
+			continue
+		}
+		ref := img.ID
+		if len(img.RepoDigests) > 0 {
+			ref = img.RepoDigests[0]
+		}
+		out[svc] = ref
+	}
+	return out, nil
+}

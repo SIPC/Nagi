@@ -20,8 +20,12 @@ type Meta struct {
 }
 
 type Version struct {
-	Version    int64
-	Config     []byte
-	CreatedAt  int64
-	DeployedAt sql.NullInt64
+	Version       int64
+	Config        []byte
+	CreatedAt     int64
+	DeployedAt    sql.NullInt64
+	FilesSnapshot string
+	Images        string
+	RollbackOf    int64
+	GitCommit     string
 }

@@ -19,6 +19,15 @@ func (q *Queries) DeleteDraft(ctx context.Context) error {
 	return err
 }
 
+const deleteVersionsBefore = `-- name: DeleteVersionsBefore :exec
+DELETE FROM versions WHERE version < ?
+`
+
+func (q *Queries) DeleteVersionsBefore(ctx context.Context, version int64) error {
+	_, err := q.db.ExecContext(ctx, deleteVersionsBefore, version)
+	return err
+}
+
 const getDraft = `-- name: GetDraft :one
 SELECT id, config, updated_at FROM draft WHERE id = 1
 `
@@ -42,7 +51,7 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 }
 
 const getVersion = `-- name: GetVersion :one
-SELECT version, config, created_at, deployed_at FROM versions WHERE version = ?
+SELECT version, config, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE version = ?
 `
 
 func (q *Queries) GetVersion(ctx context.Context, version int64) (Version, error) {
@@ -53,8 +62,33 @@ func (q *Queries) GetVersion(ctx context.Context, version int64) (Version, error
 		&i.Config,
 		&i.CreatedAt,
 		&i.DeployedAt,
+		&i.FilesSnapshot,
+		&i.Images,
+		&i.RollbackOf,
+		&i.GitCommit,
 	)
 	return i, err
+}
+
+const insertRollbackVersion = `-- name: InsertRollbackVersion :exec
+INSERT INTO versions (version, config, created_at, rollback_of) VALUES (?, ?, ?, ?)
+`
+
+type InsertRollbackVersionParams struct {
+	Version    int64
+	Config     []byte
+	CreatedAt  int64
+	RollbackOf int64
+}
+
+func (q *Queries) InsertRollbackVersion(ctx context.Context, arg InsertRollbackVersionParams) error {
+	_, err := q.db.ExecContext(ctx, insertRollbackVersion,
+		arg.Version,
+		arg.Config,
+		arg.CreatedAt,
+		arg.RollbackOf,
+	)
+	return err
 }
 
 const insertVersion = `-- name: InsertVersion :exec
@@ -73,7 +107,7 @@ func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) er
 }
 
 const latestVersion = `-- name: LatestVersion :one
-SELECT version, config, created_at, deployed_at FROM versions ORDER BY version DESC LIMIT 1
+SELECT version, config, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions ORDER BY version DESC LIMIT 1
 `
 
 func (q *Queries) LatestVersion(ctx context.Context) (Version, error) {
@@ -84,8 +118,48 @@ func (q *Queries) LatestVersion(ctx context.Context) (Version, error) {
 		&i.Config,
 		&i.CreatedAt,
 		&i.DeployedAt,
+		&i.FilesSnapshot,
+		&i.Images,
+		&i.RollbackOf,
+		&i.GitCommit,
 	)
 	return i, err
+}
+
+const listVersions = `-- name: ListVersions :many
+SELECT version, config, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions ORDER BY version DESC
+`
+
+func (q *Queries) ListVersions(ctx context.Context) ([]Version, error) {
+	rows, err := q.db.QueryContext(ctx, listVersions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Version{}
+	for rows.Next() {
+		var i Version
+		if err := rows.Scan(
+			&i.Version,
+			&i.Config,
+			&i.CreatedAt,
+			&i.DeployedAt,
+			&i.FilesSnapshot,
+			&i.Images,
+			&i.RollbackOf,
+			&i.GitCommit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markDeployed = `-- name: MarkDeployed :exec
@@ -99,6 +173,28 @@ type MarkDeployedParams struct {
 
 func (q *Queries) MarkDeployed(ctx context.Context, arg MarkDeployedParams) error {
 	_, err := q.db.ExecContext(ctx, markDeployed, arg.DeployedAt, arg.Version)
+	return err
+}
+
+const replaceUndeployedVersion = `-- name: ReplaceUndeployedVersion :exec
+UPDATE versions SET config = ?, created_at = ?, rollback_of = ?, files_snapshot = '', images = '{}', git_commit = ''
+WHERE version = ? AND deployed_at IS NULL
+`
+
+type ReplaceUndeployedVersionParams struct {
+	Config     []byte
+	CreatedAt  int64
+	RollbackOf int64
+	Version    int64
+}
+
+func (q *Queries) ReplaceUndeployedVersion(ctx context.Context, arg ReplaceUndeployedVersionParams) error {
+	_, err := q.db.ExecContext(ctx, replaceUndeployedVersion,
+		arg.Config,
+		arg.CreatedAt,
+		arg.RollbackOf,
+		arg.Version,
+	)
 	return err
 }
 
@@ -129,5 +225,40 @@ type SetMetaParams struct {
 
 func (q *Queries) SetMeta(ctx context.Context, arg SetMetaParams) error {
 	_, err := q.db.ExecContext(ctx, setMeta, arg.Key, arg.Value)
+	return err
+}
+
+const setVersionDeployed = `-- name: SetVersionDeployed :exec
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE version = ?
+`
+
+type SetVersionDeployedParams struct {
+	DeployedAt sql.NullInt64
+	Images     string
+	GitCommit  string
+	Version    int64
+}
+
+func (q *Queries) SetVersionDeployed(ctx context.Context, arg SetVersionDeployedParams) error {
+	_, err := q.db.ExecContext(ctx, setVersionDeployed,
+		arg.DeployedAt,
+		arg.Images,
+		arg.GitCommit,
+		arg.Version,
+	)
+	return err
+}
+
+const setVersionFiles = `-- name: SetVersionFiles :exec
+UPDATE versions SET files_snapshot = ? WHERE version = ?
+`
+
+type SetVersionFilesParams struct {
+	FilesSnapshot string
+	Version       int64
+}
+
+func (q *Queries) SetVersionFiles(ctx context.Context, arg SetVersionFilesParams) error {
+	_, err := q.db.ExecContext(ctx, setVersionFiles, arg.FilesSnapshot, arg.Version)
 	return err
 }

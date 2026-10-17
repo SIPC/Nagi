@@ -83,6 +83,21 @@ const (
 	// ProjectServiceDeleteNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeleteNodeProject RPC.
 	ProjectServiceDeleteNodeProjectProcedure = "/nagi.v1.ProjectService/DeleteNodeProject"
+	// ProjectServiceListNodeProjectVersionsProcedure is the fully-qualified name of the
+	// ProjectService's ListNodeProjectVersions RPC.
+	ProjectServiceListNodeProjectVersionsProcedure = "/nagi.v1.ProjectService/ListNodeProjectVersions"
+	// ProjectServiceRollbackNodeProjectProcedure is the fully-qualified name of the ProjectService's
+	// RollbackNodeProject RPC.
+	ProjectServiceRollbackNodeProjectProcedure = "/nagi.v1.ProjectService/RollbackNodeProject"
+	// ProjectServiceListNodeProjectSnapshotsProcedure is the fully-qualified name of the
+	// ProjectService's ListNodeProjectSnapshots RPC.
+	ProjectServiceListNodeProjectSnapshotsProcedure = "/nagi.v1.ProjectService/ListNodeProjectSnapshots"
+	// ProjectServiceCreateNodeProjectSnapshotProcedure is the fully-qualified name of the
+	// ProjectService's CreateNodeProjectSnapshot RPC.
+	ProjectServiceCreateNodeProjectSnapshotProcedure = "/nagi.v1.ProjectService/CreateNodeProjectSnapshot"
+	// ProjectServiceRestoreNodeProjectSnapshotProcedure is the fully-qualified name of the
+	// ProjectService's RestoreNodeProjectSnapshot RPC.
+	ProjectServiceRestoreNodeProjectSnapshotProcedure = "/nagi.v1.ProjectService/RestoreNodeProjectSnapshot"
 	// ProjectServiceSaveNodeProjectRouteProcedure is the fully-qualified name of the ProjectService's
 	// SaveNodeProjectRoute RPC.
 	ProjectServiceSaveNodeProjectRouteProcedure = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
@@ -545,6 +560,11 @@ type ProjectServiceClient interface {
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
+	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	RollbackNodeProject(context.Context, *connect.Request[v1.RollbackNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	ListNodeProjectSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	CreateNodeProjectSnapshot(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	RestoreNodeProjectSnapshot(context.Context, *connect.Request[v1.RestoreNodeProjectSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error)
 	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -598,6 +618,36 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeProjectVersions: connect.NewClient[v1.NodeProjectRef, v1.ListVersionsResponse](
+			httpClient,
+			baseURL+ProjectServiceListNodeProjectVersionsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectVersions")),
+			connect.WithClientOptions(opts...),
+		),
+		rollbackNodeProject: connect.NewClient[v1.RollbackNodeProjectRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRollbackNodeProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RollbackNodeProject")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeProjectSnapshots: connect.NewClient[v1.NodeProjectRef, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+ProjectServiceListNodeProjectSnapshotsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		createNodeProjectSnapshot: connect.NewClient[v1.NodeProjectRef, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceCreateNodeProjectSnapshotProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CreateNodeProjectSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreNodeProjectSnapshot: connect.NewClient[v1.RestoreNodeProjectSnapshotRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRestoreNodeProjectSnapshotProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RestoreNodeProjectSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
 		saveNodeProjectRoute: connect.NewClient[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse](
 			httpClient,
 			baseURL+ProjectServiceSaveNodeProjectRouteProcedure,
@@ -627,16 +677,21 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
-	listAllProjects         *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
-	createNodeProject       *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
-	getNodeProject          *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
-	saveNodeProjectDraft    *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
-	discardNodeProjectDraft *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
-	deleteNodeProject       *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
-	saveNodeProjectRoute    *connect.Client[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse]
-	deleteNodeProjectRoute  *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
-	deployNodeProject       *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
-	streamNodeProjectLogs   *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
+	listAllProjects            *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
+	createNodeProject          *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
+	getNodeProject             *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
+	saveNodeProjectDraft       *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
+	discardNodeProjectDraft    *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
+	deleteNodeProject          *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
+	listNodeProjectVersions    *connect.Client[v1.NodeProjectRef, v1.ListVersionsResponse]
+	rollbackNodeProject        *connect.Client[v1.RollbackNodeProjectRequest, v1.DeployEvent]
+	listNodeProjectSnapshots   *connect.Client[v1.NodeProjectRef, v1.ListSnapshotsResponse]
+	createNodeProjectSnapshot  *connect.Client[v1.NodeProjectRef, v1.DeployEvent]
+	restoreNodeProjectSnapshot *connect.Client[v1.RestoreNodeProjectSnapshotRequest, v1.DeployEvent]
+	saveNodeProjectRoute       *connect.Client[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse]
+	deleteNodeProjectRoute     *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
+	deployNodeProject          *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
+	streamNodeProjectLogs      *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -669,6 +724,31 @@ func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, req *conne
 	return c.deleteNodeProject.CallUnary(ctx, req)
 }
 
+// ListNodeProjectVersions calls nagi.v1.ProjectService.ListNodeProjectVersions.
+func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error) {
+	return c.listNodeProjectVersions.CallUnary(ctx, req)
+}
+
+// RollbackNodeProject calls nagi.v1.ProjectService.RollbackNodeProject.
+func (c *projectServiceClient) RollbackNodeProject(ctx context.Context, req *connect.Request[v1.RollbackNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.rollbackNodeProject.CallServerStream(ctx, req)
+}
+
+// ListNodeProjectSnapshots calls nagi.v1.ProjectService.ListNodeProjectSnapshots.
+func (c *projectServiceClient) ListNodeProjectSnapshots(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listNodeProjectSnapshots.CallUnary(ctx, req)
+}
+
+// CreateNodeProjectSnapshot calls nagi.v1.ProjectService.CreateNodeProjectSnapshot.
+func (c *projectServiceClient) CreateNodeProjectSnapshot(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.createNodeProjectSnapshot.CallServerStream(ctx, req)
+}
+
+// RestoreNodeProjectSnapshot calls nagi.v1.ProjectService.RestoreNodeProjectSnapshot.
+func (c *projectServiceClient) RestoreNodeProjectSnapshot(ctx context.Context, req *connect.Request[v1.RestoreNodeProjectSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreNodeProjectSnapshot.CallServerStream(ctx, req)
+}
+
 // SaveNodeProjectRoute calls nagi.v1.ProjectService.SaveNodeProjectRoute.
 func (c *projectServiceClient) SaveNodeProjectRoute(ctx context.Context, req *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error) {
 	return c.saveNodeProjectRoute.CallUnary(ctx, req)
@@ -697,6 +777,11 @@ type ProjectServiceHandler interface {
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
+	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	RollbackNodeProject(context.Context, *connect.Request[v1.RollbackNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
+	ListNodeProjectSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	CreateNodeProjectSnapshot(context.Context, *connect.Request[v1.NodeProjectRef], *connect.ServerStream[v1.DeployEvent]) error
+	RestoreNodeProjectSnapshot(context.Context, *connect.Request[v1.RestoreNodeProjectSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error)
 	DeleteNodeProjectRoute(context.Context, *connect.Request[v1.DeleteNodeProjectRouteRequest]) (*connect.Response[v1.DeleteNodeProjectRouteResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -746,6 +831,36 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceListNodeProjectVersionsHandler := connect.NewUnaryHandler(
+		ProjectServiceListNodeProjectVersionsProcedure,
+		svc.ListNodeProjectVersions,
+		connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectVersions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRollbackNodeProjectHandler := connect.NewServerStreamHandler(
+		ProjectServiceRollbackNodeProjectProcedure,
+		svc.RollbackNodeProject,
+		connect.WithSchema(projectServiceMethods.ByName("RollbackNodeProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListNodeProjectSnapshotsHandler := connect.NewUnaryHandler(
+		ProjectServiceListNodeProjectSnapshotsProcedure,
+		svc.ListNodeProjectSnapshots,
+		connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCreateNodeProjectSnapshotHandler := connect.NewServerStreamHandler(
+		ProjectServiceCreateNodeProjectSnapshotProcedure,
+		svc.CreateNodeProjectSnapshot,
+		connect.WithSchema(projectServiceMethods.ByName("CreateNodeProjectSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRestoreNodeProjectSnapshotHandler := connect.NewServerStreamHandler(
+		ProjectServiceRestoreNodeProjectSnapshotProcedure,
+		svc.RestoreNodeProjectSnapshot,
+		connect.WithSchema(projectServiceMethods.ByName("RestoreNodeProjectSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceSaveNodeProjectRouteHandler := connect.NewUnaryHandler(
 		ProjectServiceSaveNodeProjectRouteProcedure,
 		svc.SaveNodeProjectRoute,
@@ -784,6 +899,16 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceDiscardNodeProjectDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteNodeProjectProcedure:
 			projectServiceDeleteNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceListNodeProjectVersionsProcedure:
+			projectServiceListNodeProjectVersionsHandler.ServeHTTP(w, r)
+		case ProjectServiceRollbackNodeProjectProcedure:
+			projectServiceRollbackNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceListNodeProjectSnapshotsProcedure:
+			projectServiceListNodeProjectSnapshotsHandler.ServeHTTP(w, r)
+		case ProjectServiceCreateNodeProjectSnapshotProcedure:
+			projectServiceCreateNodeProjectSnapshotHandler.ServeHTTP(w, r)
+		case ProjectServiceRestoreNodeProjectSnapshotProcedure:
+			projectServiceRestoreNodeProjectSnapshotHandler.ServeHTTP(w, r)
 		case ProjectServiceSaveNodeProjectRouteProcedure:
 			projectServiceSaveNodeProjectRouteHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteNodeProjectRouteProcedure:
@@ -823,6 +948,26 @@ func (UnimplementedProjectServiceHandler) DiscardNodeProjectDraft(context.Contex
 
 func (UnimplementedProjectServiceHandler) DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListNodeProjectVersions is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RollbackNodeProject(context.Context, *connect.Request[v1.RollbackNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RollbackNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListNodeProjectSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListNodeProjectSnapshots is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CreateNodeProjectSnapshot(context.Context, *connect.Request[v1.NodeProjectRef], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CreateNodeProjectSnapshot is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RestoreNodeProjectSnapshot(context.Context, *connect.Request[v1.RestoreNodeProjectSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreNodeProjectSnapshot is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SaveNodeProjectRoute(context.Context, *connect.Request[v1.SaveNodeProjectRouteRequest]) (*connect.Response[v1.SaveNodeProjectRouteResponse], error) {

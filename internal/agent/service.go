@@ -6,6 +6,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/agent/snapshot"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -166,6 +167,58 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 	}
 	code := ex.ExitCode(context.WithoutCancel(ctx))
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
+}
+
+func (s *agentService) ListVersions(ctx context.Context, req *nagiv1.ListVersionsRequest) (*nagiv1.ListVersionsResponse, error) {
+	list, err := s.projects.Versions(ctx, req.GetId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.ListVersionsResponse{Versions: list}, nil
+}
+
+func (s *agentService) ListSnapshots(ctx context.Context, req *nagiv1.ListSnapshotsRequest) (*nagiv1.ListSnapshotsResponse, error) {
+	list, err := s.projects.Snapshots(ctx, req.GetId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.ListSnapshotsResponse{Snapshots: list}, nil
+}
+
+// runStream 执行一个会输出过程的操作，把输出和结果发给面板。
+func runStream(send func(*nagiv1.DeployEvent) error, op func(onLine func(string)) (int64, error)) error {
+	version, err := op(func(line string) {
+		_ = send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
+	})
+	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) || errors.Is(err, project.ErrInvalidArgument) {
+		return toStatus(err)
+	}
+	result := &nagiv1.DeployResult{Success: err == nil, Version: version}
+	if err != nil {
+		result.Error = err.Error()
+	}
+	return send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: result}})
+}
+
+func (s *agentService) Rollback(req *nagiv1.RollbackRequest, stream nagiv1.AgentService_RollbackServer) error {
+	defer s.changed()
+	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
+		return s.projects.Rollback(stream.Context(), req.GetId(), req.GetVersion(), req.GetRestoreData(), onLine)
+	})
+}
+
+func (s *agentService) CreateSnapshot(req *nagiv1.CreateSnapshotRequest, stream nagiv1.AgentService_CreateSnapshotServer) error {
+	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
+		_, err := s.projects.TakeSnapshot(stream.Context(), req.GetId(), snapshot.Manual, onLine)
+		return 0, err
+	})
+}
+
+func (s *agentService) RestoreSnapshot(req *nagiv1.RestoreSnapshotRequest, stream nagiv1.AgentService_RestoreSnapshotServer) error {
+	defer s.changed()
+	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
+		return 0, s.projects.RestoreSnapshot(stream.Context(), req.GetId(), req.GetSnapshotId(), onLine)
+	})
 }
 
 func toStatus(err error) error {

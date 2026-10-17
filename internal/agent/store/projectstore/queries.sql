@@ -26,3 +26,22 @@ ON CONFLICT (id) DO UPDATE SET config = excluded.config, updated_at = excluded.u
 
 -- name: DeleteDraft :exec
 DELETE FROM draft WHERE id = 1;
+
+-- name: ListVersions :many
+SELECT * FROM versions ORDER BY version DESC;
+
+-- name: SetVersionFiles :exec
+UPDATE versions SET files_snapshot = ? WHERE version = ?;
+
+-- name: SetVersionDeployed :exec
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE version = ?;
+
+-- name: InsertRollbackVersion :exec
+INSERT INTO versions (version, config, created_at, rollback_of) VALUES (?, ?, ?, ?);
+
+-- name: DeleteVersionsBefore :exec
+DELETE FROM versions WHERE version < ?;
+
+-- name: ReplaceUndeployedVersion :exec
+UPDATE versions SET config = ?, created_at = ?, rollback_of = ?, files_snapshot = '', images = '{}', git_commit = ''
+WHERE version = ? AND deployed_at IS NULL;

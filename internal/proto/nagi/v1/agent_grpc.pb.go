@@ -19,17 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_ListProjects_FullMethodName  = "/nagi.v1.AgentService/ListProjects"
-	AgentService_CreateProject_FullMethodName = "/nagi.v1.AgentService/CreateProject"
-	AgentService_GetProject_FullMethodName    = "/nagi.v1.AgentService/GetProject"
-	AgentService_SaveDraft_FullMethodName     = "/nagi.v1.AgentService/SaveDraft"
-	AgentService_DiscardDraft_FullMethodName  = "/nagi.v1.AgentService/DiscardDraft"
-	AgentService_SaveRoute_FullMethodName     = "/nagi.v1.AgentService/SaveRoute"
-	AgentService_DeleteRoute_FullMethodName   = "/nagi.v1.AgentService/DeleteRoute"
-	AgentService_DeleteProject_FullMethodName = "/nagi.v1.AgentService/DeleteProject"
-	AgentService_DeployProject_FullMethodName = "/nagi.v1.AgentService/DeployProject"
-	AgentService_StreamLogs_FullMethodName    = "/nagi.v1.AgentService/StreamLogs"
-	AgentService_Exec_FullMethodName          = "/nagi.v1.AgentService/Exec"
+	AgentService_ListProjects_FullMethodName    = "/nagi.v1.AgentService/ListProjects"
+	AgentService_CreateProject_FullMethodName   = "/nagi.v1.AgentService/CreateProject"
+	AgentService_GetProject_FullMethodName      = "/nagi.v1.AgentService/GetProject"
+	AgentService_SaveDraft_FullMethodName       = "/nagi.v1.AgentService/SaveDraft"
+	AgentService_DiscardDraft_FullMethodName    = "/nagi.v1.AgentService/DiscardDraft"
+	AgentService_SaveRoute_FullMethodName       = "/nagi.v1.AgentService/SaveRoute"
+	AgentService_DeleteRoute_FullMethodName     = "/nagi.v1.AgentService/DeleteRoute"
+	AgentService_ListVersions_FullMethodName    = "/nagi.v1.AgentService/ListVersions"
+	AgentService_Rollback_FullMethodName        = "/nagi.v1.AgentService/Rollback"
+	AgentService_ListSnapshots_FullMethodName   = "/nagi.v1.AgentService/ListSnapshots"
+	AgentService_CreateSnapshot_FullMethodName  = "/nagi.v1.AgentService/CreateSnapshot"
+	AgentService_RestoreSnapshot_FullMethodName = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_DeleteProject_FullMethodName   = "/nagi.v1.AgentService/DeleteProject"
+	AgentService_DeployProject_FullMethodName   = "/nagi.v1.AgentService/DeployProject"
+	AgentService_StreamLogs_FullMethodName      = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName            = "/nagi.v1.AgentService/Exec"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -46,6 +51,13 @@ type AgentServiceClient interface {
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*SaveRouteResponse, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*DeleteRouteResponse, error)
+	ListVersions(ctx context.Context, in *ListVersionsRequest, opts ...grpc.CallOption) (*ListVersionsResponse, error)
+	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
@@ -132,6 +144,83 @@ func (c *agentServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteReq
 	return out, nil
 }
 
+func (c *agentServiceClient) ListVersions(ctx context.Context, in *ListVersionsRequest, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVersionsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[0], AgentService_Rollback_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RollbackRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RollbackClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[1], AgentService_CreateSnapshot_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CreateSnapshotRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreSnapshotRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteProjectResponse)
@@ -144,7 +233,7 @@ func (c *agentServiceClient) DeleteProject(ctx context.Context, in *DeleteProjec
 
 func (c *agentServiceClient) DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[0], AgentService_DeployProject_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_DeployProject_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +252,7 @@ type AgentService_DeployProjectClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[1], AgentService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +271,7 @@ type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
 func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_Exec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_Exec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +296,13 @@ type AgentServiceServer interface {
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error)
+	ListVersions(context.Context, *ListVersionsRequest) (*ListVersionsResponse, error)
+	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
+	CreateSnapshot(*CreateSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
@@ -243,6 +339,21 @@ func (UnimplementedAgentServiceServer) SaveRoute(context.Context, *SaveRouteRequ
 }
 func (UnimplementedAgentServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
+}
+func (UnimplementedAgentServiceServer) ListVersions(context.Context, *ListVersionsRequest) (*ListVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVersions not implemented")
+}
+func (UnimplementedAgentServiceServer) Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method Rollback not implemented")
+}
+func (UnimplementedAgentServiceServer) ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
+}
+func (UnimplementedAgentServiceServer) CreateSnapshot(*CreateSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method CreateSnapshot not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreSnapshot not implemented")
 }
 func (UnimplementedAgentServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
@@ -403,6 +514,75 @@ func _AgentService_DeleteRoute_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ListVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListVersions(ctx, req.(*ListVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_Rollback_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RollbackRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).Rollback(m, &grpc.GenericServerStream[RollbackRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RollbackServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListSnapshots(ctx, req.(*ListSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CreateSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(CreateSnapshotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).CreateSnapshot(m, &grpc.GenericServerStream[CreateSnapshotRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CreateSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_RestoreSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreSnapshotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).RestoreSnapshot(m, &grpc.GenericServerStream[RestoreSnapshotRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _AgentService_DeleteProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteProjectRequest)
 	if err := dec(in); err != nil {
@@ -486,11 +666,34 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_DeleteRoute_Handler,
 		},
 		{
+			MethodName: "ListVersions",
+			Handler:    _AgentService_ListVersions_Handler,
+		},
+		{
+			MethodName: "ListSnapshots",
+			Handler:    _AgentService_ListSnapshots_Handler,
+		},
+		{
 			MethodName: "DeleteProject",
 			Handler:    _AgentService_DeleteProject_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Rollback",
+			Handler:       _AgentService_Rollback_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CreateSnapshot",
+			Handler:       _AgentService_CreateSnapshot_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreSnapshot",
+			Handler:       _AgentService_RestoreSnapshot_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "DeployProject",
 			Handler:       _AgentService_DeployProject_Handler,

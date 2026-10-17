@@ -51,6 +51,20 @@ const (
 	// AgentServiceDeleteRouteProcedure is the fully-qualified name of the AgentService's DeleteRoute
 	// RPC.
 	AgentServiceDeleteRouteProcedure = "/nagi.v1.AgentService/DeleteRoute"
+	// AgentServiceListVersionsProcedure is the fully-qualified name of the AgentService's ListVersions
+	// RPC.
+	AgentServiceListVersionsProcedure = "/nagi.v1.AgentService/ListVersions"
+	// AgentServiceRollbackProcedure is the fully-qualified name of the AgentService's Rollback RPC.
+	AgentServiceRollbackProcedure = "/nagi.v1.AgentService/Rollback"
+	// AgentServiceListSnapshotsProcedure is the fully-qualified name of the AgentService's
+	// ListSnapshots RPC.
+	AgentServiceListSnapshotsProcedure = "/nagi.v1.AgentService/ListSnapshots"
+	// AgentServiceCreateSnapshotProcedure is the fully-qualified name of the AgentService's
+	// CreateSnapshot RPC.
+	AgentServiceCreateSnapshotProcedure = "/nagi.v1.AgentService/CreateSnapshot"
+	// AgentServiceRestoreSnapshotProcedure is the fully-qualified name of the AgentService's
+	// RestoreSnapshot RPC.
+	AgentServiceRestoreSnapshotProcedure = "/nagi.v1.AgentService/RestoreSnapshot"
 	// AgentServiceDeleteProjectProcedure is the fully-qualified name of the AgentService's
 	// DeleteProject RPC.
 	AgentServiceDeleteProjectProcedure = "/nagi.v1.AgentService/DeleteProject"
@@ -73,6 +87,13 @@ type AgentServiceClient interface {
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
+	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
+	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -134,6 +155,36 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("DeleteRoute")),
 			connect.WithClientOptions(opts...),
 		),
+		listVersions: connect.NewClient[v1.ListVersionsRequest, v1.ListVersionsResponse](
+			httpClient,
+			baseURL+AgentServiceListVersionsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListVersions")),
+			connect.WithClientOptions(opts...),
+		),
+		rollback: connect.NewClient[v1.RollbackRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRollbackProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("Rollback")),
+			connect.WithClientOptions(opts...),
+		),
+		listSnapshots: connect.NewClient[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+AgentServiceListSnapshotsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		createSnapshot: connect.NewClient[v1.CreateSnapshotRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceCreateSnapshotProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CreateSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreSnapshot: connect.NewClient[v1.RestoreSnapshotRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRestoreSnapshotProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteProject: connect.NewClient[v1.DeleteProjectRequest, v1.DeleteProjectResponse](
 			httpClient,
 			baseURL+AgentServiceDeleteProjectProcedure,
@@ -163,17 +214,22 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	listProjects  *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	createProject *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	saveDraft     *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
-	discardDraft  *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
-	saveRoute     *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
-	deleteRoute   *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
-	deleteProject *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
-	deployProject *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
-	streamLogs    *connect.Client[v1.StreamLogsRequest, v1.LogLine]
-	exec          *connect.Client[v1.ExecInput, v1.ExecOutput]
+	listProjects    *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	createProject   *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject      *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	saveDraft       *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
+	discardDraft    *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
+	saveRoute       *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
+	deleteRoute     *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
+	listVersions    *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
+	rollback        *connect.Client[v1.RollbackRequest, v1.DeployEvent]
+	listSnapshots   *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
+	createSnapshot  *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
+	restoreSnapshot *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	deleteProject   *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
+	deployProject   *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
+	streamLogs      *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec            *connect.Client[v1.ExecInput, v1.ExecOutput]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -211,6 +267,31 @@ func (c *agentServiceClient) DeleteRoute(ctx context.Context, req *connect.Reque
 	return c.deleteRoute.CallUnary(ctx, req)
 }
 
+// ListVersions calls nagi.v1.AgentService.ListVersions.
+func (c *agentServiceClient) ListVersions(ctx context.Context, req *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error) {
+	return c.listVersions.CallUnary(ctx, req)
+}
+
+// Rollback calls nagi.v1.AgentService.Rollback.
+func (c *agentServiceClient) Rollback(ctx context.Context, req *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.rollback.CallServerStream(ctx, req)
+}
+
+// ListSnapshots calls nagi.v1.AgentService.ListSnapshots.
+func (c *agentServiceClient) ListSnapshots(ctx context.Context, req *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listSnapshots.CallUnary(ctx, req)
+}
+
+// CreateSnapshot calls nagi.v1.AgentService.CreateSnapshot.
+func (c *agentServiceClient) CreateSnapshot(ctx context.Context, req *connect.Request[v1.CreateSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.createSnapshot.CallServerStream(ctx, req)
+}
+
+// RestoreSnapshot calls nagi.v1.AgentService.RestoreSnapshot.
+func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, req *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreSnapshot.CallServerStream(ctx, req)
+}
+
 // DeleteProject calls nagi.v1.AgentService.DeleteProject.
 func (c *agentServiceClient) DeleteProject(ctx context.Context, req *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
 	return c.deleteProject.CallUnary(ctx, req)
@@ -241,6 +322,13 @@ type AgentServiceHandler interface {
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
+	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
+	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error
+	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -298,6 +386,36 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("DeleteRoute")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceListVersionsHandler := connect.NewUnaryHandler(
+		AgentServiceListVersionsProcedure,
+		svc.ListVersions,
+		connect.WithSchema(agentServiceMethods.ByName("ListVersions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRollbackHandler := connect.NewServerStreamHandler(
+		AgentServiceRollbackProcedure,
+		svc.Rollback,
+		connect.WithSchema(agentServiceMethods.ByName("Rollback")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListSnapshotsHandler := connect.NewUnaryHandler(
+		AgentServiceListSnapshotsProcedure,
+		svc.ListSnapshots,
+		connect.WithSchema(agentServiceMethods.ByName("ListSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCreateSnapshotHandler := connect.NewServerStreamHandler(
+		AgentServiceCreateSnapshotProcedure,
+		svc.CreateSnapshot,
+		connect.WithSchema(agentServiceMethods.ByName("CreateSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreSnapshotHandler := connect.NewServerStreamHandler(
+		AgentServiceRestoreSnapshotProcedure,
+		svc.RestoreSnapshot,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceDeleteProjectHandler := connect.NewUnaryHandler(
 		AgentServiceDeleteProjectProcedure,
 		svc.DeleteProject,
@@ -338,6 +456,16 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSaveRouteHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteRouteProcedure:
 			agentServiceDeleteRouteHandler.ServeHTTP(w, r)
+		case AgentServiceListVersionsProcedure:
+			agentServiceListVersionsHandler.ServeHTTP(w, r)
+		case AgentServiceRollbackProcedure:
+			agentServiceRollbackHandler.ServeHTTP(w, r)
+		case AgentServiceListSnapshotsProcedure:
+			agentServiceListSnapshotsHandler.ServeHTTP(w, r)
+		case AgentServiceCreateSnapshotProcedure:
+			agentServiceCreateSnapshotHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreSnapshotProcedure:
+			agentServiceRestoreSnapshotHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteProjectProcedure:
 			agentServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
@@ -381,6 +509,26 @@ func (UnimplementedAgentServiceHandler) SaveRoute(context.Context, *connect.Requ
 
 func (UnimplementedAgentServiceHandler) DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteRoute is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListVersions is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Rollback is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListSnapshots is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CreateSnapshot is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreSnapshot is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {

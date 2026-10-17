@@ -3,6 +3,7 @@ syntax = "proto3";
 package nagi.v1;
 
 import "google/protobuf/timestamp.proto";
+import "nagi/v1/agent.proto";
 import "nagi/v1/common.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
@@ -121,6 +122,11 @@ service ProjectService {
   rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
   rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
   rpc DeleteNodeProject(DeleteNodeProjectRequest) returns (DeleteNodeProjectResponse);
+  rpc ListNodeProjectVersions(NodeProjectRef) returns (ListVersionsResponse);
+  rpc RollbackNodeProject(RollbackNodeProjectRequest) returns (stream DeployEvent);
+  rpc ListNodeProjectSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
+  rpc CreateNodeProjectSnapshot(NodeProjectRef) returns (stream DeployEvent);
+  rpc RestoreNodeProjectSnapshot(RestoreNodeProjectSnapshotRequest) returns (stream DeployEvent);
   rpc SaveNodeProjectRoute(SaveNodeProjectRouteRequest) returns (SaveNodeProjectRouteResponse);
   rpc DeleteNodeProjectRoute(DeleteNodeProjectRouteRequest) returns (DeleteNodeProjectRouteResponse);
   rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
@@ -185,6 +191,24 @@ message DeleteNodeProjectRouteRequest {
 
 message DeleteNodeProjectRouteResponse {
   Project project = 1;
+}
+
+message NodeProjectRef {
+  string node_id = 1;
+  string project_id = 2;
+}
+
+message RollbackNodeProjectRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 version = 3;
+  bool restore_data = 4;
+}
+
+message RestoreNodeProjectSnapshotRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string snapshot_id = 3;
 }
 
 message DeleteNodeProjectRequest {

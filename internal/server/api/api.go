@@ -306,6 +306,82 @@ func (s *projectService) DeleteNodeProjectRoute(ctx context.Context, req *connec
 	return connect.NewResponse(&nagiv1.DeleteNodeProjectRouteResponse{Project: resp.GetProject()}), nil
 }
 
+func (s *projectService) ListNodeProjectVersions(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListVersionsResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.ListVersions(ctx, &nagiv1.ListVersionsRequest{Id: req.Msg.GetProjectId()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) ListNodeProjectSnapshots(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.ListSnapshots(ctx, &nagiv1.ListSnapshotsRequest{Id: req.Msg.GetProjectId()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// forwardEvents 把节点返回的事件流转发给浏览器。
+func forwardEvents(ctx context.Context, recv func() (*nagiv1.DeployEvent, error), out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	for {
+		ev, err := recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) || ctx.Err() != nil {
+				return nil
+			}
+			return fromGRPC(err)
+		}
+		if err := out.Send(ev); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *projectService) RollbackNodeProject(ctx context.Context, req *connect.Request[nagiv1.RollbackNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return err
+	}
+	stream, err := agent.Rollback(ctx, &nagiv1.RollbackRequest{Id: req.Msg.GetProjectId(), Version: req.Msg.GetVersion(), RestoreData: req.Msg.GetRestoreData()})
+	if err != nil {
+		return fromGRPC(err)
+	}
+	return forwardEvents(ctx, stream.Recv, out)
+}
+
+func (s *projectService) CreateNodeProjectSnapshot(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return err
+	}
+	stream, err := agent.CreateSnapshot(ctx, &nagiv1.CreateSnapshotRequest{Id: req.Msg.GetProjectId()})
+	if err != nil {
+		return fromGRPC(err)
+	}
+	return forwardEvents(ctx, stream.Recv, out)
+}
+
+func (s *projectService) RestoreNodeProjectSnapshot(ctx context.Context, req *connect.Request[nagiv1.RestoreNodeProjectSnapshotRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return err
+	}
+	stream, err := agent.RestoreSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{Id: req.Msg.GetProjectId(), SnapshotId: req.Msg.GetSnapshotId()})
+	if err != nil {
+		return fromGRPC(err)
+	}
+	return forwardEvents(ctx, stream.Recv, out)
+}
+
 func (s *projectService) DeleteNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRequest]) (*connect.Response[nagiv1.DeleteNodeProjectResponse], error) {
 	agent, err := s.agent(req.Msg.GetNodeId())
 	if err != nil {

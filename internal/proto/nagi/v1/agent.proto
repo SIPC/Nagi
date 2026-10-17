@@ -16,6 +16,13 @@ service AgentService {
   // 新建或修改一条端口映射，立即生效。
   rpc SaveRoute(SaveRouteRequest) returns (SaveRouteResponse);
   rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
+  // 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+  rpc Rollback(RollbackRequest) returns (stream DeployEvent);
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (stream DeployEvent);
+  // 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
   // 删除项目：停止并删除容器。项目目录默认保留。
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
@@ -102,6 +109,38 @@ message DeleteRouteRequest {
 
 message DeleteRouteResponse {
   Project project = 1;
+}
+
+message ListVersionsRequest {
+  string id = 1;
+}
+
+message ListVersionsResponse {
+  repeated Version versions = 1;
+}
+
+message RollbackRequest {
+  string id = 1;
+  int64 version = 2;
+  // 同时把数据（volumes/ 和保留路径）恢复到这个版本被替换之前。
+  bool restore_data = 3;
+}
+
+message ListSnapshotsRequest {
+  string id = 1;
+}
+
+message ListSnapshotsResponse {
+  repeated Snapshot snapshots = 1;
+}
+
+message CreateSnapshotRequest {
+  string id = 1;
+}
+
+message RestoreSnapshotRequest {
+  string id = 1;
+  string snapshot_id = 2;
 }
 
 message DeleteProjectRequest {

@@ -2,8 +2,8 @@
 // @generated from file nagi/v1/common.proto (package nagi.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSLvAgoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmVKBAgHEAgimwIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIioKBlNvdXJjZRIPCgdnaXRfdXJsGAEgASgJEg8KB2dpdF9yZWYYAiABKAkikQEKCEV4cG9zdXJlEg8KB3NlcnZpY2UYASABKAkSDgoGdGFyZ2V0GAIgASgNEhAKCHByb3RvY29sGAMgASgJEhEKCXB1Ymxpc2hlZBgEIAEoDRIPCgdkb21haW5zGAUgAygJEhEKCWh0dHBfb25seRgGIAEoCBIMCgRuYW1lGAcgASgJEg0KBWVycm9yGAggASgJIjQKBkVudlZhchILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGc2VjcmV0GAMgASgIIigKB0Vudkxpc3QSHQoEdmFycxgBIAMoCzIPLm5hZ2kudjEuRW52VmFyIpABCglJbWFnZUZvcm0SDQoFaW1hZ2UYASABKAkSDwoHY29tbWFuZBgCIAEoCRIjCgVwb3J0cxgDIAMoCzIULm5hZ2kudjEuUG9ydE1hcHBpbmcSDwoHdm9sdW1lcxgEIAMoCRIPCgd3b3JrZGlyGAUgASgJEhwKA2VudhgGIAMoCzIPLm5hZ2kudjEuRW52VmFyIkIKC1BvcnRNYXBwaW5nEhEKCXB1Ymxpc2hlZBgBIAEoDRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkicQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJIjkKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMiWwoOUHJvamVjdFN1bW1hcnkSIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdBImCgZzdGF0dXMYAiABKAsyFi5uYWdpLnYxLlByb2plY3RTdGF0dXMieAoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCSJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMqQAoIU3RhdGVmdWwSEQoNU1RBVEVGVUxfQVVUTxAAEhAKDFNUQVRFRlVMX1lFUxABEg8KC1NUQVRFRlVMX05PEAJCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -115,6 +115,13 @@ export type Project = Message<"nagi.v1.Project"> & {
    * @generated from field: repeated nagi.v1.Exposure routes = 15;
    */
   routes: Exposure[];
+
+  /**
+   * 实际判定的是否有状态（自动判断或用户指定）。
+   *
+   * @generated from field: bool stateful = 16;
+   */
+  stateful: boolean;
 };
 
 /**
@@ -172,6 +179,20 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
    * @generated from field: repeated string preserve = 7;
    */
   preserve: string[];
+
+  /**
+   * 是否有状态。默认自动判断：用了命名 volume 或有保留路径的项目算有状态。
+   *
+   * @generated from field: nagi.v1.Stateful stateful = 8;
+   */
+  stateful: Stateful;
+
+  /**
+   * 定时快照间隔（分钟），0 表示默认（60 分钟）。
+   *
+   * @generated from field: uint32 snapshot_interval_minutes = 9;
+   */
+  snapshotIntervalMinutes: number;
 };
 
 /**
@@ -180,6 +201,108 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
  */
 export const ProjectConfigSchema: GenMessage<ProjectConfig> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 1);
+
+/**
+ * Version 是一次部署：配置 + 文件 + 镜像摘要。
+ *
+ * @generated from message nagi.v1.Version
+ */
+export type Version = Message<"nagi.v1.Version"> & {
+  /**
+   * @generated from field: int64 version = 1;
+   */
+  version: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 2;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * 部署成功的时间，部署失败时为空。
+   *
+   * @generated from field: google.protobuf.Timestamp deployed_at = 3;
+   */
+  deployedAt?: Timestamp | undefined;
+
+  /**
+   * 服务名 → 部署时实际使用的镜像（带摘要）。
+   *
+   * @generated from field: map<string, string> images = 4;
+   */
+  images: { [key: string]: string };
+
+  /**
+   * 是否保存了这个版本的文件（data/ 中除保留路径以外的内容）。
+   *
+   * @generated from field: bool has_files = 5;
+   */
+  hasFiles: boolean;
+
+  /**
+   * 回滚生成的版本：回滚到的那个版本号。
+   *
+   * @generated from field: int64 rollback_of = 6;
+   */
+  rollbackOf: bigint;
+
+  /**
+   * 部署时拉取的 git 提交。
+   *
+   * @generated from field: string commit = 7;
+   */
+  commit: string;
+};
+
+/**
+ * Describes the message nagi.v1.Version.
+ * Use `create(VersionSchema)` to create a new message.
+ */
+export const VersionSchema: GenMessage<Version> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 2);
+
+/**
+ * Snapshot 是项目的一份快照。
+ *
+ * @generated from message nagi.v1.Snapshot
+ */
+export type Snapshot = Message<"nagi.v1.Snapshot"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * scheduled：定时；manual：手动；predeploy：部署前的数据；version：版本文件。
+   *
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp time = 3;
+   */
+  time?: Timestamp | undefined;
+
+  /**
+   * @generated from field: int64 size = 4;
+   */
+  size: bigint;
+
+  /**
+   * predeploy：部署前正在运行的版本；version：所属版本。
+   *
+   * @generated from field: int64 version = 5;
+   */
+  version: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.Snapshot.
+ * Use `create(SnapshotSchema)` to create a new message.
+ */
+export const SnapshotSchema: GenMessage<Snapshot> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 3);
 
 /**
  * @generated from message nagi.v1.Source
@@ -205,7 +328,7 @@ export type Source = Message<"nagi.v1.Source"> & {
  * Use `create(SourceSchema)` to create a new message.
  */
 export const SourceSchema: GenMessage<Source> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 2);
+  messageDesc(file_nagi_v1_common, 4);
 
 /**
  * Exposure 是一条端口映射：一个服务端口的对外开放方式。
@@ -274,7 +397,7 @@ export type Exposure = Message<"nagi.v1.Exposure"> & {
  * Use `create(ExposureSchema)` to create a new message.
  */
 export const ExposureSchema: GenMessage<Exposure> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 3);
+  messageDesc(file_nagi_v1_common, 5);
 
 /**
  * @generated from message nagi.v1.EnvVar
@@ -303,7 +426,7 @@ export type EnvVar = Message<"nagi.v1.EnvVar"> & {
  * Use `create(EnvVarSchema)` to create a new message.
  */
 export const EnvVarSchema: GenMessage<EnvVar> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 4);
+  messageDesc(file_nagi_v1_common, 6);
 
 /**
  * @generated from message nagi.v1.EnvList
@@ -320,7 +443,7 @@ export type EnvList = Message<"nagi.v1.EnvList"> & {
  * Use `create(EnvListSchema)` to create a new message.
  */
 export const EnvListSchema: GenMessage<EnvList> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 5);
+  messageDesc(file_nagi_v1_common, 7);
 
 /**
  * ImageForm：直接运行一个镜像，文件可选。
@@ -372,7 +495,7 @@ export type ImageForm = Message<"nagi.v1.ImageForm"> & {
  * Use `create(ImageFormSchema)` to create a new message.
  */
 export const ImageFormSchema: GenMessage<ImageForm> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 6);
+  messageDesc(file_nagi_v1_common, 8);
 
 /**
  * @generated from message nagi.v1.PortMapping
@@ -405,7 +528,7 @@ export type PortMapping = Message<"nagi.v1.PortMapping"> & {
  * Use `create(PortMappingSchema)` to create a new message.
  */
 export const PortMappingSchema: GenMessage<PortMapping> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 7);
+  messageDesc(file_nagi_v1_common, 9);
 
 /**
  * @generated from message nagi.v1.ServiceStatus
@@ -453,7 +576,7 @@ export type ServiceStatus = Message<"nagi.v1.ServiceStatus"> & {
  * Use `create(ServiceStatusSchema)` to create a new message.
  */
 export const ServiceStatusSchema: GenMessage<ServiceStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 8);
+  messageDesc(file_nagi_v1_common, 10);
 
 /**
  * @generated from message nagi.v1.ProjectStatus
@@ -470,7 +593,7 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
  * Use `create(ProjectStatusSchema)` to create a new message.
  */
 export const ProjectStatusSchema: GenMessage<ProjectStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 9);
+  messageDesc(file_nagi_v1_common, 11);
 
 /**
  * @generated from message nagi.v1.ProjectSummary
@@ -492,7 +615,7 @@ export type ProjectSummary = Message<"nagi.v1.ProjectSummary"> & {
  * Use `create(ProjectSummarySchema)` to create a new message.
  */
 export const ProjectSummarySchema: GenMessage<ProjectSummary> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 10);
+  messageDesc(file_nagi_v1_common, 12);
 
 /**
  * @generated from message nagi.v1.NodeInfo
@@ -534,7 +657,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
  * Use `create(NodeInfoSchema)` to create a new message.
  */
 export const NodeInfoSchema: GenMessage<NodeInfo> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 11);
+  messageDesc(file_nagi_v1_common, 13);
 
 /**
  * @generated from message nagi.v1.LogLine
@@ -568,7 +691,7 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
  * Use `create(LogLineSchema)` to create a new message.
  */
 export const LogLineSchema: GenMessage<LogLine> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 12);
+  messageDesc(file_nagi_v1_common, 14);
 
 /**
  * @generated from message nagi.v1.DeployEvent
@@ -599,7 +722,7 @@ export type DeployEvent = Message<"nagi.v1.DeployEvent"> & {
  * Use `create(DeployEventSchema)` to create a new message.
  */
 export const DeployEventSchema: GenMessage<DeployEvent> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 13);
+  messageDesc(file_nagi_v1_common, 15);
 
 /**
  * @generated from message nagi.v1.DeployResult
@@ -626,5 +749,31 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  * Use `create(DeployResultSchema)` to create a new message.
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 14);
+  messageDesc(file_nagi_v1_common, 16);
+
+/**
+ * @generated from enum nagi.v1.Stateful
+ */
+export enum Stateful {
+  /**
+   * @generated from enum value: STATEFUL_AUTO = 0;
+   */
+  AUTO = 0,
+
+  /**
+   * @generated from enum value: STATEFUL_YES = 1;
+   */
+  YES = 1,
+
+  /**
+   * @generated from enum value: STATEFUL_NO = 2;
+   */
+  NO = 2,
+}
+
+/**
+ * Describes the enum nagi.v1.Stateful.
+ */
+export const StatefulSchema: GenEnum<Stateful> = /*@__PURE__*/
+  enumDesc(file_nagi_v1_common, 0);
 

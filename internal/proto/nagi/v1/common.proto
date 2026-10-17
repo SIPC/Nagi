@@ -36,6 +36,8 @@ message Project {
   string last_commit = 14;
   // 端口映射（config/routes/ 下的文件）。
   repeated Exposure routes = 15;
+  // 实际判定的是否有状态（自动判断或用户指定）。
+  bool stateful = 16;
 }
 
 // ProjectConfig 是一个版本的完整配置。
@@ -55,6 +57,43 @@ message ProjectConfig {
   // 更新文件时保留不动的路径（相对 data/），例如 uploads/。
   // compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
   repeated string preserve = 7;
+  // 是否有状态。默认自动判断：用了命名 volume 或有保留路径的项目算有状态。
+  Stateful stateful = 8;
+  // 定时快照间隔（分钟），0 表示默认（60 分钟）。
+  uint32 snapshot_interval_minutes = 9;
+}
+
+enum Stateful {
+  STATEFUL_AUTO = 0;
+  STATEFUL_YES = 1;
+  STATEFUL_NO = 2;
+}
+
+// Version 是一次部署：配置 + 文件 + 镜像摘要。
+message Version {
+  int64 version = 1;
+  google.protobuf.Timestamp created_at = 2;
+  // 部署成功的时间，部署失败时为空。
+  google.protobuf.Timestamp deployed_at = 3;
+  // 服务名 → 部署时实际使用的镜像（带摘要）。
+  map<string, string> images = 4;
+  // 是否保存了这个版本的文件（data/ 中除保留路径以外的内容）。
+  bool has_files = 5;
+  // 回滚生成的版本：回滚到的那个版本号。
+  int64 rollback_of = 6;
+  // 部署时拉取的 git 提交。
+  string commit = 7;
+}
+
+// Snapshot 是项目的一份快照。
+message Snapshot {
+  string id = 1;
+  // scheduled：定时；manual：手动；predeploy：部署前的数据；version：版本文件。
+  string kind = 2;
+  google.protobuf.Timestamp time = 3;
+  int64 size = 4;
+  // predeploy：部署前正在运行的版本；version：所属版本。
+  int64 version = 5;
 }
 
 message Source {

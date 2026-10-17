@@ -112,7 +112,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer dc.Close()
 
-	projects, err := project.NewManager(nodeDB, dc, cfg.SubnetPool)
+	projects, err := project.NewManager(nodeDB, dc, cfg.SubnetPool, filepath.Join(cfg.DataDir, "snapshots"))
 	if err != nil {
 		return err
 	}
@@ -128,6 +128,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.info = a.nodeInfo(ctx)
 
 	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
+	go a.snapshotLoop(ctx)
 
 	if !cfg.DisableProxy {
 		a.proxy = proxy.New(filepath.Join(cfg.DataDir, "caddy"), log.With("component", "proxy"))
@@ -350,4 +351,20 @@ func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClie
 		return
 	}
 	a.log.Info("证书已续期", "panel", p.Address)
+}
+
+// snapshotLoop 每分钟检查一次，给到时间的项目做定时快照。
+func (a *agent) snapshotLoop(ctx context.Context) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		a.projects.SnapshotDue(ctx, func(id string, err error) {
+			a.log.Warn("定时快照失败", "project", id, "err", err)
+		})
+	}
 }
