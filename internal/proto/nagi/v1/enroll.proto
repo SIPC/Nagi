@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// EnrollService：节点用一次性令牌加入面板。节点此时还没有客户端证书，
+// 通过普通 HTTPS（钉住面板公钥）调用。
+service EnrollService {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+message EnrollRequest {
+  string token = 1;
+  // DER 编码的证书签名请求，私钥留在节点上。
+  bytes csr = 2;
+  // WireGuard 公钥（32 字节）。
+  bytes wireguard_public_key = 3;
+  string hostname = 4;
+}
+
+message EnrollResponse {
+  string node_id = 1;
+  // DER 编码的节点客户端证书。
+  bytes certificate = 2;
+  // DER 编码的面板 CA 证书。
+  bytes ca_certificate = 3;
+}

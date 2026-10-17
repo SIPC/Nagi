@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+import "google/protobuf/timestamp.proto";
+import "nagi/v1/common.proto";
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// 以下服务供浏览器调用（Connect-RPC）。
+
+service SetupService {
+  rpc GetSetupState(GetSetupStateRequest) returns (GetSetupStateResponse);
+  rpc Setup(SetupRequest) returns (SetupResponse);
+}
+
+message GetSetupStateRequest {}
+
+message GetSetupStateResponse {
+  bool initialized = 1;
+}
+
+message SetupRequest {
+  // 启动日志里初始化链接带的一次性令牌。
+  string token = 1;
+  string username = 2;
+  string password = 3;
+}
+
+message SetupResponse {}
+
+service AuthService {
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc Me(MeRequest) returns (MeResponse);
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {}
+
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+message MeRequest {}
+
+message MeResponse {
+  string username = 1;
+}
+
+service NodeService {
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+}
+
+message Node {
+  string id = 1;
+  string name = 2;
+  bool online = 3;
+  google.protobuf.Timestamp last_seen = 4;
+  NodeInfo info = 5;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  repeated Node nodes = 1;
+}
+
+service ProjectService {
+  rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
+  rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
+  rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
+  rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
+  rpc StreamNodeProjectLogs(StreamNodeProjectLogsRequest) returns (stream LogLine);
+}
+
+message NodeProject {
+  string node_id = 1;
+  ProjectSummary project = 2;
+}
+
+message ListAllProjectsRequest {}
+
+message ListAllProjectsResponse {
+  repeated NodeProject projects = 1;
+}
+
+message CreateNodeProjectRequest {
+  string node_id = 1;
+  string name = 2;
+  string dir = 3;
+  string compose = 4;
+}
+
+message CreateNodeProjectResponse {
+  Project project = 1;
+}
+
+message GetNodeProjectRequest {
+  string node_id = 1;
+  string project_id = 2;
+}
+
+message GetNodeProjectResponse {
+  ProjectSummary project = 1;
+}
+
+message DeployNodeProjectRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+}
+
+message StreamNodeProjectLogsRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string service = 3;
+  int32 tail = 4;
+  bool follow = 5;
+}

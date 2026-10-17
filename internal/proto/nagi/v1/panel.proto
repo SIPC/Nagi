@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+import "nagi/v1/common.proto";
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// PanelService：节点调用面板，走控制连接。
+service PanelService {
+  // 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+  rpc Report(ReportRequest) returns (ReportResponse);
+}
+
+message ReportRequest {
+  NodeInfo node = 1;
+  repeated ProjectSummary projects = 2;
+}
+
+message ReportResponse {}

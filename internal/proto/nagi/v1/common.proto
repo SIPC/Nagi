@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// Project 是节点上保存的项目。项目数据以节点为准。
+message Project {
+  // 全局唯一的项目 ID。
+  string id = 1;
+  // 显示名称，可以重名。
+  string name = 2;
+  // 项目目录，例如 /mnt/qmt。
+  string dir = 3;
+  // 修订号：每次保存草稿或部署都加一，用于多面板冲突检测。
+  int64 revision = 4;
+  // 最新版本号。
+  int64 latest_version = 5;
+  // 最近一次部署的版本号，0 表示从未部署。
+  int64 deployed_version = 6;
+  // 当前版本的 compose 原文。
+  string compose = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ServiceStatus {
+  string name = 1;
+  string container_id = 2;
+  string image = 3;
+  // 容器状态：running、exited、restarting、paused、created、dead。
+  string state = 4;
+  // Docker 给出的可读状态，例如 "Up 3 minutes"。
+  string status = 5;
+  // 健康检查状态：healthy、unhealthy、starting，没有健康检查时为空。
+  string health = 6;
+}
+
+message ProjectStatus {
+  repeated ServiceStatus services = 1;
+}
+
+message ProjectSummary {
+  Project project = 1;
+  ProjectStatus status = 2;
+}
+
+message NodeInfo {
+  string hostname = 1;
+  string os = 2;
+  string arch = 3;
+  string version = 4;
+  string docker_version = 5;
+  string compose_version = 6;
+}
+
+message LogLine {
+  string service = 1;
+  // stdout 或 stderr。
+  string stream = 2;
+  string text = 3;
+  google.protobuf.Timestamp time = 4;
+}
+
+message DeployEvent {
+  oneof event {
+    // 部署过程中的一行输出。
+    string output = 1;
+    DeployResult result = 2;
+  }
+}
+
+message DeployResult {
+  bool success = 1;
+  string error = 2;
+  int64 version = 3;
+}

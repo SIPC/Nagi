@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+import "nagi/v1/common.proto";
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// AgentService：面板调用节点（反向 gRPC），走控制连接。
+service AgentService {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
+  rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated ProjectSummary projects = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  string dir = 2;
+  string compose = 3;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}
+
+message GetProjectRequest {
+  string id = 1;
+}
+
+message GetProjectResponse {
+  ProjectSummary project = 1;
+}
+
+message DeployProjectRequest {
+  string id = 1;
+  // 面板基于的修订号；节点上已经不是这个修订号时拒绝。
+  int64 base_revision = 2;
+}
+
+message StreamLogsRequest {
+  string id = 1;
+  // 为空时返回所有服务的日志。
+  string service = 2;
+  // 先返回最近多少行。
+  int32 tail = 3;
+  bool follow = 4;
+}

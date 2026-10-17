@@ -1,15 +1,16 @@
-﻿# Go
+# Go
 /bin/
 /dist/
 *.test
 *.out
 
 # Generated / local data
-/.nagi-dev/
+/.nagi-dev*
 
 # Frontend
 /web/node_modules/
-/web/dist/
+/web/dist/*
+!/web/dist/.gitkeep
 /web/.vite/
 
 # Editors / OS
