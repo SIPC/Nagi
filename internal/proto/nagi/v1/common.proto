@@ -20,9 +20,60 @@ message Project {
   int64 latest_version = 5;
   // 最近一次部署的版本号，0 表示从未部署。
   int64 deployed_version = 6;
-  // 当前版本的 compose 原文。
-  string compose = 7;
+  reserved 7;
   google.protobuf.Timestamp created_at = 8;
+  // 最新版本的配置。
+  ProjectConfig config = 9;
+  // 是否有未部署的草稿。
+  bool has_draft = 10;
+  // 草稿内容，has_draft 为 false 时为空。
+  ProjectConfig draft = 11;
+}
+
+// ProjectConfig 是一个版本的完整配置。
+message ProjectConfig {
+  // compose 原文。用镜像表单创建的项目，由表单生成。
+  string compose = 1;
+  // 项目级变量：替换 compose 里的 ${变量}。
+  repeated EnvVar env = 2;
+  // 服务级环境变量：键是服务名，只注入对应服务的容器。
+  map<string, EnvList> service_env = 3;
+  // 用镜像表单创建的项目才有。有它时 compose 由它生成。
+  ImageForm form = 4;
+}
+
+message EnvVar {
+  string key = 1;
+  string value = 2;
+  // 密钥：界面上默认隐藏。
+  bool secret = 3;
+}
+
+message EnvList {
+  repeated EnvVar vars = 1;
+}
+
+// ImageForm：直接运行一个镜像，文件可选。
+message ImageForm {
+  string image = 1;
+  // 运行命令，为空时使用镜像默认命令。
+  string command = 2;
+  repeated PortMapping ports = 3;
+  // 持久化目录：容器内的路径，数据落到项目目录的 volumes/ 下。
+  repeated string volumes = 4;
+  // 把项目的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+  string workdir = 5;
+  // 环境变量，直接注入容器。
+  repeated EnvVar env = 6;
+}
+
+message PortMapping {
+  // 节点上对外的端口。
+  uint32 published = 1;
+  // 容器内的端口。
+  uint32 target = 2;
+  // tcp 或 udp，默认 tcp。
+  string protocol = 3;
 }
 
 message ServiceStatus {

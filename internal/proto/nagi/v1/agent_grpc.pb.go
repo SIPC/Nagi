@@ -22,6 +22,8 @@ const (
 	AgentService_ListProjects_FullMethodName  = "/nagi.v1.AgentService/ListProjects"
 	AgentService_CreateProject_FullMethodName = "/nagi.v1.AgentService/CreateProject"
 	AgentService_GetProject_FullMethodName    = "/nagi.v1.AgentService/GetProject"
+	AgentService_SaveDraft_FullMethodName     = "/nagi.v1.AgentService/SaveDraft"
+	AgentService_DiscardDraft_FullMethodName  = "/nagi.v1.AgentService/DiscardDraft"
 	AgentService_DeployProject_FullMethodName = "/nagi.v1.AgentService/DeployProject"
 	AgentService_StreamLogs_FullMethodName    = "/nagi.v1.AgentService/StreamLogs"
 )
@@ -35,6 +37,8 @@ type AgentServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
+	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error)
+	DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 }
@@ -71,6 +75,26 @@ func (c *agentServiceClient) GetProject(ctx context.Context, in *GetProjectReque
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetProjectResponse)
 	err := c.cc.Invoke(ctx, AgentService_GetProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveDraftResponse)
+	err := c.cc.Invoke(ctx, AgentService_SaveDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardDraftResponse)
+	err := c.cc.Invoke(ctx, AgentService_DiscardDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +148,8 @@ type AgentServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
+	SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error)
+	DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	mustEmbedUnimplementedAgentServiceServer()
@@ -144,6 +170,12 @@ func (UnimplementedAgentServiceServer) CreateProject(context.Context, *CreatePro
 }
 func (UnimplementedAgentServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
+}
+func (UnimplementedAgentServiceServer) SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveDraft not implemented")
+}
+func (UnimplementedAgentServiceServer) DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardDraft not implemented")
 }
 func (UnimplementedAgentServiceServer) DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployProject not implemented")
@@ -226,6 +258,42 @@ func _AgentService_GetProject_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SaveDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SaveDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SaveDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SaveDraft(ctx, req.(*SaveDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DiscardDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DiscardDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DiscardDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DiscardDraft(ctx, req.(*DiscardDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_DeployProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DeployProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -266,6 +334,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetProject",
 			Handler:    _AgentService_GetProject_Handler,
+		},
+		{
+			MethodName: "SaveDraft",
+			Handler:    _AgentService_SaveDraft_Handler,
+		},
+		{
+			MethodName: "DiscardDraft",
+			Handler:    _AgentService_DiscardDraft_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

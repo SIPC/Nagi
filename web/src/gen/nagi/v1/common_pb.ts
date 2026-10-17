@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSK1AQoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEg8KB2NvbXBvc2UYByABKAkSLgoKY3JlYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAicQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJIjkKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMiWwoOUHJvamVjdFN1bW1hcnkSIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdBImCgZzdGF0dXMYAiABKAsyFi5uYWdpLnYxLlByb2plY3RTdGF0dXMieAoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCSJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKMAgoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgHEAgi4gEKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBIjQKBkVudlZhchILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGc2VjcmV0GAMgASgIIigKB0Vudkxpc3QSHQoEdmFycxgBIAMoCzIPLm5hZ2kudjEuRW52VmFyIpABCglJbWFnZUZvcm0SDQoFaW1hZ2UYASABKAkSDwoHY29tbWFuZBgCIAEoCRIjCgVwb3J0cxgDIAMoCzIULm5hZ2kudjEuUG9ydE1hcHBpbmcSDwoHdm9sdW1lcxgEIAMoCRIPCgd3b3JrZGlyGAUgASgJEhwKA2VudhgGIAMoCzIPLm5hZ2kudjEuRW52VmFyIkIKC1BvcnRNYXBwaW5nEhEKCXB1Ymxpc2hlZBgBIAEoDRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkicQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJIjkKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMiWwoOUHJvamVjdFN1bW1hcnkSIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdBImCgZzdGF0dXMYAiABKAsyFi5uYWdpLnYxLlByb2plY3RTdGF0dXMieAoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCSJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -63,16 +63,30 @@ export type Project = Message<"nagi.v1.Project"> & {
   deployedVersion: bigint;
 
   /**
-   * 当前版本的 compose 原文。
-   *
-   * @generated from field: string compose = 7;
-   */
-  compose: string;
-
-  /**
    * @generated from field: google.protobuf.Timestamp created_at = 8;
    */
   createdAt?: Timestamp | undefined;
+
+  /**
+   * 最新版本的配置。
+   *
+   * @generated from field: nagi.v1.ProjectConfig config = 9;
+   */
+  config?: ProjectConfig | undefined;
+
+  /**
+   * 是否有未部署的草稿。
+   *
+   * @generated from field: bool has_draft = 10;
+   */
+  hasDraft: boolean;
+
+  /**
+   * 草稿内容，has_draft 为 false 时为空。
+   *
+   * @generated from field: nagi.v1.ProjectConfig draft = 11;
+   */
+  draft?: ProjectConfig | undefined;
 };
 
 /**
@@ -81,6 +95,179 @@ export type Project = Message<"nagi.v1.Project"> & {
  */
 export const ProjectSchema: GenMessage<Project> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 0);
+
+/**
+ * ProjectConfig 是一个版本的完整配置。
+ *
+ * @generated from message nagi.v1.ProjectConfig
+ */
+export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
+  /**
+   * compose 原文。用镜像表单创建的项目，由表单生成。
+   *
+   * @generated from field: string compose = 1;
+   */
+  compose: string;
+
+  /**
+   * 项目级变量：替换 compose 里的 ${变量}。
+   *
+   * @generated from field: repeated nagi.v1.EnvVar env = 2;
+   */
+  env: EnvVar[];
+
+  /**
+   * 服务级环境变量：键是服务名，只注入对应服务的容器。
+   *
+   * @generated from field: map<string, nagi.v1.EnvList> service_env = 3;
+   */
+  serviceEnv: { [key: string]: EnvList };
+
+  /**
+   * 用镜像表单创建的项目才有。有它时 compose 由它生成。
+   *
+   * @generated from field: nagi.v1.ImageForm form = 4;
+   */
+  form?: ImageForm | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.ProjectConfig.
+ * Use `create(ProjectConfigSchema)` to create a new message.
+ */
+export const ProjectConfigSchema: GenMessage<ProjectConfig> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 1);
+
+/**
+ * @generated from message nagi.v1.EnvVar
+ */
+export type EnvVar = Message<"nagi.v1.EnvVar"> & {
+  /**
+   * @generated from field: string key = 1;
+   */
+  key: string;
+
+  /**
+   * @generated from field: string value = 2;
+   */
+  value: string;
+
+  /**
+   * 密钥：界面上默认隐藏。
+   *
+   * @generated from field: bool secret = 3;
+   */
+  secret: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.EnvVar.
+ * Use `create(EnvVarSchema)` to create a new message.
+ */
+export const EnvVarSchema: GenMessage<EnvVar> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 2);
+
+/**
+ * @generated from message nagi.v1.EnvList
+ */
+export type EnvList = Message<"nagi.v1.EnvList"> & {
+  /**
+   * @generated from field: repeated nagi.v1.EnvVar vars = 1;
+   */
+  vars: EnvVar[];
+};
+
+/**
+ * Describes the message nagi.v1.EnvList.
+ * Use `create(EnvListSchema)` to create a new message.
+ */
+export const EnvListSchema: GenMessage<EnvList> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 3);
+
+/**
+ * ImageForm：直接运行一个镜像，文件可选。
+ *
+ * @generated from message nagi.v1.ImageForm
+ */
+export type ImageForm = Message<"nagi.v1.ImageForm"> & {
+  /**
+   * @generated from field: string image = 1;
+   */
+  image: string;
+
+  /**
+   * 运行命令，为空时使用镜像默认命令。
+   *
+   * @generated from field: string command = 2;
+   */
+  command: string;
+
+  /**
+   * @generated from field: repeated nagi.v1.PortMapping ports = 3;
+   */
+  ports: PortMapping[];
+
+  /**
+   * 持久化目录：容器内的路径，数据落到项目目录的 volumes/ 下。
+   *
+   * @generated from field: repeated string volumes = 4;
+   */
+  volumes: string[];
+
+  /**
+   * 把项目的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+   *
+   * @generated from field: string workdir = 5;
+   */
+  workdir: string;
+
+  /**
+   * 环境变量，直接注入容器。
+   *
+   * @generated from field: repeated nagi.v1.EnvVar env = 6;
+   */
+  env: EnvVar[];
+};
+
+/**
+ * Describes the message nagi.v1.ImageForm.
+ * Use `create(ImageFormSchema)` to create a new message.
+ */
+export const ImageFormSchema: GenMessage<ImageForm> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 4);
+
+/**
+ * @generated from message nagi.v1.PortMapping
+ */
+export type PortMapping = Message<"nagi.v1.PortMapping"> & {
+  /**
+   * 节点上对外的端口。
+   *
+   * @generated from field: uint32 published = 1;
+   */
+  published: number;
+
+  /**
+   * 容器内的端口。
+   *
+   * @generated from field: uint32 target = 2;
+   */
+  target: number;
+
+  /**
+   * tcp 或 udp，默认 tcp。
+   *
+   * @generated from field: string protocol = 3;
+   */
+  protocol: string;
+};
+
+/**
+ * Describes the message nagi.v1.PortMapping.
+ * Use `create(PortMappingSchema)` to create a new message.
+ */
+export const PortMappingSchema: GenMessage<PortMapping> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 5);
 
 /**
  * @generated from message nagi.v1.ServiceStatus
@@ -128,7 +315,7 @@ export type ServiceStatus = Message<"nagi.v1.ServiceStatus"> & {
  * Use `create(ServiceStatusSchema)` to create a new message.
  */
 export const ServiceStatusSchema: GenMessage<ServiceStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 1);
+  messageDesc(file_nagi_v1_common, 6);
 
 /**
  * @generated from message nagi.v1.ProjectStatus
@@ -145,7 +332,7 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
  * Use `create(ProjectStatusSchema)` to create a new message.
  */
 export const ProjectStatusSchema: GenMessage<ProjectStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 2);
+  messageDesc(file_nagi_v1_common, 7);
 
 /**
  * @generated from message nagi.v1.ProjectSummary
@@ -167,7 +354,7 @@ export type ProjectSummary = Message<"nagi.v1.ProjectSummary"> & {
  * Use `create(ProjectSummarySchema)` to create a new message.
  */
 export const ProjectSummarySchema: GenMessage<ProjectSummary> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 3);
+  messageDesc(file_nagi_v1_common, 8);
 
 /**
  * @generated from message nagi.v1.NodeInfo
@@ -209,7 +396,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
  * Use `create(NodeInfoSchema)` to create a new message.
  */
 export const NodeInfoSchema: GenMessage<NodeInfo> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 4);
+  messageDesc(file_nagi_v1_common, 9);
 
 /**
  * @generated from message nagi.v1.LogLine
@@ -243,7 +430,7 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
  * Use `create(LogLineSchema)` to create a new message.
  */
 export const LogLineSchema: GenMessage<LogLine> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 5);
+  messageDesc(file_nagi_v1_common, 10);
 
 /**
  * @generated from message nagi.v1.DeployEvent
@@ -274,7 +461,7 @@ export type DeployEvent = Message<"nagi.v1.DeployEvent"> & {
  * Use `create(DeployEventSchema)` to create a new message.
  */
 export const DeployEventSchema: GenMessage<DeployEvent> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 6);
+  messageDesc(file_nagi_v1_common, 11);
 
 /**
  * @generated from message nagi.v1.DeployResult
@@ -301,5 +488,5 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  * Use `create(DeployResultSchema)` to create a new message.
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 7);
+  messageDesc(file_nagi_v1_common, 12);
 

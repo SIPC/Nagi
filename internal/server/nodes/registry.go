@@ -12,6 +12,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -22,8 +23,9 @@ var ErrOffline = errors.New("节点不在线")
 
 // Registry 记录在线的节点。
 type Registry struct {
-	q   *store.Queries
-	log *slog.Logger
+	q      *store.Queries
+	log    *slog.Logger
+	sealer *sealer.Sealer
 
 	mu    sync.RWMutex
 	conns map[string]*Conn
@@ -47,8 +49,14 @@ func (c *Conn) LastReport() *nagiv1.ReportRequest {
 }
 
 // NewRegistry 创建节点注册表。
-func NewRegistry(q *store.Queries, log *slog.Logger) *Registry {
-	return &Registry{q: q, log: log, conns: map[string]*Conn{}}
+// 项目配置备份里有密钥，用面板主密钥加密后再存。
+func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer) *Registry {
+	return &Registry{q: q, log: log, sealer: s, conns: map[string]*Conn{}}
+}
+
+// BackupContext 是加密项目配置备份时绑定的上下文，防止把一条备份挪到别的项目下使用。
+func BackupContext(nodeID, projectID string) []byte {
+	return []byte(nodeID + "/" + projectID)
 }
 
 // Get 返回在线节点的连接。
@@ -162,7 +170,11 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		if proj == nil || proj.GetId() == "" {
 			continue
 		}
-		data, err := proto.Marshal(proj)
+		plain, err := proto.Marshal(proj)
+		if err != nil {
+			continue
+		}
+		data, err := p.r.sealer.Seal(plain, BackupContext(p.conn.NodeID, proj.GetId()))
 		if err != nil {
 			continue
 		}

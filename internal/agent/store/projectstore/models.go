@@ -8,6 +8,12 @@ import (
 	"database/sql"
 )
 
+type Draft struct {
+	ID        int64
+	Config    []byte
+	UpdatedAt int64
+}
+
 type Meta struct {
 	Key   string
 	Value string
@@ -15,7 +21,7 @@ type Meta struct {
 
 type Version struct {
 	Version    int64
-	Compose    string
+	Config     []byte
 	CreatedAt  int64
 	DeployedAt sql.NullInt64
 }

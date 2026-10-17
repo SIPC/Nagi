@@ -6,7 +6,7 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { DeployEventSchema, LogLineSchema, NodeInfo, Project, ProjectSummary } from "./common_pb";
+import type { DeployEventSchema, LogLineSchema, NodeInfo, Project, ProjectConfig, ProjectSummary } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/api.proto.
  */
 export const file_nagi_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChFuYWdpL3YxL2FwaS5wcm90bxIHbmFnaS52MSIWChRHZXRTZXR1cFN0YXRlUmVxdWVzdCIsChVHZXRTZXR1cFN0YXRlUmVzcG9uc2USEwoLaW5pdGlhbGl6ZWQYASABKAgiQQoMU2V0dXBSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJIg8KDVNldHVwUmVzcG9uc2UiMgoMTG9naW5SZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIg8KDUxvZ2luUmVzcG9uc2UiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSILCglNZVJlcXVlc3QiHgoKTWVSZXNwb25zZRIQCgh1c2VybmFtZRgBIAEoCSKAAQoETm9kZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBm9ubGluZRgDIAEoCBItCglsYXN0X3NlZW4YBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEh8KBGluZm8YBSABKAsyES5uYWdpLnYxLk5vZGVJbmZvIhIKEExpc3ROb2Rlc1JlcXVlc3QiMQoRTGlzdE5vZGVzUmVzcG9uc2USHAoFbm9kZXMYASADKAsyDS5uYWdpLnYxLk5vZGUiSAoLTm9kZVByb2plY3QSDwoHbm9kZV9pZBgBIAEoCRIoCgdwcm9qZWN0GAIgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSIYChZMaXN0QWxsUHJvamVjdHNSZXF1ZXN0IkEKF0xpc3RBbGxQcm9qZWN0c1Jlc3BvbnNlEiYKCHByb2plY3RzGAEgAygLMhQubmFnaS52MS5Ob2RlUHJvamVjdCJXChhDcmVhdGVOb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIPCgdjb21wb3NlGAQgASgJIj4KGUNyZWF0ZU5vZGVQcm9qZWN0UmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCI8ChVHZXROb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJIkIKFkdldE5vZGVQcm9qZWN0UmVzcG9uc2USKAoHcHJvamVjdBgBIAEoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkiVgoYRGVwbG95Tm9kZVByb2plY3RSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIVCg1iYXNlX3JldmlzaW9uGAMgASgDInIKHFN0cmVhbU5vZGVQcm9qZWN0TG9nc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSDAoEdGFpbBgEIAEoBRIOCgZmb2xsb3cYBSABKAgylgEKDFNldHVwU2VydmljZRJOCg1HZXRTZXR1cFN0YXRlEh0ubmFnaS52MS5HZXRTZXR1cFN0YXRlUmVxdWVzdBoeLm5hZ2kudjEuR2V0U2V0dXBTdGF0ZVJlc3BvbnNlEjYKBVNldHVwEhUubmFnaS52MS5TZXR1cFJlcXVlc3QaFi5uYWdpLnYxLlNldHVwUmVzcG9uc2UyrwEKC0F1dGhTZXJ2aWNlEjYKBUxvZ2luEhUubmFnaS52MS5Mb2dpblJlcXVlc3QaFi5uYWdpLnYxLkxvZ2luUmVzcG9uc2USOQoGTG9nb3V0EhYubmFnaS52MS5Mb2dvdXRSZXF1ZXN0GhcubmFnaS52MS5Mb2dvdXRSZXNwb25zZRItCgJNZRISLm5hZ2kudjEuTWVSZXF1ZXN0GhMubmFnaS52MS5NZVJlc3BvbnNlMlEKC05vZGVTZXJ2aWNlEkIKCUxpc3ROb2RlcxIZLm5hZ2kudjEuTGlzdE5vZGVzUmVxdWVzdBoaLm5hZ2kudjEuTGlzdE5vZGVzUmVzcG9uc2UyuQMKDlByb2plY3RTZXJ2aWNlElQKD0xpc3RBbGxQcm9qZWN0cxIfLm5hZ2kudjEuTGlzdEFsbFByb2plY3RzUmVxdWVzdBogLm5hZ2kudjEuTGlzdEFsbFByb2plY3RzUmVzcG9uc2USWgoRQ3JlYXRlTm9kZVByb2plY3QSIS5uYWdpLnYxLkNyZWF0ZU5vZGVQcm9qZWN0UmVxdWVzdBoiLm5hZ2kudjEuQ3JlYXRlTm9kZVByb2plY3RSZXNwb25zZRJRCg5HZXROb2RlUHJvamVjdBIeLm5hZ2kudjEuR2V0Tm9kZVByb2plY3RSZXF1ZXN0Gh8ubmFnaS52MS5HZXROb2RlUHJvamVjdFJlc3BvbnNlEk4KEURlcGxveU5vZGVQcm9qZWN0EiEubmFnaS52MS5EZXBsb3lOb2RlUHJvamVjdFJlcXVlc3QaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESUgoVU3RyZWFtTm9kZVByb2plY3RMb2dzEiUubmFnaS52MS5TdHJlYW1Ob2RlUHJvamVjdExvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChFuYWdpL3YxL2FwaS5wcm90bxIHbmFnaS52MSIWChRHZXRTZXR1cFN0YXRlUmVxdWVzdCIsChVHZXRTZXR1cFN0YXRlUmVzcG9uc2USEwoLaW5pdGlhbGl6ZWQYASABKAgiQQoMU2V0dXBSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJIg8KDVNldHVwUmVzcG9uc2UiMgoMTG9naW5SZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIg8KDUxvZ2luUmVzcG9uc2UiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSILCglNZVJlcXVlc3QiHgoKTWVSZXNwb25zZRIQCgh1c2VybmFtZRgBIAEoCSKAAQoETm9kZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBm9ubGluZRgDIAEoCBItCglsYXN0X3NlZW4YBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEh8KBGluZm8YBSABKAsyES5uYWdpLnYxLk5vZGVJbmZvIhIKEExpc3ROb2Rlc1JlcXVlc3QiMQoRTGlzdE5vZGVzUmVzcG9uc2USHAoFbm9kZXMYASADKAsyDS5uYWdpLnYxLk5vZGUiSAoLTm9kZVByb2plY3QSDwoHbm9kZV9pZBgBIAEoCRIoCgdwcm9qZWN0GAIgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSIYChZMaXN0QWxsUHJvamVjdHNSZXF1ZXN0IkEKF0xpc3RBbGxQcm9qZWN0c1Jlc3BvbnNlEiYKCHByb2plY3RzGAEgAygLMhQubmFnaS52MS5Ob2RlUHJvamVjdCJ0ChhDcmVhdGVOb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRImCgZjb25maWcYBSABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgEEAUigQEKG1NhdmVOb2RlUHJvamVjdERyYWZ0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSFQoNYmFzZV9yZXZpc2lvbhgDIAEoAxImCgZjb25maWcYBCABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWciQQocU2F2ZU5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IlwKHkRpc2NhcmROb2RlUHJvamVjdERyYWZ0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSFQoNYmFzZV9yZXZpc2lvbhgDIAEoAyJECh9EaXNjYXJkTm9kZVByb2plY3REcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiPgoZQ3JlYXRlTm9kZVByb2plY3RSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjwKFUdldE5vZGVQcm9qZWN0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkiQgoWR2V0Tm9kZVByb2plY3RSZXNwb25zZRIoCgdwcm9qZWN0GAEgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJWChhEZXBsb3lOb2RlUHJvamVjdFJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMicgocU3RyZWFtTm9kZVByb2plY3RMb2dzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDwoHc2VydmljZRgDIAEoCRIMCgR0YWlsGAQgASgFEg4KBmZvbGxvdxgFIAEoCDKWAQoMU2V0dXBTZXJ2aWNlEk4KDUdldFNldHVwU3RhdGUSHS5uYWdpLnYxLkdldFNldHVwU3RhdGVSZXF1ZXN0Gh4ubmFnaS52MS5HZXRTZXR1cFN0YXRlUmVzcG9uc2USNgoFU2V0dXASFS5uYWdpLnYxLlNldHVwUmVxdWVzdBoWLm5hZ2kudjEuU2V0dXBSZXNwb25zZTKvAQoLQXV0aFNlcnZpY2USNgoFTG9naW4SFS5uYWdpLnYxLkxvZ2luUmVxdWVzdBoWLm5hZ2kudjEuTG9naW5SZXNwb25zZRI5CgZMb2dvdXQSFi5uYWdpLnYxLkxvZ291dFJlcXVlc3QaFy5uYWdpLnYxLkxvZ291dFJlc3BvbnNlEi0KAk1lEhIubmFnaS52MS5NZVJlcXVlc3QaEy5uYWdpLnYxLk1lUmVzcG9uc2UyUQoLTm9kZVNlcnZpY2USQgoJTGlzdE5vZGVzEhkubmFnaS52MS5MaXN0Tm9kZXNSZXF1ZXN0GhoubmFnaS52MS5MaXN0Tm9kZXNSZXNwb25zZTKMBQoOUHJvamVjdFNlcnZpY2USVAoPTGlzdEFsbFByb2plY3RzEh8ubmFnaS52MS5MaXN0QWxsUHJvamVjdHNSZXF1ZXN0GiAubmFnaS52MS5MaXN0QWxsUHJvamVjdHNSZXNwb25zZRJaChFDcmVhdGVOb2RlUHJvamVjdBIhLm5hZ2kudjEuQ3JlYXRlTm9kZVByb2plY3RSZXF1ZXN0GiIubmFnaS52MS5DcmVhdGVOb2RlUHJvamVjdFJlc3BvbnNlElEKDkdldE5vZGVQcm9qZWN0Eh4ubmFnaS52MS5HZXROb2RlUHJvamVjdFJlcXVlc3QaHy5uYWdpLnYxLkdldE5vZGVQcm9qZWN0UmVzcG9uc2USYwoUU2F2ZU5vZGVQcm9qZWN0RHJhZnQSJC5uYWdpLnYxLlNhdmVOb2RlUHJvamVjdERyYWZ0UmVxdWVzdBolLm5hZ2kudjEuU2F2ZU5vZGVQcm9qZWN0RHJhZnRSZXNwb25zZRJsChdEaXNjYXJkTm9kZVByb2plY3REcmFmdBInLm5hZ2kudjEuRGlzY2FyZE5vZGVQcm9qZWN0RHJhZnRSZXF1ZXN0GigubmFnaS52MS5EaXNjYXJkTm9kZVByb2plY3REcmFmdFJlc3BvbnNlEk4KEURlcGxveU5vZGVQcm9qZWN0EiEubmFnaS52MS5EZXBsb3lOb2RlUHJvamVjdFJlcXVlc3QaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESUgoVU3RyZWFtTm9kZVByb2plY3RMb2dzEiUubmFnaS52MS5TdHJlYW1Ob2RlUHJvamVjdExvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.GetSetupStateRequest
@@ -318,9 +318,9 @@ export type CreateNodeProjectRequest = Message<"nagi.v1.CreateNodeProjectRequest
   dir: string;
 
   /**
-   * @generated from field: string compose = 4;
+   * @generated from field: nagi.v1.ProjectConfig config = 5;
    */
-  compose: string;
+  config?: ProjectConfig | undefined;
 };
 
 /**
@@ -329,6 +329,99 @@ export type CreateNodeProjectRequest = Message<"nagi.v1.CreateNodeProjectRequest
  */
 export const CreateNodeProjectRequestSchema: GenMessage<CreateNodeProjectRequest> = /*@__PURE__*/
   messageDesc(file_nagi_v1_api, 16);
+
+/**
+ * @generated from message nagi.v1.SaveNodeProjectDraftRequest
+ */
+export type SaveNodeProjectDraftRequest = Message<"nagi.v1.SaveNodeProjectDraftRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int64 base_revision = 3;
+   */
+  baseRevision: bigint;
+
+  /**
+   * @generated from field: nagi.v1.ProjectConfig config = 4;
+   */
+  config?: ProjectConfig | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveNodeProjectDraftRequest.
+ * Use `create(SaveNodeProjectDraftRequestSchema)` to create a new message.
+ */
+export const SaveNodeProjectDraftRequestSchema: GenMessage<SaveNodeProjectDraftRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 17);
+
+/**
+ * @generated from message nagi.v1.SaveNodeProjectDraftResponse
+ */
+export type SaveNodeProjectDraftResponse = Message<"nagi.v1.SaveNodeProjectDraftResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveNodeProjectDraftResponse.
+ * Use `create(SaveNodeProjectDraftResponseSchema)` to create a new message.
+ */
+export const SaveNodeProjectDraftResponseSchema: GenMessage<SaveNodeProjectDraftResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 18);
+
+/**
+ * @generated from message nagi.v1.DiscardNodeProjectDraftRequest
+ */
+export type DiscardNodeProjectDraftRequest = Message<"nagi.v1.DiscardNodeProjectDraftRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int64 base_revision = 3;
+   */
+  baseRevision: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.DiscardNodeProjectDraftRequest.
+ * Use `create(DiscardNodeProjectDraftRequestSchema)` to create a new message.
+ */
+export const DiscardNodeProjectDraftRequestSchema: GenMessage<DiscardNodeProjectDraftRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 19);
+
+/**
+ * @generated from message nagi.v1.DiscardNodeProjectDraftResponse
+ */
+export type DiscardNodeProjectDraftResponse = Message<"nagi.v1.DiscardNodeProjectDraftResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.DiscardNodeProjectDraftResponse.
+ * Use `create(DiscardNodeProjectDraftResponseSchema)` to create a new message.
+ */
+export const DiscardNodeProjectDraftResponseSchema: GenMessage<DiscardNodeProjectDraftResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_api, 20);
 
 /**
  * @generated from message nagi.v1.CreateNodeProjectResponse
@@ -345,7 +438,7 @@ export type CreateNodeProjectResponse = Message<"nagi.v1.CreateNodeProjectRespon
  * Use `create(CreateNodeProjectResponseSchema)` to create a new message.
  */
 export const CreateNodeProjectResponseSchema: GenMessage<CreateNodeProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 17);
+  messageDesc(file_nagi_v1_api, 21);
 
 /**
  * @generated from message nagi.v1.GetNodeProjectRequest
@@ -367,7 +460,7 @@ export type GetNodeProjectRequest = Message<"nagi.v1.GetNodeProjectRequest"> & {
  * Use `create(GetNodeProjectRequestSchema)` to create a new message.
  */
 export const GetNodeProjectRequestSchema: GenMessage<GetNodeProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 18);
+  messageDesc(file_nagi_v1_api, 22);
 
 /**
  * @generated from message nagi.v1.GetNodeProjectResponse
@@ -384,7 +477,7 @@ export type GetNodeProjectResponse = Message<"nagi.v1.GetNodeProjectResponse"> &
  * Use `create(GetNodeProjectResponseSchema)` to create a new message.
  */
 export const GetNodeProjectResponseSchema: GenMessage<GetNodeProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 19);
+  messageDesc(file_nagi_v1_api, 23);
 
 /**
  * @generated from message nagi.v1.DeployNodeProjectRequest
@@ -411,7 +504,7 @@ export type DeployNodeProjectRequest = Message<"nagi.v1.DeployNodeProjectRequest
  * Use `create(DeployNodeProjectRequestSchema)` to create a new message.
  */
 export const DeployNodeProjectRequestSchema: GenMessage<DeployNodeProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 20);
+  messageDesc(file_nagi_v1_api, 24);
 
 /**
  * @generated from message nagi.v1.StreamNodeProjectLogsRequest
@@ -448,7 +541,7 @@ export type StreamNodeProjectLogsRequest = Message<"nagi.v1.StreamNodeProjectLog
  * Use `create(StreamNodeProjectLogsRequestSchema)` to create a new message.
  */
 export const StreamNodeProjectLogsRequestSchema: GenMessage<StreamNodeProjectLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_api, 21);
+  messageDesc(file_nagi_v1_api, 25);
 
 /**
  * @generated from service nagi.v1.SetupService
@@ -546,6 +639,22 @@ export const ProjectService: GenService<{
     methodKind: "unary";
     input: typeof GetNodeProjectRequestSchema;
     output: typeof GetNodeProjectResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.ProjectService.SaveNodeProjectDraft
+   */
+  saveNodeProjectDraft: {
+    methodKind: "unary";
+    input: typeof SaveNodeProjectDraftRequestSchema;
+    output: typeof SaveNodeProjectDraftResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.ProjectService.DiscardNodeProjectDraft
+   */
+  discardNodeProjectDraft: {
+    methodKind: "unary";
+    input: typeof DiscardNodeProjectDraftRequestSchema;
+    output: typeof DiscardNodeProjectDraftResponseSchema;
   },
   /**
    * @generated from rpc nagi.v1.ProjectService.DeployNodeProject

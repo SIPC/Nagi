@@ -11,6 +11,8 @@ service AgentService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
+  rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
 }
@@ -24,7 +26,27 @@ message ListProjectsResponse {
 message CreateProjectRequest {
   string name = 1;
   string dir = 2;
-  string compose = 3;
+  reserved 3;
+  ProjectConfig config = 4;
+}
+
+message SaveDraftRequest {
+  string id = 1;
+  int64 base_revision = 2;
+  ProjectConfig config = 3;
+}
+
+message SaveDraftResponse {
+  Project project = 1;
+}
+
+message DiscardDraftRequest {
+  string id = 1;
+  int64 base_revision = 2;
+}
+
+message DiscardDraftResponse {
+  Project project = 1;
 }
 
 message CreateProjectResponse {
@@ -39,6 +61,7 @@ message GetProjectResponse {
   ProjectSummary project = 1;
 }
 
+// 有草稿时先把草稿记为新版本再部署；没有草稿时重新部署最新版本。
 message DeployProjectRequest {
   string id = 1;
   // 面板基于的修订号；节点上已经不是这个修订号时拒绝。

@@ -28,7 +28,7 @@ func (s *agentService) ListProjects(ctx context.Context, _ *nagiv1.ListProjectsR
 }
 
 func (s *agentService) CreateProject(ctx context.Context, req *nagiv1.CreateProjectRequest) (*nagiv1.CreateProjectResponse, error) {
-	p, err := s.projects.Create(ctx, req.GetName(), req.GetDir(), req.GetCompose())
+	p, err := s.projects.Create(ctx, req.GetName(), req.GetDir(), req.GetConfig())
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -44,6 +44,24 @@ func (s *agentService) GetProject(ctx context.Context, req *nagiv1.GetProjectReq
 	return &nagiv1.GetProjectResponse{Project: p}, nil
 }
 
+func (s *agentService) SaveDraft(ctx context.Context, req *nagiv1.SaveDraftRequest) (*nagiv1.SaveDraftResponse, error) {
+	p, err := s.projects.SaveDraft(ctx, req.GetId(), req.GetBaseRevision(), req.GetConfig())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	s.changed()
+	return &nagiv1.SaveDraftResponse{Project: p}, nil
+}
+
+func (s *agentService) DiscardDraft(ctx context.Context, req *nagiv1.DiscardDraftRequest) (*nagiv1.DiscardDraftResponse, error) {
+	p, err := s.projects.DiscardDraft(ctx, req.GetId(), req.GetBaseRevision())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	s.changed()
+	return &nagiv1.DiscardDraftResponse{Project: p}, nil
+}
+
 func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream nagiv1.AgentService_DeployProjectServer) error {
 	ctx := stream.Context()
 	send := func(line string) {
@@ -51,7 +69,7 @@ func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream na
 	}
 	version, err := s.projects.Deploy(ctx, req.GetId(), req.GetBaseRevision(), send)
 	s.changed()
-	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) {
+	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)
 	}
 	result := &nagiv1.DeployResult{Success: err == nil, Version: version}

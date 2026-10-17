@@ -23,6 +23,7 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -37,11 +38,12 @@ const nodeCertValidity = 365 * 24 * time.Hour
 
 // API 汇总所有 Connect 接口的实现。
 type API struct {
-	Q     *store.Queries
-	Auth  *auth.Service
-	Nodes *nodes.Registry
-	CA    *tlsutil.CA
-	Log   *slog.Logger
+	Q      *store.Queries
+	Auth   *auth.Service
+	Nodes  *nodes.Registry
+	CA     *tlsutil.CA
+	Sealer *sealer.Sealer
+	Log    *slog.Logger
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -192,8 +194,13 @@ func (s *projectService) ListAllProjects(ctx context.Context, _ *connect.Request
 			return nil, err
 		}
 		for _, b := range backups {
+			plain, err := s.Sealer.Open(b.Data, nodes.BackupContext(b.NodeID, b.ProjectID))
+			if err != nil {
+				s.Log.Warn("无法解密项目配置备份", "node", b.NodeID, "project", b.ProjectID, "err", err)
+				continue
+			}
 			p := &nagiv1.Project{}
-			if proto.Unmarshal(b.Data, p) == nil {
+			if proto.Unmarshal(plain, p) == nil {
 				out.Projects = append(out.Projects, &nagiv1.NodeProject{NodeId: row.ID, Project: &nagiv1.ProjectSummary{Project: p}})
 			}
 		}
@@ -207,7 +214,7 @@ func (s *projectService) CreateNodeProject(ctx context.Context, req *connect.Req
 		return nil, err
 	}
 	resp, err := agent.CreateProject(ctx, &nagiv1.CreateProjectRequest{
-		Name: req.Msg.GetName(), Dir: req.Msg.GetDir(), Compose: req.Msg.GetCompose(),
+		Name: req.Msg.GetName(), Dir: req.Msg.GetDir(), Config: req.Msg.GetConfig(),
 	})
 	if err != nil {
 		return nil, fromGRPC(err)
@@ -225,6 +232,34 @@ func (s *projectService) GetNodeProject(ctx context.Context, req *connect.Reques
 		return nil, fromGRPC(err)
 	}
 	return connect.NewResponse(&nagiv1.GetNodeProjectResponse{Project: resp.GetProject()}), nil
+}
+
+func (s *projectService) SaveNodeProjectDraft(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectDraftRequest]) (*connect.Response[nagiv1.SaveNodeProjectDraftResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.SaveDraft(ctx, &nagiv1.SaveDraftRequest{
+		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Config: req.Msg.GetConfig(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(&nagiv1.SaveNodeProjectDraftResponse{Project: resp.GetProject()}), nil
+}
+
+func (s *projectService) DiscardNodeProjectDraft(ctx context.Context, req *connect.Request[nagiv1.DiscardNodeProjectDraftRequest]) (*connect.Response[nagiv1.DiscardNodeProjectDraftResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.DiscardDraft(ctx, &nagiv1.DiscardDraftRequest{
+		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(&nagiv1.DiscardNodeProjectDraftResponse{Project: resp.GetProject()}), nil
 }
 
 func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeployNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
@@ -342,4 +377,3 @@ func fromGRPC(err error) error {
 	}
 	return connect.NewError(connect.Code(st.Code()), errors.New(st.Message()))
 }
-

@@ -439,11 +439,13 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ProjectService_ListAllProjects_FullMethodName       = "/nagi.v1.ProjectService/ListAllProjects"
-	ProjectService_CreateNodeProject_FullMethodName     = "/nagi.v1.ProjectService/CreateNodeProject"
-	ProjectService_GetNodeProject_FullMethodName        = "/nagi.v1.ProjectService/GetNodeProject"
-	ProjectService_DeployNodeProject_FullMethodName     = "/nagi.v1.ProjectService/DeployNodeProject"
-	ProjectService_StreamNodeProjectLogs_FullMethodName = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
+	ProjectService_ListAllProjects_FullMethodName         = "/nagi.v1.ProjectService/ListAllProjects"
+	ProjectService_CreateNodeProject_FullMethodName       = "/nagi.v1.ProjectService/CreateNodeProject"
+	ProjectService_GetNodeProject_FullMethodName          = "/nagi.v1.ProjectService/GetNodeProject"
+	ProjectService_SaveNodeProjectDraft_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
+	ProjectService_DiscardNodeProjectDraft_FullMethodName = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
+	ProjectService_DeployNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeployNodeProject"
+	ProjectService_StreamNodeProjectLogs_FullMethodName   = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -453,6 +455,8 @@ type ProjectServiceClient interface {
 	ListAllProjects(ctx context.Context, in *ListAllProjectsRequest, opts ...grpc.CallOption) (*ListAllProjectsResponse, error)
 	CreateNodeProject(ctx context.Context, in *CreateNodeProjectRequest, opts ...grpc.CallOption) (*CreateNodeProjectResponse, error)
 	GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error)
+	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
+	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
 	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 }
@@ -489,6 +493,26 @@ func (c *projectServiceClient) GetNodeProject(ctx context.Context, in *GetNodePr
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetNodeProjectResponse)
 	err := c.cc.Invoke(ctx, ProjectService_GetNodeProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveNodeProjectDraftResponse)
+	err := c.cc.Invoke(ctx, ProjectService_SaveNodeProjectDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardNodeProjectDraftResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DiscardNodeProjectDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -540,6 +564,8 @@ type ProjectServiceServer interface {
 	ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error)
 	CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error)
 	GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error)
+	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
+	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
 	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	mustEmbedUnimplementedProjectServiceServer()
@@ -560,6 +586,12 @@ func (UnimplementedProjectServiceServer) CreateNodeProject(context.Context, *Cre
 }
 func (UnimplementedProjectServiceServer) GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeProject not implemented")
+}
+func (UnimplementedProjectServiceServer) SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectDraft not implemented")
+}
+func (UnimplementedProjectServiceServer) DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardNodeProjectDraft not implemented")
 }
 func (UnimplementedProjectServiceServer) DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployNodeProject not implemented")
@@ -642,6 +674,42 @@ func _ProjectService_GetNodeProject_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_SaveNodeProjectDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveNodeProjectDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SaveNodeProjectDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SaveNodeProjectDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SaveNodeProjectDraft(ctx, req.(*SaveNodeProjectDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_DiscardNodeProjectDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardNodeProjectDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DiscardNodeProjectDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DiscardNodeProjectDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DiscardNodeProjectDraft(ctx, req.(*DiscardNodeProjectDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_DeployNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DeployNodeProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -682,6 +750,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeProject",
 			Handler:    _ProjectService_GetNodeProject_Handler,
+		},
+		{
+			MethodName: "SaveNodeProjectDraft",
+			Handler:    _ProjectService_SaveNodeProjectDraft_Handler,
+		},
+		{
+			MethodName: "DiscardNodeProjectDraft",
+			Handler:    _ProjectService_DiscardNodeProjectDraft_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

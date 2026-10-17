@@ -74,6 +74,8 @@ service ProjectService {
   rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
   rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
   rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
+  rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
+  rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
   rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
   rpc StreamNodeProjectLogs(StreamNodeProjectLogsRequest) returns (stream LogLine);
 }
@@ -93,7 +95,29 @@ message CreateNodeProjectRequest {
   string node_id = 1;
   string name = 2;
   string dir = 3;
-  string compose = 4;
+  reserved 4;
+  ProjectConfig config = 5;
+}
+
+message SaveNodeProjectDraftRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+  ProjectConfig config = 4;
+}
+
+message SaveNodeProjectDraftResponse {
+  Project project = 1;
+}
+
+message DiscardNodeProjectDraftRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+}
+
+message DiscardNodeProjectDraftResponse {
+  Project project = 1;
 }
 
 message CreateNodeProjectResponse {

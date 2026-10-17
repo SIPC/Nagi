@@ -41,6 +41,11 @@ const (
 	AgentServiceCreateProjectProcedure = "/nagi.v1.AgentService/CreateProject"
 	// AgentServiceGetProjectProcedure is the fully-qualified name of the AgentService's GetProject RPC.
 	AgentServiceGetProjectProcedure = "/nagi.v1.AgentService/GetProject"
+	// AgentServiceSaveDraftProcedure is the fully-qualified name of the AgentService's SaveDraft RPC.
+	AgentServiceSaveDraftProcedure = "/nagi.v1.AgentService/SaveDraft"
+	// AgentServiceDiscardDraftProcedure is the fully-qualified name of the AgentService's DiscardDraft
+	// RPC.
+	AgentServiceDiscardDraftProcedure = "/nagi.v1.AgentService/DiscardDraft"
 	// AgentServiceDeployProjectProcedure is the fully-qualified name of the AgentService's
 	// DeployProject RPC.
 	AgentServiceDeployProjectProcedure = "/nagi.v1.AgentService/DeployProject"
@@ -53,6 +58,8 @@ type AgentServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
+	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 }
@@ -86,6 +93,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 			connect.WithClientOptions(opts...),
 		),
+		saveDraft: connect.NewClient[v1.SaveDraftRequest, v1.SaveDraftResponse](
+			httpClient,
+			baseURL+AgentServiceSaveDraftProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SaveDraft")),
+			connect.WithClientOptions(opts...),
+		),
+		discardDraft: connect.NewClient[v1.DiscardDraftRequest, v1.DiscardDraftResponse](
+			httpClient,
+			baseURL+AgentServiceDiscardDraftProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
+			connect.WithClientOptions(opts...),
+		),
 		deployProject: connect.NewClient[v1.DeployProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+AgentServiceDeployProjectProcedure,
@@ -106,6 +125,8 @@ type agentServiceClient struct {
 	listProjects  *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	createProject *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
 	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	saveDraft     *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
+	discardDraft  *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
 	deployProject *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs    *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 }
@@ -125,6 +146,16 @@ func (c *agentServiceClient) GetProject(ctx context.Context, req *connect.Reques
 	return c.getProject.CallUnary(ctx, req)
 }
 
+// SaveDraft calls nagi.v1.AgentService.SaveDraft.
+func (c *agentServiceClient) SaveDraft(ctx context.Context, req *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error) {
+	return c.saveDraft.CallUnary(ctx, req)
+}
+
+// DiscardDraft calls nagi.v1.AgentService.DiscardDraft.
+func (c *agentServiceClient) DiscardDraft(ctx context.Context, req *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
+	return c.discardDraft.CallUnary(ctx, req)
+}
+
 // DeployProject calls nagi.v1.AgentService.DeployProject.
 func (c *agentServiceClient) DeployProject(ctx context.Context, req *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployProject.CallServerStream(ctx, req)
@@ -140,6 +171,8 @@ type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
+	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 }
@@ -169,6 +202,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSaveDraftHandler := connect.NewUnaryHandler(
+		AgentServiceSaveDraftProcedure,
+		svc.SaveDraft,
+		connect.WithSchema(agentServiceMethods.ByName("SaveDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDiscardDraftHandler := connect.NewUnaryHandler(
+		AgentServiceDiscardDraftProcedure,
+		svc.DiscardDraft,
+		connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceDeployProjectHandler := connect.NewServerStreamHandler(
 		AgentServiceDeployProjectProcedure,
 		svc.DeployProject,
@@ -189,6 +234,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateProjectHandler.ServeHTTP(w, r)
 		case AgentServiceGetProjectProcedure:
 			agentServiceGetProjectHandler.ServeHTTP(w, r)
+		case AgentServiceSaveDraftProcedure:
+			agentServiceSaveDraftHandler.ServeHTTP(w, r)
+		case AgentServiceDiscardDraftProcedure:
+			agentServiceDiscardDraftHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
 			agentServiceDeployProjectHandler.ServeHTTP(w, r)
 		case AgentServiceStreamLogsProcedure:
@@ -212,6 +261,14 @@ func (UnimplementedAgentServiceHandler) CreateProject(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetProject is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SaveDraft is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DiscardDraft is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

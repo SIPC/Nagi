@@ -1,13 +1,12 @@
 package project
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"github.com/compose-spec/compose-go/v2/cli"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
 	"gopkg.in/yaml.v3"
 )
@@ -18,24 +17,9 @@ const (
 	LabelVersion = "nagi.version"
 )
 
-// load 用 compose 官方的解析库读取用户的 compose，用于校验和生成 override。
-func load(ctx context.Context, p paths, composeProject string) (*types.Project, error) {
-	opts, err := cli.NewProjectOptions(
-		[]string{p.composeFile()},
-		cli.WithName(composeProject),
-		cli.WithWorkingDirectory(p.dataDir()),
-		cli.WithEnvFiles(p.envFile()),
-		cli.WithResolvedPaths(true),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return opts.LoadProject(ctx)
-}
-
 // buildOverride 生成 Nagi 的叠加配置。override 里写的值会覆盖用户的值，
 // 所以默认值只补在用户没写的地方。
-func buildOverride(proj *types.Project, p paths, projectID string, version int64, subnet string) (map[string]any, error) {
+func buildOverride(proj *types.Project, p paths, projectID string, version int64, subnet string, senv map[string][]*nagiv1.EnvVar) (map[string]any, error) {
 	services := map[string]any{}
 	for name, svc := range proj.Services {
 		s := map[string]any{
@@ -53,6 +37,9 @@ func buildOverride(proj *types.Project, p paths, projectID string, version int64
 		hasRestartPolicy := svc.Deploy != nil && svc.Deploy.RestartPolicy != nil
 		if svc.Restart == "" && !hasRestartPolicy {
 			s["restart"] = "unless-stopped"
+		}
+		if len(senv[name]) > 0 {
+			s["env_file"] = []string{filepath.ToSlash(p.serviceEnvFile(name))}
 		}
 		services[name] = s
 	}

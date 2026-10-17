@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { DeployEventSchema, LogLineSchema, Project, ProjectSummary } from "./common_pb";
+import type { DeployEventSchema, LogLineSchema, Project, ProjectConfig, ProjectSummary } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/agent.proto.
  */
 export const file_nagi_v1_agent: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIhUKE0xpc3RQcm9qZWN0c1JlcXVlc3QiQQoUTGlzdFByb2plY3RzUmVzcG9uc2USKQoIcHJvamVjdHMYASADKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IkIKFENyZWF0ZVByb2plY3RSZXF1ZXN0EgwKBG5hbWUYASABKAkSCwoDZGlyGAIgASgJEg8KB2NvbXBvc2UYAyABKAkiOgoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiHwoRR2V0UHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkiPgoSR2V0UHJvamVjdFJlc3BvbnNlEigKB3Byb2plY3QYASABKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IjkKFERlcGxveVByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMiTgoRU3RyZWFtTG9nc1JlcXVlc3QSCgoCaWQYASABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDL4AgoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEkYKDURlcGxveVByb2plY3QSHS5uYWdpLnYxLkRlcGxveVByb2plY3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIhUKE0xpc3RQcm9qZWN0c1JlcXVlc3QiQQoUTGlzdFByb2plY3RzUmVzcG9uc2USKQoIcHJvamVjdHMYASADKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5Il8KFENyZWF0ZVByb2plY3RSZXF1ZXN0EgwKBG5hbWUYASABKAkSCwoDZGlyGAIgASgJEiYKBmNvbmZpZxgEIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZ0oECAMQBCJdChBTYXZlRHJhZnRSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMSJgoGY29uZmlnGAMgASgLMhYubmFnaS52MS5Qcm9qZWN0Q29uZmlnIjYKEVNhdmVEcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiOAoTRGlzY2FyZERyYWZ0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDIjkKFERpc2NhcmREcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiOgoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiHwoRR2V0UHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkiPgoSR2V0UHJvamVjdFJlc3BvbnNlEigKB3Byb2plY3QYASABKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IjkKFERlcGxveVByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMiTgoRU3RyZWFtTG9nc1JlcXVlc3QSCgoCaWQYASABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDKJBAoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEkIKCVNhdmVEcmFmdBIZLm5hZ2kudjEuU2F2ZURyYWZ0UmVxdWVzdBoaLm5hZ2kudjEuU2F2ZURyYWZ0UmVzcG9uc2USSwoMRGlzY2FyZERyYWZ0EhwubmFnaS52MS5EaXNjYXJkRHJhZnRSZXF1ZXN0Gh0ubmFnaS52MS5EaXNjYXJkRHJhZnRSZXNwb25zZRJGCg1EZXBsb3lQcm9qZWN0Eh0ubmFnaS52MS5EZXBsb3lQcm9qZWN0UmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARI8CgpTdHJlYW1Mb2dzEhoubmFnaS52MS5TdHJlYW1Mb2dzUmVxdWVzdBoQLm5hZ2kudjEuTG9nTGluZTABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.ListProjectsRequest
@@ -59,9 +59,9 @@ export type CreateProjectRequest = Message<"nagi.v1.CreateProjectRequest"> & {
   dir: string;
 
   /**
-   * @generated from field: string compose = 3;
+   * @generated from field: nagi.v1.ProjectConfig config = 4;
    */
-  compose: string;
+  config?: ProjectConfig | undefined;
 };
 
 /**
@@ -70,6 +70,89 @@ export type CreateProjectRequest = Message<"nagi.v1.CreateProjectRequest"> & {
  */
 export const CreateProjectRequestSchema: GenMessage<CreateProjectRequest> = /*@__PURE__*/
   messageDesc(file_nagi_v1_agent, 2);
+
+/**
+ * @generated from message nagi.v1.SaveDraftRequest
+ */
+export type SaveDraftRequest = Message<"nagi.v1.SaveDraftRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: int64 base_revision = 2;
+   */
+  baseRevision: bigint;
+
+  /**
+   * @generated from field: nagi.v1.ProjectConfig config = 3;
+   */
+  config?: ProjectConfig | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveDraftRequest.
+ * Use `create(SaveDraftRequestSchema)` to create a new message.
+ */
+export const SaveDraftRequestSchema: GenMessage<SaveDraftRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 3);
+
+/**
+ * @generated from message nagi.v1.SaveDraftResponse
+ */
+export type SaveDraftResponse = Message<"nagi.v1.SaveDraftResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.SaveDraftResponse.
+ * Use `create(SaveDraftResponseSchema)` to create a new message.
+ */
+export const SaveDraftResponseSchema: GenMessage<SaveDraftResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 4);
+
+/**
+ * @generated from message nagi.v1.DiscardDraftRequest
+ */
+export type DiscardDraftRequest = Message<"nagi.v1.DiscardDraftRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: int64 base_revision = 2;
+   */
+  baseRevision: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.DiscardDraftRequest.
+ * Use `create(DiscardDraftRequestSchema)` to create a new message.
+ */
+export const DiscardDraftRequestSchema: GenMessage<DiscardDraftRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 5);
+
+/**
+ * @generated from message nagi.v1.DiscardDraftResponse
+ */
+export type DiscardDraftResponse = Message<"nagi.v1.DiscardDraftResponse"> & {
+  /**
+   * @generated from field: nagi.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.DiscardDraftResponse.
+ * Use `create(DiscardDraftResponseSchema)` to create a new message.
+ */
+export const DiscardDraftResponseSchema: GenMessage<DiscardDraftResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 6);
 
 /**
  * @generated from message nagi.v1.CreateProjectResponse
@@ -86,7 +169,7 @@ export type CreateProjectResponse = Message<"nagi.v1.CreateProjectResponse"> & {
  * Use `create(CreateProjectResponseSchema)` to create a new message.
  */
 export const CreateProjectResponseSchema: GenMessage<CreateProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 3);
+  messageDesc(file_nagi_v1_agent, 7);
 
 /**
  * @generated from message nagi.v1.GetProjectRequest
@@ -103,7 +186,7 @@ export type GetProjectRequest = Message<"nagi.v1.GetProjectRequest"> & {
  * Use `create(GetProjectRequestSchema)` to create a new message.
  */
 export const GetProjectRequestSchema: GenMessage<GetProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 4);
+  messageDesc(file_nagi_v1_agent, 8);
 
 /**
  * @generated from message nagi.v1.GetProjectResponse
@@ -120,9 +203,11 @@ export type GetProjectResponse = Message<"nagi.v1.GetProjectResponse"> & {
  * Use `create(GetProjectResponseSchema)` to create a new message.
  */
 export const GetProjectResponseSchema: GenMessage<GetProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 5);
+  messageDesc(file_nagi_v1_agent, 9);
 
 /**
+ * 有草稿时先把草稿记为新版本再部署；没有草稿时重新部署最新版本。
+ *
  * @generated from message nagi.v1.DeployProjectRequest
  */
 export type DeployProjectRequest = Message<"nagi.v1.DeployProjectRequest"> & {
@@ -144,7 +229,7 @@ export type DeployProjectRequest = Message<"nagi.v1.DeployProjectRequest"> & {
  * Use `create(DeployProjectRequestSchema)` to create a new message.
  */
 export const DeployProjectRequestSchema: GenMessage<DeployProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 6);
+  messageDesc(file_nagi_v1_agent, 10);
 
 /**
  * @generated from message nagi.v1.StreamLogsRequest
@@ -180,7 +265,7 @@ export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
  * Use `create(StreamLogsRequestSchema)` to create a new message.
  */
 export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 7);
+  messageDesc(file_nagi_v1_agent, 11);
 
 /**
  * AgentService：面板调用节点（反向 gRPC），走控制连接。
@@ -211,6 +296,22 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof GetProjectRequestSchema;
     output: typeof GetProjectResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.AgentService.SaveDraft
+   */
+  saveDraft: {
+    methodKind: "unary";
+    input: typeof SaveDraftRequestSchema;
+    output: typeof SaveDraftResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.AgentService.DiscardDraft
+   */
+  discardDraft: {
+    methodKind: "unary";
+    input: typeof DiscardDraftRequestSchema;
+    output: typeof DiscardDraftResponseSchema;
   },
   /**
    * @generated from rpc nagi.v1.AgentService.DeployProject

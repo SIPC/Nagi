@@ -21,9 +21,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/agent/store/projectstore"
-	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // 错误类型，供上层转换成对应的 gRPC 状态码。
@@ -106,36 +104,34 @@ func (p paths) projectDB() string { return filepath.Join(p.configDir(), "project
 
 func composeProjectName(id string) string { return "nagi-" + id }
 
-// 项目元数据在 project.db 的 meta 表里的键。
-const (
-	metaID              = "id"
-	metaName            = "name"
-	metaRevision        = "revision"
-	metaDeployedVersion = "deployed_version"
-	metaCreatedAt       = "created_at"
-)
-
 // ---- 创建 ----
 
-// Create 创建项目：建目录、校验 compose、分配网段、记录第一个版本。
-func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*nagiv1.Project, error) {
+// Create 创建项目：校验配置、建目录、分配网段、记录第一个版本。创建后不立即部署。
+func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.ProjectConfig) (*nagiv1.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > 64 {
 		return nil, invalid("项目名不能为空，且不超过 64 个字符")
 	}
-	if strings.TrimSpace(composeText) == "" {
-		return nil, invalid("compose 不能为空")
+	if cfg == nil {
+		return nil, invalid("缺少项目配置")
 	}
 	dir, err := m.checkDir(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-
 	id, err := newID()
 	if err != nil {
 		return nil, err
 	}
 	p := paths{root: dir}
+	if _, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id)); err != nil {
+		return nil, err
+	}
+	subnet, err := m.allocateSubnet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, d := range []string{p.configDir(), p.dataDir(), p.volumesDir(), p.backupsDir()} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, fmt.Errorf("创建项目目录: %w", err)
@@ -146,33 +142,13 @@ func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*n
 	}
 	cleanup := func() { os.RemoveAll(dir) }
 
-	if err := writeFileAtomic(p.composeFile(), []byte(composeText), 0o644); err != nil {
-		cleanup()
-		return nil, err
-	}
-	if err := writeFileAtomic(p.envFile(), nil, 0o600); err != nil {
-		cleanup()
-		return nil, err
-	}
-	if _, err := load(ctx, p, composeProjectName(id)); err != nil {
-		cleanup()
-		return nil, invalid("compose 无法解析：%v", err)
-	}
-
-	subnet, err := m.allocateSubnet(ctx)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	now := time.Now()
-	pdb, err := db.OpenMigrated(ctx, p.projectDB(), projectstore.Migrations)
+	pdb, err := openProject(ctx, dir)
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
 	defer pdb.Close()
-	pq := projectstore.New(pdb)
+	now := time.Now()
 	for k, v := range map[string]string{
 		metaID:              id,
 		metaName:            name,
@@ -180,25 +156,26 @@ func (m *Manager) Create(ctx context.Context, name, dir, composeText string) (*n
 		metaDeployedVersion: "0",
 		metaCreatedAt:       strconv.FormatInt(now.Unix(), 10),
 	} {
-		if err := pq.SetMeta(ctx, projectstore.SetMetaParams{Key: k, Value: v}); err != nil {
+		if err := pdb.setMeta(ctx, k, v); err != nil {
 			cleanup()
 			return nil, err
 		}
 	}
-	if err := pq.InsertVersion(ctx, projectstore.InsertVersionParams{
-		Version: 1, Compose: composeText, CreatedAt: now.Unix(),
-	}); err != nil {
+	if err := pdb.insertVersion(ctx, 1, cfg); err != nil {
 		cleanup()
 		return nil, err
 	}
-
+	if err := writeConfigFiles(p, cfg); err != nil {
+		cleanup()
+		return nil, err
+	}
 	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{
 		ID: id, Dir: dir, Subnet: subnet, CreatedAt: now.Unix(),
 	}); err != nil {
 		cleanup()
 		return nil, err
 	}
-	return m.readProject(ctx, id, dir)
+	return pdb.project(ctx, id, dir)
 }
 
 // checkDir 校验项目目录：必须是绝对路径；已存在时必须为空；不能和其他项目的目录互相嵌套。
@@ -319,35 +296,12 @@ func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectS
 }
 
 func (m *Manager) readProject(ctx context.Context, id, dir string) (*nagiv1.Project, error) {
-	p := paths{root: dir}
-	pdb, err := db.OpenMigrated(ctx, p.projectDB(), projectstore.Migrations)
+	pdb, err := openProject(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
 	defer pdb.Close()
-	pq := projectstore.New(pdb)
-
-	meta := func(k string) string {
-		v, _ := pq.GetMeta(ctx, k)
-		return v
-	}
-	latest, err := pq.LatestVersion(ctx)
-	if err != nil {
-		return nil, err
-	}
-	revision, _ := strconv.ParseInt(meta(metaRevision), 10, 64)
-	deployed, _ := strconv.ParseInt(meta(metaDeployedVersion), 10, 64)
-	created, _ := strconv.ParseInt(meta(metaCreatedAt), 10, 64)
-	return &nagiv1.Project{
-		Id:              id,
-		Name:            meta(metaName),
-		Dir:             dir,
-		Revision:        revision,
-		LatestVersion:   latest.Version,
-		DeployedVersion: deployed,
-		Compose:         latest.Compose,
-		CreatedAt:       timestamppb.New(time.Unix(created, 0)),
-	}, nil
+	return pdb.project(ctx, id, dir)
 }
 
 // status 合并 compose 里声明的服务和实际运行的容器。
@@ -366,70 +320,151 @@ func (m *Manager) status(ctx context.Context, id, dir string) (*nagiv1.ProjectSt
 		})
 	}
 	// compose 里有、但还没有容器的服务（例如从未部署）。
-	if proj, err := load(ctx, paths{root: dir}, composeProjectName(id)); err == nil {
-		for _, name := range proj.ServiceNames() {
-			if !seen[name] {
-				st.Services = append(st.Services, &nagiv1.ServiceStatus{
-					Name: name, Image: proj.Services[name].Image,
-				})
+	pdb, err := openProject(ctx, dir)
+	if err != nil {
+		return st, nil
+	}
+	defer pdb.Close()
+	if cfg, _, err := pdb.latest(ctx); err == nil {
+		if text, err := composeText(cfg); err == nil {
+			if proj, err := loadCompose(ctx, text, cfg.GetEnv(), paths{root: dir}.dataDir(), composeProjectName(id)); err == nil {
+				for _, name := range proj.ServiceNames() {
+					if !seen[name] {
+						st.Services = append(st.Services, &nagiv1.ServiceStatus{Name: name, Image: proj.Services[name].Image})
+					}
+				}
 			}
 		}
 	}
 	return st, nil
 }
 
-// ---- 部署 ----
+// ---- 草稿 ----
 
-// Deploy 部署项目的最新版本。baseRevision 不为 0 时，必须和节点上的修订号一致。
-func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onLine func(string)) (int64, error) {
+// projectForUpdate 加锁并打开项目，检查修订号。调用方负责 unlock 和关闭数据库。
+func (m *Manager) projectForUpdate(ctx context.Context, id string, baseRevision int64) (row nodestore.Project, pdb *projectDB, revision int64, unlock func(), err error) {
 	l := m.lock(id)
 	l.Lock()
-	defer l.Unlock()
-
-	row, err := m.nodeQ.GetProject(ctx, id)
+	unlock = l.Unlock
+	defer func() {
+		if err != nil {
+			if pdb != nil {
+				pdb.Close()
+			}
+			unlock()
+		}
+	}()
+	row, err = m.nodeQ.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrNotFound
+		return row, nil, 0, unlock, ErrNotFound
 	}
 	if err != nil {
-		return 0, err
+		return row, nil, 0, unlock, err
 	}
-	p := paths{root: row.Dir}
-	pdb, err := db.OpenMigrated(ctx, p.projectDB(), projectstore.Migrations)
+	pdb, err = openProject(ctx, row.Dir)
 	if err != nil {
-		return 0, err
+		return row, nil, 0, unlock, err
 	}
-	defer pdb.Close()
-	pq := projectstore.New(pdb)
-
-	revStr, err := pq.GetMeta(ctx, metaRevision)
+	revision, err = pdb.revision(ctx)
 	if err != nil {
-		return 0, err
+		return row, pdb, 0, unlock, err
 	}
-	revision, _ := strconv.ParseInt(revStr, 10, 64)
 	if baseRevision != 0 && baseRevision != revision {
-		return 0, ErrConflict
+		return row, pdb, 0, unlock, ErrConflict
+	}
+	return row, pdb, revision, unlock, nil
+}
+
+// SaveDraft 保存草稿。草稿要先通过校验，部署时才会成为新版本。
+func (m *Manager) SaveDraft(ctx context.Context, id string, baseRevision int64, cfg *nagiv1.ProjectConfig) (*nagiv1.Project, error) {
+	if cfg == nil {
+		return nil, invalid("缺少项目配置")
+	}
+	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	defer pdb.Close()
+	if _, err := validate(ctx, cfg, paths{root: row.Dir}.dataDir(), composeProjectName(id)); err != nil {
+		return nil, err
+	}
+	if err := pdb.setDraft(ctx, cfg); err != nil {
+		return nil, err
+	}
+	if err := pdb.setRevision(ctx, revision+1); err != nil {
+		return nil, err
+	}
+	return pdb.project(ctx, id, row.Dir)
+}
+
+// DiscardDraft 放弃草稿。
+func (m *Manager) DiscardDraft(ctx context.Context, id string, baseRevision int64) (*nagiv1.Project, error) {
+	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	defer pdb.Close()
+	if err := pdb.q.DeleteDraft(ctx); err != nil {
+		return nil, err
+	}
+	if err := pdb.setRevision(ctx, revision+1); err != nil {
+		return nil, err
+	}
+	return pdb.project(ctx, id, row.Dir)
+}
+
+// ---- 部署 ----
+
+// Deploy 部署项目。有草稿时先把草稿记为新版本；没有草稿时重新部署最新版本。
+// baseRevision 不为 0 时，必须和节点上的修订号一致。
+func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onLine func(string)) (int64, error) {
+	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	defer pdb.Close()
+	p := paths{root: row.Dir}
+
+	cfg, version, err := pdb.latest(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if draft, err := pdb.draft(ctx); err != nil {
+		return 0, err
+	} else if draft != nil {
+		version++
+		if err := pdb.insertVersion(ctx, version, draft); err != nil {
+			return 0, err
+		}
+		if err := pdb.q.DeleteDraft(ctx); err != nil {
+			return 0, err
+		}
+		cfg = draft
+		onLine(fmt.Sprintf("草稿已保存为版本 %d", version))
+	}
+	if err := pdb.setRevision(ctx, revision+1); err != nil {
+		return 0, err
 	}
 
-	latest, err := pq.LatestVersion(ctx)
+	proj, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id))
 	if err != nil {
-		return 0, err
+		return version, err
 	}
-	if err := writeFileAtomic(p.composeFile(), []byte(latest.Compose), 0o644); err != nil {
-		return 0, err
+	if err := writeConfigFiles(p, cfg); err != nil {
+		return version, err
 	}
-	proj, err := load(ctx, p, composeProjectName(id))
+	override, err := buildOverride(proj, p, id, version, row.Subnet, serviceEnv(cfg))
 	if err != nil {
-		return 0, fmt.Errorf("compose 无法解析：%w", err)
-	}
-	override, err := buildOverride(proj, p, id, latest.Version, row.Subnet)
-	if err != nil {
-		return 0, err
+		return version, err
 	}
 	if err := writeOverride(p.overrideFile(), override); err != nil {
-		return 0, err
+		return version, err
 	}
 
-	onLine(fmt.Sprintf("部署版本 %d", latest.Version))
+	onLine(fmt.Sprintf("部署版本 %d", version))
 	err = compose.Up(ctx, compose.Files{
 		ProjectName: composeProjectName(id),
 		ProjectDir:  p.dataDir(),
@@ -438,22 +473,14 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, onL
 		EnvFile:     p.envFile(),
 	}, onLine)
 	if err != nil {
-		return 0, err
+		return version, err
 	}
-
-	now := time.Now().Unix()
-	if err := pq.MarkDeployed(ctx, projectstore.MarkDeployedParams{
-		DeployedAt: sql.NullInt64{Int64: now, Valid: true}, Version: latest.Version,
+	if err := pdb.q.MarkDeployed(ctx, projectstore.MarkDeployedParams{
+		DeployedAt: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, Version: version,
 	}); err != nil {
-		return 0, err
+		return version, err
 	}
-	if err := pq.SetMeta(ctx, projectstore.SetMetaParams{Key: metaDeployedVersion, Value: strconv.FormatInt(latest.Version, 10)}); err != nil {
-		return 0, err
-	}
-	if err := pq.SetMeta(ctx, projectstore.SetMetaParams{Key: metaRevision, Value: strconv.FormatInt(revision+1, 10)}); err != nil {
-		return 0, err
-	}
-	return latest.Version, nil
+	return version, pdb.setMeta(ctx, metaDeployedVersion, strconv.FormatInt(version, 10))
 }
 
 // ---- 日志 ----

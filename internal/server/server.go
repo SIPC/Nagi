@@ -22,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/SIPC/nagi/web"
 )
@@ -55,8 +56,9 @@ type Server struct {
 	publicAddress string
 	listener      net.Listener
 
-	auth  *auth.Service
-	nodes *nodes.Registry
+	auth   *auth.Service
+	nodes  *nodes.Registry
+	sealer *sealer.Sealer
 }
 
 // New 打开数据库、准备证书、监听面板端口。
@@ -83,8 +85,13 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
+	s.sealer, err = sealer.Load(filepath.Join(cfg.DataDir, "pki", "master.key"))
+	if err != nil {
+		d.Close()
+		return nil, fmt.Errorf("读取面板主密钥: %w", err)
+	}
 	s.auth = auth.New(s.q)
-	s.nodes = nodes.NewRegistry(s.q, log)
+	s.nodes = nodes.NewRegistry(s.q, log, s.sealer)
 	return s, nil
 }
 
@@ -124,7 +131,7 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.auth.CleanupLoop(ctx)
 
 	mux := http.NewServeMux()
-	(&api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Log: s.log}).Mount(mux)
+	(&api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log}).Mount(mux)
 	mux.Handle("/", web.Handler())
 
 	httpLn := newChanListener(s.listener.Addr())

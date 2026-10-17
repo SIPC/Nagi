@@ -10,6 +10,26 @@ import (
 	"database/sql"
 )
 
+const deleteDraft = `-- name: DeleteDraft :exec
+DELETE FROM draft WHERE id = 1
+`
+
+func (q *Queries) DeleteDraft(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteDraft)
+	return err
+}
+
+const getDraft = `-- name: GetDraft :one
+SELECT id, config, updated_at FROM draft WHERE id = 1
+`
+
+func (q *Queries) GetDraft(ctx context.Context) (Draft, error) {
+	row := q.db.QueryRowContext(ctx, getDraft)
+	var i Draft
+	err := row.Scan(&i.ID, &i.Config, &i.UpdatedAt)
+	return i, err
+}
+
 const getMeta = `-- name: GetMeta :one
 SELECT value FROM meta WHERE key = ?
 `
@@ -22,7 +42,7 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 }
 
 const getVersion = `-- name: GetVersion :one
-SELECT version, compose, created_at, deployed_at FROM versions WHERE version = ?
+SELECT version, config, created_at, deployed_at FROM versions WHERE version = ?
 `
 
 func (q *Queries) GetVersion(ctx context.Context, version int64) (Version, error) {
@@ -30,7 +50,7 @@ func (q *Queries) GetVersion(ctx context.Context, version int64) (Version, error
 	var i Version
 	err := row.Scan(
 		&i.Version,
-		&i.Compose,
+		&i.Config,
 		&i.CreatedAt,
 		&i.DeployedAt,
 	)
@@ -38,22 +58,22 @@ func (q *Queries) GetVersion(ctx context.Context, version int64) (Version, error
 }
 
 const insertVersion = `-- name: InsertVersion :exec
-INSERT INTO versions (version, compose, created_at) VALUES (?, ?, ?)
+INSERT INTO versions (version, config, created_at) VALUES (?, ?, ?)
 `
 
 type InsertVersionParams struct {
 	Version   int64
-	Compose   string
+	Config    []byte
 	CreatedAt int64
 }
 
 func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) error {
-	_, err := q.db.ExecContext(ctx, insertVersion, arg.Version, arg.Compose, arg.CreatedAt)
+	_, err := q.db.ExecContext(ctx, insertVersion, arg.Version, arg.Config, arg.CreatedAt)
 	return err
 }
 
 const latestVersion = `-- name: LatestVersion :one
-SELECT version, compose, created_at, deployed_at FROM versions ORDER BY version DESC LIMIT 1
+SELECT version, config, created_at, deployed_at FROM versions ORDER BY version DESC LIMIT 1
 `
 
 func (q *Queries) LatestVersion(ctx context.Context) (Version, error) {
@@ -61,7 +81,7 @@ func (q *Queries) LatestVersion(ctx context.Context) (Version, error) {
 	var i Version
 	err := row.Scan(
 		&i.Version,
-		&i.Compose,
+		&i.Config,
 		&i.CreatedAt,
 		&i.DeployedAt,
 	)
@@ -79,6 +99,21 @@ type MarkDeployedParams struct {
 
 func (q *Queries) MarkDeployed(ctx context.Context, arg MarkDeployedParams) error {
 	_, err := q.db.ExecContext(ctx, markDeployed, arg.DeployedAt, arg.Version)
+	return err
+}
+
+const setDraft = `-- name: SetDraft :exec
+INSERT INTO draft (id, config, updated_at) VALUES (1, ?, ?)
+ON CONFLICT (id) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at
+`
+
+type SetDraftParams struct {
+	Config    []byte
+	UpdatedAt int64
+}
+
+func (q *Queries) SetDraft(ctx context.Context, arg SetDraftParams) error {
+	_, err := q.db.ExecContext(ctx, setDraft, arg.Config, arg.UpdatedAt)
 	return err
 }
 

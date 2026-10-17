@@ -61,6 +61,12 @@ const (
 	// ProjectServiceGetNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// GetNodeProject RPC.
 	ProjectServiceGetNodeProjectProcedure = "/nagi.v1.ProjectService/GetNodeProject"
+	// ProjectServiceSaveNodeProjectDraftProcedure is the fully-qualified name of the ProjectService's
+	// SaveNodeProjectDraft RPC.
+	ProjectServiceSaveNodeProjectDraftProcedure = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
+	// ProjectServiceDiscardNodeProjectDraftProcedure is the fully-qualified name of the
+	// ProjectService's DiscardNodeProjectDraft RPC.
+	ProjectServiceDiscardNodeProjectDraftProcedure = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
 	// ProjectServiceDeployNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeployNodeProject RPC.
 	ProjectServiceDeployNodeProjectProcedure = "/nagi.v1.ProjectService/DeployNodeProject"
@@ -362,6 +368,8 @@ type ProjectServiceClient interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
+	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
+	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 }
@@ -395,6 +403,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("GetNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		saveNodeProjectDraft: connect.NewClient[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse](
+			httpClient,
+			baseURL+ProjectServiceSaveNodeProjectDraftProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectDraft")),
+			connect.WithClientOptions(opts...),
+		),
+		discardNodeProjectDraft: connect.NewClient[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse](
+			httpClient,
+			baseURL+ProjectServiceDiscardNodeProjectDraftProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
+			connect.WithClientOptions(opts...),
+		),
 		deployNodeProject: connect.NewClient[v1.DeployNodeProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceDeployNodeProjectProcedure,
@@ -412,11 +432,13 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
-	listAllProjects       *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
-	createNodeProject     *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
-	getNodeProject        *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
-	deployNodeProject     *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
-	streamNodeProjectLogs *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
+	listAllProjects         *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
+	createNodeProject       *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
+	getNodeProject          *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
+	saveNodeProjectDraft    *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
+	discardNodeProjectDraft *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
+	deployNodeProject       *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
+	streamNodeProjectLogs   *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -434,6 +456,16 @@ func (c *projectServiceClient) GetNodeProject(ctx context.Context, req *connect.
 	return c.getNodeProject.CallUnary(ctx, req)
 }
 
+// SaveNodeProjectDraft calls nagi.v1.ProjectService.SaveNodeProjectDraft.
+func (c *projectServiceClient) SaveNodeProjectDraft(ctx context.Context, req *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error) {
+	return c.saveNodeProjectDraft.CallUnary(ctx, req)
+}
+
+// DiscardNodeProjectDraft calls nagi.v1.ProjectService.DiscardNodeProjectDraft.
+func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, req *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error) {
+	return c.discardNodeProjectDraft.CallUnary(ctx, req)
+}
+
 // DeployNodeProject calls nagi.v1.ProjectService.DeployNodeProject.
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, req *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployNodeProject.CallServerStream(ctx, req)
@@ -449,6 +481,8 @@ type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
+	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
+	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest], *connect.ServerStream[v1.LogLine]) error
 }
@@ -478,6 +512,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("GetNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSaveNodeProjectDraftHandler := connect.NewUnaryHandler(
+		ProjectServiceSaveNodeProjectDraftProcedure,
+		svc.SaveNodeProjectDraft,
+		connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDiscardNodeProjectDraftHandler := connect.NewUnaryHandler(
+		ProjectServiceDiscardNodeProjectDraftProcedure,
+		svc.DiscardNodeProjectDraft,
+		connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceDeployNodeProjectHandler := connect.NewServerStreamHandler(
 		ProjectServiceDeployNodeProjectProcedure,
 		svc.DeployNodeProject,
@@ -498,6 +544,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceCreateNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectProcedure:
 			projectServiceGetNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceSaveNodeProjectDraftProcedure:
+			projectServiceSaveNodeProjectDraftHandler.ServeHTTP(w, r)
+		case ProjectServiceDiscardNodeProjectDraftProcedure:
+			projectServiceDiscardNodeProjectDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDeployNodeProjectProcedure:
 			projectServiceDeployNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceStreamNodeProjectLogsProcedure:
@@ -521,6 +571,14 @@ func (UnimplementedProjectServiceHandler) CreateNodeProject(context.Context, *co
 
 func (UnimplementedProjectServiceHandler) GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SaveNodeProjectDraft is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DiscardNodeProjectDraft is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

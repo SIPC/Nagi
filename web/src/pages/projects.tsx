@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderOpen, Plus, Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { lines, textToEnv, textToPorts } from "@/lib/config";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
 import { Alert, Button, Card, CardContent, Empty, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
@@ -89,10 +90,35 @@ export function NewProjectPage() {
   const [name, setName] = useState("");
   const [dir, setDir] = useState("");
   const [compose, setCompose] = useState(exampleCompose);
+  const [mode, setMode] = useState<"compose" | "image">("compose");
+  const [image, setImage] = useState("nginx:alpine");
+  const [command, setCommand] = useState("");
+  const [ports, setPorts] = useState("8080:80");
+  const [volumes, setVolumes] = useState("");
+  const [workdir, setWorkdir] = useState("");
+  const [env, setEnv] = useState("");
   const selectedNode = nodeId || onlineNodes[0]?.id || "";
 
   const create = useMutation({
-    mutationFn: () => projectClient.createNodeProject({ nodeId: selectedNode, name, dir, compose }),
+    mutationFn: () =>
+      projectClient.createNodeProject({
+        nodeId: selectedNode,
+        name,
+        dir,
+        config:
+          mode === "compose"
+            ? { compose }
+            : {
+                form: {
+                  image,
+                  command,
+                  ports: textToPorts(ports),
+                  volumes: lines(volumes),
+                  workdir,
+                  env: textToEnv(env),
+                },
+              },
+      }),
     onSuccess: (res) => {
       navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: selectedNode, projectId: res.project!.id } });
     },
@@ -132,16 +158,47 @@ export function NewProjectPage() {
             >
               <Input id="dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/srv/myapp" required className="font-mono" />
             </Field>
-            <Field label="compose" htmlFor="compose">
-              <Textarea
-                id="compose"
-                value={compose}
-                onChange={(e) => setCompose(e.target.value)}
-                spellCheck={false}
-                className="min-h-72 font-mono text-[13px] leading-relaxed"
-                required
-              />
-            </Field>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant={mode === "compose" ? "default" : "outline"} onClick={() => setMode("compose")}>
+                写 compose
+              </Button>
+              <Button type="button" size="sm" variant={mode === "image" ? "default" : "outline"} onClick={() => setMode("image")}>
+                镜像表单
+              </Button>
+            </div>
+            {mode === "compose" ? (
+              <Field label="compose" htmlFor="compose">
+                <Textarea
+                  id="compose"
+                  value={compose}
+                  onChange={(e) => setCompose(e.target.value)}
+                  spellCheck={false}
+                  className="min-h-72 font-mono text-[13px] leading-relaxed"
+                  required
+                />
+              </Field>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="镜像" htmlFor="image">
+                  <Input id="image" value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" />
+                </Field>
+                <Field label="运行命令" htmlFor="command" hint="为空时使用镜像默认命令">
+                  <Input id="command" value={command} onChange={(e) => setCommand(e.target.value)} className="font-mono" />
+                </Field>
+                <Field label="端口" htmlFor="ports" hint="节点端口:容器端口，空格分隔，例如 8080:80 53:53/udp">
+                  <Input id="ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" />
+                </Field>
+                <Field label="工作目录" htmlFor="workdir" hint="把项目的 data/ 挂到容器内这个路径；为空表示不挂载文件">
+                  <Input id="workdir" value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
+                </Field>
+                <Field label="持久化目录" htmlFor="volumes" hint="容器内路径，每行一个">
+                  <Textarea id="volumes" value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono" placeholder="/data" />
+                </Field>
+                <Field label="环境变量" htmlFor="env" hint="KEY=VALUE，每行一个">
+                  <Textarea id="env" value={env} onChange={(e) => setEnv(e.target.value)} className="font-mono" />
+                </Field>
+              </div>
+            )}
             {create.error && <Alert>{errorMessage(create.error)}</Alert>}
             <div className="flex justify-end gap-2">
               <Link to="/projects">

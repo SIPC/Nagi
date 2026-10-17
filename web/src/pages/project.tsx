@@ -6,7 +6,9 @@ import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select, Spinner } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select, Spinner, Textarea } from "@/components/ui";
+import { envToText, textToEnv } from "@/lib/config";
+import type { Project } from "@/gen/nagi/v1/common_pb";
 
 export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: string }) {
   const project = useQuery({
@@ -47,7 +49,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
       />
 
       <div className="grid gap-6">
-        <DeployCard nodeId={nodeId} projectId={projectId} revision={p.revision} />
+        <DeployCard nodeId={nodeId} projectId={projectId} revision={p.revision} hasDraft={p.hasDraft} />
 
         <Card>
           <CardHeader>
@@ -88,14 +90,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
           containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
         />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>compose</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="overflow-x-auto rounded-md bg-muted p-4 font-mono text-[13px] leading-relaxed">{p.compose}</pre>
-          </CardContent>
-        </Card>
+        <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
       </div>
     </>
   );
@@ -112,7 +107,17 @@ function BackLink() {
 
 type DeployState = { running: boolean; lines: string[]; result?: { success: boolean; error: string } };
 
-function DeployCard({ nodeId, projectId, revision }: { nodeId: string; projectId: string; revision: bigint }) {
+function DeployCard({
+  nodeId,
+  projectId,
+  revision,
+  hasDraft,
+}: {
+  nodeId: string;
+  projectId: string;
+  revision: bigint;
+  hasDraft: boolean;
+}) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<DeployState>({ running: false, lines: [] });
   const outRef = useRef<HTMLPreElement>(null);
@@ -147,11 +152,13 @@ function DeployCard({ nodeId, projectId, revision }: { nodeId: string; projectId
       <CardHeader className="flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <CardTitle>部署</CardTitle>
-          <p className="text-sm text-muted-foreground">按当前版本执行 docker compose up。</p>
+          <p className="text-sm text-muted-foreground">
+            {hasDraft ? "有未部署的修改：部署时会把草稿保存为新版本。" : "按当前版本执行 docker compose up。"}
+          </p>
         </div>
         <Button onClick={deploy} disabled={state.running}>
           {state.running ? <Spinner /> : <Rocket />}
-          {state.running ? "部署中" : "部署"}
+          {state.running ? "部署中" : hasDraft ? "部署草稿" : "重新部署"}
         </Button>
       </CardHeader>
       {(state.lines.length > 0 || state.result) && (
@@ -268,6 +275,128 @@ function LogsCard({
             ))
           )}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConfigCard({ nodeId, project, services }: { nodeId: string; project: Project; services: string[] }) {
+  const queryClient = useQueryClient();
+  const base = project.draft ?? project.config;
+  const isForm = !!base?.form;
+  const [compose, setCompose] = useState(base?.compose ?? "");
+  const [env, setEnv] = useState(envToText(base?.env));
+  const [serviceEnv, setServiceEnv] = useState<Record<string, string>>(() =>
+    Object.fromEntries(services.map((s) => [s, envToText(base?.serviceEnv[s]?.vars)])),
+  );
+  const [formEnv, setFormEnv] = useState(envToText(base?.form?.env));
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.saveNodeProjectDraft({
+        nodeId,
+        projectId: project.id,
+        baseRevision: project.revision,
+        config: isForm
+          ? { env: textToEnv(env), form: { ...base!.form!, env: textToEnv(formEnv) } }
+          : {
+              compose,
+              env: textToEnv(env),
+              serviceEnv: Object.fromEntries(
+                Object.entries(serviceEnv)
+                  .map(([s, t]) => [s, { vars: textToEnv(t) }] as const)
+                  .filter(([, l]) => l.vars.length > 0),
+              ),
+            },
+      });
+      refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const discard = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.discardNodeProjectDraft({ nodeId, projectId: project.id, baseRevision: project.revision });
+      // 放弃草稿后用最新版本的内容重新初始化编辑框。
+      location.reload();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-4">
+        <CardTitle className="flex items-center gap-2">
+          配置
+          {project.hasDraft && <Badge tone="warning">草稿</Badge>}
+        </CardTitle>
+        <div className="flex gap-2">
+          {project.hasDraft && (
+            <Button variant="outline" size="sm" onClick={discard} disabled={busy}>
+              放弃草稿
+            </Button>
+          )}
+          <Button size="sm" onClick={save} disabled={busy}>
+            {busy && <Spinner />}
+            保存草稿
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {error && <Alert>{error}</Alert>}
+        {isForm ? (
+          <div className="grid gap-1.5">
+            <span className="text-sm font-medium">compose（由镜像表单生成，镜像 {base?.form?.image}）</span>
+          </div>
+        ) : (
+          <div className="grid gap-1.5">
+            <span className="text-sm font-medium">compose</span>
+            <Textarea
+              value={compose}
+              onChange={(e) => setCompose(e.target.value)}
+              spellCheck={false}
+              className="min-h-56 font-mono text-[13px] leading-relaxed"
+            />
+          </div>
+        )}
+        <div className="grid gap-1.5">
+          <span className="text-sm font-medium">项目级变量（替换 compose 里的 ${"{变量}"}，KEY=VALUE 每行一个）</span>
+          <Textarea value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
+        </div>
+        {isForm ? (
+          <div className="grid gap-1.5">
+            <span className="text-sm font-medium">容器环境变量</span>
+            <Textarea value={formEnv} onChange={(e) => setFormEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
+          </div>
+        ) : (
+          services.map((s) => (
+            <div key={s} className="grid gap-1.5">
+              <span className="text-sm font-medium">服务 {s} 的环境变量（只注入这个服务的容器）</span>
+              <Textarea
+                value={serviceEnv[s] ?? ""}
+                onChange={(e) => setServiceEnv((prev) => ({ ...prev, [s]: e.target.value }))}
+                spellCheck={false}
+                className="font-mono text-[13px]"
+              />
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   );

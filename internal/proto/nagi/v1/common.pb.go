@@ -36,10 +36,14 @@ type Project struct {
 	// 最新版本号。
 	LatestVersion int64 `protobuf:"varint,5,opt,name=latest_version,json=latestVersion,proto3" json:"latest_version,omitempty"`
 	// 最近一次部署的版本号，0 表示从未部署。
-	DeployedVersion int64 `protobuf:"varint,6,opt,name=deployed_version,json=deployedVersion,proto3" json:"deployed_version,omitempty"`
-	// 当前版本的 compose 原文。
-	Compose       string                 `protobuf:"bytes,7,opt,name=compose,proto3" json:"compose,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	DeployedVersion int64                  `protobuf:"varint,6,opt,name=deployed_version,json=deployedVersion,proto3" json:"deployed_version,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// 最新版本的配置。
+	Config *ProjectConfig `protobuf:"bytes,9,opt,name=config,proto3" json:"config,omitempty"`
+	// 是否有未部署的草稿。
+	HasDraft bool `protobuf:"varint,10,opt,name=has_draft,json=hasDraft,proto3" json:"has_draft,omitempty"`
+	// 草稿内容，has_draft 为 false 时为空。
+	Draft         *ProjectConfig `protobuf:"bytes,11,opt,name=draft,proto3" json:"draft,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -116,18 +120,362 @@ func (x *Project) GetDeployedVersion() int64 {
 	return 0
 }
 
-func (x *Project) GetCompose() string {
+func (x *Project) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Project) GetConfig() *ProjectConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *Project) GetHasDraft() bool {
+	if x != nil {
+		return x.HasDraft
+	}
+	return false
+}
+
+func (x *Project) GetDraft() *ProjectConfig {
+	if x != nil {
+		return x.Draft
+	}
+	return nil
+}
+
+// ProjectConfig 是一个版本的完整配置。
+type ProjectConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// compose 原文。用镜像表单创建的项目，由表单生成。
+	Compose string `protobuf:"bytes,1,opt,name=compose,proto3" json:"compose,omitempty"`
+	// 项目级变量：替换 compose 里的 ${变量}。
+	Env []*EnvVar `protobuf:"bytes,2,rep,name=env,proto3" json:"env,omitempty"`
+	// 服务级环境变量：键是服务名，只注入对应服务的容器。
+	ServiceEnv map[string]*EnvList `protobuf:"bytes,3,rep,name=service_env,json=serviceEnv,proto3" json:"service_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// 用镜像表单创建的项目才有。有它时 compose 由它生成。
+	Form          *ImageForm `protobuf:"bytes,4,opt,name=form,proto3" json:"form,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectConfig) Reset() {
+	*x = ProjectConfig{}
+	mi := &file_nagi_v1_common_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectConfig) ProtoMessage() {}
+
+func (x *ProjectConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectConfig.ProtoReflect.Descriptor instead.
+func (*ProjectConfig) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProjectConfig) GetCompose() string {
 	if x != nil {
 		return x.Compose
 	}
 	return ""
 }
 
-func (x *Project) GetCreatedAt() *timestamppb.Timestamp {
+func (x *ProjectConfig) GetEnv() []*EnvVar {
 	if x != nil {
-		return x.CreatedAt
+		return x.Env
 	}
 	return nil
+}
+
+func (x *ProjectConfig) GetServiceEnv() map[string]*EnvList {
+	if x != nil {
+		return x.ServiceEnv
+	}
+	return nil
+}
+
+func (x *ProjectConfig) GetForm() *ImageForm {
+	if x != nil {
+		return x.Form
+	}
+	return nil
+}
+
+type EnvVar struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// 密钥：界面上默认隐藏。
+	Secret        bool `protobuf:"varint,3,opt,name=secret,proto3" json:"secret,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnvVar) Reset() {
+	*x = EnvVar{}
+	mi := &file_nagi_v1_common_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnvVar) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnvVar) ProtoMessage() {}
+
+func (x *EnvVar) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnvVar.ProtoReflect.Descriptor instead.
+func (*EnvVar) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *EnvVar) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *EnvVar) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *EnvVar) GetSecret() bool {
+	if x != nil {
+		return x.Secret
+	}
+	return false
+}
+
+type EnvList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Vars          []*EnvVar              `protobuf:"bytes,1,rep,name=vars,proto3" json:"vars,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnvList) Reset() {
+	*x = EnvList{}
+	mi := &file_nagi_v1_common_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnvList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnvList) ProtoMessage() {}
+
+func (x *EnvList) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnvList.ProtoReflect.Descriptor instead.
+func (*EnvList) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *EnvList) GetVars() []*EnvVar {
+	if x != nil {
+		return x.Vars
+	}
+	return nil
+}
+
+// ImageForm：直接运行一个镜像，文件可选。
+type ImageForm struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Image string                 `protobuf:"bytes,1,opt,name=image,proto3" json:"image,omitempty"`
+	// 运行命令，为空时使用镜像默认命令。
+	Command string         `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Ports   []*PortMapping `protobuf:"bytes,3,rep,name=ports,proto3" json:"ports,omitempty"`
+	// 持久化目录：容器内的路径，数据落到项目目录的 volumes/ 下。
+	Volumes []string `protobuf:"bytes,4,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	// 把项目的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+	Workdir string `protobuf:"bytes,5,opt,name=workdir,proto3" json:"workdir,omitempty"`
+	// 环境变量，直接注入容器。
+	Env           []*EnvVar `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageForm) Reset() {
+	*x = ImageForm{}
+	mi := &file_nagi_v1_common_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageForm) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageForm) ProtoMessage() {}
+
+func (x *ImageForm) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageForm.ProtoReflect.Descriptor instead.
+func (*ImageForm) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ImageForm) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
+func (x *ImageForm) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *ImageForm) GetPorts() []*PortMapping {
+	if x != nil {
+		return x.Ports
+	}
+	return nil
+}
+
+func (x *ImageForm) GetVolumes() []string {
+	if x != nil {
+		return x.Volumes
+	}
+	return nil
+}
+
+func (x *ImageForm) GetWorkdir() string {
+	if x != nil {
+		return x.Workdir
+	}
+	return ""
+}
+
+func (x *ImageForm) GetEnv() []*EnvVar {
+	if x != nil {
+		return x.Env
+	}
+	return nil
+}
+
+type PortMapping struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 节点上对外的端口。
+	Published uint32 `protobuf:"varint,1,opt,name=published,proto3" json:"published,omitempty"`
+	// 容器内的端口。
+	Target uint32 `protobuf:"varint,2,opt,name=target,proto3" json:"target,omitempty"`
+	// tcp 或 udp，默认 tcp。
+	Protocol      string `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PortMapping) Reset() {
+	*x = PortMapping{}
+	mi := &file_nagi_v1_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PortMapping) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PortMapping) ProtoMessage() {}
+
+func (x *PortMapping) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PortMapping.ProtoReflect.Descriptor instead.
+func (*PortMapping) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *PortMapping) GetPublished() uint32 {
+	if x != nil {
+		return x.Published
+	}
+	return 0
+}
+
+func (x *PortMapping) GetTarget() uint32 {
+	if x != nil {
+		return x.Target
+	}
+	return 0
+}
+
+func (x *PortMapping) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
 }
 
 type ServiceStatus struct {
@@ -147,7 +495,7 @@ type ServiceStatus struct {
 
 func (x *ServiceStatus) Reset() {
 	*x = ServiceStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[1]
+	mi := &file_nagi_v1_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -159,7 +507,7 @@ func (x *ServiceStatus) String() string {
 func (*ServiceStatus) ProtoMessage() {}
 
 func (x *ServiceStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[1]
+	mi := &file_nagi_v1_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -172,7 +520,7 @@ func (x *ServiceStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceStatus.ProtoReflect.Descriptor instead.
 func (*ServiceStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{1}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ServiceStatus) GetName() string {
@@ -226,7 +574,7 @@ type ProjectStatus struct {
 
 func (x *ProjectStatus) Reset() {
 	*x = ProjectStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[2]
+	mi := &file_nagi_v1_common_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -238,7 +586,7 @@ func (x *ProjectStatus) String() string {
 func (*ProjectStatus) ProtoMessage() {}
 
 func (x *ProjectStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[2]
+	mi := &file_nagi_v1_common_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -251,7 +599,7 @@ func (x *ProjectStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectStatus.ProtoReflect.Descriptor instead.
 func (*ProjectStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{2}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ProjectStatus) GetServices() []*ServiceStatus {
@@ -271,7 +619,7 @@ type ProjectSummary struct {
 
 func (x *ProjectSummary) Reset() {
 	*x = ProjectSummary{}
-	mi := &file_nagi_v1_common_proto_msgTypes[3]
+	mi := &file_nagi_v1_common_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +631,7 @@ func (x *ProjectSummary) String() string {
 func (*ProjectSummary) ProtoMessage() {}
 
 func (x *ProjectSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[3]
+	mi := &file_nagi_v1_common_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +644,7 @@ func (x *ProjectSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectSummary.ProtoReflect.Descriptor instead.
 func (*ProjectSummary) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{3}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ProjectSummary) GetProject() *Project {
@@ -327,7 +675,7 @@ type NodeInfo struct {
 
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
-	mi := &file_nagi_v1_common_proto_msgTypes[4]
+	mi := &file_nagi_v1_common_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +687,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[4]
+	mi := &file_nagi_v1_common_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +700,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *NodeInfo) GetHostname() string {
@@ -410,7 +758,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_nagi_v1_common_proto_msgTypes[5]
+	mi := &file_nagi_v1_common_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -422,7 +770,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[5]
+	mi := &file_nagi_v1_common_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +783,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{5}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LogLine) GetService() string {
@@ -479,7 +827,7 @@ type DeployEvent struct {
 
 func (x *DeployEvent) Reset() {
 	*x = DeployEvent{}
-	mi := &file_nagi_v1_common_proto_msgTypes[6]
+	mi := &file_nagi_v1_common_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +839,7 @@ func (x *DeployEvent) String() string {
 func (*DeployEvent) ProtoMessage() {}
 
 func (x *DeployEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[6]
+	mi := &file_nagi_v1_common_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +852,7 @@ func (x *DeployEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployEvent.ProtoReflect.Descriptor instead.
 func (*DeployEvent) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{6}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DeployEvent) GetEvent() isDeployEvent_Event {
@@ -560,7 +908,7 @@ type DeployResult struct {
 
 func (x *DeployResult) Reset() {
 	*x = DeployResult{}
-	mi := &file_nagi_v1_common_proto_msgTypes[7]
+	mi := &file_nagi_v1_common_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -572,7 +920,7 @@ func (x *DeployResult) String() string {
 func (*DeployResult) ProtoMessage() {}
 
 func (x *DeployResult) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[7]
+	mi := &file_nagi_v1_common_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -585,7 +933,7 @@ func (x *DeployResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResult.ProtoReflect.Descriptor instead.
 func (*DeployResult) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{7}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DeployResult) GetSuccess() bool {
@@ -613,17 +961,46 @@ var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x82\x02\n" +
+	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe9\x02\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
 	"\x03dir\x18\x03 \x01(\tR\x03dir\x12\x1a\n" +
 	"\brevision\x18\x04 \x01(\x03R\brevision\x12%\n" +
 	"\x0elatest_version\x18\x05 \x01(\x03R\rlatestVersion\x12)\n" +
-	"\x10deployed_version\x18\x06 \x01(\x03R\x0fdeployedVersion\x12\x18\n" +
-	"\acompose\x18\a \x01(\tR\acompose\x129\n" +
+	"\x10deployed_version\x18\x06 \x01(\x03R\x0fdeployedVersion\x129\n" +
 	"\n" +
-	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xa2\x01\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12.\n" +
+	"\x06config\x18\t \x01(\v2\x16.nagi.v1.ProjectConfigR\x06config\x12\x1b\n" +
+	"\thas_draft\x18\n" +
+	" \x01(\bR\bhasDraft\x12,\n" +
+	"\x05draft\x18\v \x01(\v2\x16.nagi.v1.ProjectConfigR\x05draftJ\x04\b\a\x10\b\"\x8e\x02\n" +
+	"\rProjectConfig\x12\x18\n" +
+	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
+	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12G\n" +
+	"\vservice_env\x18\x03 \x03(\v2&.nagi.v1.ProjectConfig.ServiceEnvEntryR\n" +
+	"serviceEnv\x12&\n" +
+	"\x04form\x18\x04 \x01(\v2\x12.nagi.v1.ImageFormR\x04form\x1aO\n" +
+	"\x0fServiceEnvEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.nagi.v1.EnvListR\x05value:\x028\x01\"H\n" +
+	"\x06EnvVar\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
+	"\x06secret\x18\x03 \x01(\bR\x06secret\".\n" +
+	"\aEnvList\x12#\n" +
+	"\x04vars\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\x04vars\"\xbe\x01\n" +
+	"\tImageForm\x12\x14\n" +
+	"\x05image\x18\x01 \x01(\tR\x05image\x12\x18\n" +
+	"\acommand\x18\x02 \x01(\tR\acommand\x12*\n" +
+	"\x05ports\x18\x03 \x03(\v2\x14.nagi.v1.PortMappingR\x05ports\x12\x18\n" +
+	"\avolumes\x18\x04 \x03(\tR\avolumes\x12\x18\n" +
+	"\aworkdir\x18\x05 \x01(\tR\aworkdir\x12!\n" +
+	"\x03env\x18\x06 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\"_\n" +
+	"\vPortMapping\x12\x1c\n" +
+	"\tpublished\x18\x01 \x01(\rR\tpublished\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xa2\x01\n" +
 	"\rServiceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fcontainer_id\x18\x02 \x01(\tR\vcontainerId\x12\x14\n" +
@@ -669,30 +1046,45 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_common_proto_rawDescData
 }
 
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(*Project)(nil),               // 0: nagi.v1.Project
-	(*ServiceStatus)(nil),         // 1: nagi.v1.ServiceStatus
-	(*ProjectStatus)(nil),         // 2: nagi.v1.ProjectStatus
-	(*ProjectSummary)(nil),        // 3: nagi.v1.ProjectSummary
-	(*NodeInfo)(nil),              // 4: nagi.v1.NodeInfo
-	(*LogLine)(nil),               // 5: nagi.v1.LogLine
-	(*DeployEvent)(nil),           // 6: nagi.v1.DeployEvent
-	(*DeployResult)(nil),          // 7: nagi.v1.DeployResult
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*ProjectConfig)(nil),         // 1: nagi.v1.ProjectConfig
+	(*EnvVar)(nil),                // 2: nagi.v1.EnvVar
+	(*EnvList)(nil),               // 3: nagi.v1.EnvList
+	(*ImageForm)(nil),             // 4: nagi.v1.ImageForm
+	(*PortMapping)(nil),           // 5: nagi.v1.PortMapping
+	(*ServiceStatus)(nil),         // 6: nagi.v1.ServiceStatus
+	(*ProjectStatus)(nil),         // 7: nagi.v1.ProjectStatus
+	(*ProjectSummary)(nil),        // 8: nagi.v1.ProjectSummary
+	(*NodeInfo)(nil),              // 9: nagi.v1.NodeInfo
+	(*LogLine)(nil),               // 10: nagi.v1.LogLine
+	(*DeployEvent)(nil),           // 11: nagi.v1.DeployEvent
+	(*DeployResult)(nil),          // 12: nagi.v1.DeployResult
+	nil,                           // 13: nagi.v1.ProjectConfig.ServiceEnvEntry
+	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	8, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	1, // 1: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
-	0, // 2: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
-	2, // 3: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	8, // 4: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	7, // 5: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	14, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
+	1,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
+	2,  // 3: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
+	13, // 4: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	4,  // 5: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
+	2,  // 6: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
+	5,  // 7: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
+	2,  // 8: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
+	6,  // 9: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
+	0,  // 10: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
+	7,  // 11: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
+	14, // 12: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	12, // 13: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	3,  // 14: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -700,7 +1092,7 @@ func file_nagi_v1_common_proto_init() {
 	if File_nagi_v1_common_proto != nil {
 		return
 	}
-	file_nagi_v1_common_proto_msgTypes[6].OneofWrappers = []any{
+	file_nagi_v1_common_proto_msgTypes[11].OneofWrappers = []any{
 		(*DeployEvent_Output)(nil),
 		(*DeployEvent_Result)(nil),
 	}
@@ -710,7 +1102,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
