@@ -3093,7 +3093,9 @@ type DeployNodeProjectRequest struct {
 	ProjectId    string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	BaseRevision int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
 	// 部署前先从 git 拉取文件。
-	Pull          bool `protobuf:"varint,4,opt,name=pull,proto3" json:"pull,omitempty"`
+	Pull bool `protobuf:"varint,4,opt,name=pull,proto3" json:"pull,omitempty"`
+	// 用刚上传的压缩包替换 data/（先 POST /api/upload）。
+	UseUpload     bool `protobuf:"varint,5,opt,name=use_upload,json=useUpload,proto3" json:"use_upload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3152,6 +3154,13 @@ func (x *DeployNodeProjectRequest) GetBaseRevision() int64 {
 func (x *DeployNodeProjectRequest) GetPull() bool {
 	if x != nil {
 		return x.Pull
+	}
+	return false
+}
+
+func (x *DeployNodeProjectRequest) GetUseUpload() bool {
+	if x != nil {
+		return x.UseUpload
 	}
 	return false
 }
@@ -3409,13 +3418,15 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\"K\n" +
 	"\x16GetNodeProjectResponse\x121\n" +
-	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"\x8b\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"\xaa\x01\n" +
 	"\x18DeployNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
 	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x12\x12\n" +
-	"\x04pull\x18\x04 \x01(\bR\x04pull\"\x9c\x01\n" +
+	"\x04pull\x18\x04 \x01(\bR\x04pull\x12\x1d\n" +
+	"\n" +
+	"use_upload\x18\x05 \x01(\bR\tuseUpload\"\x9c\x01\n" +
 	"\x1cStreamNodeProjectLogsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +

@@ -21,6 +21,119 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type UploadChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadChunk) Reset() {
+	*x = UploadChunk{}
+	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadChunk) ProtoMessage() {}
+
+func (x *UploadChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadChunk.ProtoReflect.Descriptor instead.
+func (*UploadChunk) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *UploadChunk) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *UploadChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type UploadResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Bytes uint64                 `protobuf:"varint,1,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	Files uint32                 `protobuf:"varint,2,opt,name=files,proto3" json:"files,omitempty"`
+	// 压缩包里只有一个顶层目录时，自动去掉的这一层目录名。
+	Stripped      string `protobuf:"bytes,3,opt,name=stripped,proto3" json:"stripped,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadResponse) Reset() {
+	*x = UploadResponse{}
+	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadResponse) ProtoMessage() {}
+
+func (x *UploadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadResponse.ProtoReflect.Descriptor instead.
+func (*UploadResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *UploadResponse) GetBytes() uint64 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
+func (x *UploadResponse) GetFiles() uint32 {
+	if x != nil {
+		return x.Files
+	}
+	return 0
+}
+
+func (x *UploadResponse) GetStripped() string {
+	if x != nil {
+		return x.Stripped
+	}
+	return ""
+}
+
 type PingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -29,7 +142,7 @@ type PingRequest struct {
 
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -41,7 +154,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -54,7 +167,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{0}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{2}
 }
 
 type PingResponse struct {
@@ -67,7 +180,7 @@ type PingResponse struct {
 
 func (x *PingResponse) Reset() {
 	*x = PingResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -79,7 +192,7 @@ func (x *PingResponse) String() string {
 func (*PingResponse) ProtoMessage() {}
 
 func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -92,7 +205,7 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{1}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PingResponse) GetCaller() []byte {
@@ -106,12 +219,21 @@ var File_nagi_v1_mesh_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"\r\n" +
+	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"@\n" +
+	"\vUploadChunk\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"X\n" +
+	"\x0eUploadResponse\x12\x14\n" +
+	"\x05bytes\x18\x01 \x01(\x04R\x05bytes\x12\x14\n" +
+	"\x05files\x18\x02 \x01(\rR\x05files\x12\x1a\n" +
+	"\bstripped\x18\x03 \x01(\tR\bstripped\"\r\n" +
 	"\vPingRequest\"&\n" +
 	"\fPingResponse\x12\x16\n" +
-	"\x06caller\x18\x01 \x01(\fR\x06caller2B\n" +
+	"\x06caller\x18\x01 \x01(\fR\x06caller2}\n" +
 	"\vMeshService\x123\n" +
-	"\x04Ping\x12\x14.nagi.v1.PingRequest\x1a\x15.nagi.v1.PingResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\x04Ping\x12\x14.nagi.v1.PingRequest\x1a\x15.nagi.v1.PingResponse\x129\n" +
+	"\x06Upload\x12\x14.nagi.v1.UploadChunk\x1a\x17.nagi.v1.UploadResponse(\x01B4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_mesh_proto_rawDescOnce sync.Once
@@ -125,16 +247,20 @@ func file_nagi_v1_mesh_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_mesh_proto_rawDescData
 }
 
-var file_nagi_v1_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_nagi_v1_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_nagi_v1_mesh_proto_goTypes = []any{
-	(*PingRequest)(nil),  // 0: nagi.v1.PingRequest
-	(*PingResponse)(nil), // 1: nagi.v1.PingResponse
+	(*UploadChunk)(nil),    // 0: nagi.v1.UploadChunk
+	(*UploadResponse)(nil), // 1: nagi.v1.UploadResponse
+	(*PingRequest)(nil),    // 2: nagi.v1.PingRequest
+	(*PingResponse)(nil),   // 3: nagi.v1.PingResponse
 }
 var file_nagi_v1_mesh_proto_depIdxs = []int32{
-	0, // 0: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
-	1, // 1: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 0: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
+	0, // 1: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
+	3, // 2: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
+	1, // 3: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -151,7 +277,7 @@ func file_nagi_v1_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_mesh_proto_rawDesc), len(file_nagi_v1_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

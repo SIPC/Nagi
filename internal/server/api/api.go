@@ -59,6 +59,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
 	mux.Handle("/hooks/", a.WebhookHandler())
 	mux.Handle("/ws/exec", a.TerminalHandler())
+	mux.Handle("POST /api/upload", a.UploadHandler())
 	mux.Handle("GET /install.sh", a.InstallHandler())
 	mux.Handle("GET /download/", a.DownloadHandler())
 }
@@ -429,6 +430,7 @@ func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Req
 	}
 	stream, err := agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{
 		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Pull: req.Msg.GetPull(),
+		UseUpload: req.Msg.GetUseUpload(),
 	})
 	if err != nil {
 		return fromGRPC(err)

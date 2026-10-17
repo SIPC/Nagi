@@ -16,18 +16,18 @@ import (
 // ServicePort 是每个成员在 mesh 地址上提供 MeshService 的 TCP 端口。
 const ServicePort = 7000
 
-// Serve 在 mesh 上提供 MeshService，直到 ctx 取消。
+// Serve 在 mesh 上提供 MeshService，直到 ctx 取消。impl 为 nil 时只提供 Ping。
 // mesh 上的流量已经由 WireGuard 加密和认证，gRPC 本身不再加 TLS；调用方身份由来源 mesh 地址确定。
-func Serve(ctx context.Context, m *Mesh, register func(*grpc.Server)) error {
+func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 	ln, err := m.Listen(ServicePort)
 	if err != nil {
 		return err
 	}
-	srv := grpc.NewServer()
-	nagiv1.RegisterMeshServiceServer(srv, &service{m: m})
-	if register != nil {
-		register(srv)
+	if impl == nil {
+		impl = &Service{M: m}
 	}
+	srv := grpc.NewServer()
+	nagiv1.RegisterMeshServiceServer(srv, impl)
 	go func() {
 		<-ctx.Done()
 		srv.Stop()
@@ -44,13 +44,14 @@ func Caller(ctx context.Context, m *Mesh) (Key, bool) {
 	return m.KeyOf(p.Addr)
 }
 
-type service struct {
+// Service 实现 MeshService 的公共部分（Ping）。节点嵌入它再加上自己的方法。
+type Service struct {
 	nagiv1.UnimplementedMeshServiceServer
-	m *Mesh
+	M *Mesh
 }
 
-func (s *service) Ping(ctx context.Context, _ *nagiv1.PingRequest) (*nagiv1.PingResponse, error) {
-	k, _ := Caller(ctx, s.m)
+func (s *Service) Ping(ctx context.Context, _ *nagiv1.PingRequest) (*nagiv1.PingResponse, error) {
+	k, _ := Caller(ctx, s.M)
 	return &nagiv1.PingResponse{Caller: k[:]}, nil
 }
 

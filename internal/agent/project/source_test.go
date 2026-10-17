@@ -64,3 +64,23 @@ func TestSyncDirPreserves(t *testing.T) {
 		t.Errorf("normalized preserve = %v", preserve)
 	}
 }
+
+// 保留路径在节点上还不存在时，用新文件初始化；之后就以节点上的为准。
+func TestSyncDirSeedsMissingPreserved(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	_ = os.MkdirAll(filepath.Join(src, "uploads"), 0o755)
+	_ = os.WriteFile(filepath.Join(src, "uploads", "a.txt"), []byte("seed"), 0o644)
+	if err := syncDir(src, dst, []string{"uploads"}, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dst, "uploads", "a.txt")); string(b) != "seed" {
+		t.Fatalf("应该用新文件初始化，实际 %q", b)
+	}
+	_ = os.WriteFile(filepath.Join(src, "uploads", "a.txt"), []byte("new"), 0o644)
+	if err := syncDir(src, dst, []string{"uploads"}, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dst, "uploads", "a.txt")); string(b) != "seed" {
+		t.Fatalf("已存在的保留路径不应该被覆盖，实际 %q", b)
+	}
+}

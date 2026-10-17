@@ -228,7 +228,8 @@ func normalizePreserve(list []string) []string {
 }
 
 // syncDir 让 dst 变成 src 的内容：删掉 dst 里不在保留路径中的所有东西，再复制 src。
-// src 里属于保留路径的部分被忽略，以 dst 现有内容为准。
+// 保留路径在 dst 里已经存在时，src 里的这部分被忽略，以 dst 现有内容为准；
+// 还不存在时（例如第一次部署），用 src 里的内容初始化。
 func syncDir(src, dst string, preserve []string, onLine func(string)) error {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
@@ -263,7 +264,14 @@ func syncDir(src, dst string, preserve []string, onLine func(string)) error {
 	if err != nil {
 		return err
 	}
-	// 2. 复制新文件
+	// 2. 复制新文件。节点上还没有的保留路径不算保留，照常复制。
+	var existing []string
+	for _, p := range preserve {
+		if _, err := os.Lstat(filepath.Join(dst, filepath.FromSlash(p))); err == nil {
+			existing = append(existing, p)
+		}
+	}
+	preserve = existing
 	ignored := map[string]bool{}
 	return filepath.WalkDir(src, func(full string, d fs.DirEntry, err error) error {
 		if err != nil {

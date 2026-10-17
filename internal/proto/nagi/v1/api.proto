@@ -352,6 +352,8 @@ message DeployNodeProjectRequest {
   int64 base_revision = 3;
   // 部署前先从 git 拉取文件。
   bool pull = 4;
+  // 用刚上传的压缩包替换 data/（先 POST /api/upload）。
+  bool use_upload = 5;
 }
 
 message StreamNodeProjectLogsRequest {

@@ -226,6 +226,8 @@ message DeployProjectRequest {
   int64 base_revision = 2;
   // 部署前先从 git 拉取文件。
   bool pull = 3;
+  // 用面板刚上传的文件替换 data/（见 MeshService.Upload）。
+  bool use_upload = 4;
 }
 
 message StreamLogsRequest {

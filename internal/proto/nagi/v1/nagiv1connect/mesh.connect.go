@@ -35,11 +35,16 @@ const (
 const (
 	// MeshServicePingProcedure is the fully-qualified name of the MeshService's Ping RPC.
 	MeshServicePingProcedure = "/nagi.v1.MeshService/Ping"
+	// MeshServiceUploadProcedure is the fully-qualified name of the MeshService's Upload RPC.
+	MeshServiceUploadProcedure = "/nagi.v1.MeshService/Upload"
 )
 
 // MeshServiceClient is a client for the nagi.v1.MeshService service.
 type MeshServiceClient interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
+	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+	// 只接受节点信任的面板。第一条消息带 project_id。
+	Upload(context.Context) *connect.ClientStreamForClient[v1.UploadChunk, v1.UploadResponse]
 }
 
 // NewMeshServiceClient constructs a client for the nagi.v1.MeshService service. By default, it uses
@@ -59,12 +64,19 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("Ping")),
 			connect.WithClientOptions(opts...),
 		),
+		upload: connect.NewClient[v1.UploadChunk, v1.UploadResponse](
+			httpClient,
+			baseURL+MeshServiceUploadProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("Upload")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // meshServiceClient implements MeshServiceClient.
 type meshServiceClient struct {
-	ping *connect.Client[v1.PingRequest, v1.PingResponse]
+	ping   *connect.Client[v1.PingRequest, v1.PingResponse]
+	upload *connect.Client[v1.UploadChunk, v1.UploadResponse]
 }
 
 // Ping calls nagi.v1.MeshService.Ping.
@@ -72,9 +84,17 @@ func (c *meshServiceClient) Ping(ctx context.Context, req *connect.Request[v1.Pi
 	return c.ping.CallUnary(ctx, req)
 }
 
+// Upload calls nagi.v1.MeshService.Upload.
+func (c *meshServiceClient) Upload(ctx context.Context) *connect.ClientStreamForClient[v1.UploadChunk, v1.UploadResponse] {
+	return c.upload.CallClientStream(ctx)
+}
+
 // MeshServiceHandler is an implementation of the nagi.v1.MeshService service.
 type MeshServiceHandler interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
+	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+	// 只接受节点信任的面板。第一条消息带 project_id。
+	Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error)
 }
 
 // NewMeshServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -90,10 +110,18 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(meshServiceMethods.ByName("Ping")),
 		connect.WithHandlerOptions(opts...),
 	)
+	meshServiceUploadHandler := connect.NewClientStreamHandler(
+		MeshServiceUploadProcedure,
+		svc.Upload,
+		connect.WithSchema(meshServiceMethods.ByName("Upload")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.MeshService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MeshServicePingProcedure:
 			meshServicePingHandler.ServeHTTP(w, r)
+		case MeshServiceUploadProcedure:
+			meshServiceUploadHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -105,4 +133,8 @@ type UnimplementedMeshServiceHandler struct{}
 
 func (UnimplementedMeshServiceHandler) Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.Ping is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.Upload is not implemented"))
 }

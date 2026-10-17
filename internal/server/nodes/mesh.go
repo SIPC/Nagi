@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"slices"
 	"sync"
@@ -110,6 +111,21 @@ func (r *Registry) meshConfig() *nagiv1.MeshConfig {
 		PanelKey: self[:],
 		Peers:    append([]*nagiv1.MeshPeer{{PublicKey: self[:], Name: name, IsPanel: true}}, list...),
 	}
+}
+
+// NodeMeshKey 返回在线节点的 mesh 公钥。
+func (r *Registry) NodeMeshKey(nodeID string) (mesh.Key, error) {
+	c, err := r.Get(nodeID)
+	if err != nil {
+		return mesh.Key{}, err
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	k, err := mesh.ParseKey(c.mesh.GetPublicKey())
+	if err != nil {
+		return mesh.Key{}, errors.New("节点还没有加入 mesh")
+	}
+	return k, nil
 }
 
 // MeshPeerName 返回 mesh 成员的显示名称。

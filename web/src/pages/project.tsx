@@ -143,10 +143,36 @@ function DeployCard({
     outRef.current?.scrollTo({ top: outRef.current.scrollHeight });
   }, [state.lines.length]);
 
-  const deploy = async (pull: boolean) => {
-    setState({ running: true, lines: [] });
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换 data/。
+  const upload = async (file: File) => {
+    setState({ running: true, lines: [`上传 ${file.name}（${(file.size / 1048576).toFixed(1)} MB）`] });
+    const res = await fetch(`/api/upload?node=${encodeURIComponent(nodeId)}&project=${encodeURIComponent(projectId)}`, {
+      method: "POST",
+      headers: { "X-Nagi-Upload": "1" },
+      body: file,
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      setState((s) => ({ ...s, running: false, result: { success: false, error: body.message } }));
+      return;
+    }
+    const line = `已上传 ${body.files} 个文件${body.stripped ? `（去掉了顶层目录 ${body.stripped}/）` : ""}`;
+    setState((s) => ({ ...s, lines: [...s.lines, line] }));
+    await deploy(false, true, true);
+  };
+
+  const deploy = async (pull: boolean, useUpload = false, keepLines = false) => {
+    setState((s) => ({ running: true, lines: keepLines ? s.lines : [] }));
     try {
-      for await (const ev of projectClient.deployNodeProject({ nodeId, projectId, baseRevision: revision, pull })) {
+      for await (const ev of projectClient.deployNodeProject({
+        nodeId,
+        projectId,
+        baseRevision: revision,
+        pull,
+        useUpload,
+      })) {
         if (ev.event.case === "output") {
           const line = ev.event.value;
           setState((s) => ({ ...s, lines: [...s.lines, line] }));
@@ -174,6 +200,20 @@ function DeployCard({
           </p>
         </div>
         <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip,.tar,.tar.gz,.tgz"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) upload(f);
+            }}
+          />
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={state.running}>
+            上传并部署
+          </Button>
           {hasGit && (
             <Button variant="outline" onClick={() => deploy(true)} disabled={state.running}>
               拉取并部署

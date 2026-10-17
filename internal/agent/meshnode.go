@@ -68,7 +68,7 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 		m.Close()
 	}()
 	go func() {
-		if err := mesh.Serve(ctx, m, nil); err != nil && ctx.Err() == nil {
+		if err := mesh.Serve(ctx, m, &meshService{Service: mesh.Service{M: m}, a: a}); err != nil && ctx.Err() == nil {
 			log.Warn("mesh 服务停止", "err", err)
 		}
 	}()

@@ -10,7 +10,58 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/mesh.proto.
  */
 export const file_nagi_v1_mesh: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiDQoLUGluZ1JlcXVlc3QiHgoMUGluZ1Jlc3BvbnNlEg4KBmNhbGxlchgBIAEoDDJCCgtNZXNoU2VydmljZRIzCgRQaW5nEhQubmFnaS52MS5QaW5nUmVxdWVzdBoVLm5hZ2kudjEuUGluZ1Jlc3BvbnNlQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM");
+  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiLwoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMIkAKDlVwbG9hZFJlc3BvbnNlEg0KBWJ5dGVzGAEgASgEEg0KBWZpbGVzGAIgASgNEhAKCHN0cmlwcGVkGAMgASgJIg0KC1BpbmdSZXF1ZXN0Ih4KDFBpbmdSZXNwb25zZRIOCgZjYWxsZXIYASABKAwyfQoLTWVzaFNlcnZpY2USMwoEUGluZxIULm5hZ2kudjEuUGluZ1JlcXVlc3QaFS5uYWdpLnYxLlBpbmdSZXNwb25zZRI5CgZVcGxvYWQSFC5uYWdpLnYxLlVwbG9hZENodW5rGhcubmFnaS52MS5VcGxvYWRSZXNwb25zZSgBQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM");
+
+/**
+ * @generated from message nagi.v1.UploadChunk
+ */
+export type UploadChunk = Message<"nagi.v1.UploadChunk"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: bytes data = 2;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.UploadChunk.
+ * Use `create(UploadChunkSchema)` to create a new message.
+ */
+export const UploadChunkSchema: GenMessage<UploadChunk> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 0);
+
+/**
+ * @generated from message nagi.v1.UploadResponse
+ */
+export type UploadResponse = Message<"nagi.v1.UploadResponse"> & {
+  /**
+   * @generated from field: uint64 bytes = 1;
+   */
+  bytes: bigint;
+
+  /**
+   * @generated from field: uint32 files = 2;
+   */
+  files: number;
+
+  /**
+   * 压缩包里只有一个顶层目录时，自动去掉的这一层目录名。
+   *
+   * @generated from field: string stripped = 3;
+   */
+  stripped: string;
+};
+
+/**
+ * Describes the message nagi.v1.UploadResponse.
+ * Use `create(UploadResponseSchema)` to create a new message.
+ */
+export const UploadResponseSchema: GenMessage<UploadResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_mesh, 1);
 
 /**
  * @generated from message nagi.v1.PingRequest
@@ -23,7 +74,7 @@ export type PingRequest = Message<"nagi.v1.PingRequest"> & {
  * Use `create(PingRequestSchema)` to create a new message.
  */
 export const PingRequestSchema: GenMessage<PingRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 0);
+  messageDesc(file_nagi_v1_mesh, 2);
 
 /**
  * @generated from message nagi.v1.PingResponse
@@ -42,7 +93,7 @@ export type PingResponse = Message<"nagi.v1.PingResponse"> & {
  * Use `create(PingResponseSchema)` to create a new message.
  */
 export const PingResponseSchema: GenMessage<PingResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_mesh, 1);
+  messageDesc(file_nagi_v1_mesh, 3);
 
 /**
  * MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
@@ -57,6 +108,17 @@ export const MeshService: GenService<{
     methodKind: "unary";
     input: typeof PingRequestSchema;
     output: typeof PingResponseSchema;
+  },
+  /**
+   * 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+   * 只接受节点信任的面板。第一条消息带 project_id。
+   *
+   * @generated from rpc nagi.v1.MeshService.Upload
+   */
+  upload: {
+    methodKind: "client_streaming";
+    input: typeof UploadChunkSchema;
+    output: typeof UploadResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_mesh, 0);

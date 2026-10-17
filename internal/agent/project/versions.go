@@ -112,6 +112,7 @@ func (m *Manager) snapshotWithPause(ctx context.Context, rep *snapshot.Repo, id 
 // deployOpts 是一次部署的选项。
 type deployOpts struct {
 	pull         bool              // 部署前从 git 拉取文件
+	upload       bool              // 用面板上传的文件替换 data/
 	consumeDraft bool              // 部署成功创建版本后删除草稿
 	rollbackOf   int64             // 回滚：回滚到的版本
 	filesFrom    string            // 回滚：从这个版本文件快照恢复 data/
@@ -121,7 +122,11 @@ type deployOpts struct {
 
 // Deploy 部署项目，生成一个新版本。有草稿时用草稿，没有时用最新版本的配置（重新部署）。
 // baseRevision 不为 0 时，必须和节点上的修订号一致。
-func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull bool, onLine func(string)) (int64, error) {
+// doPull 时先从 git 拉取文件；useUpload 时用面板上传的文件替换 data/。
+func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull, useUpload bool, onLine func(string)) (int64, error) {
+	if doPull && useUpload {
+		return 0, invalid("不能同时从 git 拉取和使用上传的文件")
+	}
 	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
 	if err != nil {
 		return 0, err
@@ -132,7 +137,12 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doP
 	if err != nil {
 		return 0, err
 	}
-	opts := deployOpts{pull: doPull}
+	opts := deployOpts{pull: doPull, upload: useUpload}
+	if useUpload {
+		if _, err := os.Stat(paths{root: row.Dir}.uploadFiles()); err != nil {
+			return 0, invalid("没有已上传的文件，请先上传")
+		}
+	}
 	if draft, err := pdb.draft(ctx); err != nil {
 		return 0, err
 	} else if draft != nil {
@@ -237,6 +247,14 @@ func (m *Manager) deploy(ctx context.Context, row nodestore.Project, pdb *projec
 		if err := pdb.setMeta(ctx, metaLastCommit, commit); err != nil {
 			return 0, err
 		}
+	}
+	if opts.upload {
+		onLine("用上传的文件替换 data/")
+		if err := syncDir(p.uploadFiles(), p.dataDir(), preserve, onLine); err != nil {
+			return 0, fmt.Errorf("更新文件: %w", err)
+		}
+		// 文件已经进了 data/，部署失败也不再保留；要重试就重新上传。
+		os.RemoveAll(p.uploadDir())
 	}
 	if opts.filesFrom != "" {
 		onLine("恢复版本文件")

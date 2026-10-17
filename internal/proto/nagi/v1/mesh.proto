@@ -7,6 +7,21 @@ option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 // MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
 service MeshService {
   rpc Ping(PingRequest) returns (PingResponse);
+  // 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+  // 只接受节点信任的面板。第一条消息带 project_id。
+  rpc Upload(stream UploadChunk) returns (UploadResponse);
+}
+
+message UploadChunk {
+  string project_id = 1;
+  bytes data = 2;
+}
+
+message UploadResponse {
+  uint64 bytes = 1;
+  uint32 files = 2;
+  // 压缩包里只有一个顶层目录时，自动去掉的这一层目录名。
+  string stripped = 3;
 }
 
 message PingRequest {}
