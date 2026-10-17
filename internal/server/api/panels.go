@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/invite"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -131,4 +132,38 @@ func (s *nodeService) RemoveNodePanel(ctx context.Context, req *connect.Request[
 		}
 	}
 	return connect.NewResponse(&nagiv1.RemoveNodePanelResponse{}), nil
+}
+
+// ---- mesh ----
+
+func (s *nodeService) GetNodeMesh(ctx context.Context, req *connect.Request[nagiv1.GetNodeMeshRequest]) (*connect.Response[nagiv1.MeshStatus], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.GetMeshStatus(ctx, &nagiv1.MeshStatusRequest{})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) PingNodeMesh(ctx context.Context, req *connect.Request[nagiv1.PingNodeMeshRequest]) (*connect.Response[nagiv1.MeshPingResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.MeshPing(ctx, &nagiv1.MeshPingRequest{PublicKey: req.Msg.GetPublicKey()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetPanelMeshRequest]) (*connect.Response[nagiv1.MeshStatus], error) {
+	m := s.Nodes.Mesh()
+	if m == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("面板的 mesh 没有启动"))
+	}
+	return connect.NewResponse(mesh.StatusProto(m, s.Nodes.MeshPeerName)), nil
 }

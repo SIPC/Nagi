@@ -23,6 +23,7 @@ internal/
 │   ├── tunnel/       TLS + yamux 连接、反向 gRPC
 │   ├── alert/        告警发送（webhook、Telegram），面板和节点共用
 │   ├── invite/       面板接入码的编码与解析
+│   ├── mesh/         WireGuard mesh：收发层（直连 / UDP 中转 / TLS 中转）、进程内网络栈、MeshService
 │   └── log/
 ├── server/           面板
 │   ├── api/          Connect-RPC 接口
@@ -36,7 +37,6 @@ internal/
     ├── docker/       Docker Engine API：状态、日志、终端、事件
     ├── caddy/
     ├── snapshot/
-    ├── mesh/
     ├── lease/
     ├── metrics/      指标采集与存储
     └── alerts/       告警规则判断、发送、代发与补发

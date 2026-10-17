@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIKkAKCFN0YXRlZnVsEhEKDVNUQVRFRlVMX0FVVE8QABIQCgxTVEFURUZVTF9ZRVMQARIPCgtTVEFURUZVTF9OTxACQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIImIKCE1lc2hQZWVyEhIKCnB1YmxpY19rZXkYASABKAwSEQoJZW5kcG9pbnRzGAIgAygJEgwKBG5hbWUYAyABKAkSDwoHbm9kZV9pZBgEIAEoCRIQCghpc19wYW5lbBgFIAEoCCLYAQoOTWVzaFBlZXJTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIMCgRuYW1lGAIgASgJEg8KB2FkZHJlc3MYAyABKAkSDAoEcGF0aBgEIAEoCRIQCghlbmRwb2ludBgFIAEoCRILCgN2aWEYBiABKAkSDgoGcnR0X21zGAcgASgBEjIKDmxhc3RfaGFuZHNoYWtlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyeF9ieXRlcxgJIAEoBBIQCgh0eF9ieXRlcxgKIAEoBCJ6CgpNZXNoU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEhEKCWVuZHBvaW50cxgEIAMoCRImCgVwZWVycxgFIAMoCzIXLm5hZ2kudjEuTWVzaFBlZXJTdGF0dXMiJQoPTWVzaFBpbmdSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAwiIgoQTWVzaFBpbmdSZXNwb25zZRIOCgZydHRfbXMYASABKAEqQAoIU3RhdGVmdWwSEQoNU1RBVEVGVUxfQVVUTxAAEhAKDFNUQVRFRlVMX1lFUxABEg8KC1NUQVRFRlVMX05PEAJCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -1008,6 +1008,192 @@ export type TrustedPanel = Message<"nagi.v1.TrustedPanel"> & {
  */
 export const TrustedPanelSchema: GenMessage<TrustedPanel> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 22);
+
+/**
+ * MeshPeer 是面板告诉节点的一个 mesh 成员。
+ *
+ * @generated from message nagi.v1.MeshPeer
+ */
+export type MeshPeer = Message<"nagi.v1.MeshPeer"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+
+  /**
+   * 可以尝试直连的 UDP 地址（ip:port）。
+   *
+   * @generated from field: repeated string endpoints = 2;
+   */
+  endpoints: string[];
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * 节点 ID；面板为空。
+   *
+   * @generated from field: string node_id = 4;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: bool is_panel = 5;
+   */
+  isPanel: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.MeshPeer.
+ * Use `create(MeshPeerSchema)` to create a new message.
+ */
+export const MeshPeerSchema: GenMessage<MeshPeer> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 23);
+
+/**
+ * MeshPeerStatus 是到一个 mesh 成员的连接状态。
+ *
+ * @generated from message nagi.v1.MeshPeerStatus
+ */
+export type MeshPeerStatus = Message<"nagi.v1.MeshPeerStatus"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * mesh 地址（IPv6）。
+   *
+   * @generated from field: string address = 3;
+   */
+  address: string;
+
+  /**
+   * direct（UDP 直连）、link（直接经控制连接）、udp-relay（UDP 经面板中转）、tls-relay（经面板的控制连接中转）、none。
+   *
+   * @generated from field: string path = 4;
+   */
+  path: string;
+
+  /**
+   * 直连时的对方地址。
+   *
+   * @generated from field: string endpoint = 5;
+   */
+  endpoint: string;
+
+  /**
+   * 中转时经过的面板。
+   *
+   * @generated from field: string via = 6;
+   */
+  via: string;
+
+  /**
+   * @generated from field: double rtt_ms = 7;
+   */
+  rttMs: number;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_handshake = 8;
+   */
+  lastHandshake?: Timestamp | undefined;
+
+  /**
+   * @generated from field: uint64 rx_bytes = 9;
+   */
+  rxBytes: bigint;
+
+  /**
+   * @generated from field: uint64 tx_bytes = 10;
+   */
+  txBytes: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.MeshPeerStatus.
+ * Use `create(MeshPeerStatusSchema)` to create a new message.
+ */
+export const MeshPeerStatusSchema: GenMessage<MeshPeerStatus> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 24);
+
+/**
+ * @generated from message nagi.v1.MeshStatus
+ */
+export type MeshStatus = Message<"nagi.v1.MeshStatus"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+
+  /**
+   * @generated from field: string address = 2;
+   */
+  address: string;
+
+  /**
+   * @generated from field: uint32 port = 3;
+   */
+  port: number;
+
+  /**
+   * @generated from field: repeated string endpoints = 4;
+   */
+  endpoints: string[];
+
+  /**
+   * @generated from field: repeated nagi.v1.MeshPeerStatus peers = 5;
+   */
+  peers: MeshPeerStatus[];
+};
+
+/**
+ * Describes the message nagi.v1.MeshStatus.
+ * Use `create(MeshStatusSchema)` to create a new message.
+ */
+export const MeshStatusSchema: GenMessage<MeshStatus> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 25);
+
+/**
+ * @generated from message nagi.v1.MeshPingRequest
+ */
+export type MeshPingRequest = Message<"nagi.v1.MeshPingRequest"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.MeshPingRequest.
+ * Use `create(MeshPingRequestSchema)` to create a new message.
+ */
+export const MeshPingRequestSchema: GenMessage<MeshPingRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 26);
+
+/**
+ * @generated from message nagi.v1.MeshPingResponse
+ */
+export type MeshPingResponse = Message<"nagi.v1.MeshPingResponse"> & {
+  /**
+   * @generated from field: double rtt_ms = 1;
+   */
+  rttMs: number;
+};
+
+/**
+ * Describes the message nagi.v1.MeshPingResponse.
+ * Use `create(MeshPingResponseSchema)` to create a new message.
+ */
+export const MeshPingResponseSchema: GenMessage<MeshPingResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 27);
 
 /**
  * @generated from enum nagi.v1.Stateful

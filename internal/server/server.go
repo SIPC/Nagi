@@ -3,8 +3,10 @@ package server
 
 import (
 	"context"
+	crand "crypto/rand"
 	"crypto/tls"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,9 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	"github.com/SIPC/nagi/internal/server/api"
@@ -91,7 +95,45 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s.auth = auth.New(s.q)
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
+	if m, err := s.startMesh(); err != nil {
+		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
+	} else {
+		s.nodes.SetMesh(m, "面板 "+s.publicAddress)
+	}
 	return s, nil
+}
+
+// startMesh 启动面板的 mesh：UDP 用和面板端口相同的号码，同时替节点中转。
+func (s *Server) startMesh() (*mesh.Mesh, error) {
+	path := filepath.Join(s.cfg.DataDir, "pki", "mesh.key")
+	var priv mesh.Key
+	data, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		if _, err := crand.Read(priv[:]); err != nil {
+			return nil, err
+		}
+		// WireGuard 私钥的标准钳位处理
+		priv[0] &= 248
+		priv[31] = (priv[31] & 127) | 64
+		if err := os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(priv[:])), 0o600); err != nil {
+			return nil, err
+		}
+	case err != nil:
+		return nil, err
+	default:
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+		if err != nil || len(raw) != len(priv) {
+			return nil, errors.New("mesh 私钥文件损坏")
+		}
+		copy(priv[:], raw)
+	}
+	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: uint16(s.port), Relay: true, Logger: s.log.With("component", "mesh")})
+	if err != nil {
+		return nil, err
+	}
+	s.log.Info("mesh 已启动", "address", m.Addr(), "udp_port", m.Port())
+	return m, nil
 }
 
 // Port 返回面板端口。
@@ -156,6 +198,10 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	go s.acceptLoop(ctx, httpLn)
 	go s.nodes.RunOfflineAlerts(ctx)
+	go s.nodes.ServeMesh(ctx)
+	if m := s.nodes.Mesh(); m != nil {
+		defer m.Close()
+	}
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(httpLn) }()

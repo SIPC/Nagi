@@ -22,6 +22,7 @@ const (
 	PanelService_Report_FullMethodName           = "/nagi.v1.PanelService/Report"
 	PanelService_RenewCertificate_FullMethodName = "/nagi.v1.PanelService/RenewCertificate"
 	PanelService_RelayAlert_FullMethodName       = "/nagi.v1.PanelService/RelayAlert"
+	PanelService_MeshRelay_FullMethodName        = "/nagi.v1.PanelService/MeshRelay"
 )
 
 // PanelServiceClient is the client API for PanelService service.
@@ -36,6 +37,8 @@ type PanelServiceClient interface {
 	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(ctx context.Context, in *RelayAlertRequest, opts ...grpc.CallOption) (*RelayAlertResponse, error)
+	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
+	MeshRelay(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MeshPacket, MeshPacket], error)
 }
 
 type panelServiceClient struct {
@@ -76,6 +79,19 @@ func (c *panelServiceClient) RelayAlert(ctx context.Context, in *RelayAlertReque
 	return out, nil
 }
 
+func (c *panelServiceClient) MeshRelay(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MeshPacket, MeshPacket], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PanelService_ServiceDesc.Streams[0], PanelService_MeshRelay_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MeshPacket, MeshPacket]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PanelService_MeshRelayClient = grpc.BidiStreamingClient[MeshPacket, MeshPacket]
+
 // PanelServiceServer is the server API for PanelService service.
 // All implementations must embed UnimplementedPanelServiceServer
 // for forward compatibility.
@@ -88,6 +104,8 @@ type PanelServiceServer interface {
 	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(context.Context, *RelayAlertRequest) (*RelayAlertResponse, error)
+	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
+	MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error
 	mustEmbedUnimplementedPanelServiceServer()
 }
 
@@ -106,6 +124,9 @@ func (UnimplementedPanelServiceServer) RenewCertificate(context.Context, *RenewC
 }
 func (UnimplementedPanelServiceServer) RelayAlert(context.Context, *RelayAlertRequest) (*RelayAlertResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RelayAlert not implemented")
+}
+func (UnimplementedPanelServiceServer) MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error {
+	return status.Error(codes.Unimplemented, "method MeshRelay not implemented")
 }
 func (UnimplementedPanelServiceServer) mustEmbedUnimplementedPanelServiceServer() {}
 func (UnimplementedPanelServiceServer) testEmbeddedByValue()                      {}
@@ -182,6 +203,13 @@ func _PanelService_RelayAlert_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PanelService_MeshRelay_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PanelServiceServer).MeshRelay(&grpc.GenericServerStream[MeshPacket, MeshPacket]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PanelService_MeshRelayServer = grpc.BidiStreamingServer[MeshPacket, MeshPacket]
+
 // PanelService_ServiceDesc is the grpc.ServiceDesc for PanelService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -202,6 +230,13 @@ var PanelService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PanelService_RelayAlert_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "MeshRelay",
+			Handler:       _PanelService_MeshRelay_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/panel.proto",
 }

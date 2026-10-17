@@ -272,3 +272,48 @@ message TrustedPanel {
   // 是不是当前操作的这个面板（只由面板接口填写）。
   bool is_self = 4;
 }
+
+// MeshPeer 是面板告诉节点的一个 mesh 成员。
+message MeshPeer {
+  bytes public_key = 1;
+  // 可以尝试直连的 UDP 地址（ip:port）。
+  repeated string endpoints = 2;
+  string name = 3;
+  // 节点 ID；面板为空。
+  string node_id = 4;
+  bool is_panel = 5;
+}
+
+// MeshPeerStatus 是到一个 mesh 成员的连接状态。
+message MeshPeerStatus {
+  bytes public_key = 1;
+  string name = 2;
+  // mesh 地址（IPv6）。
+  string address = 3;
+  // direct（UDP 直连）、link（直接经控制连接）、udp-relay（UDP 经面板中转）、tls-relay（经面板的控制连接中转）、none。
+  string path = 4;
+  // 直连时的对方地址。
+  string endpoint = 5;
+  // 中转时经过的面板。
+  string via = 6;
+  double rtt_ms = 7;
+  google.protobuf.Timestamp last_handshake = 8;
+  uint64 rx_bytes = 9;
+  uint64 tx_bytes = 10;
+}
+
+message MeshStatus {
+  bytes public_key = 1;
+  string address = 2;
+  uint32 port = 3;
+  repeated string endpoints = 4;
+  repeated MeshPeerStatus peers = 5;
+}
+
+message MeshPingRequest {
+  bytes public_key = 1;
+}
+
+message MeshPingResponse {
+  double rtt_ms = 1;
+}

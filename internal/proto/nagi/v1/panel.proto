@@ -14,6 +14,28 @@ service PanelService {
   rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
   // 节点直接发送告警失败时，请面板代发到指定的渠道。
   rpc RelayAlert(RelayAlertRequest) returns (RelayAlertResponse);
+  // mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
+  rpc MeshRelay(stream MeshPacket) returns (stream MeshPacket);
+}
+
+message MeshPacket {
+  // 原始发送方和最终接收方的 WireGuard 公钥。
+  bytes src = 1;
+  bytes dst = 2;
+  bytes payload = 3;
+}
+
+// MeshInfo 是节点上报的自己的 mesh 信息。
+message MeshInfo {
+  bytes public_key = 1;
+  uint32 port = 2;
+  repeated string endpoints = 3;
+}
+
+// MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。
+message MeshConfig {
+  bytes panel_key = 1;
+  repeated MeshPeer peers = 2;
 }
 
 message RelayAlertRequest {
@@ -34,6 +56,9 @@ message RenewCertificateResponse {
 message ReportRequest {
   NodeInfo node = 1;
   repeated ProjectSummary projects = 2;
+  MeshInfo mesh = 3;
 }
 
-message ReportResponse {}
+message ReportResponse {
+  MeshConfig mesh = 1;
+}

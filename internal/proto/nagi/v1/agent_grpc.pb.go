@@ -40,6 +40,8 @@ const (
 	AgentService_ListPanels_FullMethodName      = "/nagi.v1.AgentService/ListPanels"
 	AgentService_AddPanel_FullMethodName        = "/nagi.v1.AgentService/AddPanel"
 	AgentService_RemovePanel_FullMethodName     = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_GetMeshStatus_FullMethodName   = "/nagi.v1.AgentService/GetMeshStatus"
+	AgentService_MeshPing_FullMethodName        = "/nagi.v1.AgentService/MeshPing"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -79,6 +81,10 @@ type AgentServiceClient interface {
 	AddPanel(ctx context.Context, in *AddPanelRequest, opts ...grpc.CallOption) (*AddPanelResponse, error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
+	// mesh 状态：到每个成员走哪条路径。
+	GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error)
+	// 经 mesh 连一下某个成员，测往返时间。
+	MeshPing(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 }
 
 type agentServiceClient struct {
@@ -347,6 +353,26 @@ func (c *agentServiceClient) RemovePanel(ctx context.Context, in *RemovePanelReq
 	return out, nil
 }
 
+func (c *agentServiceClient) GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshStatus)
+	err := c.cc.Invoke(ctx, AgentService_GetMeshStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) MeshPing(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshPingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshPingResponse)
+	err := c.cc.Invoke(ctx, AgentService_MeshPing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -384,6 +410,10 @@ type AgentServiceServer interface {
 	AddPanel(context.Context, *AddPanelRequest) (*AddPanelResponse, error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
+	// mesh 状态：到每个成员走哪条路径。
+	GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error)
+	// 经 mesh 连一下某个成员，测往返时间。
+	MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -456,6 +486,12 @@ func (UnimplementedAgentServiceServer) AddPanel(context.Context, *AddPanelReques
 }
 func (UnimplementedAgentServiceServer) RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemovePanel not implemented")
+}
+func (UnimplementedAgentServiceServer) GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMeshStatus not implemented")
+}
+func (UnimplementedAgentServiceServer) MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MeshPing not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -810,6 +846,42 @@ func _AgentService_RemovePanel_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetMeshStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetMeshStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetMeshStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetMeshStatus(ctx, req.(*MeshStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_MeshPing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshPingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).MeshPing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_MeshPing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).MeshPing(ctx, req.(*MeshPingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -876,6 +948,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemovePanel",
 			Handler:    _AgentService_RemovePanel_Handler,
+		},
+		{
+			MethodName: "GetMeshStatus",
+			Handler:    _AgentService_GetMeshStatus_Handler,
+		},
+		{
+			MethodName: "MeshPing",
+			Handler:    _AgentService_MeshPing_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
+service MeshService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  // 对方看到的调用方公钥。
+  bytes caller = 1;
+}

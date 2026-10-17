@@ -63,6 +63,14 @@ const (
 	// NodeServiceRemoveNodePanelProcedure is the fully-qualified name of the NodeService's
 	// RemoveNodePanel RPC.
 	NodeServiceRemoveNodePanelProcedure = "/nagi.v1.NodeService/RemoveNodePanel"
+	// NodeServiceGetNodeMeshProcedure is the fully-qualified name of the NodeService's GetNodeMesh RPC.
+	NodeServiceGetNodeMeshProcedure = "/nagi.v1.NodeService/GetNodeMesh"
+	// NodeServicePingNodeMeshProcedure is the fully-qualified name of the NodeService's PingNodeMesh
+	// RPC.
+	NodeServicePingNodeMeshProcedure = "/nagi.v1.NodeService/PingNodeMesh"
+	// NodeServiceGetPanelMeshProcedure is the fully-qualified name of the NodeService's GetPanelMesh
+	// RPC.
+	NodeServiceGetPanelMeshProcedure = "/nagi.v1.NodeService/GetPanelMesh"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -369,6 +377,12 @@ type NodeServiceClient interface {
 	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
+	// 节点的 mesh 状态。
+	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 让节点经 mesh 连一下某个成员。
+	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 面板自己的 mesh 状态。
+	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -411,6 +425,24 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeMesh: connect.NewClient[v1.GetNodeMeshRequest, v1.MeshStatus](
+			httpClient,
+			baseURL+NodeServiceGetNodeMeshProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNodeMesh")),
+			connect.WithClientOptions(opts...),
+		),
+		pingNodeMesh: connect.NewClient[v1.PingNodeMeshRequest, v1.MeshPingResponse](
+			httpClient,
+			baseURL+NodeServicePingNodeMeshProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("PingNodeMesh")),
+			connect.WithClientOptions(opts...),
+		),
+		getPanelMesh: connect.NewClient[v1.GetPanelMeshRequest, v1.MeshStatus](
+			httpClient,
+			baseURL+NodeServiceGetPanelMeshProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetPanelMesh")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -438,6 +470,9 @@ type nodeServiceClient struct {
 	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
 	addNodePanel        *connect.Client[v1.AddNodePanelRequest, v1.AddNodePanelResponse]
 	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
+	getNodeMesh         *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
+	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
+	getPanelMesh        *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
 	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -461,6 +496,21 @@ func (c *nodeServiceClient) AddNodePanel(ctx context.Context, req *connect.Reque
 // RemoveNodePanel calls nagi.v1.NodeService.RemoveNodePanel.
 func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, req *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
 	return c.removeNodePanel.CallUnary(ctx, req)
+}
+
+// GetNodeMesh calls nagi.v1.NodeService.GetNodeMesh.
+func (c *nodeServiceClient) GetNodeMesh(ctx context.Context, req *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return c.getNodeMesh.CallUnary(ctx, req)
+}
+
+// PingNodeMesh calls nagi.v1.NodeService.PingNodeMesh.
+func (c *nodeServiceClient) PingNodeMesh(ctx context.Context, req *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error) {
+	return c.pingNodeMesh.CallUnary(ctx, req)
+}
+
+// GetPanelMesh calls nagi.v1.NodeService.GetPanelMesh.
+func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, req *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return c.getPanelMesh.CallUnary(ctx, req)
 }
 
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
@@ -487,6 +537,12 @@ type NodeServiceHandler interface {
 	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
+	// 节点的 mesh 状态。
+	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 让节点经 mesh 连一下某个成员。
+	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 面板自己的 mesh 状态。
+	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -525,6 +581,24 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceGetNodeMeshHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeMeshProcedure,
+		svc.GetNodeMesh,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNodeMesh")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServicePingNodeMeshHandler := connect.NewUnaryHandler(
+		NodeServicePingNodeMeshProcedure,
+		svc.PingNodeMesh,
+		connect.WithSchema(nodeServiceMethods.ByName("PingNodeMesh")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceGetPanelMeshHandler := connect.NewUnaryHandler(
+		NodeServiceGetPanelMeshProcedure,
+		svc.GetPanelMesh,
+		connect.WithSchema(nodeServiceMethods.ByName("GetPanelMesh")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -553,6 +627,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceAddNodePanelHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodePanelProcedure:
 			nodeServiceRemoveNodePanelHandler.ServeHTTP(w, r)
+		case NodeServiceGetNodeMeshProcedure:
+			nodeServiceGetNodeMeshHandler.ServeHTTP(w, r)
+		case NodeServicePingNodeMeshProcedure:
+			nodeServicePingNodeMeshHandler.ServeHTTP(w, r)
+		case NodeServiceGetPanelMeshProcedure:
+			nodeServiceGetPanelMeshHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -582,6 +662,18 @@ func (UnimplementedNodeServiceHandler) AddNodePanel(context.Context, *connect.Re
 
 func (UnimplementedNodeServiceHandler) RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNodePanel is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetNodeMesh is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.PingNodeMesh is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetPanelMesh is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {

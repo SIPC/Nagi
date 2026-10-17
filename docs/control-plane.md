@@ -108,9 +108,9 @@ agent 主动连上面板后，在同一条 TLS 连接上用 yamux 复用出多�
 | EnrollService | agent → 面板（尚无证书时） | `Enroll`：用令牌换证书和 peer 列表 |
 | PanelService | agent → 面板 | 上报最新状态（供总览页）；项目版本变化时上报配置备份；上报事件 |
 | AgentService | 面板 → agent（反向 gRPC） | 项目：部署、更新、回滚、启停、删除；观察：日志（服务端流）、终端（双向流）、查询历史指标；节点：更新 peer 列表、修改信任列表、升级 |
-| MeshService | agent ↔ agent / 面板，经 WireGuard，直接连对方的 mesh 地址 | 租约投票；快照同步给顶替节点或备份节点；项目文件上传（面板 → 节点，客户端流） |
+| MeshService | agent ↔ agent / 面板，经 WireGuard，直接连对方的 mesh 地址 | 连通测试；租约投票；快照同步给顶替节点或备份节点；项目文件上传（面板 → 节点，客户端流） |
 
-文件上传走 mesh，大文件不占用控制连接，管理操作不会被上传卡住。mesh 直连不通时，WireGuard 流量会自动套在 TLS 里经面板中转。mesh 上的 gRPC 同样使用 mTLS，证书与控制面相同。由于一个 mesh 里可能有多个面板签发的证书，每个调用都要校验调用方是否有权限（见 [mesh.md](mesh.md)）。
+文件上传走 mesh，大文件不占用控制连接，管理操作不会被上传卡住。mesh 直连不通时，WireGuard 流量会自动经面板中转（UDP 或控制连接）。mesh 上的 gRPC 不再加 TLS：WireGuard 已经加密并认证了对方的公钥，调用方身份由来源 mesh 地址确定，每个调用都要校验调用方是否有权限（见 [mesh.md](mesh.md)）。
 
 **浏览器与面板**：用 Connect-RPC，和节点共用同一套 proto 定义，自动生成 TypeScript 类型；也支持普通 JSON，可以用 curl 调用。终端这类双向交互用 WebSocket，由面板桥接到 `AgentService` 的终端接口。
 

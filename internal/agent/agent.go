@@ -42,8 +42,10 @@ type Config struct {
 	SubnetPool string
 	// DisableProxy 不启动内嵌的 Caddy，只用于开发（例如在 Windows 上调试）。
 	DisableProxy bool
-	Version      string
-	Logger       *slog.Logger
+	// MeshPort 是 mesh 的 UDP 端口，0 表示用记住的端口（第一次随机选）。
+	MeshPort uint16
+	Version  string
+	Logger   *slog.Logger
 }
 
 // Enrolled 判断节点是否已经信任某个面板，用于决定是否需要生成加入令牌。
@@ -141,6 +143,9 @@ func Run(ctx context.Context, cfg Config) error {
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.Name(context.Background(), id) }, a.relayAlert)
 	go a.alerts.Run(ctx)
+	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
+		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
+	}
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
@@ -176,6 +181,7 @@ type agent struct {
 	proxyKick chan struct{}
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
+	mesh      *meshNode
 
 	mu       sync.Mutex
 	subs     []chan struct{}
@@ -232,6 +238,7 @@ func (a *agent) reconcile(ctx context.Context) {
 		keep = append(keep, fp)
 	}
 	a.alerts.Retain(keep)
+	a.mesh.retain(keep)
 }
 
 // reloadPanels 让 superviseLoop 立即按信任列表调整连接。
@@ -411,11 +418,19 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	notify, unsubscribe := a.subscribe()
 	defer unsubscribe()
 
+	sctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	relaying := false
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
-		if err := a.report(ctx, panel); err != nil {
+		resp, err := a.report(ctx, panel)
+		if err != nil {
 			return err
+		}
+		if key, ok := a.mesh.update(p.Fingerprint, p.Address, resp.GetMesh()); ok && !relaying {
+			relaying = true
+			go a.mesh.relayLoop(sctx, panel, key)
 		}
 		select {
 		case <-ctx.Done():
@@ -430,15 +445,14 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 }
 
-func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) error {
+func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*nagiv1.ReportResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	projects, err := a.projects.List(ctx)
 	if err != nil {
 		a.log.Warn("读取项目列表失败", "err", err)
 	}
-	_, err = panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects})
-	return err
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects, Mesh: a.mesh.info()})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

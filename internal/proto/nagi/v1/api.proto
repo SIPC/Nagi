@@ -61,6 +61,12 @@ service NodeService {
   rpc AddNodePanel(AddNodePanelRequest) returns (AddNodePanelResponse);
   // 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
   rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
+  // 节点的 mesh 状态。
+  rpc GetNodeMesh(GetNodeMeshRequest) returns (MeshStatus);
+  // 让节点经 mesh 连一下某个成员。
+  rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
+  // 面板自己的 mesh 状态。
+  rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -82,6 +88,17 @@ message RemoveNodeRequest {
 message RemoveNodeResponse {}
 
 message CreateEnrollCommandRequest {}
+
+message GetNodeMeshRequest {
+  string node_id = 1;
+}
+
+message PingNodeMeshRequest {
+  string node_id = 1;
+  bytes public_key = 2;
+}
+
+message GetPanelMeshRequest {}
 
 message ListNodePanelsRequest {
   string node_id = 1;

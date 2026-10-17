@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Alert, NodeInfo, ProjectSummary } from "./common_pb";
+import type { Alert, MeshPeer, NodeInfo, ProjectSummary } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,89 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCJbCg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEikKCHByb2plY3RzGAIgAygLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSIQCg5SZXBvcnRSZXNwb25zZTLpAQoMUGFuZWxTZXJ2aWNlEjkKBlJlcG9ydBIWLm5hZ2kudjEuUmVwb3J0UmVxdWVzdBoXLm5hZ2kudjEuUmVwb3J0UmVzcG9uc2USVwoQUmVuZXdDZXJ0aWZpY2F0ZRIgLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QaIS5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRJFCgpSZWxheUFsZXJ0EhoubmFnaS52MS5SZWxheUFsZXJ0UmVxdWVzdBobLm5hZ2kudjEuUmVsYXlBbGVydFJlc3BvbnNlQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCJ8Cg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEikKCHByb2plY3RzGAIgAygLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeRIfCgRtZXNoGAMgASgLMhEubmFnaS52MS5NZXNoSW5mbyIzCg5SZXBvcnRSZXNwb25zZRIhCgRtZXNoGAEgASgLMhMubmFnaS52MS5NZXNoQ29uZmlnMqQCCgxQYW5lbFNlcnZpY2USOQoGUmVwb3J0EhYubmFnaS52MS5SZXBvcnRSZXF1ZXN0GhcubmFnaS52MS5SZXBvcnRSZXNwb25zZRJXChBSZW5ld0NlcnRpZmljYXRlEiAubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBohLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEkUKClJlbGF5QWxlcnQSGi5uYWdpLnYxLlJlbGF5QWxlcnRSZXF1ZXN0GhsubmFnaS52MS5SZWxheUFsZXJ0UmVzcG9uc2USOQoJTWVzaFJlbGF5EhMubmFnaS52MS5NZXNoUGFja2V0GhMubmFnaS52MS5NZXNoUGFja2V0KAEwAUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_nagi_v1_common]);
+
+/**
+ * @generated from message nagi.v1.MeshPacket
+ */
+export type MeshPacket = Message<"nagi.v1.MeshPacket"> & {
+  /**
+   * 原始发送方和最终接收方的 WireGuard 公钥。
+   *
+   * @generated from field: bytes src = 1;
+   */
+  src: Uint8Array;
+
+  /**
+   * @generated from field: bytes dst = 2;
+   */
+  dst: Uint8Array;
+
+  /**
+   * @generated from field: bytes payload = 3;
+   */
+  payload: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.MeshPacket.
+ * Use `create(MeshPacketSchema)` to create a new message.
+ */
+export const MeshPacketSchema: GenMessage<MeshPacket> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 0);
+
+/**
+ * MeshInfo 是节点上报的自己的 mesh 信息。
+ *
+ * @generated from message nagi.v1.MeshInfo
+ */
+export type MeshInfo = Message<"nagi.v1.MeshInfo"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+
+  /**
+   * @generated from field: uint32 port = 2;
+   */
+  port: number;
+
+  /**
+   * @generated from field: repeated string endpoints = 3;
+   */
+  endpoints: string[];
+};
+
+/**
+ * Describes the message nagi.v1.MeshInfo.
+ * Use `create(MeshInfoSchema)` to create a new message.
+ */
+export const MeshInfoSchema: GenMessage<MeshInfo> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 1);
+
+/**
+ * MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。
+ *
+ * @generated from message nagi.v1.MeshConfig
+ */
+export type MeshConfig = Message<"nagi.v1.MeshConfig"> & {
+  /**
+   * @generated from field: bytes panel_key = 1;
+   */
+  panelKey: Uint8Array;
+
+  /**
+   * @generated from field: repeated nagi.v1.MeshPeer peers = 2;
+   */
+  peers: MeshPeer[];
+};
+
+/**
+ * Describes the message nagi.v1.MeshConfig.
+ * Use `create(MeshConfigSchema)` to create a new message.
+ */
+export const MeshConfigSchema: GenMessage<MeshConfig> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 2);
 
 /**
  * @generated from message nagi.v1.RelayAlertRequest
@@ -34,7 +116,7 @@ export type RelayAlertRequest = Message<"nagi.v1.RelayAlertRequest"> & {
  * Use `create(RelayAlertRequestSchema)` to create a new message.
  */
 export const RelayAlertRequestSchema: GenMessage<RelayAlertRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 0);
+  messageDesc(file_nagi_v1_panel, 3);
 
 /**
  * @generated from message nagi.v1.RelayAlertResponse
@@ -47,7 +129,7 @@ export type RelayAlertResponse = Message<"nagi.v1.RelayAlertResponse"> & {
  * Use `create(RelayAlertResponseSchema)` to create a new message.
  */
 export const RelayAlertResponseSchema: GenMessage<RelayAlertResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 1);
+  messageDesc(file_nagi_v1_panel, 4);
 
 /**
  * @generated from message nagi.v1.RenewCertificateRequest
@@ -64,7 +146,7 @@ export type RenewCertificateRequest = Message<"nagi.v1.RenewCertificateRequest">
  * Use `create(RenewCertificateRequestSchema)` to create a new message.
  */
 export const RenewCertificateRequestSchema: GenMessage<RenewCertificateRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 2);
+  messageDesc(file_nagi_v1_panel, 5);
 
 /**
  * @generated from message nagi.v1.RenewCertificateResponse
@@ -81,7 +163,7 @@ export type RenewCertificateResponse = Message<"nagi.v1.RenewCertificateResponse
  * Use `create(RenewCertificateResponseSchema)` to create a new message.
  */
 export const RenewCertificateResponseSchema: GenMessage<RenewCertificateResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 3);
+  messageDesc(file_nagi_v1_panel, 6);
 
 /**
  * @generated from message nagi.v1.ReportRequest
@@ -96,6 +178,11 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
    * @generated from field: repeated nagi.v1.ProjectSummary projects = 2;
    */
   projects: ProjectSummary[];
+
+  /**
+   * @generated from field: nagi.v1.MeshInfo mesh = 3;
+   */
+  mesh?: MeshInfo | undefined;
 };
 
 /**
@@ -103,12 +190,16 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
  * Use `create(ReportRequestSchema)` to create a new message.
  */
 export const ReportRequestSchema: GenMessage<ReportRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 4);
+  messageDesc(file_nagi_v1_panel, 7);
 
 /**
  * @generated from message nagi.v1.ReportResponse
  */
 export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
+  /**
+   * @generated from field: nagi.v1.MeshConfig mesh = 1;
+   */
+  mesh?: MeshConfig | undefined;
 };
 
 /**
@@ -116,7 +207,7 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
  * Use `create(ReportResponseSchema)` to create a new message.
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 5);
+  messageDesc(file_nagi_v1_panel, 8);
 
 /**
  * PanelService：节点调用面板，走控制连接。
@@ -153,6 +244,16 @@ export const PanelService: GenService<{
     methodKind: "unary";
     input: typeof RelayAlertRequestSchema;
     output: typeof RelayAlertResponseSchema;
+  },
+  /**
+   * mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
+   *
+   * @generated from rpc nagi.v1.PanelService.MeshRelay
+   */
+  meshRelay: {
+    methodKind: "bidi_streaming";
+    input: typeof MeshPacketSchema;
+    output: typeof MeshPacketSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_panel, 0);

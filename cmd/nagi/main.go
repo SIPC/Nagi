@@ -122,6 +122,7 @@ func agentCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹（首次加入时需要）")
 	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（首次加入时需要）")
 	cmd.Flags().BoolVar(&cfg.DisableProxy, "no-proxy", false, "不启动 Caddy（仅用于开发）")
+	cmd.Flags().Uint16Var(&cfg.MeshPort, "mesh-port", 0, "mesh 的 UDP 端口（默认首次启动时随机选择并记住）")
 	return cmd
 }
 

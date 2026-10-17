@@ -40,7 +40,13 @@ service AgentService {
   rpc AddPanel(AddPanelRequest) returns (AddPanelResponse);
   // 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
   rpc RemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
+  // mesh 状态：到每个成员走哪条路径。
+  rpc GetMeshStatus(MeshStatusRequest) returns (MeshStatus);
+  // 经 mesh 连一下某个成员，测往返时间。
+  rpc MeshPing(MeshPingRequest) returns (MeshPingResponse);
 }
+
+message MeshStatusRequest {}
 
 message ListPanelsRequest {}
 

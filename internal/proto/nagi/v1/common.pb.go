@@ -1902,6 +1902,370 @@ func (x *TrustedPanel) GetIsSelf() bool {
 	return false
 }
 
+// MeshPeer 是面板告诉节点的一个 mesh 成员。
+type MeshPeer struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// 可以尝试直连的 UDP 地址（ip:port）。
+	Endpoints []string `protobuf:"bytes,2,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
+	Name      string   `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// 节点 ID；面板为空。
+	NodeId        string `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	IsPanel       bool   `protobuf:"varint,5,opt,name=is_panel,json=isPanel,proto3" json:"is_panel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshPeer) Reset() {
+	*x = MeshPeer{}
+	mi := &file_nagi_v1_common_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshPeer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshPeer) ProtoMessage() {}
+
+func (x *MeshPeer) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshPeer.ProtoReflect.Descriptor instead.
+func (*MeshPeer) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *MeshPeer) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *MeshPeer) GetEndpoints() []string {
+	if x != nil {
+		return x.Endpoints
+	}
+	return nil
+}
+
+func (x *MeshPeer) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MeshPeer) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *MeshPeer) GetIsPanel() bool {
+	if x != nil {
+		return x.IsPanel
+	}
+	return false
+}
+
+// MeshPeerStatus 是到一个 mesh 成员的连接状态。
+type MeshPeerStatus struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// mesh 地址（IPv6）。
+	Address string `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	// direct（UDP 直连）、link（直接经控制连接）、udp-relay（UDP 经面板中转）、tls-relay（经面板的控制连接中转）、none。
+	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	// 直连时的对方地址。
+	Endpoint string `protobuf:"bytes,5,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	// 中转时经过的面板。
+	Via           string                 `protobuf:"bytes,6,opt,name=via,proto3" json:"via,omitempty"`
+	RttMs         float64                `protobuf:"fixed64,7,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	LastHandshake *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_handshake,json=lastHandshake,proto3" json:"last_handshake,omitempty"`
+	RxBytes       uint64                 `protobuf:"varint,9,opt,name=rx_bytes,json=rxBytes,proto3" json:"rx_bytes,omitempty"`
+	TxBytes       uint64                 `protobuf:"varint,10,opt,name=tx_bytes,json=txBytes,proto3" json:"tx_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshPeerStatus) Reset() {
+	*x = MeshPeerStatus{}
+	mi := &file_nagi_v1_common_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshPeerStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshPeerStatus) ProtoMessage() {}
+
+func (x *MeshPeerStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshPeerStatus.ProtoReflect.Descriptor instead.
+func (*MeshPeerStatus) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *MeshPeerStatus) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *MeshPeerStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MeshPeerStatus) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *MeshPeerStatus) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *MeshPeerStatus) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *MeshPeerStatus) GetVia() string {
+	if x != nil {
+		return x.Via
+	}
+	return ""
+}
+
+func (x *MeshPeerStatus) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetLastHandshake() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastHandshake
+	}
+	return nil
+}
+
+func (x *MeshPeerStatus) GetRxBytes() uint64 {
+	if x != nil {
+		return x.RxBytes
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetTxBytes() uint64 {
+	if x != nil {
+		return x.TxBytes
+	}
+	return 0
+}
+
+type MeshStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Port          uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	Endpoints     []string               `protobuf:"bytes,4,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
+	Peers         []*MeshPeerStatus      `protobuf:"bytes,5,rep,name=peers,proto3" json:"peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshStatus) Reset() {
+	*x = MeshStatus{}
+	mi := &file_nagi_v1_common_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshStatus) ProtoMessage() {}
+
+func (x *MeshStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshStatus.ProtoReflect.Descriptor instead.
+func (*MeshStatus) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *MeshStatus) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *MeshStatus) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *MeshStatus) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *MeshStatus) GetEndpoints() []string {
+	if x != nil {
+		return x.Endpoints
+	}
+	return nil
+}
+
+func (x *MeshStatus) GetPeers() []*MeshPeerStatus {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
+type MeshPingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshPingRequest) Reset() {
+	*x = MeshPingRequest{}
+	mi := &file_nagi_v1_common_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshPingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshPingRequest) ProtoMessage() {}
+
+func (x *MeshPingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshPingRequest.ProtoReflect.Descriptor instead.
+func (*MeshPingRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *MeshPingRequest) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+type MeshPingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RttMs         float64                `protobuf:"fixed64,1,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshPingResponse) Reset() {
+	*x = MeshPingResponse{}
+	mi := &file_nagi_v1_common_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshPingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshPingResponse) ProtoMessage() {}
+
+func (x *MeshPingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshPingResponse.ProtoReflect.Descriptor instead.
+func (*MeshPingResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *MeshPingResponse) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
@@ -2059,7 +2423,40 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x1c\n" +
 	"\tconnected\x18\x03 \x01(\bR\tconnected\x12\x17\n" +
-	"\ais_self\x18\x04 \x01(\bR\x06isSelf*@\n" +
+	"\ais_self\x18\x04 \x01(\bR\x06isSelf\"\x8f\x01\n" +
+	"\bMeshPeer\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
+	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
+	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xaf\x02\n" +
+	"\x0eMeshPeerStatus\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\aaddress\x18\x03 \x01(\tR\aaddress\x12\x12\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\x1a\n" +
+	"\bendpoint\x18\x05 \x01(\tR\bendpoint\x12\x10\n" +
+	"\x03via\x18\x06 \x01(\tR\x03via\x12\x15\n" +
+	"\x06rtt_ms\x18\a \x01(\x01R\x05rttMs\x12A\n" +
+	"\x0elast_handshake\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\rlastHandshake\x12\x19\n" +
+	"\brx_bytes\x18\t \x01(\x04R\arxBytes\x12\x19\n" +
+	"\btx_bytes\x18\n" +
+	" \x01(\x04R\atxBytes\"\xa6\x01\n" +
+	"\n" +
+	"MeshStatus\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\rR\x04port\x12\x1c\n" +
+	"\tendpoints\x18\x04 \x03(\tR\tendpoints\x12-\n" +
+	"\x05peers\x18\x05 \x03(\v2\x17.nagi.v1.MeshPeerStatusR\x05peers\"0\n" +
+	"\x0fMeshPingRequest\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\")\n" +
+	"\x10MeshPingResponse\x12\x15\n" +
+	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
@@ -2078,7 +2475,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -2104,41 +2501,48 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*AlertConfig)(nil),           // 21: nagi.v1.AlertConfig
 	(*Alert)(nil),                 // 22: nagi.v1.Alert
 	(*TrustedPanel)(nil),          // 23: nagi.v1.TrustedPanel
-	nil,                           // 24: nagi.v1.ProjectConfig.ServiceEnvEntry
-	nil,                           // 25: nagi.v1.Version.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 26: google.protobuf.Timestamp
+	(*MeshPeer)(nil),              // 24: nagi.v1.MeshPeer
+	(*MeshPeerStatus)(nil),        // 25: nagi.v1.MeshPeerStatus
+	(*MeshStatus)(nil),            // 26: nagi.v1.MeshStatus
+	(*MeshPingRequest)(nil),       // 27: nagi.v1.MeshPingRequest
+	(*MeshPingResponse)(nil),      // 28: nagi.v1.MeshPingResponse
+	nil,                           // 29: nagi.v1.ProjectConfig.ServiceEnvEntry
+	nil,                           // 30: nagi.v1.Version.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	26, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	31, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	2,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
 	6,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	24, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	29, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
 	9,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	5,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	0,  // 8: nagi.v1.ProjectConfig.stateful:type_name -> nagi.v1.Stateful
-	26, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	26, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	25, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	26, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	31, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	31, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	30, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	31, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	7,  // 13: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	10, // 14: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	7,  // 15: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	11, // 16: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	1,  // 17: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	12, // 18: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	26, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	31, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	17, // 20: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
 	19, // 21: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	20, // 22: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	26, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	8,  // 24: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	31, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	31, // 24: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	25, // 25: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	8,  // 26: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -2156,7 +2560,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   25,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -341,6 +341,9 @@ const (
 	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
 	NodeService_AddNodePanel_FullMethodName        = "/nagi.v1.NodeService/AddNodePanel"
 	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
+	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
+	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
+	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
 	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
@@ -357,6 +360,12 @@ type NodeServiceClient interface {
 	AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
+	// 节点的 mesh 状态。
+	GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
+	// 让节点经 mesh 连一下某个成员。
+	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
+	// 面板自己的 mesh 状态。
+	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -412,6 +421,36 @@ func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, in *RemoveNodeP
 	return out, nil
 }
 
+func (c *nodeServiceClient) GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshStatus)
+	err := c.cc.Invoke(ctx, NodeService_GetNodeMesh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshPingResponse)
+	err := c.cc.Invoke(ctx, NodeService_PingNodeMesh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshStatus)
+	err := c.cc.Invoke(ctx, NodeService_GetPanelMesh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEnrollCommandResponse)
@@ -453,6 +492,12 @@ type NodeServiceServer interface {
 	AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
+	// 节点的 mesh 状态。
+	GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error)
+	// 让节点经 mesh 连一下某个成员。
+	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
+	// 面板自己的 mesh 状态。
+	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -479,6 +524,15 @@ func (UnimplementedNodeServiceServer) AddNodePanel(context.Context, *AddNodePane
 }
 func (UnimplementedNodeServiceServer) RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNodePanel not implemented")
+}
+func (UnimplementedNodeServiceServer) GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeMesh not implemented")
+}
+func (UnimplementedNodeServiceServer) PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PingNodeMesh not implemented")
+}
+func (UnimplementedNodeServiceServer) GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPanelMesh not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -582,6 +636,60 @@ func _NodeService_RemoveNodePanel_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_GetNodeMesh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeMeshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).GetNodeMesh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_GetNodeMesh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).GetNodeMesh(ctx, req.(*GetNodeMeshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_PingNodeMesh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingNodeMeshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).PingNodeMesh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_PingNodeMesh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).PingNodeMesh(ctx, req.(*PingNodeMeshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_GetPanelMesh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPanelMeshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).GetPanelMesh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_GetPanelMesh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).GetPanelMesh(ctx, req.(*GetPanelMeshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEnrollCommandRequest)
 	if err := dec(in); err != nil {
@@ -658,6 +766,18 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveNodePanel",
 			Handler:    _NodeService_RemoveNodePanel_Handler,
+		},
+		{
+			MethodName: "GetNodeMesh",
+			Handler:    _NodeService_GetNodeMesh_Handler,
+		},
+		{
+			MethodName: "PingNodeMesh",
+			Handler:    _NodeService_PingNodeMesh_Handler,
+		},
+		{
+			MethodName: "GetPanelMesh",
+			Handler:    _NodeService_GetPanelMesh_Handler,
 		},
 		{
 			MethodName: "CreateEnrollCommand",

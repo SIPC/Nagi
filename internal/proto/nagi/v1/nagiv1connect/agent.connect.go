@@ -88,6 +88,11 @@ const (
 	// AgentServiceRemovePanelProcedure is the fully-qualified name of the AgentService's RemovePanel
 	// RPC.
 	AgentServiceRemovePanelProcedure = "/nagi.v1.AgentService/RemovePanel"
+	// AgentServiceGetMeshStatusProcedure is the fully-qualified name of the AgentService's
+	// GetMeshStatus RPC.
+	AgentServiceGetMeshStatusProcedure = "/nagi.v1.AgentService/GetMeshStatus"
+	// AgentServiceMeshPingProcedure is the fully-qualified name of the AgentService's MeshPing RPC.
+	AgentServiceMeshPingProcedure = "/nagi.v1.AgentService/MeshPing"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -123,6 +128,10 @@ type AgentServiceClient interface {
 	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
+	// mesh 状态：到每个成员走哪条路径。
+	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 经 mesh 连一下某个成员，测往返时间。
+	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -262,6 +271,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
 			connect.WithClientOptions(opts...),
 		),
+		getMeshStatus: connect.NewClient[v1.MeshStatusRequest, v1.MeshStatus](
+			httpClient,
+			baseURL+AgentServiceGetMeshStatusProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetMeshStatus")),
+			connect.WithClientOptions(opts...),
+		),
+		meshPing: connect.NewClient[v1.MeshPingRequest, v1.MeshPingResponse](
+			httpClient,
+			baseURL+AgentServiceMeshPingProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -288,6 +309,8 @@ type agentServiceClient struct {
 	listPanels      *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
 	addPanel        *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
 	removePanel     *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	getMeshStatus   *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
+	meshPing        *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -395,6 +418,16 @@ func (c *agentServiceClient) RemovePanel(ctx context.Context, req *connect.Reque
 	return c.removePanel.CallUnary(ctx, req)
 }
 
+// GetMeshStatus calls nagi.v1.AgentService.GetMeshStatus.
+func (c *agentServiceClient) GetMeshStatus(ctx context.Context, req *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return c.getMeshStatus.CallUnary(ctx, req)
+}
+
+// MeshPing calls nagi.v1.AgentService.MeshPing.
+func (c *agentServiceClient) MeshPing(ctx context.Context, req *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error) {
+	return c.meshPing.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -428,6 +461,10 @@ type AgentServiceHandler interface {
 	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
 	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
+	// mesh 状态：到每个成员走哪条路径。
+	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
+	// 经 mesh 连一下某个成员，测往返时间。
+	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -563,6 +600,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceGetMeshStatusHandler := connect.NewUnaryHandler(
+		AgentServiceGetMeshStatusProcedure,
+		svc.GetMeshStatus,
+		connect.WithSchema(agentServiceMethods.ByName("GetMeshStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMeshPingHandler := connect.NewUnaryHandler(
+		AgentServiceMeshPingProcedure,
+		svc.MeshPing,
+		connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -607,6 +656,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceAddPanelHandler.ServeHTTP(w, r)
 		case AgentServiceRemovePanelProcedure:
 			agentServiceRemovePanelHandler.ServeHTTP(w, r)
+		case AgentServiceGetMeshStatusProcedure:
+			agentServiceGetMeshStatusHandler.ServeHTTP(w, r)
+		case AgentServiceMeshPingProcedure:
+			agentServiceMeshPingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -698,4 +751,12 @@ func (UnimplementedAgentServiceHandler) AddPanel(context.Context, *connect.Reque
 
 func (UnimplementedAgentServiceHandler) RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RemovePanel is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetMeshStatus is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MeshPing is not implemented"))
 }

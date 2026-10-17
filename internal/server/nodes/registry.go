@@ -10,9 +10,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"net/netip"
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -34,8 +36,10 @@ type Registry struct {
 	sealer *sealer.Sealer
 	ca     *tlsutil.CA
 
-	mu    sync.RWMutex
-	conns map[string]*Conn
+	mu       sync.RWMutex
+	conns    map[string]*Conn
+	mesh     *mesh.Mesh
+	meshName string
 }
 
 // Conn 是一个在线节点的控制连接。
@@ -47,6 +51,9 @@ type Conn struct {
 	mu     sync.RWMutex
 	report *nagiv1.ReportRequest
 	close  func()
+	name   string
+	remote netip.Addr
+	mesh   *nagiv1.MeshInfo
 }
 
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
@@ -123,7 +130,10 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	}
 	defer sess.Close()
 
-	c := &Conn{NodeID: nodeID, close: func() { sess.Close() }}
+	c := &Conn{NodeID: nodeID, close: func() { sess.Close() }, name: node.Name}
+	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
+		c.remote = ap.Addr().Unmap()
+	}
 	srv := grpc.NewServer()
 	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
 	go tunnel.Serve(sess, srv)
@@ -155,6 +165,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 		delete(r.conns, nodeID)
 	}
 	r.mu.Unlock()
+	r.updateMesh()
 	r.touch(context.Background(), nodeID, c.LastReport())
 	r.log.Info("节点已断开", "node", nodeID)
 }
@@ -182,7 +193,11 @@ type panelService struct {
 func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*nagiv1.ReportResponse, error) {
 	p.conn.mu.Lock()
 	p.conn.report = req
+	if req.GetMesh() != nil {
+		p.conn.mesh = req.GetMesh()
+	}
 	p.conn.mu.Unlock()
+	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
 	// 保存项目配置备份。以节点为准，面板只是备份：节点上已经没有的项目，备份和 webhook 一并删掉。
@@ -231,7 +246,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 			p.r.log.Warn("保存项目配置备份失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
 		}
 	}
-	return &nagiv1.ReportResponse{}, nil
+	return &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}, nil
 }
 
 // RenewCertificate 给节点续期证书。证书签名请求里的公钥必须就是这个节点的身份公钥。
