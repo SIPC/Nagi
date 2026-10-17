@@ -23,10 +23,10 @@
 | `node:cpu`、`node:mem`、`node:disk` | 使用率（%）。磁盘是节点数据目录所在的文件系统 |
 | `node:mem_used`、`node:disk_free` | 字节 |
 | `node:net_rx`、`node:net_tx` | 物理网卡收发速率（字节/秒），不算回环、Docker 网桥、veth、WireGuard |
-| `c:<项目 ID>/<服务>:cpu` | 容器 CPU（%，单核 100%）。同一服务的多个副本相加 |
-| `c:<项目 ID>/<服务>:mem` | 容器内存（字节） |
-| `c:<项目 ID>/<服务>:net_rx`、`:net_tx` | 容器网络（字节/秒） |
-| `c:<项目 ID>/<服务>:restarts` | 累计重启次数 |
+| `c:<项目 ID>/<成员>/<服务>:cpu` | 容器 CPU（%，单核 100%）。同一服务的多个副本相加 |
+| `c:<项目 ID>/<成员>/<服务>:mem` | 容器内存（字节） |
+| `c:<项目 ID>/<成员>/<服务>:net_rx`、`:net_tx` | 容器网络（字节/秒） |
+| `c:<项目 ID>/<成员>/<服务>:restarts` | 累计重启次数 |
 | `r:<项目 ID>/<规则名>:req`、`:5xx` | http 规则的请求数、5xx 响应数（每秒）。有过请求的规则之后没请求时记 0，一天没请求就不再记 |
 | `r:<项目 ID>/<规则名>:lat` | 平均耗时（毫秒），只在有请求的采样点记录 |
 
@@ -82,7 +82,7 @@ webhook 收到 POST JSON：
 }
 ```
 
-`status` 是 `firing`、`resolved`，或者一次性通知 `info`（例如"已顶替项目"，没有对应的恢复）；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<服务>`、`health:<项目 ID>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`offline`。Telegram 收到的是 `text` 的内容。
+`status` 是 `firing`、`resolved`，或者一次性通知 `info`（例如"已顶替项目"，没有对应的恢复）；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<成员>/<服务>`、`health:<项目 ID>/<成员>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`offline`。Telegram 收到的是 `text` 的内容。
 
 ### 还没有实现的规则
 
