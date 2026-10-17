@@ -3,10 +3,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderOpen, Plus, Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
-import { lines, textToEnv, textToPorts } from "@/lib/config";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
-import { Alert, Button, Card, CardContent, Empty, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
+import { useMemberForm } from "@/components/member-form";
+import { Alert, Button, Card, CardContent, Empty, Field, Input, Select, Spinner } from "@/components/ui";
 
 export function ProjectsPage() {
   const projects = useQuery({
@@ -21,7 +21,7 @@ export function ProjectsPage() {
     <>
       <PageHeader
         title="项目"
-        description="每个项目是一份 compose，整体运行在一个节点上。"
+        description="项目是一组一起工作的成员（前端、后端、数据库……），整体运行在一个节点上。"
         actions={
           <Link to="/projects/new">
             <Button>
@@ -36,20 +36,21 @@ export function ProjectsPage() {
       ) : projects.error ? (
         <Alert>{errorMessage(projects.error)}</Alert>
       ) : projects.data.projects.length === 0 ? (
-        <Empty title="还没有项目">粘贴一份 compose，就能把它部署到节点上。</Empty>
+        <Empty title="还没有项目">新建一个项目，往里加成员（单容器或 compose），就能部署到节点上。</Empty>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.data.projects.map(({ nodeId, project: summary }) => {
             const p = summary?.project;
             if (!p) return null;
             const services = summary.status?.services ?? [];
+            const deployed = p.members.filter((m) => m.deployedVersion > 0n).length;
             return (
               <Link key={`${nodeId}/${p.id}`} to="/projects/$nodeId/$projectId" params={{ nodeId, projectId: p.id }}>
                 <Card className="h-full transition-colors hover:border-ring/60">
                   <CardContent className="grid gap-3 pt-5">
                     <div className="flex items-start justify-between gap-2">
                       <span className="truncate font-medium">{p.name}</span>
-                      <ProjectState services={services} deployed={p.deployedVersion > 0n} />
+                      <ProjectState services={services} deployed={deployed > 0} />
                     </div>
                     <div className="grid gap-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
@@ -62,7 +63,7 @@ export function ProjectsPage() {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {services.length} 个服务 · {p.deployedVersion > 0n ? `已部署版本 ${p.deployedVersion}` : "尚未部署"}
+                      {p.members.length} 个成员 · {services.length} 个服务 · {deployed > 0 ? `已部署 ${deployed} 个成员` : "尚未部署"}
                     </div>
                   </CardContent>
                 </Card>
@@ -75,13 +76,6 @@ export function ProjectsPage() {
   );
 }
 
-const exampleCompose = `services:
-  web:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
-`;
-
 export function NewProjectPage() {
   const navigate = useNavigate();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
@@ -89,14 +83,9 @@ export function NewProjectPage() {
   const [nodeId, setNodeId] = useState("");
   const [name, setName] = useState("");
   const [dir, setDir] = useState("");
-  const [compose, setCompose] = useState(exampleCompose);
-  const [mode, setMode] = useState<"compose" | "image">("compose");
-  const [image, setImage] = useState("nginx:alpine");
-  const [command, setCommand] = useState("");
-  const [ports, setPorts] = useState("8080:80");
-  const [volumes, setVolumes] = useState("");
-  const [workdir, setWorkdir] = useState("");
-  const [env, setEnv] = useState("");
+  const [withMember, setWithMember] = useState(true);
+  const [memberName, setMemberName] = useState("web");
+  const member = useMemberForm();
   const selectedNode = nodeId || onlineNodes[0]?.id || "";
 
   const create = useMutation({
@@ -105,19 +94,7 @@ export function NewProjectPage() {
         nodeId: selectedNode,
         name,
         dir,
-        config:
-          mode === "compose"
-            ? { compose }
-            : {
-                form: {
-                  image,
-                  command,
-                  ports: textToPorts(ports),
-                  volumes: lines(volumes),
-                  workdir,
-                  env: textToEnv(env),
-                },
-              },
+        ...(withMember ? { memberName, member: member.build() } : {}),
       }),
     onSuccess: (res) => {
       navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: selectedNode, projectId: res.project!.id } });
@@ -126,7 +103,7 @@ export function NewProjectPage() {
 
   return (
     <>
-      <PageHeader title="新建项目" description="创建后不会立即部署，可以先检查一遍再点部署。" />
+      <PageHeader title="新建项目" description="创建后不会立即部署，可以先检查一遍再点部署。之后可以继续往项目里加成员。" />
       <Card className="max-w-3xl">
         <CardContent className="pt-5">
           <form
@@ -154,50 +131,21 @@ export function NewProjectPage() {
             <Field
               label="项目目录"
               htmlFor="dir"
-              hint="节点上的绝对路径，例如 /srv/myapp。目录需要不存在或为空。compose 里的相对路径以其中的 data/ 为准。"
+              hint="节点上的绝对路径，例如 /srv/myapp。目录需要不存在或为空。每个成员在其中的 members/<成员>/ 下，compose 里的相对路径以成员的 data/ 为准。"
             >
               <Input id="dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/srv/myapp" required className="font-mono" />
             </Field>
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant={mode === "compose" ? "default" : "outline"} onClick={() => setMode("compose")}>
-                写 compose
-              </Button>
-              <Button type="button" size="sm" variant={mode === "image" ? "default" : "outline"} onClick={() => setMode("image")}>
-                镜像表单
-              </Button>
-            </div>
-            {mode === "compose" ? (
-              <Field label="compose" htmlFor="compose">
-                <Textarea
-                  id="compose"
-                  value={compose}
-                  onChange={(e) => setCompose(e.target.value)}
-                  spellCheck={false}
-                  className="min-h-72 font-mono text-[13px] leading-relaxed"
-                  required
-                />
-              </Field>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="镜像" htmlFor="image">
-                  <Input id="image" value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={withMember} onChange={(e) => setWithMember(e.target.checked)} />
+              同时加入第一个成员
+            </label>
+            {withMember && (
+              <>
+                <Field label="成员名" htmlFor="member" hint="小写字母、数字和 -，创建后不能改。项目内网里其他成员用这个名字访问它。">
+                  <Input id="member" value={memberName} onChange={(e) => setMemberName(e.target.value)} required className="font-mono" />
                 </Field>
-                <Field label="运行命令" htmlFor="command" hint="为空时使用镜像默认命令">
-                  <Input id="command" value={command} onChange={(e) => setCommand(e.target.value)} className="font-mono" />
-                </Field>
-                <Field label="端口" htmlFor="ports" hint="节点端口:容器端口，空格分隔，例如 8080:80 53:53/udp">
-                  <Input id="ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" />
-                </Field>
-                <Field label="工作目录" htmlFor="workdir" hint="把项目的 data/ 挂到容器内这个路径；为空表示不挂载文件">
-                  <Input id="workdir" value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
-                </Field>
-                <Field label="持久化目录" htmlFor="volumes" hint="容器内路径，每行一个">
-                  <Textarea id="volumes" value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono" placeholder="/data" />
-                </Field>
-                <Field label="环境变量" htmlFor="env" hint="KEY=VALUE，每行一个">
-                  <Textarea id="env" value={env} onChange={(e) => setEnv(e.target.value)} className="font-mono" />
-                </Field>
-              </div>
+                {member.fields}
+              </>
             )}
             {create.error && <Alert>{errorMessage(create.error)}</Alert>}
             <div className="flex justify-end gap-2">

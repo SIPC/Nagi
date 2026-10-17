@@ -337,6 +337,8 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		f.mu.Lock()
 		st.fenced = true
 		f.mu.Unlock()
+		// 下面的代管重启不能用停止前读到的状态，否则会把刚停掉的容器又拉起来。
+		fenced = true
 	}
 
 	// 持有租约时，按用户原来的重启策略代为重启退出的容器；机器重启后也由这里把项目启动起来。

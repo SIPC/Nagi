@@ -165,6 +165,11 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 	}
 	name := pdb.meta(ctx, metaName)
 	stateful := m.projectStateful(ctx, pdb, id, p)
+	members, err := memberNames(ctx, pdb)
+	if err != nil {
+		pdb.Close()
+		return nil, "", err
+	}
 	dbCopy, err := pdb.snapshotDB(ctx)
 	pdb.Close()
 	if err != nil {
@@ -233,15 +238,11 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 		}
 	}
 	config = append(config, ReplicaFile{Path: "config/project.db", Data: dbCopy, Size: int64(len(dbCopy))})
-	if entries, err := os.ReadDir(p.membersDir()); err == nil {
-		for _, e := range entries {
-			if !e.IsDir() || !nameRe.MatchString(e.Name()) {
-				continue
-			}
-			addTree(filepath.Join(p.membersDir(), e.Name()), "members/"+e.Name()+"/", func(top string) bool {
-				return slices.Contains(replicaMemberSkip, top) || strings.HasPrefix(top, ".upload-")
-			})
-		}
+	// 只同步现有成员的目录；删除成员时保留下来的目录不算。
+	for _, name := range members {
+		addTree(p.member(name).root, "members/"+name+"/", func(top string) bool {
+			return slices.Contains(replicaMemberSkip, top) || strings.HasPrefix(top, ".upload-")
+		})
 	}
 	info, _ := json.Marshal(replicaInfo{Format: formatVersion, Name: name, Stateful: stateful})
 	out := append(append(append(packs, others...), config...), ReplicaFile{Path: "project.json", Data: info, Size: int64(len(info))})
@@ -360,6 +361,15 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 	}
 	defer pdb.Close()
 	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{ID: id, Dir: dir, CreatedAt: time.Now().Unix()}); err != nil {
+		return fail(err)
+	}
+	// 源节点上的状态不跟过来：迁移中的标记（源节点停止后才做最后一次同步）、备份节点设置（只接受源节点的同步，要重新选）。
+	for _, k := range []string{metaMigrating, metaBackupTarget, metaBackupLastSync, metaBackupLastError} {
+		if err := pdb.setMeta(ctx, k, ""); err != nil {
+			return fail(err)
+		}
+	}
+	if err := m.leaveForeignNetworks(ctx, pdb, id, onLine); err != nil {
 		return fail(err)
 	}
 	members, err := pdb.q.ListMembers(ctx)

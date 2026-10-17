@@ -276,3 +276,19 @@ func (m *Manager) checkSharedSettings(ctx context.Context, id string, s *nagiv1.
 	}
 	return nil
 }
+
+// leaveForeignNetworks 项目搬到本节点（恢复副本、迁移、顶替）后，退出本节点上不存在的共享网络：
+// 共享网络只在一个节点上存在，搬过来以后要在这里重新加入（网络名被占用时也一样）。
+func (m *Manager) leaveForeignNetworks(ctx context.Context, pdb *projectDB, id string, onLine func(string)) error {
+	s := pdb.settings(ctx)
+	if len(s.GetSharedNetworks()) == 0 {
+		return nil
+	}
+	if err := m.checkSharedSettings(ctx, id, s); err == nil {
+		return nil
+	} else {
+		onLine("项目原来加入的共享网络（" + strings.Join(s.GetSharedNetworks(), "、") + "）在本节点上用不了，已退出，需要时在项目设置里重新加入：" + err.Error())
+	}
+	s.SharedNetworks = nil
+	return pdb.setSettings(ctx, s)
+}

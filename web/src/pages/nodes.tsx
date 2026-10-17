@@ -29,11 +29,11 @@ export function NodesPage() {
   });
   const [open, setOpen] = useState<{
     id: string;
-    tab: "metrics" | "panels" | "mesh" | "replicas";
+    tab: "metrics" | "panels" | "mesh" | "replicas" | "networks";
   } | null>(null);
   const toggle = (
     id: string,
-    tab: "metrics" | "panels" | "mesh" | "replicas",
+    tab: "metrics" | "panels" | "mesh" | "replicas" | "networks",
   ) => setOpen(open?.id === id && open.tab === tab ? null : { id, tab });
 
   return (
@@ -132,6 +132,13 @@ export function NodesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => toggle(n.id, "networks")}
+                        >
+                          共享网络
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={async () => {
                             if (
                               !confirm(
@@ -157,6 +164,8 @@ export function NodesPage() {
                               <NodeMesh nodeId={n.id} />
                             ) : open.tab === "replicas" ? (
                               <NodeReplicas nodeId={n.id} />
+                            ) : open.tab === "networks" ? (
+                              <SharedNetworks nodeId={n.id} />
                             ) : (
                               <NodePanels nodeId={n.id} />
                             )
@@ -247,5 +256,53 @@ function AddNode() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// 节点上的共享网络：加入的项目之间可以互相访问（成员在里面叫"成员.网络名"）。只在本节点存在。
+function SharedNetworks({ nodeId }: { nodeId: string }) {
+  const queryClient = useQueryClient();
+  const list = useQuery({ queryKey: ["shared-networks", nodeId], queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }) });
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const call = async (fn: () => Promise<unknown>) => {
+    setError("");
+    try {
+      await fn();
+      queryClient.invalidateQueries({ queryKey: ["shared-networks", nodeId] });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <div className="grid gap-3 py-3 text-sm">
+      {error && <Alert>{error}</Alert>}
+      {list.data?.networks.length === 0 && <span className="text-muted-foreground">还没有共享网络。</span>}
+      {list.data?.networks.map((n) => (
+        <div key={n.name} className="flex items-center gap-3">
+          <span className="font-mono">{n.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "还没有项目加入"}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}>
+            删除
+          </Button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="网络名，例如 db-shared" className="max-w-60 font-mono" />
+        <Button
+          size="sm"
+          onClick={() =>
+            call(async () => {
+              await nodeClient.createNodeSharedNetwork({ nodeId, name });
+              setName("");
+            })
+          }
+        >
+          创建共享网络
+        </Button>
+      </div>
+    </div>
   );
 }
