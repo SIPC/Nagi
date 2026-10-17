@@ -103,7 +103,7 @@ func (m *Manager) snapshotWithPause(ctx context.Context, rep *snapshot.Repo, id 
 	defer cancel()
 	sid, err := rep.Create(sctx, kind, dirs, ignore, tags)
 	if errors.Is(sctx.Err(), context.DeadlineExceeded) {
-		return "", fmt.Errorf("暂停超过 %d 秒，已放弃本次快照并恢复容器；数据较多时可以考虑改用导出方式", int(pauseLimit.Seconds()))
+		return "", fmt.Errorf("暂停超过 %d 秒，已放弃本次快照并恢复容器", int(pauseLimit.Seconds()))
 	}
 	return sid, err
 }
