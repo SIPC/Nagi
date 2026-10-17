@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/netip"
@@ -17,6 +18,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // meshNode 是节点的 mesh：成员列表来自每个信任的面板（面板自己和它管理的在线节点），合并后使用。
@@ -32,6 +34,62 @@ type meshNode struct {
 	panelKeys map[string]mesh.Key           // 面板指纹 → 面板的 WireGuard 公钥
 	panelAddr map[string]string             // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
 	names     map[mesh.Key]string
+	file      string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
+}
+
+type savedPanel struct {
+	Key     []byte            `json:"key"`
+	Address string            `json:"address"`
+	Peers   []json.RawMessage `json:"peers"`
+}
+
+// save 把各面板告诉我们的成员列表写盘。调用方持有 n.mu。
+func (n *meshNode) save() {
+	out := map[string]savedPanel{}
+	for fp, peers := range n.members {
+		k := n.panelKeys[fp]
+		sp := savedPanel{Key: k[:], Address: n.panelAddr[fp]}
+		for _, p := range peers {
+			if b, err := protojson.Marshal(p); err == nil {
+				sp.Peers = append(sp.Peers, b)
+			}
+		}
+		out[fp] = sp
+	}
+	b, _ := json.Marshal(out)
+	tmp := n.file + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, n.file)
+	}
+}
+
+// load 读取上次保存的成员列表并应用。
+func (n *meshNode) load() {
+	b, err := os.ReadFile(n.file)
+	if err != nil {
+		return
+	}
+	saved := map[string]savedPanel{}
+	if json.Unmarshal(b, &saved) != nil {
+		return
+	}
+	n.mu.Lock()
+	for fp, sp := range saved {
+		k, err := mesh.ParseKey(sp.Key)
+		if err != nil {
+			continue
+		}
+		var peers []*nagiv1.MeshPeer
+		for _, raw := range sp.Peers {
+			p := &nagiv1.MeshPeer{}
+			if protojson.Unmarshal(raw, p) == nil {
+				peers = append(peers, p)
+			}
+		}
+		n.members[fp], n.panelKeys[fp], n.panelAddr[fp] = peers, k, sp.Address
+	}
+	n.mu.Unlock()
+	n.apply()
 }
 
 // meshPortFile 记住第一次随机选的 UDP 端口，以后重启不变。
@@ -62,6 +120,8 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 		m: m, log: log, members: map[string][]*nagiv1.MeshPeer{}, panelKeys: map[string]mesh.Key{},
 		panelAddr: map[string]string{}, names: map[mesh.Key]string{},
 	}
+	a.mesh.file = filepath.Join(a.cfg.DataDir, "identity", "mesh-peers.json")
+	a.mesh.load()
 	log.Info("mesh 已启动", "address", m.Addr(), "udp_port", m.Port())
 	go func() {
 		<-ctx.Done()
@@ -101,6 +161,7 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 	n.members[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
+	n.save()
 	n.mu.Unlock()
 	n.apply()
 	return pk, true
@@ -120,6 +181,9 @@ func (n *meshNode) retain(fingerprints []string) {
 			delete(n.panelAddr, fp)
 			changed = true
 		}
+	}
+	if changed {
+		n.save()
 	}
 	n.mu.Unlock()
 	if changed {

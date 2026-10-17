@@ -59,6 +59,10 @@ type Manager struct {
 
 	// FastSnapshot 返回 true 的项目每 15 分钟做一次定时快照（设置了顶替的项目）。
 	FastSnapshot func(id string) bool
+	// ManagedRestart 返回 true 的项目由节点代管重启，容器的重启策略写成 no（设置了顶替的项目）。
+	ManagedRestart func(id string) bool
+
+	restarts managedRestarts
 }
 
 // NewManager 创建项目管理器。

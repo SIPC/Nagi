@@ -525,7 +525,7 @@ func (s *agentService) DeleteReplica(_ context.Context, req *nagiv1.ReplicaRef) 
 }
 
 func (s *agentService) CheckRestore(ctx context.Context, req *nagiv1.CheckRestoreRequest) (*nagiv1.CheckRestoreResponse, error) {
-	if err := s.projects.CheckRestore(ctx, req.GetProjectId(), req.GetDir()); err != nil {
+	if err := s.projects.CheckRestore(ctx, req.GetProjectId(), req.GetDir(), req.GetRoutes()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &nagiv1.CheckRestoreResponse{}, nil

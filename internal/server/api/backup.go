@@ -236,7 +236,8 @@ func (s *projectService) MigrateNodeProject(ctx context.Context, req *connect.Re
 
 	line(fmt.Sprintf("把 %s 从 %s 迁移到 %s", name, srcName, dstName))
 	// 先检查目标节点，有问题当场失败，项目不用停。
-	if _, err := dst.CheckRestore(ctx, &nagiv1.CheckRestoreRequest{ProjectId: id, Dir: req.Msg.GetDir()}); err != nil {
+	if _, err := dst.CheckRestore(ctx, &nagiv1.CheckRestoreRequest{ProjectId: id, Dir: req.Msg.GetDir(),
+		Routes: proj.GetProject().GetProject().GetRoutes()}); err != nil {
 		return finish(&nagiv1.DeployResult{Error: "目标节点检查不通过：" + connectMessage(fromGRPC(err))})
 	}
 	if _, err := dst.AcceptReplica(ctx, &nagiv1.AcceptReplicaRequest{

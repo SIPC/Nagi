@@ -54,6 +54,9 @@ type Collector struct {
 	prevContainer     map[string]docker.Stats
 	lastDownsampledTo time.Time
 	sources           []Source
+
+	// ExtraRestarts 返回节点代为重启某个容器的次数（顶替项目由节点代管重启，Docker 不计数）。
+	ExtraRestarts func(containerID string) int
 }
 
 // Source 是额外的指标来源，每次采样时调用，elapsed 是距上次采样的秒数。
@@ -133,6 +136,9 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		for _, ct := range containers {
 			prefix := "c:" + ct.Project + "/" + ct.Service + ":"
 			if n, err := c.docker.RestartCount(ctx, ct.ID); err == nil {
+				if c.ExtraRestarts != nil {
+					n += c.ExtraRestarts(ct.ID)
+				}
 				v[prefix+"restarts"] += float64(n)
 			}
 			if ct.State != "running" {

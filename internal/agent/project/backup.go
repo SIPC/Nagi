@@ -255,13 +255,24 @@ func ReplicaSnapshots(ctx context.Context, id, root, stateDir string) ([]*nagiv1
 	return snapshotsProto(list), nil
 }
 
-// CheckRestore 检查能不能把项目恢复到 dir：本节点还没有这个项目，目录可用。
-func (m *Manager) CheckRestore(ctx context.Context, id, dir string) error {
+// CheckRestore 检查能不能把项目恢复到 dir：本节点还没有这个项目，目录可用，
+// 项目的对外端口和域名在本节点上没有被其他项目或程序占用。
+func (m *Manager) CheckRestore(ctx context.Context, id, dir string, routes []*nagiv1.Exposure) error {
 	if _, err := m.projectRow(ctx, id); err == nil {
 		return invalid("目标节点上已经有这个项目")
 	}
-	_, err := m.checkDir(ctx, dir)
-	return err
+	if _, err := m.checkDir(ctx, dir); err != nil {
+		return err
+	}
+	for _, r := range routes {
+		if r.GetError() != "" {
+			continue
+		}
+		if err := m.checkConflicts(ctx, id, r.GetName(), r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RestoreReplica 把副本恢复成本节点上的项目：项目 ID 不变，复制快照仓库和配置，

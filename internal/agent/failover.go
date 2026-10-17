@@ -34,6 +34,7 @@ const (
 	stopTimeout  = 10 * time.Second // compose 默认给容器的优雅退出时间
 	safetyMargin = 5 * time.Second
 	syncEvery    = 15 * time.Minute
+	startupGrace = 10 * time.Second
 )
 
 type failoverFile struct {
@@ -52,6 +53,8 @@ type failoverState struct {
 	renewed    bool // 本次启动后续约过（至少尝试过）
 	fenced     bool
 	restoring  bool
+	everOK     bool // 本次启动后续约成功过
+	supervised time.Time
 	pending    bool // 等待用户确认顶替
 	confirmed  bool
 	lastSync   time.Time
@@ -296,6 +299,9 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		ok := votes >= 2
 		if ok {
 			st.leaseEnd = sent.Add(L)
+			st.everOK = true
+		} else {
+			st.nextRenew = now.Add(2 * time.Second) // 续不上时尽快重试
 		}
 		wasFenced := st.fenced
 		f.mu.Unlock()
@@ -315,15 +321,27 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	}
 
 	f.mu.Lock()
-	leaseEnd, fenced, restoring := st.leaseEnd, st.fenced, st.restoring
+	leaseEnd, fenced, restoring, everOK := st.leaseEnd, st.fenced, st.restoring, st.everOK
+	superviseDue := time.Since(st.supervised) >= 2*time.Second
+	if superviseDue {
+		st.supervised = time.Now()
+	}
 	f.mu.Unlock()
-	if !fenced && !restoring && time.Now().After(leaseEnd.Add(-safetyMargin-stopTimeout)) && a.projects.Has(ctx, id) {
+	// 刚启动时还要等 WireGuard 握手，头 10 秒内续不上先不停（Docker 不会自己拉起顶替项目的容器，
+	// 这段时间项目本来就没在运行）。
+	grace := !everOK && time.Since(a.startedAt) < startupGrace
+	if !fenced && !restoring && !grace && time.Now().After(leaseEnd.Add(-safetyMargin-stopTimeout)) && a.projects.Has(ctx, id) {
 		a.log.Warn("续不上租约，停止项目", "project", id)
 		a.alerts.Fire(ctx, "lease:"+id, "续不上顶替租约，已停止项目", "联系不上另一个节点和见证人；恢复后会自动重新启动", id)
 		_ = a.projects.Fence(ctx, id, leaseEnd.Add(-safetyMargin), func(string) {})
 		f.mu.Lock()
 		st.fenced = true
 		f.mu.Unlock()
+	}
+
+	// 持有租约时，按用户原来的重启策略代为重启退出的容器；机器重启后也由这里把项目启动起来。
+	if superviseDue && !fenced && !restoring && everOK && time.Now().Before(leaseEnd) && a.projects.Has(ctx, id) {
+		a.projects.Supervise(ctx, id)
 	}
 
 	// 定时同步给热备（另外每次定时快照后也会同步）。
@@ -545,6 +563,11 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 		os.Remove(f.file(id))
 		f.mu.Unlock()
 		f.voter.Forget(id)
+		if a.projects.Has(ctx, id) {
+			if err := a.projects.SetManagedRestart(ctx, id, false); err != nil {
+				a.log.Warn("恢复容器的重启策略失败", "project", id, "err", err)
+			}
+		}
 		for _, k := range []string{"lease:", "takeover:", "standby:"} {
 			a.alerts.Resolve(ctx, k+id)
 		}
@@ -586,6 +609,11 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 		if err := a.replicas.save(&replicaMeta{ProjectID: id, ProjectName: cfg.GetProjectName(), SourceKey: holder,
 			SourceNodeID: cfg.GetA().GetNodeId(), SourceName: memberName(cfg, holder)}); err != nil {
 			return nil, err
+		}
+	}
+	if a.projects.Has(ctx, id) {
+		if err := a.projects.SetManagedRestart(ctx, id, true); err != nil {
+			a.log.Warn("修改容器的重启策略失败", "project", id, "err", err)
 		}
 	}
 	a.startFailover(context.WithoutCancel(a.ctx), id)

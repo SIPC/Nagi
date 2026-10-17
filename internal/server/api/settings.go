@@ -14,8 +14,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/alert"
-	"github.com/SIPC/nagi/internal/server/auth"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

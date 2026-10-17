@@ -136,10 +136,13 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	a.failovers.loadAll()
 	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
+	projects.ManagedRestart = func(id string) bool { return a.failovers.get(id) != nil }
+	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 
 	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
 	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	if !cfg.DisableProxy {
 		a.metrics.AddSource(routeMetrics())
 	}
@@ -194,6 +197,7 @@ type agent struct {
 	replicas  *replicas
 	failovers *failovers
 	ctx       context.Context
+	startedAt time.Time
 
 	mu       sync.Mutex
 	subs     []chan struct{}

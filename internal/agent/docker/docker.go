@@ -422,3 +422,31 @@ func (d *Client) ProjectRunning(ctx context.Context, composeProject string) (boo
 	}
 	return false, nil
 }
+
+// SetRestartPolicy 修改容器的重启策略（不重启容器）。policy 是 no、always、unless-stopped 或 on-failure。
+func (d *Client) SetRestartPolicy(ctx context.Context, id, policy string, maxRetry int) error {
+	_, err := d.c.ContainerUpdate(ctx, id, client.ContainerUpdateOptions{
+		RestartPolicy: &container.RestartPolicy{Name: container.RestartPolicyMode(policy), MaximumRetryCount: maxRetry},
+	})
+	return err
+}
+
+// ExitInfo 返回已退出容器的退出码和运行开始时间。
+func (d *Client) ExitInfo(ctx context.Context, id string) (exitCode int, started time.Time, err error) {
+	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	st := info.Container.State
+	if st == nil {
+		return 0, time.Time{}, nil
+	}
+	started, _ = time.Parse(time.RFC3339Nano, st.StartedAt)
+	return st.ExitCode, started, nil
+}
+
+// StartContainer 启动一个已停止的容器。
+func (d *Client) StartContainer(ctx context.Context, id string) error {
+	_, err := d.c.ContainerStart(ctx, id, client.ContainerStartOptions{})
+	return err
+}

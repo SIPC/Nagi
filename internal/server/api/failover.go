@@ -49,7 +49,8 @@ func (s *projectService) SetNodeProjectFailover(ctx context.Context, req *connec
 		return nil, fromGRPC(err)
 	}
 	// 设置时就检查 B：目录可用、B 上还没有这个项目。
-	if _, err := b.CheckRestore(ctx, &nagiv1.CheckRestoreRequest{ProjectId: id, Dir: req.Msg.GetStandbyDir()}); err != nil {
+	if _, err := b.CheckRestore(ctx, &nagiv1.CheckRestoreRequest{ProjectId: id, Dir: req.Msg.GetStandbyDir(),
+		Routes: proj.GetProject().GetProject().GetRoutes()}); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("顶替节点检查不通过："+connectMessage(fromGRPC(err))))
 	}
 	cfg := &nagiv1.FailoverConfig{

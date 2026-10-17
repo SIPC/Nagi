@@ -321,7 +321,8 @@ func (m *Manager) deploy(ctx context.Context, row nodestore.Project, pdb *projec
 	if err := m.importPorts(ctx, pdb, p, id, proj, onLine); err != nil {
 		return version, err
 	}
-	override, err := buildOverride(proj, p, id, version, row.Subnet, serviceEnv(cfg), opts.pinImages)
+	managed := m.ManagedRestart != nil && m.ManagedRestart(id)
+	override, err := buildOverride(proj, p, id, version, row.Subnet, serviceEnv(cfg), opts.pinImages, managed)
 	if err != nil {
 		return version, err
 	}
