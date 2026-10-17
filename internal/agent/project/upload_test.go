@@ -84,14 +84,14 @@ func TestExtractTarGz(t *testing.T) {
 }
 
 func TestFormLimitsAndHealth(t *testing.T) {
-	cfg := &nagiv1.ProjectConfig{Form: &nagiv1.ImageForm{
+	cfg := &nagiv1.MemberConfig{Form: &nagiv1.ImageForm{
 		Image: "nginx:alpine", MemoryMb: 256, Cpus: 0.5, HealthCommand: "wget -qO- localhost", HealthIntervalSeconds: 15,
 	}}
-	proj, err := validate(context.Background(), cfg, t.TempDir(), "nagi-test")
+	proj, err := validate(context.Background(), cfg, "app", nil, t.TempDir(), "nagi-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := proj.Services[formService]
+	svc := proj.Services["app"]
 	if svc.MemLimit != 256<<20 || svc.CPUS != 0.5 {
 		t.Fatalf("资源限制不对：mem=%d cpus=%v", svc.MemLimit, svc.CPUS)
 	}

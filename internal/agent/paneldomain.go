@@ -17,7 +17,9 @@ import (
 // 面板绑定域名：面板自带的节点用自己的 Caddy 把这个域名反代到面板端口，证书由 Caddy 申请。
 // Caddy 连面板时用面板的 CA 校验身份（面板的服务端证书由它签发，包含 localhost），不需要信任自签证书。
 
-func (a *agent) panelDomainFile() string { return filepath.Join(a.cfg.DataDir, "identity", "panel-domain") }
+func (a *agent) panelDomainFile() string {
+	return filepath.Join(a.cfg.DataDir, "identity", "panel-domain")
+}
 
 func (a *agent) panelDomain() string {
 	b, err := os.ReadFile(a.panelDomainFile())

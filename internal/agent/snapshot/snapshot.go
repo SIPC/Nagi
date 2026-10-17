@@ -247,7 +247,8 @@ func (r *Repo) List(ctx context.Context, kinds ...Kind) ([]Info, error) {
 	return out, nil
 }
 
-// Restore 把快照里名为 name 的顶层目录恢复到 target。target 里多余的文件会被删除，
+// Restore 把快照里的目录 name 恢复到 target。name 是顶层目录名，也可以用 / 指向里面的子目录
+// （例如 member.web/data）。target 里多余的文件会被删除，
 // 所以调用方要先决定好恢复到哪里（例如先恢复到临时目录，再按保留路径合并）。
 func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
 	man, err := snapshot.LoadSnapshot(ctx, r.rep, manifest.ID(id))
@@ -258,13 +259,15 @@ func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
 	if err != nil {
 		return err
 	}
-	dir, ok := root.(fs.Directory)
-	if !ok {
-		return errors.New("快照根目录无效")
-	}
-	child, err := dir.Child(ctx, name)
-	if err != nil {
-		return fmt.Errorf("快照里没有 %s: %w", name, err)
+	var child fs.Entry = root
+	for _, part := range strings.Split(name, "/") {
+		dir, ok := child.(fs.Directory)
+		if !ok {
+			return fmt.Errorf("快照里没有 %s", name)
+		}
+		if child, err = dir.Child(ctx, part); err != nil {
+			return fmt.Errorf("快照里没有 %s: %w", name, err)
+		}
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err

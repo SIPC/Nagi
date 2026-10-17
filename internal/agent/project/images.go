@@ -10,18 +10,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/distribution/reference"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/distribution/reference"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// 镜像更新提醒：每天检查一次项目正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
-// 也不计入 Docker Hub 的拉取次数），和本地镜像的摘要比较。不自动升级，用户点"更新"时拉取新镜像并部署，
-// 记为一个新版本，可以回滚。
+// 镜像更新提醒：每天检查一次项目各成员正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
+// 也不计入 Docker Hub 的拉取次数），和本地镜像的摘要比较。不自动升级，用户点"更新"时拉取新镜像并部署这个成员，
+// 记为它的一个新版本，可以回滚。
 
 type imageUpdates struct {
 	mu      sync.Mutex
-	updates map[string][]*nagiv1.ImageUpdate // 项目 ID → 有新版本的服务
+	updates map[string][]*nagiv1.ImageUpdate // 项目 ID → 有新版本的服务（带成员名）
 	checked map[string]time.Time
 }
 
@@ -34,10 +34,17 @@ func (m *Manager) imageStatus(id string, st *nagiv1.ProjectStatus) {
 	}
 }
 
-func (m *Manager) clearImageUpdates(id string) {
+// clearImageUpdates 清掉成员的"有新版本"提醒（拉取了新镜像后）。
+func (m *Manager) clearImageUpdates(id, member string) {
 	m.images.mu.Lock()
 	defer m.images.mu.Unlock()
-	delete(m.images.updates, id)
+	var keep []*nagiv1.ImageUpdate
+	for _, u := range m.images.updates[id] {
+		if u.GetMember() != member {
+			keep = append(keep, u)
+		}
+	}
+	m.images.updates[id] = keep
 }
 
 // registryAuth 从项目自己的 docker 配置里取出某个仓库的登录信息，编码成 Docker 接口要的格式。
@@ -81,17 +88,18 @@ func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUp
 		return nil, err
 	}
 	p := paths{root: row.Dir}
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	var out []*nagiv1.ImageUpdate
 	seen := map[string]bool{}
 	for _, c := range containers {
-		if seen[c.Service] || strings.Contains(c.Image, "@") || strings.HasPrefix(c.Image, "sha256:") {
+		key := c.Member + "/" + c.Service
+		if seen[key] || strings.Contains(c.Image, "@") || strings.HasPrefix(c.Image, "sha256:") {
 			continue
 		}
-		seen[c.Service] = true
+		seen[key] = true
 		named, err := reference.ParseNormalizedNamed(c.Image)
 		if err != nil {
 			continue
@@ -118,7 +126,7 @@ func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUp
 		if err != nil || remote == "" || remote == local {
 			continue
 		}
-		out = append(out, &nagiv1.ImageUpdate{Service: c.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
+		out = append(out, &nagiv1.ImageUpdate{Member: c.Member, Service: c.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
 	}
 	m.images.mu.Lock()
 	if m.images.updates == nil {

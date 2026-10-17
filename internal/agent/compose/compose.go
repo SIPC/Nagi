@@ -15,11 +15,12 @@ import (
 
 // Files 描述一次 compose 调用用到的文件。
 type Files struct {
-	ProjectName string // compose 项目名，例如 nagi-<项目 ID>
-	ProjectDir  string // compose 的项目目录，相对路径以它为准（项目的 data/）
+	ProjectName string // compose 项目名，例如 nagi-<项目 ID>-<成员>
+	ProjectDir  string // compose 的项目目录，相对路径以它为准（成员的 data/）
 	ComposeFile string // 用户的 compose 文件
 	Override    string // Nagi 生成的叠加配置
-	EnvFile     string // 项目级变量
+	// EnvFiles 是替换 ${变量} 用的变量文件，按顺序传，后面的覆盖前面的（共享变量、成员变量）。
+	EnvFiles []string
 	// DockerConfig 是项目自己的 docker 配置目录（私有仓库登录信息），为空时用机器全局的配置。
 	DockerConfig string
 }
@@ -30,7 +31,9 @@ func (f Files) args(sub ...string) []string {
 		"--project-directory", f.ProjectDir,
 		"-f", f.ComposeFile,
 		"-f", f.Override,
-		"--env-file", f.EnvFile,
+	}
+	for _, e := range f.EnvFiles {
+		args = append(args, "--env-file", e)
 	}
 	return append(args, sub...)
 }

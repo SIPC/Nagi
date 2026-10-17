@@ -1,5 +1,5 @@
 -- name: InsertProject :exec
-INSERT INTO projects (id, dir, subnet, created_at) VALUES (?, ?, ?, ?);
+INSERT INTO projects (id, dir, created_at) VALUES (?, ?, ?);
 
 -- name: GetProject :one
 SELECT * FROM projects WHERE id = ?;
@@ -8,7 +8,28 @@ SELECT * FROM projects WHERE id = ?;
 SELECT * FROM projects ORDER BY created_at;
 
 -- name: ListSubnets :many
-SELECT subnet FROM projects;
+SELECT subnet FROM subnets;
+
+-- name: GetSubnet :one
+SELECT subnet FROM subnets WHERE owner = ?;
+
+-- name: InsertSubnet :exec
+INSERT INTO subnets (subnet, owner) VALUES (?, ?);
+
+-- name: DeleteSubnet :exec
+DELETE FROM subnets WHERE owner = ?;
+
+-- name: DeleteProjectSubnets :exec
+DELETE FROM subnets WHERE owner = @project_owner OR owner LIKE @member_prefix;
+
+-- name: InsertSharedNetwork :exec
+INSERT INTO shared_networks (name, created_at) VALUES (?, ?);
+
+-- name: ListSharedNetworks :many
+SELECT * FROM shared_networks ORDER BY name;
+
+-- name: DeleteSharedNetwork :exec
+DELETE FROM shared_networks WHERE name = ?;
 
 
 -- name: DeleteProject :exec

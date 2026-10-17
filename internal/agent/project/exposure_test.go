@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/agent/store/projectstore"
 	"github.com/SIPC/nagi/internal/pkg/db"
 )
 
@@ -15,22 +16,27 @@ func TestReadRoutes(t *testing.T) {
 	p := paths{root: t.TempDir()}
 	os.MkdirAll(p.routesDir(), 0o755)
 	files := map[string]string{
-		"web-80.yml":  "service: web\nport: 80\nprotocol: http\ndomains: [example.com]\n",
-		"db-5432.yml": "service: db\nport: 5432\nprotocol: tcp\npublished: 15432\n",
-		"dup.yml":     "service: other\nport: 1\nprotocol: tcp\npublished: 15432\n",
-		"bad.yml":     "service: [",
-		"proto.yml":   "service: x\nport: 1\nprotocol: ftp\npublished: 9\n",
-		"note.txt":    "ignored",
+		"web-80.yml":   "member: web\nport: 80\nprotocol: http\ndomains: [example.com]\n",
+		"db-5432.yml":  "member: umami\nservice: db\nport: 5432\nprotocol: tcp\npublished: 15432\n",
+		"dup.yml":      "member: web\nport: 1\nprotocol: tcp\npublished: 15432\n",
+		"bad.yml":      "service: [",
+		"proto.yml":    "member: web\nport: 1\nprotocol: ftp\npublished: 9\n",
+		"nomember.yml": "service: x\nport: 2\nprotocol: tcp\npublished: 19\n",
+		"gone-80.yml":  "member: gone\nport: 80\nprotocol: tcp\npublished: 18\n",
+		"note.txt":     "ignored",
 	}
 	for name, content := range files {
 		os.WriteFile(filepath.Join(p.routesDir(), name), []byte(content), 0o644)
 	}
-	routes := readRoutes(p)
+	routes := readRoutes(p, map[string]bool{"web": true, "umami": true})
 	got := map[string]string{}
 	for _, r := range routes {
 		got[r.GetName()] = r.GetError()
+		if r.GetName() == "web-80" && r.GetService() != "web" {
+			t.Errorf("single member route should default service to the member name: %q", r.GetService())
+		}
 	}
-	if len(got) != 5 {
+	if len(got) != 7 {
 		t.Fatalf("routes: %v", got)
 	}
 	for _, ok := range []string{"web-80", "db-5432"} {
@@ -38,7 +44,7 @@ func TestReadRoutes(t *testing.T) {
 			t.Errorf("%s should be valid: %s", ok, got[ok])
 		}
 	}
-	for _, bad := range []string{"dup", "bad", "proto"} {
+	for _, bad := range []string{"dup", "bad", "proto", "nomember", "gone-80"} {
 		if got[bad] == "" {
 			t.Errorf("%s should be invalid", bad)
 		}
@@ -57,7 +63,10 @@ func TestImportPortsOnlyNew(t *testing.T) {
 	dir := filepath.Join(root, "proj")
 	p := paths{root: dir}
 	os.MkdirAll(p.configDir(), 0o755)
-	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{ID: "p1", Dir: dir, Subnet: "10.200.0.0/26"}); err != nil {
+	if err := writeFormat(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{ID: "p1", Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	pdb, err := openProject(ctx, dir)
@@ -65,20 +74,27 @@ func TestImportPortsOnlyNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pdb.Close()
+	if err := pdb.q.InsertMember(ctx, projectstore.InsertMemberParams{Name: "web", WebhookToken: "t"}); err != nil {
+		t.Fatal(err)
+	}
 
 	load := func(compose string) {
 		t.Helper()
-		proj, err := loadCompose(ctx, compose, nil, p.dataDir(), "nagi-p1")
+		proj, err := loadCompose(ctx, compose, nil, p.member("web").dataDir(), "nagi-p1-web")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := m.importPorts(ctx, pdb, p, "p1", proj, func(string) {}); err != nil {
+		mrow, err := pdb.member(ctx, "web")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := m.importPorts(ctx, pdb, p, "p1", mrow, proj, func(string) {}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	names := func() map[string]bool {
 		out := map[string]bool{}
-		for _, r := range readRoutes(p) {
+		for _, r := range readRoutes(p, nil) {
 			out[r.GetName()] = true
 		}
 		return out

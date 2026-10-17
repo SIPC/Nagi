@@ -100,6 +100,15 @@ const (
 	// NodeServiceSetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// SetNodeMirrors RPC.
 	NodeServiceSetNodeMirrorsProcedure = "/nagi.v1.NodeService/SetNodeMirrors"
+	// NodeServiceListNodeSharedNetworksProcedure is the fully-qualified name of the NodeService's
+	// ListNodeSharedNetworks RPC.
+	NodeServiceListNodeSharedNetworksProcedure = "/nagi.v1.NodeService/ListNodeSharedNetworks"
+	// NodeServiceCreateNodeSharedNetworkProcedure is the fully-qualified name of the NodeService's
+	// CreateNodeSharedNetwork RPC.
+	NodeServiceCreateNodeSharedNetworkProcedure = "/nagi.v1.NodeService/CreateNodeSharedNetwork"
+	// NodeServiceDeleteNodeSharedNetworkProcedure is the fully-qualified name of the NodeService's
+	// DeleteNodeSharedNetwork RPC.
+	NodeServiceDeleteNodeSharedNetworkProcedure = "/nagi.v1.NodeService/DeleteNodeSharedNetwork"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -159,12 +168,33 @@ const (
 	// ProjectServiceGetNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// GetNodeProject RPC.
 	ProjectServiceGetNodeProjectProcedure = "/nagi.v1.ProjectService/GetNodeProject"
+	// ProjectServiceAddNodeProjectMemberProcedure is the fully-qualified name of the ProjectService's
+	// AddNodeProjectMember RPC.
+	ProjectServiceAddNodeProjectMemberProcedure = "/nagi.v1.ProjectService/AddNodeProjectMember"
+	// ProjectServiceDeleteNodeProjectMemberProcedure is the fully-qualified name of the
+	// ProjectService's DeleteNodeProjectMember RPC.
+	ProjectServiceDeleteNodeProjectMemberProcedure = "/nagi.v1.ProjectService/DeleteNodeProjectMember"
 	// ProjectServiceSaveNodeProjectDraftProcedure is the fully-qualified name of the ProjectService's
 	// SaveNodeProjectDraft RPC.
 	ProjectServiceSaveNodeProjectDraftProcedure = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
 	// ProjectServiceDiscardNodeProjectDraftProcedure is the fully-qualified name of the
 	// ProjectService's DiscardNodeProjectDraft RPC.
 	ProjectServiceDiscardNodeProjectDraftProcedure = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
+	// ProjectServiceUpdateNodeProjectSettingsProcedure is the fully-qualified name of the
+	// ProjectService's UpdateNodeProjectSettings RPC.
+	ProjectServiceUpdateNodeProjectSettingsProcedure = "/nagi.v1.ProjectService/UpdateNodeProjectSettings"
+	// ProjectServiceSaveNodeProjectSharedEnvProcedure is the fully-qualified name of the
+	// ProjectService's SaveNodeProjectSharedEnv RPC.
+	ProjectServiceSaveNodeProjectSharedEnvProcedure = "/nagi.v1.ProjectService/SaveNodeProjectSharedEnv"
+	// ProjectServiceDiscardNodeProjectSharedEnvProcedure is the fully-qualified name of the
+	// ProjectService's DiscardNodeProjectSharedEnv RPC.
+	ProjectServiceDiscardNodeProjectSharedEnvProcedure = "/nagi.v1.ProjectService/DiscardNodeProjectSharedEnv"
+	// ProjectServiceListNodeProjectDeploymentsProcedure is the fully-qualified name of the
+	// ProjectService's ListNodeProjectDeployments RPC.
+	ProjectServiceListNodeProjectDeploymentsProcedure = "/nagi.v1.ProjectService/ListNodeProjectDeployments"
+	// ProjectServiceRestoreNodeProjectDeploymentProcedure is the fully-qualified name of the
+	// ProjectService's RestoreNodeProjectDeployment RPC.
+	ProjectServiceRestoreNodeProjectDeploymentProcedure = "/nagi.v1.ProjectService/RestoreNodeProjectDeployment"
 	// ProjectServiceDeleteNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeleteNodeProject RPC.
 	ProjectServiceDeleteNodeProjectProcedure = "/nagi.v1.ProjectService/DeleteNodeProject"
@@ -508,6 +538,10 @@ type NodeServiceClient interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	// 节点上的共享网络。
+	ListNodeSharedNetworks(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	CreateNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -622,6 +656,24 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeSharedNetworks: connect.NewClient[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeSharedNetworksProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeSharedNetworks")),
+			connect.WithClientOptions(opts...),
+		),
+		createNodeSharedNetwork: connect.NewClient[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+NodeServiceCreateNodeSharedNetworkProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CreateNodeSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeSharedNetwork: connect.NewClient[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeSharedNetworkProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -661,6 +713,9 @@ type nodeServiceClient struct {
 	upgradeNode              *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
 	getNodeMirrors           *connect.Client[v1.ListNodeReplicasRequest, v1.Mirrors]
 	setNodeMirrors           *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
+	listNodeSharedNetworks   *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	createNodeSharedNetwork  *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	deleteNodeSharedNetwork  *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -746,6 +801,21 @@ func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, req *connect.Req
 	return c.setNodeMirrors.CallUnary(ctx, req)
 }
 
+// ListNodeSharedNetworks calls nagi.v1.NodeService.ListNodeSharedNetworks.
+func (c *nodeServiceClient) ListNodeSharedNetworks(ctx context.Context, req *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.listNodeSharedNetworks.CallUnary(ctx, req)
+}
+
+// CreateNodeSharedNetwork calls nagi.v1.NodeService.CreateNodeSharedNetwork.
+func (c *nodeServiceClient) CreateNodeSharedNetwork(ctx context.Context, req *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.createNodeSharedNetwork.CallUnary(ctx, req)
+}
+
+// DeleteNodeSharedNetwork calls nagi.v1.NodeService.DeleteNodeSharedNetwork.
+func (c *nodeServiceClient) DeleteNodeSharedNetwork(ctx context.Context, req *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.deleteNodeSharedNetwork.CallUnary(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -791,6 +861,10 @@ type NodeServiceHandler interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	// 节点上的共享网络。
+	ListNodeSharedNetworks(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	CreateNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -901,6 +975,24 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceListNodeSharedNetworksHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeSharedNetworksProcedure,
+		svc.ListNodeSharedNetworks,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeSharedNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceCreateNodeSharedNetworkHandler := connect.NewUnaryHandler(
+		NodeServiceCreateNodeSharedNetworkProcedure,
+		svc.CreateNodeSharedNetwork,
+		connect.WithSchema(nodeServiceMethods.ByName("CreateNodeSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeSharedNetworkHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeSharedNetworkProcedure,
+		svc.DeleteNodeSharedNetwork,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -953,6 +1045,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
 			nodeServiceSetNodeMirrorsHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeSharedNetworksProcedure:
+			nodeServiceListNodeSharedNetworksHandler.ServeHTTP(w, r)
+		case NodeServiceCreateNodeSharedNetworkProcedure:
+			nodeServiceCreateNodeSharedNetworkHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeSharedNetworkProcedure:
+			nodeServiceDeleteNodeSharedNetworkHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -1030,6 +1128,18 @@ func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.
 
 func (UnimplementedNodeServiceHandler) SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeMirrors is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeSharedNetworks(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeSharedNetworks is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CreateNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CreateNodeSharedNetwork is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeSharedNetwork is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -1475,10 +1585,18 @@ type ProjectServiceClient interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
+	AddNodeProjectMember(context.Context, *connect.Request[v1.AddNodeProjectMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
+	DeleteNodeProjectMember(context.Context, *connect.Request[v1.DeleteNodeProjectMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
+	UpdateNodeProjectSettings(context.Context, *connect.Request[v1.UpdateNodeProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error)
+	SaveNodeProjectSharedEnv(context.Context, *connect.Request[v1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
+	DiscardNodeProjectSharedEnv(context.Context, *connect.Request[v1.NodeProjectRevisionRef]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
+	ListNodeProjectDeployments(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
+	// 回到某次部署时的状态。
+	RestoreNodeProjectDeployment(context.Context, *connect.Request[v1.RestoreNodeProjectDeploymentRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
-	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeMemberRef]) (*connect.Response[v1.ListVersionsResponse], error)
 	RollbackNodeProject(context.Context, *connect.Request[v1.RollbackNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListNodeProjectSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateNodeProjectSnapshot(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -1536,6 +1654,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("GetNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		addNodeProjectMember: connect.NewClient[v1.AddNodeProjectMemberRequest, v1.AddMemberResponse](
+			httpClient,
+			baseURL+ProjectServiceAddNodeProjectMemberProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("AddNodeProjectMember")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeProjectMember: connect.NewClient[v1.DeleteNodeProjectMemberRequest, v1.DeleteMemberResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteNodeProjectMemberProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProjectMember")),
+			connect.WithClientOptions(opts...),
+		),
 		saveNodeProjectDraft: connect.NewClient[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse](
 			httpClient,
 			baseURL+ProjectServiceSaveNodeProjectDraftProcedure,
@@ -1548,13 +1678,43 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
 			connect.WithClientOptions(opts...),
 		),
+		updateNodeProjectSettings: connect.NewClient[v1.UpdateNodeProjectSettingsRequest, v1.UpdateProjectSettingsResponse](
+			httpClient,
+			baseURL+ProjectServiceUpdateNodeProjectSettingsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("UpdateNodeProjectSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		saveNodeProjectSharedEnv: connect.NewClient[v1.SaveNodeProjectSharedEnvRequest, v1.SaveSharedEnvResponse](
+			httpClient,
+			baseURL+ProjectServiceSaveNodeProjectSharedEnvProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectSharedEnv")),
+			connect.WithClientOptions(opts...),
+		),
+		discardNodeProjectSharedEnv: connect.NewClient[v1.NodeProjectRevisionRef, v1.DiscardSharedEnvResponse](
+			httpClient,
+			baseURL+ProjectServiceDiscardNodeProjectSharedEnvProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectSharedEnv")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeProjectDeployments: connect.NewClient[v1.NodeProjectRef, v1.ListDeploymentsResponse](
+			httpClient,
+			baseURL+ProjectServiceListNodeProjectDeploymentsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectDeployments")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreNodeProjectDeployment: connect.NewClient[v1.RestoreNodeProjectDeploymentRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRestoreNodeProjectDeploymentProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RestoreNodeProjectDeployment")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteNodeProject: connect.NewClient[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse](
 			httpClient,
 			baseURL+ProjectServiceDeleteNodeProjectProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
-		listNodeProjectVersions: connect.NewClient[v1.NodeProjectRef, v1.ListVersionsResponse](
+		listNodeProjectVersions: connect.NewClient[v1.NodeMemberRef, v1.ListVersionsResponse](
 			httpClient,
 			baseURL+ProjectServiceListNodeProjectVersionsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectVersions")),
@@ -1679,32 +1839,39 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
-	listAllProjects            *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
-	createNodeProject          *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
-	getNodeProject             *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
-	saveNodeProjectDraft       *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
-	discardNodeProjectDraft    *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
-	deleteNodeProject          *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
-	listNodeProjectVersions    *connect.Client[v1.NodeProjectRef, v1.ListVersionsResponse]
-	rollbackNodeProject        *connect.Client[v1.RollbackNodeProjectRequest, v1.DeployEvent]
-	listNodeProjectSnapshots   *connect.Client[v1.NodeProjectRef, v1.ListSnapshotsResponse]
-	createNodeProjectSnapshot  *connect.Client[v1.NodeProjectRef, v1.DeployEvent]
-	restoreNodeProjectSnapshot *connect.Client[v1.RestoreNodeProjectSnapshotRequest, v1.DeployEvent]
-	saveNodeProjectRoute       *connect.Client[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse]
-	deleteNodeProjectRoute     *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
-	deployNodeProject          *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
-	streamNodeProjectLogs      *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
-	setNodeProjectBackup       *connect.Client[v1.SetNodeProjectBackupRequest, v1.BackupStatus]
-	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
-	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
-	getNodeProjectBackupKey    *connect.Client[v1.NodeProjectRef, v1.GetNodeProjectBackupKeyResponse]
-	listNodeProjectRegistries  *connect.Client[v1.NodeProjectRef, v1.RegistriesResponse]
-	checkNodeProjectImages     *connect.Client[v1.NodeProjectRef, v1.CheckImagesResponse]
-	loginNodeProjectRegistry   *connect.Client[v1.LoginNodeProjectRegistryRequest, v1.RegistriesResponse]
-	logoutNodeProjectRegistry  *connect.Client[v1.LogoutNodeProjectRegistryRequest, v1.RegistriesResponse]
-	migrateNodeProject         *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
-	setNodeProjectFailover     *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
-	getNodeProjectFailover     *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
+	listAllProjects              *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
+	createNodeProject            *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
+	getNodeProject               *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
+	addNodeProjectMember         *connect.Client[v1.AddNodeProjectMemberRequest, v1.AddMemberResponse]
+	deleteNodeProjectMember      *connect.Client[v1.DeleteNodeProjectMemberRequest, v1.DeleteMemberResponse]
+	saveNodeProjectDraft         *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
+	discardNodeProjectDraft      *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
+	updateNodeProjectSettings    *connect.Client[v1.UpdateNodeProjectSettingsRequest, v1.UpdateProjectSettingsResponse]
+	saveNodeProjectSharedEnv     *connect.Client[v1.SaveNodeProjectSharedEnvRequest, v1.SaveSharedEnvResponse]
+	discardNodeProjectSharedEnv  *connect.Client[v1.NodeProjectRevisionRef, v1.DiscardSharedEnvResponse]
+	listNodeProjectDeployments   *connect.Client[v1.NodeProjectRef, v1.ListDeploymentsResponse]
+	restoreNodeProjectDeployment *connect.Client[v1.RestoreNodeProjectDeploymentRequest, v1.DeployEvent]
+	deleteNodeProject            *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
+	listNodeProjectVersions      *connect.Client[v1.NodeMemberRef, v1.ListVersionsResponse]
+	rollbackNodeProject          *connect.Client[v1.RollbackNodeProjectRequest, v1.DeployEvent]
+	listNodeProjectSnapshots     *connect.Client[v1.NodeProjectRef, v1.ListSnapshotsResponse]
+	createNodeProjectSnapshot    *connect.Client[v1.NodeProjectRef, v1.DeployEvent]
+	restoreNodeProjectSnapshot   *connect.Client[v1.RestoreNodeProjectSnapshotRequest, v1.DeployEvent]
+	saveNodeProjectRoute         *connect.Client[v1.SaveNodeProjectRouteRequest, v1.SaveNodeProjectRouteResponse]
+	deleteNodeProjectRoute       *connect.Client[v1.DeleteNodeProjectRouteRequest, v1.DeleteNodeProjectRouteResponse]
+	deployNodeProject            *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
+	streamNodeProjectLogs        *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
+	setNodeProjectBackup         *connect.Client[v1.SetNodeProjectBackupRequest, v1.BackupStatus]
+	getNodeProjectBackup         *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
+	syncNodeProjectBackup        *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
+	getNodeProjectBackupKey      *connect.Client[v1.NodeProjectRef, v1.GetNodeProjectBackupKeyResponse]
+	listNodeProjectRegistries    *connect.Client[v1.NodeProjectRef, v1.RegistriesResponse]
+	checkNodeProjectImages       *connect.Client[v1.NodeProjectRef, v1.CheckImagesResponse]
+	loginNodeProjectRegistry     *connect.Client[v1.LoginNodeProjectRegistryRequest, v1.RegistriesResponse]
+	logoutNodeProjectRegistry    *connect.Client[v1.LogoutNodeProjectRegistryRequest, v1.RegistriesResponse]
+	migrateNodeProject           *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
+	setNodeProjectFailover       *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
+	getNodeProjectFailover       *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
 }
 
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
@@ -1722,6 +1889,16 @@ func (c *projectServiceClient) GetNodeProject(ctx context.Context, req *connect.
 	return c.getNodeProject.CallUnary(ctx, req)
 }
 
+// AddNodeProjectMember calls nagi.v1.ProjectService.AddNodeProjectMember.
+func (c *projectServiceClient) AddNodeProjectMember(ctx context.Context, req *connect.Request[v1.AddNodeProjectMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
+	return c.addNodeProjectMember.CallUnary(ctx, req)
+}
+
+// DeleteNodeProjectMember calls nagi.v1.ProjectService.DeleteNodeProjectMember.
+func (c *projectServiceClient) DeleteNodeProjectMember(ctx context.Context, req *connect.Request[v1.DeleteNodeProjectMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
+	return c.deleteNodeProjectMember.CallUnary(ctx, req)
+}
+
 // SaveNodeProjectDraft calls nagi.v1.ProjectService.SaveNodeProjectDraft.
 func (c *projectServiceClient) SaveNodeProjectDraft(ctx context.Context, req *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error) {
 	return c.saveNodeProjectDraft.CallUnary(ctx, req)
@@ -1732,13 +1909,38 @@ func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, req 
 	return c.discardNodeProjectDraft.CallUnary(ctx, req)
 }
 
+// UpdateNodeProjectSettings calls nagi.v1.ProjectService.UpdateNodeProjectSettings.
+func (c *projectServiceClient) UpdateNodeProjectSettings(ctx context.Context, req *connect.Request[v1.UpdateNodeProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error) {
+	return c.updateNodeProjectSettings.CallUnary(ctx, req)
+}
+
+// SaveNodeProjectSharedEnv calls nagi.v1.ProjectService.SaveNodeProjectSharedEnv.
+func (c *projectServiceClient) SaveNodeProjectSharedEnv(ctx context.Context, req *connect.Request[v1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {
+	return c.saveNodeProjectSharedEnv.CallUnary(ctx, req)
+}
+
+// DiscardNodeProjectSharedEnv calls nagi.v1.ProjectService.DiscardNodeProjectSharedEnv.
+func (c *projectServiceClient) DiscardNodeProjectSharedEnv(ctx context.Context, req *connect.Request[v1.NodeProjectRevisionRef]) (*connect.Response[v1.DiscardSharedEnvResponse], error) {
+	return c.discardNodeProjectSharedEnv.CallUnary(ctx, req)
+}
+
+// ListNodeProjectDeployments calls nagi.v1.ProjectService.ListNodeProjectDeployments.
+func (c *projectServiceClient) ListNodeProjectDeployments(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error) {
+	return c.listNodeProjectDeployments.CallUnary(ctx, req)
+}
+
+// RestoreNodeProjectDeployment calls nagi.v1.ProjectService.RestoreNodeProjectDeployment.
+func (c *projectServiceClient) RestoreNodeProjectDeployment(ctx context.Context, req *connect.Request[v1.RestoreNodeProjectDeploymentRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreNodeProjectDeployment.CallServerStream(ctx, req)
+}
+
 // DeleteNodeProject calls nagi.v1.ProjectService.DeleteNodeProject.
 func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, req *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
 	return c.deleteNodeProject.CallUnary(ctx, req)
 }
 
 // ListNodeProjectVersions calls nagi.v1.ProjectService.ListNodeProjectVersions.
-func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error) {
+func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, req *connect.Request[v1.NodeMemberRef]) (*connect.Response[v1.ListVersionsResponse], error) {
 	return c.listNodeProjectVersions.CallUnary(ctx, req)
 }
 
@@ -1842,10 +2044,18 @@ type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
+	AddNodeProjectMember(context.Context, *connect.Request[v1.AddNodeProjectMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
+	DeleteNodeProjectMember(context.Context, *connect.Request[v1.DeleteNodeProjectMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
+	UpdateNodeProjectSettings(context.Context, *connect.Request[v1.UpdateNodeProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error)
+	SaveNodeProjectSharedEnv(context.Context, *connect.Request[v1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
+	DiscardNodeProjectSharedEnv(context.Context, *connect.Request[v1.NodeProjectRevisionRef]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
+	ListNodeProjectDeployments(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
+	// 回到某次部署时的状态。
+	RestoreNodeProjectDeployment(context.Context, *connect.Request[v1.RestoreNodeProjectDeploymentRequest], *connect.ServerStream[v1.DeployEvent]) error
 	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
-	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeMemberRef]) (*connect.Response[v1.ListVersionsResponse], error)
 	RollbackNodeProject(context.Context, *connect.Request[v1.RollbackNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListNodeProjectSnapshots(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateNodeProjectSnapshot(context.Context, *connect.Request[v1.NodeProjectRef], *connect.ServerStream[v1.DeployEvent]) error
@@ -1899,6 +2109,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("GetNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceAddNodeProjectMemberHandler := connect.NewUnaryHandler(
+		ProjectServiceAddNodeProjectMemberProcedure,
+		svc.AddNodeProjectMember,
+		connect.WithSchema(projectServiceMethods.ByName("AddNodeProjectMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDeleteNodeProjectMemberHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteNodeProjectMemberProcedure,
+		svc.DeleteNodeProjectMember,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProjectMember")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceSaveNodeProjectDraftHandler := connect.NewUnaryHandler(
 		ProjectServiceSaveNodeProjectDraftProcedure,
 		svc.SaveNodeProjectDraft,
@@ -1909,6 +2131,36 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceDiscardNodeProjectDraftProcedure,
 		svc.DiscardNodeProjectDraft,
 		connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceUpdateNodeProjectSettingsHandler := connect.NewUnaryHandler(
+		ProjectServiceUpdateNodeProjectSettingsProcedure,
+		svc.UpdateNodeProjectSettings,
+		connect.WithSchema(projectServiceMethods.ByName("UpdateNodeProjectSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSaveNodeProjectSharedEnvHandler := connect.NewUnaryHandler(
+		ProjectServiceSaveNodeProjectSharedEnvProcedure,
+		svc.SaveNodeProjectSharedEnv,
+		connect.WithSchema(projectServiceMethods.ByName("SaveNodeProjectSharedEnv")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDiscardNodeProjectSharedEnvHandler := connect.NewUnaryHandler(
+		ProjectServiceDiscardNodeProjectSharedEnvProcedure,
+		svc.DiscardNodeProjectSharedEnv,
+		connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectSharedEnv")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListNodeProjectDeploymentsHandler := connect.NewUnaryHandler(
+		ProjectServiceListNodeProjectDeploymentsProcedure,
+		svc.ListNodeProjectDeployments,
+		connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectDeployments")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRestoreNodeProjectDeploymentHandler := connect.NewServerStreamHandler(
+		ProjectServiceRestoreNodeProjectDeploymentProcedure,
+		svc.RestoreNodeProjectDeployment,
+		connect.WithSchema(projectServiceMethods.ByName("RestoreNodeProjectDeployment")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceDeleteNodeProjectHandler := connect.NewUnaryHandler(
@@ -2045,10 +2297,24 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceCreateNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectProcedure:
 			projectServiceGetNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceAddNodeProjectMemberProcedure:
+			projectServiceAddNodeProjectMemberHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteNodeProjectMemberProcedure:
+			projectServiceDeleteNodeProjectMemberHandler.ServeHTTP(w, r)
 		case ProjectServiceSaveNodeProjectDraftProcedure:
 			projectServiceSaveNodeProjectDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDiscardNodeProjectDraftProcedure:
 			projectServiceDiscardNodeProjectDraftHandler.ServeHTTP(w, r)
+		case ProjectServiceUpdateNodeProjectSettingsProcedure:
+			projectServiceUpdateNodeProjectSettingsHandler.ServeHTTP(w, r)
+		case ProjectServiceSaveNodeProjectSharedEnvProcedure:
+			projectServiceSaveNodeProjectSharedEnvHandler.ServeHTTP(w, r)
+		case ProjectServiceDiscardNodeProjectSharedEnvProcedure:
+			projectServiceDiscardNodeProjectSharedEnvHandler.ServeHTTP(w, r)
+		case ProjectServiceListNodeProjectDeploymentsProcedure:
+			projectServiceListNodeProjectDeploymentsHandler.ServeHTTP(w, r)
+		case ProjectServiceRestoreNodeProjectDeploymentProcedure:
+			projectServiceRestoreNodeProjectDeploymentHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteNodeProjectProcedure:
 			projectServiceDeleteNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceListNodeProjectVersionsProcedure:
@@ -2112,6 +2378,14 @@ func (UnimplementedProjectServiceHandler) GetNodeProject(context.Context, *conne
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProject is not implemented"))
 }
 
+func (UnimplementedProjectServiceHandler) AddNodeProjectMember(context.Context, *connect.Request[v1.AddNodeProjectMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.AddNodeProjectMember is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteNodeProjectMember(context.Context, *connect.Request[v1.DeleteNodeProjectMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProjectMember is not implemented"))
+}
+
 func (UnimplementedProjectServiceHandler) SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SaveNodeProjectDraft is not implemented"))
 }
@@ -2120,11 +2394,31 @@ func (UnimplementedProjectServiceHandler) DiscardNodeProjectDraft(context.Contex
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DiscardNodeProjectDraft is not implemented"))
 }
 
+func (UnimplementedProjectServiceHandler) UpdateNodeProjectSettings(context.Context, *connect.Request[v1.UpdateNodeProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.UpdateNodeProjectSettings is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SaveNodeProjectSharedEnv(context.Context, *connect.Request[v1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SaveNodeProjectSharedEnv is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DiscardNodeProjectSharedEnv(context.Context, *connect.Request[v1.NodeProjectRevisionRef]) (*connect.Response[v1.DiscardSharedEnvResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DiscardNodeProjectSharedEnv is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListNodeProjectDeployments(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListNodeProjectDeployments is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RestoreNodeProjectDeployment(context.Context, *connect.Request[v1.RestoreNodeProjectDeploymentRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreNodeProjectDeployment is not implemented"))
+}
+
 func (UnimplementedProjectServiceHandler) DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProject is not implemented"))
 }
 
-func (UnimplementedProjectServiceHandler) ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.ListVersionsResponse], error) {
+func (UnimplementedProjectServiceHandler) ListNodeProjectVersions(context.Context, *connect.Request[v1.NodeMemberRef]) (*connect.Response[v1.ListVersionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListNodeProjectVersions is not implemented"))
 }
 

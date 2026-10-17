@@ -8,10 +8,33 @@ import (
 	"database/sql"
 )
 
-type Draft struct {
+type Deployment struct {
 	ID        int64
+	CreatedAt int64
+	Source    string
+	Members   string
+	Versions  string
+	Success   int64
+	Error     string
+	RestoreOf int64
+}
+
+type Draft struct {
+	Member    string
 	Config    []byte
 	UpdatedAt int64
+}
+
+type Member struct {
+	Name            string
+	Position        int64
+	CreatedAt       int64
+	Revision        int64
+	DeployedVersion int64
+	WebhookToken    string
+	LastCommit      string
+	ImportedPorts   string
+	LastFilesRoot   string
 }
 
 type Meta struct {
@@ -20,8 +43,10 @@ type Meta struct {
 }
 
 type Version struct {
+	Member        string
 	Version       int64
 	Config        []byte
+	SharedEnv     []byte
 	CreatedAt     int64
 	DeployedAt    sql.NullInt64
 	FilesSnapshot string

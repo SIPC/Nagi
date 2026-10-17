@@ -134,7 +134,7 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	if err == nil {
 		seen := map[string]bool{}
 		for _, ct := range containers {
-			prefix := "c:" + ct.Project + "/" + ct.Service + ":"
+			prefix := "c:" + ct.Project + "/" + ct.Member + "/" + ct.Service + ":"
 			if n, err := c.docker.RestartCount(ctx, ct.ID); err == nil {
 				if c.ExtraRestarts != nil {
 					n += c.ExtraRestarts(ct.ID)

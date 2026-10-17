@@ -77,8 +77,7 @@ SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?;
 SELECT * FROM project_backups WHERE node_id = ? ORDER BY project_id;
 
 -- name: UpsertWebhook :exec
-INSERT INTO webhooks (token_hash, node_id, project_id) VALUES (?, ?, ?)
-ON CONFLICT (node_id, project_id) DO UPDATE SET token_hash = excluded.token_hash;
+INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, member) VALUES (?, ?, ?, ?);
 
 -- name: GetWebhook :one
 SELECT * FROM webhooks WHERE token_hash = ?;
@@ -98,11 +97,14 @@ DELETE FROM webhooks WHERE node_id = ?;
 -- name: DeleteProjectBackup :exec
 DELETE FROM project_backups WHERE node_id = ? AND project_id = ?;
 
--- name: DeleteProjectWebhook :exec
+-- name: DeleteProjectWebhooks :exec
 DELETE FROM webhooks WHERE node_id = ? AND project_id = ?;
 
--- name: ListWebhookProjects :many
-SELECT project_id FROM webhooks WHERE node_id = ?;
+-- name: ListNodeWebhooks :many
+SELECT * FROM webhooks WHERE node_id = ?;
+
+-- name: DeleteWebhook :exec
+DELETE FROM webhooks WHERE token_hash = ?;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = ?;
 

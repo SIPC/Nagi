@@ -8,15 +8,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/snapshot"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // 备份节点：项目的快照仓库和恢复项目所需的配置，同步到另一个节点（见 docs/snapshot.md）。
@@ -127,7 +127,7 @@ func (m *Manager) BackupKeys(ctx context.Context) map[string]string {
 
 // ReplicaFile 是要同步到备份节点的一个文件。
 type ReplicaFile struct {
-	Path string // 副本里的相对路径：repo/...、config/... 或 project.json
+	Path string // 副本里的相对路径：repo/...、config/...、members/<成员>/... 或 project.json
 	Abs  string // 本地文件；Data 不为空时不用
 	Data []byte
 	Size int64
@@ -136,20 +136,22 @@ type ReplicaFile struct {
 	Immutable bool
 }
 
-// replicaConfig 是副本里恢复项目要用的配置文件（相对 config/）。数据库、草稿等不同步，恢复后从头开始记版本。
-var replicaConfig = []string{"routes", "ssh", "docker", "backup.key"}
+// replicaConfig 是副本里要带上的项目配置（相对 config/）。project.db 单独处理（拷一份一致的副本）。
+var replicaConfig = []string{"format", ".env", "routes", "docker", "backup.key"}
+
+// replicaMemberSkip 是成员目录里不同步的东西：运行文件和数据从快照恢复，临时目录不要。
+var replicaMemberSkip = []string{"data", "volumes", ".checkout", ".restore", ".upload"}
 
 // replicaInfo 是副本里的 project.json。
 type replicaInfo struct {
-	Name   string          `json:"name"`
-	Config json.RawMessage `json:"config"`
-	// 已经导入过的 compose 端口，恢复后不再重复导入（映射文件已经随 config/routes 复制过去）。
-	ImportedPorts string `json:"imported_ports,omitempty"`
+	// Format 是项目目录的格式版本号，接收方不认识就拒绝。
+	Format int    `json:"format"`
+	Name   string `json:"name"`
 	// 是否有状态：顶替时有状态项目默认要用户确认。
 	Stateful bool `json:"stateful,omitempty"`
 }
 
-// ReplicaFiles 返回要同步的文件：快照仓库、配置文件和 project.json。
+// ReplicaFiles 返回要同步的文件：快照仓库、项目配置、成员目录里的配置文件、project.db 的一致副本和 project.json。
 // 顺序是先数据包、再其他仓库文件：仓库的索引写在数据包之后，按这个顺序传，备份节点上的仓库始终能打开。
 func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, string, error) {
 	row, err := m.projectRow(ctx, id)
@@ -162,18 +164,11 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 		return nil, "", err
 	}
 	name := pdb.meta(ctx, metaName)
-	imported := pdb.meta(ctx, metaImportedPorts)
-	cfg, err := pdb.deployed(ctx)
-	if err != nil || cfg == nil {
-		cfg, _, err = pdb.latest(ctx)
-	}
+	stateful := m.projectStateful(ctx, pdb, id, p)
+	dbCopy, err := pdb.snapshotDB(ctx)
 	pdb.Close()
 	if err != nil {
-		return nil, "", err
-	}
-	cfgJSON, err := protojson.Marshal(cfg)
-	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("复制 project.db: %w", err)
 	}
 
 	var packs, others, config []ReplicaFile
@@ -198,26 +193,57 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 	if err != nil {
 		return nil, "", fmt.Errorf("读取快照仓库: %w", err)
 	}
-	for _, c := range replicaConfig {
-		root := filepath.Join(p.configDir(), c)
+	// addTree 把 root 下的普通文件加进清单，路径前缀是 prefix。skip 返回 true 的顶层条目跳过。
+	addTree := func(root, prefix string, skip func(top string) bool) {
 		_ = filepath.WalkDir(root, func(full string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil {
+				return nil
+			}
+			rel, _ := filepath.Rel(root, full)
+			rel = filepath.ToSlash(rel)
+			if rel == "." {
+				return nil
+			}
+			if top, _, _ := strings.Cut(rel, "/"); skip != nil && skip(top) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
 				return nil
 			}
 			info, err := d.Info()
-			if err != nil || !info.Mode().IsRegular() {
+			if err != nil || !info.Mode().IsRegular() || strings.HasSuffix(rel, ".tmp") {
 				return nil
 			}
-			rel, _ := filepath.Rel(p.configDir(), full)
-			config = append(config, ReplicaFile{Path: "config/" + filepath.ToSlash(rel), Abs: full, Size: info.Size()})
+			config = append(config, ReplicaFile{Path: prefix + rel, Abs: full, Size: info.Size()})
 			return nil
 		})
 	}
-	stateful := false
-	if proj, err := validate(ctx, proto.Clone(cfg).(*nagiv1.ProjectConfig), p.dataDir(), composeProjectName(id)); err == nil {
-		stateful = isStateful(cfg, proj, preservePaths(cfg, proj, p.dataDir()))
+	for _, c := range replicaConfig {
+		full := filepath.Join(p.configDir(), c)
+		info, err := os.Stat(full)
+		switch {
+		case err != nil:
+		case info.Mode().IsRegular():
+			config = append(config, ReplicaFile{Path: "config/" + c, Abs: full, Size: info.Size()})
+		case info.IsDir():
+			addTree(full, "config/"+c+"/", nil)
+		}
 	}
-	info, _ := json.Marshal(replicaInfo{Name: name, Config: cfgJSON, ImportedPorts: imported, Stateful: stateful})
+	config = append(config, ReplicaFile{Path: "config/project.db", Data: dbCopy, Size: int64(len(dbCopy))})
+	if entries, err := os.ReadDir(p.membersDir()); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() || !nameRe.MatchString(e.Name()) {
+				continue
+			}
+			addTree(filepath.Join(p.membersDir(), e.Name()), "members/"+e.Name()+"/", func(top string) bool {
+				return slices.Contains(replicaMemberSkip, top) || strings.HasPrefix(top, ".upload-")
+			})
+		}
+	}
+	info, _ := json.Marshal(replicaInfo{Format: formatVersion, Name: name, Stateful: stateful})
 	out := append(append(append(packs, others...), config...), ReplicaFile{Path: "project.json", Data: info, Size: int64(len(info))})
 	return out, name, nil
 }
@@ -226,10 +252,32 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 func ReplicaPath(root, rel string) (string, error) {
 	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
 	if clean != rel || strings.HasPrefix(clean, "../") || filepath.IsAbs(rel) ||
-		!(clean == "project.json" || strings.HasPrefix(clean, "repo/") || strings.HasPrefix(clean, "config/")) {
+		!(clean == "project.json" || strings.HasPrefix(clean, "repo/") || strings.HasPrefix(clean, "config/") || strings.HasPrefix(clean, "members/")) {
 		return "", fmt.Errorf("副本路径无效：%q", rel)
 	}
 	return filepath.Join(root, filepath.FromSlash(clean)), nil
+}
+
+// readReplicaInfo 读取副本里的 project.json，检查格式版本本节点认识。
+func readReplicaInfo(root string) (replicaInfo, error) {
+	var info replicaInfo
+	raw, err := os.ReadFile(filepath.Join(root, "project.json"))
+	if err != nil {
+		return info, errors.New("副本还没有同步完成")
+	}
+	if err := json.Unmarshal(raw, &info); err != nil {
+		return info, err
+	}
+	return info, CheckFormat(info.Format)
+}
+
+// CheckReplicaFormat 检查副本清单里的 project.json 的格式版本本节点认识（同步提交时调用）。
+func CheckReplicaFormat(projectJSON []byte) error {
+	var info replicaInfo
+	if err := json.Unmarshal(projectJSON, &info); err != nil {
+		return err
+	}
+	return CheckFormat(info.Format)
 }
 
 // ReplicaRepo 打开副本里的快照仓库（只用于查看和恢复）。stateDir 是这个副本的连接配置和缓存目录。
@@ -275,91 +323,104 @@ func (m *Manager) CheckRestore(ctx context.Context, id, dir string, routes []*na
 	return nil
 }
 
-// RestoreReplica 把副本恢复成本节点上的项目：项目 ID 不变，复制快照仓库和配置，
-// 恢复快照里的 data/ 和 volumes/，然后部署。snapshotID 为空时用最新的含数据的快照。
+// RestoreReplica 把副本恢复成本节点上的项目：项目 ID 不变，复制快照仓库、项目配置（含 project.db，
+// 版本记录和部署记录都在）和成员的配置文件，恢复快照里各成员的 data/ 和 volumes/，
+// 然后按各成员当前部署的版本启动（不生成新版本）。snapshotID 为空时用最新的定时或手动快照。
 func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID string, onLine func(string)) (*nagiv1.Project, error) {
 	if _, err := m.projectRow(ctx, id); err == nil {
 		return nil, invalid("本节点上已经有这个项目")
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "project.json"))
-	if err != nil {
-		return nil, errors.New("副本还没有同步完成")
-	}
-	var info replicaInfo
-	cfg := &nagiv1.ProjectConfig{}
-	if err := json.Unmarshal(raw, &info); err != nil {
+	if _, err := readReplicaInfo(root); err != nil {
 		return nil, err
 	}
-	if err := protojson.Unmarshal(info.Config, cfg); err != nil {
-		return nil, err
-	}
-
-	onLine("复制快照仓库和配置")
-	proj, err := m.create(ctx, id, info.Name, dir, cfg, func(p paths) error {
-		if err := copyTree(filepath.Join(root, "repo"), p.backupsDir()); err != nil {
-			return fmt.Errorf("复制快照仓库: %w", err)
-		}
-		return copyTree(filepath.Join(root, "config"), p.configDir())
-	})
+	dir, err := m.checkDir(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	p := paths{root: proj.GetDir()}
+	p := paths{root: dir}
 	fail := func(err error) (*nagiv1.Project, error) {
-		_ = m.nodeQ.DeleteProject(ctx, id)
-		os.RemoveAll(proj.GetDir())
-		os.RemoveAll(filepath.Join(m.stateDir, id))
+		_ = m.releaseProject(ctx, id)
+		os.RemoveAll(dir)
 		return nil, err
 	}
-
-	if info.ImportedPorts != "" {
-		pdb, err := openProject(ctx, proj.GetDir())
-		if err != nil {
-			return fail(err)
-		}
-		err = pdb.setMeta(ctx, metaImportedPorts, info.ImportedPorts)
-		pdb.Close()
-		if err != nil {
-			return fail(err)
+	onLine("复制快照仓库和配置")
+	for _, c := range []struct{ src, dst string }{
+		{filepath.Join(root, "repo"), p.backupsDir()},
+		{filepath.Join(root, "config"), p.configDir()},
+		{filepath.Join(root, "members"), p.membersDir()},
+	} {
+		if err := copyTree(c.src, c.dst); err != nil {
+			return fail(fmt.Errorf("复制副本: %w", err))
 		}
 	}
+	_ = os.Chmod(p.configDir(), 0o700)
+	pdb, err := openProject(ctx, dir)
+	if err != nil {
+		return fail(err)
+	}
+	defer pdb.Close()
+	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{ID: id, Dir: dir, CreatedAt: time.Now().Unix()}); err != nil {
+		return fail(err)
+	}
+	members, err := pdb.q.ListMembers(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	for _, mem := range members {
+		mp := p.member(mem.Name)
+		for _, d := range []string{mp.dataDir(), mp.volumesDir()} {
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				return fail(err)
+			}
+		}
+	}
+
 	rep, err := m.openRepo(ctx, id, p)
 	if err != nil {
 		return fail(fmt.Errorf("打开快照仓库: %w", err))
 	}
 	if snapshotID == "" {
-		list, err := rep.List(ctx, snapshot.Scheduled, snapshot.Manual, snapshot.PreDeploy)
-		if err != nil || len(list) == 0 {
+		list, err := rep.List(ctx, snapshot.Scheduled, snapshot.Manual)
+		if err == nil && len(list) > 0 {
+			snapshotID = list[0].ID
+			onLine(fmt.Sprintf("使用最新的快照（%s）", list[0].Time.Local().Format("2006-01-02 15:04:05")))
+		} else if len(members) > 0 {
 			rep.Close(ctx)
 			return fail(errors.New("副本里没有含数据的快照"))
 		}
-		snapshotID = list[0].ID
-		onLine(fmt.Sprintf("使用最新的快照（%s）", list[0].Time.Local().Format("2006-01-02 15:04:05")))
 	}
-	onLine("恢复 data/")
-	if err := rep.Restore(ctx, snapshotID, "data", p.dataDir()); err != nil {
-		rep.Close(ctx)
-		return fail(fmt.Errorf("恢复 data: %w", err))
-	}
-	onLine("恢复 volumes/")
-	if err := rep.Restore(ctx, snapshotID, "volumes", p.volumesDir()); err != nil {
-		onLine("快照里没有 volumes/，跳过：" + err.Error())
+	for _, mem := range members {
+		if snapshotID == "" {
+			break
+		}
+		mp := p.member(mem.Name)
+		onLine("恢复成员 " + mem.Name + " 的 data/ 和 volumes/")
+		if err := rep.Restore(ctx, snapshotID, "member."+mem.Name+"/data", mp.dataDir()); err != nil {
+			onLine("快照里没有成员 " + mem.Name + " 的数据，跳过：" + err.Error())
+			continue
+		}
+		if err := rep.Restore(ctx, snapshotID, "member."+mem.Name+"/volumes", mp.volumesDir()); err != nil {
+			onLine("快照里没有成员 " + mem.Name + " 的 volumes/，跳过：" + err.Error())
+		}
 	}
 	rep.Close(ctx)
 
-	if _, err := m.Deploy(ctx, id, 0, false, false, false, onLine); err != nil {
-		// 文件已经恢复好，项目保留下来，用户可以修改配置后重新部署。
-		return proj, fmt.Errorf("项目已恢复，但部署失败：%w", err)
+	// 文件已经恢复好，启动失败时项目保留下来，用户可以修改配置后重新部署。
+	var startErr error
+	for _, mem := range members {
+		if mem.DeployedVersion == 0 {
+			continue
+		}
+		onLine(fmt.Sprintf("启动成员 %s（版本 %d）", mem.Name, mem.DeployedVersion))
+		if err := m.startDeployed(ctx, pdb, p, id, mem, onLine); err != nil && startErr == nil {
+			startErr = fmt.Errorf("项目已恢复，但成员 %s 启动失败：%w", mem.Name, err)
+		}
 	}
-	return m.getProject(ctx, id)
-}
-
-func (m *Manager) getProject(ctx context.Context, id string) (*nagiv1.Project, error) {
-	s, err := m.Get(ctx, id)
+	proj, err := pdb.project(ctx, id, dir)
 	if err != nil {
 		return nil, err
 	}
-	return s.GetProject(), nil
+	return proj, startErr
 }
 
 // copyTree 把 src 下的普通文件复制到 dst（同名覆盖）。src 不存在时什么都不做。
@@ -388,7 +449,7 @@ func copyTree(src, dst string) error {
 			return err
 		}
 		target := filepath.Join(dst, rel)
-		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
 		if err := copyFile(f, target, info.Mode().Perm()); err != nil {

@@ -24,14 +24,14 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-func (p paths) sshDir() string       { return filepath.Join(p.configDir(), "ssh") }
-func (p paths) deployKey() string    { return filepath.Join(p.sshDir(), "deploy_key") }
-func (p paths) knownHosts() string   { return filepath.Join(p.sshDir(), "known_hosts") }
-func (p paths) checkoutDir() string  { return filepath.Join(p.configDir(), ".checkout") }
-func (p paths) deployKeyPub() string { return p.deployKey() + ".pub" }
+func (p memberPaths) sshDir() string       { return filepath.Join(p.root, "ssh") }
+func (p memberPaths) deployKey() string    { return filepath.Join(p.sshDir(), "deploy_key") }
+func (p memberPaths) knownHosts() string   { return filepath.Join(p.sshDir(), "known_hosts") }
+func (p memberPaths) checkoutDir() string  { return filepath.Join(p.root, ".checkout") }
+func (p memberPaths) deployKeyPub() string { return p.deployKey() + ".pub" }
 
-// ensureDeployKey 返回项目的 deploy key 公钥（authorized_keys 格式），不存在时生成一对 ed25519 密钥。
-func ensureDeployKey(p paths) (string, error) {
+// ensureDeployKey 返回成员的 deploy key 公钥（authorized_keys 格式），不存在时生成一对 ed25519 密钥。
+func ensureDeployKey(p memberPaths) (string, error) {
 	if pub, err := os.ReadFile(p.deployKeyPub()); err == nil {
 		return strings.TrimSpace(string(pub)), nil
 	}
@@ -64,8 +64,8 @@ func isSSHURL(url string) bool {
 	return strings.HasPrefix(url, "ssh://") || (strings.Contains(url, "@") && !strings.Contains(url, "://"))
 }
 
-// gitAuth 返回访问仓库用的认证：SSH 地址用项目的 deploy key，HTTPS 地址不认证（公开仓库）。
-func gitAuth(p paths, url string) (*gitssh.PublicKeys, error) {
+// gitAuth 返回访问仓库用的认证：SSH 地址用成员的 deploy key，HTTPS 地址不认证（公开仓库）。
+func gitAuth(p memberPaths, url string) (*gitssh.PublicKeys, error) {
 	if !isSSHURL(url) {
 		return nil, nil
 	}
@@ -131,11 +131,11 @@ func (w *lineWriter) Write(b []byte) (int, error) {
 	}
 }
 
-// pull 从 git 拉取文件替换 data/，保留 preserve 里的路径。返回拉取到的提交。
-func pull(ctx context.Context, p paths, src *nagiv1.Source, preserve []string, onLine func(string)) (string, error) {
+// pull 从 git 拉取文件替换成员的 data/，保留 preserve 里的路径。返回拉取到的提交。
+func pull(ctx context.Context, p memberPaths, src *nagiv1.Source, preserve []string, onLine func(string)) (string, error) {
 	url := strings.TrimSpace(src.GetGitUrl())
 	if url == "" {
-		return "", invalid("项目没有设置 git 仓库")
+		return "", invalid("成员没有设置 git 仓库")
 	}
 	auth, err := gitAuth(p, url)
 	if err != nil {
@@ -171,7 +171,7 @@ func pull(ctx context.Context, p paths, src *nagiv1.Source, preserve []string, o
 	}
 	if err != nil {
 		if isSSHURL(url) {
-			return "", fmt.Errorf("拉取失败：%w（请确认已把项目的 deploy key 加到仓库）", err)
+			return "", fmt.Errorf("拉取失败：%w（请确认已把成员的 deploy key 加到仓库）", err)
 		}
 		return "", fmt.Errorf("拉取失败：%w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/agent/store/projectstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
 	"gopkg.in/yaml.v3"
@@ -33,14 +34,12 @@ var (
 	routeNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
 )
 
-// metaImportedPorts 记录已经从 compose 导入过的端口，被用户删掉的映射不会再导入。
-const metaImportedPorts = "imported_ports"
-
 func (p paths) routesDir() string { return filepath.Join(p.configDir(), "routes") }
 
 // routeFile 是映射文件的格式。
 type routeFile struct {
-	Service   string   `yaml:"service"`
+	Member    string   `yaml:"member"`
+	Service   string   `yaml:"service,omitempty"`
 	Port      uint32   `yaml:"port"`
 	Protocol  string   `yaml:"protocol"`
 	Published uint32   `yaml:"published,omitempty"`
@@ -49,14 +48,15 @@ type routeFile struct {
 }
 
 const routeHeader = `# Nagi 端口映射。可以直接修改，保存后立即生效。
-# service：服务名；port：容器内端口；protocol：http、tcp 或 udp
+# member：成员名；service：服务名（单容器成员可以不写）；port：容器内端口；protocol：http、tcp 或 udp
 # published：节点上对外的端口（tcp/udp 必填；http 没绑域名时必填）
 # domains：绑定的域名（只用于 http，经 80/443 访问，拿到证书后自动跳转 HTTPS）
 # http_only：只开 HTTP，不申请证书
 `
 
 // readRoutes 读取项目的所有映射。无效的文件也会返回，Error 里写明原因，不会生效。
-func readRoutes(p paths) []*nagiv1.Exposure {
+// members 不为 nil 时，指向不存在的成员的映射也标为无效。
+func readRoutes(p paths, members map[string]bool) []*nagiv1.Exposure {
 	entries, err := os.ReadDir(p.routesDir())
 	if err != nil {
 		return nil
@@ -78,10 +78,15 @@ func readRoutes(p paths) []*nagiv1.Exposure {
 			out = append(out, r)
 			continue
 		}
-		r.Service, r.Target, r.Protocol = f.Service, f.Port, strings.ToLower(f.Protocol)
+		r.Member, r.Service, r.Target, r.Protocol = f.Member, f.Service, f.Port, strings.ToLower(f.Protocol)
 		r.Published, r.Domains, r.HttpOnly = f.Published, f.Domains, f.HTTPOnly
+		if r.Service == "" {
+			r.Service = r.Member // 单容器成员的服务名就是成员名
+		}
 		if err := checkRoute(r); err != nil {
 			r.Error = err.Error()
+		} else if members != nil && !members[r.Member] {
+			r.Error = "成员 " + r.Member + " 不存在"
 		}
 		out = append(out, r)
 	}
@@ -114,6 +119,9 @@ func markDuplicates(routes []*nagiv1.Exposure) {
 
 // checkRoute 校验一条映射本身的格式。
 func checkRoute(r *nagiv1.Exposure) error {
+	if strings.TrimSpace(r.GetMember()) == "" {
+		return invalid("需要填写成员名")
+	}
 	if strings.TrimSpace(r.GetService()) == "" {
 		return invalid("需要填写服务名")
 	}
@@ -156,19 +164,27 @@ func writeRoute(p paths, r *nagiv1.Exposure) error {
 	if err := os.MkdirAll(p.routesDir(), 0o755); err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(routeFile{
-		Service: r.GetService(), Port: r.GetTarget(), Protocol: r.GetProtocol(),
+	f := routeFile{
+		Member: r.GetMember(), Service: r.GetService(), Port: r.GetTarget(), Protocol: r.GetProtocol(),
 		Published: r.GetPublished(), Domains: r.GetDomains(), HTTPOnly: r.GetHttpOnly(),
-	})
+	}
+	if f.Service == f.Member {
+		f.Service = ""
+	}
+	data, err := yaml.Marshal(f)
 	if err != nil {
 		return err
 	}
 	return writeFileAtomic(filepath.Join(p.routesDir(), r.GetName()+".yml"), append([]byte(routeHeader), data...), 0o644)
 }
 
-// newRouteName 生成映射文件名，例如 web-80、web-80-2。
+// newRouteName 生成映射文件名，例如 web-80（单容器成员 web）、umami-db-5432、web-80-2。
 func newRouteName(p paths, r *nagiv1.Exposure) string {
-	base := strings.ToLower(fmt.Sprintf("%s-%d", r.GetService(), r.GetTarget()))
+	base := fmt.Sprintf("%s-%d", r.GetMember(), r.GetTarget())
+	if r.GetService() != r.GetMember() {
+		base = fmt.Sprintf("%s-%s-%d", r.GetMember(), r.GetService(), r.GetTarget())
+	}
+	base = strings.ToLower(base)
 	base = strings.Map(func(c rune) rune {
 		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_' {
 			return c
@@ -228,7 +244,7 @@ func (m *Manager) checkConflicts(ctx context.Context, skipProject, skipName stri
 			name = pdb.meta(ctx, metaName)
 			pdb.Close()
 		}
-		for _, other := range readRoutes(paths{root: row.Dir}) {
+		for _, other := range readRoutes(paths{root: row.Dir}, nil) {
 			if other.GetError() != "" {
 				continue
 			}
@@ -295,12 +311,15 @@ func (m *Manager) SaveRoute(ctx context.Context, id string, r *nagiv1.Exposure) 
 	}
 	p := paths{root: row.Dir}
 	r = &nagiv1.Exposure{
-		Name: r.GetName(), Service: strings.TrimSpace(r.GetService()), Target: r.GetTarget(),
+		Name: r.GetName(), Member: strings.TrimSpace(r.GetMember()), Service: strings.TrimSpace(r.GetService()), Target: r.GetTarget(),
 		Protocol: strings.ToLower(r.GetProtocol()), Published: r.GetPublished(),
 		Domains: normalizeDomains(r.GetDomains()), HttpOnly: r.GetHttpOnly(),
 	}
 	if r.GetProtocol() == ProtoHTTP && len(r.GetDomains()) > 0 {
 		r.Published = 0
+	}
+	if r.Service == "" {
+		r.Service = r.Member
 	}
 	if err := checkRoute(r); err != nil {
 		return nil, err
@@ -310,7 +329,7 @@ func (m *Manager) SaveRoute(ctx context.Context, id string, r *nagiv1.Exposure) 
 	} else if !routeNameRe.MatchString(r.GetName()) {
 		return nil, invalid("映射名只能包含小写字母、数字、- 和 _")
 	}
-	if err := m.checkService(ctx, row.Dir, id, r.GetService()); err != nil {
+	if err := m.checkService(ctx, row.Dir, id, r.GetMember(), r.GetService()); err != nil {
 		return nil, err
 	}
 	if err := m.checkConflicts(ctx, id, r.GetName(), r); err != nil {
@@ -320,6 +339,15 @@ func (m *Manager) SaveRoute(ctx context.Context, id string, r *nagiv1.Exposure) 
 		return nil, err
 	}
 	return m.readProject(ctx, id, row.Dir)
+}
+
+func (m *Manager) readProject(ctx context.Context, id, dir string) (*nagiv1.Project, error) {
+	pdb, err := openProject(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	defer pdb.Close()
+	return pdb.project(ctx, id, dir)
 }
 
 // DeleteRoute 删除一条映射，立即生效。
@@ -340,37 +368,38 @@ func (m *Manager) DeleteRoute(ctx context.Context, id, name string) (*nagiv1.Pro
 	return m.readProject(ctx, id, row.Dir)
 }
 
-// checkService 检查服务在项目的 compose（最新版本或草稿）里存在，且不是 host 网络。
-func (m *Manager) checkService(ctx context.Context, dir, id, service string) error {
+// checkService 检查成员存在、服务在它的 compose（最新版本或草稿）里，且不是 host 网络。
+func (m *Manager) checkService(ctx context.Context, dir, id, member, service string) error {
 	pdb, err := openProject(ctx, dir)
 	if err != nil {
 		return err
 	}
 	defer pdb.Close()
-	var cfgs []*nagiv1.ProjectConfig
-	if cfg, _, err := pdb.latest(ctx); err == nil {
+	if _, err := pdb.member(ctx, member); err != nil {
+		return invalid("成员 %s 不存在", member)
+	}
+	var cfgs []*nagiv1.MemberConfig
+	if cfg, _, err := pdb.latest(ctx, member); err == nil {
 		cfgs = append(cfgs, cfg)
 	}
-	if d, err := pdb.draft(ctx); err == nil && d != nil {
+	if d, err := pdb.draft(ctx, member); err == nil && d != nil {
 		cfgs = append(cfgs, d)
 	}
+	shared := pdb.settings(ctx).GetSharedEnv()
+	mp := paths{root: dir}.member(member)
 	for _, cfg := range cfgs {
-		text, err := composeText(cfg)
+		cp, err := loadMember(ctx, cfg, member, shared, mp.dataDir(), composeProjectName(id, member))
 		if err != nil {
 			continue
 		}
-		proj, err := loadCompose(ctx, text, cfg.GetEnv(), paths{root: dir}.dataDir(), composeProjectName(id))
-		if err != nil {
-			continue
-		}
-		if svc, ok := proj.Services[service]; ok {
+		if svc, ok := cp.Services[service]; ok {
 			if svc.NetworkMode == "host" {
 				return invalid("服务 %s 使用 host 网络，端口直接对外，不能再经 Caddy 开放", service)
 			}
 			return nil
 		}
 	}
-	return invalid("服务 %s 不在项目的 compose 中", service)
+	return invalid("服务 %s 不在成员 %s 的 compose 中", service, member)
 }
 
 func normalizeDomains(list []string) []string {
@@ -388,17 +417,15 @@ func normalizeDomains(list []string) []string {
 
 // ---- 从 compose 导入 ----
 
-// importPorts 把 compose 里新出现的 ports 导入成映射文件（按 tcp/udp 原样开放）。
-// 导入过的端口记在 project.db 里：用户改过或删掉的映射不会被覆盖或加回来。
-// 和其他项目冲突的端口不导入，只在部署日志里提示。
-func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id string, proj *types.Project, onLine func(string)) error {
+// importPorts 把成员 compose 里新出现的 ports 导入成映射文件（按 tcp/udp 原样开放）。
+// 导入过的端口记在成员的记录里：用户改过或删掉的映射不会被覆盖或加回来。
+// 和其他映射冲突的端口不导入，只在部署日志里提示。
+func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id string, mrow projectstore.Member, proj *types.Project, onLine func(string)) error {
 	imported := map[string]bool{}
-	if v := pdb.meta(ctx, metaImportedPorts); v != "" {
-		var list []string
-		if err := json.Unmarshal([]byte(v), &list); err == nil {
-			for _, k := range list {
-				imported[k] = true
-			}
+	var list []string
+	if err := json.Unmarshal([]byte(mrow.ImportedPorts), &list); err == nil {
+		for _, k := range list {
+			imported[k] = true
 		}
 	}
 	changed := false
@@ -422,7 +449,7 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 				onLine(fmt.Sprintf("compose 里 %s 的端口 %d 没有指定对外端口，未开放，可以手动添加映射", name, port.Target))
 				continue
 			}
-			r := &nagiv1.Exposure{Service: name, Target: port.Target, Protocol: proto, Published: uint32(published)}
+			r := &nagiv1.Exposure{Member: mrow.Name, Service: name, Target: port.Target, Protocol: proto, Published: uint32(published)}
 			guessed := false
 			if proto == ProtoTCP && (strings.EqualFold(port.AppProtocol, "http") || (port.AppProtocol == "" && likelyHTTP(port.Target))) {
 				r.Protocol, guessed = ProtoHTTP, port.AppProtocol == ""
@@ -449,13 +476,13 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 	if !changed {
 		return nil
 	}
-	list := make([]string, 0, len(imported))
+	list = make([]string, 0, len(imported))
 	for k := range imported {
 		list = append(list, k)
 	}
 	sort.Strings(list)
 	data, _ := json.Marshal(list)
-	return pdb.setMeta(ctx, metaImportedPorts, string(data))
+	return pdb.q.SetMemberImportedPorts(ctx, projectstore.SetMemberImportedPortsParams{ImportedPorts: string(data), Name: mrow.Name})
 }
 
 // httpPorts 是常见的网站端口（容器内）。9000（php-fpm 等）、443（容器内一般是 HTTPS）不算。
@@ -465,9 +492,12 @@ var httpPorts = map[uint32]bool{80: true, 8000: true, 8080: true, 8081: true, 88
 // likelyHTTP 判断容器端口是不是网站。导入 compose 端口时用：网站按 HTTP 开放，可以统计请求、绑定域名。
 func likelyHTTP(target uint32) bool { return httpPorts[target] }
 
-// routeLabel 用于日志，例如 web:80 → example.com、web:80 → tcp/8080。
+// routeLabel 用于日志，例如 web:80 → example.com、umami/db:5432 → tcp/15432。
 func routeLabel(r *nagiv1.Exposure) string {
-	target := fmt.Sprintf("%s:%d", r.GetService(), r.GetTarget())
+	target := fmt.Sprintf("%s:%d", r.GetMember(), r.GetTarget())
+	if r.GetService() != r.GetMember() {
+		target = fmt.Sprintf("%s/%s:%d", r.GetMember(), r.GetService(), r.GetTarget())
+	}
 	if len(r.GetDomains()) > 0 {
 		return target + " → " + strings.Join(r.GetDomains(), ", ")
 	}

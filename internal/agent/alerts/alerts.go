@@ -244,7 +244,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 		if n := int(count - hist[0].count); n >= rules.RestartCount {
 			project, service := splitContainer(name)
 			active["restart:"+name] = &nagiv1.Alert{
-				Title:   fmt.Sprintf("服务 %s 在 %d 分钟内重启了 %d 次", service, int(rules.RestartWindow.Minutes()), n),
+				Title:   fmt.Sprintf("%s 在 %d 分钟内重启了 %d 次", describeService(service), int(rules.RestartWindow.Minutes()), n),
 				Project: e.projectName(project),
 			}
 		}
@@ -266,8 +266,12 @@ func (e *Engine) evaluate(ctx context.Context) {
 	if containers, err := e.docker.ManagedContainers(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
 			if c.Health == "unhealthy" {
-				active["health:"+c.Project+"/"+c.Service] = &nagiv1.Alert{
-					Title: fmt.Sprintf("服务 %s 健康检查失败", c.Service), Project: e.projectName(c.Project),
+				what := "成员 " + c.Member
+				if c.Service != c.Member {
+					what += " 的服务 " + c.Service
+				}
+				active["health:"+c.Project+"/"+c.Member+"/"+c.Service] = &nagiv1.Alert{
+					Title: what + " 健康检查失败", Project: e.projectName(c.Project),
 				}
 			}
 		}
@@ -340,6 +344,15 @@ func cutLast(s, sep string) (before, after string, ok bool) {
 }
 
 func isEventKey(key string) bool { return strings.HasPrefix(key, "event:") }
+
+// describeService 把"成员/服务"写成给人看的样子：单容器成员（服务名就是成员名）只写成员。
+func describeService(memberService string) string {
+	member, service, _ := strings.Cut(memberService, "/")
+	if service == "" || service == member {
+		return "成员 " + member
+	}
+	return "成员 " + member + " 的服务 " + service
+}
 
 func splitContainer(name string) (project, service string) {
 	name = strings.TrimPrefix(name, "c:")

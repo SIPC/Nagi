@@ -22,7 +22,11 @@ import (
 const (
 	labelProject = "com.docker.compose.project"
 	labelService = "com.docker.compose.service"
+	labelMember  = "nagi.member"
 )
+
+// ComposeLabel 是选出某个 compose 项目所有容器的标签条件。
+func ComposeLabel(composeProject string) string { return labelProject + "=" + composeProject }
 
 // Client 包装 Docker Engine API 客户端。
 type Client struct {
@@ -79,7 +83,13 @@ type Container struct {
 	IPs map[string]netip.Addr
 	// Project 是 Nagi 的项目 ID（nagi.project 标签）。
 	Project string
+	// Member 是 Nagi 的成员名（nagi.member 标签）。
+	Member string
+	// Single 表示单容器成员的容器（nagi.single 标签）。
+	Single  bool
 	ImageID string
+	// Name 是容器名（不带开头的 /）。
+	Name string
 }
 
 // ManagedContainers 列出带有 labelKey 标签（Nagi 管理）的所有容器。
@@ -89,7 +99,12 @@ func (d *Client) ManagedContainers(ctx context.Context, labelKey string) ([]Cont
 
 // ProjectContainers 列出某个 compose 项目的全部容器（包括已停止的）。
 func (d *Client) ProjectContainers(ctx context.Context, composeProject string) ([]Container, error) {
-	return d.listContainers(ctx, make(client.Filters).Add("label", labelProject+"="+composeProject), "nagi.project")
+	return d.Containers(ctx, ComposeLabel(composeProject))
+}
+
+// Containers 列出带某个标签（key=value）的全部容器（包括已停止的），例如 nagi.project=<项目 ID>。
+func (d *Client) Containers(ctx context.Context, label string) ([]Container, error) {
+	return d.listContainers(ctx, make(client.Filters).Add("label", label), "nagi.project")
 }
 
 func (d *Client) listContainers(ctx context.Context, filters client.Filters, projectLabel string) ([]Container, error) {
@@ -107,8 +122,15 @@ func (d *Client) listContainers(ctx context.Context, filters client.Filters, pro
 				}
 			}
 		}
+		name := ""
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
+		}
 		out = append(out, Container{
 			ID:      c.ID,
+			Name:    name,
+			Member:  c.Labels[labelMember],
+			Single:  c.Labels["nagi.single"] == "1",
 			Service: c.Labels[labelService],
 			Image:   c.Image,
 			State:   string(c.State),
@@ -119,7 +141,12 @@ func (d *Client) listContainers(ctx context.Context, filters client.Filters, pro
 			ImageID: c.ImageID,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Member != out[j].Member {
+			return out[i].Member < out[j].Member
+		}
+		return out[i].Service < out[j].Service
+	})
 	return out, nil
 }
 
@@ -133,6 +160,7 @@ func health(h *container.HealthSummary) string {
 
 // LogLine 是一行容器日志。
 type LogLine struct {
+	Member  string
 	Service string
 	Stream  string
 	Text    string
@@ -288,9 +316,9 @@ func (e *Exec) ExitCode(ctx context.Context) int {
 // Close 关闭终端连接。
 func (e *Exec) Close() { e.conn.Close() }
 
-// PauseProject 暂停项目所有正在运行的容器，返回恢复函数。用于快照时保证数据一致。
-func (d *Client) PauseProject(ctx context.Context, composeProject string) (func(), error) {
-	containers, err := d.ProjectContainers(ctx, composeProject)
+// Pause 暂停带某个标签的所有正在运行的容器，返回恢复函数。用于快照时保证数据一致。
+func (d *Client) Pause(ctx context.Context, label string) (func(), error) {
+	containers, err := d.Containers(ctx, label)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +348,7 @@ func (d *Client) PauseProject(ctx context.Context, composeProject string) (func(
 func (d *Client) ProjectImages(ctx context.Context, composeProject string) (map[string]string, error) {
 	list, err := d.c.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
-		Filters: make(client.Filters).Add("label", labelProject+"="+composeProject),
+		Filters: make(client.Filters).Add("label", ComposeLabel(composeProject)),
 	})
 	if err != nil {
 		return nil, err
@@ -393,9 +421,9 @@ func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
 	return info.Container.RestartCount, nil
 }
 
-// KillProject 立即结束项目所有正在运行的容器（SIGKILL）。顶替时来不及优雅停止才用。
-func (d *Client) KillProject(ctx context.Context, composeProject string) error {
-	containers, err := d.ProjectContainers(ctx, composeProject)
+// Kill 立即结束带某个标签的所有正在运行的容器（SIGKILL）。顶替时来不及优雅停止才用。
+func (d *Client) Kill(ctx context.Context, label string) error {
+	containers, err := d.Containers(ctx, label)
 	if err != nil {
 		return err
 	}
@@ -411,9 +439,9 @@ func (d *Client) KillProject(ctx context.Context, composeProject string) error {
 	return firstErr
 }
 
-// ProjectRunning 判断项目是否有正在运行的容器。
-func (d *Client) ProjectRunning(ctx context.Context, composeProject string) (bool, error) {
-	containers, err := d.ProjectContainers(ctx, composeProject)
+// Running 判断带某个标签的容器里有没有正在运行的。
+func (d *Client) Running(ctx context.Context, label string) (bool, error) {
+	containers, err := d.Containers(ctx, label)
 	if err != nil {
 		return false, err
 	}

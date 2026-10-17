@@ -65,8 +65,10 @@ message ReplicaCommitRequest {
 message ReplicaCommitResponse {}
 
 message UploadChunk {
+  // 第一块带上项目和成员，之后只有 data。
   string project_id = 1;
   bytes data = 2;
+  string member = 3;
 }
 
 message UploadResponse {

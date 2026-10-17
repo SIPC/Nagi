@@ -160,17 +160,17 @@ func (q *Queries) DeleteProjectBackup(ctx context.Context, arg DeleteProjectBack
 	return err
 }
 
-const deleteProjectWebhook = `-- name: DeleteProjectWebhook :exec
+const deleteProjectWebhooks = `-- name: DeleteProjectWebhooks :exec
 DELETE FROM webhooks WHERE node_id = ? AND project_id = ?
 `
 
-type DeleteProjectWebhookParams struct {
+type DeleteProjectWebhooksParams struct {
 	NodeID    string
 	ProjectID string
 }
 
-func (q *Queries) DeleteProjectWebhook(ctx context.Context, arg DeleteProjectWebhookParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectWebhook, arg.NodeID, arg.ProjectID)
+func (q *Queries) DeleteProjectWebhooks(ctx context.Context, arg DeleteProjectWebhooksParams) error {
+	_, err := q.db.ExecContext(ctx, deleteProjectWebhooks, arg.NodeID, arg.ProjectID)
 	return err
 }
 
@@ -198,6 +198,15 @@ DELETE FROM sessions WHERE user_id = ?
 
 func (q *Queries) DeleteUserSessions(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteUserSessions, userID)
+	return err
+}
+
+const deleteWebhook = `-- name: DeleteWebhook :exec
+DELETE FROM webhooks WHERE token_hash = ?
+`
+
+func (q *Queries) DeleteWebhook(ctx context.Context, tokenHash string) error {
+	_, err := q.db.ExecContext(ctx, deleteWebhook, tokenHash)
 	return err
 }
 
@@ -303,13 +312,18 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const getWebhook = `-- name: GetWebhook :one
-SELECT token_hash, node_id, project_id FROM webhooks WHERE token_hash = ?
+SELECT token_hash, node_id, project_id, member FROM webhooks WHERE token_hash = ?
 `
 
 func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, error) {
 	row := q.db.QueryRowContext(ctx, getWebhook, tokenHash)
 	var i Webhook
-	err := row.Scan(&i.TokenHash, &i.NodeID, &i.ProjectID)
+	err := row.Scan(
+		&i.TokenHash,
+		&i.NodeID,
+		&i.ProjectID,
+		&i.Member,
+	)
 	return i, err
 }
 
@@ -339,6 +353,38 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.Uses,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNodeWebhooks = `-- name: ListNodeWebhooks :many
+SELECT token_hash, node_id, project_id, member FROM webhooks WHERE node_id = ?
+`
+
+func (q *Queries) ListNodeWebhooks(ctx context.Context, nodeID string) ([]Webhook, error) {
+	rows, err := q.db.QueryContext(ctx, listNodeWebhooks, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.TokenHash,
+			&i.NodeID,
+			&i.ProjectID,
+			&i.Member,
 		); err != nil {
 			return nil, err
 		}
@@ -445,33 +491,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listWebhookProjects = `-- name: ListWebhookProjects :many
-SELECT project_id FROM webhooks WHERE node_id = ?
-`
-
-func (q *Queries) ListWebhookProjects(ctx context.Context, nodeID string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listWebhookProjects, nodeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var project_id string
-		if err := rows.Scan(&project_id); err != nil {
-			return nil, err
-		}
-		items = append(items, project_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -601,18 +620,23 @@ func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBack
 }
 
 const upsertWebhook = `-- name: UpsertWebhook :exec
-INSERT INTO webhooks (token_hash, node_id, project_id) VALUES (?, ?, ?)
-ON CONFLICT (node_id, project_id) DO UPDATE SET token_hash = excluded.token_hash
+INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, member) VALUES (?, ?, ?, ?)
 `
 
 type UpsertWebhookParams struct {
 	TokenHash string
 	NodeID    string
 	ProjectID string
+	Member    string
 }
 
 func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWebhook, arg.TokenHash, arg.NodeID, arg.ProjectID)
+	_, err := q.db.ExecContext(ctx, upsertWebhook,
+		arg.TokenHash,
+		arg.NodeID,
+		arg.ProjectID,
+		arg.Member,
+	)
 	return err
 }
 

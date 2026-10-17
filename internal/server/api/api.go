@@ -268,7 +268,8 @@ func (s *projectService) CreateNodeProject(ctx context.Context, req *connect.Req
 		return nil, err
 	}
 	resp, err := agent.CreateProject(ctx, &nagiv1.CreateProjectRequest{
-		Name: req.Msg.GetName(), Dir: req.Msg.GetDir(), Config: req.Msg.GetConfig(),
+		Name: req.Msg.GetName(), Dir: req.Msg.GetDir(), Settings: req.Msg.GetSettings(),
+		MemberName: req.Msg.GetMemberName(), Member: req.Msg.GetMember(),
 	})
 	if err != nil {
 		return nil, fromGRPC(err)
@@ -294,7 +295,7 @@ func (s *projectService) SaveNodeProjectDraft(ctx context.Context, req *connect.
 		return nil, err
 	}
 	resp, err := agent.SaveDraft(ctx, &nagiv1.SaveDraftRequest{
-		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Config: req.Msg.GetConfig(),
+		Id: req.Msg.GetProjectId(), Member: req.Msg.GetMember(), BaseRevision: req.Msg.GetBaseRevision(), Config: req.Msg.GetConfig(),
 	})
 	if err != nil {
 		return nil, fromGRPC(err)
@@ -308,7 +309,7 @@ func (s *projectService) DiscardNodeProjectDraft(ctx context.Context, req *conne
 		return nil, err
 	}
 	resp, err := agent.DiscardDraft(ctx, &nagiv1.DiscardDraftRequest{
-		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(),
+		Id: req.Msg.GetProjectId(), Member: req.Msg.GetMember(), BaseRevision: req.Msg.GetBaseRevision(),
 	})
 	if err != nil {
 		return nil, fromGRPC(err)
@@ -340,12 +341,12 @@ func (s *projectService) DeleteNodeProjectRoute(ctx context.Context, req *connec
 	return connect.NewResponse(&nagiv1.DeleteNodeProjectRouteResponse{Project: resp.GetProject()}), nil
 }
 
-func (s *projectService) ListNodeProjectVersions(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListVersionsResponse], error) {
+func (s *projectService) ListNodeProjectVersions(ctx context.Context, req *connect.Request[nagiv1.NodeMemberRef]) (*connect.Response[nagiv1.ListVersionsResponse], error) {
 	agent, err := s.agent(req.Msg.GetNodeId())
 	if err != nil {
 		return nil, err
 	}
-	resp, err := agent.ListVersions(ctx, &nagiv1.ListVersionsRequest{Id: req.Msg.GetProjectId()})
+	resp, err := agent.ListVersions(ctx, &nagiv1.ListVersionsRequest{Id: req.Msg.GetProjectId(), Member: req.Msg.GetMember()})
 	if err != nil {
 		return nil, fromGRPC(err)
 	}
@@ -385,7 +386,9 @@ func (s *projectService) RollbackNodeProject(ctx context.Context, req *connect.R
 	if err != nil {
 		return err
 	}
-	stream, err := agent.Rollback(ctx, &nagiv1.RollbackRequest{Id: req.Msg.GetProjectId(), Version: req.Msg.GetVersion(), RestoreData: req.Msg.GetRestoreData()})
+	stream, err := agent.Rollback(ctx, &nagiv1.RollbackRequest{
+		Id: req.Msg.GetProjectId(), Member: req.Msg.GetMember(), Version: req.Msg.GetVersion(), RestoreData: req.Msg.GetRestoreData(),
+	})
 	if err != nil {
 		return fromGRPC(err)
 	}
@@ -409,7 +412,9 @@ func (s *projectService) RestoreNodeProjectSnapshot(ctx context.Context, req *co
 	if err != nil {
 		return err
 	}
-	stream, err := agent.RestoreSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{Id: req.Msg.GetProjectId(), SnapshotId: req.Msg.GetSnapshotId()})
+	stream, err := agent.RestoreSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{
+		Id: req.Msg.GetProjectId(), SnapshotId: req.Msg.GetSnapshotId(), Member: req.Msg.GetMember(),
+	})
 	if err != nil {
 		return fromGRPC(err)
 	}
@@ -428,7 +433,7 @@ func (s *projectService) DeleteNodeProject(ctx context.Context, req *connect.Req
 		return nil, fromGRPC(err)
 	}
 	_ = s.Q.DeleteProjectBackup(ctx, store.DeleteProjectBackupParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
-	_ = s.Q.DeleteProjectWebhook(ctx, store.DeleteProjectWebhookParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
+	_ = s.Q.DeleteProjectWebhooks(ctx, store.DeleteProjectWebhooksParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
 	s.Log.Info("项目已删除", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "delete_dir", req.Msg.GetDeleteDir())
 	return connect.NewResponse(&nagiv1.DeleteNodeProjectResponse{}), nil
 }
@@ -439,8 +444,9 @@ func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Req
 		return err
 	}
 	stream, err := agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{
-		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Pull: req.Msg.GetPull(),
+		Id: req.Msg.GetProjectId(), Targets: req.Msg.GetTargets(), Pull: req.Msg.GetPull(),
 		UseUpload: req.Msg.GetUseUpload(), PullImages: req.Msg.GetPullImages(),
+		ApplySharedEnv: req.Msg.GetApplySharedEnv(), SettingsRevision: req.Msg.GetSettingsRevision(),
 	})
 	if err != nil {
 		return fromGRPC(err)
@@ -465,7 +471,7 @@ func (s *projectService) StreamNodeProjectLogs(ctx context.Context, req *connect
 		return err
 	}
 	stream, err := agent.StreamLogs(ctx, &nagiv1.StreamLogsRequest{
-		Id: req.Msg.GetProjectId(), Service: req.Msg.GetService(), Tail: req.Msg.GetTail(), Follow: req.Msg.GetFollow(),
+		Id: req.Msg.GetProjectId(), Member: req.Msg.GetMember(), Service: req.Msg.GetService(), Tail: req.Msg.GetTail(), Follow: req.Msg.GetFollow(),
 	})
 	if err != nil {
 		return fromGRPC(err)
@@ -482,6 +488,135 @@ func (s *projectService) StreamNodeProjectLogs(ctx context.Context, req *connect
 			return err
 		}
 	}
+}
+
+func (s *projectService) AddNodeProjectMember(ctx context.Context, req *connect.Request[nagiv1.AddNodeProjectMemberRequest]) (*connect.Response[nagiv1.AddMemberResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.AddMember(ctx, &nagiv1.AddMemberRequest{ProjectId: req.Msg.GetProjectId(), Name: req.Msg.GetName(), Config: req.Msg.GetConfig()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) DeleteNodeProjectMember(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectMemberRequest]) (*connect.Response[nagiv1.DeleteMemberResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.DeleteMember(ctx, &nagiv1.DeleteMemberRequest{
+		ProjectId: req.Msg.GetProjectId(), Member: req.Msg.GetMember(), BaseRevision: req.Msg.GetBaseRevision(), DeleteDir: req.Msg.GetDeleteDir(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	s.Log.Info("成员已删除", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "member", req.Msg.GetMember(), "delete_dir", req.Msg.GetDeleteDir())
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) UpdateNodeProjectSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateNodeProjectSettingsRequest]) (*connect.Response[nagiv1.UpdateProjectSettingsResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.UpdateProjectSettings(ctx, &nagiv1.UpdateProjectSettingsRequest{
+		ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Name: req.Msg.GetName(), Settings: req.Msg.GetSettings(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) SaveNodeProjectSharedEnv(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[nagiv1.SaveSharedEnvResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.SaveSharedEnv(ctx, &nagiv1.SaveSharedEnvRequest{
+		ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Vars: req.Msg.GetVars(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) DiscardNodeProjectSharedEnv(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRevisionRef]) (*connect.Response[nagiv1.DiscardSharedEnvResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.DiscardSharedEnv(ctx, &nagiv1.DiscardSharedEnvRequest{ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) ListNodeProjectDeployments(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListDeploymentsResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.ListDeployments(ctx, &nagiv1.ListDeploymentsRequest{Id: req.Msg.GetProjectId()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) RestoreNodeProjectDeployment(ctx context.Context, req *connect.Request[nagiv1.RestoreNodeProjectDeploymentRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return err
+	}
+	stream, err := agent.RestoreDeployment(ctx, &nagiv1.RestoreDeploymentRequest{Id: req.Msg.GetProjectId(), DeploymentId: req.Msg.GetDeploymentId()})
+	if err != nil {
+		return fromGRPC(err)
+	}
+	return forwardEvents(ctx, stream.Recv, out)
+}
+
+// ---- 共享网络 ----
+
+func (s *nodeService) ListNodeSharedNetworks(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	resp, err := conn.Agent.ListSharedNetworks(ctx, &nagiv1.ListSharedNetworksRequest{})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) CreateNodeSharedNetwork(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	resp, err := conn.Agent.CreateSharedNetwork(ctx, &nagiv1.CreateSharedNetworkRequest{Name: req.Msg.GetName()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) DeleteNodeSharedNetwork(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	resp, err := conn.Agent.DeleteSharedNetwork(ctx, &nagiv1.DeleteSharedNetworkRequest{Name: req.Msg.GetName()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
 }
 
 // ---- 节点加入 ----

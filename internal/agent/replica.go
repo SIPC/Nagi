@@ -222,6 +222,12 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 		return nil, err
 	}
 	defer s.a.replicas.lock(req.GetProjectId())()
+	// 项目目录的格式本节点不认识（源节点版本更新），不接收：以后也没法用它恢复。
+	if raw, err := os.ReadFile(filepath.Join(files, "project.json")); err == nil {
+		if err := project.CheckReplicaFormat(raw); err != nil {
+			return nil, status.Error(codes.FailedPrecondition, "备份节点不能接收这个项目："+err.Error())
+		}
+	}
 	keep := map[string]bool{}
 	for _, p := range req.GetPaths() {
 		keep[p] = true

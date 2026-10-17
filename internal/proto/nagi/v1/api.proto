@@ -95,6 +95,10 @@ service NodeService {
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(ListNodeReplicasRequest) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
+  // 节点上的共享网络。
+  rpc ListNodeSharedNetworks(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  rpc CreateNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  rpc DeleteNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -326,10 +330,18 @@ service ProjectService {
   rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
   rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
   rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
+  rpc AddNodeProjectMember(AddNodeProjectMemberRequest) returns (AddMemberResponse);
+  rpc DeleteNodeProjectMember(DeleteNodeProjectMemberRequest) returns (DeleteMemberResponse);
   rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
   rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
+  rpc UpdateNodeProjectSettings(UpdateNodeProjectSettingsRequest) returns (UpdateProjectSettingsResponse);
+  rpc SaveNodeProjectSharedEnv(SaveNodeProjectSharedEnvRequest) returns (SaveSharedEnvResponse);
+  rpc DiscardNodeProjectSharedEnv(NodeProjectRevisionRef) returns (DiscardSharedEnvResponse);
+  rpc ListNodeProjectDeployments(NodeProjectRef) returns (ListDeploymentsResponse);
+  // 回到某次部署时的状态。
+  rpc RestoreNodeProjectDeployment(RestoreNodeProjectDeploymentRequest) returns (stream DeployEvent);
   rpc DeleteNodeProject(DeleteNodeProjectRequest) returns (DeleteNodeProjectResponse);
-  rpc ListNodeProjectVersions(NodeProjectRef) returns (ListVersionsResponse);
+  rpc ListNodeProjectVersions(NodeMemberRef) returns (ListVersionsResponse);
   rpc RollbackNodeProject(RollbackNodeProjectRequest) returns (stream DeployEvent);
   rpc ListNodeProjectSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
   rpc CreateNodeProjectSnapshot(NodeProjectRef) returns (stream DeployEvent);
@@ -418,15 +430,73 @@ message CreateNodeProjectRequest {
   string node_id = 1;
   string name = 2;
   string dir = 3;
-  reserved 4;
-  ProjectConfig config = 5;
+  reserved 4, 5;
+  ProjectSettings settings = 6;
+  // 可选：第一个成员。
+  string member_name = 7;
+  MemberConfig member = 8;
+}
+
+message AddNodeProjectMemberRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string name = 3;
+  MemberConfig config = 4;
+}
+
+message DeleteNodeProjectMemberRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string member = 3;
+  int64 base_revision = 4;
+  bool delete_dir = 5;
+}
+
+message UpdateNodeProjectSettingsRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+  string name = 4;
+  ProjectSettings settings = 5;
+}
+
+message SaveNodeProjectSharedEnvRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+  repeated EnvVar vars = 4;
+}
+
+message NodeProjectRevisionRef {
+  string node_id = 1;
+  string project_id = 2;
+  int64 base_revision = 3;
+}
+
+message RestoreNodeProjectDeploymentRequest {
+  string node_id = 1;
+  string project_id = 2;
+  int64 deployment_id = 3;
+}
+
+message NodeMemberRef {
+  string node_id = 1;
+  string project_id = 2;
+  string member = 3;
+}
+
+message NodeSharedNetworkRequest {
+  string node_id = 1;
+  // 创建、删除时的网络名。
+  string name = 2;
 }
 
 message SaveNodeProjectDraftRequest {
   string node_id = 1;
   string project_id = 2;
   int64 base_revision = 3;
-  ProjectConfig config = 4;
+  MemberConfig config = 4;
+  string member = 5;
 }
 
 message SaveNodeProjectDraftResponse {
@@ -437,6 +507,7 @@ message DiscardNodeProjectDraftRequest {
   string node_id = 1;
   string project_id = 2;
   int64 base_revision = 3;
+  string member = 4;
 }
 
 message DiscardNodeProjectDraftResponse {
@@ -473,12 +544,15 @@ message RollbackNodeProjectRequest {
   string project_id = 2;
   int64 version = 3;
   bool restore_data = 4;
+  string member = 5;
 }
 
 message RestoreNodeProjectSnapshotRequest {
   string node_id = 1;
   string project_id = 2;
   string snapshot_id = 3;
+  // 只恢复这个成员；为空时恢复整个项目。
+  string member = 4;
 }
 
 message DeleteNodeProjectRequest {
@@ -507,13 +581,17 @@ message GetNodeProjectResponse {
 message DeployNodeProjectRequest {
   string node_id = 1;
   string project_id = 2;
-  int64 base_revision = 3;
+  reserved 3;
   // 部署前先从 git 拉取文件。
   bool pull = 4;
-  // 用刚上传的压缩包替换 data/（先 POST /api/upload）。
+  // 用刚上传的压缩包替换成员的 data/（先 POST /api/upload，只能部署一个成员）。
   bool use_upload = 5;
   // 先拉取最新的镜像（更新镜像）。
   bool pull_images = 6;
+  repeated DeployTarget targets = 7;
+  // 先把共享变量的草稿生效。
+  bool apply_shared_env = 8;
+  int64 settings_revision = 9;
 }
 
 message StreamNodeProjectLogsRequest {
@@ -522,4 +600,5 @@ message StreamNodeProjectLogsRequest {
   string service = 3;
   int32 tail = 4;
   bool follow = 5;
+  string member = 6;
 }

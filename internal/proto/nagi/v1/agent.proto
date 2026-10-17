@@ -12,17 +12,36 @@ service AgentService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  // 往项目里加一个成员（只保存，不部署）。
+  rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
+  // 删除成员：停止并删除它的容器，目录默认保留。
+  rpc DeleteMember(DeleteMemberRequest) returns (DeleteMemberResponse);
+  // 保存成员的草稿。
   rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
   rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
+  // 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
+  rpc UpdateProjectSettings(UpdateProjectSettingsRequest) returns (UpdateProjectSettingsResponse);
+  // 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
+  rpc SaveSharedEnv(SaveSharedEnvRequest) returns (SaveSharedEnvResponse);
+  rpc DiscardSharedEnv(DiscardSharedEnvRequest) returns (DiscardSharedEnvResponse);
+  // 项目的部署记录，最新的在前。
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+  // 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+  rpc RestoreDeployment(RestoreDeploymentRequest) returns (stream DeployEvent);
+  // 本节点的共享网络。
+  rpc ListSharedNetworks(ListSharedNetworksRequest) returns (ListSharedNetworksResponse);
+  rpc CreateSharedNetwork(CreateSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  // 删除共享网络：还有项目加入时拒绝。
+  rpc DeleteSharedNetwork(DeleteSharedNetworkRequest) returns (ListSharedNetworksResponse);
   // 新建或修改一条端口映射，立即生效。
   rpc SaveRoute(SaveRouteRequest) returns (SaveRouteResponse);
   rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
   rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
-  // 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+  // 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
   rpc Rollback(RollbackRequest) returns (stream DeployEvent);
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
   rpc CreateSnapshot(CreateSnapshotRequest) returns (stream DeployEvent);
-  // 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+  // 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
   // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
   rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
@@ -252,6 +271,7 @@ message ExecInput {
 message ExecStart {
   string project_id = 1;
   string service = 2;
+  string member = 5;
   // 为空时优先用 bash，没有 bash 就用 sh。
   repeated string command = 3;
   TerminalSize size = 4;
@@ -279,14 +299,41 @@ message ListProjectsResponse {
 message CreateProjectRequest {
   string name = 1;
   string dir = 2;
-  reserved 3;
-  ProjectConfig config = 4;
+  reserved 3, 4;
+  ProjectSettings settings = 5;
+  // 可选：创建时就带上第一个成员。
+  string member_name = 6;
+  MemberConfig member = 7;
+}
+
+message AddMemberRequest {
+  string project_id = 1;
+  string name = 2;
+  MemberConfig config = 3;
+}
+
+message AddMemberResponse {
+  Project project = 1;
+}
+
+message DeleteMemberRequest {
+  string project_id = 1;
+  string member = 2;
+  int64 base_revision = 3;
+  // 同时删除成员目录（数据会删掉）。
+  bool delete_dir = 4;
+}
+
+message DeleteMemberResponse {
+  Project project = 1;
 }
 
 message SaveDraftRequest {
   string id = 1;
+  // 成员的修订号。
   int64 base_revision = 2;
-  ProjectConfig config = 3;
+  MemberConfig config = 3;
+  string member = 4;
 }
 
 message SaveDraftResponse {
@@ -296,10 +343,72 @@ message SaveDraftResponse {
 message DiscardDraftRequest {
   string id = 1;
   int64 base_revision = 2;
+  string member = 3;
 }
 
 message DiscardDraftResponse {
   Project project = 1;
+}
+
+message UpdateProjectSettingsRequest {
+  string project_id = 1;
+  // 项目设置的修订号。
+  int64 base_revision = 2;
+  string name = 3;
+  // shared_env 在这里不生效（共享变量走草稿）。
+  ProjectSettings settings = 4;
+}
+
+message UpdateProjectSettingsResponse {
+  Project project = 1;
+}
+
+message SaveSharedEnvRequest {
+  string project_id = 1;
+  int64 base_revision = 2;
+  repeated EnvVar vars = 3;
+}
+
+message SaveSharedEnvResponse {
+  Project project = 1;
+  // 引用了改动变量的成员（部署共享变量时默认一起部署）。
+  repeated string affected = 2;
+}
+
+message DiscardSharedEnvRequest {
+  string project_id = 1;
+  int64 base_revision = 2;
+}
+
+message DiscardSharedEnvResponse {
+  Project project = 1;
+}
+
+message ListDeploymentsRequest {
+  string id = 1;
+}
+
+message ListDeploymentsResponse {
+  repeated Deployment deployments = 1;
+}
+
+message RestoreDeploymentRequest {
+  string id = 1;
+  int64 deployment_id = 2;
+}
+
+message ListSharedNetworksRequest {}
+
+message ListSharedNetworksResponse {
+  repeated SharedNetwork networks = 1;
+}
+
+message CreateSharedNetworkRequest {
+  string name = 1;
+}
+
+message DeleteSharedNetworkRequest {
+  string name = 1;
 }
 
 message SaveRouteRequest {
@@ -323,6 +432,7 @@ message DeleteRouteResponse {
 
 message ListVersionsRequest {
   string id = 1;
+  string member = 2;
 }
 
 message ListVersionsResponse {
@@ -334,6 +444,7 @@ message RollbackRequest {
   int64 version = 2;
   // 同时把数据（volumes/ 和保留路径）恢复到这个版本被替换之前。
   bool restore_data = 3;
+  string member = 4;
 }
 
 message ListSnapshotsRequest {
@@ -351,6 +462,8 @@ message CreateSnapshotRequest {
 message RestoreSnapshotRequest {
   string id = 1;
   string snapshot_id = 2;
+  // 只恢复这个成员；为空时恢复整个项目。
+  string member = 3;
 }
 
 message SetAlertConfigRequest {
@@ -372,6 +485,7 @@ message QueryMetricsResponse {
 
 message DeleteProjectRequest {
   string id = 1;
+  // 项目设置的修订号。
   int64 base_revision = 2;
   // 同时删除项目目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
   bool delete_dir = 3;
@@ -392,21 +506,37 @@ message GetProjectResponse {
   ProjectSummary project = 1;
 }
 
-// 有草稿时先把草稿记为新版本再部署；没有草稿时重新部署最新版本。
+// DeployTarget 是一起部署里的一个成员。
+message DeployTarget {
+  string member = 1;
+  // 面板基于的成员修订号；节点上已经不是这个修订号时拒绝。0 表示不检查。
+  int64 base_revision = 2;
+}
+
+// 部署一个或多个成员：有草稿的成员先把草稿记为新版本再部署，没有草稿的重新部署最新版本。
+// 多个成员按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
 message DeployProjectRequest {
   string id = 1;
-  // 面板基于的修订号；节点上已经不是这个修订号时拒绝。
-  int64 base_revision = 2;
+  reserved 2;
   // 部署前先从 git 拉取文件。
   bool pull = 3;
-  // 用面板刚上传的文件替换 data/（见 MeshService.Upload）。
+  // 用面板刚上传的文件替换 data/（见 MeshService.Upload，只能部署一个成员）。
   bool use_upload = 4;
   // 先拉取最新的镜像（更新镜像）。
   bool pull_images = 5;
+  repeated DeployTarget targets = 6;
+  // 先把共享变量的草稿生效，再部署 targets。
+  bool apply_shared_env = 7;
+  // apply_shared_env 时项目设置的修订号。
+  int64 settings_revision = 8;
+  // 部署记录里的来源，为空表示 manual。
+  string source = 9;
 }
 
 message StreamLogsRequest {
   string id = 1;
+  // 为空时返回所有成员的日志。
+  string member = 5;
   // 为空时返回所有服务的日志。
   string service = 2;
   // 先返回最近多少行。

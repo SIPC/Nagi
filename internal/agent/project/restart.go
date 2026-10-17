@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
-	"google.golang.org/protobuf/proto"
 )
 
 // 节点代管重启：设置了顶替的项目，容器的重启策略一律是 no，Docker 开机时不会自己把它们拉起来，
@@ -46,6 +44,7 @@ func policyOf(svc types.ServiceConfig) restartPolicy {
 	return restartPolicy{mode: "unless-stopped"}
 }
 
+// policies 返回项目每个服务的重启策略，键是"成员/服务"。按各成员部署的版本（没部署过时用最新版本）读。
 func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPolicy, error) {
 	row, err := m.projectRow(ctx, id)
 	if err != nil {
@@ -56,20 +55,29 @@ func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPo
 		return nil, err
 	}
 	defer pdb.Close()
-	cfg, err := pdb.deployed(ctx)
-	if err != nil || cfg == nil {
-		if cfg, _, err = pdb.latest(ctx); err != nil {
-			return nil, err
-		}
-	}
-	p := paths{root: row.Dir}
-	proj, err := validate(ctx, proto.Clone(cfg).(*nagiv1.ProjectConfig), p.dataDir(), composeProjectName(id))
+	members, err := pdb.q.ListMembers(ctx)
 	if err != nil {
 		return nil, err
 	}
+	current := pdb.settings(ctx).GetSharedEnv()
+	p := paths{root: row.Dir}
 	out := map[string]restartPolicy{}
-	for name, svc := range proj.Services {
-		out[name] = policyOf(svc)
+	for _, mem := range members {
+		cfg, err := pdb.current(ctx, mem)
+		if err != nil {
+			continue
+		}
+		shared := current
+		if v, err := pdb.deployed(ctx, mem); err == nil && v != nil {
+			shared = unmarshalEnv(v.SharedEnv)
+		}
+		cp, err := loadMember(ctx, cfg, mem.Name, shared, p.member(mem.Name).dataDir(), composeProjectName(id, mem.Name))
+		if err != nil {
+			continue
+		}
+		for name, svc := range cp.Services {
+			out[mem.Name+"/"+name] = policyOf(svc)
+		}
 	}
 	return out, nil
 }
@@ -81,14 +89,14 @@ func (m *Manager) SetManagedRestart(ctx context.Context, id string, managed bool
 	if err != nil {
 		return err
 	}
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return err
 	}
 	for _, c := range containers {
 		p := restartPolicy{mode: "no"}
 		if !managed {
-			p = pol[c.Service]
+			p = pol[c.Member+"/"+c.Service]
 		}
 		if err := m.docker.SetRestartPolicy(ctx, c.ID, p.mode, p.maxRetries); err != nil {
 			return err
@@ -125,7 +133,7 @@ func (m *Manager) Supervise(ctx context.Context, id string) {
 		return
 	}
 	defer l.Unlock()
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return
 	}
@@ -149,7 +157,7 @@ func (m *Manager) Supervise(ctx context.Context, id string) {
 				return
 			}
 		}
-		p := pol[c.Service]
+		p := pol[c.Member+"/"+c.Service]
 		code, _, err := m.docker.ExitInfo(ctx, c.ID)
 		if err != nil {
 			continue

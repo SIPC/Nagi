@@ -1,5 +1,5 @@
-// Package project 管理节点上的项目：项目目录、版本、override 生成、部署和状态。
-// 节点是项目数据的主人，这里的数据以节点本地为准。
+// Package project 管理节点上的项目：项目是一组成员（单容器或一份 compose），共用项目目录和内网，
+// 每个成员各自部署、记版本、回滚。节点是项目数据的主人，这里的数据以节点本地为准。
 package project
 
 import (
@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // 错误类型，供上层转换成对应的 gRPC 状态码。
@@ -40,10 +42,19 @@ func invalid(format string, args ...any) error {
 	return invalidError{msg: fmt.Sprintf(format, args...)}
 }
 
-// DefaultSubnetPool 是节点本地的容器网段池，每个项目分一个 /26。
+// notFoundError 是"某个东西不存在"：errors.Is 能识别为 ErrNotFound，消息是具体原因。
+type notFoundError struct{ msg string }
+
+func (e notFoundError) Error() string        { return e.msg }
+func (e notFoundError) Is(target error) bool { return target == ErrNotFound }
+
+// DefaultSubnetPool 是节点本地的容器网段池，项目内网、compose 成员、共享网络各分一个 /26。
 const DefaultSubnetPool = "10.200.0.0/16"
 
-const projectSubnetBits = 26
+const subnetBits = 26
+
+// nameRe 是成员名、网络名的格式：小写字母、数字和 -，不以 - 开头或结尾，最长 32 个字符。
+var nameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 
 // Manager 管理本节点的所有项目。
 type Manager struct {
@@ -54,8 +65,9 @@ type Manager struct {
 	// stateDir 是节点目录下存放快照仓库连接配置和缓存的地方。
 	stateDir string
 
-	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	mu       sync.Mutex
+	locks    map[string]*sync.Mutex
+	netLocks map[string]*sync.Mutex
 
 	// FastSnapshot 返回 true 的项目每 15 分钟做一次定时快照（设置了顶替的项目）。
 	FastSnapshot func(id string) bool
@@ -74,8 +86,8 @@ func NewManager(nodeDB *sql.DB, dc *docker.Client, pool, stateDir string) (*Mana
 	if err != nil {
 		return nil, fmt.Errorf("容器网段池 %q 无效: %w", pool, err)
 	}
-	if !pfx.Addr().Is4() || pfx.Bits() > projectSubnetBits {
-		return nil, fmt.Errorf("容器网段池 %q 必须是 IPv4 且不小于 /%d", pool, projectSubnetBits)
+	if !pfx.Addr().Is4() || pfx.Bits() > subnetBits {
+		return nil, fmt.Errorf("容器网段池 %q 必须是 IPv4 且不小于 /%d", pool, subnetBits)
 	}
 	return &Manager{
 		nodeDB:   nodeDB,
@@ -84,6 +96,7 @@ func NewManager(nodeDB *sql.DB, dc *docker.Client, pool, stateDir string) (*Mana
 		pool:     pfx.Masked(),
 		stateDir: stateDir,
 		locks:    map[string]*sync.Mutex{},
+		netLocks: map[string]*sync.Mutex{},
 	}, nil
 }
 
@@ -101,55 +114,67 @@ func (m *Manager) lock(id string) *sync.Mutex {
 
 // ---- 项目目录 ----
 
+// paths 是项目目录里的各个位置（见 docs/agent.md#项目目录）。
 type paths struct{ root string }
 
-func (p paths) configDir() string   { return filepath.Join(p.root, "config") }
-func (p paths) dataDir() string     { return filepath.Join(p.root, "data") }
-func (p paths) volumesDir() string  { return filepath.Join(p.root, "volumes") }
-func (p paths) backupsDir() string  { return filepath.Join(p.root, "backups") }
-func (p paths) composeFile() string { return filepath.Join(p.configDir(), "compose.yml") }
-func (p paths) overrideFile() string {
-	return filepath.Join(p.configDir(), "override.yml")
+func (p paths) configDir() string     { return filepath.Join(p.root, "config") }
+func (p paths) membersDir() string    { return filepath.Join(p.root, "members") }
+func (p paths) backupsDir() string    { return filepath.Join(p.root, "backups") }
+func (p paths) projectDB() string     { return filepath.Join(p.configDir(), "project.db") }
+func (p paths) sharedEnvFile() string { return filepath.Join(p.configDir(), ".env") }
+func (p paths) member(name string) memberPaths {
+	return memberPaths{root: filepath.Join(p.membersDir(), name)}
 }
-func (p paths) envFile() string   { return filepath.Join(p.configDir(), ".env") }
-func (p paths) projectDB() string { return filepath.Join(p.configDir(), "project.db") }
 
-func composeProjectName(id string) string { return "nagi-" + id }
+// memberPaths 是成员目录 members/<成员>/ 里的各个位置。
+type memberPaths struct{ root string }
+
+func (p memberPaths) composeFile() string   { return filepath.Join(p.root, "compose.yml") }
+func (p memberPaths) overrideFile() string  { return filepath.Join(p.root, "override.yml") }
+func (p memberPaths) envFile() string       { return filepath.Join(p.root, ".env") }
+func (p memberPaths) sharedEnvFile() string { return filepath.Join(p.root, "shared.env") }
+func (p memberPaths) dataDir() string       { return filepath.Join(p.root, "data") }
+func (p memberPaths) volumesDir() string    { return filepath.Join(p.root, "volumes") }
+func (p memberPaths) restoreDir() string    { return filepath.Join(p.root, ".restore") }
+
+// composeProjectName 是成员的 compose 项目名。
+func composeProjectName(id, member string) string { return "nagi-" + id + "-" + member }
+
+// projectLabel 选出项目所有成员的容器。
+func projectLabel(id string) string { return LabelProject + "=" + id }
 
 // ---- 创建 ----
 
-// Create 创建项目：校验配置、建目录、分配网段、记录第一个版本。创建后不立即部署。
-func (m *Manager) Create(ctx context.Context, name, dir string, cfg *nagiv1.ProjectConfig) (*nagiv1.Project, error) {
+// Create 创建项目：建目录、写格式版本号、保存设置。member 不为空时同时加入第一个成员。创建后不部署。
+func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1.ProjectSettings, memberName string, member *nagiv1.MemberConfig) (*nagiv1.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > 64 {
 		return nil, invalid("项目名不能为空，且不超过 64 个字符")
 	}
-	if cfg == nil {
-		return nil, invalid("缺少项目配置")
+	if settings == nil {
+		settings = &nagiv1.ProjectSettings{}
+	}
+	settings = proto.Clone(settings).(*nagiv1.ProjectSettings)
+	// 新项目不能直接加入共享网络（要先有网络名、网络存在），在项目设置里加。
+	settings.SharedNetworks, settings.NetworkName = nil, ""
+	if err := checkEnv(settings.GetSharedEnv()); err != nil {
+		return nil, err
+	}
+	if member != nil {
+		if err := checkMemberName(memberName); err != nil {
+			return nil, err
+		}
 	}
 	id, err := newID()
 	if err != nil {
 		return nil, err
 	}
-	return m.create(ctx, id, name, dir, cfg, nil)
-}
-
-// create 建立项目目录和记录。prepare 在目录建好、生成密钥之前调用，用于放入已有的文件（从副本恢复时）。
-func (m *Manager) create(ctx context.Context, id, name, dir string, cfg *nagiv1.ProjectConfig, prepare func(p paths) error) (*nagiv1.Project, error) {
-	dir, err := m.checkDir(ctx, dir)
+	dir, err = m.checkDir(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
 	p := paths{root: dir}
-	if _, err := validate(ctx, cfg, p.dataDir(), composeProjectName(id)); err != nil {
-		return nil, err
-	}
-	subnet, err := m.allocateSubnet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, d := range []string{p.configDir(), p.dataDir(), p.volumesDir(), p.backupsDir()} {
+	for _, d := range []string{p.configDir(), p.membersDir(), p.backupsDir()} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, fmt.Errorf("创建项目目录: %w", err)
 		}
@@ -158,57 +183,49 @@ func (m *Manager) create(ctx context.Context, id, name, dir string, cfg *nagiv1.
 		return nil, err
 	}
 	cleanup := func() { os.RemoveAll(dir) }
-	if prepare != nil {
-		if err := prepare(p); err != nil {
-			cleanup()
-			return nil, err
-		}
+	if err := writeFormat(p); err != nil {
+		cleanup()
+		return nil, err
 	}
-
 	pdb, err := openProject(ctx, dir)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	defer pdb.Close()
-	if _, err := ensureDeployKey(p); err != nil {
-		cleanup()
-		return nil, err
-	}
-	webhook, err := randomToken()
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
 	now := time.Now()
 	for k, v := range map[string]string{
-		metaID:              id,
-		metaName:            name,
-		metaRevision:        "1",
-		metaDeployedVersion: "0",
-		metaCreatedAt:       strconv.FormatInt(now.Unix(), 10),
-		metaWebhookToken:    webhook,
+		metaID:        id,
+		metaName:      name,
+		metaRevision:  "1",
+		metaCreatedAt: strconv.FormatInt(now.Unix(), 10),
 	} {
 		if err := pdb.setMeta(ctx, k, v); err != nil {
+			pdb.Close()
 			cleanup()
 			return nil, err
 		}
 	}
-	if err := pdb.insertVersion(ctx, 1, cfg); err != nil {
+	if err := pdb.setSettings(ctx, settings); err == nil {
+		err = writeFileAtomic(p.sharedEnvFile(), envFile(settings.GetSharedEnv()), 0o600)
+	}
+	if err != nil {
+		pdb.Close()
 		cleanup()
 		return nil, err
 	}
-	if err := writeConfigFiles(p, cfg); err != nil {
+	if member != nil {
+		if err := m.addMember(ctx, pdb, p, id, memberName, member); err != nil {
+			pdb.Close()
+			cleanup()
+			return nil, err
+		}
+	}
+	pdb.Close()
+	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{ID: id, Dir: dir, CreatedAt: now.Unix()}); err != nil {
 		cleanup()
 		return nil, err
 	}
-	if err := m.nodeQ.InsertProject(ctx, nodestore.InsertProjectParams{
-		ID: id, Dir: dir, Subnet: subnet, CreatedAt: now.Unix(),
-	}); err != nil {
-		cleanup()
-		return nil, err
-	}
-	return pdb.project(ctx, id, dir)
+	return m.getProject(ctx, id)
 }
 
 // checkDir 校验项目目录：必须是绝对路径；已存在时必须为空；不能和其他项目的目录互相嵌套。
@@ -245,8 +262,18 @@ func within(child, parent string) bool {
 	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
 }
 
-// allocateSubnet 从容器网段池里找第一个没用过、也不和 Docker 现有网络重叠的 /26。
-func (m *Manager) allocateSubnet(ctx context.Context) (string, error) {
+// ---- 容器网段 ----
+
+// subnetFor 返回某个网络的网段，没有时从容器网段池里分配第一个没用过、也不和 Docker 现有网络重叠的 /26。
+// owner：p:<项目 ID>（项目内网）、m:<项目 ID>/<成员>（成员自己的网络）、s:<名字>（共享网络）。
+func (m *Manager) subnetFor(ctx context.Context, owner string) (string, error) {
+	if s, err := m.nodeQ.GetSubnet(ctx, owner); err == nil {
+		return s, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	used, err := m.nodeQ.ListSubnets(ctx)
 	if err != nil {
 		return "", err
@@ -259,16 +286,19 @@ func (m *Manager) allocateSubnet(ctx context.Context) (string, error) {
 	for _, s := range used {
 		taken[s] = true
 	}
-	size := uint32(1) << (32 - projectSubnetBits)
-	count := uint32(1) << (projectSubnetBits - m.pool.Bits())
+	size := uint32(1) << (32 - subnetBits)
+	count := uint32(1) << (subnetBits - m.pool.Bits())
 	base := m.pool.Addr().As4()
 	start := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
 	for i := uint32(0); i < count; i++ {
 		v := start + i*size
 		addr := netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
-		p := netip.PrefixFrom(addr, projectSubnetBits)
+		p := netip.PrefixFrom(addr, subnetBits)
 		if taken[p.String()] || overlapsAny(p, existing) {
 			continue
+		}
+		if err := m.nodeQ.InsertSubnet(ctx, nodestore.InsertSubnetParams{Subnet: p.String(), Owner: owner}); err != nil {
+			return "", err
 		}
 		return p.String(), nil
 	}
@@ -282,6 +312,19 @@ func overlapsAny(p netip.Prefix, list []netip.Prefix) bool {
 		}
 	}
 	return false
+}
+
+func projectOwner(id string) string        { return "p:" + id }
+func memberOwner(id, member string) string { return "m:" + id + "/" + member }
+
+// releaseProject 删除节点上关于项目的记录：项目行、网段、快照仓库的连接配置。
+func (m *Manager) releaseProject(ctx context.Context, id string) error {
+	if err := m.nodeQ.DeleteProject(ctx, id); err != nil {
+		return err
+	}
+	_ = m.nodeQ.DeleteProjectSubnets(ctx, nodestore.DeleteProjectSubnetsParams{ProjectOwner: projectOwner(id), MemberPrefix: memberOwner(id, "%")})
+	os.RemoveAll(filepath.Join(m.stateDir, id))
+	return nil
 }
 
 // ---- 读取 ----
@@ -315,14 +358,19 @@ func (m *Manager) projectRow(ctx context.Context, id string) (nodestore.Project,
 
 // Get 返回单个项目及其状态。
 func (m *Manager) Get(ctx context.Context, id string) (*nagiv1.ProjectSummary, error) {
-	row, err := m.nodeQ.GetProject(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+	row, err := m.projectRow(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return m.summary(ctx, row.ID, row.Dir)
+}
+
+func (m *Manager) getProject(ctx context.Context, id string) (*nagiv1.Project, error) {
+	s, err := m.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetProject(), nil
 }
 
 // Name 返回项目名称，读不到时返回 ID。用于告警内容。
@@ -331,19 +379,28 @@ func (m *Manager) Name(ctx context.Context, id string) string {
 	if err != nil {
 		return id
 	}
-	p, err := m.readProject(ctx, id, row.Dir)
-	if err != nil || p.GetName() == "" {
+	pdb, err := openProject(ctx, row.Dir)
+	if err != nil {
 		return id
 	}
-	return p.GetName()
+	defer pdb.Close()
+	if n := pdb.meta(ctx, metaName); n != "" {
+		return n
+	}
+	return id
 }
 
 func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectSummary, error) {
-	proj, err := m.readProject(ctx, id, dir)
+	pdb, err := openProject(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	status, err := m.status(ctx, id, dir)
+	defer pdb.Close()
+	proj, err := pdb.project(ctx, id, dir)
+	if err != nil {
+		return nil, err
+	}
+	status, err := m.status(ctx, id, dir, proj)
 	if err != nil {
 		return nil, err
 	}
@@ -351,54 +408,42 @@ func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectS
 	return &nagiv1.ProjectSummary{Project: proj, Status: status}, nil
 }
 
-func (m *Manager) readProject(ctx context.Context, id, dir string) (*nagiv1.Project, error) {
-	pdb, err := openProject(ctx, dir)
-	if err != nil {
-		return nil, err
-	}
-	defer pdb.Close()
-	return pdb.project(ctx, id, dir)
-}
-
-// status 合并 compose 里声明的服务和实际运行的容器。
-func (m *Manager) status(ctx context.Context, id, dir string) (*nagiv1.ProjectStatus, error) {
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+// status 合并各成员 compose 里声明的服务和实际的容器。
+func (m *Manager) status(ctx context.Context, id, dir string, proj *nagiv1.Project) (*nagiv1.ProjectStatus, error) {
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	st := &nagiv1.ProjectStatus{}
 	seen := map[string]bool{}
 	for _, c := range containers {
-		seen[c.Service] = true
+		seen[c.Member+"/"+c.Service] = true
 		st.Services = append(st.Services, &nagiv1.ServiceStatus{
-			Name: c.Service, ContainerId: c.ID, Image: c.Image,
+			Member: c.Member, Name: c.Service, ContainerId: c.ID, Image: c.Image,
 			State: c.State, Status: c.Status, Health: c.Health,
 		})
 	}
 	// compose 里有、但还没有容器的服务（例如从未部署）。
-	pdb, err := openProject(ctx, dir)
-	if err != nil {
-		return st, nil
-	}
-	defer pdb.Close()
-	if cfg, _, err := pdb.latest(ctx); err == nil {
-		if text, err := composeText(cfg); err == nil {
-			if proj, err := loadCompose(ctx, text, cfg.GetEnv(), paths{root: dir}.dataDir(), composeProjectName(id)); err == nil {
-				for _, name := range proj.ServiceNames() {
-					if !seen[name] {
-						st.Services = append(st.Services, &nagiv1.ServiceStatus{Name: name, Image: proj.Services[name].Image})
-					}
-				}
+	shared := proj.GetSettings().GetSharedEnv()
+	for _, mem := range proj.GetMembers() {
+		cfg := mem.GetConfig()
+		cp, err := loadMember(ctx, cfg, mem.GetName(), shared, paths{root: dir}.member(mem.GetName()).dataDir(), composeProjectName(id, mem.GetName()))
+		if err != nil {
+			continue
+		}
+		for _, name := range cp.ServiceNames() {
+			if !seen[mem.GetName()+"/"+name] {
+				st.Services = append(st.Services, &nagiv1.ServiceStatus{Member: mem.GetName(), Name: name, Image: cp.Services[name].Image})
 			}
 		}
 	}
 	return st, nil
 }
 
-// ---- 草稿 ----
+// ---- 修改 ----
 
-// projectForUpdate 加锁并打开项目，检查修订号。调用方负责 unlock 和关闭数据库。
-func (m *Manager) projectForUpdate(ctx context.Context, id string, baseRevision int64) (row nodestore.Project, pdb *projectDB, revision int64, unlock func(), err error) {
+// projectForUpdate 加锁并打开项目，检查项目不在迁移中。调用方负责 unlock 和关闭数据库。
+func (m *Manager) projectForUpdate(ctx context.Context, id string) (row nodestore.Project, pdb *projectDB, unlock func(), err error) {
 	l := m.lock(id)
 	l.Lock()
 	unlock = l.Unlock
@@ -410,94 +455,51 @@ func (m *Manager) projectForUpdate(ctx context.Context, id string, baseRevision 
 			unlock()
 		}
 	}()
-	row, err = m.nodeQ.GetProject(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return row, nil, 0, unlock, ErrNotFound
-	}
+	row, err = m.projectRow(ctx, id)
 	if err != nil {
-		return row, nil, 0, unlock, err
+		return row, nil, unlock, err
 	}
 	pdb, err = openProject(ctx, row.Dir)
 	if err != nil {
-		return row, nil, 0, unlock, err
+		return row, nil, unlock, err
 	}
 	if pdb.meta(ctx, metaMigrating) == "1" {
-		return row, pdb, 0, unlock, invalid("项目正在迁移到其他节点，暂时不能修改")
+		return row, pdb, unlock, invalid("项目正在迁移到其他节点，暂时不能修改")
 	}
-	revision, err = pdb.revision(ctx)
-	if err != nil {
-		return row, pdb, 0, unlock, err
-	}
-	if baseRevision != 0 && baseRevision != revision {
-		return row, pdb, 0, unlock, ErrConflict
-	}
-	return row, pdb, revision, unlock, nil
-}
-
-// SaveDraft 保存草稿。草稿要先通过校验，部署时才会成为新版本。
-func (m *Manager) SaveDraft(ctx context.Context, id string, baseRevision int64, cfg *nagiv1.ProjectConfig) (*nagiv1.Project, error) {
-	if cfg == nil {
-		return nil, invalid("缺少项目配置")
-	}
-	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	defer pdb.Close()
-	if _, err := validate(ctx, cfg, paths{root: row.Dir}.dataDir(), composeProjectName(id)); err != nil {
-		return nil, err
-	}
-	if err := pdb.setDraft(ctx, cfg); err != nil {
-		return nil, err
-	}
-	if err := pdb.setRevision(ctx, revision+1); err != nil {
-		return nil, err
-	}
-	return pdb.project(ctx, id, row.Dir)
-}
-
-// DiscardDraft 放弃草稿。
-func (m *Manager) DiscardDraft(ctx context.Context, id string, baseRevision int64) (*nagiv1.Project, error) {
-	row, pdb, revision, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	defer pdb.Close()
-	if err := pdb.q.DeleteDraft(ctx); err != nil {
-		return nil, err
-	}
-	if err := pdb.setRevision(ctx, revision+1); err != nil {
-		return nil, err
-	}
-	return pdb.project(ctx, id, row.Dir)
+	return row, pdb, unlock, nil
 }
 
 // ---- 删除 ----
 
-// Delete 删除项目：停止并删除容器和网络，从节点上移除记录。项目目录默认保留；
+// Delete 删除项目：停止并删除所有成员的容器和项目网络，从节点上移除记录。项目目录默认保留；
 // deleteDir 时删除整个目录（含数据和快照），confirmName 必须等于项目名。
 func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, deleteDir bool, confirmName string, onLine func(string)) error {
-	row, pdb, _, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
+	row, pdb, unlock, err := m.projectForUpdate(ctx, id)
 	if err != nil {
 		return err
 	}
 	defer unlock()
+	if err := pdb.checkRevision(ctx, baseRevision); err != nil {
+		pdb.Close()
+		return err
+	}
 	name := pdb.meta(ctx, metaName)
+	members, err := pdb.q.ListMembers(ctx)
 	pdb.Close()
+	if err != nil {
+		return err
+	}
 	if deleteDir && confirmName != name {
 		return invalid("要同时删除项目目录，请输入项目名 %s 确认", name)
 	}
 	p := paths{root: row.Dir}
-	files := composeFiles(id, p)
-	// 从未部署过的项目没有 override，也没有容器。
-	if _, err := os.Stat(p.overrideFile()); err == nil {
-		if err := compose.Down(ctx, files, deleteDir, onLine); err != nil {
+	for _, mem := range members {
+		if err := m.down(ctx, id, p, mem.Name, onLine); err != nil {
 			return err
 		}
 	}
-	if err := m.nodeQ.DeleteProject(ctx, id); err != nil {
+	_ = m.docker.RemoveNetwork(ctx, projectNetwork(id))
+	if err := m.releaseProject(ctx, id); err != nil {
 		return err
 	}
 	if deleteDir {
@@ -508,23 +510,30 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 	return nil
 }
 
+// down 停止并删除成员的容器（命名卷都绑定在成员目录里，删除卷对象不会删数据）。从未部署过的成员什么都不做。
+func (m *Manager) down(ctx context.Context, id string, p paths, member string, onLine func(string)) error {
+	mp := p.member(member)
+	if _, err := os.Stat(mp.overrideFile()); err != nil {
+		return nil
+	}
+	return compose.Down(ctx, m.composeFiles(id, p, member), true, onLine)
+}
+
 // ---- 日志 ----
 
-// Logs 读取项目的容器日志。service 为空时读取所有服务。follow 时持续输出直到 ctx 取消。
-func (m *Manager) Logs(ctx context.Context, id, service string, tail int, follow bool, onLine func(docker.LogLine)) error {
-	if _, err := m.nodeQ.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	} else if err != nil {
+// Logs 读取项目的容器日志。member、service 为空时读取全部。follow 时持续输出直到 ctx 取消。
+func (m *Manager) Logs(ctx context.Context, id, member, service string, tail int, follow bool, onLine func(docker.LogLine)) error {
+	if _, err := m.projectRow(ctx, id); err != nil {
 		return err
 	}
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return err
 	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, c := range containers {
-		if service != "" && c.Service != service {
+		if (member != "" && c.Member != member) || (service != "" && c.Service != service) {
 			continue
 		}
 		wg.Add(1)
@@ -533,6 +542,7 @@ func (m *Manager) Logs(ctx context.Context, id, service string, tail int, follow
 			_ = m.docker.Logs(ctx, c, tail, follow, func(l docker.LogLine) {
 				mu.Lock()
 				defer mu.Unlock()
+				l.Member = c.Member
 				onLine(l)
 			})
 		}(c)
@@ -546,26 +556,24 @@ func (m *Manager) Logs(ctx context.Context, id, service string, tail int, follow
 // defaultShell 优先用 bash，没有 bash 就用 sh。
 var defaultShell = []string{"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi"}
 
-// Exec 在服务正在运行的容器里打开交互式终端。
-func (m *Manager) Exec(ctx context.Context, id, service string, cmd []string, cols, rows uint) (*docker.Exec, error) {
-	if _, err := m.nodeQ.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	} else if err != nil {
+// Exec 在成员的服务正在运行的容器里打开交互式终端。单容器成员的 service 可以为空。
+func (m *Manager) Exec(ctx context.Context, id, member, service string, cmd []string, cols, rows uint) (*docker.Exec, error) {
+	if _, err := m.projectRow(ctx, id); err != nil {
 		return nil, err
 	}
-	containers, err := m.docker.ProjectContainers(ctx, composeProjectName(id))
+	containers, err := m.docker.Containers(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	for _, c := range containers {
-		if c.Service == service && c.State == "running" {
+		if c.Member == member && (service == "" || c.Service == service) && c.State == "running" {
 			if len(cmd) == 0 {
 				cmd = defaultShell
 			}
 			return m.docker.StartExec(ctx, c.ID, cmd, cols, rows)
 		}
 	}
-	return nil, invalid("服务 %s 没有正在运行的容器", service)
+	return nil, invalid("成员 %s 的服务 %s 没有正在运行的容器", member, service)
 }
 
 // ---- 工具 ----

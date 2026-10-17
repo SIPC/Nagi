@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,20 +14,57 @@ import (
 	"github.com/SIPC/nagi/internal/agent/store/projectstore"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // 项目元数据在 project.db 的 meta 表里的键。
 const (
-	metaID              = "id"
-	metaName            = "name"
-	metaRevision        = "revision"
-	metaDeployedVersion = "deployed_version"
-	metaCreatedAt       = "created_at"
-	metaWebhookToken    = "webhook_token"
-	metaLastCommit      = "last_commit"
+	metaID             = "id"
+	metaName           = "name"
+	metaRevision       = "revision" // 项目设置的修订号
+	metaCreatedAt      = "created_at"
+	metaSettings       = "settings"         // ProjectSettings（JSON），共享变量是已经部署过的那份
+	metaSharedEnvDraft = "shared_env_draft" // 共享变量的草稿（EnvList，JSON），没有草稿时为空
 )
+
+// ---- 格式版本号 ----
+
+// formatVersion 是项目目录的格式版本号，记在 config/format 里。项目目录会跟着项目在不同版本的节点之间搬，
+// 节点只打开自己认识的格式（见 docs/agent.md#项目目录）。以后改目录结构时加一，并在 openProject 里就地升级。
+const formatVersion = 1
+
+func (p paths) formatFile() string { return filepath.Join(p.configDir(), "format") }
+
+func writeFormat(p paths) error {
+	return writeFileAtomic(p.formatFile(), []byte(strconv.Itoa(formatVersion)+"\n"), 0o644)
+}
+
+// readFormat 读取目录的格式版本号，没有这个文件时返回 0（成员模型之前的旧格式）。
+func readFormat(dir string) (int, error) {
+	b, err := os.ReadFile(paths{root: dir}.formatFile())
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(b)))
+}
+
+// CheckFormat 检查项目目录（或副本）的格式本节点能不能处理。
+func CheckFormat(v int) error {
+	switch {
+	case v == 0:
+		return invalid("这是旧版本 Nagi 的项目目录格式，不再支持")
+	case v > formatVersion:
+		return invalid("项目目录的格式版本是 %d，本节点只支持到 %d，请先升级节点", v, formatVersion)
+	}
+	return nil
+}
+
+// ---- project.db ----
 
 // projectDB 是项目目录里的 config/project.db。
 type projectDB struct {
@@ -34,6 +73,13 @@ type projectDB struct {
 }
 
 func openProject(ctx context.Context, dir string) (*projectDB, error) {
+	v, err := readFormat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := CheckFormat(v); err != nil {
+		return nil, err
+	}
 	d, err := db.OpenMigrated(ctx, paths{root: dir}.projectDB(), projectstore.Migrations)
 	if err != nil {
 		return nil, err
@@ -42,6 +88,22 @@ func openProject(ctx context.Context, dir string) (*projectDB, error) {
 }
 
 func (p *projectDB) Close() error { return p.db.Close() }
+
+// snapshotDB 用 SQLite 的 VACUUM INTO 拷出一份一致的 project.db（不会拷到写了一半的内容），同步副本时用。
+func (p *projectDB) snapshotDB(ctx context.Context) ([]byte, error) {
+	f, err := os.CreateTemp("", "nagi-project-*.db")
+	if err != nil {
+		return nil, err
+	}
+	path := f.Name()
+	f.Close()
+	os.Remove(path) // VACUUM INTO 要求目标文件不存在
+	defer os.Remove(path)
+	if _, err := p.db.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
+}
 
 func (p *projectDB) meta(ctx context.Context, key string) string {
 	v, _ := p.q.GetMeta(ctx, key)
@@ -52,108 +114,198 @@ func (p *projectDB) setMeta(ctx context.Context, key, value string) error {
 	return p.q.SetMeta(ctx, projectstore.SetMetaParams{Key: key, Value: value})
 }
 
-func (p *projectDB) revision(ctx context.Context) (int64, error) {
-	v, err := p.q.GetMeta(ctx, metaRevision)
-	if err != nil {
-		return 0, err
+// checkRevision 检查项目设置的修订号。base 为 0 表示不检查。
+func (p *projectDB) checkRevision(ctx context.Context, base int64) error {
+	rev, _ := strconv.ParseInt(p.meta(ctx, metaRevision), 10, 64)
+	if base != 0 && base != rev {
+		return ErrConflict
 	}
-	return strconv.ParseInt(v, 10, 64)
+	return nil
 }
 
-func (p *projectDB) setRevision(ctx context.Context, rev int64) error {
-	return p.setMeta(ctx, metaRevision, strconv.FormatInt(rev, 10))
+func (p *projectDB) bumpRevision(ctx context.Context) error {
+	rev, _ := strconv.ParseInt(p.meta(ctx, metaRevision), 10, 64)
+	return p.setMeta(ctx, metaRevision, strconv.FormatInt(rev+1, 10))
 }
 
-func (p *projectDB) insertVersion(ctx context.Context, version int64, cfg *nagiv1.ProjectConfig) error {
-	data, err := proto.Marshal(cfg)
+func (p *projectDB) settings(ctx context.Context) *nagiv1.ProjectSettings {
+	s := &nagiv1.ProjectSettings{}
+	if raw := p.meta(ctx, metaSettings); raw != "" {
+		_ = protojson.Unmarshal([]byte(raw), s)
+	}
+	return s
+}
+
+func (p *projectDB) setSettings(ctx context.Context, s *nagiv1.ProjectSettings) error {
+	raw, err := protojson.Marshal(s)
 	if err != nil {
 		return err
 	}
-	return p.q.InsertVersion(ctx, projectstore.InsertVersionParams{
-		Version: version, Config: data, CreatedAt: time.Now().Unix(),
-	})
+	return p.setMeta(ctx, metaSettings, string(raw))
 }
 
-// latest 返回最新版本的配置和版本号。
-func (p *projectDB) latest(ctx context.Context) (*nagiv1.ProjectConfig, int64, error) {
-	v, err := p.q.LatestVersion(ctx)
+// sharedEnvDraft 返回共享变量的草稿；没有草稿时返回 nil。
+func (p *projectDB) sharedEnvDraft(ctx context.Context) *nagiv1.EnvList {
+	raw := p.meta(ctx, metaSharedEnvDraft)
+	if raw == "" {
+		return nil
+	}
+	l := &nagiv1.EnvList{}
+	if protojson.Unmarshal([]byte(raw), l) != nil {
+		return nil
+	}
+	return l
+}
+
+// ---- 成员 ----
+
+// member 返回成员记录，不存在时返回 ErrNotFound。
+func (p *projectDB) member(ctx context.Context, name string) (projectstore.Member, error) {
+	m, err := p.q.GetMember(ctx, name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return m, notFoundError{fmt.Sprintf("成员 %s 不存在", name)}
+	}
+	return m, err
+}
+
+// checkMemberRevision 检查成员的修订号。base 为 0 表示不检查。
+func checkMemberRevision(m projectstore.Member, base int64) error {
+	if base != 0 && base != m.Revision {
+		return ErrConflict
+	}
+	return nil
+}
+
+func (p *projectDB) bumpMember(ctx context.Context, m projectstore.Member) error {
+	return p.q.SetMemberRevision(ctx, projectstore.SetMemberRevisionParams{Revision: m.Revision + 1, Name: m.Name})
+}
+
+func unmarshalConfig(b []byte) (*nagiv1.MemberConfig, error) {
+	cfg := &nagiv1.MemberConfig{}
+	return cfg, proto.Unmarshal(b, cfg)
+}
+
+func unmarshalEnv(b []byte) []*nagiv1.EnvVar {
+	l := &nagiv1.EnvList{}
+	_ = proto.Unmarshal(b, l)
+	return l.GetVars()
+}
+
+// latest 返回成员最新版本的配置和版本号。
+func (p *projectDB) latest(ctx context.Context, member string) (*nagiv1.MemberConfig, int64, error) {
+	v, err := p.q.LatestVersion(ctx, member)
 	if err != nil {
 		return nil, 0, err
 	}
-	cfg := &nagiv1.ProjectConfig{}
-	if err := proto.Unmarshal(v.Config, cfg); err != nil {
-		return nil, 0, err
-	}
-	return cfg, v.Version, nil
+	cfg, err := unmarshalConfig(v.Config)
+	return cfg, v.Version, err
 }
 
-// deployed 返回最近一次部署的版本的配置；从未部署时返回 nil。
-func (p *projectDB) deployed(ctx context.Context) (*nagiv1.ProjectConfig, error) {
-	n, _ := strconv.ParseInt(p.meta(ctx, metaDeployedVersion), 10, 64)
-	if n == 0 {
+// deployed 返回成员最近一次部署的版本；从未部署时返回 nil。
+func (p *projectDB) deployed(ctx context.Context, m projectstore.Member) (*projectstore.Version, error) {
+	if m.DeployedVersion == 0 {
 		return nil, nil
 	}
-	v, err := p.q.GetVersion(ctx, n)
+	v, err := p.q.GetVersion(ctx, projectstore.GetVersionParams{Member: m.Name, Version: m.DeployedVersion})
 	if err != nil {
 		return nil, err
 	}
-	cfg := &nagiv1.ProjectConfig{}
-	return cfg, proto.Unmarshal(v.Config, cfg)
+	return &v, nil
 }
 
-// draft 返回草稿；没有草稿时返回 nil。
-func (p *projectDB) draft(ctx context.Context) (*nagiv1.ProjectConfig, error) {
-	d, err := p.q.GetDraft(ctx)
+// current 返回成员当前的配置：部署过的版本，没部署过时用最新版本。
+func (p *projectDB) current(ctx context.Context, m projectstore.Member) (*nagiv1.MemberConfig, error) {
+	if v, err := p.deployed(ctx, m); err == nil && v != nil {
+		return unmarshalConfig(v.Config)
+	}
+	cfg, _, err := p.latest(ctx, m.Name)
+	return cfg, err
+}
+
+// draft 返回成员的草稿；没有草稿时返回 nil。
+func (p *projectDB) draft(ctx context.Context, member string) (*nagiv1.MemberConfig, error) {
+	d, err := p.q.GetDraft(ctx, member)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	cfg := &nagiv1.ProjectConfig{}
-	return cfg, proto.Unmarshal(d.Config, cfg)
+	return unmarshalConfig(d.Config)
 }
 
-func (p *projectDB) setDraft(ctx context.Context, cfg *nagiv1.ProjectConfig) error {
+func (p *projectDB) setDraft(ctx context.Context, member string, cfg *nagiv1.MemberConfig) error {
 	data, err := proto.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return p.q.SetDraft(ctx, projectstore.SetDraftParams{Config: data, UpdatedAt: time.Now().Unix()})
+	return p.q.SetDraft(ctx, projectstore.SetDraftParams{Member: member, Config: data, UpdatedAt: time.Now().Unix()})
 }
 
-// project 组装对外的项目信息：元数据、最新版本的配置、草稿。
+// ---- 组装 ----
+
+// project 组装对外的项目信息：元数据、设置、成员（最新版本的配置和草稿）、映射。
 func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Project, error) {
-	cfg, version, err := p.latest(ctx)
-	if err != nil {
-		return nil, err
-	}
-	draft, err := p.draft(ctx)
+	rows, err := p.q.ListMembers(ctx)
 	if err != nil {
 		return nil, err
 	}
 	revision, _ := strconv.ParseInt(p.meta(ctx, metaRevision), 10, 64)
-	deployed, _ := strconv.ParseInt(p.meta(ctx, metaDeployedVersion), 10, 64)
 	created, _ := strconv.ParseInt(p.meta(ctx, metaCreatedAt), 10, 64)
-	return &nagiv1.Project{
-		Id:              id,
-		Name:            p.meta(ctx, metaName),
-		Dir:             dir,
-		Revision:        revision,
-		LatestVersion:   version,
-		DeployedVersion: deployed,
-		CreatedAt:       timestamppb.New(time.Unix(created, 0)),
-		Config:          cfg,
-		HasDraft:        draft != nil,
-		Draft:           draft,
-		DeployKey:       readDeployKey(paths{root: dir}),
-		WebhookToken:    p.meta(ctx, metaWebhookToken),
-		LastCommit:      p.meta(ctx, metaLastCommit),
-		Routes:          readRoutes(paths{root: dir}),
-	}, nil
+	settings := p.settings(ctx)
+	pp := paths{root: dir}
+	proj := &nagiv1.Project{
+		Id:        id,
+		Name:      p.meta(ctx, metaName),
+		Dir:       dir,
+		Revision:  revision,
+		CreatedAt: timestamppb.New(time.Unix(created, 0)),
+		Settings:  settings,
+	}
+	if d := p.sharedEnvDraft(ctx); d != nil {
+		proj.HasSharedEnvDraft, proj.SharedEnvDraft = true, d.GetVars()
+	}
+	names := map[string]bool{}
+	for _, r := range rows {
+		names[r.Name] = true
+		cfg, version, err := p.latest(ctx, r.Name)
+		if err != nil {
+			return nil, err
+		}
+		draft, err := p.draft(ctx, r.Name)
+		if err != nil {
+			return nil, err
+		}
+		mp := pp.member(r.Name)
+		mem := &nagiv1.Member{
+			Name:            r.Name,
+			Revision:        r.Revision,
+			LatestVersion:   version,
+			DeployedVersion: r.DeployedVersion,
+			CreatedAt:       timestamppb.New(time.Unix(r.CreatedAt, 0)),
+			Config:          cfg,
+			HasDraft:        draft != nil,
+			Draft:           draft,
+			DeployKey:       readDeployKey(mp),
+			WebhookToken:    r.WebhookToken,
+			LastCommit:      r.LastCommit,
+		}
+		if cp, err := loadMember(ctx, cfg, r.Name, settings.GetSharedEnv(), mp.dataDir(), composeProjectName(id, r.Name)); err == nil {
+			mem.Stateful = isStateful(cfg, cp, preservePaths(cfg, cp, mp.dataDir()))
+		}
+		if v, err := p.deployed(ctx, r); err == nil && v != nil {
+			if dcfg, err := unmarshalConfig(v.Config); err == nil {
+				mem.SharedEnvOutdated = sharedEnvChanged(dcfg, r.Name, unmarshalEnv(v.SharedEnv), settings.GetSharedEnv())
+			}
+		}
+		proj.Stateful = proj.Stateful || mem.Stateful
+		proj.Members = append(proj.Members, mem)
+	}
+	proj.Routes = readRoutes(pp, names)
+	return proj, nil
 }
 
-func readDeployKey(p paths) string {
+func readDeployKey(p memberPaths) string {
 	b, err := os.ReadFile(p.deployKeyPub())
 	if err != nil {
 		return ""

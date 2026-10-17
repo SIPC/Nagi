@@ -143,7 +143,27 @@ func Run(ctx context.Context, cfg Config) error {
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 
-	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
+	// 容器有变化时上报状态；容器重建后要重新接入项目内网和共享网络（见 project/network.go）。
+	netSync := make(chan struct{}, 1)
+	go dc.WatchProjects(ctx, project.LabelProject, func() {
+		a.changed()
+		select {
+		case netSync <- struct{}{}:
+		default:
+		}
+	})
+	go func() {
+		projects.SyncAllNetworks(ctx)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-netSync:
+				time.Sleep(time.Second) // 一次部署会连续产生很多事件，攒一下再处理
+				projects.SyncAllNetworks(ctx)
+			}
+		}
+	}()
 	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	if !cfg.DisableProxy {

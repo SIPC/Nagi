@@ -240,10 +240,19 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 			}
 		}
 	}
-	if hooks, err := p.r.q.ListWebhookProjects(ctx, p.conn.NodeID); err == nil {
-		for _, id := range hooks {
-			if !reported[id] {
-				_ = p.r.q.DeleteProjectWebhook(ctx, store.DeleteProjectWebhookParams{NodeID: p.conn.NodeID, ProjectID: id})
+	// 每个成员一个 webhook。节点上已经没有的项目或成员，令牌一并删掉。
+	tokens := map[string]bool{}
+	for _, s := range req.GetProjects() {
+		for _, m := range s.GetProject().GetMembers() {
+			if t := m.GetWebhookToken(); t != "" {
+				tokens[hashToken(t)] = true
+			}
+		}
+	}
+	if hooks, err := p.r.q.ListNodeWebhooks(ctx, p.conn.NodeID); err == nil {
+		for _, h := range hooks {
+			if !tokens[h.TokenHash] {
+				_ = p.r.q.DeleteWebhook(ctx, h.TokenHash)
 			}
 		}
 	}
@@ -260,11 +269,16 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		if err != nil {
 			continue
 		}
-		if t := proj.GetWebhookToken(); t != "" {
+		for _, m := range proj.GetMembers() {
+			t := m.GetWebhookToken()
+			if t == "" {
+				continue
+			}
+			// 令牌跟着项目走（顶替、迁移后不变），所以按令牌登记：项目换了节点，地址照常能用。
 			if err := p.r.q.UpsertWebhook(ctx, store.UpsertWebhookParams{
-				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(),
+				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Member: m.GetName(),
 			}); err != nil {
-				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
+				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "member", m.GetName(), "err", err)
 			}
 		}
 		var key []byte

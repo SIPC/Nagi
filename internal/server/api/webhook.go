@@ -55,7 +55,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "节点不在线", http.StatusServiceUnavailable)
 		return
 	}
-	key := hook.NodeID + "/" + hook.ProjectID
+	key := hook.NodeID + "/" + hook.ProjectID + "/" + hook.Member
 	h.mu.Lock()
 	if h.running[key] {
 		h.again[key] = true
@@ -73,7 +73,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *webhooks) deployLoop(hook store.Webhook) {
-	key := hook.NodeID + "/" + hook.ProjectID
+	key := hook.NodeID + "/" + hook.ProjectID + "/" + hook.Member
 	for {
 		h.deploy(hook)
 		h.mu.Lock()
@@ -88,7 +88,7 @@ func (h *webhooks) deployLoop(hook store.Webhook) {
 }
 
 func (h *webhooks) deploy(hook store.Webhook) {
-	log := h.api.Log.With("node", hook.NodeID, "project", hook.ProjectID)
+	log := h.api.Log.With("node", hook.NodeID, "project", hook.ProjectID, "member", hook.Member)
 	conn, err := h.api.Nodes.Get(hook.NodeID)
 	if err != nil {
 		log.Warn("webhook 部署失败：节点不在线")
@@ -96,7 +96,9 @@ func (h *webhooks) deploy(hook store.Webhook) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	stream, err := conn.Agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{Id: hook.ProjectID, Pull: true})
+	stream, err := conn.Agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{
+		Id: hook.ProjectID, Pull: true, Source: "git", Targets: []*nagiv1.DeployTarget{{Member: hook.Member}},
+	})
 	if err != nil {
 		log.Warn("webhook 部署失败", "err", err)
 		return

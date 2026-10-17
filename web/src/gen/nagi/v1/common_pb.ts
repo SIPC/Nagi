@@ -12,10 +12,10 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIi6gEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXISEQoJbWVtb3J5X21iGAcgASgNEgwKBGNwdXMYCCABKAESFgoOaGVhbHRoX2NvbW1hbmQYCSABKAkSHwoXaGVhbHRoX2ludGVydmFsX3NlY29uZHMYCiABKA0iQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkinQEKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMSKwoNaW1hZ2VfdXBkYXRlcxgCIAMoCzIULm5hZ2kudjEuSW1hZ2VVcGRhdGUSNQoRaW1hZ2VzX2NoZWNrZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlwKC0ltYWdlVXBkYXRlEg8KB3NlcnZpY2UYASABKAkSDQoFaW1hZ2UYAiABKAkSFgoOY3VycmVudF9kaWdlc3QYAyABKAkSFQoNbGF0ZXN0X2RpZ2VzdBgEIAEoCSJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyKKAQoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCRIQCghlbWJlZGRlZBgHIAEoCCJiCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoLRGVwbG95RXZlbnQSEAoGb3V0cHV0GAEgASgJSAASJwoGcmVzdWx0GAIgASgLMhUubmFnaS52MS5EZXBsb3lSZXN1bHRIAEIHCgVldmVudCI/CgxEZXBsb3lSZXN1bHQSDwoHc3VjY2VzcxgBIAEoCBINCgVlcnJvchgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDIjsKDE1ldHJpY1NlcmllcxIMCgRuYW1lGAEgASgJEg0KBXRpbWVzGAIgAygDEg4KBnZhbHVlcxgDIAMoASJ1CgxBbGVydENoYW5uZWwSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIMCgR0eXBlGAMgASgJEgsKA3VybBgEIAEoCRIWCg50ZWxlZ3JhbV90b2tlbhgFIAEoCRIYChB0ZWxlZ3JhbV9jaGF0X2lkGAYgASgJIr8BCgpBbGVydFJ1bGVzEhQKDGRpc2tfcGVyY2VudBgBIAEoDRITCgttZW1fcGVyY2VudBgCIAEoDRITCgttZW1fbWludXRlcxgDIAEoDRIVCg1yZXN0YXJ0X2NvdW50GAQgASgNEhcKD3Jlc3RhcnRfbWludXRlcxgFIAEoDRIRCgljZXJ0X2RheXMYBiABKA0SFwoPb2ZmbGluZV9zZWNvbmRzGAcgASgNEhUKDWVycm9yX3BlcmNlbnQYCCABKA0iWgoLQWxlcnRDb25maWcSJwoIY2hhbm5lbHMYASADKAsyFS5uYWdpLnYxLkFsZXJ0Q2hhbm5lbBIiCgVydWxlcxgCIAEoCzITLm5hZ2kudjEuQWxlcnRSdWxlcyKNAQoFQWxlcnQSCwoDa2V5GAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgV0aXRsZRgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEgwKBG5vZGUYBSABKAkSDwoHcHJvamVjdBgGIAEoCRIoCgR0aW1lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJYCgxUcnVzdGVkUGFuZWwSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCRIRCgljb25uZWN0ZWQYAyABKAgSDwoHaXNfc2VsZhgEIAEoCCJiCghNZXNoUGVlchISCgpwdWJsaWNfa2V5GAEgASgMEhEKCWVuZHBvaW50cxgCIAMoCRIMCgRuYW1lGAMgASgJEg8KB25vZGVfaWQYBCABKAkSEAoIaXNfcGFuZWwYBSABKAgi2AEKDk1lc2hQZWVyU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDAoEbmFtZRgCIAEoCRIPCgdhZGRyZXNzGAMgASgJEgwKBHBhdGgYBCABKAkSEAoIZW5kcG9pbnQYBSABKAkSCwoDdmlhGAYgASgJEg4KBnJ0dF9tcxgHIAEoARIyCg5sYXN0X2hhbmRzaGFrZRgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIcnhfYnl0ZXMYCSABKAQSEAoIdHhfYnl0ZXMYCiABKAQiegoKTWVzaFN0YXR1cxISCgpwdWJsaWNfa2V5GAEgASgMEg8KB2FkZHJlc3MYAiABKAkSDAoEcG9ydBgDIAEoDRIRCgllbmRwb2ludHMYBCADKAkSJgoFcGVlcnMYBSADKAsyFy5uYWdpLnYxLk1lc2hQZWVyU3RhdHVzIiUKD01lc2hQaW5nUmVxdWVzdBISCgpwdWJsaWNfa2V5GAEgASgMIiIKEE1lc2hQaW5nUmVzcG9uc2USDgoGcnR0X21zGAEgASgBIo8BCgxCYWNrdXBTdGF0dXMSFgoOdGFyZ2V0X25vZGVfaWQYASABKAkSEwoLdGFyZ2V0X25hbWUYAiABKAkSLQoJbGFzdF9zeW5jGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpsYXN0X2Vycm9yGAQgASgJEg8KB3N5bmNpbmcYBSABKAgingEKB1JlcGxpY2ESEgoKcHJvamVjdF9pZBgBIAEoCRIUCgxwcm9qZWN0X25hbWUYAiABKAkSFgoOc291cmNlX25vZGVfaWQYAyABKAkSEwoLc291cmNlX25hbWUYBCABKAkSLQoJbGFzdF9zeW5jGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgVieXRlcxgGIAEoAyJJCg5GYWlsb3Zlck1lbWJlchILCgNrZXkYASABKAwSDwoHbm9kZV9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEgsKA2RpchgEIAEoCSL0AQoORmFpbG92ZXJDb25maWcSEgoKcHJvamVjdF9pZBgBIAEoCRIUCgxwcm9qZWN0X25hbWUYAiABKAkSIgoBYRgDIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJNZW1iZXISIgoBYhgEIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJNZW1iZXISKAoHd2l0bmVzcxgFIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJNZW1iZXISGAoQd2l0bmVzc19pc19wYW5lbBgGIAEoCBIVCg1sZWFzZV9zZWNvbmRzGAcgASgNEhUKDWF1dG9fc3RhdGVmdWwYCCABKAgi9QEKDkZhaWxvdmVyU3RhdHVzEicKBmNvbmZpZxgBIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJDb25maWcSDAoEcm9sZRgCIAEoCRITCgtob2xkZXJfbmFtZRgDIAEoCRINCgVlcG9jaBgEIAEoBBIaChJsZWFzZV9yZW1haW5pbmdfbXMYBSABKAMSFwoPcGVuZGluZ19jb25maXJtGAYgASgIEi0KCWxhc3Rfc3luYxgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKbGFzdF9lcnJvchgIIAEoCRIQCghzdGF0ZWZ1bBgJIAEoCCpACghTdGF0ZWZ1bBIRCg1TVEFURUZVTF9BVVRPEAASEAoMU1RBVEVGVUxfWUVTEAESDwoLU1RBVEVGVUxfTk8QAkI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSL0AgoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIuCgpjcmVhdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIhCgZyb3V0ZXMYDyADKAsyES5uYWdpLnYxLkV4cG9zdXJlEhAKCHN0YXRlZnVsGBAgASgIEiAKB21lbWJlcnMYESADKAsyDy5uYWdpLnYxLk1lbWJlchIqCghzZXR0aW5ncxgSIAEoCzIYLm5hZ2kudjEuUHJvamVjdFNldHRpbmdzEhwKFGhhc19zaGFyZWRfZW52X2RyYWZ0GBMgASgIEikKEHNoYXJlZF9lbnZfZHJhZnQYFCADKAsyDy5uYWdpLnYxLkVudlZhckoECAUQBkoECAYQB0oECAcQCEoECAkQCkoECAoQC0oECAsQDEoECAwQDUoECA0QDkoECA4QDyKjAQoPUHJvamVjdFNldHRpbmdzEiMKCnNoYXJlZF9lbnYYASADKAsyDy5uYWdpLnYxLkVudlZhchIZChFpbnRyYW5ldF9kaXNhYmxlZBgCIAEoCBIUCgxuZXR3b3JrX25hbWUYAyABKAkSFwoPc2hhcmVkX25ldHdvcmtzGAQgAygJEiEKGXNuYXBzaG90X2ludGVydmFsX21pbnV0ZXMYBSABKA0i2QIKBk1lbWJlchIMCgRuYW1lGAEgASgJEhAKCHJldmlzaW9uGAIgASgDEhYKDmxhdGVzdF92ZXJzaW9uGAMgASgDEhgKEGRlcGxveWVkX3ZlcnNpb24YBCABKAMSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJQoGY29uZmlnGAYgASgLMhUubmFnaS52MS5NZW1iZXJDb25maWcSEQoJaGFzX2RyYWZ0GAcgASgIEiQKBWRyYWZ0GAggASgLMhUubmFnaS52MS5NZW1iZXJDb25maWcSEgoKZGVwbG95X2tleRgJIAEoCRIVCg13ZWJob29rX3Rva2VuGAogASgJEhMKC2xhc3RfY29tbWl0GAsgASgJEhAKCHN0YXRlZnVsGAwgASgIEhsKE3NoYXJlZF9lbnZfb3V0ZGF0ZWQYDSABKAgi2AIKDE1lbWJlckNvbmZpZxIPCgdjb21wb3NlGAEgASgJEhwKA2VudhgCIAMoCzIPLm5hZ2kudjEuRW52VmFyEjoKC3NlcnZpY2VfZW52GAMgAygLMiUubmFnaS52MS5NZW1iZXJDb25maWcuU2VydmljZUVudkVudHJ5EiAKBGZvcm0YBCABKAsyEi5uYWdpLnYxLkltYWdlRm9ybRIfCgZzb3VyY2UYBiABKAsyDy5uYWdpLnYxLlNvdXJjZRIQCghwcmVzZXJ2ZRgHIAMoCRIjCghzdGF0ZWZ1bBgIIAEoDjIRLm5hZ2kudjEuU3RhdGVmdWwSEgoKZGVwZW5kc19vbhgKIAMoCRpDCg9TZXJ2aWNlRW52RW50cnkSCwoDa2V5GAEgASgJEh8KBXZhbHVlGAIgASgLMhAubmFnaS52MS5FbnZMaXN0OgI4AUoECAUQBkoECAkQCiKgAgoHVmVyc2lvbhIPCgd2ZXJzaW9uGAEgASgDEi4KCmNyZWF0ZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2RlcGxveWVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIsCgZpbWFnZXMYBCADKAsyHC5uYWdpLnYxLlZlcnNpb24uSW1hZ2VzRW50cnkSEQoJaGFzX2ZpbGVzGAUgASgIEhMKC3JvbGxiYWNrX29mGAYgASgDEg4KBmNvbW1pdBgHIAEoCRIOCgZtZW1iZXIYCCABKAkaLQoLSW1hZ2VzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASL9AQoKRGVwbG95bWVudBIKCgJpZBgBIAEoAxIoCgR0aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZzb3VyY2UYAyABKAkSDwoHbWVtYmVycxgEIAMoCRIzCgh2ZXJzaW9ucxgFIAMoCzIhLm5hZ2kudjEuRGVwbG95bWVudC5WZXJzaW9uc0VudHJ5Eg8KB3N1Y2Nlc3MYBiABKAgSDQoFZXJyb3IYByABKAkSEgoKcmVzdG9yZV9vZhgIIAEoAxovCg1WZXJzaW9uc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoAzoCOAEiXgoNU2hhcmVkTmV0d29yaxIMCgRuYW1lGAEgASgJEg4KBnN1Ym5ldBgCIAEoCRIvCghwcm9qZWN0cxgDIAMoCzIdLm5hZ2kudjEuU2hhcmVkTmV0d29ya1Byb2plY3QiVgoUU2hhcmVkTmV0d29ya1Byb2plY3QSEgoKcHJvamVjdF9pZBgBIAEoCRIUCgxwcm9qZWN0X25hbWUYAiABKAkSFAoMbmV0d29ya19uYW1lGAMgASgJIn0KCFNuYXBzaG90EgoKAmlkGAEgASgJEgwKBGtpbmQYAiABKAkSKAoEdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEc2l6ZRgEIAEoAxIPCgd2ZXJzaW9uGAUgASgDEg4KBm1lbWJlchgGIAEoCSIqCgZTb3VyY2USDwoHZ2l0X3VybBgBIAEoCRIPCgdnaXRfcmVmGAIgASgJIqEBCghFeHBvc3VyZRIPCgdzZXJ2aWNlGAEgASgJEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCRIRCglwdWJsaXNoZWQYBCABKA0SDwoHZG9tYWlucxgFIAMoCRIRCglodHRwX29ubHkYBiABKAgSDAoEbmFtZRgHIAEoCRINCgVlcnJvchgIIAEoCRIOCgZtZW1iZXIYCSABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIi6gEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXISEQoJbWVtb3J5X21iGAcgASgNEgwKBGNwdXMYCCABKAESFgoOaGVhbHRoX2NvbW1hbmQYCSABKAkSHwoXaGVhbHRoX2ludGVydmFsX3NlY29uZHMYCiABKA0iQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSKBAQoNU2VydmljZVN0YXR1cxIMCgRuYW1lGAEgASgJEhQKDGNvbnRhaW5lcl9pZBgCIAEoCRINCgVpbWFnZRgDIAEoCRINCgVzdGF0ZRgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDgoGaGVhbHRoGAYgASgJEg4KBm1lbWJlchgHIAEoCSKdAQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cxIrCg1pbWFnZV91cGRhdGVzGAIgAygLMhQubmFnaS52MS5JbWFnZVVwZGF0ZRI1ChFpbWFnZXNfY2hlY2tlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAibAoLSW1hZ2VVcGRhdGUSDwoHc2VydmljZRgBIAEoCRINCgVpbWFnZRgCIAEoCRIWCg5jdXJyZW50X2RpZ2VzdBgDIAEoCRIVCg1sYXRlc3RfZGlnZXN0GAQgASgJEg4KBm1lbWJlchgFIAEoCSJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyKKAQoITm9kZUluZm8SEAoIaG9zdG5hbWUYASABKAkSCgoCb3MYAiABKAkSDAoEYXJjaBgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEhYKDmRvY2tlcl92ZXJzaW9uGAUgASgJEhcKD2NvbXBvc2VfdmVyc2lvbhgGIAEoCRIQCghlbWJlZGRlZBgHIAEoCCJyCgdMb2dMaW5lEg8KB3NlcnZpY2UYASABKAkSDgoGc3RyZWFtGAIgASgJEgwKBHRleHQYAyABKAkSKAoEdGltZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGbWVtYmVyGAUgASgJIlEKC0RlcGxveUV2ZW50EhAKBm91dHB1dBgBIAEoCUgAEicKBnJlc3VsdBgCIAEoCzIVLm5hZ2kudjEuRGVwbG95UmVzdWx0SABCBwoFZXZlbnQiPwoMRGVwbG95UmVzdWx0Eg8KB3N1Y2Nlc3MYASABKAgSDQoFZXJyb3IYAiABKAkSDwoHdmVyc2lvbhgDIAEoAyI7CgxNZXRyaWNTZXJpZXMSDAoEbmFtZRgBIAEoCRINCgV0aW1lcxgCIAMoAxIOCgZ2YWx1ZXMYAyADKAEidQoMQWxlcnRDaGFubmVsEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEdHlwZRgDIAEoCRILCgN1cmwYBCABKAkSFgoOdGVsZWdyYW1fdG9rZW4YBSABKAkSGAoQdGVsZWdyYW1fY2hhdF9pZBgGIAEoCSK/AQoKQWxlcnRSdWxlcxIUCgxkaXNrX3BlcmNlbnQYASABKA0SEwoLbWVtX3BlcmNlbnQYAiABKA0SEwoLbWVtX21pbnV0ZXMYAyABKA0SFQoNcmVzdGFydF9jb3VudBgEIAEoDRIXCg9yZXN0YXJ0X21pbnV0ZXMYBSABKA0SEQoJY2VydF9kYXlzGAYgASgNEhcKD29mZmxpbmVfc2Vjb25kcxgHIAEoDRIVCg1lcnJvcl9wZXJjZW50GAggASgNIloKC0FsZXJ0Q29uZmlnEicKCGNoYW5uZWxzGAEgAygLMhUubmFnaS52MS5BbGVydENoYW5uZWwSIgoFcnVsZXMYAiABKAsyEy5uYWdpLnYxLkFsZXJ0UnVsZXMijQEKBUFsZXJ0EgsKA2tleRgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFdGl0bGUYAyABKAkSDwoHbWVzc2FnZRgEIAEoCRIMCgRub2RlGAUgASgJEg8KB3Byb2plY3QYBiABKAkSKAoEdGltZRgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWAoMVHJ1c3RlZFBhbmVsEg8KB2FkZHJlc3MYASABKAkSEwoLZmluZ2VycHJpbnQYAiABKAkSEQoJY29ubmVjdGVkGAMgASgIEg8KB2lzX3NlbGYYBCABKAgiYgoITWVzaFBlZXISEgoKcHVibGljX2tleRgBIAEoDBIRCgllbmRwb2ludHMYAiADKAkSDAoEbmFtZRgDIAEoCRIPCgdub2RlX2lkGAQgASgJEhAKCGlzX3BhbmVsGAUgASgIItgBCg5NZXNoUGVlclN0YXR1cxISCgpwdWJsaWNfa2V5GAEgASgMEgwKBG5hbWUYAiABKAkSDwoHYWRkcmVzcxgDIAEoCRIMCgRwYXRoGAQgASgJEhAKCGVuZHBvaW50GAUgASgJEgsKA3ZpYRgGIAEoCRIOCgZydHRfbXMYByABKAESMgoObGFzdF9oYW5kc2hha2UYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhAKCHJ4X2J5dGVzGAkgASgEEhAKCHR4X2J5dGVzGAogASgEInoKCk1lc2hTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIPCgdhZGRyZXNzGAIgASgJEgwKBHBvcnQYAyABKA0SEQoJZW5kcG9pbnRzGAQgAygJEiYKBXBlZXJzGAUgAygLMhcubmFnaS52MS5NZXNoUGVlclN0YXR1cyIlCg9NZXNoUGluZ1JlcXVlc3QSEgoKcHVibGljX2tleRgBIAEoDCIiChBNZXNoUGluZ1Jlc3BvbnNlEg4KBnJ0dF9tcxgBIAEoASKPAQoMQmFja3VwU3RhdHVzEhYKDnRhcmdldF9ub2RlX2lkGAEgASgJEhMKC3RhcmdldF9uYW1lGAIgASgJEi0KCWxhc3Rfc3luYxgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKbGFzdF9lcnJvchgEIAEoCRIPCgdzeW5jaW5nGAUgASgIIp4BCgdSZXBsaWNhEhIKCnByb2plY3RfaWQYASABKAkSFAoMcHJvamVjdF9uYW1lGAIgASgJEhYKDnNvdXJjZV9ub2RlX2lkGAMgASgJEhMKC3NvdXJjZV9uYW1lGAQgASgJEi0KCWxhc3Rfc3luYxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFYnl0ZXMYBiABKAMiSQoORmFpbG92ZXJNZW1iZXISCwoDa2V5GAEgASgMEg8KB25vZGVfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRILCgNkaXIYBCABKAki9AEKDkZhaWxvdmVyQ29uZmlnEhIKCnByb2plY3RfaWQYASABKAkSFAoMcHJvamVjdF9uYW1lGAIgASgJEiIKAWEYAyABKAsyFy5uYWdpLnYxLkZhaWxvdmVyTWVtYmVyEiIKAWIYBCABKAsyFy5uYWdpLnYxLkZhaWxvdmVyTWVtYmVyEigKB3dpdG5lc3MYBSABKAsyFy5uYWdpLnYxLkZhaWxvdmVyTWVtYmVyEhgKEHdpdG5lc3NfaXNfcGFuZWwYBiABKAgSFQoNbGVhc2Vfc2Vjb25kcxgHIAEoDRIVCg1hdXRvX3N0YXRlZnVsGAggASgIIvUBCg5GYWlsb3ZlclN0YXR1cxInCgZjb25maWcYASABKAsyFy5uYWdpLnYxLkZhaWxvdmVyQ29uZmlnEgwKBHJvbGUYAiABKAkSEwoLaG9sZGVyX25hbWUYAyABKAkSDQoFZXBvY2gYBCABKAQSGgoSbGVhc2VfcmVtYWluaW5nX21zGAUgASgDEhcKD3BlbmRpbmdfY29uZmlybRgGIAEoCBItCglsYXN0X3N5bmMYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhIKCmxhc3RfZXJyb3IYCCABKAkSEAoIc3RhdGVmdWwYCSABKAgqQAoIU3RhdGVmdWwSEQoNU1RBVEVGVUxfQVVUTxAAEhAKDFNUQVRFRlVMX1lFUxABEg8KC1NUQVRFRlVMX05PEAJCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
- * Project 是节点上保存的项目。项目数据以节点为准。
+ * Project 是节点上保存的项目：一组一起工作的成员，共用项目目录和内网。项目数据以节点为准。
  *
  * @generated from message nagi.v1.Project
  */
@@ -42,72 +42,17 @@ export type Project = Message<"nagi.v1.Project"> & {
   dir: string;
 
   /**
-   * 修订号：每次保存草稿或部署都加一，用于多面板冲突检测。
+   * 项目设置的修订号：修改名称、共享变量（草稿）、内网、共享网络时加一，用于多面板冲突检测。
+   * 成员有自己的修订号（Member.revision）。
    *
    * @generated from field: int64 revision = 4;
    */
   revision: bigint;
 
   /**
-   * 最新版本号。
-   *
-   * @generated from field: int64 latest_version = 5;
-   */
-  latestVersion: bigint;
-
-  /**
-   * 最近一次部署的版本号，0 表示从未部署。
-   *
-   * @generated from field: int64 deployed_version = 6;
-   */
-  deployedVersion: bigint;
-
-  /**
    * @generated from field: google.protobuf.Timestamp created_at = 8;
    */
   createdAt?: Timestamp | undefined;
-
-  /**
-   * 最新版本的配置。
-   *
-   * @generated from field: nagi.v1.ProjectConfig config = 9;
-   */
-  config?: ProjectConfig | undefined;
-
-  /**
-   * 是否有未部署的草稿。
-   *
-   * @generated from field: bool has_draft = 10;
-   */
-  hasDraft: boolean;
-
-  /**
-   * 草稿内容，has_draft 为 false 时为空。
-   *
-   * @generated from field: nagi.v1.ProjectConfig draft = 11;
-   */
-  draft?: ProjectConfig | undefined;
-
-  /**
-   * 项目的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
-   *
-   * @generated from field: string deploy_key = 12;
-   */
-  deployKey: string;
-
-  /**
-   * webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署。
-   *
-   * @generated from field: string webhook_token = 13;
-   */
-  webhookToken: string;
-
-  /**
-   * 最近一次拉取到的 git 提交。
-   *
-   * @generated from field: string last_commit = 14;
-   */
-  lastCommit: string;
 
   /**
    * 端口映射（config/routes/ 下的文件）。
@@ -117,11 +62,37 @@ export type Project = Message<"nagi.v1.Project"> & {
   routes: Exposure[];
 
   /**
-   * 实际判定的是否有状态（自动判断或用户指定）。
+   * 项目是否有状态：只要有一个成员有状态就算。
    *
    * @generated from field: bool stateful = 16;
    */
   stateful: boolean;
+
+  /**
+   * 成员，按创建顺序。
+   *
+   * @generated from field: repeated nagi.v1.Member members = 17;
+   */
+  members: Member[];
+
+  /**
+   * 项目设置（共享变量是已经部署过的那份）。
+   *
+   * @generated from field: nagi.v1.ProjectSettings settings = 18;
+   */
+  settings?: ProjectSettings | undefined;
+
+  /**
+   * 共享变量是否有没部署的草稿。
+   *
+   * @generated from field: bool has_shared_env_draft = 19;
+   */
+  hasSharedEnvDraft: boolean;
+
+  /**
+   * @generated from field: repeated nagi.v1.EnvVar shared_env_draft = 20;
+   */
+  sharedEnvDraft: EnvVar[];
 };
 
 /**
@@ -132,20 +103,170 @@ export const ProjectSchema: GenMessage<Project> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 0);
 
 /**
- * ProjectConfig 是一个版本的完整配置。
+ * ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进成员的版本。
  *
- * @generated from message nagi.v1.ProjectConfig
+ * @generated from message nagi.v1.ProjectSettings
  */
-export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
+export type ProjectSettings = Message<"nagi.v1.ProjectSettings"> & {
   /**
-   * compose 原文。用镜像表单创建的项目，由表单生成。
+   * 共享变量：所有成员的 compose 里都能用 ${变量} 引用，同名时以成员自己的变量为准。
+   *
+   * @generated from field: repeated nagi.v1.EnvVar shared_env = 1;
+   */
+  sharedEnv: EnvVar[];
+
+  /**
+   * 关闭项目内网（默认开启：成员之间用"成员名"或"服务.成员"互相访问）。
+   *
+   * @generated from field: bool intranet_disabled = 2;
+   */
+  intranetDisabled: boolean;
+
+  /**
+   * 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。成员在共享网络里的名字是"成员.网络名"。
+   *
+   * @generated from field: string network_name = 3;
+   */
+  networkName: string;
+
+  /**
+   * 加入的共享网络。
+   *
+   * @generated from field: repeated string shared_networks = 4;
+   */
+  sharedNetworks: string[];
+
+  /**
+   * 定时快照间隔（分钟），0 表示默认（60 分钟）。
+   *
+   * @generated from field: uint32 snapshot_interval_minutes = 5;
+   */
+  snapshotIntervalMinutes: number;
+};
+
+/**
+ * Describes the message nagi.v1.ProjectSettings.
+ * Use `create(ProjectSettingsSchema)` to create a new message.
+ */
+export const ProjectSettingsSchema: GenMessage<ProjectSettings> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 1);
+
+/**
+ * Member 是项目里独立部署的单位：单容器（镜像表单）或一份 compose。
+ *
+ * @generated from message nagi.v1.Member
+ */
+export type Member = Message<"nagi.v1.Member"> & {
+  /**
+   * 成员名，项目内唯一，创建后不能改。小写字母、数字和 -。
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * 修订号：保存这个成员的草稿或部署它时加一。
+   *
+   * @generated from field: int64 revision = 2;
+   */
+  revision: bigint;
+
+  /**
+   * 最新版本号。
+   *
+   * @generated from field: int64 latest_version = 3;
+   */
+  latestVersion: bigint;
+
+  /**
+   * 最近一次部署的版本号，0 表示从未部署。
+   *
+   * @generated from field: int64 deployed_version = 4;
+   */
+  deployedVersion: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 5;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * 最新版本的配置。
+   *
+   * @generated from field: nagi.v1.MemberConfig config = 6;
+   */
+  config?: MemberConfig | undefined;
+
+  /**
+   * @generated from field: bool has_draft = 7;
+   */
+  hasDraft: boolean;
+
+  /**
+   * 草稿内容，has_draft 为 false 时为空。
+   *
+   * @generated from field: nagi.v1.MemberConfig draft = 8;
+   */
+  draft?: MemberConfig | undefined;
+
+  /**
+   * 这个成员的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
+   *
+   * @generated from field: string deploy_key = 9;
+   */
+  deployKey: string;
+
+  /**
+   * webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署这个成员。
+   *
+   * @generated from field: string webhook_token = 10;
+   */
+  webhookToken: string;
+
+  /**
+   * 最近一次拉取到的 git 提交。
+   *
+   * @generated from field: string last_commit = 11;
+   */
+  lastCommit: string;
+
+  /**
+   * 实际判定的是否有状态（自动判断或用户指定）。
+   *
+   * @generated from field: bool stateful = 12;
+   */
+  stateful: boolean;
+
+  /**
+   * 共享变量有更新：这个成员引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
+   *
+   * @generated from field: bool shared_env_outdated = 13;
+   */
+  sharedEnvOutdated: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.Member.
+ * Use `create(MemberSchema)` to create a new message.
+ */
+export const MemberSchema: GenMessage<Member> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 2);
+
+/**
+ * MemberConfig 是成员一个版本的完整配置。
+ *
+ * @generated from message nagi.v1.MemberConfig
+ */
+export type MemberConfig = Message<"nagi.v1.MemberConfig"> & {
+  /**
+   * compose 原文。单容器成员由镜像表单生成。
    *
    * @generated from field: string compose = 1;
    */
   compose: string;
 
   /**
-   * 项目级变量：替换 compose 里的 ${变量}。
+   * 成员级变量：替换这个成员 compose 里的 ${变量}，同名时覆盖项目的共享变量。
    *
    * @generated from field: repeated nagi.v1.EnvVar env = 2;
    */
@@ -159,21 +280,21 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
   serviceEnv: { [key: string]: EnvList };
 
   /**
-   * 用镜像表单创建的项目才有。有它时 compose 由它生成。
+   * 单容器成员才有。有它时 compose 由它生成，服务名就是成员名。
    *
    * @generated from field: nagi.v1.ImageForm form = 4;
    */
   form?: ImageForm | undefined;
 
   /**
-   * 项目文件的来源。为空表示文件由用户自己放进 data/。
+   * 文件来源。为空表示文件由用户自己放进成员的 data/。
    *
    * @generated from field: nagi.v1.Source source = 6;
    */
   source?: Source | undefined;
 
   /**
-   * 更新文件时保留不动的路径（相对 data/），例如 uploads/。
+   * 更新文件时保留不动的路径（相对成员的 data/），例如 uploads/。
    * compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
    *
    * @generated from field: repeated string preserve = 7;
@@ -181,29 +302,29 @@ export type ProjectConfig = Message<"nagi.v1.ProjectConfig"> & {
   preserve: string[];
 
   /**
-   * 是否有状态。默认自动判断：用了命名 volume 或有保留路径的项目算有状态。
+   * 是否有状态。默认自动判断：用了命名 volume 或有保留路径的成员算有状态。
    *
    * @generated from field: nagi.v1.Stateful stateful = 8;
    */
   stateful: Stateful;
 
   /**
-   * 定时快照间隔（分钟），0 表示默认（60 分钟）。
+   * 一起部署时要先部署的成员（例如后端依赖数据库）。
    *
-   * @generated from field: uint32 snapshot_interval_minutes = 9;
+   * @generated from field: repeated string depends_on = 10;
    */
-  snapshotIntervalMinutes: number;
+  dependsOn: string[];
 };
 
 /**
- * Describes the message nagi.v1.ProjectConfig.
- * Use `create(ProjectConfigSchema)` to create a new message.
+ * Describes the message nagi.v1.MemberConfig.
+ * Use `create(MemberConfigSchema)` to create a new message.
  */
-export const ProjectConfigSchema: GenMessage<ProjectConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 1);
+export const MemberConfigSchema: GenMessage<MemberConfig> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 3);
 
 /**
- * Version 是一次部署：配置 + 文件 + 镜像摘要。
+ * Version 是成员的一次部署：配置 + 文件 + 镜像摘要。
  *
  * @generated from message nagi.v1.Version
  */
@@ -252,6 +373,11 @@ export type Version = Message<"nagi.v1.Version"> & {
    * @generated from field: string commit = 7;
    */
   commit: string;
+
+  /**
+   * @generated from field: string member = 8;
+   */
+  member: string;
 };
 
 /**
@@ -259,7 +385,128 @@ export type Version = Message<"nagi.v1.Version"> & {
  * Use `create(VersionSchema)` to create a new message.
  */
 export const VersionSchema: GenMessage<Version> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 2);
+  messageDesc(file_nagi_v1_common, 4);
+
+/**
+ * Deployment 是项目的一条部署记录：一次部署（一个或多个成员）完成后所有成员各自的版本。
+ *
+ * @generated from message nagi.v1.Deployment
+ */
+export type Deployment = Message<"nagi.v1.Deployment"> & {
+  /**
+   * @generated from field: int64 id = 1;
+   */
+  id: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp time = 2;
+   */
+  time?: Timestamp | undefined;
+
+  /**
+   * manual（手动）、git（webhook 拉取）、image（镜像更新）、rollback（成员回滚）、
+   * shared_env（部署共享变量）、restore（回到某次部署时的状态）。
+   *
+   * @generated from field: string source = 3;
+   */
+  source: string;
+
+  /**
+   * 这次部署动到的成员。
+   *
+   * @generated from field: repeated string members = 4;
+   */
+  members: string[];
+
+  /**
+   * 部署完成后所有成员各自的版本（没部署成功过的成员不在里面）。
+   *
+   * @generated from field: map<string, int64> versions = 5;
+   */
+  versions: { [key: string]: bigint };
+
+  /**
+   * @generated from field: bool success = 6;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string error = 7;
+   */
+  error: string;
+
+  /**
+   * 回到某次部署时的状态：那次部署的 ID。
+   *
+   * @generated from field: int64 restore_of = 8;
+   */
+  restoreOf: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.Deployment.
+ * Use `create(DeploymentSchema)` to create a new message.
+ */
+export const DeploymentSchema: GenMessage<Deployment> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 5);
+
+/**
+ * SharedNetwork 是节点上的一个共享网络，加入的项目之间可以互相访问。
+ *
+ * @generated from message nagi.v1.SharedNetwork
+ */
+export type SharedNetwork = Message<"nagi.v1.SharedNetwork"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string subnet = 2;
+   */
+  subnet: string;
+
+  /**
+   * @generated from field: repeated nagi.v1.SharedNetworkProject projects = 3;
+   */
+  projects: SharedNetworkProject[];
+};
+
+/**
+ * Describes the message nagi.v1.SharedNetwork.
+ * Use `create(SharedNetworkSchema)` to create a new message.
+ */
+export const SharedNetworkSchema: GenMessage<SharedNetwork> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 6);
+
+/**
+ * @generated from message nagi.v1.SharedNetworkProject
+ */
+export type SharedNetworkProject = Message<"nagi.v1.SharedNetworkProject"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string project_name = 2;
+   */
+  projectName: string;
+
+  /**
+   * 项目的网络名，成员在共享网络里叫"成员.网络名"。
+   *
+   * @generated from field: string network_name = 3;
+   */
+  networkName: string;
+};
+
+/**
+ * Describes the message nagi.v1.SharedNetworkProject.
+ * Use `create(SharedNetworkProjectSchema)` to create a new message.
+ */
+export const SharedNetworkProjectSchema: GenMessage<SharedNetworkProject> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 7);
 
 /**
  * Snapshot 是项目的一份快照。
@@ -295,6 +542,13 @@ export type Snapshot = Message<"nagi.v1.Snapshot"> & {
    * @generated from field: int64 version = 5;
    */
   version: bigint;
+
+  /**
+   * predeploy、version：所属成员。
+   *
+   * @generated from field: string member = 6;
+   */
+  member: string;
 };
 
 /**
@@ -302,7 +556,7 @@ export type Snapshot = Message<"nagi.v1.Snapshot"> & {
  * Use `create(SnapshotSchema)` to create a new message.
  */
 export const SnapshotSchema: GenMessage<Snapshot> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 3);
+  messageDesc(file_nagi_v1_common, 8);
 
 /**
  * @generated from message nagi.v1.Source
@@ -328,7 +582,7 @@ export type Source = Message<"nagi.v1.Source"> & {
  * Use `create(SourceSchema)` to create a new message.
  */
 export const SourceSchema: GenMessage<Source> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 4);
+  messageDesc(file_nagi_v1_common, 9);
 
 /**
  * Exposure 是一条端口映射：一个服务端口的对外开放方式。
@@ -338,6 +592,8 @@ export const SourceSchema: GenMessage<Source> = /*@__PURE__*/
  */
 export type Exposure = Message<"nagi.v1.Exposure"> & {
   /**
+   * 服务名。单容器成员可以不填（服务名就是成员名）。
+   *
    * @generated from field: string service = 1;
    */
   service: string;
@@ -390,6 +646,13 @@ export type Exposure = Message<"nagi.v1.Exposure"> & {
    * @generated from field: string error = 8;
    */
   error: string;
+
+  /**
+   * 成员名。
+   *
+   * @generated from field: string member = 9;
+   */
+  member: string;
 };
 
 /**
@@ -397,7 +660,7 @@ export type Exposure = Message<"nagi.v1.Exposure"> & {
  * Use `create(ExposureSchema)` to create a new message.
  */
 export const ExposureSchema: GenMessage<Exposure> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 5);
+  messageDesc(file_nagi_v1_common, 10);
 
 /**
  * @generated from message nagi.v1.EnvVar
@@ -426,7 +689,7 @@ export type EnvVar = Message<"nagi.v1.EnvVar"> & {
  * Use `create(EnvVarSchema)` to create a new message.
  */
 export const EnvVarSchema: GenMessage<EnvVar> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 6);
+  messageDesc(file_nagi_v1_common, 11);
 
 /**
  * @generated from message nagi.v1.EnvList
@@ -443,7 +706,7 @@ export type EnvList = Message<"nagi.v1.EnvList"> & {
  * Use `create(EnvListSchema)` to create a new message.
  */
 export const EnvListSchema: GenMessage<EnvList> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 7);
+  messageDesc(file_nagi_v1_common, 12);
 
 /**
  * ImageForm：直接运行一个镜像，文件可选。
@@ -469,14 +732,14 @@ export type ImageForm = Message<"nagi.v1.ImageForm"> & {
   ports: PortMapping[];
 
   /**
-   * 持久化目录：容器内的路径，数据落到项目目录的 volumes/ 下。
+   * 持久化目录：容器内的路径，数据落到成员目录的 volumes/ 下。
    *
    * @generated from field: repeated string volumes = 4;
    */
   volumes: string[];
 
   /**
-   * 把项目的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+   * 把成员的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
    *
    * @generated from field: string workdir = 5;
    */
@@ -523,7 +786,7 @@ export type ImageForm = Message<"nagi.v1.ImageForm"> & {
  * Use `create(ImageFormSchema)` to create a new message.
  */
 export const ImageFormSchema: GenMessage<ImageForm> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 8);
+  messageDesc(file_nagi_v1_common, 13);
 
 /**
  * @generated from message nagi.v1.PortMapping
@@ -556,7 +819,7 @@ export type PortMapping = Message<"nagi.v1.PortMapping"> & {
  * Use `create(PortMappingSchema)` to create a new message.
  */
 export const PortMappingSchema: GenMessage<PortMapping> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 9);
+  messageDesc(file_nagi_v1_common, 14);
 
 /**
  * @generated from message nagi.v1.ServiceStatus
@@ -597,6 +860,11 @@ export type ServiceStatus = Message<"nagi.v1.ServiceStatus"> & {
    * @generated from field: string health = 6;
    */
   health: string;
+
+  /**
+   * @generated from field: string member = 7;
+   */
+  member: string;
 };
 
 /**
@@ -604,7 +872,7 @@ export type ServiceStatus = Message<"nagi.v1.ServiceStatus"> & {
  * Use `create(ServiceStatusSchema)` to create a new message.
  */
 export const ServiceStatusSchema: GenMessage<ServiceStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 10);
+  messageDesc(file_nagi_v1_common, 15);
 
 /**
  * @generated from message nagi.v1.ProjectStatus
@@ -633,7 +901,7 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
  * Use `create(ProjectStatusSchema)` to create a new message.
  */
 export const ProjectStatusSchema: GenMessage<ProjectStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 11);
+  messageDesc(file_nagi_v1_common, 16);
 
 /**
  * ImageUpdate 是一个服务的镜像有新版本：标签没变，仓库里的摘要变了。
@@ -660,6 +928,11 @@ export type ImageUpdate = Message<"nagi.v1.ImageUpdate"> & {
    * @generated from field: string latest_digest = 4;
    */
   latestDigest: string;
+
+  /**
+   * @generated from field: string member = 5;
+   */
+  member: string;
 };
 
 /**
@@ -667,7 +940,7 @@ export type ImageUpdate = Message<"nagi.v1.ImageUpdate"> & {
  * Use `create(ImageUpdateSchema)` to create a new message.
  */
 export const ImageUpdateSchema: GenMessage<ImageUpdate> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 12);
+  messageDesc(file_nagi_v1_common, 17);
 
 /**
  * @generated from message nagi.v1.ProjectSummary
@@ -689,7 +962,7 @@ export type ProjectSummary = Message<"nagi.v1.ProjectSummary"> & {
  * Use `create(ProjectSummarySchema)` to create a new message.
  */
 export const ProjectSummarySchema: GenMessage<ProjectSummary> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 13);
+  messageDesc(file_nagi_v1_common, 18);
 
 /**
  * @generated from message nagi.v1.NodeInfo
@@ -738,7 +1011,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
  * Use `create(NodeInfoSchema)` to create a new message.
  */
 export const NodeInfoSchema: GenMessage<NodeInfo> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 14);
+  messageDesc(file_nagi_v1_common, 19);
 
 /**
  * @generated from message nagi.v1.LogLine
@@ -765,6 +1038,11 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
    * @generated from field: google.protobuf.Timestamp time = 4;
    */
   time?: Timestamp | undefined;
+
+  /**
+   * @generated from field: string member = 5;
+   */
+  member: string;
 };
 
 /**
@@ -772,7 +1050,7 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
  * Use `create(LogLineSchema)` to create a new message.
  */
 export const LogLineSchema: GenMessage<LogLine> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 15);
+  messageDesc(file_nagi_v1_common, 20);
 
 /**
  * @generated from message nagi.v1.DeployEvent
@@ -803,7 +1081,7 @@ export type DeployEvent = Message<"nagi.v1.DeployEvent"> & {
  * Use `create(DeployEventSchema)` to create a new message.
  */
 export const DeployEventSchema: GenMessage<DeployEvent> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 16);
+  messageDesc(file_nagi_v1_common, 21);
 
 /**
  * @generated from message nagi.v1.DeployResult
@@ -830,7 +1108,7 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  * Use `create(DeployResultSchema)` to create a new message.
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 17);
+  messageDesc(file_nagi_v1_common, 22);
 
 /**
  * MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
@@ -859,7 +1137,7 @@ export type MetricSeries = Message<"nagi.v1.MetricSeries"> & {
  * Use `create(MetricSeriesSchema)` to create a new message.
  */
 export const MetricSeriesSchema: GenMessage<MetricSeries> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 18);
+  messageDesc(file_nagi_v1_common, 23);
 
 /**
  * AlertChannel 是一个告警渠道。
@@ -909,7 +1187,7 @@ export type AlertChannel = Message<"nagi.v1.AlertChannel"> & {
  * Use `create(AlertChannelSchema)` to create a new message.
  */
 export const AlertChannelSchema: GenMessage<AlertChannel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 19);
+  messageDesc(file_nagi_v1_common, 24);
 
 /**
  * AlertRules 是告警规则的阈值，0 表示用默认值。
@@ -975,7 +1253,7 @@ export type AlertRules = Message<"nagi.v1.AlertRules"> & {
  * Use `create(AlertRulesSchema)` to create a new message.
  */
 export const AlertRulesSchema: GenMessage<AlertRules> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 20);
+  messageDesc(file_nagi_v1_common, 25);
 
 /**
  * @generated from message nagi.v1.AlertConfig
@@ -997,7 +1275,7 @@ export type AlertConfig = Message<"nagi.v1.AlertConfig"> & {
  * Use `create(AlertConfigSchema)` to create a new message.
  */
 export const AlertConfigSchema: GenMessage<AlertConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 21);
+  messageDesc(file_nagi_v1_common, 26);
 
 /**
  * Alert 是一条告警或恢复通知。
@@ -1050,7 +1328,7 @@ export type Alert = Message<"nagi.v1.Alert"> & {
  * Use `create(AlertSchema)` to create a new message.
  */
 export const AlertSchema: GenMessage<Alert> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 22);
+  messageDesc(file_nagi_v1_common, 27);
 
 /**
  * TrustedPanel 是节点信任列表里的一个面板。
@@ -1088,7 +1366,7 @@ export type TrustedPanel = Message<"nagi.v1.TrustedPanel"> & {
  * Use `create(TrustedPanelSchema)` to create a new message.
  */
 export const TrustedPanelSchema: GenMessage<TrustedPanel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 23);
+  messageDesc(file_nagi_v1_common, 28);
 
 /**
  * MeshPeer 是面板告诉节点的一个 mesh 成员。
@@ -1131,7 +1409,7 @@ export type MeshPeer = Message<"nagi.v1.MeshPeer"> & {
  * Use `create(MeshPeerSchema)` to create a new message.
  */
 export const MeshPeerSchema: GenMessage<MeshPeer> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 24);
+  messageDesc(file_nagi_v1_common, 29);
 
 /**
  * MeshPeerStatus 是到一个 mesh 成员的连接状态。
@@ -1203,7 +1481,7 @@ export type MeshPeerStatus = Message<"nagi.v1.MeshPeerStatus"> & {
  * Use `create(MeshPeerStatusSchema)` to create a new message.
  */
 export const MeshPeerStatusSchema: GenMessage<MeshPeerStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 25);
+  messageDesc(file_nagi_v1_common, 30);
 
 /**
  * @generated from message nagi.v1.MeshStatus
@@ -1240,7 +1518,7 @@ export type MeshStatus = Message<"nagi.v1.MeshStatus"> & {
  * Use `create(MeshStatusSchema)` to create a new message.
  */
 export const MeshStatusSchema: GenMessage<MeshStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 26);
+  messageDesc(file_nagi_v1_common, 31);
 
 /**
  * @generated from message nagi.v1.MeshPingRequest
@@ -1257,7 +1535,7 @@ export type MeshPingRequest = Message<"nagi.v1.MeshPingRequest"> & {
  * Use `create(MeshPingRequestSchema)` to create a new message.
  */
 export const MeshPingRequestSchema: GenMessage<MeshPingRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 27);
+  messageDesc(file_nagi_v1_common, 32);
 
 /**
  * @generated from message nagi.v1.MeshPingResponse
@@ -1274,7 +1552,7 @@ export type MeshPingResponse = Message<"nagi.v1.MeshPingResponse"> & {
  * Use `create(MeshPingResponseSchema)` to create a new message.
  */
 export const MeshPingResponseSchema: GenMessage<MeshPingResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 28);
+  messageDesc(file_nagi_v1_common, 33);
 
 /**
  * BackupStatus 是项目同步到备份节点的状态（在源节点上）。
@@ -1319,7 +1597,7 @@ export type BackupStatus = Message<"nagi.v1.BackupStatus"> & {
  * Use `create(BackupStatusSchema)` to create a new message.
  */
 export const BackupStatusSchema: GenMessage<BackupStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 29);
+  messageDesc(file_nagi_v1_common, 34);
 
 /**
  * Replica 是备份节点上保存的一个项目副本。
@@ -1363,7 +1641,7 @@ export type Replica = Message<"nagi.v1.Replica"> & {
  * Use `create(ReplicaSchema)` to create a new message.
  */
 export const ReplicaSchema: GenMessage<Replica> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 30);
+  messageDesc(file_nagi_v1_common, 35);
 
 /**
  * FailoverMember 是顶替设置里的一个参与者。
@@ -1403,7 +1681,7 @@ export type FailoverMember = Message<"nagi.v1.FailoverMember"> & {
  * Use `create(FailoverMemberSchema)` to create a new message.
  */
 export const FailoverMemberSchema: GenMessage<FailoverMember> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 31);
+  messageDesc(file_nagi_v1_common, 36);
 
 /**
  * FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
@@ -1465,7 +1743,7 @@ export type FailoverConfig = Message<"nagi.v1.FailoverConfig"> & {
  * Use `create(FailoverConfigSchema)` to create a new message.
  */
 export const FailoverConfigSchema: GenMessage<FailoverConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 32);
+  messageDesc(file_nagi_v1_common, 37);
 
 /**
  * FailoverStatus 是某个参与者看到的顶替状态。
@@ -1534,7 +1812,7 @@ export type FailoverStatus = Message<"nagi.v1.FailoverStatus"> & {
  * Use `create(FailoverStatusSchema)` to create a new message.
  */
 export const FailoverStatusSchema: GenMessage<FailoverStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 33);
+  messageDesc(file_nagi_v1_common, 38);
 
 /**
  * @generated from enum nagi.v1.Stateful

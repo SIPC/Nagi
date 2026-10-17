@@ -477,9 +477,11 @@ func (*ReplicaCommitResponse) Descriptor() ([]byte, []int) {
 }
 
 type UploadChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 第一块带上项目和成员，之后只有 data。
+	ProjectId     string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Member        string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -526,6 +528,13 @@ func (x *UploadChunk) GetData() []byte {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *UploadChunk) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
 }
 
 type UploadResponse struct {
@@ -703,11 +712,12 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12!\n" +
 	"\fproject_name\x18\x03 \x01(\tR\vprojectName\"\x17\n" +
-	"\x15ReplicaCommitResponse\"@\n" +
+	"\x15ReplicaCommitResponse\"X\n" +
 	"\vUploadChunk\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"X\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x16\n" +
+	"\x06member\x18\x03 \x01(\tR\x06member\"X\n" +
 	"\x0eUploadResponse\x12\x14\n" +
 	"\x05bytes\x18\x01 \x01(\x04R\x05bytes\x12\x14\n" +
 	"\x05files\x18\x02 \x01(\rR\x05files\x12\x1a\n" +

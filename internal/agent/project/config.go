@@ -15,21 +15,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// formService 是镜像表单生成的 compose 里唯一的服务名。
-const formService = "app"
+var (
+	envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	// varRefRe 匹配 compose 里引用变量的写法：$VAR、${VAR}、${VAR:-默认值} 等。
+	varRefRe = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
+)
 
-var envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// isSingle 判断成员是不是单容器成员（用镜像表单创建）。
+func isSingle(cfg *nagiv1.MemberConfig) bool { return cfg.GetForm() != nil }
 
-// composeText 返回配置对应的 compose 原文：有镜像表单时由表单生成。
-func composeText(cfg *nagiv1.ProjectConfig) (string, error) {
+// composeText 返回成员配置对应的 compose 原文：单容器成员由表单生成，服务名就是成员名。
+func composeText(cfg *nagiv1.MemberConfig, member string) (string, error) {
 	if cfg.GetForm() != nil {
-		return formCompose(cfg.GetForm())
+		return formCompose(cfg.GetForm(), member)
 	}
 	return cfg.GetCompose(), nil
 }
 
-// serviceEnv 返回每个服务的环境变量。镜像表单的环境变量属于唯一的服务。
-func serviceEnv(cfg *nagiv1.ProjectConfig) map[string][]*nagiv1.EnvVar {
+// serviceEnv 返回每个服务的环境变量。镜像表单的环境变量属于唯一的服务（服务名就是成员名）。
+func serviceEnv(cfg *nagiv1.MemberConfig, member string) map[string][]*nagiv1.EnvVar {
 	out := map[string][]*nagiv1.EnvVar{}
 	for name, list := range cfg.GetServiceEnv() {
 		if len(list.GetVars()) > 0 {
@@ -37,14 +41,14 @@ func serviceEnv(cfg *nagiv1.ProjectConfig) map[string][]*nagiv1.EnvVar {
 		}
 	}
 	if f := cfg.GetForm(); f != nil && len(f.GetEnv()) > 0 {
-		out[formService] = append(out[formService], f.GetEnv()...)
+		out[member] = append(out[member], f.GetEnv()...)
 	}
 	return out
 }
 
 // formCompose 把镜像表单转换成 compose。环境变量不写进 compose，而是放在服务级环境变量文件里，
 // 这样导出的 compose 里不会带着密钥。
-func formCompose(f *nagiv1.ImageForm) (string, error) {
+func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	image := strings.TrimSpace(f.GetImage())
 	if image == "" {
 		return "", invalid("镜像不能为空")
@@ -87,7 +91,7 @@ func formCompose(f *nagiv1.ImageForm) (string, error) {
 		if !strings.HasPrefix(wd, "/") {
 			return "", invalid("工作目录必须是容器内的绝对路径")
 		}
-		// compose 的相对路径以项目的 data/ 为准，所以 "./" 就是 data/。
+		// compose 的相对路径以成员的 data/ 为准，所以 "./" 就是 data/。
 		mounts = append(mounts, "./:"+wd)
 		svc["working_dir"] = wd
 	}
@@ -116,7 +120,7 @@ func formCompose(f *nagiv1.ImageForm) (string, error) {
 		}
 	}
 
-	doc := map[string]any{"services": map[string]any{formService: svc}}
+	doc := map[string]any{"services": map[string]any{service: svc}}
 	if len(volumes) > 0 {
 		doc["volumes"] = volumes
 	}
@@ -150,9 +154,10 @@ func volumeName(target string, used map[string]bool) string {
 	return name
 }
 
-// validate 校验配置：compose 能解析、变量名合法、服务级变量对应的服务存在、git 地址有效。
-func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composeProject string) (*types.Project, error) {
-	text, err := composeText(cfg)
+// validate 校验成员配置：compose 能解析、变量名合法、服务级变量对应的服务存在、git 地址有效、依赖的成员名合法。
+// shared 是项目的共享变量，用来替换 compose 里的 ${变量}（同名时以成员自己的为准）。会规范 cfg 里的部分字段。
+func validate(ctx context.Context, cfg *nagiv1.MemberConfig, member string, shared []*nagiv1.EnvVar, workDir, composeProject string) (*types.Project, error) {
+	text, err := composeText(cfg, member)
 	if err != nil {
 		return nil, err
 	}
@@ -162,16 +167,16 @@ func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composePr
 	if err := checkEnv(cfg.GetEnv()); err != nil {
 		return nil, err
 	}
-	for _, vars := range serviceEnv(cfg) {
+	for _, vars := range serviceEnv(cfg, member) {
 		if err := checkEnv(vars); err != nil {
 			return nil, err
 		}
 	}
-	proj, err := loadCompose(ctx, text, cfg.GetEnv(), workDir, composeProject)
+	proj, err := loadCompose(ctx, text, mergeEnv(shared, cfg.GetEnv()), workDir, composeProject)
 	if err != nil {
 		return nil, invalid("compose 无法解析：%v", err)
 	}
-	for name := range serviceEnv(cfg) {
+	for name := range serviceEnv(cfg, member) {
 		if _, ok := proj.Services[name]; !ok {
 			return nil, invalid("服务级环境变量里的服务 %q 不在 compose 中", name)
 		}
@@ -186,7 +191,71 @@ func validate(ctx context.Context, cfg *nagiv1.ProjectConfig, workDir, composePr
 		cfg.Source = nil
 	}
 	cfg.Preserve = normalizePreserve(cfg.GetPreserve())
+	var deps []string
+	seen := map[string]bool{}
+	for _, d := range cfg.GetDependsOn() {
+		d = strings.TrimSpace(d)
+		if d == "" || seen[d] {
+			continue
+		}
+		if d == member || !nameRe.MatchString(d) {
+			return nil, invalid("依赖的成员 %q 不对", d)
+		}
+		seen[d] = true
+		deps = append(deps, d)
+	}
+	cfg.DependsOn = deps
 	return proj, nil
+}
+
+// loadMember 只解析成员的 compose（不做 validate 里的其他检查），读取状态时用。
+func loadMember(ctx context.Context, cfg *nagiv1.MemberConfig, member string, shared []*nagiv1.EnvVar, workDir, composeProject string) (*types.Project, error) {
+	text, err := composeText(cfg, member)
+	if err != nil {
+		return nil, err
+	}
+	return loadCompose(ctx, text, mergeEnv(shared, cfg.GetEnv()), workDir, composeProject)
+}
+
+// mergeEnv 合并共享变量和成员变量，同名时以成员的为准（和 compose 按顺序读两个 --env-file 一样）。
+func mergeEnv(shared, own []*nagiv1.EnvVar) []*nagiv1.EnvVar {
+	out := append([]*nagiv1.EnvVar(nil), shared...)
+	return append(out, own...)
+}
+
+// referencedVars 返回成员 compose 里引用的变量名。
+func referencedVars(cfg *nagiv1.MemberConfig, member string) map[string]bool {
+	text, _ := composeText(cfg, member)
+	out := map[string]bool{}
+	for _, m := range varRefRe.FindAllStringSubmatch(text, -1) {
+		out[m[1]] = true
+	}
+	return out
+}
+
+// sharedEnvChanged 判断成员引用的、而且没有被成员自己的变量覆盖的共享变量，在 before 和 after 里的值是否不同。
+func sharedEnvChanged(cfg *nagiv1.MemberConfig, member string, before, after []*nagiv1.EnvVar) bool {
+	refs := referencedVars(cfg, member)
+	for _, v := range cfg.GetEnv() {
+		delete(refs, v.GetKey())
+	}
+	a, b := envMap(before), envMap(after)
+	for k := range refs {
+		va, oka := a[k]
+		vb, okb := b[k]
+		if oka != okb || va != vb {
+			return true
+		}
+	}
+	return false
+}
+
+func envMap(vars []*nagiv1.EnvVar) map[string]string {
+	out := map[string]string{}
+	for _, v := range vars {
+		out[v.GetKey()] = v.GetValue()
+	}
+	return out
 }
 
 func checkEnv(vars []*nagiv1.EnvVar) error {
@@ -219,10 +288,14 @@ func loadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, workDir
 	})
 }
 
-// writeConfigFiles 把一个版本的配置写成 compose 需要的文件：compose.yml、.env、env/<服务>.env。
-func writeConfigFiles(p paths, cfg *nagiv1.ProjectConfig) error {
-	text, err := composeText(cfg)
+// writeConfigFiles 把成员一个版本的配置写成 compose 需要的文件：compose.yml、.env、shared.env、env/<服务>.env。
+// shared 是这个版本用的共享变量。
+func writeConfigFiles(p memberPaths, cfg *nagiv1.MemberConfig, member string, shared []*nagiv1.EnvVar) error {
+	text, err := composeText(cfg, member)
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.root, 0o755); err != nil {
 		return err
 	}
 	if err := writeFileAtomic(p.composeFile(), []byte(text), 0o644); err != nil {
@@ -231,11 +304,14 @@ func writeConfigFiles(p paths, cfg *nagiv1.ProjectConfig) error {
 	if err := writeFileAtomic(p.envFile(), envFile(cfg.GetEnv()), 0o600); err != nil {
 		return err
 	}
+	if err := writeFileAtomic(p.sharedEnvFile(), envFile(shared), 0o600); err != nil {
+		return err
+	}
 	// 重新生成服务级环境变量文件，删掉不再需要的。
 	if err := os.RemoveAll(p.serviceEnvDir()); err != nil {
 		return err
 	}
-	senv := serviceEnv(cfg)
+	senv := serviceEnv(cfg, member)
 	if len(senv) == 0 {
 		return nil
 	}
@@ -273,7 +349,7 @@ func quoteEnv(v string) string {
 	return `"` + r.Replace(v) + `"`
 }
 
-func (p paths) serviceEnvDir() string { return filepath.Join(p.configDir(), "env") }
-func (p paths) serviceEnvFile(service string) string {
+func (p memberPaths) serviceEnvDir() string { return filepath.Join(p.root, "env") }
+func (p memberPaths) serviceEnvFile(service string) string {
 	return filepath.Join(p.serviceEnvDir(), service+".env")
 }

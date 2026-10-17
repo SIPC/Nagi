@@ -19,53 +19,63 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_ListProjects_FullMethodName         = "/nagi.v1.AgentService/ListProjects"
-	AgentService_CreateProject_FullMethodName        = "/nagi.v1.AgentService/CreateProject"
-	AgentService_GetProject_FullMethodName           = "/nagi.v1.AgentService/GetProject"
-	AgentService_SaveDraft_FullMethodName            = "/nagi.v1.AgentService/SaveDraft"
-	AgentService_DiscardDraft_FullMethodName         = "/nagi.v1.AgentService/DiscardDraft"
-	AgentService_SaveRoute_FullMethodName            = "/nagi.v1.AgentService/SaveRoute"
-	AgentService_DeleteRoute_FullMethodName          = "/nagi.v1.AgentService/DeleteRoute"
-	AgentService_ListVersions_FullMethodName         = "/nagi.v1.AgentService/ListVersions"
-	AgentService_Rollback_FullMethodName             = "/nagi.v1.AgentService/Rollback"
-	AgentService_ListSnapshots_FullMethodName        = "/nagi.v1.AgentService/ListSnapshots"
-	AgentService_CreateSnapshot_FullMethodName       = "/nagi.v1.AgentService/CreateSnapshot"
-	AgentService_RestoreSnapshot_FullMethodName      = "/nagi.v1.AgentService/RestoreSnapshot"
-	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
-	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
-	AgentService_DeleteProject_FullMethodName        = "/nagi.v1.AgentService/DeleteProject"
-	AgentService_DeployProject_FullMethodName        = "/nagi.v1.AgentService/DeployProject"
-	AgentService_StreamLogs_FullMethodName           = "/nagi.v1.AgentService/StreamLogs"
-	AgentService_Exec_FullMethodName                 = "/nagi.v1.AgentService/Exec"
-	AgentService_ListPanels_FullMethodName           = "/nagi.v1.AgentService/ListPanels"
-	AgentService_AddPanel_FullMethodName             = "/nagi.v1.AgentService/AddPanel"
-	AgentService_RemovePanel_FullMethodName          = "/nagi.v1.AgentService/RemovePanel"
-	AgentService_GetMeshStatus_FullMethodName        = "/nagi.v1.AgentService/GetMeshStatus"
-	AgentService_MeshPing_FullMethodName             = "/nagi.v1.AgentService/MeshPing"
-	AgentService_SetBackupTarget_FullMethodName      = "/nagi.v1.AgentService/SetBackupTarget"
-	AgentService_GetBackupStatus_FullMethodName      = "/nagi.v1.AgentService/GetBackupStatus"
-	AgentService_SyncBackup_FullMethodName           = "/nagi.v1.AgentService/SyncBackup"
-	AgentService_AcceptReplica_FullMethodName        = "/nagi.v1.AgentService/AcceptReplica"
-	AgentService_ListReplicas_FullMethodName         = "/nagi.v1.AgentService/ListReplicas"
-	AgentService_ListReplicaSnapshots_FullMethodName = "/nagi.v1.AgentService/ListReplicaSnapshots"
-	AgentService_RestoreReplica_FullMethodName       = "/nagi.v1.AgentService/RestoreReplica"
-	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
-	AgentService_CheckRestore_FullMethodName         = "/nagi.v1.AgentService/CheckRestore"
-	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
-	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
-	AgentService_MigrateFinish_FullMethodName        = "/nagi.v1.AgentService/MigrateFinish"
-	AgentService_CheckImages_FullMethodName          = "/nagi.v1.AgentService/CheckImages"
-	AgentService_GetMirrors_FullMethodName           = "/nagi.v1.AgentService/GetMirrors"
-	AgentService_SetMirrors_FullMethodName           = "/nagi.v1.AgentService/SetMirrors"
-	AgentService_SetPanelDomain_FullMethodName       = "/nagi.v1.AgentService/SetPanelDomain"
-	AgentService_Upgrade_FullMethodName              = "/nagi.v1.AgentService/Upgrade"
-	AgentService_ListRegistries_FullMethodName       = "/nagi.v1.AgentService/ListRegistries"
-	AgentService_LoginRegistry_FullMethodName        = "/nagi.v1.AgentService/LoginRegistry"
-	AgentService_LogoutRegistry_FullMethodName       = "/nagi.v1.AgentService/LogoutRegistry"
-	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
-	AgentService_GetFailover_FullMethodName          = "/nagi.v1.AgentService/GetFailover"
-	AgentService_ListFailovers_FullMethodName        = "/nagi.v1.AgentService/ListFailovers"
-	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
+	AgentService_ListProjects_FullMethodName          = "/nagi.v1.AgentService/ListProjects"
+	AgentService_CreateProject_FullMethodName         = "/nagi.v1.AgentService/CreateProject"
+	AgentService_GetProject_FullMethodName            = "/nagi.v1.AgentService/GetProject"
+	AgentService_AddMember_FullMethodName             = "/nagi.v1.AgentService/AddMember"
+	AgentService_DeleteMember_FullMethodName          = "/nagi.v1.AgentService/DeleteMember"
+	AgentService_SaveDraft_FullMethodName             = "/nagi.v1.AgentService/SaveDraft"
+	AgentService_DiscardDraft_FullMethodName          = "/nagi.v1.AgentService/DiscardDraft"
+	AgentService_UpdateProjectSettings_FullMethodName = "/nagi.v1.AgentService/UpdateProjectSettings"
+	AgentService_SaveSharedEnv_FullMethodName         = "/nagi.v1.AgentService/SaveSharedEnv"
+	AgentService_DiscardSharedEnv_FullMethodName      = "/nagi.v1.AgentService/DiscardSharedEnv"
+	AgentService_ListDeployments_FullMethodName       = "/nagi.v1.AgentService/ListDeployments"
+	AgentService_RestoreDeployment_FullMethodName     = "/nagi.v1.AgentService/RestoreDeployment"
+	AgentService_ListSharedNetworks_FullMethodName    = "/nagi.v1.AgentService/ListSharedNetworks"
+	AgentService_CreateSharedNetwork_FullMethodName   = "/nagi.v1.AgentService/CreateSharedNetwork"
+	AgentService_DeleteSharedNetwork_FullMethodName   = "/nagi.v1.AgentService/DeleteSharedNetwork"
+	AgentService_SaveRoute_FullMethodName             = "/nagi.v1.AgentService/SaveRoute"
+	AgentService_DeleteRoute_FullMethodName           = "/nagi.v1.AgentService/DeleteRoute"
+	AgentService_ListVersions_FullMethodName          = "/nagi.v1.AgentService/ListVersions"
+	AgentService_Rollback_FullMethodName              = "/nagi.v1.AgentService/Rollback"
+	AgentService_ListSnapshots_FullMethodName         = "/nagi.v1.AgentService/ListSnapshots"
+	AgentService_CreateSnapshot_FullMethodName        = "/nagi.v1.AgentService/CreateSnapshot"
+	AgentService_RestoreSnapshot_FullMethodName       = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_SetAlertConfig_FullMethodName        = "/nagi.v1.AgentService/SetAlertConfig"
+	AgentService_QueryMetrics_FullMethodName          = "/nagi.v1.AgentService/QueryMetrics"
+	AgentService_DeleteProject_FullMethodName         = "/nagi.v1.AgentService/DeleteProject"
+	AgentService_DeployProject_FullMethodName         = "/nagi.v1.AgentService/DeployProject"
+	AgentService_StreamLogs_FullMethodName            = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName                  = "/nagi.v1.AgentService/Exec"
+	AgentService_ListPanels_FullMethodName            = "/nagi.v1.AgentService/ListPanels"
+	AgentService_AddPanel_FullMethodName              = "/nagi.v1.AgentService/AddPanel"
+	AgentService_RemovePanel_FullMethodName           = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_GetMeshStatus_FullMethodName         = "/nagi.v1.AgentService/GetMeshStatus"
+	AgentService_MeshPing_FullMethodName              = "/nagi.v1.AgentService/MeshPing"
+	AgentService_SetBackupTarget_FullMethodName       = "/nagi.v1.AgentService/SetBackupTarget"
+	AgentService_GetBackupStatus_FullMethodName       = "/nagi.v1.AgentService/GetBackupStatus"
+	AgentService_SyncBackup_FullMethodName            = "/nagi.v1.AgentService/SyncBackup"
+	AgentService_AcceptReplica_FullMethodName         = "/nagi.v1.AgentService/AcceptReplica"
+	AgentService_ListReplicas_FullMethodName          = "/nagi.v1.AgentService/ListReplicas"
+	AgentService_ListReplicaSnapshots_FullMethodName  = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	AgentService_RestoreReplica_FullMethodName        = "/nagi.v1.AgentService/RestoreReplica"
+	AgentService_DeleteReplica_FullMethodName         = "/nagi.v1.AgentService/DeleteReplica"
+	AgentService_CheckRestore_FullMethodName          = "/nagi.v1.AgentService/CheckRestore"
+	AgentService_MigrateOut_FullMethodName            = "/nagi.v1.AgentService/MigrateOut"
+	AgentService_MigrateResume_FullMethodName         = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_MigrateFinish_FullMethodName         = "/nagi.v1.AgentService/MigrateFinish"
+	AgentService_CheckImages_FullMethodName           = "/nagi.v1.AgentService/CheckImages"
+	AgentService_GetMirrors_FullMethodName            = "/nagi.v1.AgentService/GetMirrors"
+	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
+	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
+	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
+	AgentService_ListRegistries_FullMethodName        = "/nagi.v1.AgentService/ListRegistries"
+	AgentService_LoginRegistry_FullMethodName         = "/nagi.v1.AgentService/LoginRegistry"
+	AgentService_LogoutRegistry_FullMethodName        = "/nagi.v1.AgentService/LogoutRegistry"
+	AgentService_SetFailover_FullMethodName           = "/nagi.v1.AgentService/SetFailover"
+	AgentService_GetFailover_FullMethodName           = "/nagi.v1.AgentService/GetFailover"
+	AgentService_ListFailovers_FullMethodName         = "/nagi.v1.AgentService/ListFailovers"
+	AgentService_ConfirmTakeover_FullMethodName       = "/nagi.v1.AgentService/ConfirmTakeover"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -77,17 +87,36 @@ type AgentServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
+	// 往项目里加一个成员（只保存，不部署）。
+	AddMember(ctx context.Context, in *AddMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error)
+	// 删除成员：停止并删除它的容器，目录默认保留。
+	DeleteMember(ctx context.Context, in *DeleteMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error)
+	// 保存成员的草稿。
 	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error)
 	DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error)
+	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
+	UpdateProjectSettings(ctx context.Context, in *UpdateProjectSettingsRequest, opts ...grpc.CallOption) (*UpdateProjectSettingsResponse, error)
+	// 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
+	SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error)
+	DiscardSharedEnv(ctx context.Context, in *DiscardSharedEnvRequest, opts ...grpc.CallOption) (*DiscardSharedEnvResponse, error)
+	// 项目的部署记录，最新的在前。
+	ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
+	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 本节点的共享网络。
+	ListSharedNetworks(ctx context.Context, in *ListSharedNetworksRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	CreateSharedNetwork(ctx context.Context, in *CreateSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	// 删除共享网络：还有项目加入时拒绝。
+	DeleteSharedNetwork(ctx context.Context, in *DeleteSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*SaveRouteResponse, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*DeleteRouteResponse, error)
 	ListVersions(ctx context.Context, in *ListVersionsRequest, opts ...grpc.CallOption) (*ListVersionsResponse, error)
-	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
@@ -194,6 +223,26 @@ func (c *agentServiceClient) GetProject(ctx context.Context, in *GetProjectReque
 	return out, nil
 }
 
+func (c *agentServiceClient) AddMember(ctx context.Context, in *AddMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddMemberResponse)
+	err := c.cc.Invoke(ctx, AgentService_AddMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteMember(ctx context.Context, in *DeleteMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteMemberResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SaveDraftResponse)
@@ -208,6 +257,95 @@ func (c *agentServiceClient) DiscardDraft(ctx context.Context, in *DiscardDraftR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DiscardDraftResponse)
 	err := c.cc.Invoke(ctx, AgentService_DiscardDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) UpdateProjectSettings(ctx context.Context, in *UpdateProjectSettingsRequest, opts ...grpc.CallOption) (*UpdateProjectSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateProjectSettingsResponse)
+	err := c.cc.Invoke(ctx, AgentService_UpdateProjectSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveSharedEnvResponse)
+	err := c.cc.Invoke(ctx, AgentService_SaveSharedEnv_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DiscardSharedEnv(ctx context.Context, in *DiscardSharedEnvRequest, opts ...grpc.CallOption) (*DiscardSharedEnvResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardSharedEnvResponse)
+	err := c.cc.Invoke(ctx, AgentService_DiscardSharedEnv_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDeploymentsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListDeployments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[0], AgentService_RestoreDeployment_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreDeploymentRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreDeploymentClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) ListSharedNetworks(ctx context.Context, in *ListSharedNetworksRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListSharedNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) CreateSharedNetwork(ctx context.Context, in *CreateSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, AgentService_CreateSharedNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteSharedNetwork(ctx context.Context, in *DeleteSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteSharedNetwork_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +384,7 @@ func (c *agentServiceClient) ListVersions(ctx context.Context, in *ListVersionsR
 
 func (c *agentServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[0], AgentService_Rollback_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[1], AgentService_Rollback_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +413,7 @@ func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ListSnapshot
 
 func (c *agentServiceClient) CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[1], AgentService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +432,7 @@ type AgentService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +481,7 @@ func (c *agentServiceClient) DeleteProject(ctx context.Context, in *DeleteProjec
 
 func (c *agentServiceClient) DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_DeployProject_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_DeployProject_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +500,7 @@ type AgentService_DeployProjectClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +519,7 @@ type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
 func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_Exec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_Exec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +642,7 @@ func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, in *Repli
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +681,7 @@ func (c *agentServiceClient) CheckRestore(ctx context.Context, in *CheckRestoreR
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +700,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -718,17 +856,36 @@ type AgentServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
+	// 往项目里加一个成员（只保存，不部署）。
+	AddMember(context.Context, *AddMemberRequest) (*AddMemberResponse, error)
+	// 删除成员：停止并删除它的容器，目录默认保留。
+	DeleteMember(context.Context, *DeleteMemberRequest) (*DeleteMemberResponse, error)
+	// 保存成员的草稿。
 	SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error)
 	DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error)
+	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
+	UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*UpdateProjectSettingsResponse, error)
+	// 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
+	SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error)
+	DiscardSharedEnv(context.Context, *DiscardSharedEnvRequest) (*DiscardSharedEnvResponse, error)
+	// 项目的部署记录，最新的在前。
+	ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error)
+	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(*RestoreDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 本节点的共享网络。
+	ListSharedNetworks(context.Context, *ListSharedNetworksRequest) (*ListSharedNetworksResponse, error)
+	CreateSharedNetwork(context.Context, *CreateSharedNetworkRequest) (*ListSharedNetworksResponse, error)
+	// 删除共享网络：还有项目加入时拒绝。
+	DeleteSharedNetwork(context.Context, *DeleteSharedNetworkRequest) (*ListSharedNetworksResponse, error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error)
 	ListVersions(context.Context, *ListVersionsRequest) (*ListVersionsResponse, error)
-	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
 	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
 	CreateSnapshot(*CreateSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
 	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
@@ -814,11 +971,41 @@ func (UnimplementedAgentServiceServer) CreateProject(context.Context, *CreatePro
 func (UnimplementedAgentServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
 }
+func (UnimplementedAgentServiceServer) AddMember(context.Context, *AddMemberRequest) (*AddMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddMember not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteMember(context.Context, *DeleteMemberRequest) (*DeleteMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteMember not implemented")
+}
 func (UnimplementedAgentServiceServer) SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveDraft not implemented")
 }
 func (UnimplementedAgentServiceServer) DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardDraft not implemented")
+}
+func (UnimplementedAgentServiceServer) UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*UpdateProjectSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateProjectSettings not implemented")
+}
+func (UnimplementedAgentServiceServer) SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSharedEnv not implemented")
+}
+func (UnimplementedAgentServiceServer) DiscardSharedEnv(context.Context, *DiscardSharedEnvRequest) (*DiscardSharedEnvResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardSharedEnv not implemented")
+}
+func (UnimplementedAgentServiceServer) ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDeployments not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreDeployment(*RestoreDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreDeployment not implemented")
+}
+func (UnimplementedAgentServiceServer) ListSharedNetworks(context.Context, *ListSharedNetworksRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSharedNetworks not implemented")
+}
+func (UnimplementedAgentServiceServer) CreateSharedNetwork(context.Context, *CreateSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSharedNetwork not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteSharedNetwork(context.Context, *DeleteSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSharedNetwork not implemented")
 }
 func (UnimplementedAgentServiceServer) SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveRoute not implemented")
@@ -1021,6 +1208,42 @@ func _AgentService_GetProject_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_AddMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).AddMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_AddMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).AddMember(ctx, req.(*AddMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteMember(ctx, req.(*DeleteMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SaveDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SaveDraftRequest)
 	if err := dec(in); err != nil {
@@ -1053,6 +1276,143 @@ func _AgentService_DiscardDraft_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).DiscardDraft(ctx, req.(*DiscardDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_UpdateProjectSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateProjectSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).UpdateProjectSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_UpdateProjectSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).UpdateProjectSettings(ctx, req.(*UpdateProjectSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SaveSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSharedEnvRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SaveSharedEnv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SaveSharedEnv_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SaveSharedEnv(ctx, req.(*SaveSharedEnvRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DiscardSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardSharedEnvRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DiscardSharedEnv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DiscardSharedEnv_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DiscardSharedEnv(ctx, req.(*DiscardSharedEnvRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListDeployments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDeploymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListDeployments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListDeployments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListDeployments(ctx, req.(*ListDeploymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestoreDeployment_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreDeploymentRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).RestoreDeployment(m, &grpc.GenericServerStream[RestoreDeploymentRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreDeploymentServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_ListSharedNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSharedNetworksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListSharedNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListSharedNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListSharedNetworks(ctx, req.(*ListSharedNetworksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CreateSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSharedNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CreateSharedNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CreateSharedNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CreateSharedNetwork(ctx, req.(*CreateSharedNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSharedNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteSharedNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteSharedNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteSharedNetwork(ctx, req.(*DeleteSharedNetworkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1766,12 +2126,48 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_GetProject_Handler,
 		},
 		{
+			MethodName: "AddMember",
+			Handler:    _AgentService_AddMember_Handler,
+		},
+		{
+			MethodName: "DeleteMember",
+			Handler:    _AgentService_DeleteMember_Handler,
+		},
+		{
 			MethodName: "SaveDraft",
 			Handler:    _AgentService_SaveDraft_Handler,
 		},
 		{
 			MethodName: "DiscardDraft",
 			Handler:    _AgentService_DiscardDraft_Handler,
+		},
+		{
+			MethodName: "UpdateProjectSettings",
+			Handler:    _AgentService_UpdateProjectSettings_Handler,
+		},
+		{
+			MethodName: "SaveSharedEnv",
+			Handler:    _AgentService_SaveSharedEnv_Handler,
+		},
+		{
+			MethodName: "DiscardSharedEnv",
+			Handler:    _AgentService_DiscardSharedEnv_Handler,
+		},
+		{
+			MethodName: "ListDeployments",
+			Handler:    _AgentService_ListDeployments_Handler,
+		},
+		{
+			MethodName: "ListSharedNetworks",
+			Handler:    _AgentService_ListSharedNetworks_Handler,
+		},
+		{
+			MethodName: "CreateSharedNetwork",
+			Handler:    _AgentService_CreateSharedNetwork_Handler,
+		},
+		{
+			MethodName: "DeleteSharedNetwork",
+			Handler:    _AgentService_DeleteSharedNetwork_Handler,
 		},
 		{
 			MethodName: "SaveRoute",
@@ -1907,6 +2303,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "RestoreDeployment",
+			Handler:       _AgentService_RestoreDeployment_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Rollback",
 			Handler:       _AgentService_Rollback_Handler,

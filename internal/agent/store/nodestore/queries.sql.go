@@ -65,6 +65,20 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteProjectSubnets = `-- name: DeleteProjectSubnets :exec
+DELETE FROM subnets WHERE owner = ?1 OR owner LIKE ?2
+`
+
+type DeleteProjectSubnetsParams struct {
+	ProjectOwner string
+	MemberPrefix string
+}
+
+func (q *Queries) DeleteProjectSubnets(ctx context.Context, arg DeleteProjectSubnetsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteProjectSubnets, arg.ProjectOwner, arg.MemberPrefix)
+	return err
+}
+
 const deleteRawBefore = `-- name: DeleteRawBefore :exec
 DELETE FROM metrics_raw WHERE ts < ?
 `
@@ -74,20 +88,44 @@ func (q *Queries) DeleteRawBefore(ctx context.Context, ts int64) error {
 	return err
 }
 
+const deleteSharedNetwork = `-- name: DeleteSharedNetwork :exec
+DELETE FROM shared_networks WHERE name = ?
+`
+
+func (q *Queries) DeleteSharedNetwork(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, deleteSharedNetwork, name)
+	return err
+}
+
+const deleteSubnet = `-- name: DeleteSubnet :exec
+DELETE FROM subnets WHERE owner = ?
+`
+
+func (q *Queries) DeleteSubnet(ctx context.Context, owner string) error {
+	_, err := q.db.ExecContext(ctx, deleteSubnet, owner)
+	return err
+}
+
 const getProject = `-- name: GetProject :one
-SELECT id, dir, subnet, created_at FROM projects WHERE id = ?
+SELECT id, dir, created_at FROM projects WHERE id = ?
 `
 
 func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 	row := q.db.QueryRowContext(ctx, getProject, id)
 	var i Project
-	err := row.Scan(
-		&i.ID,
-		&i.Dir,
-		&i.Subnet,
-		&i.CreatedAt,
-	)
+	err := row.Scan(&i.ID, &i.Dir, &i.CreatedAt)
 	return i, err
+}
+
+const getSubnet = `-- name: GetSubnet :one
+SELECT subnet FROM subnets WHERE owner = ?
+`
+
+func (q *Queries) GetSubnet(ctx context.Context, owner string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSubnet, owner)
+	var subnet string
+	err := row.Scan(&subnet)
+	return subnet, err
 }
 
 const insertM5 = `-- name: InsertM5 :exec
@@ -121,28 +159,50 @@ func (q *Queries) InsertMetric(ctx context.Context, arg InsertMetricParams) erro
 }
 
 const insertProject = `-- name: InsertProject :exec
-INSERT INTO projects (id, dir, subnet, created_at) VALUES (?, ?, ?, ?)
+INSERT INTO projects (id, dir, created_at) VALUES (?, ?, ?)
 `
 
 type InsertProjectParams struct {
 	ID        string
 	Dir       string
-	Subnet    string
 	CreatedAt int64
 }
 
 func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) error {
-	_, err := q.db.ExecContext(ctx, insertProject,
-		arg.ID,
-		arg.Dir,
-		arg.Subnet,
-		arg.CreatedAt,
-	)
+	_, err := q.db.ExecContext(ctx, insertProject, arg.ID, arg.Dir, arg.CreatedAt)
+	return err
+}
+
+const insertSharedNetwork = `-- name: InsertSharedNetwork :exec
+INSERT INTO shared_networks (name, created_at) VALUES (?, ?)
+`
+
+type InsertSharedNetworkParams struct {
+	Name      string
+	CreatedAt int64
+}
+
+func (q *Queries) InsertSharedNetwork(ctx context.Context, arg InsertSharedNetworkParams) error {
+	_, err := q.db.ExecContext(ctx, insertSharedNetwork, arg.Name, arg.CreatedAt)
+	return err
+}
+
+const insertSubnet = `-- name: InsertSubnet :exec
+INSERT INTO subnets (subnet, owner) VALUES (?, ?)
+`
+
+type InsertSubnetParams struct {
+	Subnet string
+	Owner  string
+}
+
+func (q *Queries) InsertSubnet(ctx context.Context, arg InsertSubnetParams) error {
+	_, err := q.db.ExecContext(ctx, insertSubnet, arg.Subnet, arg.Owner)
 	return err
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, dir, subnet, created_at FROM projects ORDER BY created_at
+SELECT id, dir, created_at FROM projects ORDER BY created_at
 `
 
 func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
@@ -154,12 +214,34 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	items := []Project{}
 	for rows.Next() {
 		var i Project
-		if err := rows.Scan(
-			&i.ID,
-			&i.Dir,
-			&i.Subnet,
-			&i.CreatedAt,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Dir, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSharedNetworks = `-- name: ListSharedNetworks :many
+SELECT name, created_at FROM shared_networks ORDER BY name
+`
+
+func (q *Queries) ListSharedNetworks(ctx context.Context) ([]SharedNetwork, error) {
+	rows, err := q.db.QueryContext(ctx, listSharedNetworks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SharedNetwork{}
+	for rows.Next() {
+		var i SharedNetwork
+		if err := rows.Scan(&i.Name, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -174,7 +256,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 const listSubnets = `-- name: ListSubnets :many
-SELECT subnet FROM projects
+SELECT subnet FROM subnets
 `
 
 func (q *Queries) ListSubnets(ctx context.Context) ([]string, error) {

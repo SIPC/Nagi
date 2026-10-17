@@ -19,6 +19,15 @@ type MetricsRaw struct {
 type Project struct {
 	ID        string
 	Dir       string
-	Subnet    string
 	CreatedAt int64
+}
+
+type SharedNetwork struct {
+	Name      string
+	CreatedAt int64
+}
+
+type Subnet struct {
+	Subnet string
+	Owner  string
 }

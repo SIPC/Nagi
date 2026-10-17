@@ -41,11 +41,40 @@ const (
 	AgentServiceCreateProjectProcedure = "/nagi.v1.AgentService/CreateProject"
 	// AgentServiceGetProjectProcedure is the fully-qualified name of the AgentService's GetProject RPC.
 	AgentServiceGetProjectProcedure = "/nagi.v1.AgentService/GetProject"
+	// AgentServiceAddMemberProcedure is the fully-qualified name of the AgentService's AddMember RPC.
+	AgentServiceAddMemberProcedure = "/nagi.v1.AgentService/AddMember"
+	// AgentServiceDeleteMemberProcedure is the fully-qualified name of the AgentService's DeleteMember
+	// RPC.
+	AgentServiceDeleteMemberProcedure = "/nagi.v1.AgentService/DeleteMember"
 	// AgentServiceSaveDraftProcedure is the fully-qualified name of the AgentService's SaveDraft RPC.
 	AgentServiceSaveDraftProcedure = "/nagi.v1.AgentService/SaveDraft"
 	// AgentServiceDiscardDraftProcedure is the fully-qualified name of the AgentService's DiscardDraft
 	// RPC.
 	AgentServiceDiscardDraftProcedure = "/nagi.v1.AgentService/DiscardDraft"
+	// AgentServiceUpdateProjectSettingsProcedure is the fully-qualified name of the AgentService's
+	// UpdateProjectSettings RPC.
+	AgentServiceUpdateProjectSettingsProcedure = "/nagi.v1.AgentService/UpdateProjectSettings"
+	// AgentServiceSaveSharedEnvProcedure is the fully-qualified name of the AgentService's
+	// SaveSharedEnv RPC.
+	AgentServiceSaveSharedEnvProcedure = "/nagi.v1.AgentService/SaveSharedEnv"
+	// AgentServiceDiscardSharedEnvProcedure is the fully-qualified name of the AgentService's
+	// DiscardSharedEnv RPC.
+	AgentServiceDiscardSharedEnvProcedure = "/nagi.v1.AgentService/DiscardSharedEnv"
+	// AgentServiceListDeploymentsProcedure is the fully-qualified name of the AgentService's
+	// ListDeployments RPC.
+	AgentServiceListDeploymentsProcedure = "/nagi.v1.AgentService/ListDeployments"
+	// AgentServiceRestoreDeploymentProcedure is the fully-qualified name of the AgentService's
+	// RestoreDeployment RPC.
+	AgentServiceRestoreDeploymentProcedure = "/nagi.v1.AgentService/RestoreDeployment"
+	// AgentServiceListSharedNetworksProcedure is the fully-qualified name of the AgentService's
+	// ListSharedNetworks RPC.
+	AgentServiceListSharedNetworksProcedure = "/nagi.v1.AgentService/ListSharedNetworks"
+	// AgentServiceCreateSharedNetworkProcedure is the fully-qualified name of the AgentService's
+	// CreateSharedNetwork RPC.
+	AgentServiceCreateSharedNetworkProcedure = "/nagi.v1.AgentService/CreateSharedNetwork"
+	// AgentServiceDeleteSharedNetworkProcedure is the fully-qualified name of the AgentService's
+	// DeleteSharedNetwork RPC.
+	AgentServiceDeleteSharedNetworkProcedure = "/nagi.v1.AgentService/DeleteSharedNetwork"
 	// AgentServiceSaveRouteProcedure is the fully-qualified name of the AgentService's SaveRoute RPC.
 	AgentServiceSaveRouteProcedure = "/nagi.v1.AgentService/SaveRoute"
 	// AgentServiceDeleteRouteProcedure is the fully-qualified name of the AgentService's DeleteRoute
@@ -167,17 +196,36 @@ type AgentServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	// 往项目里加一个成员（只保存，不部署）。
+	AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
+	// 删除成员：停止并删除它的容器，目录默认保留。
+	DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
+	// 保存成员的草稿。
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
+	UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error)
+	// 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
+	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
+	DiscardSharedEnv(context.Context, *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
+	// 项目的部署记录，最新的在前。
+	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
+	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(context.Context, *connect.Request[v1.RestoreDeploymentRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 本节点的共享网络。
+	ListSharedNetworks(context.Context, *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	CreateSharedNetwork(context.Context, *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 删除共享网络：还有项目加入时拒绝。
+	DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
-	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
-	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -275,6 +323,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 			connect.WithClientOptions(opts...),
 		),
+		addMember: connect.NewClient[v1.AddMemberRequest, v1.AddMemberResponse](
+			httpClient,
+			baseURL+AgentServiceAddMemberProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("AddMember")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteMember: connect.NewClient[v1.DeleteMemberRequest, v1.DeleteMemberResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteMemberProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteMember")),
+			connect.WithClientOptions(opts...),
+		),
 		saveDraft: connect.NewClient[v1.SaveDraftRequest, v1.SaveDraftResponse](
 			httpClient,
 			baseURL+AgentServiceSaveDraftProcedure,
@@ -285,6 +345,54 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceDiscardDraftProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
+			connect.WithClientOptions(opts...),
+		),
+		updateProjectSettings: connect.NewClient[v1.UpdateProjectSettingsRequest, v1.UpdateProjectSettingsResponse](
+			httpClient,
+			baseURL+AgentServiceUpdateProjectSettingsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("UpdateProjectSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		saveSharedEnv: connect.NewClient[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse](
+			httpClient,
+			baseURL+AgentServiceSaveSharedEnvProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SaveSharedEnv")),
+			connect.WithClientOptions(opts...),
+		),
+		discardSharedEnv: connect.NewClient[v1.DiscardSharedEnvRequest, v1.DiscardSharedEnvResponse](
+			httpClient,
+			baseURL+AgentServiceDiscardSharedEnvProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DiscardSharedEnv")),
+			connect.WithClientOptions(opts...),
+		),
+		listDeployments: connect.NewClient[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse](
+			httpClient,
+			baseURL+AgentServiceListDeploymentsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListDeployments")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreDeployment: connect.NewClient[v1.RestoreDeploymentRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRestoreDeploymentProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		listSharedNetworks: connect.NewClient[v1.ListSharedNetworksRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+AgentServiceListSharedNetworksProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListSharedNetworks")),
+			connect.WithClientOptions(opts...),
+		),
+		createSharedNetwork: connect.NewClient[v1.CreateSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+AgentServiceCreateSharedNetworkProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CreateSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSharedNetwork: connect.NewClient[v1.DeleteSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteSharedNetworkProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteSharedNetwork")),
 			connect.WithClientOptions(opts...),
 		),
 		saveRoute: connect.NewClient[v1.SaveRouteRequest, v1.SaveRouteResponse](
@@ -544,53 +652,63 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	listProjects         *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	createProject        *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
-	getProject           *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	saveDraft            *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
-	discardDraft         *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
-	saveRoute            *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
-	deleteRoute          *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
-	listVersions         *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
-	rollback             *connect.Client[v1.RollbackRequest, v1.DeployEvent]
-	listSnapshots        *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
-	createSnapshot       *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
-	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
-	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
-	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
-	deleteProject        *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
-	deployProject        *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
-	streamLogs           *connect.Client[v1.StreamLogsRequest, v1.LogLine]
-	exec                 *connect.Client[v1.ExecInput, v1.ExecOutput]
-	listPanels           *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
-	addPanel             *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
-	removePanel          *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
-	getMeshStatus        *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
-	meshPing             *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
-	setBackupTarget      *connect.Client[v1.SetBackupTargetRequest, v1.BackupStatus]
-	getBackupStatus      *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
-	syncBackup           *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
-	acceptReplica        *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
-	listReplicas         *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
-	listReplicaSnapshots *connect.Client[v1.ReplicaRef, v1.ListSnapshotsResponse]
-	restoreReplica       *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
-	deleteReplica        *connect.Client[v1.ReplicaRef, v1.DeleteReplicaResponse]
-	checkRestore         *connect.Client[v1.CheckRestoreRequest, v1.CheckRestoreResponse]
-	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
-	migrateResume        *connect.Client[v1.ReplicaRef, v1.DeployEvent]
-	migrateFinish        *connect.Client[v1.ReplicaRef, v1.MigrateFinishResponse]
-	checkImages          *connect.Client[v1.ReplicaRef, v1.CheckImagesResponse]
-	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
-	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
-	setPanelDomain       *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
-	upgrade              *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
-	listRegistries       *connect.Client[v1.ReplicaRef, v1.RegistriesResponse]
-	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.RegistriesResponse]
-	logoutRegistry       *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
-	setFailover          *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
-	getFailover          *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
-	listFailovers        *connect.Client[v1.ListFailoversRequest, v1.ListFailoversResponse]
-	confirmTakeover      *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
+	listProjects          *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	createProject         *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	getProject            *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
+	addMember             *connect.Client[v1.AddMemberRequest, v1.AddMemberResponse]
+	deleteMember          *connect.Client[v1.DeleteMemberRequest, v1.DeleteMemberResponse]
+	saveDraft             *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
+	discardDraft          *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
+	updateProjectSettings *connect.Client[v1.UpdateProjectSettingsRequest, v1.UpdateProjectSettingsResponse]
+	saveSharedEnv         *connect.Client[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse]
+	discardSharedEnv      *connect.Client[v1.DiscardSharedEnvRequest, v1.DiscardSharedEnvResponse]
+	listDeployments       *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
+	restoreDeployment     *connect.Client[v1.RestoreDeploymentRequest, v1.DeployEvent]
+	listSharedNetworks    *connect.Client[v1.ListSharedNetworksRequest, v1.ListSharedNetworksResponse]
+	createSharedNetwork   *connect.Client[v1.CreateSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	deleteSharedNetwork   *connect.Client[v1.DeleteSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
+	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
+	listVersions          *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
+	rollback              *connect.Client[v1.RollbackRequest, v1.DeployEvent]
+	listSnapshots         *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
+	createSnapshot        *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
+	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	setAlertConfig        *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	queryMetrics          *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	deleteProject         *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
+	deployProject         *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
+	streamLogs            *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec                  *connect.Client[v1.ExecInput, v1.ExecOutput]
+	listPanels            *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
+	addPanel              *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
+	removePanel           *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	getMeshStatus         *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
+	meshPing              *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	setBackupTarget       *connect.Client[v1.SetBackupTargetRequest, v1.BackupStatus]
+	getBackupStatus       *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
+	syncBackup            *connect.Client[v1.GetBackupStatusRequest, v1.BackupStatus]
+	acceptReplica         *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
+	listReplicas          *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
+	listReplicaSnapshots  *connect.Client[v1.ReplicaRef, v1.ListSnapshotsResponse]
+	restoreReplica        *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
+	deleteReplica         *connect.Client[v1.ReplicaRef, v1.DeleteReplicaResponse]
+	checkRestore          *connect.Client[v1.CheckRestoreRequest, v1.CheckRestoreResponse]
+	migrateOut            *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
+	migrateResume         *connect.Client[v1.ReplicaRef, v1.DeployEvent]
+	migrateFinish         *connect.Client[v1.ReplicaRef, v1.MigrateFinishResponse]
+	checkImages           *connect.Client[v1.ReplicaRef, v1.CheckImagesResponse]
+	getMirrors            *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
+	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
+	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
+	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
+	listRegistries        *connect.Client[v1.ReplicaRef, v1.RegistriesResponse]
+	loginRegistry         *connect.Client[v1.LoginRegistryRequest, v1.RegistriesResponse]
+	logoutRegistry        *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
+	setFailover           *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
+	getFailover           *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
+	listFailovers         *connect.Client[v1.ListFailoversRequest, v1.ListFailoversResponse]
+	confirmTakeover       *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -608,6 +726,16 @@ func (c *agentServiceClient) GetProject(ctx context.Context, req *connect.Reques
 	return c.getProject.CallUnary(ctx, req)
 }
 
+// AddMember calls nagi.v1.AgentService.AddMember.
+func (c *agentServiceClient) AddMember(ctx context.Context, req *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
+	return c.addMember.CallUnary(ctx, req)
+}
+
+// DeleteMember calls nagi.v1.AgentService.DeleteMember.
+func (c *agentServiceClient) DeleteMember(ctx context.Context, req *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
+	return c.deleteMember.CallUnary(ctx, req)
+}
+
 // SaveDraft calls nagi.v1.AgentService.SaveDraft.
 func (c *agentServiceClient) SaveDraft(ctx context.Context, req *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error) {
 	return c.saveDraft.CallUnary(ctx, req)
@@ -616,6 +744,46 @@ func (c *agentServiceClient) SaveDraft(ctx context.Context, req *connect.Request
 // DiscardDraft calls nagi.v1.AgentService.DiscardDraft.
 func (c *agentServiceClient) DiscardDraft(ctx context.Context, req *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
 	return c.discardDraft.CallUnary(ctx, req)
+}
+
+// UpdateProjectSettings calls nagi.v1.AgentService.UpdateProjectSettings.
+func (c *agentServiceClient) UpdateProjectSettings(ctx context.Context, req *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error) {
+	return c.updateProjectSettings.CallUnary(ctx, req)
+}
+
+// SaveSharedEnv calls nagi.v1.AgentService.SaveSharedEnv.
+func (c *agentServiceClient) SaveSharedEnv(ctx context.Context, req *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {
+	return c.saveSharedEnv.CallUnary(ctx, req)
+}
+
+// DiscardSharedEnv calls nagi.v1.AgentService.DiscardSharedEnv.
+func (c *agentServiceClient) DiscardSharedEnv(ctx context.Context, req *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error) {
+	return c.discardSharedEnv.CallUnary(ctx, req)
+}
+
+// ListDeployments calls nagi.v1.AgentService.ListDeployments.
+func (c *agentServiceClient) ListDeployments(ctx context.Context, req *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error) {
+	return c.listDeployments.CallUnary(ctx, req)
+}
+
+// RestoreDeployment calls nagi.v1.AgentService.RestoreDeployment.
+func (c *agentServiceClient) RestoreDeployment(ctx context.Context, req *connect.Request[v1.RestoreDeploymentRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreDeployment.CallServerStream(ctx, req)
+}
+
+// ListSharedNetworks calls nagi.v1.AgentService.ListSharedNetworks.
+func (c *agentServiceClient) ListSharedNetworks(ctx context.Context, req *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.listSharedNetworks.CallUnary(ctx, req)
+}
+
+// CreateSharedNetwork calls nagi.v1.AgentService.CreateSharedNetwork.
+func (c *agentServiceClient) CreateSharedNetwork(ctx context.Context, req *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.createSharedNetwork.CallUnary(ctx, req)
+}
+
+// DeleteSharedNetwork calls nagi.v1.AgentService.DeleteSharedNetwork.
+func (c *agentServiceClient) DeleteSharedNetwork(ctx context.Context, req *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.deleteSharedNetwork.CallUnary(ctx, req)
 }
 
 // SaveRoute calls nagi.v1.AgentService.SaveRoute.
@@ -833,17 +1001,36 @@ type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
+	// 往项目里加一个成员（只保存，不部署）。
+	AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
+	// 删除成员：停止并删除它的容器，目录默认保留。
+	DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
+	// 保存成员的草稿。
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
+	UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error)
+	// 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
+	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
+	DiscardSharedEnv(context.Context, *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
+	// 项目的部署记录，最新的在前。
+	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
+	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(context.Context, *connect.Request[v1.RestoreDeploymentRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 本节点的共享网络。
+	ListSharedNetworks(context.Context, *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	CreateSharedNetwork(context.Context, *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 删除共享网络：还有项目加入时拒绝。
+	DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
-	// 回滚到某个版本：用它的配置、文件和镜像生成一个新版本并部署，可选同时恢复数据。
+	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
-	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -937,6 +1124,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceAddMemberHandler := connect.NewUnaryHandler(
+		AgentServiceAddMemberProcedure,
+		svc.AddMember,
+		connect.WithSchema(agentServiceMethods.ByName("AddMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteMemberHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteMemberProcedure,
+		svc.DeleteMember,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteMember")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSaveDraftHandler := connect.NewUnaryHandler(
 		AgentServiceSaveDraftProcedure,
 		svc.SaveDraft,
@@ -947,6 +1146,54 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceDiscardDraftProcedure,
 		svc.DiscardDraft,
 		connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceUpdateProjectSettingsHandler := connect.NewUnaryHandler(
+		AgentServiceUpdateProjectSettingsProcedure,
+		svc.UpdateProjectSettings,
+		connect.WithSchema(agentServiceMethods.ByName("UpdateProjectSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSaveSharedEnvHandler := connect.NewUnaryHandler(
+		AgentServiceSaveSharedEnvProcedure,
+		svc.SaveSharedEnv,
+		connect.WithSchema(agentServiceMethods.ByName("SaveSharedEnv")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDiscardSharedEnvHandler := connect.NewUnaryHandler(
+		AgentServiceDiscardSharedEnvProcedure,
+		svc.DiscardSharedEnv,
+		connect.WithSchema(agentServiceMethods.ByName("DiscardSharedEnv")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListDeploymentsHandler := connect.NewUnaryHandler(
+		AgentServiceListDeploymentsProcedure,
+		svc.ListDeployments,
+		connect.WithSchema(agentServiceMethods.ByName("ListDeployments")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreDeploymentHandler := connect.NewServerStreamHandler(
+		AgentServiceRestoreDeploymentProcedure,
+		svc.RestoreDeployment,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListSharedNetworksHandler := connect.NewUnaryHandler(
+		AgentServiceListSharedNetworksProcedure,
+		svc.ListSharedNetworks,
+		connect.WithSchema(agentServiceMethods.ByName("ListSharedNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCreateSharedNetworkHandler := connect.NewUnaryHandler(
+		AgentServiceCreateSharedNetworkProcedure,
+		svc.CreateSharedNetwork,
+		connect.WithSchema(agentServiceMethods.ByName("CreateSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteSharedNetworkHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteSharedNetworkProcedure,
+		svc.DeleteSharedNetwork,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteSharedNetwork")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceSaveRouteHandler := connect.NewUnaryHandler(
@@ -1209,10 +1456,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateProjectHandler.ServeHTTP(w, r)
 		case AgentServiceGetProjectProcedure:
 			agentServiceGetProjectHandler.ServeHTTP(w, r)
+		case AgentServiceAddMemberProcedure:
+			agentServiceAddMemberHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteMemberProcedure:
+			agentServiceDeleteMemberHandler.ServeHTTP(w, r)
 		case AgentServiceSaveDraftProcedure:
 			agentServiceSaveDraftHandler.ServeHTTP(w, r)
 		case AgentServiceDiscardDraftProcedure:
 			agentServiceDiscardDraftHandler.ServeHTTP(w, r)
+		case AgentServiceUpdateProjectSettingsProcedure:
+			agentServiceUpdateProjectSettingsHandler.ServeHTTP(w, r)
+		case AgentServiceSaveSharedEnvProcedure:
+			agentServiceSaveSharedEnvHandler.ServeHTTP(w, r)
+		case AgentServiceDiscardSharedEnvProcedure:
+			agentServiceDiscardSharedEnvHandler.ServeHTTP(w, r)
+		case AgentServiceListDeploymentsProcedure:
+			agentServiceListDeploymentsHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreDeploymentProcedure:
+			agentServiceRestoreDeploymentHandler.ServeHTTP(w, r)
+		case AgentServiceListSharedNetworksProcedure:
+			agentServiceListSharedNetworksHandler.ServeHTTP(w, r)
+		case AgentServiceCreateSharedNetworkProcedure:
+			agentServiceCreateSharedNetworkHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteSharedNetworkProcedure:
+			agentServiceDeleteSharedNetworkHandler.ServeHTTP(w, r)
 		case AgentServiceSaveRouteProcedure:
 			agentServiceSaveRouteHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteRouteProcedure:
@@ -1318,12 +1585,52 @@ func (UnimplementedAgentServiceHandler) GetProject(context.Context, *connect.Req
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetProject is not implemented"))
 }
 
+func (UnimplementedAgentServiceHandler) AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AddMember is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteMember is not implemented"))
+}
+
 func (UnimplementedAgentServiceHandler) SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SaveDraft is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DiscardDraft is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.UpdateProjectSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.UpdateProjectSettings is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SaveSharedEnv is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DiscardSharedEnv(context.Context, *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DiscardSharedEnv is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListDeployments is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreDeployment(context.Context, *connect.Request[v1.RestoreDeploymentRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreDeployment is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListSharedNetworks(context.Context, *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListSharedNetworks is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CreateSharedNetwork(context.Context, *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CreateSharedNetwork is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteSharedNetwork is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error) {
