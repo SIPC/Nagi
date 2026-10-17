@@ -57,6 +57,7 @@ const (
 	AgentService_CheckImages_FullMethodName          = "/nagi.v1.AgentService/CheckImages"
 	AgentService_GetMirrors_FullMethodName           = "/nagi.v1.AgentService/GetMirrors"
 	AgentService_SetMirrors_FullMethodName           = "/nagi.v1.AgentService/SetMirrors"
+	AgentService_Upgrade_FullMethodName              = "/nagi.v1.AgentService/Upgrade"
 	AgentService_ListRegistries_FullMethodName       = "/nagi.v1.AgentService/ListRegistries"
 	AgentService_LoginRegistry_FullMethodName        = "/nagi.v1.AgentService/LoginRegistry"
 	AgentService_LogoutRegistry_FullMethodName       = "/nagi.v1.AgentService/LogoutRegistry"
@@ -135,6 +136,8 @@ type AgentServiceClient interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(ctx context.Context, in *GetMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
 	SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error)
+	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+	Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
 	ListRegistries(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*RegistriesResponse, error)
 	// 登录私有仓库，会向仓库验证账号。
@@ -613,6 +616,16 @@ func (c *agentServiceClient) SetMirrors(ctx context.Context, in *Mirrors, opts .
 	return out, nil
 }
 
+func (c *agentServiceClient) Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeResponse)
+	err := c.cc.Invoke(ctx, AgentService_Upgrade_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) ListRegistries(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*RegistriesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegistriesResponse)
@@ -752,6 +765,8 @@ type AgentServiceServer interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *GetMirrorsRequest) (*Mirrors, error)
 	SetMirrors(context.Context, *Mirrors) (*Mirrors, error)
+	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+	Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
 	ListRegistries(context.Context, *ReplicaRef) (*RegistriesResponse, error)
 	// 登录私有仓库，会向仓库验证账号。
@@ -888,6 +903,9 @@ func (UnimplementedAgentServiceServer) GetMirrors(context.Context, *GetMirrorsRe
 }
 func (UnimplementedAgentServiceServer) SetMirrors(context.Context, *Mirrors) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetMirrors not implemented")
+}
+func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Upgrade not implemented")
 }
 func (UnimplementedAgentServiceServer) ListRegistries(context.Context, *ReplicaRef) (*RegistriesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegistries not implemented")
@@ -1548,6 +1566,24 @@ func _AgentService_SetMirrors_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_Upgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).Upgrade(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_Upgrade_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).Upgrade(ctx, req.(*UpgradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_ListRegistries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReplicaRef)
 	if err := dec(in); err != nil {
@@ -1796,6 +1832,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMirrors",
 			Handler:    _AgentService_SetMirrors_Handler,
+		},
+		{
+			MethodName: "Upgrade",
+			Handler:    _AgentService_Upgrade_Handler,
 		},
 		{
 			MethodName: "ListRegistries",

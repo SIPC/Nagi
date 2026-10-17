@@ -29,6 +29,7 @@ type PanelInfo struct {
 	DataDir     string
 	Port        int
 	Fingerprint string
+	Version     string
 	// NewEnrollToken 生成一次性加入令牌，返回令牌和过期时间。
 	NewEnrollToken func(ctx context.Context) (string, time.Time, error)
 }
@@ -52,6 +53,7 @@ func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
 		PublicAddress: p.PublicAddress(ctx),
 		Port:          uint32(p.Port),
 		Fingerprint:   p.Fingerprint,
+		Version:       p.Version,
 	}
 }
 

@@ -38,6 +38,8 @@ type Config struct {
 	// Port 是面板端口；为 0 时首次启动随机选一个并记住。
 	Port   int
 	Logger *slog.Logger
+	// Version 是面板（也是它提供给节点的 nagi）的版本。
+	Version string
 }
 
 const (
@@ -182,6 +184,7 @@ func (s *Server) Run(ctx context.Context) error {
 		DataDir:     s.cfg.DataDir,
 		Port:        s.port,
 		Fingerprint: s.fingerprint,
+		Version:     s.cfg.Version,
 		NewEnrollToken: func(ctx context.Context) (string, time.Time, error) {
 			token, err := s.CreateEnrollToken(ctx)
 			return token, time.Now().Add(enrollTokenTTL), err

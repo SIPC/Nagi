@@ -57,6 +57,7 @@ func serverCmd() *cobra.Command {
 				DataDir: filepath.Join(dataDir, "panel"),
 				Port:    port,
 				Logger:  log.With("component", "panel"),
+				Version: version,
 			})
 			if err != nil {
 				return err
@@ -91,6 +92,7 @@ func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, n
 		DataDir:      agentDir,
 		Version:      version,
 		DisableProxy: noProxy,
+		Embedded:     true,
 		Logger:       log.With("component", "agent"),
 	}
 	// 只在第一次启动时自动加入本面板。之后即使本机节点被移交给了别的面板，也不会再自动加回来。

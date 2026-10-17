@@ -2,8 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"connectrpc.com/connect"
@@ -166,4 +170,37 @@ func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetP
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("面板的 mesh 没有启动"))
 	}
 	return connect.NewResponse(mesh.StatusProto(m, s.Nodes.MeshPeerName)), nil
+}
+
+// ---- 升级节点 ----
+
+func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagiv1.UpgradeNodeRequest]) (*connect.Response[nagiv1.UpgradeResponse], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	info := conn.LastReport().GetNode()
+	if info.GetOs() != "linux" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("只能升级 Linux 节点"))
+	}
+	path, err := s.binaryPath(info.GetArch())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	h := sha256.New()
+	_, err = io.Copy(h, f)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := conn.Agent.Upgrade(ctx, &nagiv1.UpgradeRequest{Sha256: hex.EncodeToString(h.Sum(nil))})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	s.Log.Info("节点正在升级", "node", req.Msg.GetNodeId(), "from", info.GetVersion(), "to", resp.GetVersion())
+	return connect.NewResponse(resp), nil
 }

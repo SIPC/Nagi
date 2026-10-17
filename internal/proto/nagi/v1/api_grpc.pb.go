@@ -392,6 +392,7 @@ const (
 	NodeService_DeleteNodeReplica_FullMethodName        = "/nagi.v1.NodeService/DeleteNodeReplica"
 	NodeService_ListNodeFailovers_FullMethodName        = "/nagi.v1.NodeService/ListNodeFailovers"
 	NodeService_ConfirmNodeTakeover_FullMethodName      = "/nagi.v1.NodeService/ConfirmNodeTakeover"
+	NodeService_UpgradeNode_FullMethodName              = "/nagi.v1.NodeService/UpgradeNode"
 	NodeService_GetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/GetNodeMirrors"
 	NodeService_SetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -426,6 +427,8 @@ type NodeServiceClient interface {
 	ListNodeFailovers(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
@@ -583,6 +586,16 @@ func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, in *NodePro
 	return out, nil
 }
 
+func (c *nodeServiceClient) UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeResponse)
+	err := c.cc.Invoke(ctx, NodeService_UpgradeNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
@@ -660,6 +673,8 @@ type NodeServiceServer interface {
 	ListNodeFailovers(context.Context, *ListNodeReplicasRequest) (*ListFailoversResponse, error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
@@ -716,6 +731,9 @@ func (UnimplementedNodeServiceServer) ListNodeFailovers(context.Context, *ListNo
 }
 func (UnimplementedNodeServiceServer) ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfirmNodeTakeover not implemented")
+}
+func (UnimplementedNodeServiceServer) UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpgradeNode not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
@@ -980,6 +998,24 @@ func _NodeService_ConfirmNodeTakeover_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_UpgradeNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).UpgradeNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_UpgradeNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).UpgradeNode(ctx, req.(*UpgradeNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListNodeReplicasRequest)
 	if err := dec(in); err != nil {
@@ -1124,6 +1160,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConfirmNodeTakeover",
 			Handler:    _NodeService_ConfirmNodeTakeover_Handler,
+		},
+		{
+			MethodName: "UpgradeNode",
+			Handler:    _NodeService_UpgradeNode_Handler,
 		},
 		{
 			MethodName: "GetNodeMirrors",

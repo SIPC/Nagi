@@ -90,6 +90,8 @@ service NodeService {
   rpc ListNodeFailovers(ListNodeReplicasRequest) returns (ListFailoversResponse);
   // 在热备节点上确认顶替。
   rpc ConfirmNodeTakeover(NodeProjectRef) returns (FailoverStatus);
+  // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+  rpc UpgradeNode(UpgradeNodeRequest) returns (UpgradeResponse);
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(ListNodeReplicasRequest) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
@@ -127,6 +129,10 @@ message PingNodeMeshRequest {
 message GetPanelMeshRequest {}
 
 message ListNodeReplicasRequest {
+  string node_id = 1;
+}
+
+message UpgradeNodeRequest {
   string node_id = 1;
 }
 
@@ -276,6 +282,8 @@ message PanelSettings {
   // 以下只读
   uint32 port = 2;
   string fingerprint = 3;
+  // 面板的版本，节点版本和它不一样时可以升级。
+  string version = 4;
 }
 
 message GetSettingsRequest {}

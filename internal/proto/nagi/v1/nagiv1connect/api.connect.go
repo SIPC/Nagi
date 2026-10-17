@@ -92,6 +92,8 @@ const (
 	// NodeServiceConfirmNodeTakeoverProcedure is the fully-qualified name of the NodeService's
 	// ConfirmNodeTakeover RPC.
 	NodeServiceConfirmNodeTakeoverProcedure = "/nagi.v1.NodeService/ConfirmNodeTakeover"
+	// NodeServiceUpgradeNodeProcedure is the fully-qualified name of the NodeService's UpgradeNode RPC.
+	NodeServiceUpgradeNodeProcedure = "/nagi.v1.NodeService/UpgradeNode"
 	// NodeServiceGetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// GetNodeMirrors RPC.
 	NodeServiceGetNodeMirrorsProcedure = "/nagi.v1.NodeService/GetNodeMirrors"
@@ -498,6 +500,8 @@ type NodeServiceClient interface {
 	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -597,6 +601,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
 			connect.WithClientOptions(opts...),
 		),
+		upgradeNode: connect.NewClient[v1.UpgradeNodeRequest, v1.UpgradeResponse](
+			httpClient,
+			baseURL+NodeServiceUpgradeNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UpgradeNode")),
+			connect.WithClientOptions(opts...),
+		),
 		getNodeMirrors: connect.NewClient[v1.ListNodeReplicasRequest, v1.Mirrors](
 			httpClient,
 			baseURL+NodeServiceGetNodeMirrorsProcedure,
@@ -645,6 +655,7 @@ type nodeServiceClient struct {
 	deleteNodeReplica        *connect.Client[v1.NodeProjectRef, v1.DeleteReplicaResponse]
 	listNodeFailovers        *connect.Client[v1.ListNodeReplicasRequest, v1.ListFailoversResponse]
 	confirmNodeTakeover      *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
+	upgradeNode              *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
 	getNodeMirrors           *connect.Client[v1.ListNodeReplicasRequest, v1.Mirrors]
 	setNodeMirrors           *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
@@ -717,6 +728,11 @@ func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, req *connec
 	return c.confirmNodeTakeover.CallUnary(ctx, req)
 }
 
+// UpgradeNode calls nagi.v1.NodeService.UpgradeNode.
+func (c *nodeServiceClient) UpgradeNode(ctx context.Context, req *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
+	return c.upgradeNode.CallUnary(ctx, req)
+}
+
 // GetNodeMirrors calls nagi.v1.NodeService.GetNodeMirrors.
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, req *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error) {
 	return c.getNodeMirrors.CallUnary(ctx, req)
@@ -767,6 +783,8 @@ type NodeServiceHandler interface {
 	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -862,6 +880,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceUpgradeNodeHandler := connect.NewUnaryHandler(
+		NodeServiceUpgradeNodeProcedure,
+		svc.UpgradeNode,
+		connect.WithSchema(nodeServiceMethods.ByName("UpgradeNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetNodeMirrorsHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeMirrorsProcedure,
 		svc.GetNodeMirrors,
@@ -920,6 +944,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListNodeFailoversHandler.ServeHTTP(w, r)
 		case NodeServiceConfirmNodeTakeoverProcedure:
 			nodeServiceConfirmNodeTakeoverHandler.ServeHTTP(w, r)
+		case NodeServiceUpgradeNodeProcedure:
+			nodeServiceUpgradeNodeHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMirrorsProcedure:
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
@@ -989,6 +1015,10 @@ func (UnimplementedNodeServiceHandler) ListNodeFailovers(context.Context, *conne
 
 func (UnimplementedNodeServiceHandler) ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ConfirmNodeTakeover is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UpgradeNode is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error) {

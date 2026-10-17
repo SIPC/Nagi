@@ -106,18 +106,28 @@ func (a *API) DownloadHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		path := filepath.Join(a.Panel.DataDir, "binaries", name)
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			if runtime.GOOS != "linux" || runtime.GOARCH != arch {
-				http.Error(w, "面板没有 linux/"+arch+" 的 nagi，请把它放到面板数据目录的 binaries/"+name, http.StatusNotFound)
-				return
-			}
-			if path, err = os.Executable(); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		path, err := a.binaryPath(arch)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
 		http.ServeFile(w, r, path)
 	})
+}
+
+// binaryPath 返回面板提供给节点的 linux/<arch> 的 nagi：优先用数据目录 binaries/ 下的文件，
+// 没有时，如果面板自己就是这个架构的 Linux 版本，用面板自身。
+func (a *API) binaryPath(arch string) (string, error) {
+	name := "nagi-linux-" + arch
+	path := filepath.Join(a.Panel.DataDir, "binaries", name)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	if runtime.GOOS != "linux" || runtime.GOARCH != arch {
+		return "", errors.New("面板没有 linux/" + arch + " 的 nagi，请把它放到面板数据目录的 binaries/" + name)
+	}
+	return os.Executable()
 }

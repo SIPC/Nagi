@@ -77,6 +77,9 @@ service AgentService {
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);
 
+  // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+  rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
+
   // ---- 私有仓库认证（项目自己的 docker 配置） ----
   rpc ListRegistries(ReplicaRef) returns (RegistriesResponse);
   // 登录私有仓库，会向仓库验证账号。
@@ -91,6 +94,16 @@ service AgentService {
   rpc ListFailovers(ListFailoversRequest) returns (ListFailoversResponse);
   // 热备：用户确认顶替（有状态项目默认要确认）。
   rpc ConfirmTakeover(ReplicaRef) returns (FailoverStatus);
+}
+
+message UpgradeRequest {
+  // 二进制的 SHA-256（十六进制），节点下载后核对。
+  string sha256 = 1;
+}
+
+message UpgradeResponse {
+  // 新二进制的版本号，节点替换完成后重启。
+  string version = 1;
 }
 
 message CheckImagesResponse {

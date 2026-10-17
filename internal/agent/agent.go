@@ -44,6 +44,8 @@ type Config struct {
 	DisableProxy bool
 	// MeshPort 是 mesh 的 UDP 端口，0 表示用记住的端口（第一次随机选）。
 	MeshPort uint16
+	// Embedded 表示这是面板自带的节点：随面板一起升级，不能单独升级。
+	Embedded bool
 	Version  string
 	Logger   *slog.Logger
 }

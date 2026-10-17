@@ -134,6 +134,8 @@ const (
 	AgentServiceGetMirrorsProcedure = "/nagi.v1.AgentService/GetMirrors"
 	// AgentServiceSetMirrorsProcedure is the fully-qualified name of the AgentService's SetMirrors RPC.
 	AgentServiceSetMirrorsProcedure = "/nagi.v1.AgentService/SetMirrors"
+	// AgentServiceUpgradeProcedure is the fully-qualified name of the AgentService's Upgrade RPC.
+	AgentServiceUpgradeProcedure = "/nagi.v1.AgentService/Upgrade"
 	// AgentServiceListRegistriesProcedure is the fully-qualified name of the AgentService's
 	// ListRegistries RPC.
 	AgentServiceListRegistriesProcedure = "/nagi.v1.AgentService/ListRegistries"
@@ -222,6 +224,8 @@ type AgentServiceClient interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
 	ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error)
 	// 登录私有仓库，会向仓库验证账号。
@@ -476,6 +480,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
 			connect.WithClientOptions(opts...),
 		),
+		upgrade: connect.NewClient[v1.UpgradeRequest, v1.UpgradeResponse](
+			httpClient,
+			baseURL+AgentServiceUpgradeProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("Upgrade")),
+			connect.WithClientOptions(opts...),
+		),
 		listRegistries: connect.NewClient[v1.ReplicaRef, v1.RegistriesResponse](
 			httpClient,
 			baseURL+AgentServiceListRegistriesProcedure,
@@ -561,6 +571,7 @@ type agentServiceClient struct {
 	checkImages          *connect.Client[v1.ReplicaRef, v1.CheckImagesResponse]
 	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
 	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
+	upgrade              *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	listRegistries       *connect.Client[v1.ReplicaRef, v1.RegistriesResponse]
 	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.RegistriesResponse]
 	logoutRegistry       *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
@@ -760,6 +771,11 @@ func (c *agentServiceClient) SetMirrors(ctx context.Context, req *connect.Reques
 	return c.setMirrors.CallUnary(ctx, req)
 }
 
+// Upgrade calls nagi.v1.AgentService.Upgrade.
+func (c *agentServiceClient) Upgrade(ctx context.Context, req *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
+	return c.upgrade.CallUnary(ctx, req)
+}
+
 // ListRegistries calls nagi.v1.AgentService.ListRegistries.
 func (c *agentServiceClient) ListRegistries(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error) {
 	return c.listRegistries.CallUnary(ctx, req)
@@ -860,6 +876,8 @@ type AgentServiceHandler interface {
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// ---- 私有仓库认证（项目自己的 docker 配置） ----
 	ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error)
 	// 登录私有仓库，会向仓库验证账号。
@@ -1110,6 +1128,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceUpgradeHandler := connect.NewUnaryHandler(
+		AgentServiceUpgradeProcedure,
+		svc.Upgrade,
+		connect.WithSchema(agentServiceMethods.ByName("Upgrade")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceListRegistriesHandler := connect.NewUnaryHandler(
 		AgentServiceListRegistriesProcedure,
 		svc.ListRegistries,
@@ -1230,6 +1254,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetMirrorsHandler.ServeHTTP(w, r)
 		case AgentServiceSetMirrorsProcedure:
 			agentServiceSetMirrorsHandler.ServeHTTP(w, r)
+		case AgentServiceUpgradeProcedure:
+			agentServiceUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceListRegistriesProcedure:
 			agentServiceListRegistriesHandler.ServeHTTP(w, r)
 		case AgentServiceLoginRegistryProcedure:
@@ -1403,6 +1429,10 @@ func (UnimplementedAgentServiceHandler) GetMirrors(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMirrors is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Upgrade is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error) {
