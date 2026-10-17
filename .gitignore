@@ -1,0 +1,19 @@
+﻿# Go
+/bin/
+/dist/
+*.test
+*.out
+
+# Generated / local data
+/.nagi-dev/
+
+# Frontend
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
