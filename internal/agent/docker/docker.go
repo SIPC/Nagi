@@ -5,6 +5,7 @@ package docker
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"net/netip"
 	"sort"
@@ -76,14 +77,22 @@ type Container struct {
 	Health  string
 	// IPs 是容器在各个网络里的地址，键是网络名。
 	IPs map[string]netip.Addr
+	// Project 是 Nagi 的项目 ID（nagi.project 标签）。
+	Project string
+}
+
+// ManagedContainers 列出带有 labelKey 标签（Nagi 管理）的所有容器。
+func (d *Client) ManagedContainers(ctx context.Context, labelKey string) ([]Container, error) {
+	return d.listContainers(ctx, make(client.Filters).Add("label", labelKey), labelKey)
 }
 
 // ProjectContainers 列出某个 compose 项目的全部容器（包括已停止的）。
 func (d *Client) ProjectContainers(ctx context.Context, composeProject string) ([]Container, error) {
-	list, err := d.c.ContainerList(ctx, client.ContainerListOptions{
-		All:     true,
-		Filters: make(client.Filters).Add("label", labelProject+"="+composeProject),
-	})
+	return d.listContainers(ctx, make(client.Filters).Add("label", labelProject+"="+composeProject), "nagi.project")
+}
+
+func (d *Client) listContainers(ctx context.Context, filters client.Filters, projectLabel string) ([]Container, error) {
+	list, err := d.c.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +114,7 @@ func (d *Client) ProjectContainers(ctx context.Context, composeProject string) (
 			Status:  c.Status,
 			Health:  health(c.Health),
 			IPs:     ips,
+			Project: c.Labels[projectLabel],
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
@@ -328,4 +338,55 @@ func (d *Client) ProjectImages(ctx context.Context, composeProject string) (map[
 		out[svc] = ref
 	}
 	return out, nil
+}
+
+// Stats 是一个容器的一次资源采样。
+type Stats struct {
+	CPUTotal    uint64 // 容器累计 CPU 时间（纳秒）
+	SystemTotal uint64 // 主机累计 CPU 时间
+	OnlineCPUs  uint32
+	MemUsed     uint64 // 字节，不含可回收的页缓存
+	MemLimit    uint64
+	NetRx       uint64 // 累计字节
+	NetTx       uint64
+}
+
+// ContainerStats 对容器做一次资源采样（不等待，不连续输出）。
+func (d *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
+	res, err := d.c.ContainerStats(ctx, id, client.ContainerStatsOptions{Stream: false})
+	if err != nil {
+		return Stats{}, err
+	}
+	defer res.Body.Close()
+	var s container.StatsResponse
+	if err := json.NewDecoder(res.Body).Decode(&s); err != nil {
+		return Stats{}, err
+	}
+	out := Stats{
+		CPUTotal:    s.CPUStats.CPUUsage.TotalUsage,
+		SystemTotal: s.CPUStats.SystemUsage,
+		OnlineCPUs:  s.CPUStats.OnlineCPUs,
+		MemUsed:     s.MemoryStats.Usage,
+		MemLimit:    s.MemoryStats.Limit,
+	}
+	// 页缓存可以被回收，不算作占用（cgroup v2 叫 inactive_file，v1 叫 cache）。
+	if c, ok := s.MemoryStats.Stats["inactive_file"]; ok && c < out.MemUsed {
+		out.MemUsed -= c
+	} else if c, ok := s.MemoryStats.Stats["cache"]; ok && c < out.MemUsed {
+		out.MemUsed -= c
+	}
+	for _, n := range s.Networks {
+		out.NetRx += n.RxBytes
+		out.NetTx += n.TxBytes
+	}
+	return out, nil
+}
+
+// RestartCount 返回容器被 Docker 自动重启的次数。
+func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
+	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err != nil {
+		return 0, err
+	}
+	return info.Container.RestartCount, nil
 }

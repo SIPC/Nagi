@@ -12,6 +12,7 @@
 /web/dist/*
 !/web/dist/.gitkeep
 /web/.vite/
+/web/*.tsbuildinfo
 
 # Editors / OS
 .idea/

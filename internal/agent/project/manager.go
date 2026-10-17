@@ -304,6 +304,19 @@ func (m *Manager) Get(ctx context.Context, id string) (*nagiv1.ProjectSummary, e
 	return m.summary(ctx, row.ID, row.Dir)
 }
 
+// Name 返回项目名称，读不到时返回 ID。用于告警内容。
+func (m *Manager) Name(ctx context.Context, id string) string {
+	row, err := m.projectRow(ctx, id)
+	if err != nil {
+		return id
+	}
+	p, err := m.readProject(ctx, id, row.Dir)
+	if err != nil || p.GetName() == "" {
+		return id
+	}
+	return p.GetName()
+}
+
 func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectSummary, error) {
 	proj, err := m.readProject(ctx, id, dir)
 	if err != nil {

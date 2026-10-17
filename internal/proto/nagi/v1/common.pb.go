@@ -1428,6 +1428,400 @@ func (x *DeployResult) GetVersion() int64 {
 	return 0
 }
 
+// MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
+type MetricSeries struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Times         []int64                `protobuf:"varint,2,rep,packed,name=times,proto3" json:"times,omitempty"`
+	Values        []float64              `protobuf:"fixed64,3,rep,packed,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricSeries) Reset() {
+	*x = MetricSeries{}
+	mi := &file_nagi_v1_common_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricSeries) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricSeries) ProtoMessage() {}
+
+func (x *MetricSeries) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricSeries.ProtoReflect.Descriptor instead.
+func (*MetricSeries) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *MetricSeries) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MetricSeries) GetTimes() []int64 {
+	if x != nil {
+		return x.Times
+	}
+	return nil
+}
+
+func (x *MetricSeries) GetValues() []float64 {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+// AlertChannel 是一个告警渠道。
+type AlertChannel struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// webhook 或 telegram。
+	Type string `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	// webhook：POST JSON 的地址。
+	Url string `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
+	// telegram：机器人令牌和聊天 ID。
+	TelegramToken  string `protobuf:"bytes,5,opt,name=telegram_token,json=telegramToken,proto3" json:"telegram_token,omitempty"`
+	TelegramChatId string `protobuf:"bytes,6,opt,name=telegram_chat_id,json=telegramChatId,proto3" json:"telegram_chat_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AlertChannel) Reset() {
+	*x = AlertChannel{}
+	mi := &file_nagi_v1_common_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertChannel) ProtoMessage() {}
+
+func (x *AlertChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertChannel.ProtoReflect.Descriptor instead.
+func (*AlertChannel) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *AlertChannel) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AlertChannel) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AlertChannel) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *AlertChannel) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *AlertChannel) GetTelegramToken() string {
+	if x != nil {
+		return x.TelegramToken
+	}
+	return ""
+}
+
+func (x *AlertChannel) GetTelegramChatId() string {
+	if x != nil {
+		return x.TelegramChatId
+	}
+	return ""
+}
+
+// AlertRules 是告警规则的阈值，0 表示用默认值。
+type AlertRules struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 磁盘使用超过这个百分比，默认 90。
+	DiskPercent uint32 `protobuf:"varint,1,opt,name=disk_percent,json=diskPercent,proto3" json:"disk_percent,omitempty"`
+	// 内存使用超过这个百分比并持续 mem_minutes 分钟，默认 90% / 5 分钟。
+	MemPercent uint32 `protobuf:"varint,2,opt,name=mem_percent,json=memPercent,proto3" json:"mem_percent,omitempty"`
+	MemMinutes uint32 `protobuf:"varint,3,opt,name=mem_minutes,json=memMinutes,proto3" json:"mem_minutes,omitempty"`
+	// 容器在 restart_minutes 分钟内重启 restart_count 次，默认 3 次 / 10 分钟。
+	RestartCount   uint32 `protobuf:"varint,4,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	RestartMinutes uint32 `protobuf:"varint,5,opt,name=restart_minutes,json=restartMinutes,proto3" json:"restart_minutes,omitempty"`
+	// 证书在这么多天内过期，默认 7。
+	CertDays uint32 `protobuf:"varint,6,opt,name=cert_days,json=certDays,proto3" json:"cert_days,omitempty"`
+	// 节点失联超过这么多秒，默认 60。
+	OfflineSeconds uint32 `protobuf:"varint,7,opt,name=offline_seconds,json=offlineSeconds,proto3" json:"offline_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AlertRules) Reset() {
+	*x = AlertRules{}
+	mi := &file_nagi_v1_common_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertRules) ProtoMessage() {}
+
+func (x *AlertRules) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertRules.ProtoReflect.Descriptor instead.
+func (*AlertRules) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AlertRules) GetDiskPercent() uint32 {
+	if x != nil {
+		return x.DiskPercent
+	}
+	return 0
+}
+
+func (x *AlertRules) GetMemPercent() uint32 {
+	if x != nil {
+		return x.MemPercent
+	}
+	return 0
+}
+
+func (x *AlertRules) GetMemMinutes() uint32 {
+	if x != nil {
+		return x.MemMinutes
+	}
+	return 0
+}
+
+func (x *AlertRules) GetRestartCount() uint32 {
+	if x != nil {
+		return x.RestartCount
+	}
+	return 0
+}
+
+func (x *AlertRules) GetRestartMinutes() uint32 {
+	if x != nil {
+		return x.RestartMinutes
+	}
+	return 0
+}
+
+func (x *AlertRules) GetCertDays() uint32 {
+	if x != nil {
+		return x.CertDays
+	}
+	return 0
+}
+
+func (x *AlertRules) GetOfflineSeconds() uint32 {
+	if x != nil {
+		return x.OfflineSeconds
+	}
+	return 0
+}
+
+type AlertConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channels      []*AlertChannel        `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty"`
+	Rules         *AlertRules            `protobuf:"bytes,2,opt,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertConfig) Reset() {
+	*x = AlertConfig{}
+	mi := &file_nagi_v1_common_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertConfig) ProtoMessage() {}
+
+func (x *AlertConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertConfig.ProtoReflect.Descriptor instead.
+func (*AlertConfig) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *AlertConfig) GetChannels() []*AlertChannel {
+	if x != nil {
+		return x.Channels
+	}
+	return nil
+}
+
+func (x *AlertConfig) GetRules() *AlertRules {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+// Alert 是一条告警或恢复通知。
+type Alert struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 同一个问题的唯一标识，例如 disk、cert:example.com。
+	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// firing：出现；resolved：已恢复。
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Node          string                 `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	Project       string                 `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
+	Time          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=time,proto3" json:"time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Alert) Reset() {
+	*x = Alert{}
+	mi := &file_nagi_v1_common_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Alert) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Alert) ProtoMessage() {}
+
+func (x *Alert) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Alert.ProtoReflect.Descriptor instead.
+func (*Alert) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *Alert) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Alert) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *Alert) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Alert) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *Alert) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *Alert) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *Alert) GetTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Time
+	}
+	return nil
+}
+
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
@@ -1546,7 +1940,40 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fDeployResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\x03R\aversion*@\n" +
+	"\aversion\x18\x03 \x01(\x03R\aversion\"P\n" +
+	"\fMetricSeries\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05times\x18\x02 \x03(\x03R\x05times\x12\x16\n" +
+	"\x06values\x18\x03 \x03(\x01R\x06values\"\xa9\x01\n" +
+	"\fAlertChannel\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x10\n" +
+	"\x03url\x18\x04 \x01(\tR\x03url\x12%\n" +
+	"\x0etelegram_token\x18\x05 \x01(\tR\rtelegramToken\x12(\n" +
+	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\x85\x02\n" +
+	"\n" +
+	"AlertRules\x12!\n" +
+	"\fdisk_percent\x18\x01 \x01(\rR\vdiskPercent\x12\x1f\n" +
+	"\vmem_percent\x18\x02 \x01(\rR\n" +
+	"memPercent\x12\x1f\n" +
+	"\vmem_minutes\x18\x03 \x01(\rR\n" +
+	"memMinutes\x12#\n" +
+	"\rrestart_count\x18\x04 \x01(\rR\frestartCount\x12'\n" +
+	"\x0frestart_minutes\x18\x05 \x01(\rR\x0erestartMinutes\x12\x1b\n" +
+	"\tcert_days\x18\x06 \x01(\rR\bcertDays\x12'\n" +
+	"\x0foffline_seconds\x18\a \x01(\rR\x0eofflineSeconds\"k\n" +
+	"\vAlertConfig\x121\n" +
+	"\bchannels\x18\x01 \x03(\v2\x15.nagi.v1.AlertChannelR\bchannels\x12)\n" +
+	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\"\xbf\x01\n" +
+	"\x05Alert\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12\x12\n" +
+	"\x04node\x18\x05 \x01(\tR\x04node\x12\x18\n" +
+	"\aproject\x18\x06 \x01(\tR\aproject\x12.\n" +
+	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
@@ -1565,7 +1992,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -1585,38 +2012,46 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*LogLine)(nil),               // 15: nagi.v1.LogLine
 	(*DeployEvent)(nil),           // 16: nagi.v1.DeployEvent
 	(*DeployResult)(nil),          // 17: nagi.v1.DeployResult
-	nil,                           // 18: nagi.v1.ProjectConfig.ServiceEnvEntry
-	nil,                           // 19: nagi.v1.Version.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 20: google.protobuf.Timestamp
+	(*MetricSeries)(nil),          // 18: nagi.v1.MetricSeries
+	(*AlertChannel)(nil),          // 19: nagi.v1.AlertChannel
+	(*AlertRules)(nil),            // 20: nagi.v1.AlertRules
+	(*AlertConfig)(nil),           // 21: nagi.v1.AlertConfig
+	(*Alert)(nil),                 // 22: nagi.v1.Alert
+	nil,                           // 23: nagi.v1.ProjectConfig.ServiceEnvEntry
+	nil,                           // 24: nagi.v1.Version.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 25: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	20, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	25, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	2,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
 	6,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	18, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	23, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
 	9,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	5,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	0,  // 8: nagi.v1.ProjectConfig.stateful:type_name -> nagi.v1.Stateful
-	20, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	20, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	19, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	20, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	25, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	25, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	24, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	25, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	7,  // 13: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	10, // 14: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	7,  // 15: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	11, // 16: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	1,  // 17: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	12, // 18: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	20, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	25, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	17, // 20: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	8,  // 21: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	19, // 21: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	20, // 22: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	25, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	8,  // 24: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -1634,7 +2069,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   19,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

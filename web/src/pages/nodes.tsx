@@ -1,17 +1,38 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Empty, Input, Spinner } from "@/components/ui";
+import { AlertSettings, NodeMetrics } from "@/pages/alerts";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Empty,
+  Input,
+  Spinner,
+} from "@/components/ui";
 
 export function NodesPage() {
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 5000 });
+  const nodes = useQuery({
+    queryKey: ["nodes"],
+    queryFn: () => nodeClient.listNodes({}),
+    refetchInterval: 5000,
+  });
+  const [open, setOpen] = useState<string | null>(null);
 
   return (
     <>
-      <PageHeader title="节点" description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。" />
+      <PageHeader
+        title="节点"
+        description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。"
+      />
       <AddNode />
+      <AlertSettings />
       {nodes.isPending ? (
         <Spinner />
       ) : nodes.error ? (
@@ -34,41 +55,74 @@ export function NodesPage() {
               </thead>
               <tbody>
                 {nodes.data.nodes.map((n) => (
-                  <tr key={n.id} className="border-b last:border-0">
-                    <td className="py-3 pr-4">
-                      <div className="font-medium">{n.name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">{n.id}</div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      {n.online ? (
-                        <Badge tone="success" dot>
-                          在线
-                        </Badge>
-                      ) : (
-                        <Badge dot>离线 · {timeAgo(toDate(n.lastSeen))}</Badge>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">
-                      {n.info ? `${n.info.os}/${n.info.arch}` : "—"}
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">
-                      {n.info ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}` : "—"}
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{n.info?.version || "—"}</td>
-                    <td className="py-3 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (!confirm(`移除节点 ${n.name}？面板会忘记它并拒绝它再连接，节点上的项目照常运行。`)) return;
-                          await nodeClient.removeNode({ nodeId: n.id });
-                          nodes.refetch();
-                        }}
-                      >
-                        移除
-                      </Button>
-                    </td>
-                  </tr>
+                  <Fragment key={n.id}>
+                    <tr className="border-b last:border-0">
+                      <td className="py-3 pr-4">
+                        <div className="font-medium">{n.name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {n.id}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        {n.online ? (
+                          <Badge tone="success" dot>
+                            在线
+                          </Badge>
+                        ) : (
+                          <Badge dot>
+                            离线 · {timeAgo(toDate(n.lastSeen))}
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {n.info ? `${n.info.os}/${n.info.arch}` : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {n.info
+                          ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}`
+                          : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {n.info?.version || "—"}
+                      </td>
+                      <td className="py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setOpen(open === n.id ? null : n.id)}
+                        >
+                          监控
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            if (
+                              !confirm(
+                                `移除节点 ${n.name}？面板会忘记它并拒绝它再连接，节点上的项目照常运行。`,
+                              )
+                            )
+                              return;
+                            await nodeClient.removeNode({ nodeId: n.id });
+                            nodes.refetch();
+                          }}
+                        >
+                          移除
+                        </Button>
+                      </td>
+                    </tr>
+                    {open === n.id && (
+                      <tr className="border-b">
+                        <td colSpan={6}>
+                          {n.online ? (
+                            <NodeMetrics nodeId={n.id} />
+                          ) : (
+                            "节点离线，无法查询"
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -81,7 +135,10 @@ export function NodesPage() {
 
 function AddNode() {
   const queryClient = useQueryClient();
-  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  const settings = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => settingsClient.getSettings({}),
+  });
   const [address, setAddress] = useState<string | null>(null);
   const [command, setCommand] = useState("");
   const [error, setError] = useState("");
@@ -136,8 +193,12 @@ function AddNode() {
         </div>
         {command && (
           <div className="grid gap-1">
-            <span className="text-muted-foreground">在新机器上用 root 执行（令牌一次性，1 小时内有效）：</span>
-            <code className="break-all rounded bg-muted p-3 font-mono text-xs">{command}</code>
+            <span className="text-muted-foreground">
+              在新机器上用 root 执行（令牌一次性，1 小时内有效）：
+            </span>
+            <code className="break-all rounded bg-muted p-3 font-mono text-xs">
+              {command}
+            </code>
           </div>
         )}
       </CardContent>

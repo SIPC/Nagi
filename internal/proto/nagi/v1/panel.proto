@@ -12,7 +12,16 @@ service PanelService {
   rpc Report(ReportRequest) returns (ReportResponse);
   // 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
   rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+  // 节点直接发送告警失败时，请面板代发到指定的渠道。
+  rpc RelayAlert(RelayAlertRequest) returns (RelayAlertResponse);
 }
+
+message RelayAlertRequest {
+  Alert alert = 1;
+  repeated string channel_ids = 2;
+}
+
+message RelayAlertResponse {}
 
 message RenewCertificateRequest {
   bytes csr = 1;

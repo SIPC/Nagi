@@ -423,7 +423,7 @@ func (m *Manager) TakeSnapshot(ctx context.Context, id string, kind snapshot.Kin
 }
 
 // SnapshotDue 给到了间隔时间的已部署项目做定时快照。由节点每分钟调用一次。
-func (m *Manager) SnapshotDue(ctx context.Context, onError func(id string, err error)) {
+func (m *Manager) SnapshotDue(ctx context.Context, onResult func(id string, err error)) {
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
 		return
@@ -447,11 +447,14 @@ func (m *Manager) SnapshotDue(ctx context.Context, onError func(id string, err e
 		if time.Since(time.Unix(last, 0)) < gap {
 			continue
 		}
-		if _, err := m.TakeSnapshot(ctx, r.ID, snapshot.Scheduled, func(string) {}); err != nil && onError != nil {
-			onError(r.ID, err)
+		_, err = m.TakeSnapshot(ctx, r.ID, snapshot.Scheduled, func(string) {})
+		if err == nil {
+			if err = m.maintainIfDue(ctx, r.ID); err != nil {
+				err = fmt.Errorf("快照仓库维护: %w", err)
+			}
 		}
-		if err := m.maintainIfDue(ctx, r.ID); err != nil && onError != nil {
-			onError(r.ID, fmt.Errorf("快照仓库维护: %w", err))
+		if onResult != nil {
+			onResult(r.ID, err)
 		}
 	}
 }

@@ -15,8 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/alerts"
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
@@ -128,6 +130,12 @@ func Run(ctx context.Context, cfg Config) error {
 	a.info = a.nodeInfo(ctx)
 
 	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
+	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	go a.metrics.Run(ctx)
+	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
+		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
+		func(id string) string { return projects.Name(context.Background(), id) }, a.relayAlert)
+	go a.alerts.Run(ctx)
 	go a.snapshotLoop(ctx)
 
 	if !cfg.DisableProxy {
@@ -160,9 +168,26 @@ type agent struct {
 
 	proxy     *proxy.Proxy
 	proxyKick chan struct{}
+	metrics   *metrics.Collector
+	alerts    *alerts.Engine
 
-	mu   sync.Mutex
-	subs []chan struct{}
+	mu     sync.Mutex
+	subs   []chan struct{}
+	panels map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
+}
+
+// relayAlert 请指定的面板代发告警。
+func (a *agent) relayAlert(ctx context.Context, panel string, al *nagiv1.Alert, channelIDs []string) error {
+	a.mu.Lock()
+	c := a.panels[panel]
+	a.mu.Unlock()
+	if c == nil {
+		return errors.New("面板不可达")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	_, err := c.RelayAlert(ctx, &nagiv1.RelayAlertRequest{Alert: al, ChannelIds: channelIDs})
+	return err
 }
 
 // proxyLoop 在项目或容器变化时重新生成 Caddy 配置；另外每 15 秒检查一次，及时发现新拿到的证书。
@@ -284,7 +309,9 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	defer sess.Close()
 
 	srv := grpc.NewServer()
-	nagiv1.RegisterAgentServiceServer(srv, &agentService{projects: a.projects, changed: a.changed})
+	nagiv1.RegisterAgentServiceServer(srv, &agentService{
+		projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
+	})
 	go tunnel.Serve(sess, srv)
 	defer srv.Stop()
 
@@ -296,6 +323,19 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.mu.Lock()
+	if a.panels == nil {
+		a.panels = map[string]nagiv1.PanelServiceClient{}
+	}
+	a.panels[p.Fingerprint] = panel
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		if a.panels[p.Fingerprint] == panel {
+			delete(a.panels, p.Fingerprint)
+		}
+		a.mu.Unlock()
+	}()
 	a.renewIfNeeded(ctx, panel, p)
 	notify, unsubscribe := a.subscribe()
 	defer unsubscribe()
@@ -364,7 +404,12 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 		case <-t.C:
 		}
 		a.projects.SnapshotDue(ctx, func(id string, err error) {
+			if err == nil {
+				a.alerts.Resolve(ctx, "snapshot:"+id)
+				return
+			}
 			a.log.Warn("定时快照失败", "project", id, "err", err)
+			a.alerts.Fire(ctx, "snapshot:"+id, "定时快照失败", err.Error(), id)
 		})
 	}
 }

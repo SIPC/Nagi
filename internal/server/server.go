@@ -155,6 +155,7 @@ func (s *Server) Run(ctx context.Context) error {
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
 	}
 	go s.acceptLoop(ctx, httpLn)
+	go s.nodes.RunOfflineAlerts(ctx)
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(httpLn) }()

@@ -3,8 +3,12 @@ package agent
 import (
 	"context"
 	"errors"
+	"sort"
+	"time"
 
+	"github.com/SIPC/nagi/internal/agent/alerts"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -17,7 +21,43 @@ import (
 type agentService struct {
 	nagiv1.UnimplementedAgentServiceServer
 	projects *project.Manager
+	metrics  *metrics.Collector
+	alerts   *alerts.Engine
+	panel    string // 当前连接的面板指纹
 	changed  func()
+}
+
+func (s *agentService) SetAlertConfig(_ context.Context, req *nagiv1.SetAlertConfigRequest) (*nagiv1.SetAlertConfigResponse, error) {
+	if err := s.alerts.SetConfig(s.panel, req.GetConfig()); err != nil {
+		return nil, status.Errorf(codes.Internal, "保存告警配置: %v", err)
+	}
+	return &nagiv1.SetAlertConfigResponse{}, nil
+}
+
+func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	to := time.Now()
+	if req.GetTo() != nil {
+		to = req.GetTo().AsTime()
+	}
+	from := to.Add(-time.Hour)
+	if req.GetFrom() != nil {
+		from = req.GetFrom().AsTime()
+	}
+	data, err := s.metrics.Query(ctx, req.GetPrefix(), from, to)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	out := &nagiv1.QueryMetricsResponse{}
+	for name, points := range data {
+		ser := &nagiv1.MetricSeries{Name: name}
+		for _, p := range points {
+			ser.Times = append(ser.Times, p.Time.Unix())
+			ser.Values = append(ser.Values, p.Value)
+		}
+		out.Series = append(out.Series, ser)
+	}
+	sort.Slice(out.Series, func(i, j int) bool { return out.Series[i].Name < out.Series[j].Name })
+	return out, nil
 }
 
 func (s *agentService) ListProjects(ctx context.Context, _ *nagiv1.ListProjectsRequest) (*nagiv1.ListProjectsResponse, error) {

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMqQAoIU3RhdGVmdWwSEQoNU1RBVEVGVUxfQVVUTxAAEhAKDFNUQVRFRlVMX1lFUxABEg8KC1NUQVRFRlVMX05PEAJCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIikAEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXIiQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkiqAEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0iWgoLQWxlcnRDb25maWcSJwoIY2hhbm5lbHMYASADKAsyFS5uYWdpLnYxLkFsZXJ0Q2hhbm5lbBIiCgVydWxlcxgCIAEoCzITLm5hZ2kudjEuQWxlcnRSdWxlcyKNAQoFQWxlcnQSCwoDa2V5GAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgV0aXRsZRgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEgwKBG5vZGUYBSABKAkSDwoHcHJvamVjdBgGIAEoCRIoCgR0aW1lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCpACghTdGF0ZWZ1bBIRCg1TVEFURUZVTF9BVVRPEAASEAoMU1RBVEVGVUxfWUVTEAESDwoLU1RBVEVGVUxfTk8QAkI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -750,6 +750,219 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 16);
+
+/**
+ * MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
+ *
+ * @generated from message nagi.v1.MetricSeries
+ */
+export type MetricSeries = Message<"nagi.v1.MetricSeries"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: repeated int64 times = 2;
+   */
+  times: bigint[];
+
+  /**
+   * @generated from field: repeated double values = 3;
+   */
+  values: number[];
+};
+
+/**
+ * Describes the message nagi.v1.MetricSeries.
+ * Use `create(MetricSeriesSchema)` to create a new message.
+ */
+export const MetricSeriesSchema: GenMessage<MetricSeries> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 17);
+
+/**
+ * AlertChannel 是一个告警渠道。
+ *
+ * @generated from message nagi.v1.AlertChannel
+ */
+export type AlertChannel = Message<"nagi.v1.AlertChannel"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * webhook 或 telegram。
+   *
+   * @generated from field: string type = 3;
+   */
+  type: string;
+
+  /**
+   * webhook：POST JSON 的地址。
+   *
+   * @generated from field: string url = 4;
+   */
+  url: string;
+
+  /**
+   * telegram：机器人令牌和聊天 ID。
+   *
+   * @generated from field: string telegram_token = 5;
+   */
+  telegramToken: string;
+
+  /**
+   * @generated from field: string telegram_chat_id = 6;
+   */
+  telegramChatId: string;
+};
+
+/**
+ * Describes the message nagi.v1.AlertChannel.
+ * Use `create(AlertChannelSchema)` to create a new message.
+ */
+export const AlertChannelSchema: GenMessage<AlertChannel> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 18);
+
+/**
+ * AlertRules 是告警规则的阈值，0 表示用默认值。
+ *
+ * @generated from message nagi.v1.AlertRules
+ */
+export type AlertRules = Message<"nagi.v1.AlertRules"> & {
+  /**
+   * 磁盘使用超过这个百分比，默认 90。
+   *
+   * @generated from field: uint32 disk_percent = 1;
+   */
+  diskPercent: number;
+
+  /**
+   * 内存使用超过这个百分比并持续 mem_minutes 分钟，默认 90% / 5 分钟。
+   *
+   * @generated from field: uint32 mem_percent = 2;
+   */
+  memPercent: number;
+
+  /**
+   * @generated from field: uint32 mem_minutes = 3;
+   */
+  memMinutes: number;
+
+  /**
+   * 容器在 restart_minutes 分钟内重启 restart_count 次，默认 3 次 / 10 分钟。
+   *
+   * @generated from field: uint32 restart_count = 4;
+   */
+  restartCount: number;
+
+  /**
+   * @generated from field: uint32 restart_minutes = 5;
+   */
+  restartMinutes: number;
+
+  /**
+   * 证书在这么多天内过期，默认 7。
+   *
+   * @generated from field: uint32 cert_days = 6;
+   */
+  certDays: number;
+
+  /**
+   * 节点失联超过这么多秒，默认 60。
+   *
+   * @generated from field: uint32 offline_seconds = 7;
+   */
+  offlineSeconds: number;
+};
+
+/**
+ * Describes the message nagi.v1.AlertRules.
+ * Use `create(AlertRulesSchema)` to create a new message.
+ */
+export const AlertRulesSchema: GenMessage<AlertRules> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 19);
+
+/**
+ * @generated from message nagi.v1.AlertConfig
+ */
+export type AlertConfig = Message<"nagi.v1.AlertConfig"> & {
+  /**
+   * @generated from field: repeated nagi.v1.AlertChannel channels = 1;
+   */
+  channels: AlertChannel[];
+
+  /**
+   * @generated from field: nagi.v1.AlertRules rules = 2;
+   */
+  rules?: AlertRules | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.AlertConfig.
+ * Use `create(AlertConfigSchema)` to create a new message.
+ */
+export const AlertConfigSchema: GenMessage<AlertConfig> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 20);
+
+/**
+ * Alert 是一条告警或恢复通知。
+ *
+ * @generated from message nagi.v1.Alert
+ */
+export type Alert = Message<"nagi.v1.Alert"> & {
+  /**
+   * 同一个问题的唯一标识，例如 disk、cert:example.com。
+   *
+   * @generated from field: string key = 1;
+   */
+  key: string;
+
+  /**
+   * firing：出现；resolved：已恢复。
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string title = 3;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string message = 4;
+   */
+  message: string;
+
+  /**
+   * @generated from field: string node = 5;
+   */
+  node: string;
+
+  /**
+   * @generated from field: string project = 6;
+   */
+  project: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp time = 7;
+   */
+  time?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.Alert.
+ * Use `create(AlertSchema)` to create a new message.
+ */
+export const AlertSchema: GenMessage<Alert> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 21);
 
 /**
  * @generated from enum nagi.v1.Stateful

@@ -38,6 +38,8 @@ const (
 	// PanelServiceRenewCertificateProcedure is the fully-qualified name of the PanelService's
 	// RenewCertificate RPC.
 	PanelServiceRenewCertificateProcedure = "/nagi.v1.PanelService/RenewCertificate"
+	// PanelServiceRelayAlertProcedure is the fully-qualified name of the PanelService's RelayAlert RPC.
+	PanelServiceRelayAlertProcedure = "/nagi.v1.PanelService/RelayAlert"
 )
 
 // PanelServiceClient is a client for the nagi.v1.PanelService service.
@@ -46,6 +48,8 @@ type PanelServiceClient interface {
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
+	// 节点直接发送告警失败时，请面板代发到指定的渠道。
+	RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error)
 }
 
 // NewPanelServiceClient constructs a client for the nagi.v1.PanelService service. By default, it
@@ -71,6 +75,12 @@ func NewPanelServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(panelServiceMethods.ByName("RenewCertificate")),
 			connect.WithClientOptions(opts...),
 		),
+		relayAlert: connect.NewClient[v1.RelayAlertRequest, v1.RelayAlertResponse](
+			httpClient,
+			baseURL+PanelServiceRelayAlertProcedure,
+			connect.WithSchema(panelServiceMethods.ByName("RelayAlert")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -78,6 +88,7 @@ func NewPanelServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type panelServiceClient struct {
 	report           *connect.Client[v1.ReportRequest, v1.ReportResponse]
 	renewCertificate *connect.Client[v1.RenewCertificateRequest, v1.RenewCertificateResponse]
+	relayAlert       *connect.Client[v1.RelayAlertRequest, v1.RelayAlertResponse]
 }
 
 // Report calls nagi.v1.PanelService.Report.
@@ -90,12 +101,19 @@ func (c *panelServiceClient) RenewCertificate(ctx context.Context, req *connect.
 	return c.renewCertificate.CallUnary(ctx, req)
 }
 
+// RelayAlert calls nagi.v1.PanelService.RelayAlert.
+func (c *panelServiceClient) RelayAlert(ctx context.Context, req *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error) {
+	return c.relayAlert.CallUnary(ctx, req)
+}
+
 // PanelServiceHandler is an implementation of the nagi.v1.PanelService service.
 type PanelServiceHandler interface {
 	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
+	// 节点直接发送告警失败时，请面板代发到指定的渠道。
+	RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error)
 }
 
 // NewPanelServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -117,12 +135,20 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(panelServiceMethods.ByName("RenewCertificate")),
 		connect.WithHandlerOptions(opts...),
 	)
+	panelServiceRelayAlertHandler := connect.NewUnaryHandler(
+		PanelServiceRelayAlertProcedure,
+		svc.RelayAlert,
+		connect.WithSchema(panelServiceMethods.ByName("RelayAlert")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.PanelService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PanelServiceReportProcedure:
 			panelServiceReportHandler.ServeHTTP(w, r)
 		case PanelServiceRenewCertificateProcedure:
 			panelServiceRenewCertificateHandler.ServeHTTP(w, r)
+		case PanelServiceRelayAlertProcedure:
+			panelServiceRelayAlertHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -138,4 +164,8 @@ func (UnimplementedPanelServiceHandler) Report(context.Context, *connect.Request
 
 func (UnimplementedPanelServiceHandler) RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.RenewCertificate is not implemented"))
+}
+
+func (UnimplementedPanelServiceHandler) RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.RelayAlert is not implemented"))
 }

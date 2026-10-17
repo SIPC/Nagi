@@ -21,6 +21,7 @@ internal/
 │   ├── tlsutil/      证书生成、公钥指纹
 │   ├── db/           SQLite 打开、迁移
 │   ├── tunnel/       TLS + yamux 连接、反向 gRPC
+│   ├── alert/        告警发送（webhook、Telegram），面板和节点共用
 │   └── log/
 ├── server/           面板
 │   ├── api/          Connect-RPC 接口
@@ -36,7 +37,8 @@ internal/
     ├── snapshot/
     ├── mesh/
     ├── lease/
-    └── metrics/
+    ├── metrics/      指标采集与存储
+    └── alerts/       告警规则判断、发送、代发与补发
 web/                  前端
 ```
 

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package nagi.v1;
 
+import "google/protobuf/timestamp.proto";
 import "nagi/v1/common.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
@@ -23,6 +24,10 @@ service AgentService {
   rpc CreateSnapshot(CreateSnapshotRequest) returns (stream DeployEvent);
   // 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
+  // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
+  rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
+  // 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
+  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
   // 删除项目：停止并删除容器。项目目录默认保留。
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
@@ -141,6 +146,23 @@ message CreateSnapshotRequest {
 message RestoreSnapshotRequest {
   string id = 1;
   string snapshot_id = 2;
+}
+
+message SetAlertConfigRequest {
+  AlertConfig config = 1;
+}
+
+message SetAlertConfigResponse {}
+
+message QueryMetricsRequest {
+  // 序列名前缀，例如 "node:"、"c:<项目 ID>/"。
+  string prefix = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+message QueryMetricsResponse {
+  repeated MetricSeries series = 1;
 }
 
 message DeleteProjectRequest {

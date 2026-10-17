@@ -57,6 +57,9 @@ const (
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
+	// NodeServiceQueryNodeMetricsProcedure is the fully-qualified name of the NodeService's
+	// QueryNodeMetrics RPC.
+	NodeServiceQueryNodeMetricsProcedure = "/nagi.v1.NodeService/QueryNodeMetrics"
 	// NodeServiceRemoveNodeProcedure is the fully-qualified name of the NodeService's RemoveNode RPC.
 	NodeServiceRemoveNodeProcedure = "/nagi.v1.NodeService/RemoveNode"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
@@ -65,6 +68,15 @@ const (
 	// SettingsServiceUpdateSettingsProcedure is the fully-qualified name of the SettingsService's
 	// UpdateSettings RPC.
 	SettingsServiceUpdateSettingsProcedure = "/nagi.v1.SettingsService/UpdateSettings"
+	// SettingsServiceGetAlertConfigProcedure is the fully-qualified name of the SettingsService's
+	// GetAlertConfig RPC.
+	SettingsServiceGetAlertConfigProcedure = "/nagi.v1.SettingsService/GetAlertConfig"
+	// SettingsServiceUpdateAlertConfigProcedure is the fully-qualified name of the SettingsService's
+	// UpdateAlertConfig RPC.
+	SettingsServiceUpdateAlertConfigProcedure = "/nagi.v1.SettingsService/UpdateAlertConfig"
+	// SettingsServiceTestAlertChannelProcedure is the fully-qualified name of the SettingsService's
+	// TestAlertChannel RPC.
+	SettingsServiceTestAlertChannelProcedure = "/nagi.v1.SettingsService/TestAlertChannel"
 	// ProjectServiceListAllProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListAllProjects RPC.
 	ProjectServiceListAllProjectsProcedure = "/nagi.v1.ProjectService/ListAllProjects"
@@ -335,6 +347,7 @@ type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
+	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 }
@@ -362,6 +375,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
 			connect.WithClientOptions(opts...),
 		),
+		queryNodeMetrics: connect.NewClient[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse](
+			httpClient,
+			baseURL+NodeServiceQueryNodeMetricsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
+			connect.WithClientOptions(opts...),
+		),
 		removeNode: connect.NewClient[v1.RemoveNodeRequest, v1.RemoveNodeResponse](
 			httpClient,
 			baseURL+NodeServiceRemoveNodeProcedure,
@@ -375,6 +394,7 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type nodeServiceClient struct {
 	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
+	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 }
 
@@ -388,6 +408,11 @@ func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connec
 	return c.createEnrollCommand.CallUnary(ctx, req)
 }
 
+// QueryNodeMetrics calls nagi.v1.NodeService.QueryNodeMetrics.
+func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, req *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return c.queryNodeMetrics.CallUnary(ctx, req)
+}
+
 // RemoveNode calls nagi.v1.NodeService.RemoveNode.
 func (c *nodeServiceClient) RemoveNode(ctx context.Context, req *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
 	return c.removeNode.CallUnary(ctx, req)
@@ -398,6 +423,7 @@ type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
+	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 }
@@ -421,6 +447,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceQueryNodeMetricsHandler := connect.NewUnaryHandler(
+		NodeServiceQueryNodeMetricsProcedure,
+		svc.QueryNodeMetrics,
+		connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceRemoveNodeHandler := connect.NewUnaryHandler(
 		NodeServiceRemoveNodeProcedure,
 		svc.RemoveNode,
@@ -433,6 +465,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
+		case NodeServiceQueryNodeMetricsProcedure:
+			nodeServiceQueryNodeMetricsHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodeProcedure:
 			nodeServiceRemoveNodeHandler.ServeHTTP(w, r)
 		default:
@@ -452,6 +486,10 @@ func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *con
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CreateEnrollCommand is not implemented"))
 }
 
+func (UnimplementedNodeServiceHandler) QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryNodeMetrics is not implemented"))
+}
+
 func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNode is not implemented"))
 }
@@ -460,6 +498,10 @@ func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Requ
 type SettingsServiceClient interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
 	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
+	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
+	// 用面板发一条测试消息到某个渠道。
+	TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -485,13 +527,34 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("UpdateSettings")),
 			connect.WithClientOptions(opts...),
 		),
+		getAlertConfig: connect.NewClient[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse](
+			httpClient,
+			baseURL+SettingsServiceGetAlertConfigProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAlertConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAlertConfig: connect.NewClient[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse](
+			httpClient,
+			baseURL+SettingsServiceUpdateAlertConfigProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("UpdateAlertConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		testAlertChannel: connect.NewClient[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse](
+			httpClient,
+			baseURL+SettingsServiceTestAlertChannelProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("TestAlertChannel")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // settingsServiceClient implements SettingsServiceClient.
 type settingsServiceClient struct {
-	getSettings    *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
-	updateSettings *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
+	getSettings       *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
+	updateSettings    *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
+	getAlertConfig    *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
+	updateAlertConfig *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
+	testAlertChannel  *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -504,10 +567,29 @@ func (c *settingsServiceClient) UpdateSettings(ctx context.Context, req *connect
 	return c.updateSettings.CallUnary(ctx, req)
 }
 
+// GetAlertConfig calls nagi.v1.SettingsService.GetAlertConfig.
+func (c *settingsServiceClient) GetAlertConfig(ctx context.Context, req *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error) {
+	return c.getAlertConfig.CallUnary(ctx, req)
+}
+
+// UpdateAlertConfig calls nagi.v1.SettingsService.UpdateAlertConfig.
+func (c *settingsServiceClient) UpdateAlertConfig(ctx context.Context, req *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error) {
+	return c.updateAlertConfig.CallUnary(ctx, req)
+}
+
+// TestAlertChannel calls nagi.v1.SettingsService.TestAlertChannel.
+func (c *settingsServiceClient) TestAlertChannel(ctx context.Context, req *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error) {
+	return c.testAlertChannel.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
 	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
+	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
+	// 用面板发一条测试消息到某个渠道。
+	TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -529,12 +611,36 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("UpdateSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetAlertConfigHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAlertConfigProcedure,
+		svc.GetAlertConfig,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAlertConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceUpdateAlertConfigHandler := connect.NewUnaryHandler(
+		SettingsServiceUpdateAlertConfigProcedure,
+		svc.UpdateAlertConfig,
+		connect.WithSchema(settingsServiceMethods.ByName("UpdateAlertConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceTestAlertChannelHandler := connect.NewUnaryHandler(
+		SettingsServiceTestAlertChannelProcedure,
+		svc.TestAlertChannel,
+		connect.WithSchema(settingsServiceMethods.ByName("TestAlertChannel")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
 			settingsServiceGetSettingsHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdateSettingsProcedure:
 			settingsServiceUpdateSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAlertConfigProcedure:
+			settingsServiceGetAlertConfigHandler.ServeHTTP(w, r)
+		case SettingsServiceUpdateAlertConfigProcedure:
+			settingsServiceUpdateAlertConfigHandler.ServeHTTP(w, r)
+		case SettingsServiceTestAlertChannelProcedure:
+			settingsServiceTestAlertChannelHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -550,6 +656,18 @@ func (UnimplementedSettingsServiceHandler) GetSettings(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdateSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAlertConfig is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdateAlertConfig is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.TestAlertChannel is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

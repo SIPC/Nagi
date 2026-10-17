@@ -339,6 +339,7 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 const (
 	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
 	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
+	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
 )
 
@@ -349,6 +350,7 @@ type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
+	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error)
 }
@@ -381,6 +383,16 @@ func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateE
 	return out, nil
 }
 
+func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryMetricsResponse)
+	err := c.cc.Invoke(ctx, NodeService_QueryNodeMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveNodeResponse)
@@ -398,6 +410,7 @@ type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
+	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
@@ -415,6 +428,9 @@ func (UnimplementedNodeServiceServer) ListNodes(context.Context, *ListNodesReque
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
+}
+func (UnimplementedNodeServiceServer) QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryNodeMetrics not implemented")
 }
 func (UnimplementedNodeServiceServer) RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNode not implemented")
@@ -476,6 +492,24 @@ func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_QueryNodeMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryNodeMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).QueryNodeMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_QueryNodeMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).QueryNodeMetrics(ctx, req.(*QueryNodeMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_RemoveNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveNodeRequest)
 	if err := dec(in); err != nil {
@@ -510,6 +544,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_CreateEnrollCommand_Handler,
 		},
 		{
+			MethodName: "QueryNodeMetrics",
+			Handler:    _NodeService_QueryNodeMetrics_Handler,
+		},
+		{
 			MethodName: "RemoveNode",
 			Handler:    _NodeService_RemoveNode_Handler,
 		},
@@ -519,8 +557,11 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SettingsService_GetSettings_FullMethodName    = "/nagi.v1.SettingsService/GetSettings"
-	SettingsService_UpdateSettings_FullMethodName = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_GetSettings_FullMethodName       = "/nagi.v1.SettingsService/GetSettings"
+	SettingsService_UpdateSettings_FullMethodName    = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_GetAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/GetAlertConfig"
+	SettingsService_UpdateAlertConfig_FullMethodName = "/nagi.v1.SettingsService/UpdateAlertConfig"
+	SettingsService_TestAlertChannel_FullMethodName  = "/nagi.v1.SettingsService/TestAlertChannel"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -529,6 +570,10 @@ const (
 type SettingsServiceClient interface {
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error)
 	UpdateSettings(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error)
+	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
+	// 用面板发一条测试消息到某个渠道。
+	TestAlertChannel(ctx context.Context, in *TestAlertChannelRequest, opts ...grpc.CallOption) (*TestAlertChannelResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -559,12 +604,46 @@ func (c *settingsServiceClient) UpdateSettings(ctx context.Context, in *UpdateSe
 	return out, nil
 }
 
+func (c *settingsServiceClient) GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAlertConfigResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetAlertConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAlertConfigResponse)
+	err := c.cc.Invoke(ctx, SettingsService_UpdateAlertConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) TestAlertChannel(ctx context.Context, in *TestAlertChannelRequest, opts ...grpc.CallOption) (*TestAlertChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestAlertChannelResponse)
+	err := c.cc.Invoke(ctx, SettingsService_TestAlertChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
 type SettingsServiceServer interface {
 	GetSettings(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error)
 	UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error)
+	GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error)
+	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
+	// 用面板发一条测试消息到某个渠道。
+	TestAlertChannel(context.Context, *TestAlertChannelRequest) (*TestAlertChannelResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -580,6 +659,15 @@ func (UnimplementedSettingsServiceServer) GetSettings(context.Context, *GetSetti
 }
 func (UnimplementedSettingsServiceServer) UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAlertConfig not implemented")
+}
+func (UnimplementedSettingsServiceServer) UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAlertConfig not implemented")
+}
+func (UnimplementedSettingsServiceServer) TestAlertChannel(context.Context, *TestAlertChannelRequest) (*TestAlertChannelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestAlertChannel not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -638,6 +726,60 @@ func _SettingsService_UpdateSettings_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_GetAlertConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAlertConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAlertConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAlertConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAlertConfig(ctx, req.(*GetAlertConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_UpdateAlertConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAlertConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).UpdateAlertConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_UpdateAlertConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).UpdateAlertConfig(ctx, req.(*UpdateAlertConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_TestAlertChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestAlertChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).TestAlertChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_TestAlertChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).TestAlertChannel(ctx, req.(*TestAlertChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -652,6 +794,18 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateSettings",
 			Handler:    _SettingsService_UpdateSettings_Handler,
+		},
+		{
+			MethodName: "GetAlertConfig",
+			Handler:    _SettingsService_GetAlertConfig_Handler,
+		},
+		{
+			MethodName: "UpdateAlertConfig",
+			Handler:    _SettingsService_UpdateAlertConfig_Handler,
+		},
+		{
+			MethodName: "TestAlertChannel",
+			Handler:    _SettingsService_TestAlertChannel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

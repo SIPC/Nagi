@@ -208,3 +208,56 @@ message DeployResult {
   string error = 2;
   int64 version = 3;
 }
+
+// MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
+message MetricSeries {
+  string name = 1;
+  repeated int64 times = 2;
+  repeated double values = 3;
+}
+// AlertChannel 是一个告警渠道。
+message AlertChannel {
+  string id = 1;
+  string name = 2;
+  // webhook 或 telegram。
+  string type = 3;
+  // webhook：POST JSON 的地址。
+  string url = 4;
+  // telegram：机器人令牌和聊天 ID。
+  string telegram_token = 5;
+  string telegram_chat_id = 6;
+}
+
+// AlertRules 是告警规则的阈值，0 表示用默认值。
+message AlertRules {
+  // 磁盘使用超过这个百分比，默认 90。
+  uint32 disk_percent = 1;
+  // 内存使用超过这个百分比并持续 mem_minutes 分钟，默认 90% / 5 分钟。
+  uint32 mem_percent = 2;
+  uint32 mem_minutes = 3;
+  // 容器在 restart_minutes 分钟内重启 restart_count 次，默认 3 次 / 10 分钟。
+  uint32 restart_count = 4;
+  uint32 restart_minutes = 5;
+  // 证书在这么多天内过期，默认 7。
+  uint32 cert_days = 6;
+  // 节点失联超过这么多秒，默认 60。
+  uint32 offline_seconds = 7;
+}
+
+message AlertConfig {
+  repeated AlertChannel channels = 1;
+  AlertRules rules = 2;
+}
+
+// Alert 是一条告警或恢复通知。
+message Alert {
+  // 同一个问题的唯一标识，例如 disk、cert:example.com。
+  string key = 1;
+  // firing：出现；resolved：已恢复。
+  string status = 2;
+  string title = 3;
+  string message = 4;
+  string node = 5;
+  string project = 6;
+  google.protobuf.Timestamp time = 7;
+}

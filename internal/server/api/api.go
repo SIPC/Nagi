@@ -164,6 +164,21 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 	return connect.NewResponse(out), nil
 }
 
+// QueryNodeMetrics 查询节点上的监控数据，监控数据存在节点本地。
+func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request[nagiv1.QueryNodeMetricsRequest]) (*connect.Response[nagiv1.QueryMetricsResponse], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	resp, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{
+		Prefix: req.Msg.GetPrefix(), From: req.Msg.GetFrom(), To: req.Msg.GetTo(),
+	})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 // RemoveNode 移除节点：标记为已移除（之后拒绝它连接），删掉它的配置备份和 webhook，断开当前连接。
 // 节点上的项目照常运行。以后用新的加入令牌重新加入时会恢复。
 func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv1.RemoveNodeRequest]) (*connect.Response[nagiv1.RemoveNodeResponse], error) {

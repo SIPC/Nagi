@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -79,4 +82,64 @@ func (s *nodeService) CreateEnrollCommand(ctx context.Context, _ *connect.Reques
 	cmd := fmt.Sprintf(`curl -fsS --pinnedpubkey "%s" -k https://%s/install.sh | sh -s -- --token %s`,
 		s.Panel.Fingerprint, s.Panel.PublicHostPort(ctx), token)
 	return connect.NewResponse(&nagiv1.CreateEnrollCommandResponse{Command: cmd, ExpiresAt: timestamppb.New(expires)}), nil
+}
+
+// ---- 告警 ----
+
+func (s *settingsService) GetAlertConfig(ctx context.Context, _ *connect.Request[nagiv1.GetAlertConfigRequest]) (*connect.Response[nagiv1.GetAlertConfigResponse], error) {
+	cfg, err := s.Nodes.AlertConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.GetAlertConfigResponse{Config: cfg}), nil
+}
+
+func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Request[nagiv1.UpdateAlertConfigRequest]) (*connect.Response[nagiv1.UpdateAlertConfigResponse], error) {
+	cfg := req.Msg.GetConfig()
+	if cfg == nil {
+		cfg = &nagiv1.AlertConfig{}
+	}
+	ids := map[string]bool{}
+	for _, ch := range cfg.GetChannels() {
+		ch.Name = strings.TrimSpace(ch.GetName())
+		ch.Url = strings.TrimSpace(ch.GetUrl())
+		ch.TelegramToken = strings.TrimSpace(ch.GetTelegramToken())
+		ch.TelegramChatId = strings.TrimSpace(ch.GetTelegramChatId())
+		if err := alert.Validate(ch); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("渠道 %q：%w", ch.GetName(), err))
+		}
+		if ch.GetName() == "" {
+			ch.Name = ch.GetType()
+		}
+		if ch.GetId() == "" || ids[ch.GetId()] {
+			ch.Id = randomID()
+		}
+		ids[ch.GetId()] = true
+	}
+	if r := cfg.GetRules(); r != nil && (r.GetDiskPercent() > 100 || r.GetMemPercent() > 100) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("百分比不能超过 100"))
+	}
+	if err := s.Nodes.SetAlertConfig(ctx, cfg); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.UpdateAlertConfigResponse{Config: cfg}), nil
+}
+
+func (s *settingsService) TestAlertChannel(ctx context.Context, req *connect.Request[nagiv1.TestAlertChannelRequest]) (*connect.Response[nagiv1.TestAlertChannelResponse], error) {
+	ch := req.Msg.GetChannel()
+	if err := alert.Validate(ch); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	a := &nagiv1.Alert{Key: "test", Status: "firing", Title: "Nagi 测试消息", Message: "告警渠道配置成功。",
+		Node: "面板", Time: timestamppb.Now()}
+	if err := alert.Send(ctx, ch, a); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	return connect.NewResponse(&nagiv1.TestAlertChannelResponse{}), nil
+}
+
+func randomID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

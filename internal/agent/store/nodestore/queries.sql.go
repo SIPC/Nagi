@@ -9,12 +9,68 @@ import (
 	"context"
 )
 
+const averageRaw = `-- name: AverageRaw :many
+SELECT series, CAST(avg(value) AS REAL) AS value FROM metrics_raw
+WHERE ts >= ?1 AND ts < ?2 GROUP BY series
+`
+
+type AverageRawParams struct {
+	FromTs int64
+	ToTs   int64
+}
+
+type AverageRawRow struct {
+	Series string
+	Value  float64
+}
+
+func (q *Queries) AverageRaw(ctx context.Context, arg AverageRawParams) ([]AverageRawRow, error) {
+	rows, err := q.db.QueryContext(ctx, averageRaw, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AverageRawRow{}
+	for rows.Next() {
+		var i AverageRawRow
+		if err := rows.Scan(&i.Series, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteM5Before = `-- name: DeleteM5Before :exec
+DELETE FROM metrics_m5 WHERE ts < ?
+`
+
+func (q *Queries) DeleteM5Before(ctx context.Context, ts int64) error {
+	_, err := q.db.ExecContext(ctx, deleteM5Before, ts)
+	return err
+}
+
 const deleteProject = `-- name: DeleteProject :exec
 DELETE FROM projects WHERE id = ?
 `
 
 func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteProject, id)
+	return err
+}
+
+const deleteRawBefore = `-- name: DeleteRawBefore :exec
+DELETE FROM metrics_raw WHERE ts < ?
+`
+
+func (q *Queries) DeleteRawBefore(ctx context.Context, ts int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRawBefore, ts)
 	return err
 }
 
@@ -32,6 +88,36 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertM5 = `-- name: InsertM5 :exec
+INSERT OR REPLACE INTO metrics_m5 (series, ts, value) VALUES (?, ?, ?)
+`
+
+type InsertM5Params struct {
+	Series string
+	Ts     int64
+	Value  float64
+}
+
+func (q *Queries) InsertM5(ctx context.Context, arg InsertM5Params) error {
+	_, err := q.db.ExecContext(ctx, insertM5, arg.Series, arg.Ts, arg.Value)
+	return err
+}
+
+const insertMetric = `-- name: InsertMetric :exec
+INSERT OR REPLACE INTO metrics_raw (series, ts, value) VALUES (?, ?, ?)
+`
+
+type InsertMetricParams struct {
+	Series string
+	Ts     int64
+	Value  float64
+}
+
+func (q *Queries) InsertMetric(ctx context.Context, arg InsertMetricParams) error {
+	_, err := q.db.ExecContext(ctx, insertMetric, arg.Series, arg.Ts, arg.Value)
+	return err
 }
 
 const insertProject = `-- name: InsertProject :exec
@@ -104,6 +190,74 @@ func (q *Queries) ListSubnets(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 		items = append(items, subnet)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryM5 = `-- name: QueryM5 :many
+SELECT series, ts, value FROM metrics_m5
+WHERE instr(series, ?1) = 1 AND ts >= ?2 AND ts <= ?3 ORDER BY series, ts
+`
+
+type QueryM5Params struct {
+	Prefix string
+	FromTs int64
+	ToTs   int64
+}
+
+func (q *Queries) QueryM5(ctx context.Context, arg QueryM5Params) ([]MetricsM5, error) {
+	rows, err := q.db.QueryContext(ctx, queryM5, arg.Prefix, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MetricsM5{}
+	for rows.Next() {
+		var i MetricsM5
+		if err := rows.Scan(&i.Series, &i.Ts, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryRaw = `-- name: QueryRaw :many
+SELECT series, ts, value FROM metrics_raw
+WHERE instr(series, ?1) = 1 AND ts >= ?2 AND ts <= ?3 ORDER BY series, ts
+`
+
+type QueryRawParams struct {
+	Prefix string
+	FromTs int64
+	ToTs   int64
+}
+
+func (q *Queries) QueryRaw(ctx context.Context, arg QueryRawParams) ([]MetricsRaw, error) {
+	rows, err := q.db.QueryContext(ctx, queryRaw, arg.Prefix, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MetricsRaw{}
+	for rows.Next() {
+		var i MetricsRaw
+		if err := rows.Scan(&i.Series, &i.Ts, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

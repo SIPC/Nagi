@@ -4,6 +4,18 @@
 
 package nodestore
 
+type MetricsM5 struct {
+	Series string
+	Ts     int64
+	Value  float64
+}
+
+type MetricsRaw struct {
+	Series string
+	Ts     int64
+	Value  float64
+}
+
 type Project struct {
 	ID        string
 	Dir       string

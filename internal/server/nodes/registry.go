@@ -143,6 +143,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	r.conns[nodeID] = c
 	r.mu.Unlock()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
+	go r.pushAlertConfig(ctx, c, nil)
 
 	select {
 	case <-sess.CloseChan():

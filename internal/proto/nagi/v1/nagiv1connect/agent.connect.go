@@ -65,6 +65,12 @@ const (
 	// AgentServiceRestoreSnapshotProcedure is the fully-qualified name of the AgentService's
 	// RestoreSnapshot RPC.
 	AgentServiceRestoreSnapshotProcedure = "/nagi.v1.AgentService/RestoreSnapshot"
+	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
+	// SetAlertConfig RPC.
+	AgentServiceSetAlertConfigProcedure = "/nagi.v1.AgentService/SetAlertConfig"
+	// AgentServiceQueryMetricsProcedure is the fully-qualified name of the AgentService's QueryMetrics
+	// RPC.
+	AgentServiceQueryMetricsProcedure = "/nagi.v1.AgentService/QueryMetrics"
 	// AgentServiceDeleteProjectProcedure is the fully-qualified name of the AgentService's
 	// DeleteProject RPC.
 	AgentServiceDeleteProjectProcedure = "/nagi.v1.AgentService/DeleteProject"
@@ -94,6 +100,10 @@ type AgentServiceClient interface {
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
+	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
+	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
+	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -185,6 +195,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
+		setAlertConfig: connect.NewClient[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse](
+			httpClient,
+			baseURL+AgentServiceSetAlertConfigProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetAlertConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		queryMetrics: connect.NewClient[v1.QueryMetricsRequest, v1.QueryMetricsResponse](
+			httpClient,
+			baseURL+AgentServiceQueryMetricsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("QueryMetrics")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteProject: connect.NewClient[v1.DeleteProjectRequest, v1.DeleteProjectResponse](
 			httpClient,
 			baseURL+AgentServiceDeleteProjectProcedure,
@@ -226,6 +248,8 @@ type agentServiceClient struct {
 	listSnapshots   *connect.Client[v1.ListSnapshotsRequest, v1.ListSnapshotsResponse]
 	createSnapshot  *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
 	restoreSnapshot *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	setAlertConfig  *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	queryMetrics    *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	deleteProject   *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	deployProject   *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs      *connect.Client[v1.StreamLogsRequest, v1.LogLine]
@@ -292,6 +316,16 @@ func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, req *connect.R
 	return c.restoreSnapshot.CallServerStream(ctx, req)
 }
 
+// SetAlertConfig calls nagi.v1.AgentService.SetAlertConfig.
+func (c *agentServiceClient) SetAlertConfig(ctx context.Context, req *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
+	return c.setAlertConfig.CallUnary(ctx, req)
+}
+
+// QueryMetrics calls nagi.v1.AgentService.QueryMetrics.
+func (c *agentServiceClient) QueryMetrics(ctx context.Context, req *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return c.queryMetrics.CallUnary(ctx, req)
+}
+
 // DeleteProject calls nagi.v1.AgentService.DeleteProject.
 func (c *agentServiceClient) DeleteProject(ctx context.Context, req *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
 	return c.deleteProject.CallUnary(ctx, req)
@@ -329,6 +363,10 @@ type AgentServiceHandler interface {
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 从快照恢复 data/ 和 volumes/：停止服务、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
+	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
+	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
+	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -416,6 +454,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetAlertConfigHandler := connect.NewUnaryHandler(
+		AgentServiceSetAlertConfigProcedure,
+		svc.SetAlertConfig,
+		connect.WithSchema(agentServiceMethods.ByName("SetAlertConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceQueryMetricsHandler := connect.NewUnaryHandler(
+		AgentServiceQueryMetricsProcedure,
+		svc.QueryMetrics,
+		connect.WithSchema(agentServiceMethods.ByName("QueryMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceDeleteProjectHandler := connect.NewUnaryHandler(
 		AgentServiceDeleteProjectProcedure,
 		svc.DeleteProject,
@@ -466,6 +516,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateSnapshotHandler.ServeHTTP(w, r)
 		case AgentServiceRestoreSnapshotProcedure:
 			agentServiceRestoreSnapshotHandler.ServeHTTP(w, r)
+		case AgentServiceSetAlertConfigProcedure:
+			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
+		case AgentServiceQueryMetricsProcedure:
+			agentServiceQueryMetricsHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteProjectProcedure:
 			agentServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
@@ -529,6 +583,14 @@ func (UnimplementedAgentServiceHandler) CreateSnapshot(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreSnapshot is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetAlertConfig is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.QueryMetrics is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
