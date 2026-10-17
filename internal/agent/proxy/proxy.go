@@ -23,6 +23,8 @@ import (
 // Route 是一条对外开放规则以及它当前的上游地址。
 type Route struct {
 	Project string
+	// Name 是映射文件名，用于统计请求。
+	Name    string
 	Service string
 	// http、tcp 或 udp。
 	Protocol  string
@@ -103,7 +105,7 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 		case "http":
 			if len(r.Domains) > 0 {
 				proxyRoute := func(hosts []string) obj {
-					return obj{"match": []obj{{"host": hosts}}, "handle": []obj{reverseProxy(r.Upstreams)}, "terminal": true}
+					return obj{"match": []obj{{"host": hosts}}, "handle": handlers(r), "terminal": true}
 				}
 				if r.HTTPOnly {
 					port80Routes = append(port80Routes, proxyRoute(r.Domains))
@@ -133,8 +135,9 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 			}
 			httpServers["port_"+strconv.Itoa(int(r.Published))] = obj{
 				"listen":          []string{":" + strconv.Itoa(int(r.Published))},
-				"routes":          []obj{{"handle": []obj{reverseProxy(r.Upstreams)}}},
+				"routes":          []obj{{"handle": handlers(r)}},
 				"automatic_https": obj{"disable": true},
+				"logs":            obj{},
 			}
 		case "tcp", "udp":
 			if len(r.Upstreams) == 0 {
@@ -163,15 +166,20 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 			"listen":          []string{":443"},
 			"routes":          httpsRoutes,
 			"automatic_https": obj{"disable_redirects": true},
+			"logs":            obj{},
 		}
 	}
 	// 80 端口：只开 HTTP 的域名、还没拿到证书的域名直接转发；已有证书的域名跳转到 HTTPS；
 	// 证书申请的 HTTP 验证由 Caddy 自动处理。没匹配到任何域名的请求返回 404。
 	if len(port80Routes) > 0 {
-		httpServers["http"] = obj{"listen": []string{":80"}, "routes": append(port80Routes, notFound())}
+		httpServers["http"] = obj{"listen": []string{":80"}, "routes": append(port80Routes, notFound()), "logs": obj{}}
 	}
 
-	apps := obj{}
+	// 证书申请成功或失败时通知节点（见 observe.go）。
+	apps := obj{"events": obj{"subscriptions": []obj{{
+		"events":   []string{"cert_obtained", "cert_failed"},
+		"handlers": []obj{{"handler": "nagi"}},
+	}}}}
 	if len(httpServers) > 0 {
 		apps["http"] = obj{"servers": httpServers}
 	}
@@ -179,10 +187,26 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 		apps["layer4"] = obj{"servers": l4Servers}
 	}
 	return obj{
-		"admin":   obj{"disabled": true, "config": obj{"persist": false}},
-		"logging": obj{"logs": obj{"default": obj{"level": "WARN"}}},
+		"admin": obj{"disabled": true, "config": obj{"persist": false}},
+		// 访问日志不输出，只交给 nagi_metrics 统计请求数、5xx 和耗时。
+		"logging": obj{"logs": obj{
+			"default": obj{"level": "WARN", "exclude": []string{"http.log.access"}},
+			"nagi_access": obj{
+				"writer":  obj{"output": "nagi_metrics"},
+				"encoder": obj{"format": "json"},
+				"include": []string{"http.log.access"},
+			},
+		}},
 		"storage": obj{"module": "file_system", "root": storage},
 		"apps":    apps,
+	}
+}
+
+// handlers 返回一条 http 规则的处理器：先在访问日志里标上规则，再反向代理。
+func handlers(r Route) []obj {
+	return []obj{
+		{"handler": "log_append", "key": logRouteKey, "value": r.Project + "/" + r.Name},
+		reverseProxy(r.Upstreams),
 	}
 }
 

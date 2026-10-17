@@ -242,6 +242,8 @@ message AlertRules {
   uint32 cert_days = 6;
   // 节点失联超过这么多秒，默认 60。
   uint32 offline_seconds = 7;
+  // 一条 http 规则最近 5 分钟的 5xx 比例超过这个百分比（至少 20 个请求），默认 5。
+  uint32 error_percent = 8;
 }
 
 message AlertConfig {

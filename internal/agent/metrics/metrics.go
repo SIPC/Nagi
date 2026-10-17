@@ -5,6 +5,7 @@
 //   - node:cpu、node:mem（百分比），node:mem_used、node:disk_free（字节），node:disk（百分比），
 //     node:net_rx、node:net_tx（字节/秒）
 //   - c:<项目 ID>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
+//   - r:<项目 ID>/<规则名>:req、:5xx（请求/秒）、:lat（平均耗时，毫秒），由 AddSource 提供
 package metrics
 
 import (
@@ -18,8 +19,10 @@ import (
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 )
 
+// Interval 是采样间隔。
+const Interval = 10 * time.Second
+
 const (
-	interval   = 10 * time.Second
 	bucket     = 5 * time.Minute
 	keepRaw    = 24 * time.Hour
 	keepM5     = 30 * 24 * time.Hour
@@ -50,7 +53,14 @@ type Collector struct {
 	prevNetTx         uint64
 	prevContainer     map[string]docker.Stats
 	lastDownsampledTo time.Time
+	sources           []Source
 }
+
+// Source 是额外的指标来源，每次采样时调用，elapsed 是距上次采样的秒数。
+type Source func(elapsed float64) map[string]float64
+
+// AddSource 添加额外的指标来源。需要在 Run 之前调用。
+func (c *Collector) AddSource(s Source) { c.sources = append(c.sources, s) }
 
 // New 创建采集器。diskPath 用来计算磁盘使用率（节点目录所在的文件系统）。
 func New(db *sql.DB, dc *docker.Client, diskPath string, log *slog.Logger) *Collector {
@@ -73,7 +83,7 @@ func (c *Collector) Latest() map[string]float64 {
 
 // Run 每 10 秒采集一次，直到 ctx 取消。
 func (c *Collector) Run(ctx context.Context) {
-	t := time.NewTicker(interval)
+	t := time.NewTicker(Interval)
 	defer t.Stop()
 	for {
 		now := time.Now()
@@ -152,6 +162,14 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		for id := range c.prevContainer {
 			if !seen[id] {
 				delete(c.prevContainer, id)
+			}
+		}
+	}
+
+	if !first && elapsed > 0 {
+		for _, src := range c.sources {
+			for k, x := range src(elapsed) {
+				v[k] = x
 			}
 		}
 	}

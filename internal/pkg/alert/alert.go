@@ -25,6 +25,10 @@ const (
 	DefaultRestartMinutes = 10
 	DefaultCertDays       = 7
 	DefaultOfflineSeconds = 60
+	DefaultErrorPercent   = 5
+	// 5xx 比例按最近 5 分钟计算，请求数太少时不判断。
+	ErrorWindow      = 5 * time.Minute
+	ErrorMinRequests = 20
 	// RepeatInterval：问题一直没恢复时，每隔这么久再提醒一次。
 	RepeatInterval = 4 * time.Hour
 )
@@ -45,6 +49,7 @@ type Rules struct {
 	RestartWindow  time.Duration
 	CertDays       int
 	OfflineSeconds int
+	ErrorPercent   float64
 }
 
 // EffectiveRules 把 0 替换成默认值。
@@ -57,6 +62,7 @@ func EffectiveRules(r *nagiv1.AlertRules) Rules {
 		RestartWindow:  time.Duration(or(r.GetRestartMinutes(), DefaultRestartMinutes)) * time.Minute,
 		CertDays:       int(or(r.GetCertDays(), DefaultCertDays)),
 		OfflineSeconds: int(or(r.GetOfflineSeconds(), DefaultOfflineSeconds)),
+		ErrorPercent:   float64(or(r.GetErrorPercent(), DefaultErrorPercent)),
 	}
 }
 

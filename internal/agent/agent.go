@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -131,11 +132,23 @@ func Run(ctx context.Context, cfg Config) error {
 
 	go dc.WatchProjects(ctx, project.LabelProject, a.changed)
 	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	if !cfg.DisableProxy {
+		a.metrics.AddSource(routeMetrics())
+	}
 	go a.metrics.Run(ctx)
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.Name(context.Background(), id) }, a.relayAlert)
 	go a.alerts.Run(ctx)
+	proxy.OnCertEvent(func(domain string, err error) {
+		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
+		if err == nil {
+			go a.alerts.Resolve(ctx, "cert_failed:"+domain)
+			return
+		}
+		go a.alerts.Fire(ctx, "cert_failed:"+domain, fmt.Sprintf("域名 %s 申请证书失败", domain), err.Error(),
+			a.domainProject(ctx, domain))
+	})
 	go a.snapshotLoop(ctx)
 
 	if !cfg.DisableProxy {
@@ -391,6 +404,47 @@ func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClie
 		return
 	}
 	a.log.Info("证书已续期", "panel", p.Address)
+}
+
+// domainProject 返回绑定了这个域名的项目 ID，找不到时返回空。
+func (a *agent) domainProject(ctx context.Context, domain string) string {
+	routes, _ := a.projects.Routes(ctx)
+	for _, r := range routes {
+		if slices.Contains(r.Domains, domain) {
+			return r.Project
+		}
+	}
+	return ""
+}
+
+// routeMetrics 把 Caddy 统计的请求转成监控序列。有过请求的规则，之后没有请求时记 0，
+// 超过一天没有请求就不再记录（规则可能已经删除）。
+func routeMetrics() metrics.Source {
+	lastActive := map[string]time.Time{}
+	return func(elapsed float64) map[string]float64 {
+		now := time.Now()
+		stats := proxy.TakeStats()
+		for k, s := range stats {
+			if s.Requests > 0 {
+				lastActive[k] = now
+			}
+		}
+		out := map[string]float64{}
+		for k, t := range lastActive {
+			if now.Sub(t) > 24*time.Hour {
+				delete(lastActive, k)
+				continue
+			}
+			s := stats[k]
+			prefix := "r:" + k + ":"
+			out[prefix+"req"] = float64(s.Requests) / elapsed
+			out[prefix+"5xx"] = float64(s.Errors) / elapsed
+			if s.Requests > 0 {
+				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Requests)
+			}
+		}
+		return out
+	}
 }
 
 // snapshotLoop 每分钟检查一次，给到时间的项目做定时快照。

@@ -193,6 +193,7 @@ export function AlertSettings() {
             {ruleField("重启窗口分钟", "restartMinutes", 10)}
             {ruleField("证书剩余天数", "certDays", 7)}
             {ruleField("失联秒数", "offlineSeconds", 60)}
+            {ruleField("5xx 比例 %", "errorPercent", 5)}
           </div>
         </div>
         <div>
@@ -207,7 +208,7 @@ export function AlertSettings() {
 
 // ---- 节点监控（临时测试界面）----
 
-function Sparkline({ values }: { values: number[] }) {
+export function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2)
     return <span className="text-muted-foreground">—</span>;
   const max = Math.max(...values, 1);
@@ -226,7 +227,7 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-function fmtBytes(v: number) {
+export function fmtBytes(v: number) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {
@@ -269,6 +270,79 @@ export function NodeMetrics({ nodeId }: { nodeId: string }) {
       {row("磁盘", "node:disk", (v) => `${v.toFixed(1)}%`)}
       {row("下行", "node:net_rx", (v) => `${fmtBytes(v)}/s`)}
       {row("上行", "node:net_tx", (v) => `${fmtBytes(v)}/s`)}
+    </div>
+  );
+}
+
+// 项目的容器和对外访问规则的监控（最近 1 小时）。
+export function ProjectMetrics({
+  nodeId,
+  projectId,
+}: {
+  nodeId: string;
+  projectId: string;
+}) {
+  const from = () => timestampFromDate(new Date(Date.now() - 3600_000));
+  const q = useQuery({
+    queryKey: ["project-metrics", nodeId, projectId],
+    queryFn: async () => {
+      const [c, r] = await Promise.all([
+        nodeClient.queryNodeMetrics({
+          nodeId,
+          prefix: `c:${projectId}/`,
+          from: from(),
+        }),
+        nodeClient.queryNodeMetrics({
+          nodeId,
+          prefix: `r:${projectId}/`,
+          from: from(),
+        }),
+      ]);
+      return [...c.series, ...r.series];
+    },
+    refetchInterval: 10_000,
+  });
+  if (q.isPending) return <Spinner />;
+  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  // 序列名形如 c:<项目>/<服务>:cpu、r:<项目>/<规则>:req，按服务/规则分组。
+  const groups = new Map<string, Map<string, number[]>>();
+  for (const s of q.data) {
+    const rest = s.name.slice(s.name.indexOf("/") + 1);
+    const i = rest.lastIndexOf(":");
+    const key = `${s.name[0] === "c" ? "服务" : "规则"} ${rest.slice(0, i)}`;
+    if (!groups.has(key)) groups.set(key, new Map());
+    groups.get(key)!.set(rest.slice(i + 1), s.values);
+  }
+  if (groups.size === 0)
+    return <div className="text-sm text-muted-foreground">还没有数据</div>;
+  const fmt: Record<string, [string, (v: number) => string]> = {
+    cpu: ["CPU", (v) => `${v.toFixed(1)}%`],
+    mem: ["内存", fmtBytes],
+    net_rx: ["下行", (v) => `${fmtBytes(v)}/s`],
+    net_tx: ["上行", (v) => `${fmtBytes(v)}/s`],
+    restarts: ["重启", (v) => String(v)],
+    req: ["请求", (v) => `${v.toFixed(2)}/s`],
+    "5xx": ["5xx", (v) => `${v.toFixed(2)}/s`],
+    lat: ["耗时", (v) => `${v.toFixed(0)} ms`],
+  };
+  return (
+    <div className="grid gap-3 text-xs">
+      {[...groups.entries()].map(([name, series]) => (
+        <div key={name}>
+          <div className="mb-1 font-medium">{name}</div>
+          {[...series.entries()].map(([kind, values]) => (
+            <div key={kind} className="flex items-center gap-3">
+              <span className="w-12 text-muted-foreground">
+                {fmt[kind]?.[0] ?? kind}
+              </span>
+              <span className="w-24 font-mono">
+                {(fmt[kind]?.[1] ?? String)(values[values.length - 1])}
+              </span>
+              <Sparkline values={values} />
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

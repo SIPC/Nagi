@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
+import { ProjectMetrics } from "@/pages/alerts";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, Spinner, Textarea } from "@/components/ui";
@@ -93,6 +94,14 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         />
 
         <TerminalCard nodeId={nodeId} projectId={projectId} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+        <Card>
+          <CardHeader>
+            <CardTitle>监控（最近 1 小时）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProjectMetrics nodeId={nodeId} projectId={projectId} />
+          </CardContent>
+        </Card>
         <RoutesCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
         <HistoryCard nodeId={nodeId} project={p} />

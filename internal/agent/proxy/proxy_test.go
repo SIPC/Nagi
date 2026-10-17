@@ -2,7 +2,15 @@ package proxy
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 )
@@ -32,4 +40,47 @@ func mustConfig(t *testing.T, data []byte) *caddy.Config {
 		t.Fatal(err)
 	}
 	return &cfg
+}
+
+// 经过 Caddy 的请求按规则统计请求数和 5xx 数。
+func TestRouteStats(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer up.Close()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	p := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	defer p.Stop()
+	err = p.Apply([]Route{{Project: "p1", Name: "web", Protocol: "http", Published: uint32(port),
+		Upstreams: []string{strings.TrimPrefix(up.URL, "http://")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	TakeStats()
+	base := "http://127.0.0.1:" + strconv.Itoa(port)
+	for _, path := range []string{"/", "/", "/fail"} {
+		resp, err := http.Get(base + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	var s RouteStats
+	for range 50 {
+		if s = TakeStats()["p1/web"]; s.Requests > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if s.Requests != 3 || s.Errors != 1 {
+		t.Fatalf("统计不对：%+v", s)
+	}
 }

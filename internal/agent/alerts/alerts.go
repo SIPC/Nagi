@@ -167,6 +167,7 @@ func (e *Engine) rules() alert.Rules {
 		r.RestartCount = min(r.RestartCount, x.RestartCount)
 		r.RestartWindow = max(r.RestartWindow, x.RestartWindow)
 		r.CertDays = max(r.CertDays, x.CertDays)
+		r.ErrorPercent = min(r.ErrorPercent, x.ErrorPercent)
 	}
 	return r
 }
@@ -230,6 +231,18 @@ func (e *Engine) evaluate(ctx context.Context) {
 		}
 	}
 
+	// http 规则的 5xx 比例。
+	for route, x := range e.errorRates(ctx, now) {
+		if x.requests >= alert.ErrorMinRequests && 100*x.errors/x.requests > rules.ErrorPercent {
+			project, name := splitContainer(route)
+			active["errors:"+route] = &nagiv1.Alert{
+				Title: fmt.Sprintf("规则 %s 最近 %d 分钟 5xx 占 %.0f%%（共 %.0f 个请求）",
+					name, int(alert.ErrorWindow.Minutes()), 100*x.errors/x.requests, x.requests),
+				Project: e.projectName(project),
+			}
+		}
+	}
+
 	// 健康检查失败。
 	if containers, err := e.docker.ManagedContainers(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
@@ -268,6 +281,43 @@ func (e *Engine) evaluate(ctx context.Context) {
 	for _, a := range send {
 		e.dispatch(ctx, a)
 	}
+}
+
+type errorRate struct{ requests, errors float64 }
+
+// errorRates 统计每条 http 规则最近一段时间的请求数和 5xx 数（序列存的是每秒速率，每 10 秒一个点）。
+func (e *Engine) errorRates(ctx context.Context, now time.Time) map[string]errorRate {
+	data, err := e.metrics.Query(ctx, "r:", now.Add(-alert.ErrorWindow), now)
+	if err != nil {
+		return nil
+	}
+	out := map[string]errorRate{}
+	for series, points := range data {
+		route, kind, ok := cutLast(strings.TrimPrefix(series, "r:"), ":")
+		if !ok || (kind != "req" && kind != "5xx") {
+			continue
+		}
+		var sum float64
+		for _, p := range points {
+			sum += p.Value * metrics.Interval.Seconds()
+		}
+		x := out[route]
+		if kind == "req" {
+			x.requests = sum
+		} else {
+			x.errors = sum
+		}
+		out[route] = x
+	}
+	return out
+}
+
+func cutLast(s, sep string) (before, after string, ok bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
 }
 
 func isEventKey(key string) bool { return strings.HasPrefix(key, "event:") }

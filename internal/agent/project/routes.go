@@ -32,6 +32,7 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 			}
 			route := proxy.Route{
 				Project:   r.ID,
+				Name:      e.GetName(),
 				Service:   e.GetService(),
 				Protocol:  e.GetProtocol(),
 				Published: e.GetPublished(),

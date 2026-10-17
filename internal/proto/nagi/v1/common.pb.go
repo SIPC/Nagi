@@ -1592,8 +1592,10 @@ type AlertRules struct {
 	CertDays uint32 `protobuf:"varint,6,opt,name=cert_days,json=certDays,proto3" json:"cert_days,omitempty"`
 	// 节点失联超过这么多秒，默认 60。
 	OfflineSeconds uint32 `protobuf:"varint,7,opt,name=offline_seconds,json=offlineSeconds,proto3" json:"offline_seconds,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 一条 http 规则最近 5 分钟的 5xx 比例超过这个百分比（至少 20 个请求），默认 5。
+	ErrorPercent  uint32 `protobuf:"varint,8,opt,name=error_percent,json=errorPercent,proto3" json:"error_percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AlertRules) Reset() {
@@ -1671,6 +1673,13 @@ func (x *AlertRules) GetCertDays() uint32 {
 func (x *AlertRules) GetOfflineSeconds() uint32 {
 	if x != nil {
 		return x.OfflineSeconds
+	}
+	return 0
+}
+
+func (x *AlertRules) GetErrorPercent() uint32 {
+	if x != nil {
+		return x.ErrorPercent
 	}
 	return 0
 }
@@ -1951,7 +1960,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x04type\x18\x03 \x01(\tR\x04type\x12\x10\n" +
 	"\x03url\x18\x04 \x01(\tR\x03url\x12%\n" +
 	"\x0etelegram_token\x18\x05 \x01(\tR\rtelegramToken\x12(\n" +
-	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\x85\x02\n" +
+	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\xaa\x02\n" +
 	"\n" +
 	"AlertRules\x12!\n" +
 	"\fdisk_percent\x18\x01 \x01(\rR\vdiskPercent\x12\x1f\n" +
@@ -1962,7 +1971,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\rrestart_count\x18\x04 \x01(\rR\frestartCount\x12'\n" +
 	"\x0frestart_minutes\x18\x05 \x01(\rR\x0erestartMinutes\x12\x1b\n" +
 	"\tcert_days\x18\x06 \x01(\rR\bcertDays\x12'\n" +
-	"\x0foffline_seconds\x18\a \x01(\rR\x0eofflineSeconds\"k\n" +
+	"\x0foffline_seconds\x18\a \x01(\rR\x0eofflineSeconds\x12#\n" +
+	"\rerror_percent\x18\b \x01(\rR\ferrorPercent\"k\n" +
 	"\vAlertConfig\x121\n" +
 	"\bchannels\x18\x01 \x03(\v2\x15.nagi.v1.AlertChannelR\bchannels\x12)\n" +
 	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\"\xbf\x01\n" +
