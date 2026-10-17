@@ -431,6 +431,46 @@ func (m *Manager) DiscardDraft(ctx context.Context, id string, baseRevision int6
 	return pdb.project(ctx, id, row.Dir)
 }
 
+// ---- 删除 ----
+
+// Delete 删除项目：停止并删除容器和网络，从节点上移除记录。项目目录默认保留；
+// deleteDir 时删除整个目录（含数据和快照），confirmName 必须等于项目名。
+func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, deleteDir bool, confirmName string, onLine func(string)) error {
+	row, pdb, _, unlock, err := m.projectForUpdate(ctx, id, baseRevision)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	name := pdb.meta(ctx, metaName)
+	pdb.Close()
+	if deleteDir && confirmName != name {
+		return invalid("要同时删除项目目录，请输入项目名 %s 确认", name)
+	}
+	p := paths{root: row.Dir}
+	files := compose.Files{
+		ProjectName: composeProjectName(id),
+		ProjectDir:  p.dataDir(),
+		ComposeFile: p.composeFile(),
+		Override:    p.overrideFile(),
+		EnvFile:     p.envFile(),
+	}
+	// 从未部署过的项目没有 override，也没有容器。
+	if _, err := os.Stat(p.overrideFile()); err == nil {
+		if err := compose.Down(ctx, files, deleteDir, onLine); err != nil {
+			return err
+		}
+	}
+	if err := m.nodeQ.DeleteProject(ctx, id); err != nil {
+		return err
+	}
+	if deleteDir {
+		if err := os.RemoveAll(row.Dir); err != nil {
+			return fmt.Errorf("删除项目目录: %w", err)
+		}
+	}
+	return nil
+}
+
 // ---- 部署 ----
 
 // Deploy 部署项目。有草稿时先把草稿记为新版本；没有草稿时重新部署最新版本。

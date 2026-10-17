@@ -164,6 +164,25 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 	return connect.NewResponse(out), nil
 }
 
+// RemoveNode 移除节点：标记为已移除（之后拒绝它连接），删掉它的配置备份和 webhook，断开当前连接。
+// 节点上的项目照常运行。以后用新的加入令牌重新加入时会恢复。
+func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv1.RemoveNodeRequest]) (*connect.Response[nagiv1.RemoveNodeResponse], error) {
+	id := req.Msg.GetNodeId()
+	if _, err := s.Q.GetNode(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("节点不存在"))
+	} else if err != nil {
+		return nil, err
+	}
+	if err := s.Q.RevokeNode(ctx, id); err != nil {
+		return nil, err
+	}
+	_ = s.Q.DeleteNodeData(ctx, id)
+	_ = s.Q.DeleteNodeWebhooks(ctx, id)
+	s.Nodes.Disconnect(id)
+	s.Log.Info("节点已移除", "node", id)
+	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
+}
+
 // ---- 项目：转发给节点 ----
 
 type projectService struct{ *API }
@@ -263,6 +282,23 @@ func (s *projectService) DiscardNodeProjectDraft(ctx context.Context, req *conne
 	return connect.NewResponse(&nagiv1.DiscardNodeProjectDraftResponse{Project: resp.GetProject()}), nil
 }
 
+func (s *projectService) DeleteNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRequest]) (*connect.Response[nagiv1.DeleteNodeProjectResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if _, err := agent.DeleteProject(ctx, &nagiv1.DeleteProjectRequest{
+		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(),
+		DeleteDir: req.Msg.GetDeleteDir(), ConfirmName: req.Msg.GetConfirmName(),
+	}); err != nil {
+		return nil, fromGRPC(err)
+	}
+	_ = s.Q.DeleteProjectBackup(ctx, store.DeleteProjectBackupParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
+	_ = s.Q.DeleteProjectWebhook(ctx, store.DeleteProjectWebhookParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
+	s.Log.Info("项目已删除", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "delete_dir", req.Msg.GetDeleteDir())
+	return connect.NewResponse(&nagiv1.DeleteNodeProjectResponse{}), nil
+}
+
 func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeployNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	agent, err := s.agent(req.Msg.GetNodeId())
 	if err != nil {
@@ -340,7 +376,12 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	// 节点 ID 由节点的身份公钥算出：同一个节点加入不同的面板，ID 都一样。
 	nodeID := nodes.NodeID(csr.RawSubjectPublicKeyInfo)
 
-	if _, err := s.Q.GetNode(ctx, nodeID); errors.Is(err, sql.ErrNoRows) {
+	if n, err := s.Q.GetNode(ctx, nodeID); err == nil && n.Revoked != 0 {
+		// 已移除的节点用新令牌重新加入：恢复。
+		if err := s.Q.UnrevokeNode(ctx, nodeID); err != nil {
+			return nil, err
+		}
+	} else if errors.Is(err, sql.ErrNoRows) {
 		name := strings.TrimSpace(req.Msg.GetHostname())
 		if name == "" {
 			name = nodeID

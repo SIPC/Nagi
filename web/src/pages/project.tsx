@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -94,6 +94,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
 
         <TerminalCard nodeId={nodeId} projectId={projectId} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         <ConfigCard nodeId={nodeId} project={p} services={services.map((s) => s.name)} />
+        <DeleteCard nodeId={nodeId} project={p} />
       </div>
     </>
   );
@@ -489,6 +490,55 @@ function SourceInfo({ project }: { project: Project }) {
         <div className="grid gap-1">
           <span className="font-medium">webhook 地址（push 后自动拉取并部署）</span>
           <code className="break-all rounded bg-muted p-2 text-xs">{hook}</code>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deleteDir, setDeleteDir] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [error, setError] = useState("");
+
+  const remove = async () => {
+    if (!deleteDir && !confirm(`删除项目 ${project.name}？容器会被删除，项目目录保留。`)) return;
+    setError("");
+    try {
+      await projectClient.deleteNodeProject({
+        nodeId,
+        projectId: project.id,
+        baseRevision: project.revision,
+        deleteDir,
+        confirmName,
+      });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      navigate({ to: "/projects" });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader>
+        <CardTitle>删除项目</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        {error && <Alert>{error}</Alert>}
+        <p className="text-muted-foreground">停止并删除容器。项目目录（含数据和快照）默认保留在 {project.dir}。</p>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={deleteDir} onChange={(e) => setDeleteDir(e.target.checked)} />
+          同时删除项目目录（数据、快照都会删掉，无法恢复）
+        </label>
+        {deleteDir && (
+          <Input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={`输入项目名 ${project.name} 确认`} />
+        )}
+        <div>
+          <Button variant="destructive" size="sm" onClick={remove}>
+            删除项目
+          </Button>
         </div>
       </CardContent>
     </Card>

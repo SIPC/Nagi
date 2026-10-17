@@ -9,6 +9,15 @@ import (
 	"context"
 )
 
+const deleteProject = `-- name: DeleteProject :exec
+DELETE FROM projects WHERE id = ?
+`
+
+func (q *Queries) DeleteProject(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteProject, id)
+	return err
+}
+
 const getProject = `-- name: GetProject :one
 SELECT id, dir, subnet, created_at FROM projects WHERE id = ?
 `

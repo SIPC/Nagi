@@ -62,6 +62,15 @@ func (s *agentService) DiscardDraft(ctx context.Context, req *nagiv1.DiscardDraf
 	return &nagiv1.DiscardDraftResponse{Project: p}, nil
 }
 
+func (s *agentService) DeleteProject(ctx context.Context, req *nagiv1.DeleteProjectRequest) (*nagiv1.DeleteProjectResponse, error) {
+	err := s.projects.Delete(ctx, req.GetId(), req.GetBaseRevision(), req.GetDeleteDir(), req.GetConfirmName(), func(string) {})
+	s.changed()
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.DeleteProjectResponse{}, nil
+}
+
 func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream nagiv1.AgentService_DeployProjectServer) error {
 	ctx := stream.Context()
 	send := func(line string) {

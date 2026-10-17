@@ -46,6 +46,9 @@ const (
 	// AgentServiceDiscardDraftProcedure is the fully-qualified name of the AgentService's DiscardDraft
 	// RPC.
 	AgentServiceDiscardDraftProcedure = "/nagi.v1.AgentService/DiscardDraft"
+	// AgentServiceDeleteProjectProcedure is the fully-qualified name of the AgentService's
+	// DeleteProject RPC.
+	AgentServiceDeleteProjectProcedure = "/nagi.v1.AgentService/DeleteProject"
 	// AgentServiceDeployProjectProcedure is the fully-qualified name of the AgentService's
 	// DeployProject RPC.
 	AgentServiceDeployProjectProcedure = "/nagi.v1.AgentService/DeployProject"
@@ -62,6 +65,8 @@ type AgentServiceClient interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 删除项目：停止并删除容器。项目目录默认保留。
+	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -109,6 +114,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteProject: connect.NewClient[v1.DeleteProjectRequest, v1.DeleteProjectResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteProjectProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteProject")),
+			connect.WithClientOptions(opts...),
+		),
 		deployProject: connect.NewClient[v1.DeployProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+AgentServiceDeployProjectProcedure,
@@ -137,6 +148,7 @@ type agentServiceClient struct {
 	getProject    *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
 	saveDraft     *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
 	discardDraft  *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
+	deleteProject *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	deployProject *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs    *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 	exec          *connect.Client[v1.ExecInput, v1.ExecOutput]
@@ -167,6 +179,11 @@ func (c *agentServiceClient) DiscardDraft(ctx context.Context, req *connect.Requ
 	return c.discardDraft.CallUnary(ctx, req)
 }
 
+// DeleteProject calls nagi.v1.AgentService.DeleteProject.
+func (c *agentServiceClient) DeleteProject(ctx context.Context, req *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
+	return c.deleteProject.CallUnary(ctx, req)
+}
+
 // DeployProject calls nagi.v1.AgentService.DeployProject.
 func (c *agentServiceClient) DeployProject(ctx context.Context, req *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployProject.CallServerStream(ctx, req)
@@ -189,6 +206,8 @@ type AgentServiceHandler interface {
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
+	// 删除项目：停止并删除容器。项目目录默认保留。
+	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -232,6 +251,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("DiscardDraft")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceDeleteProjectHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteProjectProcedure,
+		svc.DeleteProject,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceDeployProjectHandler := connect.NewServerStreamHandler(
 		AgentServiceDeployProjectProcedure,
 		svc.DeployProject,
@@ -262,6 +287,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSaveDraftHandler.ServeHTTP(w, r)
 		case AgentServiceDiscardDraftProcedure:
 			agentServiceDiscardDraftHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteProjectProcedure:
+			agentServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
 			agentServiceDeployProjectHandler.ServeHTTP(w, r)
 		case AgentServiceStreamLogsProcedure:
@@ -295,6 +322,10 @@ func (UnimplementedAgentServiceHandler) SaveDraft(context.Context, *connect.Requ
 
 func (UnimplementedAgentServiceHandler) DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DiscardDraft is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteProject is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

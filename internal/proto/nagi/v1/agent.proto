@@ -13,6 +13,8 @@ service AgentService {
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
   rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
+  // 删除项目：停止并删除容器。项目目录默认保留。
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -79,6 +81,16 @@ message DiscardDraftRequest {
 message DiscardDraftResponse {
   Project project = 1;
 }
+
+message DeleteProjectRequest {
+  string id = 1;
+  int64 base_revision = 2;
+  // 同时删除项目目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
+  bool delete_dir = 3;
+  string confirm_name = 4;
+}
+
+message DeleteProjectResponse {}
 
 message CreateProjectResponse {
   Project project = 1;

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/agent.proto.
  */
 export const file_nagi_v1_agent: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0ImYKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSDwoHY29tbWFuZBgDIAMoCRIjCgRzaXplGAQgASgLMhUubmFnaS52MS5UZXJtaW5hbFNpemUiKgoMVGVybWluYWxTaXplEgwKBGNvbHMYASABKA0SDAoEcm93cxgCIAEoDSI9CgpFeGVjT3V0cHV0EhAKBnN0ZG91dBgBIAEoDEgAEhMKCWV4aXRfY29kZRgCIAEoBUgAQggKBm91dHB1dCIVChNMaXN0UHJvamVjdHNSZXF1ZXN0IkEKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEikKCHByb2plY3RzGAEgAygLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJfChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRuYW1lGAEgASgJEgsKA2RpchgCIAEoCRImCgZjb25maWcYBCABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgDEAQiXQoQU2F2ZURyYWZ0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEiYKBmNvbmZpZxgDIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZyI2ChFTYXZlRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjgKE0Rpc2NhcmREcmFmdFJlcXVlc3QSCgoCaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyI5ChREaXNjYXJkRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjoKFUNyZWF0ZVByb2plY3RSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0Ih8KEUdldFByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJIj4KEkdldFByb2plY3RSZXNwb25zZRIoCgdwcm9qZWN0GAEgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJHChREZXBsb3lQcm9qZWN0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEgwKBHB1bGwYAyABKAgiTgoRU3RyZWFtTG9nc1JlcXVlc3QSCgoCaWQYASABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDK+BAoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEkIKCVNhdmVEcmFmdBIZLm5hZ2kudjEuU2F2ZURyYWZ0UmVxdWVzdBoaLm5hZ2kudjEuU2F2ZURyYWZ0UmVzcG9uc2USSwoMRGlzY2FyZERyYWZ0EhwubmFnaS52MS5EaXNjYXJkRHJhZnRSZXF1ZXN0Gh0ubmFnaS52MS5EaXNjYXJkRHJhZnRSZXNwb25zZRJGCg1EZXBsb3lQcm9qZWN0Eh0ubmFnaS52MS5EZXBsb3lQcm9qZWN0UmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARI8CgpTdHJlYW1Mb2dzEhoubmFnaS52MS5TdHJlYW1Mb2dzUmVxdWVzdBoQLm5hZ2kudjEuTG9nTGluZTABEjMKBEV4ZWMSEi5uYWdpLnYxLkV4ZWNJbnB1dBoTLm5hZ2kudjEuRXhlY091dHB1dCgBMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0ImYKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSDwoHY29tbWFuZBgDIAMoCRIjCgRzaXplGAQgASgLMhUubmFnaS52MS5UZXJtaW5hbFNpemUiKgoMVGVybWluYWxTaXplEgwKBGNvbHMYASABKA0SDAoEcm93cxgCIAEoDSI9CgpFeGVjT3V0cHV0EhAKBnN0ZG91dBgBIAEoDEgAEhMKCWV4aXRfY29kZRgCIAEoBUgAQggKBm91dHB1dCIVChNMaXN0UHJvamVjdHNSZXF1ZXN0IkEKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEikKCHByb2plY3RzGAEgAygLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJfChRDcmVhdGVQcm9qZWN0UmVxdWVzdBIMCgRuYW1lGAEgASgJEgsKA2RpchgCIAEoCRImCgZjb25maWcYBCABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWdKBAgDEAQiXQoQU2F2ZURyYWZ0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEiYKBmNvbmZpZxgDIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZyI2ChFTYXZlRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjgKE0Rpc2NhcmREcmFmdFJlcXVlc3QSCgoCaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyI5ChREaXNjYXJkRHJhZnRSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0ImMKFERlbGV0ZVByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMSEgoKZGVsZXRlX2RpchgDIAEoCBIUCgxjb25maXJtX25hbWUYBCABKAkiFwoVRGVsZXRlUHJvamVjdFJlc3BvbnNlIjoKFUNyZWF0ZVByb2plY3RSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0Ih8KEUdldFByb2plY3RSZXF1ZXN0EgoKAmlkGAEgASgJIj4KEkdldFByb2plY3RSZXNwb25zZRIoCgdwcm9qZWN0GAEgASgLMhcubmFnaS52MS5Qcm9qZWN0U3VtbWFyeSJHChREZXBsb3lQcm9qZWN0UmVxdWVzdBIKCgJpZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEgwKBHB1bGwYAyABKAgiTgoRU3RyZWFtTG9nc1JlcXVlc3QSCgoCaWQYASABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDKOBQoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEkIKCVNhdmVEcmFmdBIZLm5hZ2kudjEuU2F2ZURyYWZ0UmVxdWVzdBoaLm5hZ2kudjEuU2F2ZURyYWZ0UmVzcG9uc2USSwoMRGlzY2FyZERyYWZ0EhwubmFnaS52MS5EaXNjYXJkRHJhZnRSZXF1ZXN0Gh0ubmFnaS52MS5EaXNjYXJkRHJhZnRSZXNwb25zZRJOCg1EZWxldGVQcm9qZWN0Eh0ubmFnaS52MS5EZWxldGVQcm9qZWN0UmVxdWVzdBoeLm5hZ2kudjEuRGVsZXRlUHJvamVjdFJlc3BvbnNlEkYKDURlcGxveVByb2plY3QSHS5uYWdpLnYxLkRlcGxveVByb2plY3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAESMwoERXhlYxISLm5hZ2kudjEuRXhlY0lucHV0GhMubmFnaS52MS5FeGVjT3V0cHV0KAEwAUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.ExecInput
@@ -277,6 +277,53 @@ export const DiscardDraftResponseSchema: GenMessage<DiscardDraftResponse> = /*@_
   messageDesc(file_nagi_v1_agent, 10);
 
 /**
+ * @generated from message nagi.v1.DeleteProjectRequest
+ */
+export type DeleteProjectRequest = Message<"nagi.v1.DeleteProjectRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: int64 base_revision = 2;
+   */
+  baseRevision: bigint;
+
+  /**
+   * 同时删除项目目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
+   *
+   * @generated from field: bool delete_dir = 3;
+   */
+  deleteDir: boolean;
+
+  /**
+   * @generated from field: string confirm_name = 4;
+   */
+  confirmName: string;
+};
+
+/**
+ * Describes the message nagi.v1.DeleteProjectRequest.
+ * Use `create(DeleteProjectRequestSchema)` to create a new message.
+ */
+export const DeleteProjectRequestSchema: GenMessage<DeleteProjectRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 11);
+
+/**
+ * @generated from message nagi.v1.DeleteProjectResponse
+ */
+export type DeleteProjectResponse = Message<"nagi.v1.DeleteProjectResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.DeleteProjectResponse.
+ * Use `create(DeleteProjectResponseSchema)` to create a new message.
+ */
+export const DeleteProjectResponseSchema: GenMessage<DeleteProjectResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 12);
+
+/**
  * @generated from message nagi.v1.CreateProjectResponse
  */
 export type CreateProjectResponse = Message<"nagi.v1.CreateProjectResponse"> & {
@@ -291,7 +338,7 @@ export type CreateProjectResponse = Message<"nagi.v1.CreateProjectResponse"> & {
  * Use `create(CreateProjectResponseSchema)` to create a new message.
  */
 export const CreateProjectResponseSchema: GenMessage<CreateProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 11);
+  messageDesc(file_nagi_v1_agent, 13);
 
 /**
  * @generated from message nagi.v1.GetProjectRequest
@@ -308,7 +355,7 @@ export type GetProjectRequest = Message<"nagi.v1.GetProjectRequest"> & {
  * Use `create(GetProjectRequestSchema)` to create a new message.
  */
 export const GetProjectRequestSchema: GenMessage<GetProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 12);
+  messageDesc(file_nagi_v1_agent, 14);
 
 /**
  * @generated from message nagi.v1.GetProjectResponse
@@ -325,7 +372,7 @@ export type GetProjectResponse = Message<"nagi.v1.GetProjectResponse"> & {
  * Use `create(GetProjectResponseSchema)` to create a new message.
  */
 export const GetProjectResponseSchema: GenMessage<GetProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 13);
+  messageDesc(file_nagi_v1_agent, 15);
 
 /**
  * 有草稿时先把草稿记为新版本再部署；没有草稿时重新部署最新版本。
@@ -358,7 +405,7 @@ export type DeployProjectRequest = Message<"nagi.v1.DeployProjectRequest"> & {
  * Use `create(DeployProjectRequestSchema)` to create a new message.
  */
 export const DeployProjectRequestSchema: GenMessage<DeployProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 14);
+  messageDesc(file_nagi_v1_agent, 16);
 
 /**
  * @generated from message nagi.v1.StreamLogsRequest
@@ -394,7 +441,7 @@ export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
  * Use `create(StreamLogsRequestSchema)` to create a new message.
  */
 export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 15);
+  messageDesc(file_nagi_v1_agent, 17);
 
 /**
  * AgentService：面板调用节点（反向 gRPC），走控制连接。
@@ -441,6 +488,16 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof DiscardDraftRequestSchema;
     output: typeof DiscardDraftResponseSchema;
+  },
+  /**
+   * 删除项目：停止并删除容器。项目目录默认保留。
+   *
+   * @generated from rpc nagi.v1.AgentService.DeleteProject
+   */
+  deleteProject: {
+    methodKind: "unary";
+    input: typeof DeleteProjectRequestSchema;
+    output: typeof DeleteProjectResponseSchema;
   },
   /**
    * @generated from rpc nagi.v1.AgentService.DeployProject

@@ -9,3 +9,7 @@ SELECT * FROM projects ORDER BY created_at;
 
 -- name: ListSubnets :many
 SELECT subnet FROM projects;
+
+
+-- name: DeleteProject :exec
+DELETE FROM projects WHERE id = ?;

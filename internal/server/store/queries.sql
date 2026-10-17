@@ -68,3 +68,24 @@ ON CONFLICT (node_id, project_id) DO UPDATE SET token_hash = excluded.token_hash
 
 -- name: GetWebhook :one
 SELECT * FROM webhooks WHERE token_hash = ?;
+
+-- name: RevokeNode :exec
+UPDATE nodes SET revoked = 1 WHERE id = ?;
+
+-- name: UnrevokeNode :exec
+UPDATE nodes SET revoked = 0 WHERE id = ?;
+
+-- name: DeleteNodeData :exec
+DELETE FROM project_backups WHERE node_id = ?;
+
+-- name: DeleteNodeWebhooks :exec
+DELETE FROM webhooks WHERE node_id = ?;
+
+-- name: DeleteProjectBackup :exec
+DELETE FROM project_backups WHERE node_id = ? AND project_id = ?;
+
+-- name: DeleteProjectWebhook :exec
+DELETE FROM webhooks WHERE node_id = ? AND project_id = ?;
+
+-- name: ListWebhookProjects :many
+SELECT project_id FROM webhooks WHERE node_id = ?;

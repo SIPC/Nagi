@@ -43,6 +43,15 @@ func Recreate(ctx context.Context, f Files, services []string, onLine func(strin
 	return run(ctx, f.args(append([]string{"up", "-d", "--force-recreate", "--no-deps"}, services...)...), onLine)
 }
 
+// Down 停止并删除项目的容器和网络。removeVolumes 时一并删除命名 volume。
+func Down(ctx context.Context, f Files, removeVolumes bool, onLine func(string)) error {
+	args := []string{"down", "--remove-orphans"}
+	if removeVolumes {
+		args = append(args, "-v")
+	}
+	return run(ctx, f.args(args...), onLine)
+}
+
 // Version 返回 docker compose 插件的版本号，例如 "2.39.1"。
 func Version(ctx context.Context) (string, error) {
 	out, err := exec.CommandContext(ctx, "docker", "compose", "version", "--short").Output()

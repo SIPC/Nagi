@@ -57,6 +57,8 @@ const (
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
+	// NodeServiceRemoveNodeProcedure is the fully-qualified name of the NodeService's RemoveNode RPC.
+	NodeServiceRemoveNodeProcedure = "/nagi.v1.NodeService/RemoveNode"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -78,6 +80,9 @@ const (
 	// ProjectServiceDiscardNodeProjectDraftProcedure is the fully-qualified name of the
 	// ProjectService's DiscardNodeProjectDraft RPC.
 	ProjectServiceDiscardNodeProjectDraftProcedure = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
+	// ProjectServiceDeleteNodeProjectProcedure is the fully-qualified name of the ProjectService's
+	// DeleteNodeProject RPC.
+	ProjectServiceDeleteNodeProjectProcedure = "/nagi.v1.ProjectService/DeleteNodeProject"
 	// ProjectServiceDeployNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// DeployNodeProject RPC.
 	ProjectServiceDeployNodeProjectProcedure = "/nagi.v1.ProjectService/DeployNodeProject"
@@ -309,6 +314,8 @@ type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
+	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -334,6 +341,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
 			connect.WithClientOptions(opts...),
 		),
+		removeNode: connect.NewClient[v1.RemoveNodeRequest, v1.RemoveNodeResponse](
+			httpClient,
+			baseURL+NodeServiceRemoveNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RemoveNode")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -341,6 +354,7 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type nodeServiceClient struct {
 	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
+	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -353,11 +367,18 @@ func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connec
 	return c.createEnrollCommand.CallUnary(ctx, req)
 }
 
+// RemoveNode calls nagi.v1.NodeService.RemoveNode.
+func (c *nodeServiceClient) RemoveNode(ctx context.Context, req *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
+	return c.removeNode.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
+	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -379,12 +400,20 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceRemoveNodeHandler := connect.NewUnaryHandler(
+		NodeServiceRemoveNodeProcedure,
+		svc.RemoveNode,
+		connect.WithSchema(nodeServiceMethods.ByName("RemoveNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
+		case NodeServiceRemoveNodeProcedure:
+			nodeServiceRemoveNodeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -400,6 +429,10 @@ func (UnimplementedNodeServiceHandler) ListNodes(context.Context, *connect.Reque
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CreateEnrollCommand is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNode is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.
@@ -505,6 +538,7 @@ type ProjectServiceClient interface {
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
+	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 }
@@ -550,6 +584,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteNodeProject: connect.NewClient[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteNodeProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
+			connect.WithClientOptions(opts...),
+		),
 		deployNodeProject: connect.NewClient[v1.DeployNodeProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceDeployNodeProjectProcedure,
@@ -572,6 +612,7 @@ type projectServiceClient struct {
 	getNodeProject          *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
 	saveNodeProjectDraft    *connect.Client[v1.SaveNodeProjectDraftRequest, v1.SaveNodeProjectDraftResponse]
 	discardNodeProjectDraft *connect.Client[v1.DiscardNodeProjectDraftRequest, v1.DiscardNodeProjectDraftResponse]
+	deleteNodeProject       *connect.Client[v1.DeleteNodeProjectRequest, v1.DeleteNodeProjectResponse]
 	deployNodeProject       *connect.Client[v1.DeployNodeProjectRequest, v1.DeployEvent]
 	streamNodeProjectLogs   *connect.Client[v1.StreamNodeProjectLogsRequest, v1.LogLine]
 }
@@ -601,6 +642,11 @@ func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, req 
 	return c.discardNodeProjectDraft.CallUnary(ctx, req)
 }
 
+// DeleteNodeProject calls nagi.v1.ProjectService.DeleteNodeProject.
+func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, req *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
+	return c.deleteNodeProject.CallUnary(ctx, req)
+}
+
 // DeployNodeProject calls nagi.v1.ProjectService.DeployNodeProject.
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, req *connect.Request[v1.DeployNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployNodeProject.CallServerStream(ctx, req)
@@ -618,6 +664,7 @@ type ProjectServiceHandler interface {
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
 	SaveNodeProjectDraft(context.Context, *connect.Request[v1.SaveNodeProjectDraftRequest]) (*connect.Response[v1.SaveNodeProjectDraftResponse], error)
 	DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error)
+	DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error)
 	DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamNodeProjectLogs(context.Context, *connect.Request[v1.StreamNodeProjectLogsRequest], *connect.ServerStream[v1.LogLine]) error
 }
@@ -659,6 +706,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DiscardNodeProjectDraft")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceDeleteNodeProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteNodeProjectProcedure,
+		svc.DeleteNodeProject,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteNodeProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceDeployNodeProjectHandler := connect.NewServerStreamHandler(
 		ProjectServiceDeployNodeProjectProcedure,
 		svc.DeployNodeProject,
@@ -683,6 +736,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSaveNodeProjectDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDiscardNodeProjectDraftProcedure:
 			projectServiceDiscardNodeProjectDraftHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteNodeProjectProcedure:
+			projectServiceDeleteNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceDeployNodeProjectProcedure:
 			projectServiceDeployNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceStreamNodeProjectLogsProcedure:
@@ -714,6 +769,10 @@ func (UnimplementedProjectServiceHandler) SaveNodeProjectDraft(context.Context, 
 
 func (UnimplementedProjectServiceHandler) DiscardNodeProjectDraft(context.Context, *connect.Request[v1.DiscardNodeProjectDraftRequest]) (*connect.Response[v1.DiscardNodeProjectDraftResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DiscardNodeProjectDraft is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteNodeProject(context.Context, *connect.Request[v1.DeleteNodeProjectRequest]) (*connect.Response[v1.DeleteNodeProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteNodeProject is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) DeployNodeProject(context.Context, *connect.Request[v1.DeployNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

@@ -46,6 +46,7 @@ type Conn struct {
 
 	mu     sync.RWMutex
 	report *nagiv1.ReportRequest
+	close  func()
 }
 
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
@@ -80,6 +81,16 @@ func (r *Registry) Get(nodeID string) (*Conn, error) {
 	return c, nil
 }
 
+// Disconnect 断开节点的当前连接（例如节点被移除时）。
+func (r *Registry) Disconnect(nodeID string) {
+	r.mu.RLock()
+	c, ok := r.conns[nodeID]
+	r.mu.RUnlock()
+	if ok && c.close != nil {
+		c.close()
+	}
+}
+
 // Online 判断节点是否在线。
 func (r *Registry) Online(nodeID string) bool {
 	_, err := r.Get(nodeID)
@@ -112,7 +123,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	}
 	defer sess.Close()
 
-	c := &Conn{NodeID: nodeID}
+	c := &Conn{NodeID: nodeID, close: func() { sess.Close() }}
 	srv := grpc.NewServer()
 	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
 	go tunnel.Serve(sess, srv)
@@ -173,8 +184,26 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.conn.mu.Unlock()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
-	// 保存项目配置备份。以节点为准，面板只是备份。
+	// 保存项目配置备份。以节点为准，面板只是备份：节点上已经没有的项目，备份和 webhook 一并删掉。
 	now := time.Now().Unix()
+	reported := map[string]bool{}
+	for _, s := range req.GetProjects() {
+		reported[s.GetProject().GetId()] = true
+	}
+	if backups, err := p.r.q.ListProjectBackups(ctx, p.conn.NodeID); err == nil {
+		for _, b := range backups {
+			if !reported[b.ProjectID] {
+				_ = p.r.q.DeleteProjectBackup(ctx, store.DeleteProjectBackupParams{NodeID: p.conn.NodeID, ProjectID: b.ProjectID})
+			}
+		}
+	}
+	if hooks, err := p.r.q.ListWebhookProjects(ctx, p.conn.NodeID); err == nil {
+		for _, id := range hooks {
+			if !reported[id] {
+				_ = p.r.q.DeleteProjectWebhook(ctx, store.DeleteProjectWebhookParams{NodeID: p.conn.NodeID, ProjectID: id})
+			}
+		}
+	}
 	for _, s := range req.GetProjects() {
 		proj := s.GetProject()
 		if proj == nil || proj.GetId() == "" {

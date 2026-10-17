@@ -28,7 +28,8 @@ export function NodesPage() {
                   <th className="py-2 pr-4 font-medium">状态</th>
                   <th className="py-2 pr-4 font-medium">系统</th>
                   <th className="py-2 pr-4 font-medium">Docker / Compose</th>
-                  <th className="py-2 font-medium">Nagi</th>
+                  <th className="py-2 pr-4 font-medium">Nagi</th>
+                  <th className="py-2 font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -53,7 +54,20 @@ export function NodesPage() {
                     <td className="py-3 pr-4 text-muted-foreground">
                       {n.info ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}` : "—"}
                     </td>
-                    <td className="py-3 text-muted-foreground">{n.info?.version || "—"}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{n.info?.version || "—"}</td>
+                    <td className="py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm(`移除节点 ${n.name}？面板会忘记它并拒绝它再连接，节点上的项目照常运行。`)) return;
+                          await nodeClient.removeNode({ nodeId: n.id });
+                          nodes.refetch();
+                        }}
+                      >
+                        移除
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

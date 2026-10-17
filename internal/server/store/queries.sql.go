@@ -99,6 +99,52 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) er
 	return err
 }
 
+const deleteNodeData = `-- name: DeleteNodeData :exec
+DELETE FROM project_backups WHERE node_id = ?
+`
+
+func (q *Queries) DeleteNodeData(ctx context.Context, nodeID string) error {
+	_, err := q.db.ExecContext(ctx, deleteNodeData, nodeID)
+	return err
+}
+
+const deleteNodeWebhooks = `-- name: DeleteNodeWebhooks :exec
+DELETE FROM webhooks WHERE node_id = ?
+`
+
+func (q *Queries) DeleteNodeWebhooks(ctx context.Context, nodeID string) error {
+	_, err := q.db.ExecContext(ctx, deleteNodeWebhooks, nodeID)
+	return err
+}
+
+const deleteProjectBackup = `-- name: DeleteProjectBackup :exec
+DELETE FROM project_backups WHERE node_id = ? AND project_id = ?
+`
+
+type DeleteProjectBackupParams struct {
+	NodeID    string
+	ProjectID string
+}
+
+func (q *Queries) DeleteProjectBackup(ctx context.Context, arg DeleteProjectBackupParams) error {
+	_, err := q.db.ExecContext(ctx, deleteProjectBackup, arg.NodeID, arg.ProjectID)
+	return err
+}
+
+const deleteProjectWebhook = `-- name: DeleteProjectWebhook :exec
+DELETE FROM webhooks WHERE node_id = ? AND project_id = ?
+`
+
+type DeleteProjectWebhookParams struct {
+	NodeID    string
+	ProjectID string
+}
+
+func (q *Queries) DeleteProjectWebhook(ctx context.Context, arg DeleteProjectWebhookParams) error {
+	_, err := q.db.ExecContext(ctx, deleteProjectWebhook, arg.NodeID, arg.ProjectID)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = ?
 `
@@ -260,6 +306,42 @@ func (q *Queries) ListProjectBackups(ctx context.Context, nodeID string) ([]Proj
 	return items, nil
 }
 
+const listWebhookProjects = `-- name: ListWebhookProjects :many
+SELECT project_id FROM webhooks WHERE node_id = ?
+`
+
+func (q *Queries) ListWebhookProjects(ctx context.Context, nodeID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listWebhookProjects, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var project_id string
+		if err := rows.Scan(&project_id); err != nil {
+			return nil, err
+		}
+		items = append(items, project_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeNode = `-- name: RevokeNode :exec
+UPDATE nodes SET revoked = 1 WHERE id = ?
+`
+
+func (q *Queries) RevokeNode(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, revokeNode, id)
+	return err
+}
+
 const setSetting = `-- name: SetSetting :exec
 INSERT INTO settings (key, value) VALUES (?, ?)
 ON CONFLICT (key) DO UPDATE SET value = excluded.value
@@ -272,6 +354,15 @@ type SetSettingParams struct {
 
 func (q *Queries) SetSetting(ctx context.Context, arg SetSettingParams) error {
 	_, err := q.db.ExecContext(ctx, setSetting, arg.Key, arg.Value)
+	return err
+}
+
+const unrevokeNode = `-- name: UnrevokeNode :exec
+UPDATE nodes SET revoked = 0 WHERE id = ?
+`
+
+func (q *Queries) UnrevokeNode(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, unrevokeNode, id)
 	return err
 }
 

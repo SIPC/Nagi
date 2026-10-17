@@ -339,6 +339,7 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 const (
 	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
 	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
+	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -348,6 +349,8 @@ type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
+	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -378,6 +381,16 @@ func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateE
 	return out, nil
 }
 
+func (c *nodeServiceClient) RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_RemoveNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -385,6 +398,8 @@ type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
+	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -400,6 +415,9 @@ func (UnimplementedNodeServiceServer) ListNodes(context.Context, *ListNodesReque
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
+}
+func (UnimplementedNodeServiceServer) RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveNode not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -458,6 +476,24 @@ func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_RemoveNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RemoveNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RemoveNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RemoveNode(ctx, req.(*RemoveNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -472,6 +508,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateEnrollCommand",
 			Handler:    _NodeService_CreateEnrollCommand_Handler,
+		},
+		{
+			MethodName: "RemoveNode",
+			Handler:    _NodeService_RemoveNode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -624,6 +664,7 @@ const (
 	ProjectService_GetNodeProject_FullMethodName          = "/nagi.v1.ProjectService/GetNodeProject"
 	ProjectService_SaveNodeProjectDraft_FullMethodName    = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
 	ProjectService_DiscardNodeProjectDraft_FullMethodName = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
+	ProjectService_DeleteNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeleteNodeProject"
 	ProjectService_DeployNodeProject_FullMethodName       = "/nagi.v1.ProjectService/DeployNodeProject"
 	ProjectService_StreamNodeProjectLogs_FullMethodName   = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
 )
@@ -637,6 +678,7 @@ type ProjectServiceClient interface {
 	GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error)
 	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
+	DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error)
 	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 }
@@ -699,6 +741,16 @@ func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNodeProjectResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_DeployNodeProject_FullMethodName, cOpts...)
@@ -746,6 +798,7 @@ type ProjectServiceServer interface {
 	GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error)
 	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
+	DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error)
 	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	mustEmbedUnimplementedProjectServiceServer()
@@ -772,6 +825,9 @@ func (UnimplementedProjectServiceServer) SaveNodeProjectDraft(context.Context, *
 }
 func (UnimplementedProjectServiceServer) DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardNodeProjectDraft not implemented")
+}
+func (UnimplementedProjectServiceServer) DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProject not implemented")
 }
 func (UnimplementedProjectServiceServer) DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployNodeProject not implemented")
@@ -890,6 +946,24 @@ func _ProjectService_DiscardNodeProjectDraft_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_DeleteNodeProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DeleteNodeProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DeleteNodeProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DeleteNodeProject(ctx, req.(*DeleteNodeProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_DeployNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DeployNodeProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -938,6 +1012,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiscardNodeProjectDraft",
 			Handler:    _ProjectService_DiscardNodeProjectDraft_Handler,
+		},
+		{
+			MethodName: "DeleteNodeProject",
+			Handler:    _ProjectService_DeleteNodeProject_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

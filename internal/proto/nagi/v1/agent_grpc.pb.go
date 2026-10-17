@@ -24,6 +24,7 @@ const (
 	AgentService_GetProject_FullMethodName    = "/nagi.v1.AgentService/GetProject"
 	AgentService_SaveDraft_FullMethodName     = "/nagi.v1.AgentService/SaveDraft"
 	AgentService_DiscardDraft_FullMethodName  = "/nagi.v1.AgentService/DiscardDraft"
+	AgentService_DeleteProject_FullMethodName = "/nagi.v1.AgentService/DeleteProject"
 	AgentService_DeployProject_FullMethodName = "/nagi.v1.AgentService/DeployProject"
 	AgentService_StreamLogs_FullMethodName    = "/nagi.v1.AgentService/StreamLogs"
 	AgentService_Exec_FullMethodName          = "/nagi.v1.AgentService/Exec"
@@ -40,6 +41,8 @@ type AgentServiceClient interface {
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error)
 	DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error)
+	// 删除项目：停止并删除容器。项目目录默认保留。
+	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -98,6 +101,16 @@ func (c *agentServiceClient) DiscardDraft(ctx context.Context, in *DiscardDraftR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DiscardDraftResponse)
 	err := c.cc.Invoke(ctx, AgentService_DiscardDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteProjectResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +179,8 @@ type AgentServiceServer interface {
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error)
 	DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error)
+	// 删除项目：停止并删除容器。项目目录默认保留。
+	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -194,6 +209,9 @@ func (UnimplementedAgentServiceServer) SaveDraft(context.Context, *SaveDraftRequ
 }
 func (UnimplementedAgentServiceServer) DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardDraft not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
 }
 func (UnimplementedAgentServiceServer) DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployProject not implemented")
@@ -315,6 +333,24 @@ func _AgentService_DiscardDraft_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_DeleteProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_DeployProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DeployProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -370,6 +406,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiscardDraft",
 			Handler:    _AgentService_DiscardDraft_Handler,
+		},
+		{
+			MethodName: "DeleteProject",
+			Handler:    _AgentService_DeleteProject_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
