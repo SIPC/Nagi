@@ -263,3 +263,12 @@ message Alert {
   string project = 6;
   google.protobuf.Timestamp time = 7;
 }
+// TrustedPanel 是节点信任列表里的一个面板。
+message TrustedPanel {
+  string address = 1;
+  string fingerprint = 2;
+  // 节点当前是否连着这个面板。
+  bool connected = 3;
+  // 是不是当前操作的这个面板（只由面板接口填写）。
+  bool is_self = 4;
+}

@@ -81,6 +81,13 @@ const (
 	AgentServiceStreamLogsProcedure = "/nagi.v1.AgentService/StreamLogs"
 	// AgentServiceExecProcedure is the fully-qualified name of the AgentService's Exec RPC.
 	AgentServiceExecProcedure = "/nagi.v1.AgentService/Exec"
+	// AgentServiceListPanelsProcedure is the fully-qualified name of the AgentService's ListPanels RPC.
+	AgentServiceListPanelsProcedure = "/nagi.v1.AgentService/ListPanels"
+	// AgentServiceAddPanelProcedure is the fully-qualified name of the AgentService's AddPanel RPC.
+	AgentServiceAddPanelProcedure = "/nagi.v1.AgentService/AddPanel"
+	// AgentServiceRemovePanelProcedure is the fully-qualified name of the AgentService's RemovePanel
+	// RPC.
+	AgentServiceRemovePanelProcedure = "/nagi.v1.AgentService/RemovePanel"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -110,6 +117,12 @@ type AgentServiceClient interface {
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
+	// 信任的面板列表。
+	ListPanels(context.Context, *connect.Request[v1.ListPanelsRequest]) (*connect.Response[v1.ListPanelsResponse], error)
+	// 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
+	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
+	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
+	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -231,6 +244,24 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("Exec")),
 			connect.WithClientOptions(opts...),
 		),
+		listPanels: connect.NewClient[v1.ListPanelsRequest, v1.ListPanelsResponse](
+			httpClient,
+			baseURL+AgentServiceListPanelsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListPanels")),
+			connect.WithClientOptions(opts...),
+		),
+		addPanel: connect.NewClient[v1.AddPanelRequest, v1.AddPanelResponse](
+			httpClient,
+			baseURL+AgentServiceAddPanelProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("AddPanel")),
+			connect.WithClientOptions(opts...),
+		),
+		removePanel: connect.NewClient[v1.RemovePanelRequest, v1.RemovePanelResponse](
+			httpClient,
+			baseURL+AgentServiceRemovePanelProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -254,6 +285,9 @@ type agentServiceClient struct {
 	deployProject   *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
 	streamLogs      *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 	exec            *connect.Client[v1.ExecInput, v1.ExecOutput]
+	listPanels      *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
+	addPanel        *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
+	removePanel     *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
 }
 
 // ListProjects calls nagi.v1.AgentService.ListProjects.
@@ -346,6 +380,21 @@ func (c *agentServiceClient) Exec(ctx context.Context) *connect.BidiStreamForCli
 	return c.exec.CallBidiStream(ctx)
 }
 
+// ListPanels calls nagi.v1.AgentService.ListPanels.
+func (c *agentServiceClient) ListPanels(ctx context.Context, req *connect.Request[v1.ListPanelsRequest]) (*connect.Response[v1.ListPanelsResponse], error) {
+	return c.listPanels.CallUnary(ctx, req)
+}
+
+// AddPanel calls nagi.v1.AgentService.AddPanel.
+func (c *agentServiceClient) AddPanel(ctx context.Context, req *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error) {
+	return c.addPanel.CallUnary(ctx, req)
+}
+
+// RemovePanel calls nagi.v1.AgentService.RemovePanel.
+func (c *agentServiceClient) RemovePanel(ctx context.Context, req *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
+	return c.removePanel.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
@@ -373,6 +422,12 @@ type AgentServiceHandler interface {
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
+	// 信任的面板列表。
+	ListPanels(context.Context, *connect.Request[v1.ListPanelsRequest]) (*connect.Response[v1.ListPanelsResponse], error)
+	// 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
+	AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error)
+	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
+	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -490,6 +545,24 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("Exec")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceListPanelsHandler := connect.NewUnaryHandler(
+		AgentServiceListPanelsProcedure,
+		svc.ListPanels,
+		connect.WithSchema(agentServiceMethods.ByName("ListPanels")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceAddPanelHandler := connect.NewUnaryHandler(
+		AgentServiceAddPanelProcedure,
+		svc.AddPanel,
+		connect.WithSchema(agentServiceMethods.ByName("AddPanel")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRemovePanelHandler := connect.NewUnaryHandler(
+		AgentServiceRemovePanelProcedure,
+		svc.RemovePanel,
+		connect.WithSchema(agentServiceMethods.ByName("RemovePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListProjectsProcedure:
@@ -528,6 +601,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceStreamLogsHandler.ServeHTTP(w, r)
 		case AgentServiceExecProcedure:
 			agentServiceExecHandler.ServeHTTP(w, r)
+		case AgentServiceListPanelsProcedure:
+			agentServiceListPanelsHandler.ServeHTTP(w, r)
+		case AgentServiceAddPanelProcedure:
+			agentServiceAddPanelHandler.ServeHTTP(w, r)
+		case AgentServiceRemovePanelProcedure:
+			agentServiceRemovePanelHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -607,4 +686,16 @@ func (UnimplementedAgentServiceHandler) StreamLogs(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Exec is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListPanels(context.Context, *connect.Request[v1.ListPanelsRequest]) (*connect.Response[v1.ListPanelsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListPanels is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) AddPanel(context.Context, *connect.Request[v1.AddPanelRequest]) (*connect.Response[v1.AddPanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AddPanel is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RemovePanel is not implemented"))
 }

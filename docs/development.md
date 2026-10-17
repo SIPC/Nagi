@@ -22,6 +22,7 @@ internal/
 │   ├── db/           SQLite 打开、迁移
 │   ├── tunnel/       TLS + yamux 连接、反向 gRPC
 │   ├── alert/        告警发送（webhook、Telegram），面板和节点共用
+│   ├── invite/       面板接入码的编码与解析
 │   └── log/
 ├── server/           面板
 │   ├── api/          Connect-RPC 接口

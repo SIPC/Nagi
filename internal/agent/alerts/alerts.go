@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -85,6 +86,24 @@ func (e *Engine) SetConfig(panel string, cfg *nagiv1.AlertConfig) error {
 	defer e.mu.Unlock()
 	e.configs[panel] = cfg
 	return e.saveConfigs()
+}
+
+// Retain 删除不在列表里的面板的告警配置（面板已被移出信任列表）。
+func (e *Engine) Retain(panels []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	changed := false
+	for p := range e.configs {
+		if !slices.Contains(panels, p) {
+			delete(e.configs, p)
+			changed = true
+		}
+	}
+	if changed {
+		if err := e.saveConfigs(); err != nil {
+			e.log.Warn("保存告警配置失败", "err", err)
+		}
+	}
 }
 
 func (e *Engine) saveConfigs() error {

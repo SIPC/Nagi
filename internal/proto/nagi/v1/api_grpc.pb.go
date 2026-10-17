@@ -338,6 +338,9 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
+	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
+	NodeService_AddNodePanel_FullMethodName        = "/nagi.v1.NodeService/AddNodePanel"
+	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
 	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
@@ -348,6 +351,12 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	// 节点信任的面板列表。
+	ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error)
+	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error)
+	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
+	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -367,6 +376,36 @@ func (c *nodeServiceClient) ListNodes(ctx context.Context, in *ListNodesRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListNodesResponse)
 	err := c.cc.Invoke(ctx, NodeService_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodePanelsResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodePanels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddNodePanelResponse)
+	err := c.cc.Invoke(ctx, NodeService_AddNodePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveNodePanelResponse)
+	err := c.cc.Invoke(ctx, NodeService_RemoveNodePanel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +447,12 @@ func (c *nodeServiceClient) RemoveNode(ctx context.Context, in *RemoveNodeReques
 // for forward compatibility.
 type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	// 节点信任的面板列表。
+	ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error)
+	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error)
+	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
+	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -425,6 +470,15 @@ type UnimplementedNodeServiceServer struct{}
 
 func (UnimplementedNodeServiceServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodePanels not implemented")
+}
+func (UnimplementedNodeServiceServer) AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddNodePanel not implemented")
+}
+func (UnimplementedNodeServiceServer) RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveNodePanel not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -470,6 +524,60 @@ func _NodeService_ListNodes_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServiceServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListNodePanels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodePanelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodePanels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodePanels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodePanels(ctx, req.(*ListNodePanelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_AddNodePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddNodePanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).AddNodePanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_AddNodePanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).AddNodePanel(ctx, req.(*AddNodePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RemoveNodePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveNodePanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RemoveNodePanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RemoveNodePanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RemoveNodePanel(ctx, req.(*RemoveNodePanelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -540,6 +648,18 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_ListNodes_Handler,
 		},
 		{
+			MethodName: "ListNodePanels",
+			Handler:    _NodeService_ListNodePanels_Handler,
+		},
+		{
+			MethodName: "AddNodePanel",
+			Handler:    _NodeService_AddNodePanel_Handler,
+		},
+		{
+			MethodName: "RemoveNodePanel",
+			Handler:    _NodeService_RemoveNodePanel_Handler,
+		},
+		{
 			MethodName: "CreateEnrollCommand",
 			Handler:    _NodeService_CreateEnrollCommand_Handler,
 		},
@@ -562,6 +682,9 @@ const (
 	SettingsService_GetAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/GetAlertConfig"
 	SettingsService_UpdateAlertConfig_FullMethodName = "/nagi.v1.SettingsService/UpdateAlertConfig"
 	SettingsService_TestAlertChannel_FullMethodName  = "/nagi.v1.SettingsService/TestAlertChannel"
+	SettingsService_CreateInvite_FullMethodName      = "/nagi.v1.SettingsService/CreateInvite"
+	SettingsService_ListInvites_FullMethodName       = "/nagi.v1.SettingsService/ListInvites"
+	SettingsService_RevokeInvite_FullMethodName      = "/nagi.v1.SettingsService/RevokeInvite"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -574,6 +697,12 @@ type SettingsServiceClient interface {
 	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
 	TestAlertChannel(ctx context.Context, in *TestAlertChannelRequest, opts ...grpc.CallOption) (*TestAlertChannelResponse, error)
+	// 生成接入码：其他面板用它把节点交给本面板。1 小时内可以给多个节点用。
+	CreateInvite(ctx context.Context, in *CreateInviteRequest, opts ...grpc.CallOption) (*CreateInviteResponse, error)
+	// 还在有效期内的接入码。
+	ListInvites(ctx context.Context, in *ListInvitesRequest, opts ...grpc.CallOption) (*ListInvitesResponse, error)
+	// 提前作废接入码。
+	RevokeInvite(ctx context.Context, in *RevokeInviteRequest, opts ...grpc.CallOption) (*RevokeInviteResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -634,6 +763,36 @@ func (c *settingsServiceClient) TestAlertChannel(ctx context.Context, in *TestAl
 	return out, nil
 }
 
+func (c *settingsServiceClient) CreateInvite(ctx context.Context, in *CreateInviteRequest, opts ...grpc.CallOption) (*CreateInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateInviteResponse)
+	err := c.cc.Invoke(ctx, SettingsService_CreateInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) ListInvites(ctx context.Context, in *ListInvitesRequest, opts ...grpc.CallOption) (*ListInvitesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInvitesResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListInvites_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) RevokeInvite(ctx context.Context, in *RevokeInviteRequest, opts ...grpc.CallOption) (*RevokeInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeInviteResponse)
+	err := c.cc.Invoke(ctx, SettingsService_RevokeInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -644,6 +803,12 @@ type SettingsServiceServer interface {
 	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
 	TestAlertChannel(context.Context, *TestAlertChannelRequest) (*TestAlertChannelResponse, error)
+	// 生成接入码：其他面板用它把节点交给本面板。1 小时内可以给多个节点用。
+	CreateInvite(context.Context, *CreateInviteRequest) (*CreateInviteResponse, error)
+	// 还在有效期内的接入码。
+	ListInvites(context.Context, *ListInvitesRequest) (*ListInvitesResponse, error)
+	// 提前作废接入码。
+	RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -668,6 +833,15 @@ func (UnimplementedSettingsServiceServer) UpdateAlertConfig(context.Context, *Up
 }
 func (UnimplementedSettingsServiceServer) TestAlertChannel(context.Context, *TestAlertChannelRequest) (*TestAlertChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestAlertChannel not implemented")
+}
+func (UnimplementedSettingsServiceServer) CreateInvite(context.Context, *CreateInviteRequest) (*CreateInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateInvite not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListInvites(context.Context, *ListInvitesRequest) (*ListInvitesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInvites not implemented")
+}
+func (UnimplementedSettingsServiceServer) RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeInvite not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -780,6 +954,60 @@ func _SettingsService_TestAlertChannel_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_CreateInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).CreateInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_CreateInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).CreateInvite(ctx, req.(*CreateInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_ListInvites_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInvitesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListInvites(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListInvites_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListInvites(ctx, req.(*ListInvitesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_RevokeInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).RevokeInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_RevokeInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).RevokeInvite(ctx, req.(*RevokeInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -806,6 +1034,18 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestAlertChannel",
 			Handler:    _SettingsService_TestAlertChannel_Handler,
+		},
+		{
+			MethodName: "CreateInvite",
+			Handler:    _SettingsService_CreateInvite_Handler,
+		},
+		{
+			MethodName: "ListInvites",
+			Handler:    _SettingsService_ListInvites_Handler,
+		},
+		{
+			MethodName: "RevokeInvite",
+			Handler:    _SettingsService_RevokeInvite_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

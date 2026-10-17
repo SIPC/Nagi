@@ -98,9 +98,9 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		log.Info("已加入面板", "panel", cfg.Panel)
 	}
-	panels := id.Panels()
-	if len(panels) == 0 {
-		return errors.New("节点尚未加入任何面板")
+	if len(id.Panels()) == 0 {
+		// 项目照常运行；用本地命令 nagi panel add 加入面板后会自动连接。
+		log.Warn("节点没有信任任何面板，等待用 nagi panel add 加入")
 	}
 
 	nodeDB, err := db.OpenMigrated(ctx, filepath.Join(cfg.DataDir, "node.db"), nodestore.Migrations)
@@ -127,6 +127,7 @@ func Run(ctx context.Context, cfg Config) error {
 		docker:   dc,
 		projects: projects,
 		hostname: hostname,
+		reload:   make(chan struct{}, 1),
 	}
 	a.info = a.nodeInfo(ctx)
 
@@ -158,15 +159,7 @@ func Run(ctx context.Context, cfg Config) error {
 		go a.proxyLoop(ctx)
 	}
 
-	var wg sync.WaitGroup
-	for _, p := range panels {
-		wg.Add(1)
-		go func(p trustedPanel) {
-			defer wg.Done()
-			a.connectLoop(ctx, p)
-		}(p)
-	}
-	wg.Wait()
+	a.superviseLoop(ctx)
 	return nil
 }
 
@@ -184,9 +177,69 @@ type agent struct {
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
 
-	mu     sync.Mutex
-	subs   []chan struct{}
-	panels map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
+	mu       sync.Mutex
+	subs     []chan struct{}
+	panels   map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
+	sessions map[string]context.CancelFunc        // 面板指纹 → 停止连接
+	reload   chan struct{}
+}
+
+// superviseLoop 按信任列表维持到每个面板的连接：列表变了（面板发指令、或者本地命令改了文件）就增减连接。
+func (a *agent) superviseLoop(ctx context.Context) {
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for {
+		if err := a.id.reload(); err != nil {
+			a.log.Warn("读取信任列表失败", "err", err)
+		}
+		a.reconcile(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		case <-a.reload:
+		}
+	}
+}
+
+func (a *agent) reconcile(ctx context.Context) {
+	want := map[string]trustedPanel{}
+	for _, p := range a.id.Panels() {
+		want[p.Fingerprint] = p
+	}
+	a.mu.Lock()
+	if a.sessions == nil {
+		a.sessions = map[string]context.CancelFunc{}
+	}
+	for fp, p := range want {
+		if a.sessions[fp] == nil {
+			sctx, cancel := context.WithCancel(ctx)
+			a.sessions[fp] = cancel
+			go a.connectLoop(sctx, fp)
+			a.log.Info("开始连接面板", "panel", p.Address)
+		}
+	}
+	for fp, cancel := range a.sessions {
+		if _, ok := want[fp]; !ok {
+			cancel()
+			delete(a.sessions, fp)
+			a.log.Info("已移除面板，断开连接", "fingerprint", fp)
+		}
+	}
+	a.mu.Unlock()
+	keep := make([]string, 0, len(want))
+	for fp := range want {
+		keep = append(keep, fp)
+	}
+	a.alerts.Retain(keep)
+}
+
+// reloadPanels 让 superviseLoop 立即按信任列表调整连接。
+func (a *agent) reloadPanels() {
+	select {
+	case a.reload <- struct{}{}:
+	default:
+	}
 }
 
 // relayAlert 请指定的面板代发告警。
@@ -281,10 +334,15 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 	return info
 }
 
-// connectLoop 保持与一个面板的连接，断开后按指数退避重连。
-func (a *agent) connectLoop(ctx context.Context, p trustedPanel) {
+// connectLoop 保持与一个面板的连接，断开后按指数退避重连。每次连接都读取信任列表里最新的条目
+// （地址或证书可能已经更新），面板被移出列表后退出。
+func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 	backoff := time.Second
 	for ctx.Err() == nil {
+		p, ok := a.id.panel(fingerprint)
+		if !ok {
+			return
+		}
 		start := time.Now()
 		err := a.session(ctx, p)
 		if ctx.Err() != nil {
@@ -323,7 +381,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 
 	srv := grpc.NewServer()
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
-		projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
+		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
 	})
 	go tunnel.Serve(sess, srv)
 	defer srv.Stop()

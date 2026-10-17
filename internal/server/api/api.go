@@ -188,14 +188,22 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 	} else if err != nil {
 		return nil, err
 	}
-	if err := s.Q.RevokeNode(ctx, id); err != nil {
+	if err := s.forgetNode(ctx, id); err != nil {
 		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
+}
+
+// forgetNode 让面板忘记节点：拒绝它再连接，删除它的配置备份和 webhook。节点上的项目照常运行。
+func (s *nodeService) forgetNode(ctx context.Context, id string) error {
+	if err := s.Q.RevokeNode(ctx, id); err != nil {
+		return err
 	}
 	_ = s.Q.DeleteNodeData(ctx, id)
 	_ = s.Q.DeleteNodeWebhooks(ctx, id)
 	s.Nodes.Disconnect(id)
 	s.Log.Info("节点已移除", "node", id)
-	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
+	return nil
 }
 
 // ---- 项目：转发给节点 ----

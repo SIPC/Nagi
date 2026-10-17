@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/SIPC/nagi/internal/agent"
+	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -26,7 +27,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), versionCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), versionCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -88,18 +89,17 @@ func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, n
 	agentDir := filepath.Join(dataDir, "agent")
 	cfg := agent.Config{
 		DataDir:      agentDir,
-		Panel:        srv.LocalAddr(),
-		Fingerprint:  srv.Fingerprint(),
 		Version:      version,
 		DisableProxy: noProxy,
 		Logger:       log.With("component", "agent"),
 	}
-	if !agent.Enrolled(agentDir, srv.Fingerprint()) {
+	// 只在第一次启动时自动加入本面板。之后即使本机节点被移交给了别的面板，也不会再自动加回来。
+	if !agent.HasPanels(agentDir) {
 		token, err := srv.CreateEnrollToken(ctx)
 		if err != nil {
 			return err
 		}
-		cfg.Token = token
+		cfg.Panel, cfg.Fingerprint, cfg.Token = srv.LocalAddr(), srv.Fingerprint(), token
 	}
 	return agent.Run(ctx, cfg)
 }
@@ -140,6 +140,83 @@ func enrollCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.Panel, "server", "", "面板地址，例如 203.0.113.10:34567")
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹")
 	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌")
+	return cmd
+}
+
+// panelCmd 是节点本地命令：查看和修改信任的面板列表。用于旧面板已经挂掉、无法再发指令的情况。
+// 需要 root（能读写节点数据目录）。运行中的节点会在 10 秒内按新列表调整连接。
+func panelCmd() *cobra.Command {
+	var dataDir string
+	cmd := &cobra.Command{
+		Use:   "panel",
+		Short: "查看和修改节点信任的面板（面板自带的节点用 --data-dir <面板数据目录>/agent）",
+	}
+	cmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "节点数据目录")
+
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "列出信任的面板",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			panels, err := agent.ListPanels(dataDir)
+			if err != nil {
+				return err
+			}
+			if len(panels) == 0 {
+				fmt.Println("没有信任任何面板")
+			}
+			for _, p := range panels {
+				fmt.Println(p.Address, p.Fingerprint)
+			}
+			return nil
+		},
+	}
+
+	var server, fingerprint, token string
+	add := &cobra.Command{
+		Use:   "add [接入码]",
+		Short: "加入一个面板：粘贴新面板生成的接入码，或者用 --server、--fingerprint、--token",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				inv, err := invite.Decode(args[0])
+				if err != nil {
+					return err
+				}
+				server, fingerprint, token = inv.Address, inv.Fingerprint, inv.Token
+			}
+			if server == "" || fingerprint == "" || token == "" {
+				return errors.New("需要接入码，或者 --server、--fingerprint 和 --token")
+			}
+			ctx, cancel := signalContext()
+			defer cancel()
+			if err := agent.AddPanel(ctx, dataDir, server, fingerprint, token); err != nil {
+				return err
+			}
+			fmt.Println("已加入面板", server)
+			return nil
+		},
+	}
+	add.Flags().StringVar(&server, "server", "", "面板地址，例如 203.0.113.10:34567")
+	add.Flags().StringVar(&fingerprint, "fingerprint", "", "面板公钥指纹")
+	add.Flags().StringVar(&token, "token", "", "加入令牌")
+
+	var force bool
+	remove := &cobra.Command{
+		Use:   "remove <地址或指纹>",
+		Short: "从信任列表移除一个面板",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := agent.RemovePanel(dataDir, args[0], force)
+			if err != nil {
+				return err
+			}
+			fmt.Println("已移除面板", p.Address)
+			return nil
+		},
+	}
+	remove.Flags().BoolVar(&force, "force", false, "允许移除最后一个面板")
+
+	cmd.AddCommand(list, add, remove)
 	return cmd
 }
 

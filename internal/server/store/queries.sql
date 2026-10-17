@@ -37,8 +37,18 @@ DELETE FROM sessions WHERE expires_at < ?;
 INSERT INTO enroll_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?);
 
 -- name: UseEnrollToken :execrows
-UPDATE enroll_tokens SET used_at = ?
-WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?;
+UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
+WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1);
+
+-- name: CreateInvite :exec
+INSERT INTO enroll_tokens (token_hash, created_at, expires_at, multi_use) VALUES (?, ?, ?, 1);
+
+-- name: ListInvites :many
+SELECT token_hash, created_at, expires_at, uses FROM enroll_tokens
+WHERE multi_use = 1 AND expires_at > ? ORDER BY created_at DESC;
+
+-- name: RevokeInvite :execrows
+UPDATE enroll_tokens SET expires_at = 0 WHERE multi_use = 1 AND substr(token_hash, 1, 12) = ?;
 
 -- name: CreateNode :exec
 INSERT INTO nodes (id, name, created_at) VALUES (?, ?, ?);

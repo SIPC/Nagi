@@ -55,6 +55,12 @@ message MeResponse {
 
 service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  // 节点信任的面板列表。
+  rpc ListNodePanels(ListNodePanelsRequest) returns (ListNodePanelsResponse);
+  // 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+  rpc AddNodePanel(AddNodePanelRequest) returns (AddNodePanelResponse);
+  // 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
+  rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -77,6 +83,30 @@ message RemoveNodeResponse {}
 
 message CreateEnrollCommandRequest {}
 
+message ListNodePanelsRequest {
+  string node_id = 1;
+}
+
+message ListNodePanelsResponse {
+  repeated TrustedPanel panels = 1;
+}
+
+message AddNodePanelRequest {
+  string node_id = 1;
+  // 新面板生成的接入码。
+  string invite = 2;
+  bool remove_self = 3;
+}
+
+message AddNodePanelResponse {}
+
+message RemoveNodePanelRequest {
+  string node_id = 1;
+  string fingerprint = 2;
+}
+
+message RemoveNodePanelResponse {}
+
 message CreateEnrollCommandResponse {
   string command = 1;
   google.protobuf.Timestamp expires_at = 2;
@@ -89,7 +119,40 @@ service SettingsService {
   rpc UpdateAlertConfig(UpdateAlertConfigRequest) returns (UpdateAlertConfigResponse);
   // 用面板发一条测试消息到某个渠道。
   rpc TestAlertChannel(TestAlertChannelRequest) returns (TestAlertChannelResponse);
+  // 生成接入码：其他面板用它把节点交给本面板。1 小时内可以给多个节点用。
+  rpc CreateInvite(CreateInviteRequest) returns (CreateInviteResponse);
+  // 还在有效期内的接入码。
+  rpc ListInvites(ListInvitesRequest) returns (ListInvitesResponse);
+  // 提前作废接入码。
+  rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse);
 }
+
+message CreateInviteRequest {}
+
+message CreateInviteResponse {
+  string invite = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message ListInvitesRequest {}
+
+message Invite {
+  string id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  // 已经用它加入的节点数。
+  uint32 uses = 4;
+}
+
+message ListInvitesResponse {
+  repeated Invite invites = 1;
+}
+
+message RevokeInviteRequest {
+  string id = 1;
+}
+
+message RevokeInviteResponse {}
 
 message GetAlertConfigRequest {}
 

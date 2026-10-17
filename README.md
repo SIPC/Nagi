@@ -36,6 +36,13 @@ nagi server
 curl --pinnedpubkey "sha256//<面板公钥指纹>" -k https://<地址:端口>/install.sh | sh -s -- --token <令牌>
 ```
 
+换面板或多个面板一起管理：在新面板上生成接入码，粘贴到旧面板，选择"移交"或"共同管理"。旧面板已经挂了的话，在节点上执行：
+
+```bash
+nagi panel add <接入码>
+nagi panel remove <旧面板地址>
+```
+
 ## 功能（MVP）
 
 - 节点一键加入

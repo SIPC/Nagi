@@ -1831,6 +1831,77 @@ func (x *Alert) GetTime() *timestamppb.Timestamp {
 	return nil
 }
 
+// TrustedPanel 是节点信任列表里的一个面板。
+type TrustedPanel struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Address     string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Fingerprint string                 `protobuf:"bytes,2,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	// 节点当前是否连着这个面板。
+	Connected bool `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
+	// 是不是当前操作的这个面板（只由面板接口填写）。
+	IsSelf        bool `protobuf:"varint,4,opt,name=is_self,json=isSelf,proto3" json:"is_self,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustedPanel) Reset() {
+	*x = TrustedPanel{}
+	mi := &file_nagi_v1_common_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustedPanel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustedPanel) ProtoMessage() {}
+
+func (x *TrustedPanel) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustedPanel.ProtoReflect.Descriptor instead.
+func (*TrustedPanel) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *TrustedPanel) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *TrustedPanel) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *TrustedPanel) GetConnected() bool {
+	if x != nil {
+		return x.Connected
+	}
+	return false
+}
+
+func (x *TrustedPanel) GetIsSelf() bool {
+	if x != nil {
+		return x.IsSelf
+	}
+	return false
+}
+
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
@@ -1983,7 +2054,12 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x12\n" +
 	"\x04node\x18\x05 \x01(\tR\x04node\x12\x18\n" +
 	"\aproject\x18\x06 \x01(\tR\aproject\x12.\n" +
-	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time*@\n" +
+	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\x81\x01\n" +
+	"\fTrustedPanel\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
+	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x1c\n" +
+	"\tconnected\x18\x03 \x01(\bR\tconnected\x12\x17\n" +
+	"\ais_self\x18\x04 \x01(\bR\x06isSelf*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
@@ -2002,7 +2078,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -2027,35 +2103,36 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*AlertRules)(nil),            // 20: nagi.v1.AlertRules
 	(*AlertConfig)(nil),           // 21: nagi.v1.AlertConfig
 	(*Alert)(nil),                 // 22: nagi.v1.Alert
-	nil,                           // 23: nagi.v1.ProjectConfig.ServiceEnvEntry
-	nil,                           // 24: nagi.v1.Version.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 25: google.protobuf.Timestamp
+	(*TrustedPanel)(nil),          // 23: nagi.v1.TrustedPanel
+	nil,                           // 24: nagi.v1.ProjectConfig.ServiceEnvEntry
+	nil,                           // 25: nagi.v1.Version.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 26: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	25, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	26, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: nagi.v1.Project.config:type_name -> nagi.v1.ProjectConfig
 	2,  // 2: nagi.v1.Project.draft:type_name -> nagi.v1.ProjectConfig
 	6,  // 3: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 4: nagi.v1.ProjectConfig.env:type_name -> nagi.v1.EnvVar
-	23, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
+	24, // 5: nagi.v1.ProjectConfig.service_env:type_name -> nagi.v1.ProjectConfig.ServiceEnvEntry
 	9,  // 6: nagi.v1.ProjectConfig.form:type_name -> nagi.v1.ImageForm
 	5,  // 7: nagi.v1.ProjectConfig.source:type_name -> nagi.v1.Source
 	0,  // 8: nagi.v1.ProjectConfig.stateful:type_name -> nagi.v1.Stateful
-	25, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	25, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	24, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	25, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	26, // 9: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	26, // 10: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	25, // 11: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	26, // 12: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	7,  // 13: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	10, // 14: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	7,  // 15: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	11, // 16: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	1,  // 17: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	12, // 18: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	25, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	26, // 19: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	17, // 20: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
 	19, // 21: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	20, // 22: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	25, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	26, // 23: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
 	8,  // 24: nagi.v1.ProjectConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
 	25, // [25:25] is the sub-list for method output_type
 	25, // [25:25] is the sub-list for method input_type
@@ -2079,7 +2156,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   24,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

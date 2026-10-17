@@ -13,6 +13,8 @@ type EnrollToken struct {
 	CreatedAt int64
 	ExpiresAt int64
 	UsedAt    sql.NullInt64
+	MultiUse  int64
+	Uses      int64
 }
 
 type Node struct {

@@ -20,6 +20,7 @@ import (
 // agentService 实现 AgentService，供面板通过反向 gRPC 调用。
 type agentService struct {
 	nagiv1.UnimplementedAgentServiceServer
+	node     *agent
 	projects *project.Manager
 	metrics  *metrics.Collector
 	alerts   *alerts.Engine

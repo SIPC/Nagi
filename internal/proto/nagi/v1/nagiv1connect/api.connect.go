@@ -54,6 +54,15 @@ const (
 	AuthServiceMeProcedure = "/nagi.v1.AuthService/Me"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
+	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
+	// ListNodePanels RPC.
+	NodeServiceListNodePanelsProcedure = "/nagi.v1.NodeService/ListNodePanels"
+	// NodeServiceAddNodePanelProcedure is the fully-qualified name of the NodeService's AddNodePanel
+	// RPC.
+	NodeServiceAddNodePanelProcedure = "/nagi.v1.NodeService/AddNodePanel"
+	// NodeServiceRemoveNodePanelProcedure is the fully-qualified name of the NodeService's
+	// RemoveNodePanel RPC.
+	NodeServiceRemoveNodePanelProcedure = "/nagi.v1.NodeService/RemoveNodePanel"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -77,6 +86,15 @@ const (
 	// SettingsServiceTestAlertChannelProcedure is the fully-qualified name of the SettingsService's
 	// TestAlertChannel RPC.
 	SettingsServiceTestAlertChannelProcedure = "/nagi.v1.SettingsService/TestAlertChannel"
+	// SettingsServiceCreateInviteProcedure is the fully-qualified name of the SettingsService's
+	// CreateInvite RPC.
+	SettingsServiceCreateInviteProcedure = "/nagi.v1.SettingsService/CreateInvite"
+	// SettingsServiceListInvitesProcedure is the fully-qualified name of the SettingsService's
+	// ListInvites RPC.
+	SettingsServiceListInvitesProcedure = "/nagi.v1.SettingsService/ListInvites"
+	// SettingsServiceRevokeInviteProcedure is the fully-qualified name of the SettingsService's
+	// RevokeInvite RPC.
+	SettingsServiceRevokeInviteProcedure = "/nagi.v1.SettingsService/RevokeInvite"
 	// ProjectServiceListAllProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListAllProjects RPC.
 	ProjectServiceListAllProjectsProcedure = "/nagi.v1.ProjectService/ListAllProjects"
@@ -345,6 +363,12 @@ func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.M
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
 type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// 节点信任的面板列表。
+	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
+	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
+	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
+	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -367,6 +391,24 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+NodeServiceListNodesProcedure,
 			connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodePanels: connect.NewClient[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse](
+			httpClient,
+			baseURL+NodeServiceListNodePanelsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodePanels")),
+			connect.WithClientOptions(opts...),
+		),
+		addNodePanel: connect.NewClient[v1.AddNodePanelRequest, v1.AddNodePanelResponse](
+			httpClient,
+			baseURL+NodeServiceAddNodePanelProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("AddNodePanel")),
+			connect.WithClientOptions(opts...),
+		),
+		removeNodePanel: connect.NewClient[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse](
+			httpClient,
+			baseURL+NodeServiceRemoveNodePanelProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
 			connect.WithClientOptions(opts...),
 		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
@@ -393,6 +435,9 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
 	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
+	addNodePanel        *connect.Client[v1.AddNodePanelRequest, v1.AddNodePanelResponse]
+	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
 	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -401,6 +446,21 @@ type nodeServiceClient struct {
 // ListNodes calls nagi.v1.NodeService.ListNodes.
 func (c *nodeServiceClient) ListNodes(ctx context.Context, req *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return c.listNodes.CallUnary(ctx, req)
+}
+
+// ListNodePanels calls nagi.v1.NodeService.ListNodePanels.
+func (c *nodeServiceClient) ListNodePanels(ctx context.Context, req *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error) {
+	return c.listNodePanels.CallUnary(ctx, req)
+}
+
+// AddNodePanel calls nagi.v1.NodeService.AddNodePanel.
+func (c *nodeServiceClient) AddNodePanel(ctx context.Context, req *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error) {
+	return c.addNodePanel.CallUnary(ctx, req)
+}
+
+// RemoveNodePanel calls nagi.v1.NodeService.RemoveNodePanel.
+func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, req *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
+	return c.removeNodePanel.CallUnary(ctx, req)
 }
 
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
@@ -421,6 +481,12 @@ func (c *nodeServiceClient) RemoveNode(ctx context.Context, req *connect.Request
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// 节点信任的面板列表。
+	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
+	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
+	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
+	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -439,6 +505,24 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		NodeServiceListNodesProcedure,
 		svc.ListNodes,
 		connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodePanelsHandler := connect.NewUnaryHandler(
+		NodeServiceListNodePanelsProcedure,
+		svc.ListNodePanels,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodePanels")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceAddNodePanelHandler := connect.NewUnaryHandler(
+		NodeServiceAddNodePanelProcedure,
+		svc.AddNodePanel,
+		connect.WithSchema(nodeServiceMethods.ByName("AddNodePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRemoveNodePanelHandler := connect.NewUnaryHandler(
+		NodeServiceRemoveNodePanelProcedure,
+		svc.RemoveNodePanel,
+		connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
 		connect.WithHandlerOptions(opts...),
 	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
@@ -463,6 +547,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
+		case NodeServiceListNodePanelsProcedure:
+			nodeServiceListNodePanelsHandler.ServeHTTP(w, r)
+		case NodeServiceAddNodePanelProcedure:
+			nodeServiceAddNodePanelHandler.ServeHTTP(w, r)
+		case NodeServiceRemoveNodePanelProcedure:
+			nodeServiceRemoveNodePanelHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -480,6 +570,18 @@ type UnimplementedNodeServiceHandler struct{}
 
 func (UnimplementedNodeServiceHandler) ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodes is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodePanels is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AddNodePanel is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNodePanel is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -502,6 +604,12 @@ type SettingsServiceClient interface {
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
 	TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error)
+	// 生成接入码：其他面板用它把节点交给本面板。1 小时内可以给多个节点用。
+	CreateInvite(context.Context, *connect.Request[v1.CreateInviteRequest]) (*connect.Response[v1.CreateInviteResponse], error)
+	// 还在有效期内的接入码。
+	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
+	// 提前作废接入码。
+	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -545,6 +653,24 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("TestAlertChannel")),
 			connect.WithClientOptions(opts...),
 		),
+		createInvite: connect.NewClient[v1.CreateInviteRequest, v1.CreateInviteResponse](
+			httpClient,
+			baseURL+SettingsServiceCreateInviteProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CreateInvite")),
+			connect.WithClientOptions(opts...),
+		),
+		listInvites: connect.NewClient[v1.ListInvitesRequest, v1.ListInvitesResponse](
+			httpClient,
+			baseURL+SettingsServiceListInvitesProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListInvites")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeInvite: connect.NewClient[v1.RevokeInviteRequest, v1.RevokeInviteResponse](
+			httpClient,
+			baseURL+SettingsServiceRevokeInviteProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -555,6 +681,9 @@ type settingsServiceClient struct {
 	getAlertConfig    *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
 	updateAlertConfig *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
 	testAlertChannel  *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
+	createInvite      *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
+	listInvites       *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
+	revokeInvite      *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -582,6 +711,21 @@ func (c *settingsServiceClient) TestAlertChannel(ctx context.Context, req *conne
 	return c.testAlertChannel.CallUnary(ctx, req)
 }
 
+// CreateInvite calls nagi.v1.SettingsService.CreateInvite.
+func (c *settingsServiceClient) CreateInvite(ctx context.Context, req *connect.Request[v1.CreateInviteRequest]) (*connect.Response[v1.CreateInviteResponse], error) {
+	return c.createInvite.CallUnary(ctx, req)
+}
+
+// ListInvites calls nagi.v1.SettingsService.ListInvites.
+func (c *settingsServiceClient) ListInvites(ctx context.Context, req *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error) {
+	return c.listInvites.CallUnary(ctx, req)
+}
+
+// RevokeInvite calls nagi.v1.SettingsService.RevokeInvite.
+func (c *settingsServiceClient) RevokeInvite(ctx context.Context, req *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error) {
+	return c.revokeInvite.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -590,6 +734,12 @@ type SettingsServiceHandler interface {
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
 	TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error)
+	// 生成接入码：其他面板用它把节点交给本面板。1 小时内可以给多个节点用。
+	CreateInvite(context.Context, *connect.Request[v1.CreateInviteRequest]) (*connect.Response[v1.CreateInviteResponse], error)
+	// 还在有效期内的接入码。
+	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
+	// 提前作废接入码。
+	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -629,6 +779,24 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("TestAlertChannel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceCreateInviteHandler := connect.NewUnaryHandler(
+		SettingsServiceCreateInviteProcedure,
+		svc.CreateInvite,
+		connect.WithSchema(settingsServiceMethods.ByName("CreateInvite")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceListInvitesHandler := connect.NewUnaryHandler(
+		SettingsServiceListInvitesProcedure,
+		svc.ListInvites,
+		connect.WithSchema(settingsServiceMethods.ByName("ListInvites")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceRevokeInviteHandler := connect.NewUnaryHandler(
+		SettingsServiceRevokeInviteProcedure,
+		svc.RevokeInvite,
+		connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -641,6 +809,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceUpdateAlertConfigHandler.ServeHTTP(w, r)
 		case SettingsServiceTestAlertChannelProcedure:
 			settingsServiceTestAlertChannelHandler.ServeHTTP(w, r)
+		case SettingsServiceCreateInviteProcedure:
+			settingsServiceCreateInviteHandler.ServeHTTP(w, r)
+		case SettingsServiceListInvitesProcedure:
+			settingsServiceListInvitesHandler.ServeHTTP(w, r)
+		case SettingsServiceRevokeInviteProcedure:
+			settingsServiceRevokeInviteHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -668,6 +842,18 @@ func (UnimplementedSettingsServiceHandler) UpdateAlertConfig(context.Context, *c
 
 func (UnimplementedSettingsServiceHandler) TestAlertChannel(context.Context, *connect.Request[v1.TestAlertChannelRequest]) (*connect.Response[v1.TestAlertChannelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.TestAlertChannel is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CreateInvite(context.Context, *connect.Request[v1.CreateInviteRequest]) (*connect.Response[v1.CreateInviteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CreateInvite is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListInvites is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeInvite is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

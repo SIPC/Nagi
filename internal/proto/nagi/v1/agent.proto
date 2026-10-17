@@ -34,7 +34,33 @@ service AgentService {
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
   rpc Exec(stream ExecInput) returns (stream ExecOutput);
+  // 信任的面板列表。
+  rpc ListPanels(ListPanelsRequest) returns (ListPanelsResponse);
+  // 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
+  rpc AddPanel(AddPanelRequest) returns (AddPanelResponse);
+  // 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
+  rpc RemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
 }
+
+message ListPanelsRequest {}
+
+message ListPanelsResponse {
+  repeated TrustedPanel panels = 1;
+}
+
+message AddPanelRequest {
+  string address = 1;
+  string fingerprint = 2;
+  string token = 3;
+}
+
+message AddPanelResponse {}
+
+message RemovePanelRequest {
+  string fingerprint = 1;
+}
+
+message RemovePanelResponse {}
 
 message ExecInput {
   oneof input {

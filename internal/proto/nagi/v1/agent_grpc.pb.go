@@ -37,6 +37,9 @@ const (
 	AgentService_DeployProject_FullMethodName   = "/nagi.v1.AgentService/DeployProject"
 	AgentService_StreamLogs_FullMethodName      = "/nagi.v1.AgentService/StreamLogs"
 	AgentService_Exec_FullMethodName            = "/nagi.v1.AgentService/Exec"
+	AgentService_ListPanels_FullMethodName      = "/nagi.v1.AgentService/ListPanels"
+	AgentService_AddPanel_FullMethodName        = "/nagi.v1.AgentService/AddPanel"
+	AgentService_RemovePanel_FullMethodName     = "/nagi.v1.AgentService/RemovePanel"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -70,6 +73,12 @@ type AgentServiceClient interface {
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error)
+	// 信任的面板列表。
+	ListPanels(ctx context.Context, in *ListPanelsRequest, opts ...grpc.CallOption) (*ListPanelsResponse, error)
+	// 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
+	AddPanel(ctx context.Context, in *AddPanelRequest, opts ...grpc.CallOption) (*AddPanelResponse, error)
+	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
+	RemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
 }
 
 type agentServiceClient struct {
@@ -308,6 +317,36 @@ func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ExecClient = grpc.BidiStreamingClient[ExecInput, ExecOutput]
 
+func (c *agentServiceClient) ListPanels(ctx context.Context, in *ListPanelsRequest, opts ...grpc.CallOption) (*ListPanelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPanelsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListPanels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) AddPanel(ctx context.Context, in *AddPanelRequest, opts ...grpc.CallOption) (*AddPanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddPanelResponse)
+	err := c.cc.Invoke(ctx, AgentService_AddPanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePanelResponse)
+	err := c.cc.Invoke(ctx, AgentService_RemovePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -339,6 +378,12 @@ type AgentServiceServer interface {
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error
+	// 信任的面板列表。
+	ListPanels(context.Context, *ListPanelsRequest) (*ListPanelsResponse, error)
+	// 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
+	AddPanel(context.Context, *AddPanelRequest) (*AddPanelResponse, error)
+	// 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
+	RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -402,6 +447,15 @@ func (UnimplementedAgentServiceServer) StreamLogs(*StreamLogsRequest, grpc.Serve
 }
 func (UnimplementedAgentServiceServer) Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error {
 	return status.Error(codes.Unimplemented, "method Exec not implemented")
+}
+func (UnimplementedAgentServiceServer) ListPanels(context.Context, *ListPanelsRequest) (*ListPanelsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPanels not implemented")
+}
+func (UnimplementedAgentServiceServer) AddPanel(context.Context, *AddPanelRequest) (*AddPanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddPanel not implemented")
+}
+func (UnimplementedAgentServiceServer) RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemovePanel not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -702,6 +756,60 @@ func _AgentService_Exec_Handler(srv interface{}, stream grpc.ServerStream) error
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ExecServer = grpc.BidiStreamingServer[ExecInput, ExecOutput]
 
+func _AgentService_ListPanels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPanelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListPanels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListPanels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListPanels(ctx, req.(*ListPanelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_AddPanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).AddPanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_AddPanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).AddPanel(ctx, req.(*AddPanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RemovePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RemovePanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_RemovePanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RemovePanel(ctx, req.(*RemovePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -756,6 +864,18 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteProject",
 			Handler:    _AgentService_DeleteProject_Handler,
+		},
+		{
+			MethodName: "ListPanels",
+			Handler:    _AgentService_ListPanels_Handler,
+		},
+		{
+			MethodName: "AddPanel",
+			Handler:    _AgentService_AddPanel_Handler,
+		},
+		{
+			MethodName: "RemovePanel",
+			Handler:    _AgentService_RemovePanel_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -4,6 +4,7 @@ import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
 import { AlertSettings, NodeMetrics } from "@/pages/alerts";
+import { HandOverCard, InviteCard, NodePanels } from "@/pages/panels";
 import {
   Alert,
   Badge,
@@ -23,7 +24,12 @@ export function NodesPage() {
     queryFn: () => nodeClient.listNodes({}),
     refetchInterval: 5000,
   });
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<{
+    id: string;
+    tab: "metrics" | "panels";
+  } | null>(null);
+  const toggle = (id: string, tab: "metrics" | "panels") =>
+    setOpen(open?.id === id && open.tab === tab ? null : { id, tab });
 
   return (
     <>
@@ -33,6 +39,8 @@ export function NodesPage() {
       />
       <AddNode />
       <AlertSettings />
+      <InviteCard />
+      {nodes.data && <HandOverCard nodes={nodes.data.nodes} />}
       {nodes.isPending ? (
         <Spinner />
       ) : nodes.error ? (
@@ -89,9 +97,16 @@ export function NodesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setOpen(open === n.id ? null : n.id)}
+                          onClick={() => toggle(n.id, "metrics")}
                         >
                           监控
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggle(n.id, "panels")}
+                        >
+                          面板
                         </Button>
                         <Button
                           variant="ghost"
@@ -111,11 +126,15 @@ export function NodesPage() {
                         </Button>
                       </td>
                     </tr>
-                    {open === n.id && (
+                    {open?.id === n.id && (
                       <tr className="border-b">
                         <td colSpan={6}>
                           {n.online ? (
-                            <NodeMetrics nodeId={n.id} />
+                            open.tab === "metrics" ? (
+                              <NodeMetrics nodeId={n.id} />
+                            ) : (
+                              <NodePanels nodeId={n.id} />
+                            )
                           ) : (
                             "节点离线，无法查询"
                           )}

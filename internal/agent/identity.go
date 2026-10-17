@@ -88,12 +88,7 @@ func loadIdentity(dir string) (*identity, error) {
 	}
 	id.wgKey = wg
 
-	data, err := os.ReadFile(id.panelsPath())
-	if err == nil {
-		if err := json.Unmarshal(data, &id.panels); err != nil {
-			return nil, fmt.Errorf("信任列表文件损坏: %w", err)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if id.panels, err = id.readPanels(); err != nil {
 		return nil, err
 	}
 	return id, nil
@@ -120,19 +115,53 @@ func (id *identity) trusts(fingerprint string) bool {
 	return false
 }
 
-func (id *identity) addPanel(p trustedPanel) error {
-	id.mu.Lock()
-	defer id.mu.Unlock()
-	panels := append([]trustedPanel(nil), id.panels...)
-	replaced := false
-	for i := range panels {
-		if panels[i].Fingerprint == p.Fingerprint {
-			panels[i] = p
-			replaced = true
+// panel 返回信任列表里的某个面板。
+func (id *identity) panel(fingerprint string) (trustedPanel, bool) {
+	for _, p := range id.Panels() {
+		if p.Fingerprint == fingerprint {
+			return p, true
 		}
 	}
-	if !replaced {
-		panels = append(panels, p)
+	return trustedPanel{}, false
+}
+
+func (id *identity) readPanels() ([]trustedPanel, error) {
+	data, err := os.ReadFile(id.panelsPath())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var panels []trustedPanel
+	if err := json.Unmarshal(data, &panels); err != nil {
+		return nil, fmt.Errorf("信任列表文件损坏: %w", err)
+	}
+	return panels, nil
+}
+
+// reload 重新读取信任列表文件。节点本地命令会直接修改这个文件。
+func (id *identity) reload() error {
+	id.mu.Lock()
+	defer id.mu.Unlock()
+	panels, err := id.readPanels()
+	if err != nil {
+		return err
+	}
+	id.panels = panels
+	return nil
+}
+
+// update 以文件里的最新内容为准修改信任列表，避免覆盖本地命令刚做的修改。
+func (id *identity) update(fn func([]trustedPanel) ([]trustedPanel, error)) error {
+	id.mu.Lock()
+	defer id.mu.Unlock()
+	panels, err := id.readPanels()
+	if err != nil {
+		return err
+	}
+	if panels, err = fn(panels); err != nil {
+		return err
 	}
 	data, err := json.MarshalIndent(panels, "", "  ")
 	if err != nil {
@@ -147,6 +176,39 @@ func (id *identity) addPanel(p trustedPanel) error {
 	}
 	id.panels = panels
 	return nil
+}
+
+func (id *identity) addPanel(p trustedPanel) error {
+	return id.update(func(panels []trustedPanel) ([]trustedPanel, error) {
+		for i := range panels {
+			if panels[i].Fingerprint == p.Fingerprint {
+				panels[i] = p
+				return panels, nil
+			}
+		}
+		return append(panels, p), nil
+	})
+}
+
+// errLastPanel 表示要移除的是最后一个面板：移除后节点不再被任何面板管理。
+var errLastPanel = errors.New("这是节点信任的最后一个面板，移除后节点将不受任何面板管理")
+
+// removePanel 从信任列表移除面板。which 是公钥指纹或地址。force 时允许移除最后一个面板。
+func (id *identity) removePanel(which string, force bool) (trustedPanel, error) {
+	var removed trustedPanel
+	err := id.update(func(panels []trustedPanel) ([]trustedPanel, error) {
+		for i, p := range panels {
+			if p.Fingerprint == which || p.Address == which {
+				if len(panels) == 1 && !force {
+					return nil, errLastPanel
+				}
+				removed = p
+				return append(panels[:i:i], panels[i+1:]...), nil
+			}
+		}
+		return nil, fmt.Errorf("信任列表里没有 %s", which)
+	})
+	return removed, err
 }
 
 // enroll 用一次性令牌加入面板，把面板加入信任列表。

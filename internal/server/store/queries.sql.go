@@ -36,6 +36,21 @@ func (q *Queries) CreateEnrollToken(ctx context.Context, arg CreateEnrollTokenPa
 	return err
 }
 
+const createInvite = `-- name: CreateInvite :exec
+INSERT INTO enroll_tokens (token_hash, created_at, expires_at, multi_use) VALUES (?, ?, ?, 1)
+`
+
+type CreateInviteParams struct {
+	TokenHash string
+	CreatedAt int64
+	ExpiresAt int64
+}
+
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) error {
+	_, err := q.db.ExecContext(ctx, createInvite, arg.TokenHash, arg.CreatedAt, arg.ExpiresAt)
+	return err
+}
+
 const createNode = `-- name: CreateNode :exec
 INSERT INTO nodes (id, name, created_at) VALUES (?, ?, ?)
 `
@@ -239,6 +254,46 @@ func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, er
 	return i, err
 }
 
+const listInvites = `-- name: ListInvites :many
+SELECT token_hash, created_at, expires_at, uses FROM enroll_tokens
+WHERE multi_use = 1 AND expires_at > ? ORDER BY created_at DESC
+`
+
+type ListInvitesRow struct {
+	TokenHash string
+	CreatedAt int64
+	ExpiresAt int64
+	Uses      int64
+}
+
+func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvitesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listInvites, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInvitesRow{}
+	for rows.Next() {
+		var i ListInvitesRow
+		if err := rows.Scan(
+			&i.TokenHash,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.Uses,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNodes = `-- name: ListNodes :many
 SELECT id, name, created_at, last_seen, info, revoked FROM nodes WHERE revoked = 0 ORDER BY created_at
 `
@@ -333,6 +388,18 @@ func (q *Queries) ListWebhookProjects(ctx context.Context, nodeID string) ([]str
 	return items, nil
 }
 
+const revokeInvite = `-- name: RevokeInvite :execrows
+UPDATE enroll_tokens SET expires_at = 0 WHERE multi_use = 1 AND substr(token_hash, 1, 12) = ?
+`
+
+func (q *Queries) RevokeInvite(ctx context.Context, tokenHash string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeInvite, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const revokeNode = `-- name: RevokeNode :exec
 UPDATE nodes SET revoked = 1 WHERE id = ?
 `
@@ -425,8 +492,8 @@ func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) er
 }
 
 const useEnrollToken = `-- name: UseEnrollToken :execrows
-UPDATE enroll_tokens SET used_at = ?
-WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
+UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
+WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1)
 `
 
 type UseEnrollTokenParams struct {
