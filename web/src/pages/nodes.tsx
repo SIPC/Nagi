@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { errorMessage, nodeClient, toDate } from "@/lib/api";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
-import { Alert, Badge, Card, CardContent, Empty, Spinner } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Empty, Input, Spinner } from "@/components/ui";
 
 export function NodesPage() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 5000 });
@@ -10,6 +11,7 @@ export function NodesPage() {
   return (
     <>
       <PageHeader title="节点" description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。" />
+      <AddNode />
       {nodes.isPending ? (
         <Spinner />
       ) : nodes.error ? (
@@ -60,5 +62,71 @@ export function NodesPage() {
         </Card>
       )}
     </>
+  );
+}
+
+function AddNode() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  const [address, setAddress] = useState<string | null>(null);
+  const [command, setCommand] = useState("");
+  const [error, setError] = useState("");
+
+  const saveAddress = async () => {
+    setError("");
+    try {
+      await settingsClient.updateSettings({ publicAddress: address ?? "" });
+      setAddress(null);
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  const create = async () => {
+    setError("");
+    try {
+      const res = await nodeClient.createEnrollCommand({});
+      setCommand(res.command);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  const s = settings.data?.settings;
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>添加节点</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        {error && <Alert>{error}</Alert>}
+        <div className="flex flex-wrap items-center gap-2">
+          <span>面板对外地址（节点必须能访问到）：</span>
+          <Input
+            className="w-56 font-mono"
+            value={address ?? s?.publicAddress ?? ""}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+          <span className="font-mono text-muted-foreground">:{s?.port}</span>
+          {address !== null && (
+            <Button size="sm" variant="outline" onClick={saveAddress}>
+              保存
+            </Button>
+          )}
+        </div>
+        <div>
+          <Button size="sm" onClick={create}>
+            生成安装命令
+          </Button>
+        </div>
+        {command && (
+          <div className="grid gap-1">
+            <span className="text-muted-foreground">在新机器上用 root 执行（令牌一次性，1 小时内有效）：</span>
+            <code className="break-all rounded bg-muted p-3 font-mono text-xs">{command}</code>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -182,6 +182,15 @@ func (id *identity) enroll(ctx context.Context, address, fingerprint, token, hos
 	})
 }
 
+// certificate 返回这个面板签发给节点的证书。
+func (p trustedPanel) certificate() (*x509.Certificate, error) {
+	block, _ := pem.Decode([]byte(p.CertPEM))
+	if block == nil {
+		return nil, errors.New("信任列表里的证书无效")
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
 // tlsConfig 返回连接某个面板用的 TLS 配置：出示该面板签发的客户端证书，并钉住面板公钥。
 func (id *identity) tlsConfig(p trustedPanel, alpn string) (*tls.Config, error) {
 	block, _ := pem.Decode([]byte(p.CertPEM))

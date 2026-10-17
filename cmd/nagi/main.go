@@ -26,7 +26,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), versionCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), versionCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -122,6 +122,24 @@ func agentCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹（首次加入时需要）")
 	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（首次加入时需要）")
 	cmd.Flags().BoolVar(&cfg.DisableProxy, "no-proxy", false, "不启动 Caddy（仅用于开发）")
+	return cmd
+}
+
+func enrollCmd() *cobra.Command {
+	var cfg agent.Config
+	cmd := &cobra.Command{
+		Use:   "enroll",
+		Short: "用一次性令牌加入面板（安装脚本会调用它）",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx, cancel := signalContext()
+			defer cancel()
+			return agent.Enroll(ctx, cfg)
+		},
+	}
+	cmd.Flags().StringVar(&cfg.DataDir, "data-dir", "/var/lib/nagi", "数据目录")
+	cmd.Flags().StringVar(&cfg.Panel, "server", "", "面板地址，例如 203.0.113.10:34567")
+	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹")
+	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌")
 	return cmd
 }
 

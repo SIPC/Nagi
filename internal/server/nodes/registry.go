@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -12,11 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,6 +32,7 @@ type Registry struct {
 	q      *store.Queries
 	log    *slog.Logger
 	sealer *sealer.Sealer
+	ca     *tlsutil.CA
 
 	mu    sync.RWMutex
 	conns map[string]*Conn
@@ -52,9 +57,12 @@ func (c *Conn) LastReport() *nagiv1.ReportRequest {
 
 // NewRegistry 创建节点注册表。
 // 项目配置备份里有密钥，用面板主密钥加密后再存。
-func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer) *Registry {
-	return &Registry{q: q, log: log, sealer: s, conns: map[string]*Conn{}}
+func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer, ca *tlsutil.CA) *Registry {
+	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}}
 }
+
+// NodeCertValidity 是节点客户端证书的有效期。节点在到期前 30 天内连上面板时自动续期。
+const NodeCertValidity = 365 * 24 * time.Hour
 
 // BackupContext 是加密项目配置备份时绑定的上下文，防止把一条备份挪到别的项目下使用。
 func BackupContext(nodeID, projectID string) []byte {
@@ -194,6 +202,30 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		}
 	}
 	return &nagiv1.ReportResponse{}, nil
+}
+
+// RenewCertificate 给节点续期证书。证书签名请求里的公钥必须就是这个节点的身份公钥。
+func (p *panelService) RenewCertificate(ctx context.Context, req *nagiv1.RenewCertificateRequest) (*nagiv1.RenewCertificateResponse, error) {
+	csr, err := x509.ParseCertificateRequest(req.GetCsr())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "证书签名请求无效")
+	}
+	if NodeID(csr.RawSubjectPublicKeyInfo) != p.conn.NodeID {
+		return nil, status.Error(codes.PermissionDenied, "证书签名请求的公钥不属于这个节点")
+	}
+	cert, err := p.r.ca.SignCSR(req.GetCsr(), p.conn.NodeID, NodeCertValidity)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	p.r.log.Info("节点证书已续期", "node", p.conn.NodeID, "not_after", cert.NotAfter)
+	return &nagiv1.RenewCertificateResponse{Certificate: cert.Raw}, nil
+}
+
+// NodeID 由公钥（SubjectPublicKeyInfo）计算节点 ID：SHA-256 的前 8 字节，十六进制。
+// 同一个节点加入不同的面板，ID 都一样。
+func NodeID(spki []byte) string {
+	sum := sha256.Sum256(spki)
+	return hex.EncodeToString(sum[:8])
 }
 
 // hashToken 与 auth.HashToken 相同；这里单独写一份，避免 nodes 依赖 auth。

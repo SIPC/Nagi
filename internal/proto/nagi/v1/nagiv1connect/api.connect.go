@@ -27,6 +27,8 @@ const (
 	AuthServiceName = "nagi.v1.AuthService"
 	// NodeServiceName is the fully-qualified name of the NodeService service.
 	NodeServiceName = "nagi.v1.NodeService"
+	// SettingsServiceName is the fully-qualified name of the SettingsService service.
+	SettingsServiceName = "nagi.v1.SettingsService"
 	// ProjectServiceName is the fully-qualified name of the ProjectService service.
 	ProjectServiceName = "nagi.v1.ProjectService"
 )
@@ -52,6 +54,15 @@ const (
 	AuthServiceMeProcedure = "/nagi.v1.AuthService/Me"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
+	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
+	// CreateEnrollCommand RPC.
+	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
+	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
+	// GetSettings RPC.
+	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
+	// SettingsServiceUpdateSettingsProcedure is the fully-qualified name of the SettingsService's
+	// UpdateSettings RPC.
+	SettingsServiceUpdateSettingsProcedure = "/nagi.v1.SettingsService/UpdateSettings"
 	// ProjectServiceListAllProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListAllProjects RPC.
 	ProjectServiceListAllProjectsProcedure = "/nagi.v1.ProjectService/ListAllProjects"
@@ -296,6 +307,8 @@ func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.M
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
 type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
+	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -315,12 +328,19 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
 			connect.WithClientOptions(opts...),
 		),
+		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
+			httpClient,
+			baseURL+NodeServiceCreateEnrollCommandProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	listNodes *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -328,9 +348,16 @@ func (c *nodeServiceClient) ListNodes(ctx context.Context, req *connect.Request[
 	return c.listNodes.CallUnary(ctx, req)
 }
 
+// CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
+func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
+	return c.createEnrollCommand.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
+	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -346,10 +373,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
+		NodeServiceCreateEnrollCommandProcedure,
+		svc.CreateEnrollCommand,
+		connect.WithSchema(nodeServiceMethods.ByName("CreateEnrollCommand")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
+		case NodeServiceCreateEnrollCommandProcedure:
+			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -361,6 +396,106 @@ type UnimplementedNodeServiceHandler struct{}
 
 func (UnimplementedNodeServiceHandler) ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodes is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CreateEnrollCommand is not implemented"))
+}
+
+// SettingsServiceClient is a client for the nagi.v1.SettingsService service.
+type SettingsServiceClient interface {
+	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
+	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+}
+
+// NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
+// it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and
+// sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC()
+// or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) SettingsServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	settingsServiceMethods := v1.File_nagi_v1_api_proto.Services().ByName("SettingsService").Methods()
+	return &settingsServiceClient{
+		getSettings: connect.NewClient[v1.GetSettingsRequest, v1.GetSettingsResponse](
+			httpClient,
+			baseURL+SettingsServiceGetSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSettings: connect.NewClient[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse](
+			httpClient,
+			baseURL+SettingsServiceUpdateSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("UpdateSettings")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// settingsServiceClient implements SettingsServiceClient.
+type settingsServiceClient struct {
+	getSettings    *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
+	updateSettings *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
+}
+
+// GetSettings calls nagi.v1.SettingsService.GetSettings.
+func (c *settingsServiceClient) GetSettings(ctx context.Context, req *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error) {
+	return c.getSettings.CallUnary(ctx, req)
+}
+
+// UpdateSettings calls nagi.v1.SettingsService.UpdateSettings.
+func (c *settingsServiceClient) UpdateSettings(ctx context.Context, req *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return c.updateSettings.CallUnary(ctx, req)
+}
+
+// SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
+type SettingsServiceHandler interface {
+	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
+	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+}
+
+// NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
+// path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	settingsServiceMethods := v1.File_nagi_v1_api_proto.Services().ByName("SettingsService").Methods()
+	settingsServiceGetSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceGetSettingsProcedure,
+		svc.GetSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("GetSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceUpdateSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceUpdateSettingsProcedure,
+		svc.UpdateSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("UpdateSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case SettingsServiceGetSettingsProcedure:
+			settingsServiceGetSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceUpdateSettingsProcedure:
+			settingsServiceUpdateSettingsHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedSettingsServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedSettingsServiceHandler struct{}
+
+func (UnimplementedSettingsServiceHandler) GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdateSettings is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

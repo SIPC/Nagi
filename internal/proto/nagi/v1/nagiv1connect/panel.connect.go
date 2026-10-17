@@ -35,12 +35,17 @@ const (
 const (
 	// PanelServiceReportProcedure is the fully-qualified name of the PanelService's Report RPC.
 	PanelServiceReportProcedure = "/nagi.v1.PanelService/Report"
+	// PanelServiceRenewCertificateProcedure is the fully-qualified name of the PanelService's
+	// RenewCertificate RPC.
+	PanelServiceRenewCertificateProcedure = "/nagi.v1.PanelService/RenewCertificate"
 )
 
 // PanelServiceClient is a client for the nagi.v1.PanelService service.
 type PanelServiceClient interface {
 	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
+	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
 }
 
 // NewPanelServiceClient constructs a client for the nagi.v1.PanelService service. By default, it
@@ -60,12 +65,19 @@ func NewPanelServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(panelServiceMethods.ByName("Report")),
 			connect.WithClientOptions(opts...),
 		),
+		renewCertificate: connect.NewClient[v1.RenewCertificateRequest, v1.RenewCertificateResponse](
+			httpClient,
+			baseURL+PanelServiceRenewCertificateProcedure,
+			connect.WithSchema(panelServiceMethods.ByName("RenewCertificate")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // panelServiceClient implements PanelServiceClient.
 type panelServiceClient struct {
-	report *connect.Client[v1.ReportRequest, v1.ReportResponse]
+	report           *connect.Client[v1.ReportRequest, v1.ReportResponse]
+	renewCertificate *connect.Client[v1.RenewCertificateRequest, v1.RenewCertificateResponse]
 }
 
 // Report calls nagi.v1.PanelService.Report.
@@ -73,10 +85,17 @@ func (c *panelServiceClient) Report(ctx context.Context, req *connect.Request[v1
 	return c.report.CallUnary(ctx, req)
 }
 
+// RenewCertificate calls nagi.v1.PanelService.RenewCertificate.
+func (c *panelServiceClient) RenewCertificate(ctx context.Context, req *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error) {
+	return c.renewCertificate.CallUnary(ctx, req)
+}
+
 // PanelServiceHandler is an implementation of the nagi.v1.PanelService service.
 type PanelServiceHandler interface {
 	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
+	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
 }
 
 // NewPanelServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -92,10 +111,18 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(panelServiceMethods.ByName("Report")),
 		connect.WithHandlerOptions(opts...),
 	)
+	panelServiceRenewCertificateHandler := connect.NewUnaryHandler(
+		PanelServiceRenewCertificateProcedure,
+		svc.RenewCertificate,
+		connect.WithSchema(panelServiceMethods.ByName("RenewCertificate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.PanelService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PanelServiceReportProcedure:
 			panelServiceReportHandler.ServeHTTP(w, r)
+		case PanelServiceRenewCertificateProcedure:
+			panelServiceRenewCertificateHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -107,4 +134,8 @@ type UnimplementedPanelServiceHandler struct{}
 
 func (UnimplementedPanelServiceHandler) Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.Report is not implemented"))
+}
+
+func (UnimplementedPanelServiceHandler) RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.RenewCertificate is not implemented"))
 }

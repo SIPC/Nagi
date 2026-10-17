@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PanelService_Report_FullMethodName = "/nagi.v1.PanelService/Report"
+	PanelService_Report_FullMethodName           = "/nagi.v1.PanelService/Report"
+	PanelService_RenewCertificate_FullMethodName = "/nagi.v1.PanelService/RenewCertificate"
 )
 
 // PanelServiceClient is the client API for PanelService service.
@@ -30,6 +31,8 @@ const (
 type PanelServiceClient interface {
 	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
 	Report(ctx context.Context, in *ReportRequest, opts ...grpc.CallOption) (*ReportResponse, error)
+	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
 }
 
 type panelServiceClient struct {
@@ -50,6 +53,16 @@ func (c *panelServiceClient) Report(ctx context.Context, in *ReportRequest, opts
 	return out, nil
 }
 
+func (c *panelServiceClient) RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewCertificateResponse)
+	err := c.cc.Invoke(ctx, PanelService_RenewCertificate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PanelServiceServer is the server API for PanelService service.
 // All implementations must embed UnimplementedPanelServiceServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *panelServiceClient) Report(ctx context.Context, in *ReportRequest, opts
 type PanelServiceServer interface {
 	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
 	Report(context.Context, *ReportRequest) (*ReportResponse, error)
+	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
 	mustEmbedUnimplementedPanelServiceServer()
 }
 
@@ -70,6 +85,9 @@ type UnimplementedPanelServiceServer struct{}
 
 func (UnimplementedPanelServiceServer) Report(context.Context, *ReportRequest) (*ReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Report not implemented")
+}
+func (UnimplementedPanelServiceServer) RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewCertificate not implemented")
 }
 func (UnimplementedPanelServiceServer) mustEmbedUnimplementedPanelServiceServer() {}
 func (UnimplementedPanelServiceServer) testEmbeddedByValue()                      {}
@@ -110,6 +128,24 @@ func _PanelService_Report_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PanelService_RenewCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PanelServiceServer).RenewCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PanelService_RenewCertificate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PanelServiceServer).RenewCertificate(ctx, req.(*RenewCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PanelService_ServiceDesc is the grpc.ServiceDesc for PanelService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +156,10 @@ var PanelService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Report",
 			Handler:    _PanelService_Report_Handler,
+		},
+		{
+			MethodName: "RenewCertificate",
+			Handler:    _PanelService_RenewCertificate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

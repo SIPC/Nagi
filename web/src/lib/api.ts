@@ -5,6 +5,7 @@ import {
   AuthService,
   NodeService,
   ProjectService,
+  SettingsService,
   SetupService,
 } from "@/gen/nagi/v1/api_pb";
 
@@ -15,6 +16,7 @@ export const setupClient = createClient(SetupService, transport);
 export const authClient = createClient(AuthService, transport);
 export const nodeClient = createClient(NodeService, transport);
 export const projectClient = createClient(ProjectService, transport);
+export const settingsClient = createClient(SettingsService, transport);
 
 export function errorMessage(err: unknown): string {
   if (err instanceof ConnectError) return err.rawMessage;

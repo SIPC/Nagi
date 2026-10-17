@@ -21,6 +21,94 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type RenewCertificateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Csr           []byte                 `protobuf:"bytes,1,opt,name=csr,proto3" json:"csr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenewCertificateRequest) Reset() {
+	*x = RenewCertificateRequest{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewCertificateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewCertificateRequest) ProtoMessage() {}
+
+func (x *RenewCertificateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewCertificateRequest.ProtoReflect.Descriptor instead.
+func (*RenewCertificateRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RenewCertificateRequest) GetCsr() []byte {
+	if x != nil {
+		return x.Csr
+	}
+	return nil
+}
+
+type RenewCertificateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Certificate   []byte                 `protobuf:"bytes,1,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenewCertificateResponse) Reset() {
+	*x = RenewCertificateResponse{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewCertificateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewCertificateResponse) ProtoMessage() {}
+
+func (x *RenewCertificateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewCertificateResponse.ProtoReflect.Descriptor instead.
+func (*RenewCertificateResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RenewCertificateResponse) GetCertificate() []byte {
+	if x != nil {
+		return x.Certificate
+	}
+	return nil
+}
+
 type ReportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Node          *NodeInfo              `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
@@ -31,7 +119,7 @@ type ReportRequest struct {
 
 func (x *ReportRequest) Reset() {
 	*x = ReportRequest{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[0]
+	mi := &file_nagi_v1_panel_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +131,7 @@ func (x *ReportRequest) String() string {
 func (*ReportRequest) ProtoMessage() {}
 
 func (x *ReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[0]
+	mi := &file_nagi_v1_panel_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +144,7 @@ func (x *ReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRequest.ProtoReflect.Descriptor instead.
 func (*ReportRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{0}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReportRequest) GetNode() *NodeInfo {
@@ -81,7 +169,7 @@ type ReportResponse struct {
 
 func (x *ReportResponse) Reset() {
 	*x = ReportResponse{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[1]
+	mi := &file_nagi_v1_panel_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -93,7 +181,7 @@ func (x *ReportResponse) String() string {
 func (*ReportResponse) ProtoMessage() {}
 
 func (x *ReportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[1]
+	mi := &file_nagi_v1_panel_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -106,20 +194,25 @@ func (x *ReportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResponse.ProtoReflect.Descriptor instead.
 func (*ReportResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{1}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{3}
 }
 
 var File_nagi_v1_panel_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\n" +
-	"\x13nagi/v1/panel.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\"k\n" +
+	"\x13nagi/v1/panel.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\"+\n" +
+	"\x17RenewCertificateRequest\x12\x10\n" +
+	"\x03csr\x18\x01 \x01(\fR\x03csr\"<\n" +
+	"\x18RenewCertificateResponse\x12 \n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"k\n" +
 	"\rReportRequest\x12%\n" +
 	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x123\n" +
 	"\bprojects\x18\x02 \x03(\v2\x17.nagi.v1.ProjectSummaryR\bprojects\"\x10\n" +
-	"\x0eReportResponse2I\n" +
+	"\x0eReportResponse2\xa2\x01\n" +
 	"\fPanelService\x129\n" +
-	"\x06Report\x12\x16.nagi.v1.ReportRequest\x1a\x17.nagi.v1.ReportResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\x06Report\x12\x16.nagi.v1.ReportRequest\x1a\x17.nagi.v1.ReportResponse\x12W\n" +
+	"\x10RenewCertificate\x12 .nagi.v1.RenewCertificateRequest\x1a!.nagi.v1.RenewCertificateResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_panel_proto_rawDescOnce sync.Once
@@ -133,20 +226,24 @@ func file_nagi_v1_panel_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_panel_proto_rawDescData
 }
 
-var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_nagi_v1_panel_proto_goTypes = []any{
-	(*ReportRequest)(nil),  // 0: nagi.v1.ReportRequest
-	(*ReportResponse)(nil), // 1: nagi.v1.ReportResponse
-	(*NodeInfo)(nil),       // 2: nagi.v1.NodeInfo
-	(*ProjectSummary)(nil), // 3: nagi.v1.ProjectSummary
+	(*RenewCertificateRequest)(nil),  // 0: nagi.v1.RenewCertificateRequest
+	(*RenewCertificateResponse)(nil), // 1: nagi.v1.RenewCertificateResponse
+	(*ReportRequest)(nil),            // 2: nagi.v1.ReportRequest
+	(*ReportResponse)(nil),           // 3: nagi.v1.ReportResponse
+	(*NodeInfo)(nil),                 // 4: nagi.v1.NodeInfo
+	(*ProjectSummary)(nil),           // 5: nagi.v1.ProjectSummary
 }
 var file_nagi_v1_panel_proto_depIdxs = []int32{
-	2, // 0: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
-	3, // 1: nagi.v1.ReportRequest.projects:type_name -> nagi.v1.ProjectSummary
-	0, // 2: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
-	1, // 3: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
+	4, // 0: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
+	5, // 1: nagi.v1.ReportRequest.projects:type_name -> nagi.v1.ProjectSummary
+	2, // 2: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
+	0, // 3: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
+	3, // 4: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
+	1, // 5: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -164,7 +261,7 @@ func file_nagi_v1_panel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_panel_proto_rawDesc), len(file_nagi_v1_panel_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

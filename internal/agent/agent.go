@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"crypto/tls"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
@@ -45,6 +47,28 @@ type Config struct {
 func Enrolled(dataDir, fingerprint string) bool {
 	id, err := loadIdentity(filepath.Join(dataDir, "identity"))
 	return err == nil && id.trusts(fingerprint)
+}
+
+// Enroll 只加入面板（把面板加入信任列表）然后返回，不运行节点。安装脚本用它，
+// 这样一次性令牌不会写进服务配置。
+func Enroll(ctx context.Context, cfg Config) error {
+	if cfg.Panel == "" || cfg.Fingerprint == "" || cfg.Token == "" {
+		return errors.New("需要 --server、--fingerprint 和 --token")
+	}
+	id, err := loadIdentity(filepath.Join(cfg.DataDir, "identity"))
+	if err != nil {
+		return fmt.Errorf("读取节点身份: %w", err)
+	}
+	if id.trusts(cfg.Fingerprint) {
+		fmt.Println("节点已经信任这个面板，无需重复加入")
+		return nil
+	}
+	hostname, _ := os.Hostname()
+	if err := id.enroll(ctx, cfg.Panel, cfg.Fingerprint, cfg.Token, hostname); err != nil {
+		return err
+	}
+	fmt.Println("已加入面板", cfg.Panel)
+	return nil
 }
 
 // Run 运行节点，直到 ctx 取消。
@@ -271,6 +295,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.renewIfNeeded(ctx, panel, p)
 	notify, unsubscribe := a.subscribe()
 	defer unsubscribe()
 
@@ -302,4 +327,27 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) err
 	}
 	_, err = panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects})
 	return err
+}
+
+// renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。
+func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClient, p trustedPanel) {
+	cert, err := p.certificate()
+	if err != nil || time.Until(cert.NotAfter) > 30*24*time.Hour {
+		return
+	}
+	csr, err := tlsutil.CreateCSR(a.id.key, a.hostname)
+	if err != nil {
+		return
+	}
+	resp, err := panel.RenewCertificate(ctx, &nagiv1.RenewCertificateRequest{Csr: csr})
+	if err != nil {
+		a.log.Warn("证书续期失败", "panel", p.Address, "err", err)
+		return
+	}
+	p.CertPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: resp.GetCertificate()}))
+	if err := a.id.addPanel(p); err != nil {
+		a.log.Warn("保存续期后的证书失败", "err", err)
+		return
+	}
+	a.log.Info("证书已续期", "panel", p.Address)
 }

@@ -3,11 +3,9 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/x509"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -33,9 +31,6 @@ import (
 // SettingSetupToken 是面板初始化令牌哈希在 settings 表里的键。
 const SettingSetupToken = "setup_token"
 
-// 节点证书有效期 1 年，每次连接时续期（续期在后续步骤实现）。
-const nodeCertValidity = 365 * 24 * time.Hour
-
 // API 汇总所有 Connect 接口的实现。
 type API struct {
 	Q      *store.Queries
@@ -43,6 +38,7 @@ type API struct {
 	Nodes  *nodes.Registry
 	CA     *tlsutil.CA
 	Sealer *sealer.Sealer
+	Panel  *PanelInfo
 	Log    *slog.Logger
 }
 
@@ -60,6 +56,11 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewNodeServiceHandler(&nodeService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
+	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
+	mux.Handle("/hooks/", a.WebhookHandler())
+	mux.Handle("/ws/exec", a.TerminalHandler())
+	mux.Handle("GET /install.sh", a.InstallHandler())
+	mux.Handle("GET /download/", a.DownloadHandler())
 }
 
 // ---- 初始化 ----
@@ -337,7 +338,7 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("证书签名请求无效: %w", err))
 	}
 	// 节点 ID 由节点的身份公钥算出：同一个节点加入不同的面板，ID 都一样。
-	nodeID := NodeID(csr.RawSubjectPublicKeyInfo)
+	nodeID := nodes.NodeID(csr.RawSubjectPublicKeyInfo)
 
 	if _, err := s.Q.GetNode(ctx, nodeID); errors.Is(err, sql.ErrNoRows) {
 		name := strings.TrimSpace(req.Msg.GetHostname())
@@ -351,7 +352,7 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		return nil, err
 	}
 
-	cert, err := s.CA.SignCSR(req.Msg.GetCsr(), nodeID, nodeCertValidity)
+	cert, err := s.CA.SignCSR(req.Msg.GetCsr(), nodeID, nodes.NodeCertValidity)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -359,12 +360,6 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	return connect.NewResponse(&nagiv1.EnrollResponse{
 		NodeId: nodeID, Certificate: cert.Raw, CaCertificate: s.CA.Cert.Raw,
 	}), nil
-}
-
-// NodeID 由公钥（SubjectPublicKeyInfo）计算节点 ID：SHA-256 的前 8 字节，十六进制。
-func NodeID(spki []byte) string {
-	sum := sha256.Sum256(spki)
-	return hex.EncodeToString(sum[:8])
 }
 
 // ---- 错误转换 ----

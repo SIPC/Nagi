@@ -10,6 +10,16 @@ option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 service PanelService {
   // 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
   rpc Report(ReportRequest) returns (ReportResponse);
+  // 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+}
+
+message RenewCertificateRequest {
+  bytes csr = 1;
+}
+
+message RenewCertificateResponse {
+  bytes certificate = 1;
 }
 
 message ReportRequest {

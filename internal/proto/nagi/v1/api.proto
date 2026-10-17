@@ -54,6 +54,42 @@ message MeResponse {
 
 service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
+  rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
+}
+
+message CreateEnrollCommandRequest {}
+
+message CreateEnrollCommandResponse {
+  string command = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+service SettingsService {
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}
+
+message PanelSettings {
+  // 面板对外地址（IP 或域名，不含端口），安装命令和节点连接都用它，必须能被所有节点访问。
+  string public_address = 1;
+  // 以下只读
+  uint32 port = 2;
+  string fingerprint = 3;
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  PanelSettings settings = 1;
+}
+
+message UpdateSettingsRequest {
+  string public_address = 1;
+}
+
+message UpdateSettingsResponse {
+  PanelSettings settings = 1;
 }
 
 message Node {

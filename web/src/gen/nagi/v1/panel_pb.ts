@@ -12,7 +12,41 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIlsKDVJlcG9ydFJlcXVlc3QSHwoEbm9kZRgBIAEoCzIRLm5hZ2kudjEuTm9kZUluZm8SKQoIcHJvamVjdHMYAiADKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IhAKDlJlcG9ydFJlc3BvbnNlMkkKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIiYKF1JlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0EgsKA2NzchgBIAEoDCIvChhSZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USEwoLY2VydGlmaWNhdGUYASABKAwiWwoNUmVwb3J0UmVxdWVzdBIfCgRub2RlGAEgASgLMhEubmFnaS52MS5Ob2RlSW5mbxIpCghwcm9qZWN0cxgCIAMoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkiEAoOUmVwb3J0UmVzcG9uc2UyogEKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2VCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+
+/**
+ * @generated from message nagi.v1.RenewCertificateRequest
+ */
+export type RenewCertificateRequest = Message<"nagi.v1.RenewCertificateRequest"> & {
+  /**
+   * @generated from field: bytes csr = 1;
+   */
+  csr: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.RenewCertificateRequest.
+ * Use `create(RenewCertificateRequestSchema)` to create a new message.
+ */
+export const RenewCertificateRequestSchema: GenMessage<RenewCertificateRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 0);
+
+/**
+ * @generated from message nagi.v1.RenewCertificateResponse
+ */
+export type RenewCertificateResponse = Message<"nagi.v1.RenewCertificateResponse"> & {
+  /**
+   * @generated from field: bytes certificate = 1;
+   */
+  certificate: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.RenewCertificateResponse.
+ * Use `create(RenewCertificateResponseSchema)` to create a new message.
+ */
+export const RenewCertificateResponseSchema: GenMessage<RenewCertificateResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 1);
 
 /**
  * @generated from message nagi.v1.ReportRequest
@@ -34,7 +68,7 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
  * Use `create(ReportRequestSchema)` to create a new message.
  */
 export const ReportRequestSchema: GenMessage<ReportRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 0);
+  messageDesc(file_nagi_v1_panel, 2);
 
 /**
  * @generated from message nagi.v1.ReportResponse
@@ -47,7 +81,7 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
  * Use `create(ReportResponseSchema)` to create a new message.
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 1);
+  messageDesc(file_nagi_v1_panel, 3);
 
 /**
  * PanelService：节点调用面板，走控制连接。
@@ -64,6 +98,16 @@ export const PanelService: GenService<{
     methodKind: "unary";
     input: typeof ReportRequestSchema;
     output: typeof ReportResponseSchema;
+  },
+  /**
+   * 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
+   *
+   * @generated from rpc nagi.v1.PanelService.RenewCertificate
+   */
+  renewCertificate: {
+    methodKind: "unary";
+    input: typeof RenewCertificateRequestSchema;
+    output: typeof RenewCertificateResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_panel, 0);

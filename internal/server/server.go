@@ -37,9 +37,8 @@ type Config struct {
 }
 
 const (
-	settingPort          = "port"
-	settingPublicAddress = "public_address"
-	enrollTokenTTL       = time.Hour
+	settingPort    = "port"
+	enrollTokenTTL = time.Hour
 )
 
 // Server 是面板。New 之后端口已经监听，可以先取 Addr、Fingerprint 再调用 Run。
@@ -73,7 +72,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d)}
 
-	s.publicAddress, err = s.setting(ctx, settingPublicAddress, detectAddress)
+	s.publicAddress, err = s.setting(ctx, api.SettingPublicAddress, detectAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +90,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)
 	}
 	s.auth = auth.New(s.q)
-	s.nodes = nodes.NewRegistry(s.q, log, s.sealer)
+	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	return s, nil
 }
 
@@ -103,7 +102,11 @@ func (s *Server) LocalAddr() string { return net.JoinHostPort("127.0.0.1", strco
 
 // URL 返回面板的对外访问地址。
 func (s *Server) URL() string {
-	return "https://" + net.JoinHostPort(s.publicAddress, strconv.Itoa(s.port))
+	addr := s.publicAddress
+	if v, err := s.q.GetSetting(context.Background(), api.SettingPublicAddress); err == nil && v != "" {
+		addr = v
+	}
+	return "https://" + net.JoinHostPort(addr, strconv.Itoa(s.port))
 }
 
 // Fingerprint 返回面板公钥指纹。
@@ -131,10 +134,17 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.auth.CleanupLoop(ctx)
 
 	mux := http.NewServeMux()
-	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log}
+	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log, Panel: &api.PanelInfo{
+		Q:           s.q,
+		DataDir:     s.cfg.DataDir,
+		Port:        s.port,
+		Fingerprint: s.fingerprint,
+		NewEnrollToken: func(ctx context.Context) (string, time.Time, error) {
+			token, err := s.CreateEnrollToken(ctx)
+			return token, time.Now().Add(enrollTokenTTL), err
+		},
+	}}
 	a.Mount(mux)
-	mux.Handle("/hooks/", a.WebhookHandler())
-	mux.Handle("/ws/exec", a.TerminalHandler())
 	mux.Handle("/", web.Handler())
 
 	httpLn := newChanListener(s.listener.Addr())
