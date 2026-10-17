@@ -168,6 +168,7 @@ func Run(ctx context.Context, cfg Config) error {
 			a.domainProject(ctx, domain))
 	})
 	go a.snapshotLoop(ctx)
+	go a.imageCheckLoop(ctx)
 
 	if !cfg.DisableProxy {
 		a.proxy = proxy.New(filepath.Join(cfg.DataDir, "caddy"), log.With("component", "proxy"))

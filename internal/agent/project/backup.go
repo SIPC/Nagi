@@ -347,7 +347,7 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 	}
 	rep.Close(ctx)
 
-	if _, err := m.Deploy(ctx, id, 0, false, false, onLine); err != nil {
+	if _, err := m.Deploy(ctx, id, 0, false, false, false, onLine); err != nil {
 		// 文件已经恢复好，项目保留下来，用户可以修改配置后重新部署。
 		return proj, fmt.Errorf("项目已恢复，但部署失败：%w", err)
 	}

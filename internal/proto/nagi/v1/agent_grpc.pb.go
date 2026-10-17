@@ -54,6 +54,12 @@ const (
 	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
 	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
 	AgentService_MigrateFinish_FullMethodName        = "/nagi.v1.AgentService/MigrateFinish"
+	AgentService_CheckImages_FullMethodName          = "/nagi.v1.AgentService/CheckImages"
+	AgentService_GetMirrors_FullMethodName           = "/nagi.v1.AgentService/GetMirrors"
+	AgentService_SetMirrors_FullMethodName           = "/nagi.v1.AgentService/SetMirrors"
+	AgentService_ListRegistries_FullMethodName       = "/nagi.v1.AgentService/ListRegistries"
+	AgentService_LoginRegistry_FullMethodName        = "/nagi.v1.AgentService/LoginRegistry"
+	AgentService_LogoutRegistry_FullMethodName       = "/nagi.v1.AgentService/LogoutRegistry"
 	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
 	AgentService_GetFailover_FullMethodName          = "/nagi.v1.AgentService/GetFailover"
 	AgentService_ListFailovers_FullMethodName        = "/nagi.v1.AgentService/ListFailovers"
@@ -124,6 +130,16 @@ type AgentServiceClient interface {
 	MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*MigrateFinishResponse, error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckImages(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
+	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
+	GetMirrors(ctx context.Context, in *GetMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
+	SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error)
+	// ---- 私有仓库认证（项目自己的 docker 配置） ----
+	ListRegistries(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	// 登录私有仓库，会向仓库验证账号。
+	LoginRegistry(ctx context.Context, in *LoginRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	LogoutRegistry(ctx context.Context, in *LogoutRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
 	// ---- 顶替 ----
 	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
 	SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
@@ -567,6 +583,66 @@ func (c *agentServiceClient) MigrateFinish(ctx context.Context, in *ReplicaRef, 
 	return out, nil
 }
 
+func (c *agentServiceClient) CheckImages(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckImagesResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) GetMirrors(ctx context.Context, in *GetMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mirrors)
+	err := c.cc.Invoke(ctx, AgentService_GetMirrors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mirrors)
+	err := c.cc.Invoke(ctx, AgentService_SetMirrors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListRegistries(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListRegistries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) LoginRegistry(ctx context.Context, in *LoginRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, AgentService_LoginRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) LogoutRegistry(ctx context.Context, in *LogoutRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, AgentService_LogoutRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FailoverStatus)
@@ -671,6 +747,16 @@ type AgentServiceServer interface {
 	MigrateResume(*ReplicaRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckImages(context.Context, *ReplicaRef) (*CheckImagesResponse, error)
+	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
+	GetMirrors(context.Context, *GetMirrorsRequest) (*Mirrors, error)
+	SetMirrors(context.Context, *Mirrors) (*Mirrors, error)
+	// ---- 私有仓库认证（项目自己的 docker 配置） ----
+	ListRegistries(context.Context, *ReplicaRef) (*RegistriesResponse, error)
+	// 登录私有仓库，会向仓库验证账号。
+	LoginRegistry(context.Context, *LoginRegistryRequest) (*RegistriesResponse, error)
+	LogoutRegistry(context.Context, *LogoutRegistryRequest) (*RegistriesResponse, error)
 	// ---- 顶替 ----
 	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
 	SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error)
@@ -793,6 +879,24 @@ func (UnimplementedAgentServiceServer) MigrateResume(*ReplicaRef, grpc.ServerStr
 }
 func (UnimplementedAgentServiceServer) MigrateFinish(context.Context, *ReplicaRef) (*MigrateFinishResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateFinish not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ReplicaRef) (*CheckImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckImages not implemented")
+}
+func (UnimplementedAgentServiceServer) GetMirrors(context.Context, *GetMirrorsRequest) (*Mirrors, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMirrors not implemented")
+}
+func (UnimplementedAgentServiceServer) SetMirrors(context.Context, *Mirrors) (*Mirrors, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMirrors not implemented")
+}
+func (UnimplementedAgentServiceServer) ListRegistries(context.Context, *ReplicaRef) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRegistries not implemented")
+}
+func (UnimplementedAgentServiceServer) LoginRegistry(context.Context, *LoginRegistryRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LoginRegistry not implemented")
+}
+func (UnimplementedAgentServiceServer) LogoutRegistry(context.Context, *LogoutRegistryRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogoutRegistry not implemented")
 }
 func (UnimplementedAgentServiceServer) SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetFailover not implemented")
@@ -1390,6 +1494,114 @@ func _AgentService_MigrateFinish_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CheckImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckImages(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMirrorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetMirrors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetMirrors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetMirrors(ctx, req.(*GetMirrorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SetMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Mirrors)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetMirrors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetMirrors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetMirrors(ctx, req.(*Mirrors))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListRegistries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplicaRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListRegistries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListRegistries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListRegistries(ctx, req.(*ReplicaRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_LoginRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRegistryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).LoginRegistry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_LoginRegistry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).LoginRegistry(ctx, req.(*LoginRegistryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_LogoutRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogoutRegistryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).LogoutRegistry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_LogoutRegistry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).LogoutRegistry(ctx, req.(*LogoutRegistryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetFailoverRequest)
 	if err := dec(in); err != nil {
@@ -1572,6 +1784,30 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MigrateFinish",
 			Handler:    _AgentService_MigrateFinish_Handler,
+		},
+		{
+			MethodName: "CheckImages",
+			Handler:    _AgentService_CheckImages_Handler,
+		},
+		{
+			MethodName: "GetMirrors",
+			Handler:    _AgentService_GetMirrors_Handler,
+		},
+		{
+			MethodName: "SetMirrors",
+			Handler:    _AgentService_SetMirrors_Handler,
+		},
+		{
+			MethodName: "ListRegistries",
+			Handler:    _AgentService_ListRegistries_Handler,
+		},
+		{
+			MethodName: "LoginRegistry",
+			Handler:    _AgentService_LoginRegistry_Handler,
+		},
+		{
+			MethodName: "LogoutRegistry",
+			Handler:    _AgentService_LogoutRegistry_Handler,
 		},
 		{
 			MethodName: "SetFailover",

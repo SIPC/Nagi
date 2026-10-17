@@ -71,6 +71,18 @@ service AgentService {
   // 迁移成功后把项目移出本节点（目录保留）。
   rpc MigrateFinish(ReplicaRef) returns (MigrateFinishResponse);
 
+  // 立即检查项目的镜像有没有新版本。
+  rpc CheckImages(ReplicaRef) returns (CheckImagesResponse);
+  // 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
+  rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
+  rpc SetMirrors(Mirrors) returns (Mirrors);
+
+  // ---- 私有仓库认证（项目自己的 docker 配置） ----
+  rpc ListRegistries(ReplicaRef) returns (RegistriesResponse);
+  // 登录私有仓库，会向仓库验证账号。
+  rpc LoginRegistry(LoginRegistryRequest) returns (RegistriesResponse);
+  rpc LogoutRegistry(LogoutRegistryRequest) returns (RegistriesResponse);
+
   // ---- 顶替 ----
   // 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
   rpc SetFailover(SetFailoverRequest) returns (FailoverStatus);
@@ -79,6 +91,36 @@ service AgentService {
   rpc ListFailovers(ListFailoversRequest) returns (ListFailoversResponse);
   // 热备：用户确认顶替（有状态项目默认要确认）。
   rpc ConfirmTakeover(ReplicaRef) returns (FailoverStatus);
+}
+
+message CheckImagesResponse {
+  repeated ImageUpdate updates = 1;
+}
+
+message GetMirrorsRequest {}
+
+message Mirrors {
+  // 写在 daemon.json 里的地址。
+  repeated string mirrors = 1;
+  // Docker 当前生效的地址（只读）。和 mirrors 不一样说明还没有重启 Docker。
+  repeated string active = 2;
+}
+
+message LoginRegistryRequest {
+  string project_id = 1;
+  string registry = 2;
+  string username = 3;
+  string password = 4;
+}
+
+message LogoutRegistryRequest {
+  string project_id = 1;
+  string registry = 2;
+}
+
+message RegistriesResponse {
+  // 登录过的仓库地址（不返回密码）。
+  repeated string registries = 1;
 }
 
 message SetFailoverRequest {
@@ -338,6 +380,8 @@ message DeployProjectRequest {
   bool pull = 3;
   // 用面板刚上传的文件替换 data/（见 MeshService.Upload）。
   bool use_upload = 4;
+  // 先拉取最新的镜像（更新镜像）。
+  bool pull_images = 5;
 }
 
 message StreamLogsRequest {

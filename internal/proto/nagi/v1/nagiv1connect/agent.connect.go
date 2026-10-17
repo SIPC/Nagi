@@ -127,6 +127,22 @@ const (
 	// AgentServiceMigrateFinishProcedure is the fully-qualified name of the AgentService's
 	// MigrateFinish RPC.
 	AgentServiceMigrateFinishProcedure = "/nagi.v1.AgentService/MigrateFinish"
+	// AgentServiceCheckImagesProcedure is the fully-qualified name of the AgentService's CheckImages
+	// RPC.
+	AgentServiceCheckImagesProcedure = "/nagi.v1.AgentService/CheckImages"
+	// AgentServiceGetMirrorsProcedure is the fully-qualified name of the AgentService's GetMirrors RPC.
+	AgentServiceGetMirrorsProcedure = "/nagi.v1.AgentService/GetMirrors"
+	// AgentServiceSetMirrorsProcedure is the fully-qualified name of the AgentService's SetMirrors RPC.
+	AgentServiceSetMirrorsProcedure = "/nagi.v1.AgentService/SetMirrors"
+	// AgentServiceListRegistriesProcedure is the fully-qualified name of the AgentService's
+	// ListRegistries RPC.
+	AgentServiceListRegistriesProcedure = "/nagi.v1.AgentService/ListRegistries"
+	// AgentServiceLoginRegistryProcedure is the fully-qualified name of the AgentService's
+	// LoginRegistry RPC.
+	AgentServiceLoginRegistryProcedure = "/nagi.v1.AgentService/LoginRegistry"
+	// AgentServiceLogoutRegistryProcedure is the fully-qualified name of the AgentService's
+	// LogoutRegistry RPC.
+	AgentServiceLogoutRegistryProcedure = "/nagi.v1.AgentService/LogoutRegistry"
 	// AgentServiceSetFailoverProcedure is the fully-qualified name of the AgentService's SetFailover
 	// RPC.
 	AgentServiceSetFailoverProcedure = "/nagi.v1.AgentService/SetFailover"
@@ -201,6 +217,16 @@ type AgentServiceClient interface {
 	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckImages(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.CheckImagesResponse], error)
+	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
+	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// ---- 私有仓库认证（项目自己的 docker 配置） ----
+	ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error)
+	// 登录私有仓库，会向仓库验证账号。
+	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
+	LogoutRegistry(context.Context, *connect.Request[v1.LogoutRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
 	// ---- 顶替 ----
 	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
@@ -432,6 +458,42 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
 			connect.WithClientOptions(opts...),
 		),
+		checkImages: connect.NewClient[v1.ReplicaRef, v1.CheckImagesResponse](
+			httpClient,
+			baseURL+AgentServiceCheckImagesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CheckImages")),
+			connect.WithClientOptions(opts...),
+		),
+		getMirrors: connect.NewClient[v1.GetMirrorsRequest, v1.Mirrors](
+			httpClient,
+			baseURL+AgentServiceGetMirrorsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetMirrors")),
+			connect.WithClientOptions(opts...),
+		),
+		setMirrors: connect.NewClient[v1.Mirrors, v1.Mirrors](
+			httpClient,
+			baseURL+AgentServiceSetMirrorsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
+			connect.WithClientOptions(opts...),
+		),
+		listRegistries: connect.NewClient[v1.ReplicaRef, v1.RegistriesResponse](
+			httpClient,
+			baseURL+AgentServiceListRegistriesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListRegistries")),
+			connect.WithClientOptions(opts...),
+		),
+		loginRegistry: connect.NewClient[v1.LoginRegistryRequest, v1.RegistriesResponse](
+			httpClient,
+			baseURL+AgentServiceLoginRegistryProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
+			connect.WithClientOptions(opts...),
+		),
+		logoutRegistry: connect.NewClient[v1.LogoutRegistryRequest, v1.RegistriesResponse](
+			httpClient,
+			baseURL+AgentServiceLogoutRegistryProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("LogoutRegistry")),
+			connect.WithClientOptions(opts...),
+		),
 		setFailover: connect.NewClient[v1.SetFailoverRequest, v1.FailoverStatus](
 			httpClient,
 			baseURL+AgentServiceSetFailoverProcedure,
@@ -496,6 +558,12 @@ type agentServiceClient struct {
 	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
 	migrateResume        *connect.Client[v1.ReplicaRef, v1.DeployEvent]
 	migrateFinish        *connect.Client[v1.ReplicaRef, v1.MigrateFinishResponse]
+	checkImages          *connect.Client[v1.ReplicaRef, v1.CheckImagesResponse]
+	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
+	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
+	listRegistries       *connect.Client[v1.ReplicaRef, v1.RegistriesResponse]
+	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.RegistriesResponse]
+	logoutRegistry       *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
 	setFailover          *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
 	getFailover          *connect.Client[v1.ReplicaRef, v1.FailoverStatus]
 	listFailovers        *connect.Client[v1.ListFailoversRequest, v1.ListFailoversResponse]
@@ -677,6 +745,36 @@ func (c *agentServiceClient) MigrateFinish(ctx context.Context, req *connect.Req
 	return c.migrateFinish.CallUnary(ctx, req)
 }
 
+// CheckImages calls nagi.v1.AgentService.CheckImages.
+func (c *agentServiceClient) CheckImages(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.CheckImagesResponse], error) {
+	return c.checkImages.CallUnary(ctx, req)
+}
+
+// GetMirrors calls nagi.v1.AgentService.GetMirrors.
+func (c *agentServiceClient) GetMirrors(ctx context.Context, req *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
+	return c.getMirrors.CallUnary(ctx, req)
+}
+
+// SetMirrors calls nagi.v1.AgentService.SetMirrors.
+func (c *agentServiceClient) SetMirrors(ctx context.Context, req *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error) {
+	return c.setMirrors.CallUnary(ctx, req)
+}
+
+// ListRegistries calls nagi.v1.AgentService.ListRegistries.
+func (c *agentServiceClient) ListRegistries(ctx context.Context, req *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.listRegistries.CallUnary(ctx, req)
+}
+
+// LoginRegistry calls nagi.v1.AgentService.LoginRegistry.
+func (c *agentServiceClient) LoginRegistry(ctx context.Context, req *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.loginRegistry.CallUnary(ctx, req)
+}
+
+// LogoutRegistry calls nagi.v1.AgentService.LogoutRegistry.
+func (c *agentServiceClient) LogoutRegistry(ctx context.Context, req *connect.Request[v1.LogoutRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.logoutRegistry.CallUnary(ctx, req)
+}
+
 // SetFailover calls nagi.v1.AgentService.SetFailover.
 func (c *agentServiceClient) SetFailover(ctx context.Context, req *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
 	return c.setFailover.CallUnary(ctx, req)
@@ -757,6 +855,16 @@ type AgentServiceHandler interface {
 	MigrateResume(context.Context, *connect.Request[v1.ReplicaRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 迁移成功后把项目移出本节点（目录保留）。
 	MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckImages(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.CheckImagesResponse], error)
+	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
+	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
+	// ---- 私有仓库认证（项目自己的 docker 配置） ----
+	ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error)
+	// 登录私有仓库，会向仓库验证账号。
+	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
+	LogoutRegistry(context.Context, *connect.Request[v1.LogoutRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
 	// ---- 顶替 ----
 	// 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
@@ -984,6 +1092,42 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("MigrateFinish")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCheckImagesHandler := connect.NewUnaryHandler(
+		AgentServiceCheckImagesProcedure,
+		svc.CheckImages,
+		connect.WithSchema(agentServiceMethods.ByName("CheckImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceGetMirrorsHandler := connect.NewUnaryHandler(
+		AgentServiceGetMirrorsProcedure,
+		svc.GetMirrors,
+		connect.WithSchema(agentServiceMethods.ByName("GetMirrors")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetMirrorsHandler := connect.NewUnaryHandler(
+		AgentServiceSetMirrorsProcedure,
+		svc.SetMirrors,
+		connect.WithSchema(agentServiceMethods.ByName("SetMirrors")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListRegistriesHandler := connect.NewUnaryHandler(
+		AgentServiceListRegistriesProcedure,
+		svc.ListRegistries,
+		connect.WithSchema(agentServiceMethods.ByName("ListRegistries")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceLoginRegistryHandler := connect.NewUnaryHandler(
+		AgentServiceLoginRegistryProcedure,
+		svc.LoginRegistry,
+		connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceLogoutRegistryHandler := connect.NewUnaryHandler(
+		AgentServiceLogoutRegistryProcedure,
+		svc.LogoutRegistry,
+		connect.WithSchema(agentServiceMethods.ByName("LogoutRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetFailoverHandler := connect.NewUnaryHandler(
 		AgentServiceSetFailoverProcedure,
 		svc.SetFailover,
@@ -1080,6 +1224,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceMigrateResumeHandler.ServeHTTP(w, r)
 		case AgentServiceMigrateFinishProcedure:
 			agentServiceMigrateFinishHandler.ServeHTTP(w, r)
+		case AgentServiceCheckImagesProcedure:
+			agentServiceCheckImagesHandler.ServeHTTP(w, r)
+		case AgentServiceGetMirrorsProcedure:
+			agentServiceGetMirrorsHandler.ServeHTTP(w, r)
+		case AgentServiceSetMirrorsProcedure:
+			agentServiceSetMirrorsHandler.ServeHTTP(w, r)
+		case AgentServiceListRegistriesProcedure:
+			agentServiceListRegistriesHandler.ServeHTTP(w, r)
+		case AgentServiceLoginRegistryProcedure:
+			agentServiceLoginRegistryHandler.ServeHTTP(w, r)
+		case AgentServiceLogoutRegistryProcedure:
+			agentServiceLogoutRegistryHandler.ServeHTTP(w, r)
 		case AgentServiceSetFailoverProcedure:
 			agentServiceSetFailoverHandler.ServeHTTP(w, r)
 		case AgentServiceGetFailoverProcedure:
@@ -1235,6 +1391,30 @@ func (UnimplementedAgentServiceHandler) MigrateResume(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) MigrateFinish(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.MigrateFinishResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateFinish is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CheckImages(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.CheckImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckImages is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetMirrors is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMirrors is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListRegistries(context.Context, *connect.Request[v1.ReplicaRef]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListRegistries is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.LoginRegistry is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) LogoutRegistry(context.Context, *connect.Request[v1.LogoutRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.LogoutRegistry is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {

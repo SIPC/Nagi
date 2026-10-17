@@ -47,13 +47,18 @@ func (m *Manager) openRepo(ctx context.Context, id string, p paths) (*snapshot.R
 }
 
 func composeFiles(id string, p paths) compose.Files {
-	return compose.Files{
+	f := compose.Files{
 		ProjectName: composeProjectName(id),
 		ProjectDir:  p.dataDir(),
 		ComposeFile: p.composeFile(),
 		Override:    p.overrideFile(),
 		EnvFile:     p.envFile(),
 	}
+	// 项目登录过私有仓库时用它自己的 docker 配置；没有时用机器全局的（节点上全局 docker login 过的照常能用）。
+	if _, err := os.Stat(filepath.Join(p.dockerConfigDir(), "config.json")); err == nil {
+		f.DockerConfig = p.dockerConfigDir()
+	}
+	return f
 }
 
 // preservePaths 返回完整的保留路径：用户设置的 + compose 里挂载进容器的 data/ 下的目录。
@@ -114,6 +119,7 @@ func (m *Manager) snapshotWithPause(ctx context.Context, rep *snapshot.Repo, id 
 type deployOpts struct {
 	pull         bool              // 部署前从 git 拉取文件
 	upload       bool              // 用面板上传的文件替换 data/
+	pullImages   bool              // 部署前拉取最新的镜像
 	consumeDraft bool              // 部署成功创建版本后删除草稿
 	rollbackOf   int64             // 回滚：回滚到的版本
 	filesFrom    string            // 回滚：从这个版本文件快照恢复 data/
@@ -124,7 +130,7 @@ type deployOpts struct {
 // Deploy 部署项目，生成一个新版本。有草稿时用草稿，没有时用最新版本的配置（重新部署）。
 // baseRevision 不为 0 时，必须和节点上的修订号一致。
 // doPull 时先从 git 拉取文件；useUpload 时用面板上传的文件替换 data/。
-func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull, useUpload bool, onLine func(string)) (int64, error) {
+func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doPull, useUpload, pullImages bool, onLine func(string)) (int64, error) {
 	if doPull && useUpload {
 		return 0, invalid("不能同时从 git 拉取和使用上传的文件")
 	}
@@ -138,7 +144,11 @@ func (m *Manager) Deploy(ctx context.Context, id string, baseRevision int64, doP
 	if err != nil {
 		return 0, err
 	}
-	opts := deployOpts{pull: doPull, upload: useUpload}
+	opts := deployOpts{pull: doPull, upload: useUpload, pullImages: pullImages}
+	if pullImages {
+		// 拉取了新镜像，原来的"有新版本"提醒不再准确，下次检查时再算。
+		defer m.clearImageUpdates(id)
+	}
 	if useUpload {
 		if _, err := os.Stat(paths{root: row.Dir}.uploadFiles()); err != nil {
 			return 0, invalid("没有已上传的文件，请先上传")
@@ -332,6 +342,12 @@ func (m *Manager) deploy(ctx context.Context, row nodestore.Project, pdb *projec
 
 	// 6. 启动。
 	onLine(fmt.Sprintf("部署版本 %d", version))
+	if opts.pullImages {
+		onLine("拉取最新的镜像")
+		if err := compose.Pull(ctx, files, onLine); err != nil {
+			return 0, fmt.Errorf("拉取镜像: %w", err)
+		}
+	}
 	if err := compose.Up(ctx, files, onLine); err != nil {
 		return version, err
 	}

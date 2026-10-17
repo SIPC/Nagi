@@ -79,6 +79,7 @@ type Container struct {
 	IPs map[string]netip.Addr
 	// Project 是 Nagi 的项目 ID（nagi.project 标签）。
 	Project string
+	ImageID string
 }
 
 // ManagedContainers 列出带有 labelKey 标签（Nagi 管理）的所有容器。
@@ -115,6 +116,7 @@ func (d *Client) listContainers(ctx context.Context, filters client.Filters, pro
 			Health:  health(c.Health),
 			IPs:     ips,
 			Project: c.Labels[projectLabel],
+			ImageID: c.ImageID,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
@@ -449,4 +451,35 @@ func (d *Client) ExitInfo(ctx context.Context, id string) (exitCode int, started
 func (d *Client) StartContainer(ctx context.Context, id string) error {
 	_, err := d.c.ContainerStart(ctx, id, client.ContainerStartOptions{})
 	return err
+}
+
+// RepoDigests 返回本地镜像的仓库摘要（repo@sha256:...），本地构建的镜像没有。
+func (d *Client) RepoDigests(ctx context.Context, imageID string) ([]string, error) {
+	info, err := d.c.ImageInspect(ctx, imageID)
+	if err != nil {
+		return nil, err
+	}
+	return info.RepoDigests, nil
+}
+
+// RemoteDigest 向仓库查询镜像标签当前的摘要。只查询清单，不下载镜像，也不计入 Docker Hub 的拉取次数。
+// encodedAuth 是私有仓库的登录信息（base64url 编码的 JSON），公开镜像为空。
+func (d *Client) RemoteDigest(ctx context.Context, ref, encodedAuth string) (string, error) {
+	res, err := d.c.DistributionInspect(ctx, ref, client.DistributionInspectOptions{EncodedRegistryAuth: encodedAuth})
+	if err != nil {
+		return "", err
+	}
+	return res.Descriptor.Digest.String(), nil
+}
+
+// Mirrors 返回 Docker 当前生效的镜像加速地址。
+func (d *Client) Mirrors(ctx context.Context) ([]string, error) {
+	info, err := d.c.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if info.Info.RegistryConfig == nil {
+		return nil, nil
+	}
+	return info.Info.RegistryConfig.Mirrors, nil
 }

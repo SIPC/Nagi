@@ -90,6 +90,9 @@ service NodeService {
   rpc ListNodeFailovers(ListNodeReplicasRequest) returns (ListFailoversResponse);
   // 在热备节点上确认顶替。
   rpc ConfirmNodeTakeover(NodeProjectRef) returns (FailoverStatus);
+  // 节点的镜像加速地址。
+  rpc GetNodeMirrors(ListNodeReplicasRequest) returns (Mirrors);
+  rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -125,6 +128,11 @@ message GetPanelMeshRequest {}
 
 message ListNodeReplicasRequest {
   string node_id = 1;
+}
+
+message SetNodeMirrorsRequest {
+  string node_id = 1;
+  repeated string mirrors = 2;
 }
 
 message RestoreNodeReplicaRequest {
@@ -320,6 +328,12 @@ service ProjectService {
   rpc SyncNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
   // 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
   rpc GetNodeProjectBackupKey(NodeProjectRef) returns (GetNodeProjectBackupKeyResponse);
+  // 私有仓库认证：每个项目自己的登录信息。
+  rpc ListNodeProjectRegistries(NodeProjectRef) returns (RegistriesResponse);
+  // 立即检查项目的镜像有没有新版本。
+  rpc CheckNodeProjectImages(NodeProjectRef) returns (CheckImagesResponse);
+  rpc LoginNodeProjectRegistry(LoginNodeProjectRegistryRequest) returns (RegistriesResponse);
+  rpc LogoutNodeProjectRegistry(LogoutNodeProjectRegistryRequest) returns (RegistriesResponse);
   // 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
   // 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
   rpc MigrateNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
@@ -347,6 +361,20 @@ message MigrateNodeProjectRequest {
   string target_node_id = 3;
   // 目标节点上的项目目录。
   string dir = 4;
+}
+
+message LoginNodeProjectRegistryRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string registry = 3;
+  string username = 4;
+  string password = 5;
+}
+
+message LogoutNodeProjectRegistryRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string registry = 3;
 }
 
 message GetNodeProjectBackupKeyResponse {
@@ -468,6 +496,8 @@ message DeployNodeProjectRequest {
   bool pull = 4;
   // 用刚上传的压缩包替换 data/（先 POST /api/upload）。
   bool use_upload = 5;
+  // 先拉取最新的镜像（更新镜像）。
+  bool pull_images = 6;
 }
 
 message StreamNodeProjectLogsRequest {

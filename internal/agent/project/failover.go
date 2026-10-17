@@ -151,5 +151,9 @@ func PrePull(ctx context.Context, root string, onLine func(string)) error {
 	if err := os.WriteFile(prep.overrideFile(), []byte("services: {}\n"), 0o600); err != nil {
 		return err
 	}
-	return compose.Pull(ctx, composeFiles("prepull", prep), onLine)
+	files := composeFiles("prepull", prep)
+	if _, err := os.Stat(filepath.Join(root, "config", "docker", "config.json")); err == nil {
+		files.DockerConfig = filepath.Join(root, "config", "docker")
+	}
+	return compose.Pull(ctx, files, onLine)
 }

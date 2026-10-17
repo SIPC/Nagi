@@ -136,7 +136,7 @@ func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream na
 	send := func(line string) {
 		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	}
-	version, err := s.projects.Deploy(ctx, req.GetId(), req.GetBaseRevision(), req.GetPull(), req.GetUseUpload(), send)
+	version, err := s.projects.Deploy(ctx, req.GetId(), req.GetBaseRevision(), req.GetPull(), req.GetUseUpload(), req.GetPullImages(), send)
 	s.changed()
 	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)
@@ -276,4 +276,30 @@ func toStatus(err error) error {
 		return status.Error(codes.Canceled, err.Error())
 	}
 	return status.Error(codes.Internal, err.Error())
+}
+
+// ---- 私有仓库认证 ----
+
+func (s *agentService) ListRegistries(ctx context.Context, req *nagiv1.ReplicaRef) (*nagiv1.RegistriesResponse, error) {
+	list, err := s.projects.Registries(ctx, req.GetProjectId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.RegistriesResponse{Registries: list}, nil
+}
+
+func (s *agentService) LoginRegistry(ctx context.Context, req *nagiv1.LoginRegistryRequest) (*nagiv1.RegistriesResponse, error) {
+	list, err := s.projects.Login(ctx, req.GetProjectId(), req.GetRegistry(), req.GetUsername(), req.GetPassword())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.RegistriesResponse{Registries: list}, nil
+}
+
+func (s *agentService) LogoutRegistry(ctx context.Context, req *nagiv1.LogoutRegistryRequest) (*nagiv1.RegistriesResponse, error) {
+	list, err := s.projects.Logout(ctx, req.GetProjectId(), req.GetRegistry())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.RegistriesResponse{Registries: list}, nil
 }

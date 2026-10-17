@@ -280,3 +280,78 @@ func (s *projectService) GetNodeProjectBackupKey(ctx context.Context, req *conne
 	s.Log.Info("查看了项目快照密码", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "user", auth.Username(ctx))
 	return connect.NewResponse(&nagiv1.GetNodeProjectBackupKeyResponse{Key: key}), nil
 }
+
+// ---- 私有仓库认证 ----
+
+func (s *projectService) ListNodeProjectRegistries(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.RegistriesResponse], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.ListRegistries(ctx, &nagiv1.ReplicaRef{ProjectId: req.Msg.GetProjectId()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) LoginNodeProjectRegistry(ctx context.Context, req *connect.Request[nagiv1.LoginNodeProjectRegistryRequest]) (*connect.Response[nagiv1.RegistriesResponse], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.LoginRegistry(ctx, &nagiv1.LoginRegistryRequest{ProjectId: req.Msg.GetProjectId(),
+		Registry: req.Msg.GetRegistry(), Username: req.Msg.GetUsername(), Password: req.Msg.GetPassword()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) LogoutNodeProjectRegistry(ctx context.Context, req *connect.Request[nagiv1.LogoutNodeProjectRegistryRequest]) (*connect.Response[nagiv1.RegistriesResponse], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.LogoutRegistry(ctx, &nagiv1.LogoutRegistryRequest{ProjectId: req.Msg.GetProjectId(), Registry: req.Msg.GetRegistry()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *projectService) CheckNodeProjectImages(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.CheckImagesResponse], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.CheckImages(ctx, &nagiv1.ReplicaRef{ProjectId: req.Msg.GetProjectId()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) GetNodeMirrors(ctx context.Context, req *connect.Request[nagiv1.ListNodeReplicasRequest]) (*connect.Response[nagiv1.Mirrors], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.GetMirrors(ctx, &nagiv1.GetMirrorsRequest{})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) SetNodeMirrors(ctx context.Context, req *connect.Request[nagiv1.SetNodeMirrorsRequest]) (*connect.Response[nagiv1.Mirrors], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.SetMirrors(ctx, &nagiv1.Mirrors{Mirrors: req.Msg.GetMirrors()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}

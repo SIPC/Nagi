@@ -63,6 +63,7 @@ type Manager struct {
 	ManagedRestart func(id string) bool
 
 	restarts managedRestarts
+	images   imageUpdates
 }
 
 // NewManager 创建项目管理器。
@@ -344,6 +345,7 @@ func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectS
 	if err != nil {
 		return nil, err
 	}
+	m.imageStatus(id, status)
 	return &nagiv1.ProjectSummary{Project: proj, Status: status}, nil
 }
 
@@ -486,13 +488,7 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 		return invalid("要同时删除项目目录，请输入项目名 %s 确认", name)
 	}
 	p := paths{root: row.Dir}
-	files := compose.Files{
-		ProjectName: composeProjectName(id),
-		ProjectDir:  p.dataDir(),
-		ComposeFile: p.composeFile(),
-		Override:    p.overrideFile(),
-		EnvFile:     p.envFile(),
-	}
+	files := composeFiles(id, p)
 	// 从未部署过的项目没有 override，也没有容器。
 	if _, err := os.Stat(p.overrideFile()); err == nil {
 		if err := compose.Down(ctx, files, deleteDir, onLine); err != nil {

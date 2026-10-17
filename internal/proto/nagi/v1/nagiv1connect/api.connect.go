@@ -92,6 +92,12 @@ const (
 	// NodeServiceConfirmNodeTakeoverProcedure is the fully-qualified name of the NodeService's
 	// ConfirmNodeTakeover RPC.
 	NodeServiceConfirmNodeTakeoverProcedure = "/nagi.v1.NodeService/ConfirmNodeTakeover"
+	// NodeServiceGetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
+	// GetNodeMirrors RPC.
+	NodeServiceGetNodeMirrorsProcedure = "/nagi.v1.NodeService/GetNodeMirrors"
+	// NodeServiceSetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
+	// SetNodeMirrors RPC.
+	NodeServiceSetNodeMirrorsProcedure = "/nagi.v1.NodeService/SetNodeMirrors"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -196,6 +202,18 @@ const (
 	// ProjectServiceGetNodeProjectBackupKeyProcedure is the fully-qualified name of the
 	// ProjectService's GetNodeProjectBackupKey RPC.
 	ProjectServiceGetNodeProjectBackupKeyProcedure = "/nagi.v1.ProjectService/GetNodeProjectBackupKey"
+	// ProjectServiceListNodeProjectRegistriesProcedure is the fully-qualified name of the
+	// ProjectService's ListNodeProjectRegistries RPC.
+	ProjectServiceListNodeProjectRegistriesProcedure = "/nagi.v1.ProjectService/ListNodeProjectRegistries"
+	// ProjectServiceCheckNodeProjectImagesProcedure is the fully-qualified name of the ProjectService's
+	// CheckNodeProjectImages RPC.
+	ProjectServiceCheckNodeProjectImagesProcedure = "/nagi.v1.ProjectService/CheckNodeProjectImages"
+	// ProjectServiceLoginNodeProjectRegistryProcedure is the fully-qualified name of the
+	// ProjectService's LoginNodeProjectRegistry RPC.
+	ProjectServiceLoginNodeProjectRegistryProcedure = "/nagi.v1.ProjectService/LoginNodeProjectRegistry"
+	// ProjectServiceLogoutNodeProjectRegistryProcedure is the fully-qualified name of the
+	// ProjectService's LogoutNodeProjectRegistry RPC.
+	ProjectServiceLogoutNodeProjectRegistryProcedure = "/nagi.v1.ProjectService/LogoutNodeProjectRegistry"
 	// ProjectServiceMigrateNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// MigrateNodeProject RPC.
 	ProjectServiceMigrateNodeProjectProcedure = "/nagi.v1.ProjectService/MigrateNodeProject"
@@ -480,6 +498,9 @@ type NodeServiceClient interface {
 	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 节点的镜像加速地址。
+	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
+	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -576,6 +597,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeMirrors: connect.NewClient[v1.ListNodeReplicasRequest, v1.Mirrors](
+			httpClient,
+			baseURL+NodeServiceGetNodeMirrorsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNodeMirrors")),
+			connect.WithClientOptions(opts...),
+		),
+		setNodeMirrors: connect.NewClient[v1.SetNodeMirrorsRequest, v1.Mirrors](
+			httpClient,
+			baseURL+NodeServiceSetNodeMirrorsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -612,6 +645,8 @@ type nodeServiceClient struct {
 	deleteNodeReplica        *connect.Client[v1.NodeProjectRef, v1.DeleteReplicaResponse]
 	listNodeFailovers        *connect.Client[v1.ListNodeReplicasRequest, v1.ListFailoversResponse]
 	confirmNodeTakeover      *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
+	getNodeMirrors           *connect.Client[v1.ListNodeReplicasRequest, v1.Mirrors]
+	setNodeMirrors           *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -682,6 +717,16 @@ func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, req *connec
 	return c.confirmNodeTakeover.CallUnary(ctx, req)
 }
 
+// GetNodeMirrors calls nagi.v1.NodeService.GetNodeMirrors.
+func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, req *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error) {
+	return c.getNodeMirrors.CallUnary(ctx, req)
+}
+
+// SetNodeMirrors calls nagi.v1.NodeService.SetNodeMirrors.
+func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, req *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
+	return c.setNodeMirrors.CallUnary(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -722,6 +767,9 @@ type NodeServiceHandler interface {
 	ListNodeFailovers(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.ListFailoversResponse], error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 节点的镜像加速地址。
+	GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error)
+	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -814,6 +862,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("ConfirmNodeTakeover")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceGetNodeMirrorsHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeMirrorsProcedure,
+		svc.GetNodeMirrors,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNodeMirrors")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceSetNodeMirrorsHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeMirrorsProcedure,
+		svc.SetNodeMirrors,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -860,6 +920,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListNodeFailoversHandler.ServeHTTP(w, r)
 		case NodeServiceConfirmNodeTakeoverProcedure:
 			nodeServiceConfirmNodeTakeoverHandler.ServeHTTP(w, r)
+		case NodeServiceGetNodeMirrorsProcedure:
+			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeMirrorsProcedure:
+			nodeServiceSetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -925,6 +989,14 @@ func (UnimplementedNodeServiceHandler) ListNodeFailovers(context.Context, *conne
 
 func (UnimplementedNodeServiceHandler) ConfirmNodeTakeover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ConfirmNodeTakeover is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.Request[v1.ListNodeReplicasRequest]) (*connect.Response[v1.Mirrors], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetNodeMirrors is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeMirrors is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -1360,6 +1432,12 @@ type ProjectServiceClient interface {
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error)
+	// 私有仓库认证：每个项目自己的登录信息。
+	ListNodeProjectRegistries(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.RegistriesResponse], error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckNodeProjectImages(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.CheckImagesResponse], error)
+	LoginNodeProjectRegistry(context.Context, *connect.Request[v1.LoginNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
+	LogoutNodeProjectRegistry(context.Context, *connect.Request[v1.LogoutNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
@@ -1493,6 +1571,30 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackupKey")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeProjectRegistries: connect.NewClient[v1.NodeProjectRef, v1.RegistriesResponse](
+			httpClient,
+			baseURL+ProjectServiceListNodeProjectRegistriesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectRegistries")),
+			connect.WithClientOptions(opts...),
+		),
+		checkNodeProjectImages: connect.NewClient[v1.NodeProjectRef, v1.CheckImagesResponse](
+			httpClient,
+			baseURL+ProjectServiceCheckNodeProjectImagesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CheckNodeProjectImages")),
+			connect.WithClientOptions(opts...),
+		),
+		loginNodeProjectRegistry: connect.NewClient[v1.LoginNodeProjectRegistryRequest, v1.RegistriesResponse](
+			httpClient,
+			baseURL+ProjectServiceLoginNodeProjectRegistryProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("LoginNodeProjectRegistry")),
+			connect.WithClientOptions(opts...),
+		),
+		logoutNodeProjectRegistry: connect.NewClient[v1.LogoutNodeProjectRegistryRequest, v1.RegistriesResponse](
+			httpClient,
+			baseURL+ProjectServiceLogoutNodeProjectRegistryProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("LogoutNodeProjectRegistry")),
+			connect.WithClientOptions(opts...),
+		),
 		migrateNodeProject: connect.NewClient[v1.MigrateNodeProjectRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceMigrateNodeProjectProcedure,
@@ -1535,6 +1637,10 @@ type projectServiceClient struct {
 	getNodeProjectBackup       *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	syncNodeProjectBackup      *connect.Client[v1.NodeProjectRef, v1.BackupStatus]
 	getNodeProjectBackupKey    *connect.Client[v1.NodeProjectRef, v1.GetNodeProjectBackupKeyResponse]
+	listNodeProjectRegistries  *connect.Client[v1.NodeProjectRef, v1.RegistriesResponse]
+	checkNodeProjectImages     *connect.Client[v1.NodeProjectRef, v1.CheckImagesResponse]
+	loginNodeProjectRegistry   *connect.Client[v1.LoginNodeProjectRegistryRequest, v1.RegistriesResponse]
+	logoutNodeProjectRegistry  *connect.Client[v1.LogoutNodeProjectRegistryRequest, v1.RegistriesResponse]
 	migrateNodeProject         *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
 	setNodeProjectFailover     *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
 	getNodeProjectFailover     *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
@@ -1635,6 +1741,26 @@ func (c *projectServiceClient) GetNodeProjectBackupKey(ctx context.Context, req 
 	return c.getNodeProjectBackupKey.CallUnary(ctx, req)
 }
 
+// ListNodeProjectRegistries calls nagi.v1.ProjectService.ListNodeProjectRegistries.
+func (c *projectServiceClient) ListNodeProjectRegistries(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.listNodeProjectRegistries.CallUnary(ctx, req)
+}
+
+// CheckNodeProjectImages calls nagi.v1.ProjectService.CheckNodeProjectImages.
+func (c *projectServiceClient) CheckNodeProjectImages(ctx context.Context, req *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.CheckImagesResponse], error) {
+	return c.checkNodeProjectImages.CallUnary(ctx, req)
+}
+
+// LoginNodeProjectRegistry calls nagi.v1.ProjectService.LoginNodeProjectRegistry.
+func (c *projectServiceClient) LoginNodeProjectRegistry(ctx context.Context, req *connect.Request[v1.LoginNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.loginNodeProjectRegistry.CallUnary(ctx, req)
+}
+
+// LogoutNodeProjectRegistry calls nagi.v1.ProjectService.LogoutNodeProjectRegistry.
+func (c *projectServiceClient) LogoutNodeProjectRegistry(ctx context.Context, req *connect.Request[v1.LogoutNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return c.logoutNodeProjectRegistry.CallUnary(ctx, req)
+}
+
 // MigrateNodeProject calls nagi.v1.ProjectService.MigrateNodeProject.
 func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, req *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.migrateNodeProject.CallServerStream(ctx, req)
@@ -1673,6 +1799,12 @@ type ProjectServiceHandler interface {
 	SyncNodeProjectBackup(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.BackupStatus], error)
 	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error)
+	// 私有仓库认证：每个项目自己的登录信息。
+	ListNodeProjectRegistries(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.RegistriesResponse], error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckNodeProjectImages(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.CheckImagesResponse], error)
+	LoginNodeProjectRegistry(context.Context, *connect.Request[v1.LoginNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
+	LogoutNodeProjectRegistry(context.Context, *connect.Request[v1.LogoutNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
@@ -1802,6 +1934,30 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("GetNodeProjectBackupKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceListNodeProjectRegistriesHandler := connect.NewUnaryHandler(
+		ProjectServiceListNodeProjectRegistriesProcedure,
+		svc.ListNodeProjectRegistries,
+		connect.WithSchema(projectServiceMethods.ByName("ListNodeProjectRegistries")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCheckNodeProjectImagesHandler := connect.NewUnaryHandler(
+		ProjectServiceCheckNodeProjectImagesProcedure,
+		svc.CheckNodeProjectImages,
+		connect.WithSchema(projectServiceMethods.ByName("CheckNodeProjectImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceLoginNodeProjectRegistryHandler := connect.NewUnaryHandler(
+		ProjectServiceLoginNodeProjectRegistryProcedure,
+		svc.LoginNodeProjectRegistry,
+		connect.WithSchema(projectServiceMethods.ByName("LoginNodeProjectRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceLogoutNodeProjectRegistryHandler := connect.NewUnaryHandler(
+		ProjectServiceLogoutNodeProjectRegistryProcedure,
+		svc.LogoutNodeProjectRegistry,
+		connect.WithSchema(projectServiceMethods.ByName("LogoutNodeProjectRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceMigrateNodeProjectHandler := connect.NewServerStreamHandler(
 		ProjectServiceMigrateNodeProjectProcedure,
 		svc.MigrateNodeProject,
@@ -1860,6 +2016,14 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSyncNodeProjectBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectBackupKeyProcedure:
 			projectServiceGetNodeProjectBackupKeyHandler.ServeHTTP(w, r)
+		case ProjectServiceListNodeProjectRegistriesProcedure:
+			projectServiceListNodeProjectRegistriesHandler.ServeHTTP(w, r)
+		case ProjectServiceCheckNodeProjectImagesProcedure:
+			projectServiceCheckNodeProjectImagesHandler.ServeHTTP(w, r)
+		case ProjectServiceLoginNodeProjectRegistryProcedure:
+			projectServiceLoginNodeProjectRegistryHandler.ServeHTTP(w, r)
+		case ProjectServiceLogoutNodeProjectRegistryProcedure:
+			projectServiceLogoutNodeProjectRegistryHandler.ServeHTTP(w, r)
 		case ProjectServiceMigrateNodeProjectProcedure:
 			projectServiceMigrateNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceSetNodeProjectFailoverProcedure:
@@ -1949,6 +2113,22 @@ func (UnimplementedProjectServiceHandler) SyncNodeProjectBackup(context.Context,
 
 func (UnimplementedProjectServiceHandler) GetNodeProjectBackupKey(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.GetNodeProjectBackupKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetNodeProjectBackupKey is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListNodeProjectRegistries(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListNodeProjectRegistries is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CheckNodeProjectImages(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.CheckImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CheckNodeProjectImages is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) LoginNodeProjectRegistry(context.Context, *connect.Request[v1.LoginNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.LoginNodeProjectRegistry is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) LogoutNodeProjectRegistry(context.Context, *connect.Request[v1.LogoutNodeProjectRegistryRequest]) (*connect.Response[v1.RegistriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.LogoutNodeProjectRegistry is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {

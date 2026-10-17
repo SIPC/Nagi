@@ -179,6 +179,17 @@ message ServiceStatus {
 
 message ProjectStatus {
   repeated ServiceStatus services = 1;
+  // 有新版本的镜像（每天检查一次）。
+  repeated ImageUpdate image_updates = 2;
+  google.protobuf.Timestamp images_checked_at = 3;
+}
+
+// ImageUpdate 是一个服务的镜像有新版本：标签没变，仓库里的摘要变了。
+message ImageUpdate {
+  string service = 1;
+  string image = 2;
+  string current_digest = 3;
+  string latest_digest = 4;
 }
 
 message ProjectSummary {

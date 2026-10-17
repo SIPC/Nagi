@@ -392,6 +392,8 @@ const (
 	NodeService_DeleteNodeReplica_FullMethodName        = "/nagi.v1.NodeService/DeleteNodeReplica"
 	NodeService_ListNodeFailovers_FullMethodName        = "/nagi.v1.NodeService/ListNodeFailovers"
 	NodeService_ConfirmNodeTakeover_FullMethodName      = "/nagi.v1.NodeService/ConfirmNodeTakeover"
+	NodeService_GetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/GetNodeMirrors"
+	NodeService_SetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName         = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName               = "/nagi.v1.NodeService/RemoveNode"
@@ -424,6 +426,9 @@ type NodeServiceClient interface {
 	ListNodeFailovers(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 节点的镜像加速地址。
+	GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error)
+	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -578,6 +583,26 @@ func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, in *NodePro
 	return out, nil
 }
 
+func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mirrors)
+	err := c.cc.Invoke(ctx, NodeService_GetNodeMirrors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Mirrors)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeMirrors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEnrollCommandResponse)
@@ -635,6 +660,9 @@ type NodeServiceServer interface {
 	ListNodeFailovers(context.Context, *ListNodeReplicasRequest) (*ListFailoversResponse, error)
 	// 在热备节点上确认顶替。
 	ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
+	// 节点的镜像加速地址。
+	GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error)
+	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -688,6 +716,12 @@ func (UnimplementedNodeServiceServer) ListNodeFailovers(context.Context, *ListNo
 }
 func (UnimplementedNodeServiceServer) ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfirmNodeTakeover not implemented")
+}
+func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeMirrors not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -946,6 +980,42 @@ func _NodeService_ConfirmNodeTakeover_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodeReplicasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).GetNodeMirrors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_GetNodeMirrors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).GetNodeMirrors(ctx, req.(*ListNodeReplicasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_SetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeMirrorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeMirrors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeMirrors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeMirrors(ctx, req.(*SetNodeMirrorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEnrollCommandRequest)
 	if err := dec(in); err != nil {
@@ -1054,6 +1124,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConfirmNodeTakeover",
 			Handler:    _NodeService_ConfirmNodeTakeover_Handler,
+		},
+		{
+			MethodName: "GetNodeMirrors",
+			Handler:    _NodeService_GetNodeMirrors_Handler,
+		},
+		{
+			MethodName: "SetNodeMirrors",
+			Handler:    _NodeService_SetNodeMirrors_Handler,
 		},
 		{
 			MethodName: "CreateEnrollCommand",
@@ -1672,6 +1750,10 @@ const (
 	ProjectService_GetNodeProjectBackup_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectBackup"
 	ProjectService_SyncNodeProjectBackup_FullMethodName      = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
 	ProjectService_GetNodeProjectBackupKey_FullMethodName    = "/nagi.v1.ProjectService/GetNodeProjectBackupKey"
+	ProjectService_ListNodeProjectRegistries_FullMethodName  = "/nagi.v1.ProjectService/ListNodeProjectRegistries"
+	ProjectService_CheckNodeProjectImages_FullMethodName     = "/nagi.v1.ProjectService/CheckNodeProjectImages"
+	ProjectService_LoginNodeProjectRegistry_FullMethodName   = "/nagi.v1.ProjectService/LoginNodeProjectRegistry"
+	ProjectService_LogoutNodeProjectRegistry_FullMethodName  = "/nagi.v1.ProjectService/LogoutNodeProjectRegistry"
 	ProjectService_MigrateNodeProject_FullMethodName         = "/nagi.v1.ProjectService/MigrateNodeProject"
 	ProjectService_SetNodeProjectFailover_FullMethodName     = "/nagi.v1.ProjectService/SetNodeProjectFailover"
 	ProjectService_GetNodeProjectFailover_FullMethodName     = "/nagi.v1.ProjectService/GetNodeProjectFailover"
@@ -1702,6 +1784,12 @@ type ProjectServiceClient interface {
 	SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
 	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetNodeProjectBackupKey(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*GetNodeProjectBackupKeyResponse, error)
+	// 私有仓库认证：每个项目自己的登录信息。
+	ListNodeProjectRegistries(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckNodeProjectImages(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
+	LoginNodeProjectRegistry(ctx context.Context, in *LoginNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	LogoutNodeProjectRegistry(ctx context.Context, in *LogoutNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
@@ -1953,6 +2041,46 @@ func (c *projectServiceClient) GetNodeProjectBackupKey(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *projectServiceClient) ListNodeProjectRegistries(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectRegistries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) CheckNodeProjectImages(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckImagesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_CheckNodeProjectImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) LoginNodeProjectRegistry(ctx context.Context, in *LoginNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_LoginNodeProjectRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) LogoutNodeProjectRegistry(ctx context.Context, in *LogoutNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_LogoutNodeProjectRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_MigrateNodeProject_FullMethodName, cOpts...)
@@ -2017,6 +2145,12 @@ type ProjectServiceServer interface {
 	SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
 	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error)
+	// 私有仓库认证：每个项目自己的登录信息。
+	ListNodeProjectRegistries(context.Context, *NodeProjectRef) (*RegistriesResponse, error)
+	// 立即检查项目的镜像有没有新版本。
+	CheckNodeProjectImages(context.Context, *NodeProjectRef) (*CheckImagesResponse, error)
+	LoginNodeProjectRegistry(context.Context, *LoginNodeProjectRegistryRequest) (*RegistriesResponse, error)
+	LogoutNodeProjectRegistry(context.Context, *LogoutNodeProjectRegistryRequest) (*RegistriesResponse, error)
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
@@ -2089,6 +2223,18 @@ func (UnimplementedProjectServiceServer) SyncNodeProjectBackup(context.Context, 
 }
 func (UnimplementedProjectServiceServer) GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectBackupKey not implemented")
+}
+func (UnimplementedProjectServiceServer) ListNodeProjectRegistries(context.Context, *NodeProjectRef) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectRegistries not implemented")
+}
+func (UnimplementedProjectServiceServer) CheckNodeProjectImages(context.Context, *NodeProjectRef) (*CheckImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckNodeProjectImages not implemented")
+}
+func (UnimplementedProjectServiceServer) LoginNodeProjectRegistry(context.Context, *LoginNodeProjectRegistryRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LoginNodeProjectRegistry not implemented")
+}
+func (UnimplementedProjectServiceServer) LogoutNodeProjectRegistry(context.Context, *LogoutNodeProjectRegistryRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogoutNodeProjectRegistry not implemented")
 }
 func (UnimplementedProjectServiceServer) MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method MigrateNodeProject not implemented")
@@ -2427,6 +2573,78 @@ func _ProjectService_GetNodeProjectBackupKey_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_ListNodeProjectRegistries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListNodeProjectRegistries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListNodeProjectRegistries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListNodeProjectRegistries(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_CheckNodeProjectImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeProjectRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).CheckNodeProjectImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_CheckNodeProjectImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).CheckNodeProjectImages(ctx, req.(*NodeProjectRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_LoginNodeProjectRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginNodeProjectRegistryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).LoginNodeProjectRegistry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_LoginNodeProjectRegistry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).LoginNodeProjectRegistry(ctx, req.(*LoginNodeProjectRegistryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_LogoutNodeProjectRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogoutNodeProjectRegistryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).LogoutNodeProjectRegistry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_LogoutNodeProjectRegistry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).LogoutNodeProjectRegistry(ctx, req.(*LogoutNodeProjectRegistryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_MigrateNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(MigrateNodeProjectRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -2536,6 +2754,22 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeProjectBackupKey",
 			Handler:    _ProjectService_GetNodeProjectBackupKey_Handler,
+		},
+		{
+			MethodName: "ListNodeProjectRegistries",
+			Handler:    _ProjectService_ListNodeProjectRegistries_Handler,
+		},
+		{
+			MethodName: "CheckNodeProjectImages",
+			Handler:    _ProjectService_CheckNodeProjectImages_Handler,
+		},
+		{
+			MethodName: "LoginNodeProjectRegistry",
+			Handler:    _ProjectService_LoginNodeProjectRegistry_Handler,
+		},
+		{
+			MethodName: "LogoutNodeProjectRegistry",
+			Handler:    _ProjectService_LogoutNodeProjectRegistry_Handler,
 		},
 		{
 			MethodName: "SetNodeProjectFailover",

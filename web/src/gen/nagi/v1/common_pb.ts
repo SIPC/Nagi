@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/common.proto.
  */
 export const file_nagi_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIi6gEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXISEQoJbWVtb3J5X21iGAcgASgNEgwKBGNwdXMYCCABKAESFgoOaGVhbHRoX2NvbW1hbmQYCSABKAkSHwoXaGVhbHRoX2ludGVydmFsX3NlY29uZHMYCiABKA0iQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkiOQoNUHJvamVjdFN0YXR1cxIoCghzZXJ2aWNlcxgBIAMoCzIWLm5hZ2kudjEuU2VydmljZVN0YXR1cyJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIImIKCE1lc2hQZWVyEhIKCnB1YmxpY19rZXkYASABKAwSEQoJZW5kcG9pbnRzGAIgAygJEgwKBG5hbWUYAyABKAkSDwoHbm9kZV9pZBgEIAEoCRIQCghpc19wYW5lbBgFIAEoCCLYAQoOTWVzaFBlZXJTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIMCgRuYW1lGAIgASgJEg8KB2FkZHJlc3MYAyABKAkSDAoEcGF0aBgEIAEoCRIQCghlbmRwb2ludBgFIAEoCRILCgN2aWEYBiABKAkSDgoGcnR0X21zGAcgASgBEjIKDmxhc3RfaGFuZHNoYWtlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyeF9ieXRlcxgJIAEoBBIQCgh0eF9ieXRlcxgKIAEoBCJ6CgpNZXNoU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEhEKCWVuZHBvaW50cxgEIAMoCRImCgVwZWVycxgFIAMoCzIXLm5hZ2kudjEuTWVzaFBlZXJTdGF0dXMiJQoPTWVzaFBpbmdSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAwiIgoQTWVzaFBpbmdSZXNwb25zZRIOCgZydHRfbXMYASABKAEijwEKDEJhY2t1cFN0YXR1cxIWCg50YXJnZXRfbm9kZV9pZBgBIAEoCRITCgt0YXJnZXRfbmFtZRgCIAEoCRItCglsYXN0X3N5bmMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhIKCmxhc3RfZXJyb3IYBCABKAkSDwoHc3luY2luZxgFIAEoCCKeAQoHUmVwbGljYRISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIWCg5zb3VyY2Vfbm9kZV9pZBgDIAEoCRITCgtzb3VyY2VfbmFtZRgEIAEoCRItCglsYXN0X3N5bmMYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWJ5dGVzGAYgASgDIkkKDkZhaWxvdmVyTWVtYmVyEgsKA2tleRgBIAEoDBIPCgdub2RlX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSCwoDZGlyGAQgASgJIvQBCg5GYWlsb3ZlckNvbmZpZxISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIiCgFhGAMgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIiCgFiGAQgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIoCgd3aXRuZXNzGAUgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIYChB3aXRuZXNzX2lzX3BhbmVsGAYgASgIEhUKDWxlYXNlX3NlY29uZHMYByABKA0SFQoNYXV0b19zdGF0ZWZ1bBgIIAEoCCL1AQoORmFpbG92ZXJTdGF0dXMSJwoGY29uZmlnGAEgASgLMhcubmFnaS52MS5GYWlsb3ZlckNvbmZpZxIMCgRyb2xlGAIgASgJEhMKC2hvbGRlcl9uYW1lGAMgASgJEg0KBWVwb2NoGAQgASgEEhoKEmxlYXNlX3JlbWFpbmluZ19tcxgFIAEoAxIXCg9wZW5kaW5nX2NvbmZpcm0YBiABKAgSLQoJbGFzdF9zeW5jGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpsYXN0X2Vycm9yGAggASgJEhAKCHN0YXRlZnVsGAkgASgIKkAKCFN0YXRlZnVsEhEKDVNUQVRFRlVMX0FVVE8QABIQCgxTVEFURUZVTF9ZRVMQARIPCgtTVEFURUZVTF9OTxACQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRuYWdpL3YxL2NvbW1vbi5wcm90bxIHbmFnaS52MSKBAwoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgsKA2RpchgDIAEoCRIQCghyZXZpc2lvbhgEIAEoAxIWCg5sYXRlc3RfdmVyc2lvbhgFIAEoAxIYChBkZXBsb3llZF92ZXJzaW9uGAYgASgDEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKBmNvbmZpZxgJIAEoCzIWLm5hZ2kudjEuUHJvamVjdENvbmZpZxIRCgloYXNfZHJhZnQYCiABKAgSJQoFZHJhZnQYCyABKAsyFi5uYWdpLnYxLlByb2plY3RDb25maWcSEgoKZGVwbG95X2tleRgMIAEoCRIVCg13ZWJob29rX3Rva2VuGA0gASgJEhMKC2xhc3RfY29tbWl0GA4gASgJEiEKBnJvdXRlcxgPIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUSEAoIc3RhdGVmdWwYECABKAhKBAgHEAgi4wIKDVByb2plY3RDb25maWcSDwoHY29tcG9zZRgBIAEoCRIcCgNlbnYYAiADKAsyDy5uYWdpLnYxLkVudlZhchI7CgtzZXJ2aWNlX2VudhgDIAMoCzImLm5hZ2kudjEuUHJvamVjdENvbmZpZy5TZXJ2aWNlRW52RW50cnkSIAoEZm9ybRgEIAEoCzISLm5hZ2kudjEuSW1hZ2VGb3JtEh8KBnNvdXJjZRgGIAEoCzIPLm5hZ2kudjEuU291cmNlEhAKCHByZXNlcnZlGAcgAygJEiMKCHN0YXRlZnVsGAggASgOMhEubmFnaS52MS5TdGF0ZWZ1bBIhChlzbmFwc2hvdF9pbnRlcnZhbF9taW51dGVzGAkgASgNGkMKD1NlcnZpY2VFbnZFbnRyeRILCgNrZXkYASABKAkSHwoFdmFsdWUYAiABKAsyEC5uYWdpLnYxLkVudkxpc3Q6AjgBSgQIBRAGIpACCgdWZXJzaW9uEg8KB3ZlcnNpb24YASABKAMSLgoKY3JlYXRlZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZGVwbG95ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBmltYWdlcxgEIAMoCzIcLm5hZ2kudjEuVmVyc2lvbi5JbWFnZXNFbnRyeRIRCgloYXNfZmlsZXMYBSABKAgSEwoLcm9sbGJhY2tfb2YYBiABKAMSDgoGY29tbWl0GAcgASgJGi0KC0ltYWdlc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibQoIU25hcHNob3QSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIoCgR0aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRzaXplGAQgASgDEg8KB3ZlcnNpb24YBSABKAMiKgoGU291cmNlEg8KB2dpdF91cmwYASABKAkSDwoHZ2l0X3JlZhgCIAEoCSKRAQoIRXhwb3N1cmUSDwoHc2VydmljZRgBIAEoCRIOCgZ0YXJnZXQYAiABKA0SEAoIcHJvdG9jb2wYAyABKAkSEQoJcHVibGlzaGVkGAQgASgNEg8KB2RvbWFpbnMYBSADKAkSEQoJaHR0cF9vbmx5GAYgASgIEgwKBG5hbWUYByABKAkSDQoFZXJyb3IYCCABKAkiNAoGRW52VmFyEgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIOCgZzZWNyZXQYAyABKAgiKAoHRW52TGlzdBIdCgR2YXJzGAEgAygLMg8ubmFnaS52MS5FbnZWYXIi6gEKCUltYWdlRm9ybRINCgVpbWFnZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEiMKBXBvcnRzGAMgAygLMhQubmFnaS52MS5Qb3J0TWFwcGluZxIPCgd2b2x1bWVzGAQgAygJEg8KB3dvcmtkaXIYBSABKAkSHAoDZW52GAYgAygLMg8ubmFnaS52MS5FbnZWYXISEQoJbWVtb3J5X21iGAcgASgNEgwKBGNwdXMYCCABKAESFgoOaGVhbHRoX2NvbW1hbmQYCSABKAkSHwoXaGVhbHRoX2ludGVydmFsX3NlY29uZHMYCiABKA0iQgoLUG9ydE1hcHBpbmcSEQoJcHVibGlzaGVkGAEgASgNEg4KBnRhcmdldBgCIAEoDRIQCghwcm90b2NvbBgDIAEoCSJxCg1TZXJ2aWNlU3RhdHVzEgwKBG5hbWUYASABKAkSFAoMY29udGFpbmVyX2lkGAIgASgJEg0KBWltYWdlGAMgASgJEg0KBXN0YXRlGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIOCgZoZWFsdGgYBiABKAkinQEKDVByb2plY3RTdGF0dXMSKAoIc2VydmljZXMYASADKAsyFi5uYWdpLnYxLlNlcnZpY2VTdGF0dXMSKwoNaW1hZ2VfdXBkYXRlcxgCIAMoCzIULm5hZ2kudjEuSW1hZ2VVcGRhdGUSNQoRaW1hZ2VzX2NoZWNrZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlwKC0ltYWdlVXBkYXRlEg8KB3NlcnZpY2UYASABKAkSDQoFaW1hZ2UYAiABKAkSFgoOY3VycmVudF9kaWdlc3QYAyABKAkSFQoNbGF0ZXN0X2RpZ2VzdBgEIAEoCSJbCg5Qcm9qZWN0U3VtbWFyeRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0EiYKBnN0YXR1cxgCIAEoCzIWLm5hZ2kudjEuUHJvamVjdFN0YXR1cyJ4CghOb2RlSW5mbxIQCghob3N0bmFtZRgBIAEoCRIKCgJvcxgCIAEoCRIMCgRhcmNoGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSFgoOZG9ja2VyX3ZlcnNpb24YBSABKAkSFwoPY29tcG9zZV92ZXJzaW9uGAYgASgJImIKB0xvZ0xpbmUSDwoHc2VydmljZRgBIAEoCRIOCgZzdHJlYW0YAiABKAkSDAoEdGV4dBgDIAEoCRIoCgR0aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgtEZXBsb3lFdmVudBIQCgZvdXRwdXQYASABKAlIABInCgZyZXN1bHQYAiABKAsyFS5uYWdpLnYxLkRlcGxveVJlc3VsdEgAQgcKBWV2ZW50Ij8KDERlcGxveVJlc3VsdBIPCgdzdWNjZXNzGAEgASgIEg0KBWVycm9yGAIgASgJEg8KB3ZlcnNpb24YAyABKAMiOwoMTWV0cmljU2VyaWVzEgwKBG5hbWUYASABKAkSDQoFdGltZXMYAiADKAMSDgoGdmFsdWVzGAMgAygBInUKDEFsZXJ0Q2hhbm5lbBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHR5cGUYAyABKAkSCwoDdXJsGAQgASgJEhYKDnRlbGVncmFtX3Rva2VuGAUgASgJEhgKEHRlbGVncmFtX2NoYXRfaWQYBiABKAkivwEKCkFsZXJ0UnVsZXMSFAoMZGlza19wZXJjZW50GAEgASgNEhMKC21lbV9wZXJjZW50GAIgASgNEhMKC21lbV9taW51dGVzGAMgASgNEhUKDXJlc3RhcnRfY291bnQYBCABKA0SFwoPcmVzdGFydF9taW51dGVzGAUgASgNEhEKCWNlcnRfZGF5cxgGIAEoDRIXCg9vZmZsaW5lX3NlY29uZHMYByABKA0SFQoNZXJyb3JfcGVyY2VudBgIIAEoDSJaCgtBbGVydENvbmZpZxInCghjaGFubmVscxgBIAMoCzIVLm5hZ2kudjEuQWxlcnRDaGFubmVsEiIKBXJ1bGVzGAIgASgLMhMubmFnaS52MS5BbGVydFJ1bGVzIo0BCgVBbGVydBILCgNrZXkYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXRpdGxlGAMgASgJEg8KB21lc3NhZ2UYBCABKAkSDAoEbm9kZRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEigKBHRpbWUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlgKDFRydXN0ZWRQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJEhEKCWNvbm5lY3RlZBgDIAEoCBIPCgdpc19zZWxmGAQgASgIImIKCE1lc2hQZWVyEhIKCnB1YmxpY19rZXkYASABKAwSEQoJZW5kcG9pbnRzGAIgAygJEgwKBG5hbWUYAyABKAkSDwoHbm9kZV9pZBgEIAEoCRIQCghpc19wYW5lbBgFIAEoCCLYAQoOTWVzaFBlZXJTdGF0dXMSEgoKcHVibGljX2tleRgBIAEoDBIMCgRuYW1lGAIgASgJEg8KB2FkZHJlc3MYAyABKAkSDAoEcGF0aBgEIAEoCRIQCghlbmRwb2ludBgFIAEoCRILCgN2aWEYBiABKAkSDgoGcnR0X21zGAcgASgBEjIKDmxhc3RfaGFuZHNoYWtlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyeF9ieXRlcxgJIAEoBBIQCgh0eF9ieXRlcxgKIAEoBCJ6CgpNZXNoU3RhdHVzEhIKCnB1YmxpY19rZXkYASABKAwSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEhEKCWVuZHBvaW50cxgEIAMoCRImCgVwZWVycxgFIAMoCzIXLm5hZ2kudjEuTWVzaFBlZXJTdGF0dXMiJQoPTWVzaFBpbmdSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAwiIgoQTWVzaFBpbmdSZXNwb25zZRIOCgZydHRfbXMYASABKAEijwEKDEJhY2t1cFN0YXR1cxIWCg50YXJnZXRfbm9kZV9pZBgBIAEoCRITCgt0YXJnZXRfbmFtZRgCIAEoCRItCglsYXN0X3N5bmMYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhIKCmxhc3RfZXJyb3IYBCABKAkSDwoHc3luY2luZxgFIAEoCCKeAQoHUmVwbGljYRISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIWCg5zb3VyY2Vfbm9kZV9pZBgDIAEoCRITCgtzb3VyY2VfbmFtZRgEIAEoCRItCglsYXN0X3N5bmMYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWJ5dGVzGAYgASgDIkkKDkZhaWxvdmVyTWVtYmVyEgsKA2tleRgBIAEoDBIPCgdub2RlX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSCwoDZGlyGAQgASgJIvQBCg5GYWlsb3ZlckNvbmZpZxISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRIiCgFhGAMgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIiCgFiGAQgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIoCgd3aXRuZXNzGAUgASgLMhcubmFnaS52MS5GYWlsb3Zlck1lbWJlchIYChB3aXRuZXNzX2lzX3BhbmVsGAYgASgIEhUKDWxlYXNlX3NlY29uZHMYByABKA0SFQoNYXV0b19zdGF0ZWZ1bBgIIAEoCCL1AQoORmFpbG92ZXJTdGF0dXMSJwoGY29uZmlnGAEgASgLMhcubmFnaS52MS5GYWlsb3ZlckNvbmZpZxIMCgRyb2xlGAIgASgJEhMKC2hvbGRlcl9uYW1lGAMgASgJEg0KBWVwb2NoGAQgASgEEhoKEmxlYXNlX3JlbWFpbmluZ19tcxgFIAEoAxIXCg9wZW5kaW5nX2NvbmZpcm0YBiABKAgSLQoJbGFzdF9zeW5jGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpsYXN0X2Vycm9yGAggASgJEhAKCHN0YXRlZnVsGAkgASgIKkAKCFN0YXRlZnVsEhEKDVNUQVRFRlVMX0FVVE8QABIQCgxTVEFURUZVTF9ZRVMQARIPCgtTVEFURUZVTF9OTxACQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Project 是节点上保存的项目。项目数据以节点为准。
@@ -614,6 +614,18 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
    * @generated from field: repeated nagi.v1.ServiceStatus services = 1;
    */
   services: ServiceStatus[];
+
+  /**
+   * 有新版本的镜像（每天检查一次）。
+   *
+   * @generated from field: repeated nagi.v1.ImageUpdate image_updates = 2;
+   */
+  imageUpdates: ImageUpdate[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp images_checked_at = 3;
+   */
+  imagesCheckedAt?: Timestamp | undefined;
 };
 
 /**
@@ -622,6 +634,40 @@ export type ProjectStatus = Message<"nagi.v1.ProjectStatus"> & {
  */
 export const ProjectStatusSchema: GenMessage<ProjectStatus> = /*@__PURE__*/
   messageDesc(file_nagi_v1_common, 11);
+
+/**
+ * ImageUpdate 是一个服务的镜像有新版本：标签没变，仓库里的摘要变了。
+ *
+ * @generated from message nagi.v1.ImageUpdate
+ */
+export type ImageUpdate = Message<"nagi.v1.ImageUpdate"> & {
+  /**
+   * @generated from field: string service = 1;
+   */
+  service: string;
+
+  /**
+   * @generated from field: string image = 2;
+   */
+  image: string;
+
+  /**
+   * @generated from field: string current_digest = 3;
+   */
+  currentDigest: string;
+
+  /**
+   * @generated from field: string latest_digest = 4;
+   */
+  latestDigest: string;
+};
+
+/**
+ * Describes the message nagi.v1.ImageUpdate.
+ * Use `create(ImageUpdateSchema)` to create a new message.
+ */
+export const ImageUpdateSchema: GenMessage<ImageUpdate> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_common, 12);
 
 /**
  * @generated from message nagi.v1.ProjectSummary
@@ -643,7 +689,7 @@ export type ProjectSummary = Message<"nagi.v1.ProjectSummary"> & {
  * Use `create(ProjectSummarySchema)` to create a new message.
  */
 export const ProjectSummarySchema: GenMessage<ProjectSummary> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 12);
+  messageDesc(file_nagi_v1_common, 13);
 
 /**
  * @generated from message nagi.v1.NodeInfo
@@ -685,7 +731,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
  * Use `create(NodeInfoSchema)` to create a new message.
  */
 export const NodeInfoSchema: GenMessage<NodeInfo> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 13);
+  messageDesc(file_nagi_v1_common, 14);
 
 /**
  * @generated from message nagi.v1.LogLine
@@ -719,7 +765,7 @@ export type LogLine = Message<"nagi.v1.LogLine"> & {
  * Use `create(LogLineSchema)` to create a new message.
  */
 export const LogLineSchema: GenMessage<LogLine> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 14);
+  messageDesc(file_nagi_v1_common, 15);
 
 /**
  * @generated from message nagi.v1.DeployEvent
@@ -750,7 +796,7 @@ export type DeployEvent = Message<"nagi.v1.DeployEvent"> & {
  * Use `create(DeployEventSchema)` to create a new message.
  */
 export const DeployEventSchema: GenMessage<DeployEvent> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 15);
+  messageDesc(file_nagi_v1_common, 16);
 
 /**
  * @generated from message nagi.v1.DeployResult
@@ -777,7 +823,7 @@ export type DeployResult = Message<"nagi.v1.DeployResult"> & {
  * Use `create(DeployResultSchema)` to create a new message.
  */
 export const DeployResultSchema: GenMessage<DeployResult> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 16);
+  messageDesc(file_nagi_v1_common, 17);
 
 /**
  * MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
@@ -806,7 +852,7 @@ export type MetricSeries = Message<"nagi.v1.MetricSeries"> & {
  * Use `create(MetricSeriesSchema)` to create a new message.
  */
 export const MetricSeriesSchema: GenMessage<MetricSeries> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 17);
+  messageDesc(file_nagi_v1_common, 18);
 
 /**
  * AlertChannel 是一个告警渠道。
@@ -856,7 +902,7 @@ export type AlertChannel = Message<"nagi.v1.AlertChannel"> & {
  * Use `create(AlertChannelSchema)` to create a new message.
  */
 export const AlertChannelSchema: GenMessage<AlertChannel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 18);
+  messageDesc(file_nagi_v1_common, 19);
 
 /**
  * AlertRules 是告警规则的阈值，0 表示用默认值。
@@ -922,7 +968,7 @@ export type AlertRules = Message<"nagi.v1.AlertRules"> & {
  * Use `create(AlertRulesSchema)` to create a new message.
  */
 export const AlertRulesSchema: GenMessage<AlertRules> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 19);
+  messageDesc(file_nagi_v1_common, 20);
 
 /**
  * @generated from message nagi.v1.AlertConfig
@@ -944,7 +990,7 @@ export type AlertConfig = Message<"nagi.v1.AlertConfig"> & {
  * Use `create(AlertConfigSchema)` to create a new message.
  */
 export const AlertConfigSchema: GenMessage<AlertConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 20);
+  messageDesc(file_nagi_v1_common, 21);
 
 /**
  * Alert 是一条告警或恢复通知。
@@ -997,7 +1043,7 @@ export type Alert = Message<"nagi.v1.Alert"> & {
  * Use `create(AlertSchema)` to create a new message.
  */
 export const AlertSchema: GenMessage<Alert> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 21);
+  messageDesc(file_nagi_v1_common, 22);
 
 /**
  * TrustedPanel 是节点信任列表里的一个面板。
@@ -1035,7 +1081,7 @@ export type TrustedPanel = Message<"nagi.v1.TrustedPanel"> & {
  * Use `create(TrustedPanelSchema)` to create a new message.
  */
 export const TrustedPanelSchema: GenMessage<TrustedPanel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 22);
+  messageDesc(file_nagi_v1_common, 23);
 
 /**
  * MeshPeer 是面板告诉节点的一个 mesh 成员。
@@ -1078,7 +1124,7 @@ export type MeshPeer = Message<"nagi.v1.MeshPeer"> & {
  * Use `create(MeshPeerSchema)` to create a new message.
  */
 export const MeshPeerSchema: GenMessage<MeshPeer> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 23);
+  messageDesc(file_nagi_v1_common, 24);
 
 /**
  * MeshPeerStatus 是到一个 mesh 成员的连接状态。
@@ -1150,7 +1196,7 @@ export type MeshPeerStatus = Message<"nagi.v1.MeshPeerStatus"> & {
  * Use `create(MeshPeerStatusSchema)` to create a new message.
  */
 export const MeshPeerStatusSchema: GenMessage<MeshPeerStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 24);
+  messageDesc(file_nagi_v1_common, 25);
 
 /**
  * @generated from message nagi.v1.MeshStatus
@@ -1187,7 +1233,7 @@ export type MeshStatus = Message<"nagi.v1.MeshStatus"> & {
  * Use `create(MeshStatusSchema)` to create a new message.
  */
 export const MeshStatusSchema: GenMessage<MeshStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 25);
+  messageDesc(file_nagi_v1_common, 26);
 
 /**
  * @generated from message nagi.v1.MeshPingRequest
@@ -1204,7 +1250,7 @@ export type MeshPingRequest = Message<"nagi.v1.MeshPingRequest"> & {
  * Use `create(MeshPingRequestSchema)` to create a new message.
  */
 export const MeshPingRequestSchema: GenMessage<MeshPingRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 26);
+  messageDesc(file_nagi_v1_common, 27);
 
 /**
  * @generated from message nagi.v1.MeshPingResponse
@@ -1221,7 +1267,7 @@ export type MeshPingResponse = Message<"nagi.v1.MeshPingResponse"> & {
  * Use `create(MeshPingResponseSchema)` to create a new message.
  */
 export const MeshPingResponseSchema: GenMessage<MeshPingResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 27);
+  messageDesc(file_nagi_v1_common, 28);
 
 /**
  * BackupStatus 是项目同步到备份节点的状态（在源节点上）。
@@ -1266,7 +1312,7 @@ export type BackupStatus = Message<"nagi.v1.BackupStatus"> & {
  * Use `create(BackupStatusSchema)` to create a new message.
  */
 export const BackupStatusSchema: GenMessage<BackupStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 28);
+  messageDesc(file_nagi_v1_common, 29);
 
 /**
  * Replica 是备份节点上保存的一个项目副本。
@@ -1310,7 +1356,7 @@ export type Replica = Message<"nagi.v1.Replica"> & {
  * Use `create(ReplicaSchema)` to create a new message.
  */
 export const ReplicaSchema: GenMessage<Replica> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 29);
+  messageDesc(file_nagi_v1_common, 30);
 
 /**
  * FailoverMember 是顶替设置里的一个参与者。
@@ -1350,7 +1396,7 @@ export type FailoverMember = Message<"nagi.v1.FailoverMember"> & {
  * Use `create(FailoverMemberSchema)` to create a new message.
  */
 export const FailoverMemberSchema: GenMessage<FailoverMember> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 30);
+  messageDesc(file_nagi_v1_common, 31);
 
 /**
  * FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
@@ -1412,7 +1458,7 @@ export type FailoverConfig = Message<"nagi.v1.FailoverConfig"> & {
  * Use `create(FailoverConfigSchema)` to create a new message.
  */
 export const FailoverConfigSchema: GenMessage<FailoverConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 31);
+  messageDesc(file_nagi_v1_common, 32);
 
 /**
  * FailoverStatus 是某个参与者看到的顶替状态。
@@ -1481,7 +1527,7 @@ export type FailoverStatus = Message<"nagi.v1.FailoverStatus"> & {
  * Use `create(FailoverStatusSchema)` to create a new message.
  */
 export const FailoverStatusSchema: GenMessage<FailoverStatus> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_common, 32);
+  messageDesc(file_nagi_v1_common, 33);
 
 /**
  * @generated from enum nagi.v1.Stateful
