@@ -809,9 +809,17 @@ type ImageForm struct {
 	// 把项目的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
 	Workdir string `protobuf:"bytes,5,opt,name=workdir,proto3" json:"workdir,omitempty"`
 	// 环境变量，直接注入容器。
-	Env           []*EnvVar `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Env []*EnvVar `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty"`
+	// 内存上限（MB），0 表示不限制。
+	MemoryMb uint32 `protobuf:"varint,7,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	// CPU 上限（核数，可以是小数，例如 0.5），0 表示不限制。
+	Cpus float64 `protobuf:"fixed64,8,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	// 健康检查命令（在容器里用 sh -c 执行，退出码 0 表示健康），为空表示不检查。
+	HealthCommand string `protobuf:"bytes,9,opt,name=health_command,json=healthCommand,proto3" json:"health_command,omitempty"`
+	// 健康检查间隔（秒），0 表示默认 30 秒。
+	HealthIntervalSeconds uint32 `protobuf:"varint,10,opt,name=health_interval_seconds,json=healthIntervalSeconds,proto3" json:"health_interval_seconds,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ImageForm) Reset() {
@@ -884,6 +892,34 @@ func (x *ImageForm) GetEnv() []*EnvVar {
 		return x.Env
 	}
 	return nil
+}
+
+func (x *ImageForm) GetMemoryMb() uint32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+func (x *ImageForm) GetCpus() float64 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *ImageForm) GetHealthCommand() string {
+	if x != nil {
+		return x.HealthCommand
+	}
+	return ""
+}
+
+func (x *ImageForm) GetHealthIntervalSeconds() uint32 {
+	if x != nil {
+		return x.HealthIntervalSeconds
+	}
+	return 0
 }
 
 type PortMapping struct {
@@ -2797,14 +2833,19 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
 	"\x06secret\x18\x03 \x01(\bR\x06secret\".\n" +
 	"\aEnvList\x12#\n" +
-	"\x04vars\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\x04vars\"\xbe\x01\n" +
+	"\x04vars\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\x04vars\"\xce\x02\n" +
 	"\tImageForm\x12\x14\n" +
 	"\x05image\x18\x01 \x01(\tR\x05image\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12*\n" +
 	"\x05ports\x18\x03 \x03(\v2\x14.nagi.v1.PortMappingR\x05ports\x12\x18\n" +
 	"\avolumes\x18\x04 \x03(\tR\avolumes\x12\x18\n" +
 	"\aworkdir\x18\x05 \x01(\tR\aworkdir\x12!\n" +
-	"\x03env\x18\x06 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\"_\n" +
+	"\x03env\x18\x06 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12\x1b\n" +
+	"\tmemory_mb\x18\a \x01(\rR\bmemoryMb\x12\x12\n" +
+	"\x04cpus\x18\b \x01(\x01R\x04cpus\x12%\n" +
+	"\x0ehealth_command\x18\t \x01(\tR\rhealthCommand\x126\n" +
+	"\x17health_interval_seconds\x18\n" +
+	" \x01(\rR\x15healthIntervalSeconds\"_\n" +
 	"\vPortMapping\x12\x1c\n" +
 	"\tpublished\x18\x01 \x01(\rR\tpublished\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +

@@ -418,6 +418,10 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 				continue
 			}
 			r := &nagiv1.Exposure{Service: name, Target: port.Target, Protocol: proto, Published: uint32(published)}
+			guessed := false
+			if proto == ProtoTCP && (strings.EqualFold(port.AppProtocol, "http") || (port.AppProtocol == "" && likelyHTTP(port.Target))) {
+				r.Protocol, guessed = ProtoHTTP, port.AppProtocol == ""
+			}
 			if err := checkRoute(r); err != nil {
 				onLine(fmt.Sprintf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err))
 				continue
@@ -430,7 +434,11 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 			if err := writeRoute(p, r); err != nil {
 				return err
 			}
-			onLine("已从 compose 导入映射：" + routeLabel(r))
+			if guessed {
+				onLine("已从 compose 导入映射：" + routeLabel(r) + "（按端口猜测是网站，按 HTTP 开放；不是的话在映射里改成 TCP）")
+			} else {
+				onLine("已从 compose 导入映射：" + routeLabel(r))
+			}
 		}
 	}
 	if !changed {
@@ -444,6 +452,13 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 	data, _ := json.Marshal(list)
 	return pdb.setMeta(ctx, metaImportedPorts, string(data))
 }
+
+// httpPorts 是常见的网站端口（容器内）。9000（php-fpm 等）、443（容器内一般是 HTTPS）不算。
+var httpPorts = map[uint32]bool{80: true, 8000: true, 8080: true, 8081: true, 8888: true, 3000: true, 3001: true,
+	4000: true, 5000: true, 5173: true, 8096: true}
+
+// likelyHTTP 判断容器端口是不是网站。导入 compose 端口时用：网站按 HTTP 开放，可以统计请求、绑定域名。
+func likelyHTTP(target uint32) bool { return httpPorts[target] }
 
 // routeLabel 用于日志，例如 web:80 → example.com、web:80 → tcp/8080。
 func routeLabel(r *nagiv1.Exposure) string {

@@ -94,6 +94,27 @@ func formCompose(f *nagiv1.ImageForm) (string, error) {
 	if len(mounts) > 0 {
 		svc["volumes"] = mounts
 	}
+	if mb := f.GetMemoryMb(); mb > 0 {
+		svc["mem_limit"] = fmt.Sprintf("%dm", mb)
+	}
+	if c := f.GetCpus(); c < 0 || c > 1024 {
+		return "", invalid("CPU 上限不对")
+	} else if c > 0 {
+		svc["cpus"] = c
+	}
+	if hc := strings.TrimSpace(f.GetHealthCommand()); hc != "" {
+		interval := f.GetHealthIntervalSeconds()
+		if interval == 0 {
+			interval = 30
+		}
+		svc["healthcheck"] = map[string]any{
+			"test":         []string{"CMD-SHELL", hc},
+			"interval":     fmt.Sprintf("%ds", interval),
+			"timeout":      fmt.Sprintf("%ds", min(interval, 10)),
+			"retries":      3,
+			"start_period": fmt.Sprintf("%ds", interval),
+		}
+	}
 
 	doc := map[string]any{"services": map[string]any{formService: svc}}
 	if len(volumes) > 0 {

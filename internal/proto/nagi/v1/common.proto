@@ -146,6 +146,14 @@ message ImageForm {
   string workdir = 5;
   // 环境变量，直接注入容器。
   repeated EnvVar env = 6;
+  // 内存上限（MB），0 表示不限制。
+  uint32 memory_mb = 7;
+  // CPU 上限（核数，可以是小数，例如 0.5），0 表示不限制。
+  double cpus = 8;
+  // 健康检查命令（在容器里用 sh -c 执行，退出码 0 表示健康），为空表示不检查。
+  string health_command = 9;
+  // 健康检查间隔（秒），0 表示默认 30 秒。
+  uint32 health_interval_seconds = 10;
 }
 
 message PortMapping {
