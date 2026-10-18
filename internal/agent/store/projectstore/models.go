@@ -8,24 +8,7 @@ import (
 	"database/sql"
 )
 
-type Deployment struct {
-	ID        int64
-	CreatedAt int64
-	Source    string
-	Members   string
-	Versions  string
-	Success   int64
-	Error     string
-	RestoreOf int64
-}
-
-type Draft struct {
-	Member    string
-	Config    []byte
-	UpdatedAt int64
-}
-
-type Member struct {
+type Container struct {
 	Name            string
 	Position        int64
 	CreatedAt       int64
@@ -37,13 +20,30 @@ type Member struct {
 	LastFilesRoot   string
 }
 
+type Deployment struct {
+	ID         int64
+	CreatedAt  int64
+	Source     string
+	Containers string
+	Versions   string
+	Success    int64
+	Error      string
+	RestoreOf  int64
+}
+
+type Draft struct {
+	Container string
+	Config    []byte
+	UpdatedAt int64
+}
+
 type Meta struct {
 	Key   string
 	Value string
 }
 
 type Version struct {
-	Member        string
+	Container     string
 	Version       int64
 	Config        []byte
 	SharedEnv     []byte

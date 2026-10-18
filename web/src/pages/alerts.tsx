@@ -309,7 +309,7 @@ export function ProjectMetrics({
   for (const s of q.data) {
     const rest = s.name.slice(s.name.indexOf("/") + 1);
     const i = rest.lastIndexOf(":");
-    const key = `${s.name[0] === "c" ? "服务" : "规则"} ${rest.slice(0, i)}`;
+    const key = `${s.name[0] === "c" ? "容器" : "规则"} ${rest.slice(0, i)}`;
     if (!groups.has(key)) groups.set(key, new Map());
     groups.get(key)!.set(rest.slice(i + 1), s.values);
   }

@@ -1,5 +1,5 @@
--- 项目由多个成员组成：容器网段不再一个项目一个，改为单独的分配表。
--- owner：p:<项目 ID>（项目内网）、m:<项目 ID>/<成员>（成员自己的网络）、s:<名字>（共享网络）。
+-- 项目由多个容器组成：容器网段不再一个项目一个，改为单独的分配表。
+-- owner：p:<项目 ID>（项目内网）、g:<项目 ID>/<容器组>（容器组自己的网络）、s:<名字>（共享网络）。
 CREATE TABLE subnets (
     subnet TEXT PRIMARY KEY,
     owner  TEXT NOT NULL UNIQUE

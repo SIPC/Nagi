@@ -30,8 +30,8 @@ func (r *Registry) Mesh() *mesh.Mesh {
 	return r.mesh
 }
 
-// members 返回所有已上报 mesh 信息的在线节点。
-func (r *Registry) members() ([]mesh.Peer, []*nagiv1.MeshPeer) {
+// meshPeers 返回所有已上报 mesh 信息的在线节点。
+func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 	m := r.Mesh()
 	direct := map[mesh.Key]netip.AddrPort{}
 	if m != nil {
@@ -90,7 +90,7 @@ func (r *Registry) updateMesh() {
 	if m == nil {
 		return
 	}
-	peers, _ := r.members()
+	peers, _ := r.meshPeers()
 	if err := m.SetPeers(peers); err != nil {
 		r.log.Warn("更新 mesh 成员失败", "err", err)
 	}
@@ -103,7 +103,7 @@ func (r *Registry) meshConfig() *nagiv1.MeshConfig {
 		return nil
 	}
 	self := m.PublicKey()
-	_, list := r.members()
+	_, list := r.meshPeers()
 	r.mu.RLock()
 	name := r.meshName
 	r.mu.RUnlock()

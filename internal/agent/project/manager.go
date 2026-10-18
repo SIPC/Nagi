@@ -1,5 +1,5 @@
-// Package project 管理节点上的项目：项目是一组成员（单容器或一份 compose），共用项目目录和内网，
-// 每个成员各自部署、记版本、回滚。节点是项目数据的主人，这里的数据以节点本地为准。
+// Package project 管理节点上的项目：项目是一组容器（单容器或一份 compose），共用项目目录和内网，
+// 每个容器各自部署、记版本、回滚。节点是项目数据的主人，这里的数据以节点本地为准。
 package project
 
 import (
@@ -48,12 +48,12 @@ type notFoundError struct{ msg string }
 func (e notFoundError) Error() string        { return e.msg }
 func (e notFoundError) Is(target error) bool { return target == ErrNotFound }
 
-// DefaultSubnetPool 是节点本地的容器网段池，项目内网、compose 成员、共享网络各分一个 /26。
+// DefaultSubnetPool 是节点本地的容器网段池，项目内网、容器组、共享网络各分一个 /26。
 const DefaultSubnetPool = "10.200.0.0/16"
 
 const subnetBits = 26
 
-// nameRe 是成员名、网络名的格式：小写字母、数字和 -，不以 - 开头或结尾，最长 32 个字符。
+// nameRe 是容器名、网络名的格式：小写字母、数字和 -，不以 - 开头或结尾，最长 32 个字符。
 var nameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 
 // Manager 管理本节点的所有项目。
@@ -121,35 +121,35 @@ func (m *Manager) lock(id string) *sync.Mutex {
 type paths struct{ root string }
 
 func (p paths) configDir() string     { return filepath.Join(p.root, "config") }
-func (p paths) membersDir() string    { return filepath.Join(p.root, "members") }
+func (p paths) containersDir() string { return filepath.Join(p.root, "containers") }
 func (p paths) backupsDir() string    { return filepath.Join(p.root, "backups") }
 func (p paths) projectDB() string     { return filepath.Join(p.configDir(), "project.db") }
 func (p paths) sharedEnvFile() string { return filepath.Join(p.configDir(), ".env") }
-func (p paths) member(name string) memberPaths {
-	return memberPaths{root: filepath.Join(p.membersDir(), name)}
+func (p paths) container(name string) containerPaths {
+	return containerPaths{root: filepath.Join(p.containersDir(), name)}
 }
 
-// memberPaths 是成员目录 members/<成员>/ 里的各个位置。
-type memberPaths struct{ root string }
+// containerPaths 是容器目录 containers/<容器>/ 里的各个位置。
+type containerPaths struct{ root string }
 
-func (p memberPaths) composeFile() string   { return filepath.Join(p.root, "compose.yml") }
-func (p memberPaths) overrideFile() string  { return filepath.Join(p.root, "override.yml") }
-func (p memberPaths) envFile() string       { return filepath.Join(p.root, ".env") }
-func (p memberPaths) sharedEnvFile() string { return filepath.Join(p.root, "shared.env") }
-func (p memberPaths) dataDir() string       { return filepath.Join(p.root, "data") }
-func (p memberPaths) volumesDir() string    { return filepath.Join(p.root, "volumes") }
-func (p memberPaths) restoreDir() string    { return filepath.Join(p.root, ".restore") }
+func (p containerPaths) composeFile() string   { return filepath.Join(p.root, "compose.yml") }
+func (p containerPaths) overrideFile() string  { return filepath.Join(p.root, "override.yml") }
+func (p containerPaths) envFile() string       { return filepath.Join(p.root, ".env") }
+func (p containerPaths) sharedEnvFile() string { return filepath.Join(p.root, "shared.env") }
+func (p containerPaths) dataDir() string       { return filepath.Join(p.root, "data") }
+func (p containerPaths) volumesDir() string    { return filepath.Join(p.root, "volumes") }
+func (p containerPaths) restoreDir() string    { return filepath.Join(p.root, ".restore") }
 
-// composeProjectName 是成员的 compose 项目名。
-func composeProjectName(id, member string) string { return "nagi-" + id + "-" + member }
+// composeProjectName 是容器的 compose 项目名。
+func composeProjectName(id, container string) string { return "nagi-" + id + "-" + container }
 
-// projectLabel 选出项目所有成员的容器。
+// projectLabel 选出项目所有容器的容器。
 func projectLabel(id string) string { return LabelProject + "=" + id }
 
 // ---- 创建 ----
 
-// Create 创建项目：建目录、写格式版本号、保存设置。member 不为空时同时加入第一个成员。创建后不部署。
-func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1.ProjectSettings, memberName string, member *nagiv1.MemberConfig) (*nagiv1.Project, error) {
+// Create 创建项目：建目录、写格式版本号、保存设置。container 不为空时同时加入第一个容器。创建后不部署。
+func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1.ProjectSettings, containerName string, container *nagiv1.ContainerConfig) (*nagiv1.Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > 64 {
 		return nil, invalid("项目名不能为空，且不超过 64 个字符")
@@ -163,8 +163,8 @@ func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1
 	if err := checkEnv(settings.GetSharedEnv()); err != nil {
 		return nil, err
 	}
-	if member != nil {
-		if err := checkMemberName(memberName); err != nil {
+	if container != nil {
+		if err := checkContainerName(containerName); err != nil {
 			return nil, err
 		}
 	}
@@ -177,7 +177,7 @@ func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1
 		return nil, err
 	}
 	p := paths{root: dir}
-	for _, d := range []string{p.configDir(), p.membersDir(), p.backupsDir()} {
+	for _, d := range []string{p.configDir(), p.containersDir(), p.backupsDir()} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, fmt.Errorf("创建项目目录: %w", err)
 		}
@@ -216,8 +216,8 @@ func (m *Manager) Create(ctx context.Context, name, dir string, settings *nagiv1
 		cleanup()
 		return nil, err
 	}
-	if member != nil {
-		if err := m.addMember(ctx, pdb, p, id, memberName, member); err != nil {
+	if container != nil {
+		if err := m.addContainer(ctx, pdb, p, id, containerName, container); err != nil {
 			pdb.Close()
 			cleanup()
 			return nil, err
@@ -268,7 +268,7 @@ func within(child, parent string) bool {
 // ---- 容器网段 ----
 
 // subnetFor 返回某个网络的网段，没有时从容器网段池里分配第一个没用过、也不和 Docker 现有网络重叠的 /26。
-// owner：p:<项目 ID>（项目内网）、m:<项目 ID>/<成员>（成员自己的网络）、s:<名字>（共享网络）。
+// owner：p:<项目 ID>（项目内网）、m:<项目 ID>/<容器>（容器自己的网络）、s:<名字>（共享网络）。
 func (m *Manager) subnetFor(ctx context.Context, owner string) (string, error) {
 	if s, err := m.nodeQ.GetSubnet(ctx, owner); err == nil {
 		return s, nil
@@ -317,15 +317,15 @@ func overlapsAny(p netip.Prefix, list []netip.Prefix) bool {
 	return false
 }
 
-func projectOwner(id string) string        { return "p:" + id }
-func memberOwner(id, member string) string { return "m:" + id + "/" + member }
+func projectOwner(id string) string          { return "p:" + id }
+func groupOwner(id, container string) string { return "g:" + id + "/" + container }
 
 // releaseProject 删除节点上关于项目的记录：项目行、网段、快照仓库的连接配置。
 func (m *Manager) releaseProject(ctx context.Context, id string) error {
 	if err := m.nodeQ.DeleteProject(ctx, id); err != nil {
 		return err
 	}
-	_ = m.nodeQ.DeleteProjectSubnets(ctx, nodestore.DeleteProjectSubnetsParams{ProjectOwner: projectOwner(id), MemberPrefix: memberOwner(id, "%")})
+	_ = m.nodeQ.DeleteProjectSubnets(ctx, nodestore.DeleteProjectSubnetsParams{ProjectOwner: projectOwner(id), GroupPrefix: groupOwner(id, "%")})
 	os.RemoveAll(filepath.Join(m.stateDir, id))
 	return nil
 }
@@ -411,32 +411,32 @@ func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectS
 	return &nagiv1.ProjectSummary{Project: proj, Status: status}, nil
 }
 
-// status 合并各成员 compose 里声明的服务和实际的容器。
+// status 合并各容器 compose 里声明的服务和实际的容器。
 func (m *Manager) status(ctx context.Context, id, dir string, proj *nagiv1.Project) (*nagiv1.ProjectStatus, error) {
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	st := &nagiv1.ProjectStatus{}
 	seen := map[string]bool{}
 	for _, c := range containers {
-		seen[c.Member+"/"+c.Service] = true
+		seen[c.Container+"/"+c.Service] = true
 		st.Services = append(st.Services, &nagiv1.ServiceStatus{
-			Member: c.Member, Name: c.Service, ContainerId: c.ID, Image: c.Image,
+			Container: c.Container, Name: c.Service, ContainerId: c.ID, Image: c.Image,
 			State: c.State, Status: c.Status, Health: c.Health,
 		})
 	}
 	// compose 里有、但还没有容器的服务（例如从未部署）。
 	shared := proj.GetSettings().GetSharedEnv()
-	for _, mem := range proj.GetMembers() {
+	for _, mem := range proj.GetContainers() {
 		cfg := mem.GetConfig()
-		cp, err := loadMember(ctx, cfg, mem.GetName(), shared, paths{root: dir}.member(mem.GetName()).dataDir(), composeProjectName(id, mem.GetName()))
+		cp, err := loadContainer(ctx, cfg, mem.GetName(), shared, paths{root: dir}.container(mem.GetName()).dataDir(), composeProjectName(id, mem.GetName()))
 		if err != nil {
 			continue
 		}
 		for _, name := range cp.ServiceNames() {
 			if !seen[mem.GetName()+"/"+name] {
-				st.Services = append(st.Services, &nagiv1.ServiceStatus{Member: mem.GetName(), Name: name, Image: cp.Services[name].Image})
+				st.Services = append(st.Services, &nagiv1.ServiceStatus{Container: mem.GetName(), Name: name, Image: cp.Services[name].Image})
 			}
 		}
 	}
@@ -474,7 +474,7 @@ func (m *Manager) projectForUpdate(ctx context.Context, id string) (row nodestor
 
 // ---- 删除 ----
 
-// Delete 删除项目：停止并删除所有成员的容器和项目网络，从节点上移除记录。项目目录默认保留；
+// Delete 删除项目：停止并删除所有容器的容器和项目网络，从节点上移除记录。项目目录默认保留；
 // deleteDir 时删除整个目录（含数据和快照），confirmName 必须等于项目名。
 func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, deleteDir bool, confirmName string, onLine func(string)) error {
 	row, pdb, unlock, err := m.projectForUpdate(ctx, id)
@@ -487,7 +487,7 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 		return err
 	}
 	name := pdb.meta(ctx, metaName)
-	members, err := pdb.q.ListMembers(ctx)
+	containers, err := pdb.q.ListContainers(ctx)
 	pdb.Close()
 	if err != nil {
 		return err
@@ -496,7 +496,7 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 		return invalid("要同时删除项目目录，请输入项目名 %s 确认", name)
 	}
 	p := paths{root: row.Dir}
-	for _, mem := range members {
+	for _, mem := range containers {
 		if err := m.down(ctx, id, p, mem.Name, onLine); err != nil {
 			return err
 		}
@@ -513,39 +513,39 @@ func (m *Manager) Delete(ctx context.Context, id string, baseRevision int64, del
 	return nil
 }
 
-// down 停止并删除成员的容器（命名卷都绑定在成员目录里，删除卷对象不会删数据）。从未部署过的成员什么都不做。
-func (m *Manager) down(ctx context.Context, id string, p paths, member string, onLine func(string)) error {
-	mp := p.member(member)
+// down 停止并删除容器的容器（命名卷都绑定在容器目录里，删除卷对象不会删数据）。从未部署过的容器什么都不做。
+func (m *Manager) down(ctx context.Context, id string, p paths, container string, onLine func(string)) error {
+	mp := p.container(container)
 	if _, err := os.Stat(mp.overrideFile()); err != nil {
 		return nil
 	}
-	return compose.Down(ctx, m.composeFiles(id, p, member), true, onLine)
+	return compose.Down(ctx, m.composeFiles(id, p, container), true, onLine)
 }
 
 // ---- 日志 ----
 
-// Logs 读取项目的容器日志。member、service 为空时读取全部。follow 时持续输出直到 ctx 取消。
-func (m *Manager) Logs(ctx context.Context, id, member, service string, tail int, follow bool, onLine func(docker.LogLine)) error {
+// Logs 读取项目的容器日志。container、service 为空时读取全部。follow 时持续输出直到 ctx 取消。
+func (m *Manager) Logs(ctx context.Context, id, container, service string, tail int, follow bool, onLine func(docker.LogLine)) error {
 	if _, err := m.projectRow(ctx, id); err != nil {
 		return err
 	}
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return err
 	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, c := range containers {
-		if (member != "" && c.Member != member) || (service != "" && c.Service != service) {
+		if (container != "" && c.Container != container) || (service != "" && c.Service != service) {
 			continue
 		}
 		wg.Add(1)
-		go func(c docker.Container) {
+		go func(c docker.Instance) {
 			defer wg.Done()
 			_ = m.docker.Logs(ctx, c, tail, follow, func(l docker.LogLine) {
 				mu.Lock()
 				defer mu.Unlock()
-				l.Member = c.Member
+				l.Container = c.Container
 				onLine(l)
 			})
 		}(c)
@@ -559,24 +559,24 @@ func (m *Manager) Logs(ctx context.Context, id, member, service string, tail int
 // defaultShell 优先用 bash，没有 bash 就用 sh。
 var defaultShell = []string{"/bin/sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi"}
 
-// Exec 在成员的服务正在运行的容器里打开交互式终端。单容器成员的 service 可以为空。
-func (m *Manager) Exec(ctx context.Context, id, member, service string, cmd []string, cols, rows uint) (*docker.Exec, error) {
+// Exec 在容器的服务正在运行的容器里打开交互式终端。单个容器的 service 可以为空。
+func (m *Manager) Exec(ctx context.Context, id, container, service string, cmd []string, cols, rows uint) (*docker.Exec, error) {
 	if _, err := m.projectRow(ctx, id); err != nil {
 		return nil, err
 	}
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	for _, c := range containers {
-		if c.Member == member && (service == "" || c.Service == service) && c.State == "running" {
+		if c.Container == container && (service == "" || c.Service == service) && c.State == "running" {
 			if len(cmd) == 0 {
 				cmd = defaultShell
 			}
 			return m.docker.StartExec(ctx, c.ID, cmd, cols, rows)
 		}
 	}
-	return nil, invalid("成员 %s 的服务 %s 没有正在运行的容器", member, service)
+	return nil, invalid("容器组 %s 里的容器 %s 没有在运行", container, service)
 }
 
 // ---- 工具 ----

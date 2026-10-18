@@ -58,7 +58,7 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusServiceUnavailable, err)
 			return
 		}
-		if err := stream.Send(&nagiv1.UploadChunk{ProjectId: q.Get("project"), Member: q.Get("member")}); err != nil {
+		if err := stream.Send(&nagiv1.UploadChunk{ProjectId: q.Get("project"), Container: q.Get("container")}); err != nil {
 			fail(http.StatusBadGateway, err)
 			return
 		}

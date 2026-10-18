@@ -22,8 +22,8 @@ const (
 	AgentService_ListProjects_FullMethodName          = "/nagi.v1.AgentService/ListProjects"
 	AgentService_CreateProject_FullMethodName         = "/nagi.v1.AgentService/CreateProject"
 	AgentService_GetProject_FullMethodName            = "/nagi.v1.AgentService/GetProject"
-	AgentService_AddMember_FullMethodName             = "/nagi.v1.AgentService/AddMember"
-	AgentService_DeleteMember_FullMethodName          = "/nagi.v1.AgentService/DeleteMember"
+	AgentService_AddContainer_FullMethodName          = "/nagi.v1.AgentService/AddContainer"
+	AgentService_DeleteContainer_FullMethodName       = "/nagi.v1.AgentService/DeleteContainer"
 	AgentService_SaveDraft_FullMethodName             = "/nagi.v1.AgentService/SaveDraft"
 	AgentService_DiscardDraft_FullMethodName          = "/nagi.v1.AgentService/DiscardDraft"
 	AgentService_UpdateProjectSettings_FullMethodName = "/nagi.v1.AgentService/UpdateProjectSettings"
@@ -90,11 +90,11 @@ type AgentServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
-	// 往项目里加一个成员（只保存，不部署）。
-	AddMember(ctx context.Context, in *AddMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error)
-	// 删除成员：停止并删除它的容器，目录默认保留。
-	DeleteMember(ctx context.Context, in *DeleteMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error)
-	// 保存成员的草稿。
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error)
+	// 删除容器：停止并删除它的容器，目录默认保留。
+	DeleteContainer(ctx context.Context, in *DeleteContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error)
+	// 保存容器的草稿。
 	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*SaveDraftResponse, error)
 	DiscardDraft(ctx context.Context, in *DiscardDraftRequest, opts ...grpc.CallOption) (*DiscardDraftResponse, error)
 	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
@@ -104,7 +104,7 @@ type AgentServiceClient interface {
 	DiscardSharedEnv(ctx context.Context, in *DiscardSharedEnvRequest, opts ...grpc.CallOption) (*DiscardSharedEnvResponse, error)
 	// 项目的部署记录，最新的在前。
 	ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
-	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
 	RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 本节点的共享网络。
 	ListSharedNetworks(ctx context.Context, in *ListSharedNetworksRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
@@ -117,11 +117,11 @@ type AgentServiceClient interface {
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*SaveRouteResponse, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*DeleteRouteResponse, error)
 	ListVersions(ctx context.Context, in *ListVersionsRequest, opts ...grpc.CallOption) (*ListVersionsResponse, error)
-	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	CreateSnapshot(ctx context.Context, in *CreateSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
@@ -130,7 +130,7 @@ type AgentServiceClient interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
 	RebuildProject(ctx context.Context, in *RebuildProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -143,9 +143,9 @@ type AgentServiceClient interface {
 	RemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
 	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
 	CheckRemovePanel(ctx context.Context, in *RemovePanelRequest, opts ...grpc.CallOption) (*RemovePanelResponse, error)
-	// mesh 状态：到每个成员走哪条路径。
+	// mesh 状态：到每个容器走哪条路径。
 	GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error)
-	// 经 mesh 连一下某个成员，测往返时间。
+	// 经 mesh 连一下某个容器，测往返时间。
 	MeshPing(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 	// ---- 备份节点：源节点一侧 ----
 	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
@@ -232,20 +232,20 @@ func (c *agentServiceClient) GetProject(ctx context.Context, in *GetProjectReque
 	return out, nil
 }
 
-func (c *agentServiceClient) AddMember(ctx context.Context, in *AddMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error) {
+func (c *agentServiceClient) AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddMemberResponse)
-	err := c.cc.Invoke(ctx, AgentService_AddMember_FullMethodName, in, out, cOpts...)
+	out := new(AddContainerResponse)
+	err := c.cc.Invoke(ctx, AgentService_AddContainer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *agentServiceClient) DeleteMember(ctx context.Context, in *DeleteMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error) {
+func (c *agentServiceClient) DeleteContainer(ctx context.Context, in *DeleteContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteMemberResponse)
-	err := c.cc.Invoke(ctx, AgentService_DeleteMember_FullMethodName, in, out, cOpts...)
+	out := new(DeleteContainerResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteContainer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -904,11 +904,11 @@ type AgentServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
-	// 往项目里加一个成员（只保存，不部署）。
-	AddMember(context.Context, *AddMemberRequest) (*AddMemberResponse, error)
-	// 删除成员：停止并删除它的容器，目录默认保留。
-	DeleteMember(context.Context, *DeleteMemberRequest) (*DeleteMemberResponse, error)
-	// 保存成员的草稿。
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(context.Context, *AddContainerRequest) (*AddContainerResponse, error)
+	// 删除容器：停止并删除它的容器，目录默认保留。
+	DeleteContainer(context.Context, *DeleteContainerRequest) (*DeleteContainerResponse, error)
+	// 保存容器的草稿。
 	SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error)
 	DiscardDraft(context.Context, *DiscardDraftRequest) (*DiscardDraftResponse, error)
 	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
@@ -918,7 +918,7 @@ type AgentServiceServer interface {
 	DiscardSharedEnv(context.Context, *DiscardSharedEnvRequest) (*DiscardSharedEnvResponse, error)
 	// 项目的部署记录，最新的在前。
 	ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error)
-	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
 	RestoreDeployment(*RestoreDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 本节点的共享网络。
 	ListSharedNetworks(context.Context, *ListSharedNetworksRequest) (*ListSharedNetworksResponse, error)
@@ -931,11 +931,11 @@ type AgentServiceServer interface {
 	SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error)
 	ListVersions(context.Context, *ListVersionsRequest) (*ListVersionsResponse, error)
-	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
 	CreateSnapshot(*CreateSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
 	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
@@ -944,7 +944,7 @@ type AgentServiceServer interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
 	RebuildProject(*RebuildProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -957,9 +957,9 @@ type AgentServiceServer interface {
 	RemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
 	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
 	CheckRemovePanel(context.Context, *RemovePanelRequest) (*RemovePanelResponse, error)
-	// mesh 状态：到每个成员走哪条路径。
+	// mesh 状态：到每个容器走哪条路径。
 	GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error)
-	// 经 mesh 连一下某个成员，测往返时间。
+	// 经 mesh 连一下某个容器，测往返时间。
 	MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error)
 	// ---- 备份节点：源节点一侧 ----
 	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
@@ -1025,11 +1025,11 @@ func (UnimplementedAgentServiceServer) CreateProject(context.Context, *CreatePro
 func (UnimplementedAgentServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
 }
-func (UnimplementedAgentServiceServer) AddMember(context.Context, *AddMemberRequest) (*AddMemberResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddMember not implemented")
+func (UnimplementedAgentServiceServer) AddContainer(context.Context, *AddContainerRequest) (*AddContainerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddContainer not implemented")
 }
-func (UnimplementedAgentServiceServer) DeleteMember(context.Context, *DeleteMemberRequest) (*DeleteMemberResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteMember not implemented")
+func (UnimplementedAgentServiceServer) DeleteContainer(context.Context, *DeleteContainerRequest) (*DeleteContainerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteContainer not implemented")
 }
 func (UnimplementedAgentServiceServer) SaveDraft(context.Context, *SaveDraftRequest) (*SaveDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveDraft not implemented")
@@ -1271,38 +1271,38 @@ func _AgentService_GetProject_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AgentService_AddMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddMemberRequest)
+func _AgentService_AddContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddContainerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).AddMember(ctx, in)
+		return srv.(AgentServiceServer).AddContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_AddMember_FullMethodName,
+		FullMethod: AgentService_AddContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).AddMember(ctx, req.(*AddMemberRequest))
+		return srv.(AgentServiceServer).AddContainer(ctx, req.(*AddContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AgentService_DeleteMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteMemberRequest)
+func _AgentService_DeleteContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteContainerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).DeleteMember(ctx, in)
+		return srv.(AgentServiceServer).DeleteContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_DeleteMember_FullMethodName,
+		FullMethod: AgentService_DeleteContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).DeleteMember(ctx, req.(*DeleteMemberRequest))
+		return srv.(AgentServiceServer).DeleteContainer(ctx, req.(*DeleteContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2236,12 +2236,12 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_GetProject_Handler,
 		},
 		{
-			MethodName: "AddMember",
-			Handler:    _AgentService_AddMember_Handler,
+			MethodName: "AddContainer",
+			Handler:    _AgentService_AddContainer_Handler,
 		},
 		{
-			MethodName: "DeleteMember",
-			Handler:    _AgentService_DeleteMember_Handler,
+			MethodName: "DeleteContainer",
+			Handler:    _AgentService_DeleteContainer_Handler,
 		},
 		{
 			MethodName: "SaveDraft",

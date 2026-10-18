@@ -77,7 +77,7 @@ SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?;
 SELECT * FROM project_backups WHERE node_id = ? ORDER BY project_id;
 
 -- name: UpsertWebhook :exec
-INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, member) VALUES (?, ?, ?, ?);
+INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, container) VALUES (?, ?, ?, ?);
 
 -- name: GetWebhook :one
 SELECT * FROM webhooks WHERE token_hash = ?;

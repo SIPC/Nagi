@@ -11,10 +11,10 @@ import { ProjectState, ServiceState } from "@/components/status";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { TerminalCard } from "@/components/terminal";
-import { useImageForm, useMemberForm } from "@/components/member-form";
-import type { Member, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { useImageForm, useContainerForm } from "@/components/container-form";
+import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
-// 测试界面：项目由多个成员组成，每个成员单独部署、记版本、回滚（见 docs/agent.md#项目与成员）。
+// 测试界面：项目由多个容器组成，每个容器单独部署、记版本、回滚（见 docs/agent.md#项目与容器）。
 
 export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: string }) {
   const project = useQuery({
@@ -38,7 +38,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
   const services = project.data.project?.status?.services ?? [];
   const imageUpdates = project.data.project?.status?.imageUpdates ?? [];
   if (!p) return null;
-  const member = p.members.find((m) => m.name === selected) ?? p.members[0];
+  const container = p.containers.find((m) => m.name === selected) ?? p.containers[0];
 
   return (
     <>
@@ -47,34 +47,34 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         title={
           <span className="flex items-center gap-3">
             {p.name}
-            <ProjectState services={services} deployed={p.members.some((m) => m.deployedVersion > 0n)} />
+            <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} />
             {p.stateful && <Badge>有状态</Badge>}
           </span>
         }
         description={
           <span className="font-mono text-xs">
-            {p.dir} · {p.members.length} 个成员 · 项目内网{p.settings?.intranetDisabled ? "已关闭" : "开启"} · 创建于 {timeAgo(toDate(p.createdAt))}
+            {p.dir} · {p.containers.length} 个容器 · 项目内网{p.settings?.intranetDisabled ? "已关闭" : "开启"} · 创建于 {timeAgo(toDate(p.createdAt))}
           </span>
         }
       />
 
       <div className="grid gap-6">
-        <MembersCard nodeId={nodeId} project={p} services={services} selected={member?.name ?? ""} onSelect={setSelected} />
-        <AddMemberCard nodeId={nodeId} project={p} onAdded={setSelected} />
+        <ContainersCard nodeId={nodeId} project={p} services={services} selected={container?.name ?? ""} onSelect={setSelected} />
+        <AddContainerCard nodeId={nodeId} project={p} onAdded={setSelected} />
         {imageUpdates.length > 0 && (
           <Alert>
             有新版本的镜像：
-            {imageUpdates.map((u) => `${u.member}/${u.service}（${u.image}）`).join("、")}。在成员上点"更新镜像"拉取并部署。
+            {imageUpdates.map((u) => `${u.container}/${u.service}（${u.image}）`).join("、")}。在容器上点"更新镜像"拉取并部署。
           </Alert>
         )}
-        {member && (
-          <MemberPanel
-            key={member.name}
+        {container && (
+          <ContainerPanel
+            key={container.name}
             nodeId={nodeId}
             project={p}
-            member={member}
-            services={services.filter((s) => s.member === member.name)}
-            hasImageUpdate={imageUpdates.some((u) => u.member === member.name)}
+            container={container}
+            services={services.filter((s) => s.container === container.name)}
+            hasImageUpdate={imageUpdates.some((u) => u.container === container.name)}
           />
         )}
         <SettingsCard key={`settings-${p.revision}`} nodeId={nodeId} project={p} />
@@ -178,7 +178,7 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   );
 }
 
-// ---- 成员列表与一起部署 ----
+// ---- 容器列表与一起部署 ----
 
 // shortImage 把固定了摘要的镜像（回滚、迁移、顶替后会固定到当时的摘要）缩短显示，例如 redis@sha256:858f009f9709。
 function shortImage(image: string) {
@@ -186,11 +186,12 @@ function shortImage(image: string) {
   return i < 0 ? image : image.slice(0, i + 8 + 12);
 }
 
-function memberKind(m: Member) {
-  return (m.draft ?? m.config)?.form ? "单容器" : "compose";
+// containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
+function containerKind(m: Container) {
+  return m.kind === "group" ? "容器组" : "容器";
 }
 
-function MembersCard({
+function ContainersCard({
   nodeId,
   project,
   services,
@@ -205,15 +206,15 @@ function MembersCard({
 }) {
   const { run, busy, output } = useRun(nodeId, project.id);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const targets = project.members.filter((m) => checked[m.name]);
-  const changed = project.members.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
+  const targets = project.containers.filter((m) => checked[m.name]);
+  const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
 
-  const deploy = (members: Member[]) =>
+  const deploy = (containers: Container[]) =>
     run(() =>
       projectClient.deployNodeProject({
         nodeId,
         projectId: project.id,
-        targets: members.map((m) => ({ member: m.name, baseRevision: m.revision })),
+        targets: containers.map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
 
@@ -221,8 +222,8 @@ function MembersCard({
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
-          <CardTitle>成员</CardTitle>
-          <p className="text-sm text-muted-foreground">每个成员单独部署；勾选几个可以一起部署（按依赖顺序，记一条部署记录）。</p>
+          <CardTitle>容器</CardTitle>
+          <p className="text-sm text-muted-foreground">每个容器单独部署；勾选几个可以一起部署（按依赖顺序，记一条部署记录）。</p>
         </div>
         <div className="flex gap-2">
           {changed.length > 0 && (
@@ -237,22 +238,22 @@ function MembersCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
-        {project.members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">还没有成员，在下面加一个。</p>
+        {project.containers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">还没有容器，在下面加一个。</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b">
                 <th className="w-8 py-2" />
-                <th className="py-2 pr-4 font-medium">成员</th>
+                <th className="py-2 pr-4 font-medium">容器</th>
                 <th className="py-2 pr-4 font-medium">状态</th>
                 <th className="py-2 pr-4 font-medium">版本</th>
                 <th className="py-2 font-medium">内网地址</th>
               </tr>
             </thead>
             <tbody>
-              {project.members.map((m) => {
-                const svc = services.filter((s) => s.member === m.name);
+              {project.containers.map((m) => {
+                const svc = services.filter((s) => s.container === m.name);
                 return (
                   <tr
                     key={m.name}
@@ -264,7 +265,7 @@ function MembersCard({
                     </td>
                     <td className="py-2 pr-4">
                       <span className="font-medium">{m.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{memberKind(m)}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{containerKind(m)}</span>
                       {m.hasDraft && (
                         <Badge tone="warning" className="ml-2">
                           草稿
@@ -297,7 +298,7 @@ function MembersCard({
                     <td className="py-2 font-mono text-xs text-muted-foreground">
                       {project.settings?.intranetDisabled
                         ? "—"
-                        : memberKind(m) === "单容器"
+                        : containerKind(m) === "容器"
                           ? m.name
                           : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") ||
                             "—"}
@@ -314,34 +315,34 @@ function MembersCard({
   );
 }
 
-// ---- 一个成员 ----
+// ---- 一个容器 ----
 
-function MemberPanel({
+function ContainerPanel({
   nodeId,
   project,
-  member,
+  container,
   services,
   hasImageUpdate,
 }: {
   nodeId: string;
   project: Project;
-  member: Member;
+  container: Container;
   services: ServiceStatus[];
   hasImageUpdate: boolean;
 }) {
   const { run, busy, output, setLines } = useRun(nodeId, project.id);
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const cfg = member.draft ?? member.config;
-  const target = [{ member: member.name, baseRevision: member.revision }];
+  const cfg = container.draft ?? container.config;
+  const target = [{ container: container.name, baseRevision: container.revision }];
 
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) =>
     run(() => projectClient.deployNodeProject({ nodeId, projectId: project.id, targets: target, ...opts }), keep);
 
-  // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换成员的 data/。
+  // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换容器的 data/。
   const upload = async (file: File) => {
     setLines([`上传 ${file.name}（${(file.size / 1048576).toFixed(1)} MB）`]);
-    const q = new URLSearchParams({ node: nodeId, project: project.id, member: member.name });
+    const q = new URLSearchParams({ node: nodeId, project: project.id, container: container.name });
     const res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1" }, body: file });
     const body = await res.json();
     if (!res.ok) {
@@ -353,10 +354,10 @@ function MemberPanel({
   };
 
   const remove = async () => {
-    const deleteDir = confirm(`删除成员 ${member.name}？容器会被删除。\n\n点"确定"同时删除成员目录（数据会删掉），点"取消"只删容器、保留目录。`);
-    if (!deleteDir && !confirm(`只删除成员 ${member.name} 的容器，保留成员目录？`)) return;
+    const deleteDir = confirm(`删除容器 ${container.name}？容器会被删除。\n\n点"确定"同时删除容器目录（数据会删掉），点"取消"只删容器、保留目录。`);
+    if (!deleteDir && !confirm(`只删除容器 ${container.name} 的容器，保留容器目录？`)) return;
     try {
-      await projectClient.deleteNodeProjectMember({ nodeId, projectId: project.id, member: member.name, baseRevision: member.revision, deleteDir });
+      await projectClient.deleteNodeProjectContainer({ nodeId, projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
       queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
     } catch (err) {
       setLines(["✗ " + errorMessage(err)]);
@@ -369,24 +370,25 @@ function MemberPanel({
         <CardHeader className="flex-row items-center justify-between gap-4">
           <div className="grid gap-1">
             <CardTitle>
-              成员 {member.name} <span className="text-sm font-normal text-muted-foreground">（{memberKind(member)}）</span>
+              {containerKind(container)} {container.name}
+              {container.kind === "group" && <span className="ml-1 text-sm font-normal text-muted-foreground">（compose）</span>}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {member.hasDraft
+              {container.hasDraft
                 ? "有未部署的修改：部署时会把草稿保存为新版本。"
-                : member.deployedVersion > 0n
-                  ? `运行的是版本 v${member.deployedVersion}。`
+                : container.deployedVersion > 0n
+                  ? `运行的是版本 v${container.deployedVersion}。`
                   : "还没部署过。"}
-              {member.sharedEnvOutdated && " 共享变量有更新，部署时用上。"}
+              {container.sharedEnvOutdated && " 共享变量有更新，部署时用上。"}
             </p>
-            {member.hostNetworkServices.length > 0 && (
+            {container.hostNetworkServices.length > 0 && (
               <p className="text-sm font-medium text-destructive">
-                ⚠ 服务 {member.hostNetworkServices.join("、")} 用的是 host 网络：不经过 Caddy、不在项目内网里，端口直接对外开放，防火墙要自己管。
+                ⚠ 容器 {container.hostNetworkServices.join("、")} 用的是 host 网络：不经过 Caddy、不在项目内网里，端口直接对外开放，防火墙要自己管。
               </p>
             )}
-            {member.unmanagedVolumes.length > 0 && (
+            {container.unmanagedVolumes.length > 0 && (
               <p className="rounded border border-warning/40 bg-warning/15 px-2 py-1 text-sm">
-                ⚠ volume {member.unmanagedVolumes.join("、")} 是 external 或用了自定义 driver，不在快照范围内：快照、迁移、顶替都不带它的数据。
+                ⚠ volume {container.unmanagedVolumes.join("、")} 是 external 或用了自定义 driver，不在快照范围内：快照、迁移、顶替都不带它的数据。
               </p>
             )}
           </div>
@@ -419,10 +421,10 @@ function MemberPanel({
             )}
             <Button size="sm" onClick={() => deploy({})} disabled={busy}>
               {busy ? <Spinner /> : <Rocket />}
-              {busy ? "部署中" : member.hasDraft ? "部署草稿" : member.deployedVersion > 0n ? "重新部署" : "部署"}
+              {busy ? "部署中" : container.hasDraft ? "部署草稿" : container.deployedVersion > 0n ? "重新部署" : "部署"}
             </Button>
             <Button variant="ghost" size="sm" onClick={remove} disabled={busy}>
-              删除成员
+              删除容器
             </Button>
           </div>
         </CardHeader>
@@ -446,17 +448,17 @@ function MemberPanel({
           </table>
         </CardContent>
       </Card>
-      <SourceInfo member={member} />
-      <MemberConfigCard key={`cfg-${member.revision}`} nodeId={nodeId} project={project} member={member} services={[...new Set(services.map((s) => s.name))]} />
-      <VersionsCard nodeId={nodeId} project={project} member={member} />
+      <SourceInfo container={container} />
+      <ContainerConfigCard key={`cfg-${container.revision}`} nodeId={nodeId} project={project} container={container} services={[...new Set(services.map((s) => s.name))]} />
+      <VersionsCard nodeId={nodeId} project={project} container={container} />
       <LogsCard
         nodeId={nodeId}
         projectId={project.id}
-        member={member.name}
+        container={container.name}
         services={[...new Set(services.map((s) => s.name))]}
         containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
       />
-      <TerminalCard nodeId={nodeId} projectId={project.id} member={member.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+      <TerminalCard nodeId={nodeId} projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
     </div>
   );
 }
@@ -468,13 +470,13 @@ const maxLines = 2000;
 function LogsCard({
   nodeId,
   projectId,
-  member,
+  container,
   services,
   containers,
 }: {
   nodeId: string;
   projectId: string;
-  member: string;
+  container: string;
   services: string[];
   containers: string;
 }) {
@@ -492,7 +494,7 @@ function LogsCard({
     (async () => {
       try {
         const stream = projectClient.streamNodeProjectLogs(
-          { nodeId, projectId, member, service, tail: 200, follow: true },
+          { nodeId, projectId, container, service, tail: 200, follow: true },
           { signal: abort.signal },
         );
         for await (const l of stream) {
@@ -509,7 +511,7 @@ function LogsCard({
     })();
     return () => abort.abort();
     // 容器变化（例如部署后容器被重建）时重新订阅。
-  }, [nodeId, projectId, member, service, containers]);
+  }, [nodeId, projectId, container, service, containers]);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -525,7 +527,7 @@ function LogsCard({
         </CardTitle>
         {services.length > 1 && (
           <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40">
-            <option value="">全部服务</option>
+            <option value="">全部容器</option>
             {services.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -560,9 +562,9 @@ function LogsCard({
   );
 }
 
-function MemberConfigCard({ nodeId, project, member, services }: { nodeId: string; project: Project; member: Member; services: string[] }) {
+function ContainerConfigCard({ nodeId, project, container, services }: { nodeId: string; project: Project; container: Container; services: string[] }) {
   const queryClient = useQueryClient();
-  const base = member.draft ?? member.config;
+  const base = container.draft ?? container.config;
   const isForm = !!base?.form;
   const [compose, setCompose] = useState(base?.compose ?? "");
   const [env, setEnv] = useState(envToText(base?.env));
@@ -596,8 +598,8 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
       await projectClient.saveNodeProjectDraft({
         nodeId,
         projectId: project.id,
-        member: member.name,
-        baseRevision: member.revision,
+        container: container.name,
+        baseRevision: container.revision,
         config: isForm
           ? { ...common, form: imageForm.build() }
           : {
@@ -622,7 +624,7 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
     setBusy(true);
     setError("");
     try {
-      await projectClient.discardNodeProjectDraft({ nodeId, projectId: project.id, member: member.name, baseRevision: member.revision });
+      await projectClient.discardNodeProjectDraft({ nodeId, projectId: project.id, container: container.name, baseRevision: container.revision });
       refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -636,10 +638,10 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
       <CardHeader className="flex-row items-center justify-between gap-4">
         <CardTitle className="flex items-center gap-2">
           配置
-          {member.hasDraft && <Badge tone="warning">草稿</Badge>}
+          {container.hasDraft && <Badge tone="warning">草稿</Badge>}
         </CardTitle>
         <div className="flex gap-2">
-          {member.hasDraft && (
+          {container.hasDraft && (
             <Button variant="outline" size="sm" onClick={discard} disabled={busy}>
               放弃草稿
             </Button>
@@ -684,20 +686,20 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
             <Textarea value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
           </div>
           <div className="grid gap-1.5">
-            <span className="text-sm font-medium">先部署的成员（一起部署时）</span>
+            <span className="text-sm font-medium">先部署的容器（一起部署时）</span>
             <Input value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
           </div>
         </div>
         {!isForm && (
           <div className="grid gap-1.5">
-            <span className="text-sm font-medium">成员变量（替换 compose 里的 ${"{变量}"}，同名时覆盖项目的共享变量；KEY=VALUE 每行一个）</span>
+            <span className="text-sm font-medium">容器组变量（替换 compose 里的 ${"{变量}"}，同名时覆盖项目的共享变量；KEY=VALUE 每行一个）</span>
             <Textarea value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
           </div>
         )}
         {!isForm &&
           services.map((s) => (
             <div key={s} className="grid gap-1.5">
-              <span className="text-sm font-medium">服务 {s} 的环境变量（只注入这个服务的容器）</span>
+              <span className="text-sm font-medium">容器 {s} 的环境变量（只注入这个容器）</span>
               <Textarea
                 value={serviceEnv[s] ?? ""}
                 onChange={(e) => setServiceEnv((prev) => ({ ...prev, [s]: e.target.value }))}
@@ -711,10 +713,10 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
   );
 }
 
-function SourceInfo({ member }: { member: Member }) {
-  const cfg = member.draft ?? member.config;
+function SourceInfo({ container }: { container: Container }) {
+  const cfg = container.draft ?? container.config;
   if (!cfg?.source?.gitUrl) return null;
-  const hook = `${location.origin}/hooks/${member.webhookToken}`;
+  const hook = `${location.origin}/hooks/${container.webhookToken}`;
   return (
     <Card>
       <CardHeader>
@@ -724,14 +726,14 @@ function SourceInfo({ member }: { member: Member }) {
         <div>
           仓库 <span className="font-mono">{cfg.source.gitUrl}</span>
           {cfg.source.gitRef && <span className="font-mono"> @ {cfg.source.gitRef}</span>}
-          {member.lastCommit && <span className="text-muted-foreground">，当前提交 {member.lastCommit.slice(0, 12)}</span>}
+          {container.lastCommit && <span className="text-muted-foreground">，当前提交 {container.lastCommit.slice(0, 12)}</span>}
         </div>
         <div className="grid gap-1">
           <span className="font-medium">deploy key（加到仓库的只读 deploy key）</span>
-          <code className="break-all rounded bg-muted p-2 text-xs">{member.deployKey}</code>
+          <code className="break-all rounded bg-muted p-2 text-xs">{container.deployKey}</code>
         </div>
         <div className="grid gap-1">
-          <span className="font-medium">webhook 地址（push 后自动拉取并部署这个成员）</span>
+          <span className="font-medium">webhook 地址（push 后自动拉取并部署这个容器）</span>
           <code className="break-all rounded bg-muted p-2 text-xs">{hook}</code>
         </div>
       </CardContent>
@@ -739,11 +741,11 @@ function SourceInfo({ member }: { member: Member }) {
   );
 }
 
-function VersionsCard({ nodeId, project, member }: { nodeId: string; project: Project; member: Member }) {
+function VersionsCard({ nodeId, project, container }: { nodeId: string; project: Project; container: Container }) {
   const { run, busy, output } = useRun(nodeId, project.id);
-  const ref = { nodeId, projectId: project.id, member: member.name };
+  const ref = { nodeId, projectId: project.id, container: container.name };
   const versions = useQuery({
-    queryKey: ["versions", nodeId, project.id, member.name, String(member.revision)],
+    queryKey: ["versions", nodeId, project.id, container.name, String(container.revision)],
     queryFn: () => projectClient.listNodeProjectVersions(ref),
   });
   const [restoreData, setRestoreData] = useState(false);
@@ -751,7 +753,7 @@ function VersionsCard({ nodeId, project, member }: { nodeId: string; project: Pr
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-4">
-        <CardTitle>版本（每次部署这个成员一个）</CardTitle>
+        <CardTitle>版本（每次部署这个容器一个）</CardTitle>
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={restoreData} onChange={(e) => setRestoreData(e.target.checked)} />
           回滚时同时恢复数据
@@ -771,7 +773,7 @@ function VersionsCard({ nodeId, project, member }: { nodeId: string; project: Pr
                 </td>
                 <td className="py-1.5 pr-3 font-mono text-muted-foreground">{Object.values(v.images).join(", ").slice(0, 80)}</td>
                 <td className="py-1.5 text-right">
-                  {v.version !== member.deployedVersion && v.deployedAt && (
+                  {v.version !== container.deployedVersion && v.deployedAt && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -791,21 +793,21 @@ function VersionsCard({ nodeId, project, member }: { nodeId: string; project: Pr
   );
 }
 
-// ---- 加成员 ----
+// ---- 加容器 ----
 
-function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: Project; onAdded: (name: string) => void }) {
+function AddContainerCard({ nodeId, project, onAdded }: { nodeId: string; project: Project; onAdded: (name: string) => void }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(project.members.length === 0);
+  const [open, setOpen] = useState(project.containers.length === 0);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const form = useMemberForm();
+  const form = useContainerForm();
 
   const add = async () => {
     setBusy(true);
     setError("");
     try {
-      await projectClient.addNodeProjectMember({ nodeId, projectId: project.id, name, config: form.build() });
+      await projectClient.addNodeProjectContainer({ nodeId, projectId: project.id, name, config: form.build() });
       queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
       onAdded(name);
       setName("");
@@ -820,10 +822,10 @@ function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: 
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-4">
-        <CardTitle>加成员</CardTitle>
+        <CardTitle>加容器</CardTitle>
         {!open && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-            加一个成员
+            加一个容器或容器组
           </Button>
         )}
       </CardHeader>
@@ -836,8 +838,8 @@ function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: 
               add();
             }}
           >
-            <Field label="成员名" htmlFor="new-member" hint="小写字母、数字和 -，创建后不能改。单容器成员在项目内网里就叫这个名字；compose 里的服务叫“服务.成员名”。">
-              <Input id="new-member" value={name} onChange={(e) => setName(e.target.value)} required className="font-mono" placeholder="api" />
+            <Field label="容器名" htmlFor="new-container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
+              <Input id="new-container" value={name} onChange={(e) => setName(e.target.value)} required className="font-mono" placeholder="api" />
             </Field>
             {form.fields}
             {error && <Alert>{error}</Alert>}
@@ -930,7 +932,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
         projectId: project.id,
         applySharedEnv: true,
         settingsRevision: project.revision,
-        targets: project.members.filter((m) => affected[m.name]).map((m) => ({ member: m.name, baseRevision: m.revision })),
+        targets: project.containers.filter((m) => affected[m.name]).map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
 
@@ -938,7 +940,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
     <Card>
       <CardHeader>
         <CardTitle>项目设置</CardTitle>
-        <p className="text-sm text-muted-foreground">名称、内网、共享网络改了立即生效，不进成员的版本。开关内网时单容器成员会重建（短暂重启）。</p>
+        <p className="text-sm text-muted-foreground">名称、内网、共享网络改了立即生效，不进容器的版本。开关内网时单个容器会重建（短暂重启）。</p>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
         {error && <Alert>{error}</Alert>}
@@ -952,10 +954,10 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
         </div>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={intranet} onChange={(e) => setIntranet(e.target.checked)} />
-          项目内网：成员之间用"成员名"（单容器）或"服务.成员"（compose）互相访问
+          项目内网：容器之间用"容器名"（单个容器）或"容器.容器组"（容器组）互相访问
         </label>
         <div className="grid gap-2 rounded-md border p-3">
-          <span className="font-medium">共享网络（和加入它的其他项目互通，成员在里面叫"成员.网络名"；网络和其他节点相连时也能跨节点访问）</span>
+          <span className="font-medium">共享网络（和加入它的其他项目互通，容器在里面叫"容器.网络名"；网络和其他节点相连时也能跨节点访问）</span>
           <Input
             value={networkName}
             onChange={(e) => setNetworkName(e.target.value)}
@@ -964,7 +966,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
           />
           {s?.networkName && networkName !== s.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
             <p className="rounded border border-warning/40 bg-warning/15 px-2 py-1 text-xs">
-              改网络名以后，其他项目里用"成员.{s.networkName}"访问本项目的地方，要跟着改成"成员.{networkName || defaultNetworkName(name, project.id)}"。
+              改网络名以后，其他项目里用"容器.{s.networkName}"访问本项目的地方，要跟着改成"容器.{networkName || defaultNetworkName(name, project.id)}"。
             </p>
           )}
           {networks.data?.networks.length ? (
@@ -988,7 +990,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
           ) : (
             <span className="text-xs text-muted-foreground">本节点还没有共享网络，在节点页里创建。</span>
           )}
-          <Field label="跨节点端口（相连节点经代理访问本项目时，容器没声明的端口；一行一个，如 pg:5432，compose 成员写 服务.成员:端口）" htmlFor="p-linkports">
+          <Field label="跨节点端口（相连节点经代理访问本项目时，容器没声明的端口；一行一个，如 pg:5432，容器组里的写 容器.容器组:端口）" htmlFor="p-linkports">
             <textarea
               id="p-linkports"
               className="min-h-16 rounded-md border bg-transparent px-3 py-2 font-mono text-sm"
@@ -1006,15 +1008,15 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
 
         <div className="grid gap-2 border-t pt-4">
           <span className="flex items-center gap-2 font-medium">
-            共享变量（所有成员的 compose 里都能用 ${"{变量}"} 引用，同名时以成员自己的为准）
+            共享变量（所有容器的 compose 里都能用 ${"{变量}"} 引用，同名时以容器自己的为准）
             {project.hasSharedEnvDraft && <Badge tone="warning">草稿</Badge>}
           </span>
           <Textarea value={sharedEnv} onChange={(e) => setSharedEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
           {project.hasSharedEnvDraft && (
             <div className="grid gap-1">
-              <span className="text-xs text-muted-foreground">部署共享变量时一起部署这些成员（默认是引用了改动变量的）：</span>
+              <span className="text-xs text-muted-foreground">部署共享变量时一起部署这些容器（默认是引用了改动变量的）：</span>
               <div className="flex flex-wrap gap-3">
-                {project.members.map((m) => (
+                {project.containers.map((m) => (
                   <label key={m.name} className="flex items-center gap-1.5">
                     <input type="checkbox" checked={!!affected[m.name]} onChange={(e) => setAffected({ ...affected, [m.name]: e.target.checked })} />
                     {m.name}
@@ -1057,7 +1059,7 @@ const sourceLabel: Record<string, string> = {
   manual: "手动",
   git: "git 拉取",
   image: "镜像更新",
-  rollback: "成员回滚",
+  rollback: "容器回滚",
   shared_env: "共享变量",
   restore: "回到某次部署",
 };
@@ -1073,7 +1075,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
     <Card>
       <CardHeader>
         <CardTitle>部署记录</CardTitle>
-        <p className="text-sm text-muted-foreground">每次部署（一个或多个成员）一条，记下部署后所有成员的版本。可以把整个项目回到某次部署时的状态。</p>
+        <p className="text-sm text-muted-foreground">每次部署（一个或多个容器）一条，记下部署后所有容器的版本。可以把整个项目回到某次部署时的状态。</p>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         {output}
@@ -1086,7 +1088,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
                 <td className="py-1.5 pr-3 text-muted-foreground">{timeAgo(toDate(d.time))}</td>
                 <td className="py-1.5 pr-3">
                   {sourceLabel[d.source] ?? d.source}
-                  {d.restoreOf > 0n && ` #${d.restoreOf}`}：{d.members.join("、")}
+                  {d.restoreOf > 0n && ` #${d.restoreOf}`}：{d.containers.join("、")}
                   {!d.success && <span className="ml-2 text-destructive">失败：{d.error}</span>}
                 </td>
                 <td className="py-1.5 pr-3 font-mono text-muted-foreground">
@@ -1101,7 +1103,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
                     variant="ghost"
                     disabled={busy}
                     onClick={() =>
-                      confirm(`把项目回到部署 #${d.id} 时的状态？版本不一样的成员都会回滚。`) &&
+                      confirm(`把项目回到部署 #${d.id} 时的状态？版本不一样的容器都会回滚。`) &&
                       run(() => projectClient.restoreNodeProjectDeployment({ nodeId, projectId: project.id, deploymentId: d.id }))
                     }
                   >
@@ -1122,12 +1124,12 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
 
 function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Project; services: ServiceStatus[] }) {
   const queryClient = useQueryClient();
-  const empty = { name: "", member: "", service: "", target: "", protocol: "http", published: "", domains: "", httpOnly: false };
+  const empty = { name: "", container: "", service: "", target: "", protocol: "http", published: "", domains: "", httpOnly: false };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState("");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
-  const member = form.member || project.members[0]?.name || "";
-  const memberServices = [...new Set(services.filter((s) => s.member === member).map((s) => s.name))];
+  const container = form.container || project.containers[0]?.name || "";
+  const containerServices = [...new Set(services.filter((s) => s.container === container).map((s) => s.name))];
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const address = nodes.data?.nodes.find((n) => n.id === nodeId)?.address ?? "";
   // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
@@ -1145,8 +1147,8 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
         projectId: project.id,
         route: {
           name: form.name,
-          member,
-          service: form.service || memberServices[0] || "",
+          container,
+          service: form.service || containerServices[0] || "",
           target: Number(form.target),
           protocol: form.protocol,
           published: Number(form.published || 0),
@@ -1176,7 +1178,7 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
       <CardHeader>
         <CardTitle>端口映射</CardTitle>
         <p className="text-sm text-muted-foreground">
-          保存后立即生效，不需要重新部署。文件在 {project.dir}/config/routes/，也可以直接在节点上修改。成员 compose 里新出现的 ports 会在部署时自动导入。
+          保存后立即生效，不需要重新部署。文件在 {project.dir}/config/routes/，也可以直接在节点上修改。容器 compose 里新出现的 ports 会在部署时自动导入。
         </p>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
@@ -1194,8 +1196,8 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
                       <span className="text-destructive">{r.error}</span>
                     ) : (
                       <span className="font-mono text-xs">
-                        {r.member}
-                        {r.service !== r.member && `/${r.service}`}:{r.target} →{" "}
+                        {r.container}
+                        {r.service !== r.container && `/${r.service}`}:{r.target} →{" "}
                         {r.domains.length ? r.domains.join(", ") + (r.httpOnly ? "（仅 HTTP）" : "") : `${r.protocol}/${r.published}`}
                       </span>
                     )}
@@ -1217,7 +1219,7 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
                       onClick={() =>
                         setForm({
                           name: r.name,
-                          member: r.member,
+                          container: r.container,
                           service: r.service,
                           target: String(r.target),
                           protocol: r.protocol || "http",
@@ -1239,13 +1241,13 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
           </table>
         )}
         <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-7">
-          <Select value={member} onChange={(e) => setForm({ ...form, member: e.target.value, service: "" })}>
-            {project.members.map((m) => (
+          <Select value={container} onChange={(e) => setForm({ ...form, container: e.target.value, service: "" })}>
+            {project.containers.map((m) => (
               <option key={m.name}>{m.name}</option>
             ))}
           </Select>
-          <Select value={form.service || memberServices[0] || ""} onChange={(e) => setForm({ ...form, service: e.target.value })}>
-            {memberServices.map((s) => (
+          <Select value={form.service || containerServices[0] || ""} onChange={(e) => setForm({ ...form, service: e.target.value })}>
+            {containerServices.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </Select>
@@ -1283,7 +1285,7 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
   const { run, busy, output } = useRun(nodeId, project.id);
   const ref = { nodeId, projectId: project.id };
   const snapshots = useQuery({ queryKey: ["snapshots", nodeId, project.id], queryFn: () => projectClient.listNodeProjectSnapshots(ref) });
-  const [member, setMember] = useState("");
+  const [container, setContainer] = useState("");
 
   return (
     <Card>
@@ -1295,15 +1297,15 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <p className="text-muted-foreground">
-          定时和手动快照保存所有成员的数据（data/ 和 volumes/），可以在这里恢复，配置不变。"部署前的数据"和"版本文件"供回滚用，在成员的版本列表里回滚。
+          定时和手动快照保存所有容器的数据（data/ 和 volumes/），可以在这里恢复，配置不变。"部署前的数据"和"版本文件"供回滚用，在容器的版本列表里回滚。
         </p>
         <label className="flex items-center gap-2">
           <span>恢复时：</span>
-          <Select value={member} onChange={(e) => setMember(e.target.value)} className="w-44">
+          <Select value={container} onChange={(e) => setContainer(e.target.value)} className="w-44">
             <option value="">恢复整个项目</option>
-            {project.members.map((m) => (
+            {project.containers.map((m) => (
               <option key={m.name} value={m.name}>
-                只恢复成员 {m.name}
+                只恢复容器 {m.name}
               </option>
             ))}
           </Select>
@@ -1316,7 +1318,7 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
                 <td className="py-1.5 pr-3">{snapshotKinds[sn.kind] ?? sn.kind}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">{timeAgo(toDate(sn.time))}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">
-                  {sn.member && `${sn.member} `}
+                  {sn.container && `${sn.container} `}
                   {sn.version > 0n && `v${sn.version}`} {(Number(sn.size) / 1024).toFixed(1)} KB
                 </td>
                 <td className="py-1.5 text-right">
@@ -1326,8 +1328,8 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
                       variant="ghost"
                       disabled={busy}
                       onClick={() =>
-                        confirm(`从这个快照恢复${member ? `成员 ${member} 的` : "整个项目的"} data/ 和 volumes/？会先停止。`) &&
-                        run(() => projectClient.restoreNodeProjectSnapshot({ ...ref, snapshotId: sn.id, member }))
+                        confirm(`从这个快照恢复${container ? `容器 ${container} 的` : "整个项目的"} data/ 和 volumes/？会先停止。`) &&
+                        run(() => projectClient.restoreNodeProjectSnapshot({ ...ref, snapshotId: sn.id, container }))
                       }
                     >
                       恢复
@@ -1351,7 +1353,7 @@ function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
   const [error, setError] = useState("");
 
   const remove = async () => {
-    if (!deleteDir && !confirm(`删除项目 ${project.name}？所有成员的容器会被删除，项目目录保留。`)) return;
+    if (!deleteDir && !confirm(`删除项目 ${project.name}？所有容器的容器会被删除，项目目录保留。`)) return;
     setError("");
     try {
       await projectClient.deleteNodeProject({
@@ -1375,7 +1377,7 @@ function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         {error && <Alert>{error}</Alert>}
-        <p className="text-muted-foreground">停止并删除所有成员的容器和项目网络。项目目录（含数据和快照）默认保留在 {project.dir}。</p>
+        <p className="text-muted-foreground">停止并删除所有容器的容器和项目网络。项目目录（含数据和快照）默认保留在 {project.dir}。</p>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={deleteDir} onChange={(e) => setDeleteDir(e.target.checked)} />
           同时删除项目目录（数据、快照都会删掉，无法恢复）

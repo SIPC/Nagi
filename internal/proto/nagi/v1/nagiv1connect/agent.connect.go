@@ -41,11 +41,12 @@ const (
 	AgentServiceCreateProjectProcedure = "/nagi.v1.AgentService/CreateProject"
 	// AgentServiceGetProjectProcedure is the fully-qualified name of the AgentService's GetProject RPC.
 	AgentServiceGetProjectProcedure = "/nagi.v1.AgentService/GetProject"
-	// AgentServiceAddMemberProcedure is the fully-qualified name of the AgentService's AddMember RPC.
-	AgentServiceAddMemberProcedure = "/nagi.v1.AgentService/AddMember"
-	// AgentServiceDeleteMemberProcedure is the fully-qualified name of the AgentService's DeleteMember
+	// AgentServiceAddContainerProcedure is the fully-qualified name of the AgentService's AddContainer
 	// RPC.
-	AgentServiceDeleteMemberProcedure = "/nagi.v1.AgentService/DeleteMember"
+	AgentServiceAddContainerProcedure = "/nagi.v1.AgentService/AddContainer"
+	// AgentServiceDeleteContainerProcedure is the fully-qualified name of the AgentService's
+	// DeleteContainer RPC.
+	AgentServiceDeleteContainerProcedure = "/nagi.v1.AgentService/DeleteContainer"
 	// AgentServiceSaveDraftProcedure is the fully-qualified name of the AgentService's SaveDraft RPC.
 	AgentServiceSaveDraftProcedure = "/nagi.v1.AgentService/SaveDraft"
 	// AgentServiceDiscardDraftProcedure is the fully-qualified name of the AgentService's DiscardDraft
@@ -205,11 +206,11 @@ type AgentServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
-	// 往项目里加一个成员（只保存，不部署）。
-	AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
-	// 删除成员：停止并删除它的容器，目录默认保留。
-	DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
-	// 保存成员的草稿。
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.AddContainerResponse], error)
+	// 删除容器：停止并删除它的容器，目录默认保留。
+	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
+	// 保存容器的草稿。
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
@@ -219,7 +220,7 @@ type AgentServiceClient interface {
 	DiscardSharedEnv(context.Context, *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
 	// 项目的部署记录，最新的在前。
 	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
-	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
 	RestoreDeployment(context.Context, *connect.Request[v1.RestoreDeploymentRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 本节点的共享网络。
 	ListSharedNetworks(context.Context, *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
@@ -232,11 +233,11 @@ type AgentServiceClient interface {
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
-	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
-	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -245,7 +246,7 @@ type AgentServiceClient interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
-	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
 	RebuildProject(context.Context, *connect.Request[v1.RebuildProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -258,9 +259,9 @@ type AgentServiceClient interface {
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
 	CheckRemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
-	// mesh 状态：到每个成员走哪条路径。
+	// mesh 状态：到每个容器走哪条路径。
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
-	// 经 mesh 连一下某个成员，测往返时间。
+	// 经 mesh 连一下某个容器，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// ---- 备份节点：源节点一侧 ----
 	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
@@ -338,16 +339,16 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 			connect.WithClientOptions(opts...),
 		),
-		addMember: connect.NewClient[v1.AddMemberRequest, v1.AddMemberResponse](
+		addContainer: connect.NewClient[v1.AddContainerRequest, v1.AddContainerResponse](
 			httpClient,
-			baseURL+AgentServiceAddMemberProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("AddMember")),
+			baseURL+AgentServiceAddContainerProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("AddContainer")),
 			connect.WithClientOptions(opts...),
 		),
-		deleteMember: connect.NewClient[v1.DeleteMemberRequest, v1.DeleteMemberResponse](
+		deleteContainer: connect.NewClient[v1.DeleteContainerRequest, v1.DeleteContainerResponse](
 			httpClient,
-			baseURL+AgentServiceDeleteMemberProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("DeleteMember")),
+			baseURL+AgentServiceDeleteContainerProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteContainer")),
 			connect.WithClientOptions(opts...),
 		),
 		saveDraft: connect.NewClient[v1.SaveDraftRequest, v1.SaveDraftResponse](
@@ -688,8 +689,8 @@ type agentServiceClient struct {
 	listProjects          *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
 	createProject         *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
 	getProject            *connect.Client[v1.GetProjectRequest, v1.GetProjectResponse]
-	addMember             *connect.Client[v1.AddMemberRequest, v1.AddMemberResponse]
-	deleteMember          *connect.Client[v1.DeleteMemberRequest, v1.DeleteMemberResponse]
+	addContainer          *connect.Client[v1.AddContainerRequest, v1.AddContainerResponse]
+	deleteContainer       *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
 	saveDraft             *connect.Client[v1.SaveDraftRequest, v1.SaveDraftResponse]
 	discardDraft          *connect.Client[v1.DiscardDraftRequest, v1.DiscardDraftResponse]
 	updateProjectSettings *connect.Client[v1.UpdateProjectSettingsRequest, v1.UpdateProjectSettingsResponse]
@@ -762,14 +763,14 @@ func (c *agentServiceClient) GetProject(ctx context.Context, req *connect.Reques
 	return c.getProject.CallUnary(ctx, req)
 }
 
-// AddMember calls nagi.v1.AgentService.AddMember.
-func (c *agentServiceClient) AddMember(ctx context.Context, req *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
-	return c.addMember.CallUnary(ctx, req)
+// AddContainer calls nagi.v1.AgentService.AddContainer.
+func (c *agentServiceClient) AddContainer(ctx context.Context, req *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.AddContainerResponse], error) {
+	return c.addContainer.CallUnary(ctx, req)
 }
 
-// DeleteMember calls nagi.v1.AgentService.DeleteMember.
-func (c *agentServiceClient) DeleteMember(ctx context.Context, req *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
-	return c.deleteMember.CallUnary(ctx, req)
+// DeleteContainer calls nagi.v1.AgentService.DeleteContainer.
+func (c *agentServiceClient) DeleteContainer(ctx context.Context, req *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error) {
+	return c.deleteContainer.CallUnary(ctx, req)
 }
 
 // SaveDraft calls nagi.v1.AgentService.SaveDraft.
@@ -1052,11 +1053,11 @@ type AgentServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.CreateProjectResponse], error)
 	GetProject(context.Context, *connect.Request[v1.GetProjectRequest]) (*connect.Response[v1.GetProjectResponse], error)
-	// 往项目里加一个成员（只保存，不部署）。
-	AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error)
-	// 删除成员：停止并删除它的容器，目录默认保留。
-	DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error)
-	// 保存成员的草稿。
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.AddContainerResponse], error)
+	// 删除容器：停止并删除它的容器，目录默认保留。
+	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
+	// 保存容器的草稿。
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error)
 	DiscardDraft(context.Context, *connect.Request[v1.DiscardDraftRequest]) (*connect.Response[v1.DiscardDraftResponse], error)
 	// 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
@@ -1066,7 +1067,7 @@ type AgentServiceHandler interface {
 	DiscardSharedEnv(context.Context, *connect.Request[v1.DiscardSharedEnvRequest]) (*connect.Response[v1.DiscardSharedEnvResponse], error)
 	// 项目的部署记录，最新的在前。
 	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
-	// 回到某次部署时的状态：版本不一样的成员都回滚到那次记录的版本，作为一次一起部署执行。
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
 	RestoreDeployment(context.Context, *connect.Request[v1.RestoreDeploymentRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 本节点的共享网络。
 	ListSharedNetworks(context.Context, *connect.Request[v1.ListSharedNetworksRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
@@ -1079,11 +1080,11 @@ type AgentServiceHandler interface {
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
 	ListVersions(context.Context, *connect.Request[v1.ListVersionsRequest]) (*connect.Response[v1.ListVersionsResponse], error)
-	// 回滚成员到某个版本：用它的配置、文件和镜像生成这个成员的新版本并部署，可选同时恢复数据。
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListSnapshots(context.Context, *connect.Request[v1.ListSnapshotsRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.CreateSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
-	// 从快照恢复 data/ 和 volumes/（整个项目或一个成员）：停止、恢复文件、重新启动。
+	// 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -1092,7 +1093,7 @@ type AgentServiceHandler interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
-	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
 	RebuildProject(context.Context, *connect.Request[v1.RebuildProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
@@ -1105,9 +1106,9 @@ type AgentServiceHandler interface {
 	RemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
 	// 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
 	CheckRemovePanel(context.Context, *connect.Request[v1.RemovePanelRequest]) (*connect.Response[v1.RemovePanelResponse], error)
-	// mesh 状态：到每个成员走哪条路径。
+	// mesh 状态：到每个容器走哪条路径。
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
-	// 经 mesh 连一下某个成员，测往返时间。
+	// 经 mesh 连一下某个容器，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// ---- 备份节点：源节点一侧 ----
 	// 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
@@ -1181,16 +1182,16 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("GetProject")),
 		connect.WithHandlerOptions(opts...),
 	)
-	agentServiceAddMemberHandler := connect.NewUnaryHandler(
-		AgentServiceAddMemberProcedure,
-		svc.AddMember,
-		connect.WithSchema(agentServiceMethods.ByName("AddMember")),
+	agentServiceAddContainerHandler := connect.NewUnaryHandler(
+		AgentServiceAddContainerProcedure,
+		svc.AddContainer,
+		connect.WithSchema(agentServiceMethods.ByName("AddContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
-	agentServiceDeleteMemberHandler := connect.NewUnaryHandler(
-		AgentServiceDeleteMemberProcedure,
-		svc.DeleteMember,
-		connect.WithSchema(agentServiceMethods.ByName("DeleteMember")),
+	agentServiceDeleteContainerHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteContainerProcedure,
+		svc.DeleteContainer,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceSaveDraftHandler := connect.NewUnaryHandler(
@@ -1531,10 +1532,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateProjectHandler.ServeHTTP(w, r)
 		case AgentServiceGetProjectProcedure:
 			agentServiceGetProjectHandler.ServeHTTP(w, r)
-		case AgentServiceAddMemberProcedure:
-			agentServiceAddMemberHandler.ServeHTTP(w, r)
-		case AgentServiceDeleteMemberProcedure:
-			agentServiceDeleteMemberHandler.ServeHTTP(w, r)
+		case AgentServiceAddContainerProcedure:
+			agentServiceAddContainerHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteContainerProcedure:
+			agentServiceDeleteContainerHandler.ServeHTTP(w, r)
 		case AgentServiceSaveDraftProcedure:
 			agentServiceSaveDraftHandler.ServeHTTP(w, r)
 		case AgentServiceDiscardDraftProcedure:
@@ -1666,12 +1667,12 @@ func (UnimplementedAgentServiceHandler) GetProject(context.Context, *connect.Req
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetProject is not implemented"))
 }
 
-func (UnimplementedAgentServiceHandler) AddMember(context.Context, *connect.Request[v1.AddMemberRequest]) (*connect.Response[v1.AddMemberResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AddMember is not implemented"))
+func (UnimplementedAgentServiceHandler) AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.AddContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AddContainer is not implemented"))
 }
 
-func (UnimplementedAgentServiceHandler) DeleteMember(context.Context, *connect.Request[v1.DeleteMemberRequest]) (*connect.Response[v1.DeleteMemberResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteMember is not implemented"))
+func (UnimplementedAgentServiceHandler) DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteContainer is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.SaveDraftResponse], error) {

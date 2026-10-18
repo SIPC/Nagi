@@ -65,7 +65,7 @@ type MeshServiceClient interface {
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
-	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
 	SharedNetworkInfo(context.Context, *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error)
 }
 
@@ -184,7 +184,7 @@ type MeshServiceHandler interface {
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
-	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
 	SharedNetworkInfo(context.Context, *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error)
 }
 

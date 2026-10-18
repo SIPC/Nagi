@@ -261,8 +261,8 @@ function AddNode() {
   );
 }
 
-// 节点上的共享网络：加入的项目之间可以互相访问（成员在里面叫"成员.网络名"）。
-// 可以和其他节点的同名网络连起来，对方的成员在本节点有一个同名的代理容器。
+// 节点上的共享网络：加入的项目之间可以互相访问（容器在里面叫"容器.网络名"）。
+// 可以和其他节点的同名网络连起来，对方的容器在本节点有一个同名的代理容器。
 function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string; name: string }[] }) {
   const queryClient = useQueryClient();
   const list = useQuery({
@@ -285,7 +285,7 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
   return (
     <div className="grid gap-3 py-3 text-sm">
       <p className="text-muted-foreground">
-        项目之间默认互相访问不了。共享网络让几个项目互通，例如几个应用共用一个数据库项目：建好以后在各项目的"项目设置"里加入，成员在里面叫"成员.网络名"。
+        项目之间默认互相访问不了。共享网络让几个项目互通，例如几个应用共用一个数据库项目：建好以后在各项目的"项目设置"里加入，容器在里面叫"容器.网络名"。
         和其他节点的同名网络连起来，不同节点上的项目也能这样访问。
       </p>
       {error && <Alert>{error}</Alert>}
@@ -317,7 +317,7 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
           )}
           {n.remotes.length > 0 && (
             <div className="text-xs text-muted-foreground">
-              对方的成员（本节点有同名的代理）：
+              对方的容器（本节点有同名的代理）：
               {n.remotes.map((r) => `${r.alias}（${r.nodeName}，${r.ports.length ? "端口 " + r.ports.join("、") : "没有端口"}）`).join("、")}
             </div>
           )}

@@ -265,14 +265,11 @@ func (e *Engine) evaluate(ctx context.Context) {
 	}
 
 	// 健康检查失败。
-	if containers, err := e.docker.ManagedContainers(ctx, "nagi.project"); err == nil {
+	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
 			if c.Health == "unhealthy" {
-				what := "成员 " + c.Member
-				if c.Service != c.Member {
-					what += " 的服务 " + c.Service
-				}
-				active["health:"+c.Project+"/"+c.Member+"/"+c.Service] = &nagiv1.Alert{
+				what := describeService(c.Container + "/" + c.Service)
+				active["health:"+c.Project+"/"+c.Container+"/"+c.Service] = &nagiv1.Alert{
 					Title: what + " 健康检查失败", Project: e.projectName(c.Project),
 				}
 			}
@@ -347,13 +344,14 @@ func cutLast(s, sep string) (before, after string, ok bool) {
 
 func isEventKey(key string) bool { return strings.HasPrefix(key, "event:") }
 
-// describeService 把"成员/服务"写成给人看的样子：单容器成员（服务名就是成员名）只写成员。
-func describeService(memberService string) string {
-	member, service, _ := strings.Cut(memberService, "/")
-	if service == "" || service == member {
-		return "成员 " + member
+// describeService 把"容器/服务"写成给人看的样子：单个容器（服务名就是容器名）写"容器 X"，
+// 容器组里的写"容器组 X 里的容器 Y"（compose 里的一个服务就是组里的一个容器）。
+func describeService(containerService string) string {
+	container, service, _ := strings.Cut(containerService, "/")
+	if service == "" || service == container {
+		return "容器 " + container
 	}
-	return "成员 " + member + " 的服务 " + service
+	return "容器组 " + container + " 里的容器 " + service
 }
 
 func splitContainer(name string) (project, service string) {

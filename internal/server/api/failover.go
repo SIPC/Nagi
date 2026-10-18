@@ -39,12 +39,12 @@ func (s *projectService) SetNodeProjectFailover(ctx context.Context, req *connec
 	if err != nil {
 		return nil, err
 	}
-	member := func(nodeID, dir string) (*nagiv1.FailoverMember, error) {
+	participant := func(nodeID, dir string) (*nagiv1.FailoverParticipant, error) {
 		k, err := s.Nodes.NodeMeshKey(nodeID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
-		return &nagiv1.FailoverMember{Key: k[:], NodeId: nodeID, Name: s.nodeName(ctx, nodeID), Dir: dir}, nil
+		return &nagiv1.FailoverParticipant{Key: k[:], NodeId: nodeID, Name: s.nodeName(ctx, nodeID), Dir: dir}, nil
 	}
 	proj, err := a.GetProject(ctx, &nagiv1.GetProjectRequest{Id: id})
 	if err != nil {
@@ -59,10 +59,10 @@ func (s *projectService) SetNodeProjectFailover(ctx context.Context, req *connec
 		ProjectId: id, ProjectName: proj.GetProject().GetProject().GetName(),
 		LeaseSeconds: req.Msg.GetLeaseSeconds(), AutoStateful: req.Msg.GetAutoStateful(),
 	}
-	if cfg.A, err = member(aID, proj.GetProject().GetProject().GetDir()); err != nil {
+	if cfg.A, err = participant(aID, proj.GetProject().GetProject().GetDir()); err != nil {
 		return nil, err
 	}
-	if cfg.B, err = member(bID, req.Msg.GetStandbyDir()); err != nil {
+	if cfg.B, err = participant(bID, req.Msg.GetStandbyDir()); err != nil {
 		return nil, err
 	}
 	var w nagiv1.AgentServiceClient
@@ -72,12 +72,12 @@ func (s *projectService) SetNodeProjectFailover(ctx context.Context, req *connec
 			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("面板的 mesh 没有启动，不能担任见证人"))
 		}
 		k := m.PublicKey()
-		cfg.Witness, cfg.WitnessIsPanel = &nagiv1.FailoverMember{Key: k[:], Name: "面板"}, true
+		cfg.Witness, cfg.WitnessIsPanel = &nagiv1.FailoverParticipant{Key: k[:], Name: "面板"}, true
 	} else {
 		if w, err = s.agent(wID); err != nil {
 			return nil, err
 		}
-		if cfg.Witness, err = member(wID, ""); err != nil {
+		if cfg.Witness, err = participant(wID, ""); err != nil {
 			return nil, err
 		}
 	}
@@ -212,7 +212,7 @@ func (s *projectService) ChangeNodeProjectWitness(ctx context.Context, req *conn
 		if cfg.GetWitnessIsPanel() && bytes.Equal(cfg.GetWitness().GetKey(), k[:]) {
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("本面板已经是见证人"))
 		}
-		next.Witness, next.WitnessIsPanel = &nagiv1.FailoverMember{Key: k[:], Name: "面板"}, true
+		next.Witness, next.WitnessIsPanel = &nagiv1.FailoverParticipant{Key: k[:], Name: "面板"}, true
 	} else {
 		if wID == aID || wID == bID {
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("见证人不能是项目所在的节点或顶替节点"))
@@ -227,7 +227,7 @@ func (s *projectService) ChangeNodeProjectWitness(ctx context.Context, req *conn
 		if err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
-		next.Witness, next.WitnessIsPanel = &nagiv1.FailoverMember{Key: k[:], NodeId: wID, Name: s.nodeName(ctx, wID)}, false
+		next.Witness, next.WitnessIsPanel = &nagiv1.FailoverParticipant{Key: k[:], NodeId: wID, Name: s.nodeName(ctx, wID)}, false
 	}
 
 	clearNew := func() {

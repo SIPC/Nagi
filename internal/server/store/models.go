@@ -60,5 +60,5 @@ type Webhook struct {
 	TokenHash string
 	NodeID    string
 	ProjectID string
-	Member    string
+	Container string
 }

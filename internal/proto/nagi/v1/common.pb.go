@@ -71,7 +71,7 @@ func (Stateful) EnumDescriptor() ([]byte, []int) {
 	return file_nagi_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
-// Project 是节点上保存的项目：一组一起工作的成员，共用项目目录和内网。项目数据以节点为准。
+// Project 是节点上保存的项目：一组一起工作的容器，共用项目目录和内网。项目数据以节点为准。
 type Project struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 全局唯一的项目 ID。
@@ -81,15 +81,15 @@ type Project struct {
 	// 项目目录，例如 /mnt/qmt。
 	Dir string `protobuf:"bytes,3,opt,name=dir,proto3" json:"dir,omitempty"`
 	// 项目设置的修订号：修改名称、共享变量（草稿）、内网、共享网络时加一，用于多面板冲突检测。
-	// 成员有自己的修订号（Member.revision）。
+	// 容器有自己的修订号（Container.revision）。
 	Revision  int64                  `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// 端口映射（config/routes/ 下的文件）。
 	Routes []*Exposure `protobuf:"bytes,15,rep,name=routes,proto3" json:"routes,omitempty"`
-	// 项目是否有状态：只要有一个成员有状态就算。
+	// 项目是否有状态：只要有一个容器有状态就算。
 	Stateful bool `protobuf:"varint,16,opt,name=stateful,proto3" json:"stateful,omitempty"`
-	// 成员，按创建顺序。
-	Members []*Member `protobuf:"bytes,17,rep,name=members,proto3" json:"members,omitempty"`
+	// 容器，按创建顺序。
+	Containers []*Container `protobuf:"bytes,17,rep,name=containers,proto3" json:"containers,omitempty"`
 	// 项目设置（共享变量是已经部署过的那份）。
 	Settings *ProjectSettings `protobuf:"bytes,18,opt,name=settings,proto3" json:"settings,omitempty"`
 	// 共享变量是否有没部署的草稿。
@@ -178,9 +178,9 @@ func (x *Project) GetStateful() bool {
 	return false
 }
 
-func (x *Project) GetMembers() []*Member {
+func (x *Project) GetContainers() []*Container {
 	if x != nil {
-		return x.Members
+		return x.Containers
 	}
 	return nil
 }
@@ -206,20 +206,20 @@ func (x *Project) GetSharedEnvDraft() []*EnvVar {
 	return nil
 }
 
-// ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进成员的版本。
+// ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进容器的版本。
 type ProjectSettings struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 共享变量：所有成员的 compose 里都能用 ${变量} 引用，同名时以成员自己的变量为准。
+	// 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
 	SharedEnv []*EnvVar `protobuf:"bytes,1,rep,name=shared_env,json=sharedEnv,proto3" json:"shared_env,omitempty"`
-	// 关闭项目内网（默认开启：成员之间用"成员名"或"服务.成员"互相访问）。
+	// 关闭项目内网（默认开启：容器之间用"容器名"或"服务.容器组"互相访问）。
 	IntranetDisabled bool `protobuf:"varint,2,opt,name=intranet_disabled,json=intranetDisabled,proto3" json:"intranet_disabled,omitempty"`
-	// 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。成员在共享网络里的名字是"成员.网络名"。
+	// 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。容器在共享网络里的名字是"容器.网络名"。
 	NetworkName string `protobuf:"bytes,3,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
 	// 加入的共享网络。
 	SharedNetworks []string `protobuf:"bytes,4,rep,name=shared_networks,json=sharedNetworks,proto3" json:"shared_networks,omitempty"`
 	// 定时快照间隔（分钟），0 表示默认（60 分钟）。
 	SnapshotIntervalMinutes uint32 `protobuf:"varint,5,opt,name=snapshot_interval_minutes,json=snapshotIntervalMinutes,proto3" json:"snapshot_interval_minutes,omitempty"`
-	// 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"成员:端口"（compose 成员写"服务.成员:端口"）。
+	// 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
 	LinkPorts     []string `protobuf:"bytes,6,rep,name=link_ports,json=linkPorts,proto3" json:"link_ports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -297,12 +297,12 @@ func (x *ProjectSettings) GetLinkPorts() []string {
 	return nil
 }
 
-// Member 是项目里独立部署的单位：单容器（镜像表单）或一份 compose。
-type Member struct {
+// Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
+type Container struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 成员名，项目内唯一，创建后不能改。小写字母、数字和 -。
+	// 容器名，项目内唯一，创建后不能改。小写字母、数字和 -。
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// 修订号：保存这个成员的草稿或部署它时加一。
+	// 修订号：保存这个容器的草稿或部署它时加一。
 	Revision int64 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 	// 最新版本号。
 	LatestVersion int64 `protobuf:"varint,3,opt,name=latest_version,json=latestVersion,proto3" json:"latest_version,omitempty"`
@@ -310,42 +310,44 @@ type Member struct {
 	DeployedVersion int64                  `protobuf:"varint,4,opt,name=deployed_version,json=deployedVersion,proto3" json:"deployed_version,omitempty"`
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// 最新版本的配置。
-	Config   *MemberConfig `protobuf:"bytes,6,opt,name=config,proto3" json:"config,omitempty"`
-	HasDraft bool          `protobuf:"varint,7,opt,name=has_draft,json=hasDraft,proto3" json:"has_draft,omitempty"`
+	Config   *ContainerConfig `protobuf:"bytes,6,opt,name=config,proto3" json:"config,omitempty"`
+	HasDraft bool             `protobuf:"varint,7,opt,name=has_draft,json=hasDraft,proto3" json:"has_draft,omitempty"`
 	// 草稿内容，has_draft 为 false 时为空。
-	Draft *MemberConfig `protobuf:"bytes,8,opt,name=draft,proto3" json:"draft,omitempty"`
-	// 这个成员的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
+	Draft *ContainerConfig `protobuf:"bytes,8,opt,name=draft,proto3" json:"draft,omitempty"`
+	// 这个容器的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
 	DeployKey string `protobuf:"bytes,9,opt,name=deploy_key,json=deployKey,proto3" json:"deploy_key,omitempty"`
-	// webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署这个成员。
+	// webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署这个容器。
 	WebhookToken string `protobuf:"bytes,10,opt,name=webhook_token,json=webhookToken,proto3" json:"webhook_token,omitempty"`
 	// 最近一次拉取到的 git 提交。
 	LastCommit string `protobuf:"bytes,11,opt,name=last_commit,json=lastCommit,proto3" json:"last_commit,omitempty"`
 	// 实际判定的是否有状态（自动判断或用户指定）。
 	Stateful bool `protobuf:"varint,12,opt,name=stateful,proto3" json:"stateful,omitempty"`
-	// 共享变量有更新：这个成员引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
+	// 共享变量有更新：这个容器引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
 	SharedEnvOutdated bool `protobuf:"varint,13,opt,name=shared_env_outdated,json=sharedEnvOutdated,proto3" json:"shared_env_outdated,omitempty"`
 	// 不在快照范围内的命名 volume（external 或用了自定义 driver），按最新版本的配置算。
 	UnmanagedVolumes []string `protobuf:"bytes,14,rep,name=unmanaged_volumes,json=unmanagedVolumes,proto3" json:"unmanaged_volumes,omitempty"`
 	// 用 network_mode: host 的服务：不经过 Caddy、不在项目内网里，端口直接对外。
 	HostNetworkServices []string `protobuf:"bytes,15,rep,name=host_network_services,json=hostNetworkServices,proto3" json:"host_network_services,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// single：单个容器（镜像表单）；group：容器组（一份 compose，里面有几个容器）。
+	Kind          string `protobuf:"bytes,16,opt,name=kind,proto3" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Member) Reset() {
-	*x = Member{}
+func (x *Container) Reset() {
+	*x = Container{}
 	mi := &file_nagi_v1_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Member) String() string {
+func (x *Container) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Member) ProtoMessage() {}
+func (*Container) ProtoMessage() {}
 
-func (x *Member) ProtoReflect() protoreflect.Message {
+func (x *Container) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -357,154 +359,161 @@ func (x *Member) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Member.ProtoReflect.Descriptor instead.
-func (*Member) Descriptor() ([]byte, []int) {
+// Deprecated: Use Container.ProtoReflect.Descriptor instead.
+func (*Container) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Member) GetName() string {
+func (x *Container) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *Member) GetRevision() int64 {
+func (x *Container) GetRevision() int64 {
 	if x != nil {
 		return x.Revision
 	}
 	return 0
 }
 
-func (x *Member) GetLatestVersion() int64 {
+func (x *Container) GetLatestVersion() int64 {
 	if x != nil {
 		return x.LatestVersion
 	}
 	return 0
 }
 
-func (x *Member) GetDeployedVersion() int64 {
+func (x *Container) GetDeployedVersion() int64 {
 	if x != nil {
 		return x.DeployedVersion
 	}
 	return 0
 }
 
-func (x *Member) GetCreatedAt() *timestamppb.Timestamp {
+func (x *Container) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
 }
 
-func (x *Member) GetConfig() *MemberConfig {
+func (x *Container) GetConfig() *ContainerConfig {
 	if x != nil {
 		return x.Config
 	}
 	return nil
 }
 
-func (x *Member) GetHasDraft() bool {
+func (x *Container) GetHasDraft() bool {
 	if x != nil {
 		return x.HasDraft
 	}
 	return false
 }
 
-func (x *Member) GetDraft() *MemberConfig {
+func (x *Container) GetDraft() *ContainerConfig {
 	if x != nil {
 		return x.Draft
 	}
 	return nil
 }
 
-func (x *Member) GetDeployKey() string {
+func (x *Container) GetDeployKey() string {
 	if x != nil {
 		return x.DeployKey
 	}
 	return ""
 }
 
-func (x *Member) GetWebhookToken() string {
+func (x *Container) GetWebhookToken() string {
 	if x != nil {
 		return x.WebhookToken
 	}
 	return ""
 }
 
-func (x *Member) GetLastCommit() string {
+func (x *Container) GetLastCommit() string {
 	if x != nil {
 		return x.LastCommit
 	}
 	return ""
 }
 
-func (x *Member) GetStateful() bool {
+func (x *Container) GetStateful() bool {
 	if x != nil {
 		return x.Stateful
 	}
 	return false
 }
 
-func (x *Member) GetSharedEnvOutdated() bool {
+func (x *Container) GetSharedEnvOutdated() bool {
 	if x != nil {
 		return x.SharedEnvOutdated
 	}
 	return false
 }
 
-func (x *Member) GetUnmanagedVolumes() []string {
+func (x *Container) GetUnmanagedVolumes() []string {
 	if x != nil {
 		return x.UnmanagedVolumes
 	}
 	return nil
 }
 
-func (x *Member) GetHostNetworkServices() []string {
+func (x *Container) GetHostNetworkServices() []string {
 	if x != nil {
 		return x.HostNetworkServices
 	}
 	return nil
 }
 
-// MemberConfig 是成员一个版本的完整配置。
-type MemberConfig struct {
+func (x *Container) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+// ContainerConfig 是容器一个版本的完整配置。
+type ContainerConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// compose 原文。单容器成员由镜像表单生成。
+	// compose 原文。单个容器由镜像表单生成。
 	Compose string `protobuf:"bytes,1,opt,name=compose,proto3" json:"compose,omitempty"`
-	// 成员级变量：替换这个成员 compose 里的 ${变量}，同名时覆盖项目的共享变量。
+	// 容器级变量：替换这个容器 compose 里的 ${变量}，同名时覆盖项目的共享变量。
 	Env []*EnvVar `protobuf:"bytes,2,rep,name=env,proto3" json:"env,omitempty"`
 	// 服务级环境变量：键是服务名，只注入对应服务的容器。
 	ServiceEnv map[string]*EnvList `protobuf:"bytes,3,rep,name=service_env,json=serviceEnv,proto3" json:"service_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// 单容器成员才有。有它时 compose 由它生成，服务名就是成员名。
+	// 单个容器才有。有它时 compose 由它生成，服务名就是容器名。
 	Form *ImageForm `protobuf:"bytes,4,opt,name=form,proto3" json:"form,omitempty"`
-	// 文件来源。为空表示文件由用户自己放进成员的 data/。
+	// 文件来源。为空表示文件由用户自己放进容器的 data/。
 	Source *Source `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
-	// 更新文件时保留不动的路径（相对成员的 data/），例如 uploads/。
+	// 更新文件时保留不动的路径（相对容器的 data/），例如 uploads/。
 	// compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
 	Preserve []string `protobuf:"bytes,7,rep,name=preserve,proto3" json:"preserve,omitempty"`
-	// 是否有状态。默认自动判断：用了命名 volume 或有保留路径的成员算有状态。
+	// 是否有状态。默认自动判断：用了命名 volume 或有保留路径的容器算有状态。
 	Stateful Stateful `protobuf:"varint,8,opt,name=stateful,proto3,enum=nagi.v1.Stateful" json:"stateful,omitempty"`
-	// 一起部署时要先部署的成员（例如后端依赖数据库）。
+	// 一起部署时要先部署的容器（例如后端依赖数据库）。
 	DependsOn     []string `protobuf:"bytes,10,rep,name=depends_on,json=dependsOn,proto3" json:"depends_on,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MemberConfig) Reset() {
-	*x = MemberConfig{}
+func (x *ContainerConfig) Reset() {
+	*x = ContainerConfig{}
 	mi := &file_nagi_v1_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MemberConfig) String() string {
+func (x *ContainerConfig) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MemberConfig) ProtoMessage() {}
+func (*ContainerConfig) ProtoMessage() {}
 
-func (x *MemberConfig) ProtoReflect() protoreflect.Message {
+func (x *ContainerConfig) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -516,68 +525,68 @@ func (x *MemberConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MemberConfig.ProtoReflect.Descriptor instead.
-func (*MemberConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use ContainerConfig.ProtoReflect.Descriptor instead.
+func (*ContainerConfig) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_common_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *MemberConfig) GetCompose() string {
+func (x *ContainerConfig) GetCompose() string {
 	if x != nil {
 		return x.Compose
 	}
 	return ""
 }
 
-func (x *MemberConfig) GetEnv() []*EnvVar {
+func (x *ContainerConfig) GetEnv() []*EnvVar {
 	if x != nil {
 		return x.Env
 	}
 	return nil
 }
 
-func (x *MemberConfig) GetServiceEnv() map[string]*EnvList {
+func (x *ContainerConfig) GetServiceEnv() map[string]*EnvList {
 	if x != nil {
 		return x.ServiceEnv
 	}
 	return nil
 }
 
-func (x *MemberConfig) GetForm() *ImageForm {
+func (x *ContainerConfig) GetForm() *ImageForm {
 	if x != nil {
 		return x.Form
 	}
 	return nil
 }
 
-func (x *MemberConfig) GetSource() *Source {
+func (x *ContainerConfig) GetSource() *Source {
 	if x != nil {
 		return x.Source
 	}
 	return nil
 }
 
-func (x *MemberConfig) GetPreserve() []string {
+func (x *ContainerConfig) GetPreserve() []string {
 	if x != nil {
 		return x.Preserve
 	}
 	return nil
 }
 
-func (x *MemberConfig) GetStateful() Stateful {
+func (x *ContainerConfig) GetStateful() Stateful {
 	if x != nil {
 		return x.Stateful
 	}
 	return Stateful_STATEFUL_AUTO
 }
 
-func (x *MemberConfig) GetDependsOn() []string {
+func (x *ContainerConfig) GetDependsOn() []string {
 	if x != nil {
 		return x.DependsOn
 	}
 	return nil
 }
 
-// Version 是成员的一次部署：配置 + 文件 + 镜像摘要。
+// Version 是容器的一次部署：配置 + 文件 + 镜像摘要。
 type Version struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Version   int64                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -592,7 +601,7 @@ type Version struct {
 	RollbackOf int64 `protobuf:"varint,6,opt,name=rollback_of,json=rollbackOf,proto3" json:"rollback_of,omitempty"`
 	// 部署时拉取的 git 提交。
 	Commit        string `protobuf:"bytes,7,opt,name=commit,proto3" json:"commit,omitempty"`
-	Member        string `protobuf:"bytes,8,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string `protobuf:"bytes,8,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -676,24 +685,24 @@ func (x *Version) GetCommit() string {
 	return ""
 }
 
-func (x *Version) GetMember() string {
+func (x *Version) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
 
-// Deployment 是项目的一条部署记录：一次部署（一个或多个成员）完成后所有成员各自的版本。
+// Deployment 是项目的一条部署记录：一次部署（一个或多个容器）完成后所有容器各自的版本。
 type Deployment struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Time  *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=time,proto3" json:"time,omitempty"`
-	// manual（手动）、git（webhook 拉取）、image（镜像更新）、rollback（成员回滚）、
+	// manual（手动）、git（webhook 拉取）、image（镜像更新）、rollback（容器回滚）、
 	// shared_env（部署共享变量）、restore（回到某次部署时的状态）。
 	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
-	// 这次部署动到的成员。
-	Members []string `protobuf:"bytes,4,rep,name=members,proto3" json:"members,omitempty"`
-	// 部署完成后所有成员各自的版本（没部署成功过的成员不在里面）。
+	// 这次部署动到的容器。
+	Containers []string `protobuf:"bytes,4,rep,name=containers,proto3" json:"containers,omitempty"`
+	// 部署完成后所有容器各自的版本（没部署成功过的容器不在里面）。
 	Versions map[string]int64 `protobuf:"bytes,5,rep,name=versions,proto3" json:"versions,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	Success  bool             `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
 	Error    string           `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
@@ -754,9 +763,9 @@ func (x *Deployment) GetSource() string {
 	return ""
 }
 
-func (x *Deployment) GetMembers() []string {
+func (x *Deployment) GetContainers() []string {
 	if x != nil {
-		return x.Members
+		return x.Containers
 	}
 	return nil
 }
@@ -797,7 +806,7 @@ type SharedNetwork struct {
 	Projects []*SharedNetworkProject `protobuf:"bytes,3,rep,name=projects,proto3" json:"projects,omitempty"`
 	// 跨节点连接：和本节点的这个网络相连的节点。
 	Peers []*SharedNetworkPeer `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`
-	// 相连节点上的成员，本节点为每个放了一个同名的代理容器。
+	// 相连节点上的容器，本节点为每个放了一个同名的代理容器。
 	Remotes       []*SharedNetworkRemote `protobuf:"bytes,5,rep,name=remotes,proto3" json:"remotes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1019,7 +1028,7 @@ type SharedNetworkProject struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId   string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	ProjectName string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	// 项目的网络名，成员在共享网络里叫"成员.网络名"。
+	// 项目的网络名，容器在共享网络里叫"容器.网络名"。
 	NetworkName   string `protobuf:"bytes,3,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1086,8 +1095,8 @@ type Snapshot struct {
 	Size int64                  `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
 	// predeploy：部署前正在运行的版本；version：所属版本。
 	Version int64 `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
-	// predeploy、version：所属成员。
-	Member        string `protobuf:"bytes,6,opt,name=member,proto3" json:"member,omitempty"`
+	// predeploy、version：所属容器。
+	Container     string `protobuf:"bytes,6,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1157,9 +1166,9 @@ func (x *Snapshot) GetVersion() int64 {
 	return 0
 }
 
-func (x *Snapshot) GetMember() string {
+func (x *Snapshot) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -1222,7 +1231,7 @@ func (x *Source) GetGitRef() string {
 // 每条映射是项目目录 config/routes/<name>.yml 一个文件，改了立即生效，不需要重新部署。
 type Exposure struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 服务名。单容器成员可以不填（服务名就是成员名）。
+	// 服务名。单个容器可以不填（服务名就是容器名）。
 	Service string `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
 	// 容器内的端口。
 	Target uint32 `protobuf:"varint,2,opt,name=target,proto3" json:"target,omitempty"`
@@ -1238,8 +1247,8 @@ type Exposure struct {
 	Name string `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
 	// 文件无效时的原因，这条映射不会生效。只读。
 	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	// 成员名。
-	Member        string `protobuf:"bytes,9,opt,name=member,proto3" json:"member,omitempty"`
+	// 容器名。
+	Container     string `protobuf:"bytes,9,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1330,9 +1339,9 @@ func (x *Exposure) GetError() string {
 	return ""
 }
 
-func (x *Exposure) GetMember() string {
+func (x *Exposure) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -1449,9 +1458,9 @@ type ImageForm struct {
 	// 运行命令，为空时使用镜像默认命令。
 	Command string         `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
 	Ports   []*PortMapping `protobuf:"bytes,3,rep,name=ports,proto3" json:"ports,omitempty"`
-	// 持久化目录：容器内的路径，数据落到成员目录的 volumes/ 下。
+	// 持久化目录：容器内的路径，数据落到容器目录的 volumes/ 下。
 	Volumes []string `protobuf:"bytes,4,rep,name=volumes,proto3" json:"volumes,omitempty"`
-	// 把成员的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+	// 把容器的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
 	Workdir string `protobuf:"bytes,5,opt,name=workdir,proto3" json:"workdir,omitempty"`
 	// 环境变量，直接注入容器。
 	Env []*EnvVar `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty"`
@@ -1641,7 +1650,7 @@ type ServiceStatus struct {
 	Status string `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	// 健康检查状态：healthy、unhealthy、starting，没有健康检查时为空。
 	Health        string `protobuf:"bytes,6,opt,name=health,proto3" json:"health,omitempty"`
-	Member        string `protobuf:"bytes,7,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string `protobuf:"bytes,7,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1718,9 +1727,9 @@ func (x *ServiceStatus) GetHealth() string {
 	return ""
 }
 
-func (x *ServiceStatus) GetMember() string {
+func (x *ServiceStatus) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -1793,7 +1802,7 @@ type ImageUpdate struct {
 	Image         string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
 	CurrentDigest string                 `protobuf:"bytes,3,opt,name=current_digest,json=currentDigest,proto3" json:"current_digest,omitempty"`
 	LatestDigest  string                 `protobuf:"bytes,4,opt,name=latest_digest,json=latestDigest,proto3" json:"latest_digest,omitempty"`
-	Member        string                 `protobuf:"bytes,5,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,5,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1856,9 +1865,9 @@ func (x *ImageUpdate) GetLatestDigest() string {
 	return ""
 }
 
-func (x *ImageUpdate) GetMember() string {
+func (x *ImageUpdate) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -2015,7 +2024,7 @@ type LogLine struct {
 	Stream        string                 `protobuf:"bytes,2,opt,name=stream,proto3" json:"stream,omitempty"`
 	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	Time          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=time,proto3" json:"time,omitempty"`
-	Member        string                 `protobuf:"bytes,5,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,5,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2078,9 +2087,9 @@ func (x *LogLine) GetTime() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *LogLine) GetMember() string {
+func (x *LogLine) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -3240,8 +3249,8 @@ func (x *Replica) GetBytes() int64 {
 	return 0
 }
 
-// FailoverMember 是顶替设置里的一个参与者。
-type FailoverMember struct {
+// FailoverParticipant 是顶替设置里的一个参与者。
+type FailoverParticipant struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// mesh 公钥。
 	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -3254,20 +3263,20 @@ type FailoverMember struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *FailoverMember) Reset() {
-	*x = FailoverMember{}
+func (x *FailoverParticipant) Reset() {
+	*x = FailoverParticipant{}
 	mi := &file_nagi_v1_common_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *FailoverMember) String() string {
+func (x *FailoverParticipant) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FailoverMember) ProtoMessage() {}
+func (*FailoverParticipant) ProtoMessage() {}
 
-func (x *FailoverMember) ProtoReflect() protoreflect.Message {
+func (x *FailoverParticipant) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_common_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3279,33 +3288,33 @@ func (x *FailoverMember) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FailoverMember.ProtoReflect.Descriptor instead.
-func (*FailoverMember) Descriptor() ([]byte, []int) {
+// Deprecated: Use FailoverParticipant.ProtoReflect.Descriptor instead.
+func (*FailoverParticipant) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_common_proto_rawDescGZIP(), []int{38}
 }
 
-func (x *FailoverMember) GetKey() []byte {
+func (x *FailoverParticipant) GetKey() []byte {
 	if x != nil {
 		return x.Key
 	}
 	return nil
 }
 
-func (x *FailoverMember) GetNodeId() string {
+func (x *FailoverParticipant) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *FailoverMember) GetName() string {
+func (x *FailoverParticipant) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *FailoverMember) GetDir() string {
+func (x *FailoverParticipant) GetDir() string {
 	if x != nil {
 		return x.Dir
 	}
@@ -3318,11 +3327,11 @@ type FailoverConfig struct {
 	ProjectId   string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	ProjectName string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
 	// 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
-	A *FailoverMember `protobuf:"bytes,3,opt,name=a,proto3" json:"a,omitempty"`
-	B *FailoverMember `protobuf:"bytes,4,opt,name=b,proto3" json:"b,omitempty"`
+	A *FailoverParticipant `protobuf:"bytes,3,opt,name=a,proto3" json:"a,omitempty"`
+	B *FailoverParticipant `protobuf:"bytes,4,opt,name=b,proto3" json:"b,omitempty"`
 	// 见证人：一个面板或另一台节点，只投票。
-	Witness        *FailoverMember `protobuf:"bytes,5,opt,name=witness,proto3" json:"witness,omitempty"`
-	WitnessIsPanel bool            `protobuf:"varint,6,opt,name=witness_is_panel,json=witnessIsPanel,proto3" json:"witness_is_panel,omitempty"`
+	Witness        *FailoverParticipant `protobuf:"bytes,5,opt,name=witness,proto3" json:"witness,omitempty"`
+	WitnessIsPanel bool                 `protobuf:"varint,6,opt,name=witness_is_panel,json=witnessIsPanel,proto3" json:"witness_is_panel,omitempty"`
 	// 租约时长（秒），默认 30，每 1/3 续约一次。
 	LeaseSeconds uint32 `protobuf:"varint,7,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
 	// 有状态项目也自动顶替（接受丢失最后一次快照之后的数据）。默认只告警，等用户确认。
@@ -3375,21 +3384,21 @@ func (x *FailoverConfig) GetProjectName() string {
 	return ""
 }
 
-func (x *FailoverConfig) GetA() *FailoverMember {
+func (x *FailoverConfig) GetA() *FailoverParticipant {
 	if x != nil {
 		return x.A
 	}
 	return nil
 }
 
-func (x *FailoverConfig) GetB() *FailoverMember {
+func (x *FailoverConfig) GetB() *FailoverParticipant {
 	if x != nil {
 		return x.B
 	}
 	return nil
 }
 
-func (x *FailoverConfig) GetWitness() *FailoverMember {
+func (x *FailoverConfig) GetWitness() *FailoverParticipant {
 	if x != nil {
 		return x.Witness
 	}
@@ -3544,7 +3553,7 @@ var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe0\x03\n" +
+	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe9\x03\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -3553,8 +3562,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12)\n" +
 	"\x06routes\x18\x0f \x03(\v2\x11.nagi.v1.ExposureR\x06routes\x12\x1a\n" +
-	"\bstateful\x18\x10 \x01(\bR\bstateful\x12)\n" +
-	"\amembers\x18\x11 \x03(\v2\x0f.nagi.v1.MemberR\amembers\x124\n" +
+	"\bstateful\x18\x10 \x01(\bR\bstateful\x122\n" +
+	"\n" +
+	"containers\x18\x11 \x03(\v2\x12.nagi.v1.ContainerR\n" +
+	"containers\x124\n" +
 	"\bsettings\x18\x12 \x01(\v2\x18.nagi.v1.ProjectSettingsR\bsettings\x12/\n" +
 	"\x14has_shared_env_draft\x18\x13 \x01(\bR\x11hasSharedEnvDraft\x129\n" +
 	"\x10shared_env_draft\x18\x14 \x03(\v2\x0f.nagi.v1.EnvVarR\x0esharedEnvDraftJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\t\x10\n" +
@@ -3568,17 +3579,17 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0fshared_networks\x18\x04 \x03(\tR\x0esharedNetworks\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x05 \x01(\rR\x17snapshotIntervalMinutes\x12\x1d\n" +
 	"\n" +
-	"link_ports\x18\x06 \x03(\tR\tlinkPorts\"\xd0\x04\n" +
-	"\x06Member\x12\x12\n" +
+	"link_ports\x18\x06 \x03(\tR\tlinkPorts\"\xed\x04\n" +
+	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
 	"\x0elatest_version\x18\x03 \x01(\x03R\rlatestVersion\x12)\n" +
 	"\x10deployed_version\x18\x04 \x01(\x03R\x0fdeployedVersion\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12-\n" +
-	"\x06config\x18\x06 \x01(\v2\x15.nagi.v1.MemberConfigR\x06config\x12\x1b\n" +
-	"\thas_draft\x18\a \x01(\bR\bhasDraft\x12+\n" +
-	"\x05draft\x18\b \x01(\v2\x15.nagi.v1.MemberConfigR\x05draft\x12\x1d\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x120\n" +
+	"\x06config\x18\x06 \x01(\v2\x18.nagi.v1.ContainerConfigR\x06config\x12\x1b\n" +
+	"\thas_draft\x18\a \x01(\bR\bhasDraft\x12.\n" +
+	"\x05draft\x18\b \x01(\v2\x18.nagi.v1.ContainerConfigR\x05draft\x12\x1d\n" +
 	"\n" +
 	"deploy_key\x18\t \x01(\tR\tdeployKey\x12#\n" +
 	"\rwebhook_token\x18\n" +
@@ -3588,11 +3599,12 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bstateful\x18\f \x01(\bR\bstateful\x12.\n" +
 	"\x13shared_env_outdated\x18\r \x01(\bR\x11sharedEnvOutdated\x12+\n" +
 	"\x11unmanaged_volumes\x18\x0e \x03(\tR\x10unmanagedVolumes\x122\n" +
-	"\x15host_network_services\x18\x0f \x03(\tR\x13hostNetworkServices\"\xab\x03\n" +
-	"\fMemberConfig\x12\x18\n" +
+	"\x15host_network_services\x18\x0f \x03(\tR\x13hostNetworkServices\x12\x12\n" +
+	"\x04kind\x18\x10 \x01(\tR\x04kind\"\xb1\x03\n" +
+	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
-	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12F\n" +
-	"\vservice_env\x18\x03 \x03(\v2%.nagi.v1.MemberConfig.ServiceEnvEntryR\n" +
+	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +
+	"\vservice_env\x18\x03 \x03(\v2(.nagi.v1.ContainerConfig.ServiceEnvEntryR\n" +
 	"serviceEnv\x12&\n" +
 	"\x04form\x18\x04 \x01(\v2\x12.nagi.v1.ImageFormR\x04form\x12'\n" +
 	"\x06source\x18\x06 \x01(\v2\x0f.nagi.v1.SourceR\x06source\x12\x1a\n" +
@@ -3604,7 +3616,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0fServiceEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
 	"\x05value\x18\x02 \x01(\v2\x10.nagi.v1.EnvListR\x05value:\x028\x01J\x04\b\x05\x10\x06J\x04\b\t\x10\n" +
-	"\"\xfa\x02\n" +
+	"\"\x80\x03\n" +
 	"\aVersion\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x03R\aversion\x129\n" +
 	"\n" +
@@ -3615,17 +3627,19 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\thas_files\x18\x05 \x01(\bR\bhasFiles\x12\x1f\n" +
 	"\vrollback_of\x18\x06 \x01(\x03R\n" +
 	"rollbackOf\x12\x16\n" +
-	"\x06commit\x18\a \x01(\tR\x06commit\x12\x16\n" +
-	"\x06member\x18\b \x01(\tR\x06member\x1a9\n" +
+	"\x06commit\x18\a \x01(\tR\x06commit\x12\x1c\n" +
+	"\tcontainer\x18\b \x01(\tR\tcontainer\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcf\x02\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x16\n" +
-	"\x06source\x18\x03 \x01(\tR\x06source\x12\x18\n" +
-	"\amembers\x18\x04 \x03(\tR\amembers\x12=\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x1e\n" +
+	"\n" +
+	"containers\x18\x04 \x03(\tR\n" +
+	"containers\x12=\n" +
 	"\bversions\x18\x05 \x03(\v2!.nagi.v1.Deployment.VersionsEntryR\bversions\x12\x18\n" +
 	"\asuccess\x18\x06 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\a \x01(\tR\x05error\x12\x1d\n" +
@@ -3656,17 +3670,17 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
 	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12!\n" +
-	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\xa4\x01\n" +
+	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\xaa\x01\n" +
 	"\bSnapshot\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12.\n" +
 	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x12\n" +
 	"\x04size\x18\x04 \x01(\x03R\x04size\x12\x18\n" +
-	"\aversion\x18\x05 \x01(\x03R\aversion\x12\x16\n" +
-	"\x06member\x18\x06 \x01(\tR\x06member\":\n" +
+	"\aversion\x18\x05 \x01(\x03R\aversion\x12\x1c\n" +
+	"\tcontainer\x18\x06 \x01(\tR\tcontainer\":\n" +
 	"\x06Source\x12\x17\n" +
 	"\agit_url\x18\x01 \x01(\tR\x06gitUrl\x12\x17\n" +
-	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xef\x01\n" +
+	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xf5\x01\n" +
 	"\bExposure\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
@@ -3675,8 +3689,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\adomains\x18\x05 \x03(\tR\adomains\x12\x1b\n" +
 	"\thttp_only\x18\x06 \x01(\bR\bhttpOnly\x12\x12\n" +
 	"\x04name\x18\a \x01(\tR\x04name\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\x12\x16\n" +
-	"\x06member\x18\t \x01(\tR\x06member\"H\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x12\x1c\n" +
+	"\tcontainer\x18\t \x01(\tR\tcontainer\"H\n" +
 	"\x06EnvVar\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
@@ -3698,25 +3712,25 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vPortMapping\x12\x1c\n" +
 	"\tpublished\x18\x01 \x01(\rR\tpublished\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
-	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xba\x01\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xc0\x01\n" +
 	"\rServiceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fcontainer_id\x18\x02 \x01(\tR\vcontainerId\x12\x14\n" +
 	"\x05image\x18\x03 \x01(\tR\x05image\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x16\n" +
-	"\x06health\x18\x06 \x01(\tR\x06health\x12\x16\n" +
-	"\x06member\x18\a \x01(\tR\x06member\"\xc6\x01\n" +
+	"\x06health\x18\x06 \x01(\tR\x06health\x12\x1c\n" +
+	"\tcontainer\x18\a \x01(\tR\tcontainer\"\xc6\x01\n" +
 	"\rProjectStatus\x122\n" +
 	"\bservices\x18\x01 \x03(\v2\x16.nagi.v1.ServiceStatusR\bservices\x129\n" +
 	"\rimage_updates\x18\x02 \x03(\v2\x14.nagi.v1.ImageUpdateR\fimageUpdates\x12F\n" +
-	"\x11images_checked_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0fimagesCheckedAt\"\xa1\x01\n" +
+	"\x11images_checked_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0fimagesCheckedAt\"\xa7\x01\n" +
 	"\vImageUpdate\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x14\n" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12%\n" +
 	"\x0ecurrent_digest\x18\x03 \x01(\tR\rcurrentDigest\x12#\n" +
-	"\rlatest_digest\x18\x04 \x01(\tR\flatestDigest\x12\x16\n" +
-	"\x06member\x18\x05 \x01(\tR\x06member\"l\n" +
+	"\rlatest_digest\x18\x04 \x01(\tR\flatestDigest\x12\x1c\n" +
+	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
 	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd0\x01\n" +
@@ -3727,13 +3741,13 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\aversion\x18\x04 \x01(\tR\aversion\x12%\n" +
 	"\x0edocker_version\x18\x05 \x01(\tR\rdockerVersion\x12'\n" +
 	"\x0fcompose_version\x18\x06 \x01(\tR\x0ecomposeVersion\x12\x1a\n" +
-	"\bembedded\x18\a \x01(\bR\bembedded\"\x97\x01\n" +
+	"\bembedded\x18\a \x01(\bR\bembedded\"\x9d\x01\n" +
 	"\aLogLine\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06stream\x18\x02 \x01(\tR\x06stream\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12.\n" +
-	"\x04time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x16\n" +
-	"\x06member\x18\x05 \x01(\tR\x06member\"a\n" +
+	"\x04time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x1c\n" +
+	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"a\n" +
 	"\vDeployEvent\x12\x18\n" +
 	"\x06output\x18\x01 \x01(\tH\x00R\x06output\x12/\n" +
 	"\x06result\x18\x02 \x01(\v2\x15.nagi.v1.DeployResultH\x00R\x06resultB\a\n" +
@@ -3832,19 +3846,19 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vsource_name\x18\x04 \x01(\tR\n" +
 	"sourceName\x127\n" +
 	"\tlast_sync\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x14\n" +
-	"\x05bytes\x18\x06 \x01(\x03R\x05bytes\"a\n" +
-	"\x0eFailoverMember\x12\x10\n" +
+	"\x05bytes\x18\x06 \x01(\x03R\x05bytes\"f\n" +
+	"\x13FailoverParticipant\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x10\n" +
-	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xc7\x02\n" +
+	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xd6\x02\n" +
 	"\x0eFailoverConfig\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
-	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12%\n" +
-	"\x01a\x18\x03 \x01(\v2\x17.nagi.v1.FailoverMemberR\x01a\x12%\n" +
-	"\x01b\x18\x04 \x01(\v2\x17.nagi.v1.FailoverMemberR\x01b\x121\n" +
-	"\awitness\x18\x05 \x01(\v2\x17.nagi.v1.FailoverMemberR\awitness\x12(\n" +
+	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12*\n" +
+	"\x01a\x18\x03 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\x01a\x12*\n" +
+	"\x01b\x18\x04 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\x01b\x126\n" +
+	"\awitness\x18\x05 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\awitness\x12(\n" +
 	"\x10witness_is_panel\x18\x06 \x01(\bR\x0ewitnessIsPanel\x12#\n" +
 	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
 	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\"\xf6\x02\n" +
@@ -3886,8 +3900,8 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
 	(*ProjectSettings)(nil),       // 2: nagi.v1.ProjectSettings
-	(*Member)(nil),                // 3: nagi.v1.Member
-	(*MemberConfig)(nil),          // 4: nagi.v1.MemberConfig
+	(*Container)(nil),             // 3: nagi.v1.Container
+	(*ContainerConfig)(nil),       // 4: nagi.v1.ContainerConfig
 	(*Version)(nil),               // 5: nagi.v1.Version
 	(*Deployment)(nil),            // 6: nagi.v1.Deployment
 	(*SharedNetwork)(nil),         // 7: nagi.v1.SharedNetwork
@@ -3922,10 +3936,10 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*MeshPingResponse)(nil),      // 36: nagi.v1.MeshPingResponse
 	(*BackupStatus)(nil),          // 37: nagi.v1.BackupStatus
 	(*Replica)(nil),               // 38: nagi.v1.Replica
-	(*FailoverMember)(nil),        // 39: nagi.v1.FailoverMember
+	(*FailoverParticipant)(nil),   // 39: nagi.v1.FailoverParticipant
 	(*FailoverConfig)(nil),        // 40: nagi.v1.FailoverConfig
 	(*FailoverStatus)(nil),        // 41: nagi.v1.FailoverStatus
-	nil,                           // 42: nagi.v1.MemberConfig.ServiceEnvEntry
+	nil,                           // 42: nagi.v1.ContainerConfig.ServiceEnvEntry
 	nil,                           // 43: nagi.v1.Version.ImagesEntry
 	nil,                           // 44: nagi.v1.Deployment.VersionsEntry
 	(*timestamppb.Timestamp)(nil), // 45: google.protobuf.Timestamp
@@ -3933,18 +3947,18 @@ var file_nagi_v1_common_proto_goTypes = []any{
 var file_nagi_v1_common_proto_depIdxs = []int32{
 	45, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	13, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
-	3,  // 2: nagi.v1.Project.members:type_name -> nagi.v1.Member
+	3,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
 	2,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
 	14, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
 	14, // 5: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
-	45, // 6: nagi.v1.Member.created_at:type_name -> google.protobuf.Timestamp
-	4,  // 7: nagi.v1.Member.config:type_name -> nagi.v1.MemberConfig
-	4,  // 8: nagi.v1.Member.draft:type_name -> nagi.v1.MemberConfig
-	14, // 9: nagi.v1.MemberConfig.env:type_name -> nagi.v1.EnvVar
-	42, // 10: nagi.v1.MemberConfig.service_env:type_name -> nagi.v1.MemberConfig.ServiceEnvEntry
-	16, // 11: nagi.v1.MemberConfig.form:type_name -> nagi.v1.ImageForm
-	12, // 12: nagi.v1.MemberConfig.source:type_name -> nagi.v1.Source
-	0,  // 13: nagi.v1.MemberConfig.stateful:type_name -> nagi.v1.Stateful
+	45, // 6: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	4,  // 7: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
+	4,  // 8: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
+	14, // 9: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
+	42, // 10: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	16, // 11: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
+	12, // 12: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
+	0,  // 13: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
 	45, // 14: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
 	45, // 15: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
 	43, // 16: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
@@ -3971,12 +3985,12 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	33, // 37: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
 	45, // 38: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
 	45, // 39: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	39, // 40: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverMember
-	39, // 41: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverMember
-	39, // 42: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverMember
+	39, // 40: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	39, // 41: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	39, // 42: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
 	40, // 43: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
 	45, // 44: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	15, // 45: nagi.v1.MemberConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	15, // 45: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
 	46, // [46:46] is the sub-list for method output_type
 	46, // [46:46] is the sub-list for method input_type
 	46, // [46:46] is the sub-list for extension type_name

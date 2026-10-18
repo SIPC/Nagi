@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	labelProject = "com.docker.compose.project"
-	labelService = "com.docker.compose.service"
-	labelMember  = "nagi.member"
+	labelProject   = "com.docker.compose.project"
+	labelService   = "com.docker.compose.service"
+	labelContainer = "nagi.container"
 )
 
 // ComposeLabel 是选出某个 compose 项目所有容器的标签条件。
@@ -72,8 +72,8 @@ func (d *Client) NetworkSubnets(ctx context.Context) ([]netip.Prefix, error) {
 	return out, nil
 }
 
-// Container 是一个 compose 服务对应的容器。
-type Container struct {
+// Instance 是 Docker 里实际运行的一个容器（compose 里一个服务的一个副本）。
+type Instance struct {
 	ID      string
 	Service string
 	Image   string
@@ -84,9 +84,9 @@ type Container struct {
 	IPs map[string]netip.Addr
 	// Project 是 Nagi 的项目 ID（nagi.project 标签）。
 	Project string
-	// Member 是 Nagi 的成员名（nagi.member 标签）。
-	Member string
-	// Single 表示单容器成员的容器（nagi.single 标签）。
+	// Container 是 Nagi 的容器名（nagi.container 标签）：单个容器的名字，或者容器组的名字。
+	Container string
+	// Single 表示单个容器的容器（nagi.single 标签）。
 	Single  bool
 	ImageID string
 	// Name 是容器名（不带开头的 /）。
@@ -97,27 +97,27 @@ type Container struct {
 	Labels map[string]string
 }
 
-// ManagedContainers 列出带有 labelKey 标签（Nagi 管理）的所有容器。
-func (d *Client) ManagedContainers(ctx context.Context, labelKey string) ([]Container, error) {
-	return d.listContainers(ctx, make(client.Filters).Add("label", labelKey), labelKey)
+// ManagedInstances 列出带有 labelKey 标签（Nagi 管理）的所有容器。
+func (d *Client) ManagedInstances(ctx context.Context, labelKey string) ([]Instance, error) {
+	return d.listInstances(ctx, make(client.Filters).Add("label", labelKey), labelKey)
 }
 
-// ProjectContainers 列出某个 compose 项目的全部容器（包括已停止的）。
-func (d *Client) ProjectContainers(ctx context.Context, composeProject string) ([]Container, error) {
-	return d.Containers(ctx, ComposeLabel(composeProject))
+// ProjectInstances 列出某个 compose 项目的全部容器（包括已停止的）。
+func (d *Client) ProjectInstances(ctx context.Context, composeProject string) ([]Instance, error) {
+	return d.Instances(ctx, ComposeLabel(composeProject))
 }
 
 // Containers 列出带某个标签（key=value）的全部容器（包括已停止的），例如 nagi.project=<项目 ID>。
-func (d *Client) Containers(ctx context.Context, label string) ([]Container, error) {
-	return d.listContainers(ctx, make(client.Filters).Add("label", label), "nagi.project")
+func (d *Client) Instances(ctx context.Context, label string) ([]Instance, error) {
+	return d.listInstances(ctx, make(client.Filters).Add("label", label), "nagi.project")
 }
 
-func (d *Client) listContainers(ctx context.Context, filters client.Filters, projectLabel string) ([]Container, error) {
+func (d *Client) listInstances(ctx context.Context, filters client.Filters, projectLabel string) ([]Instance, error) {
 	list, err := d.c.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Container, 0, len(list.Items))
+	out := make([]Instance, 0, len(list.Items))
 	for _, c := range list.Items {
 		ips := map[string]netip.Addr{}
 		if c.NetworkSettings != nil {
@@ -138,26 +138,26 @@ func (d *Client) listContainers(ctx context.Context, filters client.Filters, pro
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-		out = append(out, Container{
-			ID:      c.ID,
-			Name:    name,
-			Member:  c.Labels[labelMember],
-			Single:  c.Labels["nagi.single"] == "1",
-			Service: c.Labels[labelService],
-			Image:   c.Image,
-			State:   string(c.State),
-			Status:  c.Status,
-			Health:  health(c.Health),
-			IPs:     ips,
-			Project: c.Labels[projectLabel],
-			ImageID: c.ImageID,
-			Ports:   ports,
-			Labels:  c.Labels,
+		out = append(out, Instance{
+			ID:        c.ID,
+			Name:      name,
+			Container: c.Labels[labelContainer],
+			Single:    c.Labels["nagi.single"] == "1",
+			Service:   c.Labels[labelService],
+			Image:     c.Image,
+			State:     string(c.State),
+			Status:    c.Status,
+			Health:    health(c.Health),
+			IPs:       ips,
+			Project:   c.Labels[projectLabel],
+			ImageID:   c.ImageID,
+			Ports:     ports,
+			Labels:    c.Labels,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].Member != out[j].Member {
-			return out[i].Member < out[j].Member
+		if out[i].Container != out[j].Container {
+			return out[i].Container < out[j].Container
 		}
 		return out[i].Service < out[j].Service
 	})
@@ -174,15 +174,15 @@ func health(h *container.HealthSummary) string {
 
 // LogLine 是一行容器日志。
 type LogLine struct {
-	Member  string
-	Service string
-	Stream  string
-	Text    string
-	Time    time.Time
+	Container string
+	Service   string
+	Stream    string
+	Text      string
+	Time      time.Time
 }
 
 // Logs 读取一个容器的日志，每一行调用一次 onLine，直到结束或 ctx 取消。
-func (d *Client) Logs(ctx context.Context, c Container, tail int, follow bool, onLine func(LogLine)) error {
+func (d *Client) Logs(ctx context.Context, c Instance, tail int, follow bool, onLine func(LogLine)) error {
 	info, err := d.c.ContainerInspect(ctx, c.ID, client.ContainerInspectOptions{})
 	if err != nil {
 		return err
@@ -332,7 +332,7 @@ func (e *Exec) Close() { e.conn.Close() }
 
 // Pause 暂停带某个标签的所有正在运行的容器，返回恢复函数。用于快照时保证数据一致。
 func (d *Client) Pause(ctx context.Context, label string) (func(), error) {
-	containers, err := d.Containers(ctx, label)
+	containers, err := d.Instances(ctx, label)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +437,7 @@ func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
 
 // Kill 立即结束带某个标签的所有正在运行的容器（SIGKILL）。顶替时来不及优雅停止才用。
 func (d *Client) Kill(ctx context.Context, label string) error {
-	containers, err := d.Containers(ctx, label)
+	containers, err := d.Instances(ctx, label)
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ func (d *Client) Kill(ctx context.Context, label string) error {
 
 // Running 判断带某个标签的容器里有没有正在运行的。
 func (d *Client) Running(ctx context.Context, label string) (bool, error) {
-	containers, err := d.Containers(ctx, label)
+	containers, err := d.Instances(ctx, label)
 	if err != nil {
 		return false, err
 	}

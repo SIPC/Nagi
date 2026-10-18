@@ -18,14 +18,14 @@ import (
 	"strings"
 )
 
-// 面板上传的成员文件：压缩包经 mesh 传到节点，解压到 members/<成员>/.upload/files 暂存，
-// 下次部署这个成员（useUpload）时替换它的 data/，规则和 git 拉取一样（保留路径不动）。
+// 面板上传的容器文件：压缩包经 mesh 传到节点，解压到 containers/<容器>/.upload/files 暂存，
+// 下次部署这个容器（useUpload）时替换它的 data/，规则和 git 拉取一样（保留路径不动）。
 
 // maxUploadSize 是解压后的总大小上限，防止压缩炸弹写满磁盘。
 const maxUploadSize = 10 << 30
 
-func (p memberPaths) uploadDir() string   { return filepath.Join(p.root, ".upload") }
-func (p memberPaths) uploadFiles() string { return filepath.Join(p.uploadDir(), "files") }
+func (p containerPaths) uploadDir() string   { return filepath.Join(p.root, ".upload") }
+func (p containerPaths) uploadFiles() string { return filepath.Join(p.uploadDir(), "files") }
 
 // UploadResult 是一次上传的结果。
 type UploadResult struct {
@@ -35,17 +35,17 @@ type UploadResult struct {
 	Stripped string
 }
 
-// ReceiveUpload 接收成员的一个压缩包（zip、tar.gz 或 tar），解压后暂存，替换上一次没部署的上传。
-func (m *Manager) ReceiveUpload(ctx context.Context, id, member string, r io.Reader) (UploadResult, error) {
+// ReceiveUpload 接收容器的一个压缩包（zip、tar.gz 或 tar），解压后暂存，替换上一次没部署的上传。
+func (m *Manager) ReceiveUpload(ctx context.Context, id, container string, r io.Reader) (UploadResult, error) {
 	var res UploadResult
 	row, err := m.projectRow(ctx, id)
 	if err != nil {
 		return res, err
 	}
-	if err := m.hasMember(ctx, row.Dir, member); err != nil {
+	if err := m.hasContainer(ctx, row.Dir, container); err != nil {
 		return res, err
 	}
-	p := paths{root: row.Dir}.member(member)
+	p := paths{root: row.Dir}.container(container)
 	// 接收和解压不持有项目锁，可能很慢；放到单独的临时目录，完成后再替换暂存的文件。
 	var suffix [6]byte
 	_, _ = rand.Read(suffix[:])

@@ -67,7 +67,7 @@ func (x *SharedNetworkInfoRequest) GetName() string {
 
 type SharedNetworkInfoResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 正在运行、接入了这个网络的成员。
+	// 正在运行、接入了这个网络的容器。
 	Endpoints []*LinkEndpoint `protobuf:"bytes,1,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
 	// 加入了这个网络的项目（不管是否在运行），用来检查网络名是否重复。
 	Projects      []*SharedNetworkProject `protobuf:"bytes,2,rep,name=projects,proto3" json:"projects,omitempty"`
@@ -644,10 +644,10 @@ func (*ReplicaCommitResponse) Descriptor() ([]byte, []int) {
 
 type UploadChunk struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 第一块带上项目和成员，之后只有 data。
+	// 第一块带上项目和容器，之后只有 data。
 	ProjectId     string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	Member        string `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -696,9 +696,9 @@ func (x *UploadChunk) GetData() []byte {
 	return nil
 }
 
-func (x *UploadChunk) GetMember() string {
+func (x *UploadChunk) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -889,12 +889,12 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12!\n" +
 	"\fproject_name\x18\x03 \x01(\tR\vprojectName\"\x17\n" +
-	"\x15ReplicaCommitResponse\"X\n" +
+	"\x15ReplicaCommitResponse\"^\n" +
 	"\vUploadChunk\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\x12\x16\n" +
-	"\x06member\x18\x03 \x01(\tR\x06member\"X\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\"X\n" +
 	"\x0eUploadResponse\x12\x14\n" +
 	"\x05bytes\x18\x01 \x01(\x04R\x05bytes\x12\x14\n" +
 	"\x05files\x18\x02 \x01(\rR\x05files\x12\x1a\n" +

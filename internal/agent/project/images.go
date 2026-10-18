@@ -15,13 +15,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// 镜像更新提醒：每天检查一次项目各成员正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
-// 也不计入 Docker Hub 的拉取次数），和本地镜像的摘要比较。不自动升级，用户点"更新"时拉取新镜像并部署这个成员，
+// 镜像更新提醒：每天检查一次项目各容器正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
+// 也不计入 Docker Hub 的拉取次数），和本地镜像的摘要比较。不自动升级，用户点"更新"时拉取新镜像并部署这个容器，
 // 记为它的一个新版本，可以回滚。
 
 type imageUpdates struct {
 	mu      sync.Mutex
-	updates map[string][]*nagiv1.ImageUpdate // 项目 ID → 有新版本的服务（带成员名）
+	updates map[string][]*nagiv1.ImageUpdate // 项目 ID → 有新版本的服务（带容器名）
 	checked map[string]time.Time
 }
 
@@ -34,13 +34,13 @@ func (m *Manager) imageStatus(id string, st *nagiv1.ProjectStatus) {
 	}
 }
 
-// clearImageUpdates 清掉成员的"有新版本"提醒（拉取了新镜像后）。
-func (m *Manager) clearImageUpdates(id, member string) {
+// clearImageUpdates 清掉容器的"有新版本"提醒（拉取了新镜像后）。
+func (m *Manager) clearImageUpdates(id, container string) {
 	m.images.mu.Lock()
 	defer m.images.mu.Unlock()
 	var keep []*nagiv1.ImageUpdate
 	for _, u := range m.images.updates[id] {
-		if u.GetMember() != member {
+		if u.GetContainer() != container {
 			keep = append(keep, u)
 		}
 	}
@@ -88,14 +88,14 @@ func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUp
 		return nil, err
 	}
 	p := paths{root: row.Dir}
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return nil, err
 	}
 	var out []*nagiv1.ImageUpdate
 	seen := map[string]bool{}
 	for _, c := range containers {
-		key := c.Member + "/" + c.Service
+		key := c.Container + "/" + c.Service
 		if seen[key] || strings.Contains(c.Image, "@") || strings.HasPrefix(c.Image, "sha256:") {
 			continue
 		}
@@ -126,7 +126,7 @@ func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUp
 		if err != nil || remote == "" || remote == local {
 			continue
 		}
-		out = append(out, &nagiv1.ImageUpdate{Member: c.Member, Service: c.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
+		out = append(out, &nagiv1.ImageUpdate{Container: c.Container, Service: c.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
 	}
 	m.images.mu.Lock()
 	if m.images.updates == nil {

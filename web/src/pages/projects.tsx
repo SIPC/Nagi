@@ -5,7 +5,7 @@ import { FolderOpen, Plus, Server } from "lucide-react";
 import { authClient, errorMessage, nodeClient, projectClient, settingsClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
-import { useMemberForm } from "@/components/member-form";
+import { useContainerForm } from "@/components/container-form";
 import { SharedNetworkWarning } from "@/pages/backup";
 import {
   Alert,
@@ -96,7 +96,7 @@ export function ProjectsPage() {
     <>
       <PageHeader
         title="项目"
-        description="项目是一组一起工作的成员（前端、后端、数据库……），整体运行在一个节点上。"
+        description="项目是一组一起工作的容器（前端、后端、数据库……），整体运行在一个节点上。"
         actions={
           <Link to="/projects/new">
             <Button>
@@ -113,14 +113,14 @@ export function ProjectsPage() {
       ) : projects.error ? (
         <Alert>{errorMessage(projects.error)}</Alert>
       ) : projects.data.projects.length === 0 ? (
-        <Empty title="还没有项目">新建一个项目，往里加成员（单容器或 compose），就能部署到节点上。</Empty>
+        <Empty title="还没有项目">新建一个项目，往里加容器（单容器或 compose），就能部署到节点上。</Empty>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.data.projects.map(({ nodeId, project: summary }) => {
             const p = summary?.project;
             if (!p) return null;
             const services = summary.status?.services ?? [];
-            const deployed = p.members.filter((m) => m.deployedVersion > 0n).length;
+            const deployed = p.containers.filter((m) => m.deployedVersion > 0n).length;
             if (offline(nodeId)) {
               // 节点离线：显示的是面板上的配置备份，项目页打不开；可以用备份在别的节点上重建。
               return (
@@ -135,7 +135,7 @@ export function ProjectsPage() {
                         <Server className="size-3.5" />
                         {nodeName(nodeId)}
                       </span>
-                      <span>{p.members.length} 个成员 · 显示的是面板上的配置备份</span>
+                      <span>{p.containers.length} 个容器 · 显示的是面板上的配置备份</span>
                     </div>
                     <div>
                       <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name, dir: p.dir, sharedNetworks: p.settings?.sharedNetworks ?? [] })}>
@@ -165,7 +165,7 @@ export function ProjectsPage() {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {p.members.length} 个成员 · {services.length} 个服务 · {deployed > 0 ? `已部署 ${deployed} 个成员` : "尚未部署"}
+                      {p.containers.length} 个容器和容器组 · {deployed > 0 ? `已部署 ${deployed} 个` : "尚未部署"}
                     </div>
                   </CardContent>
                 </Card>
@@ -236,9 +236,9 @@ function RebuildCard({
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <p className="text-muted-foreground">
-          在另一个节点上建一个新项目（新的项目 ID），带上各成员最新的配置、草稿、项目设置和端口映射。
+          在另一个节点上建一个新项目（新的项目 ID），带上各容器最新的配置、草稿、项目设置和端口映射。
           项目文件、运行数据和历史版本不在备份里。deploy key 和 webhook 地址都是新的。
-          从 git 拉文件的、不用 data/ 文件的成员会自动部署，其余的要先上传文件。原节点修好回来时，两个项目互不干扰。
+          从 git 拉文件的、不用 data/ 文件的容器会自动部署，其余的要先上传文件。原节点修好回来时，两个项目互不干扰。
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Select className="w-48" value={target} onChange={(e) => setTarget(e.target.value)} disabled={busy}>
@@ -281,9 +281,9 @@ export function NewProjectPage() {
   const [nodeId, setNodeId] = useState("");
   const [name, setName] = useState("");
   const [dir, setDir] = useState("");
-  const [withMember, setWithMember] = useState(true);
-  const [memberName, setMemberName] = useState("web");
-  const member = useMemberForm(true);
+  const [withContainer, setWithContainer] = useState(true);
+  const [containerName, setContainerName] = useState("web");
+  const container = useContainerForm(true);
   const selectedNode = nodeId || onlineNodes[0]?.id || "";
 
   const create = useMutation({
@@ -292,7 +292,7 @@ export function NewProjectPage() {
         nodeId: selectedNode,
         name,
         dir,
-        ...(withMember ? { memberName, member: member.build() } : {}),
+        ...(withContainer ? { containerName, container: container.build() } : {}),
       }),
     onSuccess: (res) => {
       navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: selectedNode, projectId: res.project!.id } });
@@ -301,7 +301,7 @@ export function NewProjectPage() {
 
   return (
     <>
-      <PageHeader title="新建项目" description="创建后不会立即部署，可以先检查一遍再点部署。之后可以继续往项目里加成员。" />
+      <PageHeader title="新建项目" description="创建后不会立即部署，可以先检查一遍再点部署。之后可以继续往项目里加容器。" />
       <Card className="max-w-3xl">
         <CardContent className="pt-5">
           <form
@@ -329,20 +329,20 @@ export function NewProjectPage() {
             <Field
               label="项目目录"
               htmlFor="dir"
-              hint="节点上的绝对路径，例如 /srv/myapp。目录需要不存在或为空。每个成员在其中的 members/<成员>/ 下，compose 里的相对路径以成员的 data/ 为准。"
+              hint="节点上的绝对路径，例如 /srv/myapp。目录需要不存在或为空。每个容器在其中的 containers/<容器名>/ 下，compose 里的相对路径以容器的 data/ 为准。"
             >
               <Input id="dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/srv/myapp" required className="font-mono" />
             </Field>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={withMember} onChange={(e) => setWithMember(e.target.checked)} />
-              同时加入第一个成员
+              <input type="checkbox" checked={withContainer} onChange={(e) => setWithContainer(e.target.checked)} />
+              同时加入第一个容器
             </label>
-            {withMember && (
+            {withContainer && (
               <>
-                <Field label="成员名" htmlFor="member" hint="小写字母、数字和 -，创建后不能改。单容器成员在项目内网里就叫这个名字；compose 里的服务叫“服务.成员名”。">
-                  <Input id="member" value={memberName} onChange={(e) => setMemberName(e.target.value)} required className="font-mono" />
+                <Field label="容器名" htmlFor="container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
+                  <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" />
                 </Field>
-                {member.fields}
+                {container.fields}
               </>
             )}
             {create.error && <Alert>{errorMessage(create.error)}</Alert>}

@@ -65,16 +65,16 @@ func (v *Voter) save(project string, x *vote) error {
 	return os.Rename(tmp, v.file(project))
 }
 
-// Vote 处理 candidate 对第 epoch 轮租约的请求。members 是允许运行项目的两方（A、B）。
+// Vote 处理 candidate 对第 epoch 轮租约的请求。parties 是允许运行项目的两方（A、B）。
 // 返回是否同意，以及投票之后这张票投给谁、第几轮。
 //   - 同一方、同一轮：续约。
 //   - 更高的轮次：只有当前的票已经作废（超过租约时长没续约）或者还没投过时才同意。
-func (v *Voter) Vote(project string, members [][]byte, candidate []byte, epoch uint64, lease time.Duration) (bool, []byte, uint64) {
+func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch uint64, lease time.Duration) (bool, []byte, uint64) {
 	if !idRe.MatchString(project) {
 		return false, nil, 0
 	}
 	allowed := false
-	for _, m := range members {
+	for _, m := range parties {
 		if bytes.Equal(m, candidate) {
 			allowed = true
 		}

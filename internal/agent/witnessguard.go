@@ -70,7 +70,7 @@ func failoverBreaks(dataDir, fingerprint string) []string {
 		if name == "" {
 			name = cfg.GetProjectId()
 		}
-		for _, m := range []*nagiv1.FailoverMember{cfg.GetA(), cfg.GetB(), cfg.GetWitness()} {
+		for _, m := range []*nagiv1.FailoverParticipant{cfg.GetA(), cfg.GetB(), cfg.GetWitness()} {
 			if len(m.GetKey()) != 32 || bytes.Equal(m.GetKey(), self) || canReach(m.GetKey()) {
 				continue
 			}

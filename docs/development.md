@@ -32,7 +32,7 @@ internal/
 │   ├── sealer/       面板主密钥加密
 │   └── store/        面板数据库（sqlc）
 └── agent/            节点：连接面板、信任列表、mesh、副本同步、顶替、跨节点共享网络
-    ├── project/      项目和成员、网络、版本与回滚、快照、端口映射、override 生成、重建
+    ├── project/      项目和容器、网络、版本与回滚、快照、端口映射、override 生成、重建
     ├── compose/      调用 docker compose
     ├── docker/       Docker Engine API：状态、日志、终端、事件、网络、代理容器
     ├── proxy/        内嵌 Caddy
@@ -97,9 +97,9 @@ nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器
 
 - 加入共享网络时网络名默认由项目名生成；改网络名时提示连它的项目要跟着改（[agent.md](agent.md#共享网络)）
 - 设置顶替、迁移、用配置备份重建时，提示搬过去以后会断开哪些共享网络的连接（[failover.md](failover.md#实现)）
-- 不在快照范围内的 volume（`external` 或自定义 driver，接口里是成员的 `unmanaged_volumes`）和 `network_mode: host` 的服务（`host_network_services`）醒目提示（[agent.md](agent.md#部署方式)）
+- 不在快照范围内的 volume（`external` 或自定义 driver，接口里是容器的 `unmanaged_volumes`）和 `network_mode: host` 的服务（`host_network_services`）醒目提示（[agent.md](agent.md#部署方式)）
 - 首页提醒开启两步验证；提醒单独备份面板主密钥文件（设置里的 `master_key_path`，见 [panel.md](panel.md)）
-- 端口映射旁给出访问地址（节点列表里的 `address`，见 [exposure.md](exposure.md#端口映射目录)）；修改成员时对外端口在映射里改，不在成员配置里改
+- 端口映射旁给出访问地址（节点列表里的 `address`，见 [exposure.md](exposure.md#端口映射目录)）；修改容器时对外端口在映射里改，不在容器配置里改
 - 顶替和备份节点二选一，设了一个时另一个直接说明原因；设了顶替时迁移先说明要取消顶替（[failover.md](failover.md)）
 - 迁移以后、或者打开搬走了的项目的旧链接时，按项目 ID 找到它现在所在的节点并跳过去
 - 面板自己的设置（账号安全、告警、接入码、面板的 mesh）放在单独的设置页，不和节点列表混在一起
@@ -114,4 +114,4 @@ nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器
 4. 在网页上新建项目：填项目名、项目目录，粘贴一份 compose。agent 生成项目 ID，创建项目目录，解析 compose 并生成 override（本地网段、标签、日志轮转、重启策略），记录第一个版本。
 5. 点部署：agent 调用 `docker compose up`，面板上能看到每个服务的容器状态，并实时查看日志。
 
-**这一步不做**：Caddy 出口（第 1 步暂时保留 compose 里的 `ports`，第 2 步接入 Caddy 后再由 override 去掉）、草稿、镜像表单、服务级环境变量、文件来源、终端、TOTP、快照、远程节点、mesh。修订号从这一步起就要有。
+**这一步不做**：Caddy 出口（第 1 步暂时保留 compose 里的 `ports`，第 2 步接入 Caddy 后再由 override 去掉）、草稿、镜像表单、容器的环境变量、文件来源、终端、TOTP、快照、远程节点、mesh。修订号从这一步起就要有。

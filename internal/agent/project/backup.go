@@ -127,7 +127,7 @@ func (m *Manager) BackupKeys(ctx context.Context) map[string]string {
 
 // ReplicaFile 是要同步到备份节点的一个文件。
 type ReplicaFile struct {
-	Path string // 副本里的相对路径：repo/...、config/...、members/<成员>/... 或 project.json
+	Path string // 副本里的相对路径：repo/...、config/...、containers/<容器>/... 或 project.json
 	Abs  string // 本地文件；Data 不为空时不用
 	Data []byte
 	Size int64
@@ -139,8 +139,8 @@ type ReplicaFile struct {
 // replicaConfig 是副本里要带上的项目配置（相对 config/）。project.db 单独处理（拷一份一致的副本）。
 var replicaConfig = []string{"format", ".env", "routes", "docker", "backup.key"}
 
-// replicaMemberSkip 是成员目录里不同步的东西：运行文件和数据从快照恢复，临时目录不要。
-var replicaMemberSkip = []string{"data", "volumes", ".checkout", ".restore", ".upload"}
+// replicaContainerSkip 是容器目录里不同步的东西：运行文件和数据从快照恢复，临时目录不要。
+var replicaContainerSkip = []string{"data", "volumes", ".checkout", ".restore", ".upload"}
 
 // replicaInfo 是副本里的 project.json。
 type replicaInfo struct {
@@ -151,7 +151,7 @@ type replicaInfo struct {
 	Stateful bool `json:"stateful,omitempty"`
 }
 
-// ReplicaFiles 返回要同步的文件：快照仓库、项目配置、成员目录里的配置文件、project.db 的一致副本和 project.json。
+// ReplicaFiles 返回要同步的文件：快照仓库、项目配置、容器目录里的配置文件、project.db 的一致副本和 project.json。
 // 顺序是先数据包、再其他仓库文件：仓库的索引写在数据包之后，按这个顺序传，备份节点上的仓库始终能打开。
 func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, string, error) {
 	row, err := m.projectRow(ctx, id)
@@ -165,7 +165,7 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 	}
 	name := pdb.meta(ctx, metaName)
 	stateful := m.projectStateful(ctx, pdb, id, p)
-	members, err := memberNames(ctx, pdb)
+	containers, err := containerNames(ctx, pdb)
 	if err != nil {
 		pdb.Close()
 		return nil, "", err
@@ -238,10 +238,10 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 		}
 	}
 	config = append(config, ReplicaFile{Path: "config/project.db", Data: dbCopy, Size: int64(len(dbCopy))})
-	// 只同步现有成员的目录；删除成员时保留下来的目录不算。
-	for _, name := range members {
-		addTree(p.member(name).root, "members/"+name+"/", func(top string) bool {
-			return slices.Contains(replicaMemberSkip, top) || strings.HasPrefix(top, ".upload-")
+	// 只同步现有容器的目录；删除容器时保留下来的目录不算。
+	for _, name := range containers {
+		addTree(p.container(name).root, "containers/"+name+"/", func(top string) bool {
+			return slices.Contains(replicaContainerSkip, top) || strings.HasPrefix(top, ".upload-")
 		})
 	}
 	info, _ := json.Marshal(replicaInfo{Format: formatVersion, Name: name, Stateful: stateful})
@@ -253,7 +253,7 @@ func (m *Manager) ReplicaFiles(ctx context.Context, id string) ([]ReplicaFile, s
 func ReplicaPath(root, rel string) (string, error) {
 	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
 	if clean != rel || strings.HasPrefix(clean, "../") || filepath.IsAbs(rel) ||
-		!(clean == "project.json" || strings.HasPrefix(clean, "repo/") || strings.HasPrefix(clean, "config/") || strings.HasPrefix(clean, "members/")) {
+		!(clean == "project.json" || strings.HasPrefix(clean, "repo/") || strings.HasPrefix(clean, "config/") || strings.HasPrefix(clean, "containers/")) {
 		return "", fmt.Errorf("副本路径无效：%q", rel)
 	}
 	return filepath.Join(root, filepath.FromSlash(clean)), nil
@@ -325,8 +325,8 @@ func (m *Manager) CheckRestore(ctx context.Context, id, dir string, routes []*na
 }
 
 // RestoreReplica 把副本恢复成本节点上的项目：项目 ID 不变，复制快照仓库、项目配置（含 project.db，
-// 版本记录和部署记录都在）和成员的配置文件，恢复快照里各成员的 data/ 和 volumes/，
-// 然后按各成员当前部署的版本启动（不生成新版本）。snapshotID 为空时用最新的定时或手动快照。
+// 版本记录和部署记录都在）和容器的配置文件，恢复快照里各容器的 data/ 和 volumes/，
+// 然后按各容器当前部署的版本启动（不生成新版本）。snapshotID 为空时用最新的定时或手动快照。
 func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID string, onLine func(string)) (*nagiv1.Project, error) {
 	if _, err := m.projectRow(ctx, id); err == nil {
 		return nil, invalid("本节点上已经有这个项目")
@@ -348,7 +348,7 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 	for _, c := range []struct{ src, dst string }{
 		{filepath.Join(root, "repo"), p.backupsDir()},
 		{filepath.Join(root, "config"), p.configDir()},
-		{filepath.Join(root, "members"), p.membersDir()},
+		{filepath.Join(root, "containers"), p.containersDir()},
 	} {
 		if err := copyTree(c.src, c.dst); err != nil {
 			return fail(fmt.Errorf("复制副本: %w", err))
@@ -372,12 +372,12 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 	if err := m.leaveForeignNetworks(ctx, pdb, id, onLine); err != nil {
 		return fail(err)
 	}
-	members, err := pdb.q.ListMembers(ctx)
+	containers, err := pdb.q.ListContainers(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	for _, mem := range members {
-		mp := p.member(mem.Name)
+	for _, mem := range containers {
+		mp := p.container(mem.Name)
 		for _, d := range []string{mp.dataDir(), mp.volumesDir()} {
 			if err := os.MkdirAll(d, 0o755); err != nil {
 				return fail(err)
@@ -396,41 +396,41 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 			onLine(fmt.Sprintf("使用最新的快照（%s）", list[0].Time.Local().Format("2006-01-02 15:04:05")))
 		}
 	}
-	for _, mem := range members {
-		mp := p.member(mem.Name)
+	for _, mem := range containers {
+		mp := p.container(mem.Name)
 		if snapshotID == "" {
 			// 还没有定时快照（例如项目刚创建就要顶替）：用部署的版本的文件恢复 data/，没有运行数据。
 			v, err := pdb.deployed(ctx, mem)
 			if err != nil || v == nil || v.FilesSnapshot == "" {
 				continue
 			}
-			onLine("副本里还没有定时快照，用版本文件恢复成员 " + mem.Name + " 的 data/（没有运行数据）")
+			onLine("副本里还没有定时快照，用版本文件恢复容器 " + mem.Name + " 的 data/（没有运行数据）")
 			if err := rep.Restore(ctx, v.FilesSnapshot, "data", mp.dataDir()); err != nil {
 				rep.Close(ctx)
-				return fail(fmt.Errorf("恢复成员 %s 的版本文件: %w", mem.Name, err))
+				return fail(fmt.Errorf("恢复容器 %s 的版本文件: %w", mem.Name, err))
 			}
 			continue
 		}
-		onLine("恢复成员 " + mem.Name + " 的 data/ 和 volumes/")
-		if err := rep.Restore(ctx, snapshotID, "member."+mem.Name+"/data", mp.dataDir()); err != nil {
-			onLine("快照里没有成员 " + mem.Name + " 的数据，跳过：" + err.Error())
+		onLine("恢复容器 " + mem.Name + " 的 data/ 和 volumes/")
+		if err := restoreContainerDir(ctx, rep, snapshotID, mem.Name, "data", mp.dataDir()); err != nil {
+			onLine("快照里没有容器 " + mem.Name + " 的数据，跳过：" + err.Error())
 			continue
 		}
-		if err := rep.Restore(ctx, snapshotID, "member."+mem.Name+"/volumes", mp.volumesDir()); err != nil {
-			onLine("快照里没有成员 " + mem.Name + " 的 volumes/，跳过：" + err.Error())
+		if err := restoreContainerDir(ctx, rep, snapshotID, mem.Name, "volumes", mp.volumesDir()); err != nil {
+			onLine("快照里没有容器 " + mem.Name + " 的 volumes/，跳过：" + err.Error())
 		}
 	}
 	rep.Close(ctx)
 
 	// 文件已经恢复好，启动失败时项目保留下来，用户可以修改配置后重新部署。
 	var startErr error
-	for _, mem := range members {
+	for _, mem := range containers {
 		if mem.DeployedVersion == 0 {
 			continue
 		}
-		onLine(fmt.Sprintf("启动成员 %s（版本 %d）", mem.Name, mem.DeployedVersion))
+		onLine(fmt.Sprintf("启动容器 %s（版本 %d）", mem.Name, mem.DeployedVersion))
 		if err := m.startDeployed(ctx, pdb, p, id, mem, onLine); err != nil && startErr == nil {
-			startErr = fmt.Errorf("项目已恢复，但成员 %s 启动失败：%w", mem.Name, err)
+			startErr = fmt.Errorf("项目已恢复，但容器 %s 启动失败：%w", mem.Name, err)
 		}
 	}
 	proj, err := pdb.project(ctx, id, dir)

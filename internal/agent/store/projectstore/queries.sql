@@ -6,77 +6,77 @@ INSERT INTO meta (key, value) VALUES (?, ?)
 ON CONFLICT (key) DO UPDATE SET value = excluded.value;
 
 
--- name: InsertMember :exec
-INSERT INTO members (name, position, created_at, webhook_token)
-VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM members), ?, ?);
+-- name: InsertContainer :exec
+INSERT INTO containers (name, position, created_at, webhook_token)
+VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM containers), ?, ?);
 
--- name: GetMember :one
-SELECT * FROM members WHERE name = ?;
+-- name: GetContainer :one
+SELECT * FROM containers WHERE name = ?;
 
--- name: ListMembers :many
-SELECT * FROM members ORDER BY position;
+-- name: ListContainers :many
+SELECT * FROM containers ORDER BY position;
 
--- name: DeleteMember :exec
-DELETE FROM members WHERE name = ?;
+-- name: DeleteContainer :exec
+DELETE FROM containers WHERE name = ?;
 
--- name: SetMemberRevision :exec
-UPDATE members SET revision = ? WHERE name = ?;
+-- name: SetContainerRevision :exec
+UPDATE containers SET revision = ? WHERE name = ?;
 
--- name: SetMemberDeployed :exec
-UPDATE members SET deployed_version = ? WHERE name = ?;
+-- name: SetContainerDeployed :exec
+UPDATE containers SET deployed_version = ? WHERE name = ?;
 
--- name: SetMemberCommit :exec
-UPDATE members SET last_commit = ? WHERE name = ?;
+-- name: SetContainerCommit :exec
+UPDATE containers SET last_commit = ? WHERE name = ?;
 
--- name: SetMemberImportedPorts :exec
-UPDATE members SET imported_ports = ? WHERE name = ?;
+-- name: SetContainerImportedPorts :exec
+UPDATE containers SET imported_ports = ? WHERE name = ?;
 
--- name: SetMemberFilesRoot :exec
-UPDATE members SET last_files_root = ? WHERE name = ?;
+-- name: SetContainerFilesRoot :exec
+UPDATE containers SET last_files_root = ? WHERE name = ?;
 
 
 -- name: InsertVersion :exec
-INSERT INTO versions (member, version, config, shared_env, created_at, rollback_of) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO versions (container, version, config, shared_env, created_at, rollback_of) VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: ReplaceUndeployedVersion :exec
 UPDATE versions SET config = ?, shared_env = ?, created_at = ?, rollback_of = ?, files_snapshot = '', images = '{}', git_commit = ''
-WHERE member = ? AND version = ? AND deployed_at IS NULL;
+WHERE container = ? AND version = ? AND deployed_at IS NULL;
 
 -- name: LatestVersion :one
-SELECT * FROM versions WHERE member = ? ORDER BY version DESC LIMIT 1;
+SELECT * FROM versions WHERE container = ? ORDER BY version DESC LIMIT 1;
 
 -- name: GetVersion :one
-SELECT * FROM versions WHERE member = ? AND version = ?;
+SELECT * FROM versions WHERE container = ? AND version = ?;
 
 -- name: ListVersions :many
-SELECT * FROM versions WHERE member = ? ORDER BY version DESC;
+SELECT * FROM versions WHERE container = ? ORDER BY version DESC;
 
 -- name: SetVersionFiles :exec
-UPDATE versions SET files_snapshot = ? WHERE member = ? AND version = ?;
+UPDATE versions SET files_snapshot = ? WHERE container = ? AND version = ?;
 
 -- name: SetVersionDeployed :exec
-UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE member = ? AND version = ?;
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE container = ? AND version = ?;
 
 -- name: DeleteVersionsBefore :exec
-DELETE FROM versions WHERE member = ? AND version < ?;
+DELETE FROM versions WHERE container = ? AND version < ?;
 
--- name: DeleteMemberVersions :exec
-DELETE FROM versions WHERE member = ?;
+-- name: DeleteContainerVersions :exec
+DELETE FROM versions WHERE container = ?;
 
 
 -- name: GetDraft :one
-SELECT * FROM drafts WHERE member = ?;
+SELECT * FROM drafts WHERE container = ?;
 
 -- name: SetDraft :exec
-INSERT INTO drafts (member, config, updated_at) VALUES (?, ?, ?)
-ON CONFLICT (member) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at;
+INSERT INTO drafts (container, config, updated_at) VALUES (?, ?, ?)
+ON CONFLICT (container) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at;
 
 -- name: DeleteDraft :exec
-DELETE FROM drafts WHERE member = ?;
+DELETE FROM drafts WHERE container = ?;
 
 
 -- name: InsertDeployment :one
-INSERT INTO deployments (created_at, source, members, versions, success, error, restore_of)
+INSERT INTO deployments (created_at, source, containers, versions, success, error, restore_of)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 

@@ -13,7 +13,7 @@ import (
 )
 
 // 跨节点连接共享网络（见 docs/agent.md#跨节点连接共享网络）：这里管连接关系（存在节点数据库里）
-// 和本节点网络里的成员；代理容器、成员列表的同步和连接转发由节点（agent 包）负责。
+// 和本节点网络里的容器；代理容器、容器列表的同步和连接转发由节点（agent 包）负责。
 
 // LinkPeer 是和本节点某个共享网络相连的节点。
 type LinkPeer struct {
@@ -88,10 +88,10 @@ func (m *Manager) sharedNetworkExists(ctx context.Context, name string) (bool, e
 
 // SharedNetworkProjects 返回加入了共享网络 name 的项目（不管是否在运行）。
 func (m *Manager) SharedNetworkProjects(ctx context.Context, name string) []*nagiv1.SharedNetworkProject {
-	return m.sharedMembers(ctx)[name]
+	return m.sharedContainers(ctx)[name]
 }
 
-// LinkEndpoint 是本节点共享网络里的一个成员（一个容器）。
+// LinkEndpoint 是本节点共享网络里的一个容器（一个容器）。
 type LinkEndpoint struct {
 	Alias       string
 	ProjectID   string
@@ -100,7 +100,7 @@ type LinkEndpoint struct {
 	Ports       []uint32
 }
 
-// LinkEndpoints 返回本节点共享网络 name 里正在运行的成员：名字、地址和开着的端口
+// LinkEndpoints 返回本节点共享网络 name 里正在运行的容器：名字、地址和开着的端口
 // （容器声明的端口，加上项目设置里补的跨节点端口）。
 func (m *Manager) LinkEndpoints(ctx context.Context, name string) ([]LinkEndpoint, error) {
 	rows, err := m.nodeQ.ListProjects(ctx)
@@ -121,18 +121,18 @@ func (m *Manager) LinkEndpoints(ctx context.Context, name string) ([]LinkEndpoin
 			continue
 		}
 		extra := linkPortMap(s.GetLinkPorts())
-		containers, err := m.docker.Containers(ctx, projectLabel(r.ID))
+		containers, err := m.docker.Instances(ctx, projectLabel(r.ID))
 		if err != nil {
 			return nil, err
 		}
 		for _, c := range containers {
 			ip, ok := c.IPs[sharedNetwork(name)]
-			if c.State != "running" || !ok || c.Member == "" || c.Service == "" {
+			if c.State != "running" || !ok || c.Container == "" || c.Service == "" {
 				continue
 			}
-			key := c.Member
+			key := c.Container
 			if !c.Single {
-				key = c.Service + "." + c.Member
+				key = c.Service + "." + c.Container
 			}
 			var ports []uint32
 			for _, p := range c.Ports {
@@ -152,7 +152,7 @@ func (m *Manager) LinkEndpoints(ctx context.Context, name string) ([]LinkEndpoin
 
 var linkPortRe = regexp.MustCompile(`^([a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)?):([0-9]{1,5})$`)
 
-// cleanLinkPorts 检查并整理项目设置里的跨节点端口（"成员:端口"或"服务.成员:端口"）。
+// cleanLinkPorts 检查并整理项目设置里的跨节点端口（"容器:端口"或"服务.容器组:端口"）。
 func cleanLinkPorts(in []string) ([]string, error) {
 	var out []string
 	for _, s := range in {
@@ -162,7 +162,7 @@ func cleanLinkPorts(in []string) ([]string, error) {
 		}
 		m := linkPortRe.FindStringSubmatch(s)
 		if m == nil {
-			return nil, invalid("跨节点端口 %q 的格式不对，应该是\"成员:端口\"或\"服务.成员:端口\"", s)
+			return nil, invalid("跨节点端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"", s)
 		}
 		if p, _ := strconv.Atoi(m[3]); p < 1 || p > 65535 {
 			return nil, invalid("跨节点端口 %q 的端口号不对", s)

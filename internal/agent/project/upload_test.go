@@ -84,7 +84,7 @@ func TestExtractTarGz(t *testing.T) {
 }
 
 func TestFormLimitsAndHealth(t *testing.T) {
-	cfg := &nagiv1.MemberConfig{Form: &nagiv1.ImageForm{
+	cfg := &nagiv1.ContainerConfig{Form: &nagiv1.ImageForm{
 		Image: "nginx:alpine", MemoryMb: 256, Cpus: 0.5, HealthCommand: "wget -qO- localhost", HealthIntervalSeconds: 15,
 	}}
 	proj, err := validate(context.Background(), cfg, "app", nil, t.TempDir(), "nagi-test")

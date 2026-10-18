@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { Button, Field, Input, Textarea } from "@/components/ui";
 import { envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
-import type { ImageForm, ImageFormSchema, MemberConfigSchema } from "@/gen/nagi/v1/common_pb";
+import type { ImageForm, ImageFormSchema, ContainerConfigSchema } from "@/gen/nagi/v1/common_pb";
 
 const exampleCompose = `services:
   web:
@@ -11,12 +11,12 @@ const exampleCompose = `services:
       - "8080:80"
 `;
 
-export type MemberConfigInit = MessageInitShape<typeof MemberConfigSchema>;
+export type ContainerConfigInit = MessageInitShape<typeof ContainerConfigSchema>;
 export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
 
-// useImageForm 是单容器成员的镜像表单：新建成员和修改成员共用，所以所有字段建好以后都能改。
+// useImageForm 是单个容器的镜像表单：新建容器和修改容器共用，所以所有字段建好以后都能改。
 // 例外是对外端口：它只在第一次部署时导入成端口映射，之后以"端口映射"为准，所以修改时（传了 initial）不显示。
-// prefix 加在输入框的 id 前面：同一个页面上可能同时有"加成员"和"修改成员"两个表单。
+// prefix 加在输入框的 id 前面：同一个页面上可能同时有"加容器"和"修改容器"两个表单。
 export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactNode; build: () => ImageFormInit } {
   const editing = !!initial;
   const [image, setImage] = useState(initial?.image ?? "nginx:alpine");
@@ -63,10 +63,10 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
             <Input id={prefix + "ports"} value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" />
           </Field>
         )}
-        <Field label="工作目录" htmlFor={prefix + "workdir"} hint="把成员的 data/（上传或从 git 拉的文件）挂到容器内这个路径；为空表示不挂载文件">
+        <Field label="工作目录" htmlFor={prefix + "workdir"} hint="把容器的 data/（上传或从 git 拉的文件）挂到容器内这个路径；为空表示不挂载文件">
           <Input id={prefix + "workdir"} value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
         </Field>
-        <Field label="持久化目录" htmlFor={prefix + "volumes"} hint="容器内路径，每行一个；数据保存在成员目录的 volumes/ 下，随快照备份">
+        <Field label="持久化目录" htmlFor={prefix + "volumes"} hint="容器内路径，每行一个；数据保存在容器目录的 volumes/ 下，随快照备份">
           <Textarea id={prefix + "volumes"} value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono" placeholder="/data" />
         </Field>
         <Field label="环境变量" htmlFor={prefix + "env"} hint="KEY=VALUE，每行一个">
@@ -95,15 +95,15 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
   return { fields, build };
 }
 
-// 新建项目和加成员共用的表单：单容器（镜像表单）或一份 compose。
-// first 表示项目里的第一个成员（没有别的成员可依赖，不显示"先部署的成员"）。
-export function useMemberForm(first = false): { fields: ReactNode; build: () => MemberConfigInit; mode: "compose" | "image" } {
+// 新建项目和加容器共用的表单：单容器（镜像表单）或一份 compose。
+// first 表示项目里的第一个容器（没有别的容器可依赖，不显示"先部署的容器"）。
+export function useContainerForm(first = false): { fields: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" } {
   const [mode, setMode] = useState<"compose" | "image">("image");
   const [compose, setCompose] = useState(exampleCompose);
   const [dependsOn, setDependsOn] = useState("");
   const imageForm = useImageForm();
 
-  const build = (): MemberConfigInit => {
+  const build = (): ContainerConfigInit => {
     const deps = dependsOn.split(/[\s,]+/).filter(Boolean);
     if (mode === "compose") return { compose, dependsOn: deps };
     return { dependsOn: deps, form: imageForm.build() };
@@ -120,7 +120,7 @@ export function useMemberForm(first = false): { fields: ReactNode; build: () => 
         </Button>
       </div>
       {mode === "compose" ? (
-        <Field label="compose" htmlFor="compose" hint="整份作为一个成员，例如自带数据库的开源应用。内部的服务照常用原名互相访问。">
+        <Field label="compose" htmlFor="compose" hint="整份作为一个容器组，例如自带数据库的开源应用。组里的容器照常用 compose 里的服务名互相访问。">
           <Textarea
             id="compose"
             value={compose}
@@ -134,7 +134,7 @@ export function useMemberForm(first = false): { fields: ReactNode; build: () => 
         imageForm.fields
       )}
       {!first && (
-        <Field label="先部署的成员（可选）" htmlFor="deps" hint="一起部署时排在这些成员后面，例如后端依赖数据库。成员名，逗号分隔。">
+        <Field label="先部署的容器（可选）" htmlFor="deps" hint="一起部署时排在这些容器后面，例如后端依赖数据库。容器名，逗号分隔。">
           <Input id="deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
         </Field>
       )}

@@ -74,7 +74,7 @@ func TestFormCompose(t *testing.T) {
 func TestValidate(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	ok := &nagiv1.MemberConfig{
+	ok := &nagiv1.ContainerConfig{
 		Compose: "services:\n  web:\n    image: nginx:${TAG}\n",
 		Env:     []*nagiv1.EnvVar{{Key: "TAG", Value: "alpine"}},
 		ServiceEnv: map[string]*nagiv1.EnvList{
@@ -89,7 +89,7 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("interpolation: %q", proj.Services["web"].Image)
 	}
 
-	cases := map[string]*nagiv1.MemberConfig{
+	cases := map[string]*nagiv1.ContainerConfig{
 		"empty":         {Compose: "  "},
 		"bad yaml":      {Compose: "services: ["},
 		"bad key":       {Compose: ok.Compose, Env: []*nagiv1.EnvVar{{Key: "1BAD"}}},
@@ -106,11 +106,11 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// 共享变量可以在 compose 里引用，同名时以成员自己的变量为准。
+// 共享变量可以在 compose 里引用，同名时以容器自己的变量为准。
 func TestSharedEnv(t *testing.T) {
 	ctx := context.Background()
 	shared := []*nagiv1.EnvVar{{Key: "TAG", Value: "1"}, {Key: "DB_PASS", Value: "x"}}
-	cfg := &nagiv1.MemberConfig{Compose: "services:\n  api:\n    image: app:${TAG}\n    environment:\n      P: ${DB_PASS}\n"}
+	cfg := &nagiv1.ContainerConfig{Compose: "services:\n  api:\n    image: app:${TAG}\n    environment:\n      P: ${DB_PASS}\n"}
 	proj, err := validate(ctx, cfg, "api", shared, t.TempDir(), "nagi-test")
 	if err != nil {
 		t.Fatal(err)
@@ -120,31 +120,31 @@ func TestSharedEnv(t *testing.T) {
 	}
 	cfg.Env = []*nagiv1.EnvVar{{Key: "TAG", Value: "2"}}
 	if proj, _ = validate(ctx, cfg, "api", shared, t.TempDir(), "nagi-test"); proj.Services["api"].Image != "app:2" {
-		t.Fatalf("member should win: %q", proj.Services["api"].Image)
+		t.Fatalf("container should win: %q", proj.Services["api"].Image)
 	}
-	// TAG 被成员自己的变量覆盖，改共享的 TAG 不影响它；改 DB_PASS 影响。
+	// TAG 被容器自己的变量覆盖，改共享的 TAG 不影响它；改 DB_PASS 影响。
 	changedTag := []*nagiv1.EnvVar{{Key: "TAG", Value: "9"}, {Key: "DB_PASS", Value: "x"}}
 	changedPass := []*nagiv1.EnvVar{{Key: "TAG", Value: "1"}, {Key: "DB_PASS", Value: "y"}}
 	if sharedEnvChanged(cfg, "api", shared, changedTag) {
-		t.Fatal("TAG is overridden by the member")
+		t.Fatal("TAG is overridden by the container")
 	}
 	if !sharedEnvChanged(cfg, "api", shared, changedPass) {
 		t.Fatal("DB_PASS change should be noticed")
 	}
-	other := &nagiv1.MemberConfig{Compose: "services:\n  web:\n    image: nginx\n"}
+	other := &nagiv1.ContainerConfig{Compose: "services:\n  web:\n    image: nginx\n"}
 	if sharedEnvChanged(other, "web", shared, changedPass) {
 		t.Fatal("web does not reference DB_PASS")
 	}
 }
 
-func TestMemberName(t *testing.T) {
+func TestContainerName(t *testing.T) {
 	for _, ok := range []string{"web", "api-v2", "a", "db1"} {
-		if checkMemberName(ok) != nil {
+		if checkContainerName(ok) != nil {
 			t.Errorf("%s should be valid", ok)
 		}
 	}
 	for _, bad := range []string{"", "Web", "-web", "web-", "a_b", "a.b", "abcdefghijabcdefghijabcdefghijabc"} {
-		if checkMemberName(bad) == nil {
+		if checkContainerName(bad) == nil {
 			t.Errorf("%q should be invalid", bad)
 		}
 	}
@@ -153,7 +153,7 @@ func TestMemberName(t *testing.T) {
 // 一起部署时按依赖排序：被依赖的先部署，其余按创建顺序；有循环时报错。
 func TestOrderJobs(t *testing.T) {
 	mk := func(name string, pos int64, deps ...string) job {
-		return job{row: projectstore.Member{Name: name, Position: pos}, cfg: &nagiv1.MemberConfig{DependsOn: deps}}
+		return job{row: projectstore.Container{Name: name, Position: pos}, cfg: &nagiv1.ContainerConfig{DependsOn: deps}}
 	}
 	got, err := orderJobs([]job{mk("web", 1, "api"), mk("api", 2, "db"), mk("db", 3), mk("cron", 4)})
 	if err != nil {
@@ -171,43 +171,43 @@ func TestOrderJobs(t *testing.T) {
 	}
 }
 
-// 单容器成员（内网开启）只加入项目内网；compose 成员用自己的默认网络，项目内网由节点接入。
+// 单个容器（内网开启）只加入项目内网；容器组用自己的默认网络，项目内网由节点接入。
 func TestOverrideNetworks(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	mp := memberPaths{root: dir}
+	mp := containerPaths{root: dir}
 	text, _ := formCompose(&nagiv1.ImageForm{Image: "nginx"}, "web")
 	single, err := loadCompose(ctx, text, nil, dir, "nagi-p-web")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ov, err := buildOverride(overrideInput{proj: single, mp: mp, projectID: "p", member: "web", version: 1, single: true, intranet: true})
+	ov, err := buildOverride(overrideInput{proj: single, mp: mp, projectID: "p", container: "web", version: 1, single: true, intranet: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	nets := ov["networks"].(map[string]any)
 	if n, ok := nets["nagi"].(map[string]any); !ok || n["name"] != "nagi-p" || n["external"] != true {
-		t.Fatalf("single member networks: %v", nets)
+		t.Fatalf("single container networks: %v", nets)
 	}
 	svc := ov["services"].(map[string]any)["web"].(map[string]any)
 	if svc["networks"] == nil || svc["labels"].(map[string]string)[LabelSingle] != "1" {
-		t.Fatalf("single member service: %v", svc)
+		t.Fatalf("single container service: %v", svc)
 	}
 
 	compose, err := loadCompose(ctx, "services:\n  db:\n    image: postgres\n", nil, dir, "nagi-p-umami")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ov, err = buildOverride(overrideInput{proj: compose, mp: mp, projectID: "p", member: "umami", version: 1, intranet: true, subnet: "10.200.0.64/26"})
+	ov, err = buildOverride(overrideInput{proj: compose, mp: mp, projectID: "p", container: "umami", version: 1, intranet: true, subnet: "10.200.0.64/26"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	nets = ov["networks"].(map[string]any)
 	if _, ok := nets["default"]; !ok || nets["nagi"] != nil {
-		t.Fatalf("compose member networks: %v", nets)
+		t.Fatalf("compose container networks: %v", nets)
 	}
 	if ov["services"].(map[string]any)["db"].(map[string]any)["networks"] != nil {
-		t.Fatal("compose member must not join the project network in compose")
+		t.Fatal("compose container must not join the project network in compose")
 	}
 }
 

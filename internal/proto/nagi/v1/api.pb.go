@@ -3346,9 +3346,9 @@ type CreateNodeProjectRequest struct {
 	Name     string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Dir      string                 `protobuf:"bytes,3,opt,name=dir,proto3" json:"dir,omitempty"`
 	Settings *ProjectSettings       `protobuf:"bytes,6,opt,name=settings,proto3" json:"settings,omitempty"`
-	// 可选：第一个成员。
-	MemberName    string        `protobuf:"bytes,7,opt,name=member_name,json=memberName,proto3" json:"member_name,omitempty"`
-	Member        *MemberConfig `protobuf:"bytes,8,opt,name=member,proto3" json:"member,omitempty"`
+	// 可选：第一个容器。
+	ContainerName string           `protobuf:"bytes,7,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
+	Container     *ContainerConfig `protobuf:"bytes,8,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3411,44 +3411,44 @@ func (x *CreateNodeProjectRequest) GetSettings() *ProjectSettings {
 	return nil
 }
 
-func (x *CreateNodeProjectRequest) GetMemberName() string {
+func (x *CreateNodeProjectRequest) GetContainerName() string {
 	if x != nil {
-		return x.MemberName
+		return x.ContainerName
 	}
 	return ""
 }
 
-func (x *CreateNodeProjectRequest) GetMember() *MemberConfig {
+func (x *CreateNodeProjectRequest) GetContainer() *ContainerConfig {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return nil
 }
 
-type AddNodeProjectMemberRequest struct {
+type AddNodeProjectContainerRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Config        *MemberConfig          `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
+	Config        *ContainerConfig       `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AddNodeProjectMemberRequest) Reset() {
-	*x = AddNodeProjectMemberRequest{}
+func (x *AddNodeProjectContainerRequest) Reset() {
+	*x = AddNodeProjectContainerRequest{}
 	mi := &file_nagi_v1_api_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AddNodeProjectMemberRequest) String() string {
+func (x *AddNodeProjectContainerRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AddNodeProjectMemberRequest) ProtoMessage() {}
+func (*AddNodeProjectContainerRequest) ProtoMessage() {}
 
-func (x *AddNodeProjectMemberRequest) ProtoReflect() protoreflect.Message {
+func (x *AddNodeProjectContainerRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_api_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3460,64 +3460,64 @@ func (x *AddNodeProjectMemberRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AddNodeProjectMemberRequest.ProtoReflect.Descriptor instead.
-func (*AddNodeProjectMemberRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use AddNodeProjectContainerRequest.ProtoReflect.Descriptor instead.
+func (*AddNodeProjectContainerRequest) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_api_proto_rawDescGZIP(), []int{70}
 }
 
-func (x *AddNodeProjectMemberRequest) GetNodeId() string {
+func (x *AddNodeProjectContainerRequest) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *AddNodeProjectMemberRequest) GetProjectId() string {
+func (x *AddNodeProjectContainerRequest) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
 	}
 	return ""
 }
 
-func (x *AddNodeProjectMemberRequest) GetName() string {
+func (x *AddNodeProjectContainerRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *AddNodeProjectMemberRequest) GetConfig() *MemberConfig {
+func (x *AddNodeProjectContainerRequest) GetConfig() *ContainerConfig {
 	if x != nil {
 		return x.Config
 	}
 	return nil
 }
 
-type DeleteNodeProjectMemberRequest struct {
+type DeleteNodeProjectContainerRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Member        string                 `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`
 	BaseRevision  int64                  `protobuf:"varint,4,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
 	DeleteDir     bool                   `protobuf:"varint,5,opt,name=delete_dir,json=deleteDir,proto3" json:"delete_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteNodeProjectMemberRequest) Reset() {
-	*x = DeleteNodeProjectMemberRequest{}
+func (x *DeleteNodeProjectContainerRequest) Reset() {
+	*x = DeleteNodeProjectContainerRequest{}
 	mi := &file_nagi_v1_api_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteNodeProjectMemberRequest) String() string {
+func (x *DeleteNodeProjectContainerRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteNodeProjectMemberRequest) ProtoMessage() {}
+func (*DeleteNodeProjectContainerRequest) ProtoMessage() {}
 
-func (x *DeleteNodeProjectMemberRequest) ProtoReflect() protoreflect.Message {
+func (x *DeleteNodeProjectContainerRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_api_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3529,40 +3529,40 @@ func (x *DeleteNodeProjectMemberRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteNodeProjectMemberRequest.ProtoReflect.Descriptor instead.
-func (*DeleteNodeProjectMemberRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteNodeProjectContainerRequest.ProtoReflect.Descriptor instead.
+func (*DeleteNodeProjectContainerRequest) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_api_proto_rawDescGZIP(), []int{71}
 }
 
-func (x *DeleteNodeProjectMemberRequest) GetNodeId() string {
+func (x *DeleteNodeProjectContainerRequest) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *DeleteNodeProjectMemberRequest) GetProjectId() string {
+func (x *DeleteNodeProjectContainerRequest) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
 	}
 	return ""
 }
 
-func (x *DeleteNodeProjectMemberRequest) GetMember() string {
+func (x *DeleteNodeProjectContainerRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
 
-func (x *DeleteNodeProjectMemberRequest) GetBaseRevision() int64 {
+func (x *DeleteNodeProjectContainerRequest) GetBaseRevision() int64 {
 	if x != nil {
 		return x.BaseRevision
 	}
 	return 0
 }
 
-func (x *DeleteNodeProjectMemberRequest) GetDeleteDir() bool {
+func (x *DeleteNodeProjectContainerRequest) GetDeleteDir() bool {
 	if x != nil {
 		return x.DeleteDir
 	}
@@ -3833,29 +3833,29 @@ func (x *RestoreNodeProjectDeploymentRequest) GetDeploymentId() int64 {
 	return 0
 }
 
-type NodeMemberRef struct {
+type NodeContainerRef struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Member        string                 `protobuf:"bytes,3,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *NodeMemberRef) Reset() {
-	*x = NodeMemberRef{}
+func (x *NodeContainerRef) Reset() {
+	*x = NodeContainerRef{}
 	mi := &file_nagi_v1_api_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *NodeMemberRef) String() string {
+func (x *NodeContainerRef) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NodeMemberRef) ProtoMessage() {}
+func (*NodeContainerRef) ProtoMessage() {}
 
-func (x *NodeMemberRef) ProtoReflect() protoreflect.Message {
+func (x *NodeContainerRef) ProtoReflect() protoreflect.Message {
 	mi := &file_nagi_v1_api_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3867,28 +3867,28 @@ func (x *NodeMemberRef) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NodeMemberRef.ProtoReflect.Descriptor instead.
-func (*NodeMemberRef) Descriptor() ([]byte, []int) {
+// Deprecated: Use NodeContainerRef.ProtoReflect.Descriptor instead.
+func (*NodeContainerRef) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_api_proto_rawDescGZIP(), []int{76}
 }
 
-func (x *NodeMemberRef) GetNodeId() string {
+func (x *NodeContainerRef) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *NodeMemberRef) GetProjectId() string {
+func (x *NodeContainerRef) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
 	}
 	return ""
 }
 
-func (x *NodeMemberRef) GetMember() string {
+func (x *NodeContainerRef) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -4011,8 +4011,8 @@ type SaveNodeProjectDraftRequest struct {
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	BaseRevision  int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
-	Config        *MemberConfig          `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
-	Member        string                 `protobuf:"bytes,5,opt,name=member,proto3" json:"member,omitempty"`
+	Config        *ContainerConfig       `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
+	Container     string                 `protobuf:"bytes,5,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4068,16 +4068,16 @@ func (x *SaveNodeProjectDraftRequest) GetBaseRevision() int64 {
 	return 0
 }
 
-func (x *SaveNodeProjectDraftRequest) GetConfig() *MemberConfig {
+func (x *SaveNodeProjectDraftRequest) GetConfig() *ContainerConfig {
 	if x != nil {
 		return x.Config
 	}
 	return nil
 }
 
-func (x *SaveNodeProjectDraftRequest) GetMember() string {
+func (x *SaveNodeProjectDraftRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -4131,7 +4131,7 @@ type DiscardNodeProjectDraftRequest struct {
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	BaseRevision  int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
-	Member        string                 `protobuf:"bytes,4,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4187,9 +4187,9 @@ func (x *DiscardNodeProjectDraftRequest) GetBaseRevision() int64 {
 	return 0
 }
 
-func (x *DiscardNodeProjectDraftRequest) GetMember() string {
+func (x *DiscardNodeProjectDraftRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -4504,7 +4504,7 @@ type RollbackNodeProjectRequest struct {
 	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Version       int64                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
 	RestoreData   bool                   `protobuf:"varint,4,opt,name=restore_data,json=restoreData,proto3" json:"restore_data,omitempty"`
-	Member        string                 `protobuf:"bytes,5,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,5,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4567,9 +4567,9 @@ func (x *RollbackNodeProjectRequest) GetRestoreData() bool {
 	return false
 }
 
-func (x *RollbackNodeProjectRequest) GetMember() string {
+func (x *RollbackNodeProjectRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -4579,8 +4579,8 @@ type RestoreNodeProjectSnapshotRequest struct {
 	NodeId     string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	ProjectId  string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	SnapshotId string                 `protobuf:"bytes,3,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
-	// 只恢复这个成员；为空时恢复整个项目。
-	Member        string `protobuf:"bytes,4,opt,name=member,proto3" json:"member,omitempty"`
+	// 只恢复这个容器；为空时恢复整个项目。
+	Container     string `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4636,9 +4636,9 @@ func (x *RestoreNodeProjectSnapshotRequest) GetSnapshotId() string {
 	return ""
 }
 
-func (x *RestoreNodeProjectSnapshotRequest) GetMember() string {
+func (x *RestoreNodeProjectSnapshotRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -4901,7 +4901,7 @@ type DeployNodeProjectRequest struct {
 	ProjectId string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// 部署前先从 git 拉取文件。
 	Pull bool `protobuf:"varint,4,opt,name=pull,proto3" json:"pull,omitempty"`
-	// 用刚上传的压缩包替换成员的 data/（先 POST /api/upload，只能部署一个成员）。
+	// 用刚上传的压缩包替换容器的 data/（先 POST /api/upload，只能部署一个容器）。
 	UseUpload bool `protobuf:"varint,5,opt,name=use_upload,json=useUpload,proto3" json:"use_upload,omitempty"`
 	// 先拉取最新的镜像（更新镜像）。
 	PullImages bool            `protobuf:"varint,6,opt,name=pull_images,json=pullImages,proto3" json:"pull_images,omitempty"`
@@ -5006,7 +5006,7 @@ type StreamNodeProjectLogsRequest struct {
 	Service       string                 `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
 	Tail          int32                  `protobuf:"varint,4,opt,name=tail,proto3" json:"tail,omitempty"`
 	Follow        bool                   `protobuf:"varint,5,opt,name=follow,proto3" json:"follow,omitempty"`
-	Member        string                 `protobuf:"bytes,6,opt,name=member,proto3" json:"member,omitempty"`
+	Container     string                 `protobuf:"bytes,6,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5076,9 +5076,9 @@ func (x *StreamNodeProjectLogsRequest) GetFollow() bool {
 	return false
 }
 
-func (x *StreamNodeProjectLogsRequest) GetMember() string {
+func (x *StreamNodeProjectLogsRequest) GetContainer() string {
 	if x != nil {
-		return x.Member
+		return x.Container
 	}
 	return ""
 }
@@ -5274,26 +5274,25 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\aproject\x18\x02 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"\x18\n" +
 	"\x16ListAllProjectsRequest\"K\n" +
 	"\x17ListAllProjectsResponse\x120\n" +
-	"\bprojects\x18\x01 \x03(\v2\x14.nagi.v1.NodeProjectR\bprojects\"\xeb\x01\n" +
+	"\bprojects\x18\x01 \x03(\v2\x14.nagi.v1.NodeProjectR\bprojects\"\xfa\x01\n" +
 	"\x18CreateNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
 	"\x03dir\x18\x03 \x01(\tR\x03dir\x124\n" +
-	"\bsettings\x18\x06 \x01(\v2\x18.nagi.v1.ProjectSettingsR\bsettings\x12\x1f\n" +
-	"\vmember_name\x18\a \x01(\tR\n" +
-	"memberName\x12-\n" +
-	"\x06member\x18\b \x01(\v2\x15.nagi.v1.MemberConfigR\x06memberJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06\"\x98\x01\n" +
-	"\x1bAddNodeProjectMemberRequest\x12\x17\n" +
+	"\bsettings\x18\x06 \x01(\v2\x18.nagi.v1.ProjectSettingsR\bsettings\x12%\n" +
+	"\x0econtainer_name\x18\a \x01(\tR\rcontainerName\x126\n" +
+	"\tcontainer\x18\b \x01(\v2\x18.nagi.v1.ContainerConfigR\tcontainerJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06\"\x9e\x01\n" +
+	"\x1eAddNodeProjectContainerRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12-\n" +
-	"\x06config\x18\x04 \x01(\v2\x15.nagi.v1.MemberConfigR\x06config\"\xb4\x01\n" +
-	"\x1eDeleteNodeProjectMemberRequest\x12\x17\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x120\n" +
+	"\x06config\x18\x04 \x01(\v2\x18.nagi.v1.ContainerConfigR\x06config\"\xbd\x01\n" +
+	"!DeleteNodeProjectContainerRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x16\n" +
-	"\x06member\x18\x03 \x01(\tR\x06member\x12#\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\x12#\n" +
 	"\rbase_revision\x18\x04 \x01(\x03R\fbaseRevision\x12\x1d\n" +
 	"\n" +
 	"delete_dir\x18\x05 \x01(\bR\tdeleteDir\"\xc9\x01\n" +
@@ -5319,12 +5318,12 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rdeployment_id\x18\x03 \x01(\x03R\fdeploymentId\"_\n" +
-	"\rNodeMemberRef\x12\x17\n" +
+	"\rdeployment_id\x18\x03 \x01(\x03R\fdeploymentId\"h\n" +
+	"\x10NodeContainerRef\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x16\n" +
-	"\x06member\x18\x03 \x01(\tR\x06member\"G\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\"G\n" +
 	"\x18NodeSharedNetworkRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"m\n" +
@@ -5332,22 +5331,22 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\fpeer_node_id\x18\x03 \x01(\tR\n" +
-	"peerNodeId\"\xc1\x01\n" +
+	"peerNodeId\"\xca\x01\n" +
 	"\x1bSaveNodeProjectDraftRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x12-\n" +
-	"\x06config\x18\x04 \x01(\v2\x15.nagi.v1.MemberConfigR\x06config\x12\x16\n" +
-	"\x06member\x18\x05 \x01(\tR\x06member\"J\n" +
+	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x120\n" +
+	"\x06config\x18\x04 \x01(\v2\x18.nagi.v1.ContainerConfigR\x06config\x12\x1c\n" +
+	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"J\n" +
 	"\x1cSaveNodeProjectDraftResponse\x12*\n" +
-	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\"\x95\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\"\x9b\x01\n" +
 	"\x1eDiscardNodeProjectDraftRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x12\x16\n" +
-	"\x06member\x18\x04 \x01(\tR\x06member\"M\n" +
+	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\"M\n" +
 	"\x1fDiscardNodeProjectDraftResponse\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\"~\n" +
 	"\x1bSaveNodeProjectRouteRequest\x12\x17\n" +
@@ -5367,21 +5366,21 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x0eNodeProjectRef\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\"\xa9\x01\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\"\xaf\x01\n" +
 	"\x1aRollbackNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\x03R\aversion\x12!\n" +
-	"\frestore_data\x18\x04 \x01(\bR\vrestoreData\x12\x16\n" +
-	"\x06member\x18\x05 \x01(\tR\x06member\"\x94\x01\n" +
+	"\frestore_data\x18\x04 \x01(\bR\vrestoreData\x12\x1c\n" +
+	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"\x9a\x01\n" +
 	"!RestoreNodeProjectSnapshotRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1f\n" +
 	"\vsnapshot_id\x18\x03 \x01(\tR\n" +
-	"snapshotId\x12\x16\n" +
-	"\x06member\x18\x04 \x01(\tR\x06member\"\xb9\x01\n" +
+	"snapshotId\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\"\xb9\x01\n" +
 	"\x18DeleteNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -5410,15 +5409,15 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"pullImages\x12/\n" +
 	"\atargets\x18\a \x03(\v2\x15.nagi.v1.DeployTargetR\atargets\x12(\n" +
 	"\x10apply_shared_env\x18\b \x01(\bR\x0eapplySharedEnv\x12+\n" +
-	"\x11settings_revision\x18\t \x01(\x03R\x10settingsRevisionJ\x04\b\x03\x10\x04\"\xb4\x01\n" +
+	"\x11settings_revision\x18\t \x01(\x03R\x10settingsRevisionJ\x04\b\x03\x10\x04\"\xba\x01\n" +
 	"\x1cStreamNodeProjectLogsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x18\n" +
 	"\aservice\x18\x03 \x01(\tR\aservice\x12\x12\n" +
 	"\x04tail\x18\x04 \x01(\x05R\x04tail\x12\x16\n" +
-	"\x06follow\x18\x05 \x01(\bR\x06follow\x12\x16\n" +
-	"\x06member\x18\x06 \x01(\tR\x06member2\x96\x01\n" +
+	"\x06follow\x18\x05 \x01(\bR\x06follow\x12\x1c\n" +
+	"\tcontainer\x18\x06 \x01(\tR\tcontainer2\x96\x01\n" +
 	"\fSetupService\x12N\n" +
 	"\rGetSetupState\x12\x1d.nagi.v1.GetSetupStateRequest\x1a\x1e.nagi.v1.GetSetupStateResponse\x126\n" +
 	"\x05Setup\x12\x15.nagi.v1.SetupRequest\x1a\x16.nagi.v1.SetupResponse2\x82\x02\n" +
@@ -5468,13 +5467,13 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"EnableTOTP\x12\x1a.nagi.v1.EnableTOTPRequest\x1a\x11.nagi.v1.Security\x12=\n" +
 	"\vDisableTOTP\x12\x1b.nagi.v1.DisableTOTPRequest\x1a\x11.nagi.v1.Security\x12=\n" +
-	"\vSetEntrance\x12\x1b.nagi.v1.SetEntranceRequest\x1a\x11.nagi.v1.Security2\xf2\x18\n" +
+	"\vSetEntrance\x12\x1b.nagi.v1.SetEntranceRequest\x1a\x11.nagi.v1.Security2\x87\x19\n" +
 	"\x0eProjectService\x12T\n" +
 	"\x0fListAllProjects\x12\x1f.nagi.v1.ListAllProjectsRequest\x1a .nagi.v1.ListAllProjectsResponse\x12Z\n" +
 	"\x11CreateNodeProject\x12!.nagi.v1.CreateNodeProjectRequest\x1a\".nagi.v1.CreateNodeProjectResponse\x12Q\n" +
-	"\x0eGetNodeProject\x12\x1e.nagi.v1.GetNodeProjectRequest\x1a\x1f.nagi.v1.GetNodeProjectResponse\x12X\n" +
-	"\x14AddNodeProjectMember\x12$.nagi.v1.AddNodeProjectMemberRequest\x1a\x1a.nagi.v1.AddMemberResponse\x12a\n" +
-	"\x17DeleteNodeProjectMember\x12'.nagi.v1.DeleteNodeProjectMemberRequest\x1a\x1d.nagi.v1.DeleteMemberResponse\x12c\n" +
+	"\x0eGetNodeProject\x12\x1e.nagi.v1.GetNodeProjectRequest\x1a\x1f.nagi.v1.GetNodeProjectResponse\x12a\n" +
+	"\x17AddNodeProjectContainer\x12'.nagi.v1.AddNodeProjectContainerRequest\x1a\x1d.nagi.v1.AddContainerResponse\x12j\n" +
+	"\x1aDeleteNodeProjectContainer\x12*.nagi.v1.DeleteNodeProjectContainerRequest\x1a .nagi.v1.DeleteContainerResponse\x12c\n" +
 	"\x14SaveNodeProjectDraft\x12$.nagi.v1.SaveNodeProjectDraftRequest\x1a%.nagi.v1.SaveNodeProjectDraftResponse\x12l\n" +
 	"\x17DiscardNodeProjectDraft\x12'.nagi.v1.DiscardNodeProjectDraftRequest\x1a(.nagi.v1.DiscardNodeProjectDraftResponse\x12n\n" +
 	"\x19UpdateNodeProjectSettings\x12).nagi.v1.UpdateNodeProjectSettingsRequest\x1a&.nagi.v1.UpdateProjectSettingsResponse\x12d\n" +
@@ -5482,8 +5481,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x1bDiscardNodeProjectSharedEnv\x12\x1f.nagi.v1.NodeProjectRevisionRef\x1a!.nagi.v1.DiscardSharedEnvResponse\x12W\n" +
 	"\x1aListNodeProjectDeployments\x12\x17.nagi.v1.NodeProjectRef\x1a .nagi.v1.ListDeploymentsResponse\x12d\n" +
 	"\x1cRestoreNodeProjectDeployment\x12,.nagi.v1.RestoreNodeProjectDeploymentRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12Z\n" +
-	"\x11DeleteNodeProject\x12!.nagi.v1.DeleteNodeProjectRequest\x1a\".nagi.v1.DeleteNodeProjectResponse\x12P\n" +
-	"\x17ListNodeProjectVersions\x12\x16.nagi.v1.NodeMemberRef\x1a\x1d.nagi.v1.ListVersionsResponse\x12R\n" +
+	"\x11DeleteNodeProject\x12!.nagi.v1.DeleteNodeProjectRequest\x1a\".nagi.v1.DeleteNodeProjectResponse\x12S\n" +
+	"\x17ListNodeProjectVersions\x12\x19.nagi.v1.NodeContainerRef\x1a\x1d.nagi.v1.ListVersionsResponse\x12R\n" +
 	"\x13RollbackNodeProject\x12#.nagi.v1.RollbackNodeProjectRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12S\n" +
 	"\x18ListNodeProjectSnapshots\x12\x17.nagi.v1.NodeProjectRef\x1a\x1e.nagi.v1.ListSnapshotsResponse\x12L\n" +
 	"\x19CreateNodeProjectSnapshot\x12\x17.nagi.v1.NodeProjectRef\x1a\x14.nagi.v1.DeployEvent0\x01\x12`\n" +
@@ -5590,13 +5589,13 @@ var file_nagi_v1_api_proto_goTypes = []any{
 	(*ListAllProjectsRequest)(nil),              // 67: nagi.v1.ListAllProjectsRequest
 	(*ListAllProjectsResponse)(nil),             // 68: nagi.v1.ListAllProjectsResponse
 	(*CreateNodeProjectRequest)(nil),            // 69: nagi.v1.CreateNodeProjectRequest
-	(*AddNodeProjectMemberRequest)(nil),         // 70: nagi.v1.AddNodeProjectMemberRequest
-	(*DeleteNodeProjectMemberRequest)(nil),      // 71: nagi.v1.DeleteNodeProjectMemberRequest
+	(*AddNodeProjectContainerRequest)(nil),      // 70: nagi.v1.AddNodeProjectContainerRequest
+	(*DeleteNodeProjectContainerRequest)(nil),   // 71: nagi.v1.DeleteNodeProjectContainerRequest
 	(*UpdateNodeProjectSettingsRequest)(nil),    // 72: nagi.v1.UpdateNodeProjectSettingsRequest
 	(*SaveNodeProjectSharedEnvRequest)(nil),     // 73: nagi.v1.SaveNodeProjectSharedEnvRequest
 	(*NodeProjectRevisionRef)(nil),              // 74: nagi.v1.NodeProjectRevisionRef
 	(*RestoreNodeProjectDeploymentRequest)(nil), // 75: nagi.v1.RestoreNodeProjectDeploymentRequest
-	(*NodeMemberRef)(nil),                       // 76: nagi.v1.NodeMemberRef
+	(*NodeContainerRef)(nil),                    // 76: nagi.v1.NodeContainerRef
 	(*NodeSharedNetworkRequest)(nil),            // 77: nagi.v1.NodeSharedNetworkRequest
 	(*LinkNodeSharedNetworkRequest)(nil),        // 78: nagi.v1.LinkNodeSharedNetworkRequest
 	(*SaveNodeProjectDraftRequest)(nil),         // 79: nagi.v1.SaveNodeProjectDraftRequest
@@ -5624,7 +5623,7 @@ var file_nagi_v1_api_proto_goTypes = []any{
 	(*NodeInfo)(nil),                            // 101: nagi.v1.NodeInfo
 	(*ProjectSummary)(nil),                      // 102: nagi.v1.ProjectSummary
 	(*ProjectSettings)(nil),                     // 103: nagi.v1.ProjectSettings
-	(*MemberConfig)(nil),                        // 104: nagi.v1.MemberConfig
+	(*ContainerConfig)(nil),                     // 104: nagi.v1.ContainerConfig
 	(*EnvVar)(nil),                              // 105: nagi.v1.EnvVar
 	(*Project)(nil),                             // 106: nagi.v1.Project
 	(*Exposure)(nil),                            // 107: nagi.v1.Exposure
@@ -5641,8 +5640,8 @@ var file_nagi_v1_api_proto_goTypes = []any{
 	(*Mirrors)(nil),                             // 118: nagi.v1.Mirrors
 	(*ListSharedNetworksResponse)(nil),          // 119: nagi.v1.ListSharedNetworksResponse
 	(*QueryMetricsResponse)(nil),                // 120: nagi.v1.QueryMetricsResponse
-	(*AddMemberResponse)(nil),                   // 121: nagi.v1.AddMemberResponse
-	(*DeleteMemberResponse)(nil),                // 122: nagi.v1.DeleteMemberResponse
+	(*AddContainerResponse)(nil),                // 121: nagi.v1.AddContainerResponse
+	(*DeleteContainerResponse)(nil),             // 122: nagi.v1.DeleteContainerResponse
 	(*UpdateProjectSettingsResponse)(nil),       // 123: nagi.v1.UpdateProjectSettingsResponse
 	(*SaveSharedEnvResponse)(nil),               // 124: nagi.v1.SaveSharedEnvResponse
 	(*DiscardSharedEnvResponse)(nil),            // 125: nagi.v1.DiscardSharedEnvResponse
@@ -5674,11 +5673,11 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	102, // 17: nagi.v1.NodeProject.project:type_name -> nagi.v1.ProjectSummary
 	66,  // 18: nagi.v1.ListAllProjectsResponse.projects:type_name -> nagi.v1.NodeProject
 	103, // 19: nagi.v1.CreateNodeProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
-	104, // 20: nagi.v1.CreateNodeProjectRequest.member:type_name -> nagi.v1.MemberConfig
-	104, // 21: nagi.v1.AddNodeProjectMemberRequest.config:type_name -> nagi.v1.MemberConfig
+	104, // 20: nagi.v1.CreateNodeProjectRequest.container:type_name -> nagi.v1.ContainerConfig
+	104, // 21: nagi.v1.AddNodeProjectContainerRequest.config:type_name -> nagi.v1.ContainerConfig
 	103, // 22: nagi.v1.UpdateNodeProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
 	105, // 23: nagi.v1.SaveNodeProjectSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
-	104, // 24: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.MemberConfig
+	104, // 24: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.ContainerConfig
 	106, // 25: nagi.v1.SaveNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
 	106, // 26: nagi.v1.DiscardNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
 	107, // 27: nagi.v1.SaveNodeProjectRouteRequest.route:type_name -> nagi.v1.Exposure
@@ -5734,8 +5733,8 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	67,  // 77: nagi.v1.ProjectService.ListAllProjects:input_type -> nagi.v1.ListAllProjectsRequest
 	69,  // 78: nagi.v1.ProjectService.CreateNodeProject:input_type -> nagi.v1.CreateNodeProjectRequest
 	93,  // 79: nagi.v1.ProjectService.GetNodeProject:input_type -> nagi.v1.GetNodeProjectRequest
-	70,  // 80: nagi.v1.ProjectService.AddNodeProjectMember:input_type -> nagi.v1.AddNodeProjectMemberRequest
-	71,  // 81: nagi.v1.ProjectService.DeleteNodeProjectMember:input_type -> nagi.v1.DeleteNodeProjectMemberRequest
+	70,  // 80: nagi.v1.ProjectService.AddNodeProjectContainer:input_type -> nagi.v1.AddNodeProjectContainerRequest
+	71,  // 81: nagi.v1.ProjectService.DeleteNodeProjectContainer:input_type -> nagi.v1.DeleteNodeProjectContainerRequest
 	79,  // 82: nagi.v1.ProjectService.SaveNodeProjectDraft:input_type -> nagi.v1.SaveNodeProjectDraftRequest
 	81,  // 83: nagi.v1.ProjectService.DiscardNodeProjectDraft:input_type -> nagi.v1.DiscardNodeProjectDraftRequest
 	72,  // 84: nagi.v1.ProjectService.UpdateNodeProjectSettings:input_type -> nagi.v1.UpdateNodeProjectSettingsRequest
@@ -5744,7 +5743,7 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	87,  // 87: nagi.v1.ProjectService.ListNodeProjectDeployments:input_type -> nagi.v1.NodeProjectRef
 	75,  // 88: nagi.v1.ProjectService.RestoreNodeProjectDeployment:input_type -> nagi.v1.RestoreNodeProjectDeploymentRequest
 	90,  // 89: nagi.v1.ProjectService.DeleteNodeProject:input_type -> nagi.v1.DeleteNodeProjectRequest
-	76,  // 90: nagi.v1.ProjectService.ListNodeProjectVersions:input_type -> nagi.v1.NodeMemberRef
+	76,  // 90: nagi.v1.ProjectService.ListNodeProjectVersions:input_type -> nagi.v1.NodeContainerRef
 	88,  // 91: nagi.v1.ProjectService.RollbackNodeProject:input_type -> nagi.v1.RollbackNodeProjectRequest
 	87,  // 92: nagi.v1.ProjectService.ListNodeProjectSnapshots:input_type -> nagi.v1.NodeProjectRef
 	87,  // 93: nagi.v1.ProjectService.CreateNodeProjectSnapshot:input_type -> nagi.v1.NodeProjectRef
@@ -5813,8 +5812,8 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	68,  // 156: nagi.v1.ProjectService.ListAllProjects:output_type -> nagi.v1.ListAllProjectsResponse
 	92,  // 157: nagi.v1.ProjectService.CreateNodeProject:output_type -> nagi.v1.CreateNodeProjectResponse
 	94,  // 158: nagi.v1.ProjectService.GetNodeProject:output_type -> nagi.v1.GetNodeProjectResponse
-	121, // 159: nagi.v1.ProjectService.AddNodeProjectMember:output_type -> nagi.v1.AddMemberResponse
-	122, // 160: nagi.v1.ProjectService.DeleteNodeProjectMember:output_type -> nagi.v1.DeleteMemberResponse
+	121, // 159: nagi.v1.ProjectService.AddNodeProjectContainer:output_type -> nagi.v1.AddContainerResponse
+	122, // 160: nagi.v1.ProjectService.DeleteNodeProjectContainer:output_type -> nagi.v1.DeleteContainerResponse
 	80,  // 161: nagi.v1.ProjectService.SaveNodeProjectDraft:output_type -> nagi.v1.SaveNodeProjectDraftResponse
 	82,  // 162: nagi.v1.ProjectService.DiscardNodeProjectDraft:output_type -> nagi.v1.DiscardNodeProjectDraftResponse
 	123, // 163: nagi.v1.ProjectService.UpdateNodeProjectSettings:output_type -> nagi.v1.UpdateProjectSettingsResponse

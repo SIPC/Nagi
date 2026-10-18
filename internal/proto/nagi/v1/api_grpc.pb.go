@@ -418,7 +418,7 @@ type NodeServiceClient interface {
 	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
-	// 让节点经 mesh 连一下某个成员。
+	// 让节点经 mesh 连一下某个容器。
 	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
@@ -722,7 +722,7 @@ type NodeServiceServer interface {
 	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error)
-	// 让节点经 mesh 连一下某个成员。
+	// 让节点经 mesh 连一下某个容器。
 	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
@@ -2010,8 +2010,8 @@ const (
 	ProjectService_ListAllProjects_FullMethodName              = "/nagi.v1.ProjectService/ListAllProjects"
 	ProjectService_CreateNodeProject_FullMethodName            = "/nagi.v1.ProjectService/CreateNodeProject"
 	ProjectService_GetNodeProject_FullMethodName               = "/nagi.v1.ProjectService/GetNodeProject"
-	ProjectService_AddNodeProjectMember_FullMethodName         = "/nagi.v1.ProjectService/AddNodeProjectMember"
-	ProjectService_DeleteNodeProjectMember_FullMethodName      = "/nagi.v1.ProjectService/DeleteNodeProjectMember"
+	ProjectService_AddNodeProjectContainer_FullMethodName      = "/nagi.v1.ProjectService/AddNodeProjectContainer"
+	ProjectService_DeleteNodeProjectContainer_FullMethodName   = "/nagi.v1.ProjectService/DeleteNodeProjectContainer"
 	ProjectService_SaveNodeProjectDraft_FullMethodName         = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
 	ProjectService_DiscardNodeProjectDraft_FullMethodName      = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
 	ProjectService_UpdateNodeProjectSettings_FullMethodName    = "/nagi.v1.ProjectService/UpdateNodeProjectSettings"
@@ -2051,8 +2051,8 @@ type ProjectServiceClient interface {
 	ListAllProjects(ctx context.Context, in *ListAllProjectsRequest, opts ...grpc.CallOption) (*ListAllProjectsResponse, error)
 	CreateNodeProject(ctx context.Context, in *CreateNodeProjectRequest, opts ...grpc.CallOption) (*CreateNodeProjectResponse, error)
 	GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error)
-	AddNodeProjectMember(ctx context.Context, in *AddNodeProjectMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error)
-	DeleteNodeProjectMember(ctx context.Context, in *DeleteNodeProjectMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error)
+	AddNodeProjectContainer(ctx context.Context, in *AddNodeProjectContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error)
+	DeleteNodeProjectContainer(ctx context.Context, in *DeleteNodeProjectContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error)
 	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
 	UpdateNodeProjectSettings(ctx context.Context, in *UpdateNodeProjectSettingsRequest, opts ...grpc.CallOption) (*UpdateProjectSettingsResponse, error)
@@ -2062,7 +2062,7 @@ type ProjectServiceClient interface {
 	// 回到某次部署时的状态。
 	RestoreNodeProjectDeployment(ctx context.Context, in *RestoreNodeProjectDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error)
-	ListNodeProjectVersions(ctx context.Context, in *NodeMemberRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
+	ListNodeProjectVersions(ctx context.Context, in *NodeContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
 	RollbackNodeProject(ctx context.Context, in *RollbackNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListNodeProjectSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	CreateNodeProjectSnapshot(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
@@ -2133,20 +2133,20 @@ func (c *projectServiceClient) GetNodeProject(ctx context.Context, in *GetNodePr
 	return out, nil
 }
 
-func (c *projectServiceClient) AddNodeProjectMember(ctx context.Context, in *AddNodeProjectMemberRequest, opts ...grpc.CallOption) (*AddMemberResponse, error) {
+func (c *projectServiceClient) AddNodeProjectContainer(ctx context.Context, in *AddNodeProjectContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddMemberResponse)
-	err := c.cc.Invoke(ctx, ProjectService_AddNodeProjectMember_FullMethodName, in, out, cOpts...)
+	out := new(AddContainerResponse)
+	err := c.cc.Invoke(ctx, ProjectService_AddNodeProjectContainer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) DeleteNodeProjectMember(ctx context.Context, in *DeleteNodeProjectMemberRequest, opts ...grpc.CallOption) (*DeleteMemberResponse, error) {
+func (c *projectServiceClient) DeleteNodeProjectContainer(ctx context.Context, in *DeleteNodeProjectContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteMemberResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProjectMember_FullMethodName, in, out, cOpts...)
+	out := new(DeleteContainerResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProjectContainer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2242,7 +2242,7 @@ func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, in *Delete
 	return out, nil
 }
 
-func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, in *NodeMemberRef, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
+func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, in *NodeContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVersionsResponse)
 	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectVersions_FullMethodName, in, out, cOpts...)
@@ -2532,8 +2532,8 @@ type ProjectServiceServer interface {
 	ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error)
 	CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error)
 	GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error)
-	AddNodeProjectMember(context.Context, *AddNodeProjectMemberRequest) (*AddMemberResponse, error)
-	DeleteNodeProjectMember(context.Context, *DeleteNodeProjectMemberRequest) (*DeleteMemberResponse, error)
+	AddNodeProjectContainer(context.Context, *AddNodeProjectContainerRequest) (*AddContainerResponse, error)
+	DeleteNodeProjectContainer(context.Context, *DeleteNodeProjectContainerRequest) (*DeleteContainerResponse, error)
 	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
 	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
 	UpdateNodeProjectSettings(context.Context, *UpdateNodeProjectSettingsRequest) (*UpdateProjectSettingsResponse, error)
@@ -2543,7 +2543,7 @@ type ProjectServiceServer interface {
 	// 回到某次部署时的状态。
 	RestoreNodeProjectDeployment(*RestoreNodeProjectDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error)
-	ListNodeProjectVersions(context.Context, *NodeMemberRef) (*ListVersionsResponse, error)
+	ListNodeProjectVersions(context.Context, *NodeContainerRef) (*ListVersionsResponse, error)
 	RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListNodeProjectSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error)
 	CreateNodeProjectSnapshot(*NodeProjectRef, grpc.ServerStreamingServer[DeployEvent]) error
@@ -2593,11 +2593,11 @@ func (UnimplementedProjectServiceServer) CreateNodeProject(context.Context, *Cre
 func (UnimplementedProjectServiceServer) GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeProject not implemented")
 }
-func (UnimplementedProjectServiceServer) AddNodeProjectMember(context.Context, *AddNodeProjectMemberRequest) (*AddMemberResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddNodeProjectMember not implemented")
+func (UnimplementedProjectServiceServer) AddNodeProjectContainer(context.Context, *AddNodeProjectContainerRequest) (*AddContainerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddNodeProjectContainer not implemented")
 }
-func (UnimplementedProjectServiceServer) DeleteNodeProjectMember(context.Context, *DeleteNodeProjectMemberRequest) (*DeleteMemberResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProjectMember not implemented")
+func (UnimplementedProjectServiceServer) DeleteNodeProjectContainer(context.Context, *DeleteNodeProjectContainerRequest) (*DeleteContainerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProjectContainer not implemented")
 }
 func (UnimplementedProjectServiceServer) SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectDraft not implemented")
@@ -2623,7 +2623,7 @@ func (UnimplementedProjectServiceServer) RestoreNodeProjectDeployment(*RestoreNo
 func (UnimplementedProjectServiceServer) DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProject not implemented")
 }
-func (UnimplementedProjectServiceServer) ListNodeProjectVersions(context.Context, *NodeMemberRef) (*ListVersionsResponse, error) {
+func (UnimplementedProjectServiceServer) ListNodeProjectVersions(context.Context, *NodeContainerRef) (*ListVersionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectVersions not implemented")
 }
 func (UnimplementedProjectServiceServer) RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
@@ -2764,38 +2764,38 @@ func _ProjectService_GetNodeProject_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_AddNodeProjectMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddNodeProjectMemberRequest)
+func _ProjectService_AddNodeProjectContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddNodeProjectContainerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).AddNodeProjectMember(ctx, in)
+		return srv.(ProjectServiceServer).AddNodeProjectContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_AddNodeProjectMember_FullMethodName,
+		FullMethod: ProjectService_AddNodeProjectContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).AddNodeProjectMember(ctx, req.(*AddNodeProjectMemberRequest))
+		return srv.(ProjectServiceServer).AddNodeProjectContainer(ctx, req.(*AddNodeProjectContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DeleteNodeProjectMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNodeProjectMemberRequest)
+func _ProjectService_DeleteNodeProjectContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeProjectContainerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DeleteNodeProjectMember(ctx, in)
+		return srv.(ProjectServiceServer).DeleteNodeProjectContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DeleteNodeProjectMember_FullMethodName,
+		FullMethod: ProjectService_DeleteNodeProjectContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DeleteNodeProjectMember(ctx, req.(*DeleteNodeProjectMemberRequest))
+		return srv.(ProjectServiceServer).DeleteNodeProjectContainer(ctx, req.(*DeleteNodeProjectContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2938,7 +2938,7 @@ func _ProjectService_DeleteNodeProject_Handler(srv interface{}, ctx context.Cont
 }
 
 func _ProjectService_ListNodeProjectVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeMemberRef)
+	in := new(NodeContainerRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -2950,7 +2950,7 @@ func _ProjectService_ListNodeProjectVersions_Handler(srv interface{}, ctx contex
 		FullMethod: ProjectService_ListNodeProjectVersions_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, req.(*NodeMemberRef))
+		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, req.(*NodeContainerRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3304,12 +3304,12 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_GetNodeProject_Handler,
 		},
 		{
-			MethodName: "AddNodeProjectMember",
-			Handler:    _ProjectService_AddNodeProjectMember_Handler,
+			MethodName: "AddNodeProjectContainer",
+			Handler:    _ProjectService_AddNodeProjectContainer_Handler,
 		},
 		{
-			MethodName: "DeleteNodeProjectMember",
-			Handler:    _ProjectService_DeleteNodeProjectMember_Handler,
+			MethodName: "DeleteNodeProjectContainer",
+			Handler:    _ProjectService_DeleteNodeProjectContainer_Handler,
 		},
 		{
 			MethodName: "SaveNodeProjectDraft",

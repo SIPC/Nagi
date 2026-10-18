@@ -6,7 +6,7 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
-// Project 是节点上保存的项目：一组一起工作的成员，共用项目目录和内网。项目数据以节点为准。
+// Project 是节点上保存的项目：一组一起工作的容器，共用项目目录和内网。项目数据以节点为准。
 message Project {
   // 全局唯一的项目 ID。
   string id = 1;
@@ -15,17 +15,17 @@ message Project {
   // 项目目录，例如 /mnt/qmt。
   string dir = 3;
   // 项目设置的修订号：修改名称、共享变量（草稿）、内网、共享网络时加一，用于多面板冲突检测。
-  // 成员有自己的修订号（Member.revision）。
+  // 容器有自己的修订号（Container.revision）。
   int64 revision = 4;
   reserved 5, 6, 7;
   google.protobuf.Timestamp created_at = 8;
   reserved 9, 10, 11, 12, 13, 14;
   // 端口映射（config/routes/ 下的文件）。
   repeated Exposure routes = 15;
-  // 项目是否有状态：只要有一个成员有状态就算。
+  // 项目是否有状态：只要有一个容器有状态就算。
   bool stateful = 16;
-  // 成员，按创建顺序。
-  repeated Member members = 17;
+  // 容器，按创建顺序。
+  repeated Container containers = 17;
   // 项目设置（共享变量是已经部署过的那份）。
   ProjectSettings settings = 18;
   // 共享变量是否有没部署的草稿。
@@ -33,27 +33,27 @@ message Project {
   repeated EnvVar shared_env_draft = 20;
 }
 
-// ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进成员的版本。
+// ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进容器的版本。
 message ProjectSettings {
-  // 共享变量：所有成员的 compose 里都能用 ${变量} 引用，同名时以成员自己的变量为准。
+  // 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
   repeated EnvVar shared_env = 1;
-  // 关闭项目内网（默认开启：成员之间用"成员名"或"服务.成员"互相访问）。
+  // 关闭项目内网（默认开启：容器之间用"容器名"或"服务.容器组"互相访问）。
   bool intranet_disabled = 2;
-  // 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。成员在共享网络里的名字是"成员.网络名"。
+  // 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。容器在共享网络里的名字是"容器.网络名"。
   string network_name = 3;
   // 加入的共享网络。
   repeated string shared_networks = 4;
   // 定时快照间隔（分钟），0 表示默认（60 分钟）。
   uint32 snapshot_interval_minutes = 5;
-  // 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"成员:端口"（compose 成员写"服务.成员:端口"）。
+  // 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
   repeated string link_ports = 6;
 }
 
-// Member 是项目里独立部署的单位：单容器（镜像表单）或一份 compose。
-message Member {
-  // 成员名，项目内唯一，创建后不能改。小写字母、数字和 -。
+// Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
+message Container {
+  // 容器名，项目内唯一，创建后不能改。小写字母、数字和 -。
   string name = 1;
-  // 修订号：保存这个成员的草稿或部署它时加一。
+  // 修订号：保存这个容器的草稿或部署它时加一。
   int64 revision = 2;
   // 最新版本号。
   int64 latest_version = 3;
@@ -61,46 +61,48 @@ message Member {
   int64 deployed_version = 4;
   google.protobuf.Timestamp created_at = 5;
   // 最新版本的配置。
-  MemberConfig config = 6;
+  ContainerConfig config = 6;
   bool has_draft = 7;
   // 草稿内容，has_draft 为 false 时为空。
-  MemberConfig draft = 8;
-  // 这个成员的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
+  ContainerConfig draft = 8;
+  // 这个容器的 SSH deploy key 公钥，加到 git 仓库的只读 deploy key 里。
   string deploy_key = 9;
-  // webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署这个成员。
+  // webhook 令牌：POST 到面板的 /hooks/<令牌> 会拉取并部署这个容器。
   string webhook_token = 10;
   // 最近一次拉取到的 git 提交。
   string last_commit = 11;
   // 实际判定的是否有状态（自动判断或用户指定）。
   bool stateful = 12;
-  // 共享变量有更新：这个成员引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
+  // 共享变量有更新：这个容器引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
   bool shared_env_outdated = 13;
   // 不在快照范围内的命名 volume（external 或用了自定义 driver），按最新版本的配置算。
   repeated string unmanaged_volumes = 14;
   // 用 network_mode: host 的服务：不经过 Caddy、不在项目内网里，端口直接对外。
   repeated string host_network_services = 15;
+  // single：单个容器（镜像表单）；group：容器组（一份 compose，里面有几个容器）。
+  string kind = 16;
 }
 
-// MemberConfig 是成员一个版本的完整配置。
-message MemberConfig {
-  // compose 原文。单容器成员由镜像表单生成。
+// ContainerConfig 是容器一个版本的完整配置。
+message ContainerConfig {
+  // compose 原文。单个容器由镜像表单生成。
   string compose = 1;
-  // 成员级变量：替换这个成员 compose 里的 ${变量}，同名时覆盖项目的共享变量。
+  // 容器级变量：替换这个容器 compose 里的 ${变量}，同名时覆盖项目的共享变量。
   repeated EnvVar env = 2;
   // 服务级环境变量：键是服务名，只注入对应服务的容器。
   map<string, EnvList> service_env = 3;
-  // 单容器成员才有。有它时 compose 由它生成，服务名就是成员名。
+  // 单个容器才有。有它时 compose 由它生成，服务名就是容器名。
   ImageForm form = 4;
   reserved 5;
-  // 文件来源。为空表示文件由用户自己放进成员的 data/。
+  // 文件来源。为空表示文件由用户自己放进容器的 data/。
   Source source = 6;
-  // 更新文件时保留不动的路径（相对成员的 data/），例如 uploads/。
+  // 更新文件时保留不动的路径（相对容器的 data/），例如 uploads/。
   // compose 里挂载进容器的 data/ 下的目录会自动保留，不需要写在这里。
   repeated string preserve = 7;
-  // 是否有状态。默认自动判断：用了命名 volume 或有保留路径的成员算有状态。
+  // 是否有状态。默认自动判断：用了命名 volume 或有保留路径的容器算有状态。
   Stateful stateful = 8;
   reserved 9;
-  // 一起部署时要先部署的成员（例如后端依赖数据库）。
+  // 一起部署时要先部署的容器（例如后端依赖数据库）。
   repeated string depends_on = 10;
 }
 
@@ -110,7 +112,7 @@ enum Stateful {
   STATEFUL_NO = 2;
 }
 
-// Version 是成员的一次部署：配置 + 文件 + 镜像摘要。
+// Version 是容器的一次部署：配置 + 文件 + 镜像摘要。
 message Version {
   int64 version = 1;
   google.protobuf.Timestamp created_at = 2;
@@ -124,19 +126,19 @@ message Version {
   int64 rollback_of = 6;
   // 部署时拉取的 git 提交。
   string commit = 7;
-  string member = 8;
+  string container = 8;
 }
 
-// Deployment 是项目的一条部署记录：一次部署（一个或多个成员）完成后所有成员各自的版本。
+// Deployment 是项目的一条部署记录：一次部署（一个或多个容器）完成后所有容器各自的版本。
 message Deployment {
   int64 id = 1;
   google.protobuf.Timestamp time = 2;
-  // manual（手动）、git（webhook 拉取）、image（镜像更新）、rollback（成员回滚）、
+  // manual（手动）、git（webhook 拉取）、image（镜像更新）、rollback（容器回滚）、
   // shared_env（部署共享变量）、restore（回到某次部署时的状态）。
   string source = 3;
-  // 这次部署动到的成员。
-  repeated string members = 4;
-  // 部署完成后所有成员各自的版本（没部署成功过的成员不在里面）。
+  // 这次部署动到的容器。
+  repeated string containers = 4;
+  // 部署完成后所有容器各自的版本（没部署成功过的容器不在里面）。
   map<string, int64> versions = 5;
   bool success = 6;
   string error = 7;
@@ -151,7 +153,7 @@ message SharedNetwork {
   repeated SharedNetworkProject projects = 3;
   // 跨节点连接：和本节点的这个网络相连的节点。
   repeated SharedNetworkPeer peers = 4;
-  // 相连节点上的成员，本节点为每个放了一个同名的代理容器。
+  // 相连节点上的容器，本节点为每个放了一个同名的代理容器。
   repeated SharedNetworkRemote remotes = 5;
 }
 
@@ -176,7 +178,7 @@ message SharedNetworkRemote {
 message SharedNetworkProject {
   string project_id = 1;
   string project_name = 2;
-  // 项目的网络名，成员在共享网络里叫"成员.网络名"。
+  // 项目的网络名，容器在共享网络里叫"容器.网络名"。
   string network_name = 3;
 }
 
@@ -189,8 +191,8 @@ message Snapshot {
   int64 size = 4;
   // predeploy：部署前正在运行的版本；version：所属版本。
   int64 version = 5;
-  // predeploy、version：所属成员。
-  string member = 6;
+  // predeploy、version：所属容器。
+  string container = 6;
 }
 
 message Source {
@@ -203,7 +205,7 @@ message Source {
 // Exposure 是一条端口映射：一个服务端口的对外开放方式。
 // 每条映射是项目目录 config/routes/<name>.yml 一个文件，改了立即生效，不需要重新部署。
 message Exposure {
-  // 服务名。单容器成员可以不填（服务名就是成员名）。
+  // 服务名。单个容器可以不填（服务名就是容器名）。
   string service = 1;
   // 容器内的端口。
   uint32 target = 2;
@@ -219,8 +221,8 @@ message Exposure {
   string name = 7;
   // 文件无效时的原因，这条映射不会生效。只读。
   string error = 8;
-  // 成员名。
-  string member = 9;
+  // 容器名。
+  string container = 9;
 }
 
 message EnvVar {
@@ -240,9 +242,9 @@ message ImageForm {
   // 运行命令，为空时使用镜像默认命令。
   string command = 2;
   repeated PortMapping ports = 3;
-  // 持久化目录：容器内的路径，数据落到成员目录的 volumes/ 下。
+  // 持久化目录：容器内的路径，数据落到容器目录的 volumes/ 下。
   repeated string volumes = 4;
-  // 把成员的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
+  // 把容器的 data/ 挂到容器内的这个路径作为工作目录；为空表示不挂载文件。
   string workdir = 5;
   // 环境变量，直接注入容器。
   repeated EnvVar env = 6;
@@ -275,7 +277,7 @@ message ServiceStatus {
   string status = 5;
   // 健康检查状态：healthy、unhealthy、starting，没有健康检查时为空。
   string health = 6;
-  string member = 7;
+  string container = 7;
 }
 
 message ProjectStatus {
@@ -291,7 +293,7 @@ message ImageUpdate {
   string image = 2;
   string current_digest = 3;
   string latest_digest = 4;
-  string member = 5;
+  string container = 5;
 }
 
 message ProjectSummary {
@@ -316,7 +318,7 @@ message LogLine {
   string stream = 2;
   string text = 3;
   google.protobuf.Timestamp time = 4;
-  string member = 5;
+  string container = 5;
 }
 
 message DeployEvent {
@@ -466,8 +468,8 @@ message Replica {
   int64 bytes = 6;
 }
 
-// FailoverMember 是顶替设置里的一个参与者。
-message FailoverMember {
+// FailoverParticipant 是顶替设置里的一个参与者。
+message FailoverParticipant {
   // mesh 公钥。
   bytes key = 1;
   // 节点 ID；面板为空。
@@ -482,10 +484,10 @@ message FailoverConfig {
   string project_id = 1;
   string project_name = 2;
   // 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
-  FailoverMember a = 3;
-  FailoverMember b = 4;
+  FailoverParticipant a = 3;
+  FailoverParticipant b = 4;
   // 见证人：一个面板或另一台节点，只投票。
-  FailoverMember witness = 5;
+  FailoverParticipant witness = 5;
   bool witness_is_panel = 6;
   // 租约时长（秒），默认 30，每 1/3 续约一次。
   uint32 lease_seconds = 7;

@@ -19,7 +19,7 @@ service MeshService {
   rpc ReplicaCommit(ReplicaCommitRequest) returns (ReplicaCommitResponse);
   // 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
   rpc LeaseVote(LeaseVoteRequest) returns (LeaseVoteResponse);
-  // 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+  // 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
   rpc SharedNetworkInfo(SharedNetworkInfoRequest) returns (SharedNetworkInfoResponse);
 }
 
@@ -28,7 +28,7 @@ message SharedNetworkInfoRequest {
 }
 
 message SharedNetworkInfoResponse {
-  // 正在运行、接入了这个网络的成员。
+  // 正在运行、接入了这个网络的容器。
   repeated LinkEndpoint endpoints = 1;
   // 加入了这个网络的项目（不管是否在运行），用来检查网络名是否重复。
   repeated SharedNetworkProject projects = 2;
@@ -87,10 +87,10 @@ message ReplicaCommitRequest {
 message ReplicaCommitResponse {}
 
 message UploadChunk {
-  // 第一块带上项目和成员，之后只有 data。
+  // 第一块带上项目和容器，之后只有 data。
   string project_id = 1;
   bytes data = 2;
-  string member = 3;
+  string container = 3;
 }
 
 message UploadResponse {

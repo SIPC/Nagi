@@ -10,6 +10,24 @@ import (
 	"database/sql"
 )
 
+const deleteContainer = `-- name: DeleteContainer :exec
+DELETE FROM containers WHERE name = ?
+`
+
+func (q *Queries) DeleteContainer(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, deleteContainer, name)
+	return err
+}
+
+const deleteContainerVersions = `-- name: DeleteContainerVersions :exec
+DELETE FROM versions WHERE container = ?
+`
+
+func (q *Queries) DeleteContainerVersions(ctx context.Context, container string) error {
+	_, err := q.db.ExecContext(ctx, deleteContainerVersions, container)
+	return err
+}
+
 const deleteDeploymentsBefore = `-- name: DeleteDeploymentsBefore :exec
 DELETE FROM deployments WHERE id < ?
 `
@@ -20,84 +38,35 @@ func (q *Queries) DeleteDeploymentsBefore(ctx context.Context, id int64) error {
 }
 
 const deleteDraft = `-- name: DeleteDraft :exec
-DELETE FROM drafts WHERE member = ?
+DELETE FROM drafts WHERE container = ?
 `
 
-func (q *Queries) DeleteDraft(ctx context.Context, member string) error {
-	_, err := q.db.ExecContext(ctx, deleteDraft, member)
-	return err
-}
-
-const deleteMember = `-- name: DeleteMember :exec
-DELETE FROM members WHERE name = ?
-`
-
-func (q *Queries) DeleteMember(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, deleteMember, name)
-	return err
-}
-
-const deleteMemberVersions = `-- name: DeleteMemberVersions :exec
-DELETE FROM versions WHERE member = ?
-`
-
-func (q *Queries) DeleteMemberVersions(ctx context.Context, member string) error {
-	_, err := q.db.ExecContext(ctx, deleteMemberVersions, member)
+func (q *Queries) DeleteDraft(ctx context.Context, container string) error {
+	_, err := q.db.ExecContext(ctx, deleteDraft, container)
 	return err
 }
 
 const deleteVersionsBefore = `-- name: DeleteVersionsBefore :exec
-DELETE FROM versions WHERE member = ? AND version < ?
+DELETE FROM versions WHERE container = ? AND version < ?
 `
 
 type DeleteVersionsBeforeParams struct {
-	Member  string
-	Version int64
+	Container string
+	Version   int64
 }
 
 func (q *Queries) DeleteVersionsBefore(ctx context.Context, arg DeleteVersionsBeforeParams) error {
-	_, err := q.db.ExecContext(ctx, deleteVersionsBefore, arg.Member, arg.Version)
+	_, err := q.db.ExecContext(ctx, deleteVersionsBefore, arg.Container, arg.Version)
 	return err
 }
 
-const getDeployment = `-- name: GetDeployment :one
-SELECT id, created_at, source, members, versions, success, error, restore_of FROM deployments WHERE id = ?
+const getContainer = `-- name: GetContainer :one
+SELECT name, position, created_at, revision, deployed_version, webhook_token, last_commit, imported_ports, last_files_root FROM containers WHERE name = ?
 `
 
-func (q *Queries) GetDeployment(ctx context.Context, id int64) (Deployment, error) {
-	row := q.db.QueryRowContext(ctx, getDeployment, id)
-	var i Deployment
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.Source,
-		&i.Members,
-		&i.Versions,
-		&i.Success,
-		&i.Error,
-		&i.RestoreOf,
-	)
-	return i, err
-}
-
-const getDraft = `-- name: GetDraft :one
-SELECT member, config, updated_at FROM drafts WHERE member = ?
-`
-
-func (q *Queries) GetDraft(ctx context.Context, member string) (Draft, error) {
-	row := q.db.QueryRowContext(ctx, getDraft, member)
-	var i Draft
-	err := row.Scan(&i.Member, &i.Config, &i.UpdatedAt)
-	return i, err
-}
-
-const getMember = `-- name: GetMember :one
-SELECT name, position, created_at, revision, deployed_version, webhook_token, last_commit, imported_ports, last_files_root FROM members WHERE name = ?
-`
-
-func (q *Queries) GetMember(ctx context.Context, name string) (Member, error) {
-	row := q.db.QueryRowContext(ctx, getMember, name)
-	var i Member
+func (q *Queries) GetContainer(ctx context.Context, name string) (Container, error) {
+	row := q.db.QueryRowContext(ctx, getContainer, name)
+	var i Container
 	err := row.Scan(
 		&i.Name,
 		&i.Position,
@@ -109,6 +78,37 @@ func (q *Queries) GetMember(ctx context.Context, name string) (Member, error) {
 		&i.ImportedPorts,
 		&i.LastFilesRoot,
 	)
+	return i, err
+}
+
+const getDeployment = `-- name: GetDeployment :one
+SELECT id, created_at, source, containers, versions, success, error, restore_of FROM deployments WHERE id = ?
+`
+
+func (q *Queries) GetDeployment(ctx context.Context, id int64) (Deployment, error) {
+	row := q.db.QueryRowContext(ctx, getDeployment, id)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.Source,
+		&i.Containers,
+		&i.Versions,
+		&i.Success,
+		&i.Error,
+		&i.RestoreOf,
+	)
+	return i, err
+}
+
+const getDraft = `-- name: GetDraft :one
+SELECT container, config, updated_at FROM drafts WHERE container = ?
+`
+
+func (q *Queries) GetDraft(ctx context.Context, container string) (Draft, error) {
+	row := q.db.QueryRowContext(ctx, getDraft, container)
+	var i Draft
+	err := row.Scan(&i.Container, &i.Config, &i.UpdatedAt)
 	return i, err
 }
 
@@ -124,19 +124,19 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 }
 
 const getVersion = `-- name: GetVersion :one
-SELECT member, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE member = ? AND version = ?
+SELECT container, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE container = ? AND version = ?
 `
 
 type GetVersionParams struct {
-	Member  string
-	Version int64
+	Container string
+	Version   int64
 }
 
 func (q *Queries) GetVersion(ctx context.Context, arg GetVersionParams) (Version, error) {
-	row := q.db.QueryRowContext(ctx, getVersion, arg.Member, arg.Version)
+	row := q.db.QueryRowContext(ctx, getVersion, arg.Container, arg.Version)
 	var i Version
 	err := row.Scan(
-		&i.Member,
+		&i.Container,
 		&i.Version,
 		&i.Config,
 		&i.SharedEnv,
@@ -150,27 +150,43 @@ func (q *Queries) GetVersion(ctx context.Context, arg GetVersionParams) (Version
 	return i, err
 }
 
+const insertContainer = `-- name: InsertContainer :exec
+INSERT INTO containers (name, position, created_at, webhook_token)
+VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM containers), ?, ?)
+`
+
+type InsertContainerParams struct {
+	Name         string
+	CreatedAt    int64
+	WebhookToken string
+}
+
+func (q *Queries) InsertContainer(ctx context.Context, arg InsertContainerParams) error {
+	_, err := q.db.ExecContext(ctx, insertContainer, arg.Name, arg.CreatedAt, arg.WebhookToken)
+	return err
+}
+
 const insertDeployment = `-- name: InsertDeployment :one
-INSERT INTO deployments (created_at, source, members, versions, success, error, restore_of)
+INSERT INTO deployments (created_at, source, containers, versions, success, error, restore_of)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
 type InsertDeploymentParams struct {
-	CreatedAt int64
-	Source    string
-	Members   string
-	Versions  string
-	Success   int64
-	Error     string
-	RestoreOf int64
+	CreatedAt  int64
+	Source     string
+	Containers string
+	Versions   string
+	Success    int64
+	Error      string
+	RestoreOf  int64
 }
 
 func (q *Queries) InsertDeployment(ctx context.Context, arg InsertDeploymentParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, insertDeployment,
 		arg.CreatedAt,
 		arg.Source,
-		arg.Members,
+		arg.Containers,
 		arg.Versions,
 		arg.Success,
 		arg.Error,
@@ -181,28 +197,12 @@ func (q *Queries) InsertDeployment(ctx context.Context, arg InsertDeploymentPara
 	return id, err
 }
 
-const insertMember = `-- name: InsertMember :exec
-INSERT INTO members (name, position, created_at, webhook_token)
-VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM members), ?, ?)
-`
-
-type InsertMemberParams struct {
-	Name         string
-	CreatedAt    int64
-	WebhookToken string
-}
-
-func (q *Queries) InsertMember(ctx context.Context, arg InsertMemberParams) error {
-	_, err := q.db.ExecContext(ctx, insertMember, arg.Name, arg.CreatedAt, arg.WebhookToken)
-	return err
-}
-
 const insertVersion = `-- name: InsertVersion :exec
-INSERT INTO versions (member, version, config, shared_env, created_at, rollback_of) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO versions (container, version, config, shared_env, created_at, rollback_of) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type InsertVersionParams struct {
-	Member     string
+	Container  string
 	Version    int64
 	Config     []byte
 	SharedEnv  []byte
@@ -212,7 +212,7 @@ type InsertVersionParams struct {
 
 func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) error {
 	_, err := q.db.ExecContext(ctx, insertVersion,
-		arg.Member,
+		arg.Container,
 		arg.Version,
 		arg.Config,
 		arg.SharedEnv,
@@ -223,14 +223,14 @@ func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) er
 }
 
 const latestVersion = `-- name: LatestVersion :one
-SELECT member, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE member = ? ORDER BY version DESC LIMIT 1
+SELECT container, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE container = ? ORDER BY version DESC LIMIT 1
 `
 
-func (q *Queries) LatestVersion(ctx context.Context, member string) (Version, error) {
-	row := q.db.QueryRowContext(ctx, latestVersion, member)
+func (q *Queries) LatestVersion(ctx context.Context, container string) (Version, error) {
+	row := q.db.QueryRowContext(ctx, latestVersion, container)
 	var i Version
 	err := row.Scan(
-		&i.Member,
+		&i.Container,
 		&i.Version,
 		&i.Config,
 		&i.SharedEnv,
@@ -244,55 +244,19 @@ func (q *Queries) LatestVersion(ctx context.Context, member string) (Version, er
 	return i, err
 }
 
-const listDeployments = `-- name: ListDeployments :many
-SELECT id, created_at, source, members, versions, success, error, restore_of FROM deployments ORDER BY id DESC LIMIT ?
+const listContainers = `-- name: ListContainers :many
+SELECT name, position, created_at, revision, deployed_version, webhook_token, last_commit, imported_ports, last_files_root FROM containers ORDER BY position
 `
 
-func (q *Queries) ListDeployments(ctx context.Context, limit int64) ([]Deployment, error) {
-	rows, err := q.db.QueryContext(ctx, listDeployments, limit)
+func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listContainers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Deployment{}
+	items := []Container{}
 	for rows.Next() {
-		var i Deployment
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.Source,
-			&i.Members,
-			&i.Versions,
-			&i.Success,
-			&i.Error,
-			&i.RestoreOf,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMembers = `-- name: ListMembers :many
-SELECT name, position, created_at, revision, deployed_version, webhook_token, last_commit, imported_ports, last_files_root FROM members ORDER BY position
-`
-
-func (q *Queries) ListMembers(ctx context.Context) ([]Member, error) {
-	rows, err := q.db.QueryContext(ctx, listMembers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Member{}
-	for rows.Next() {
-		var i Member
+		var i Container
 		if err := rows.Scan(
 			&i.Name,
 			&i.Position,
@@ -317,12 +281,48 @@ func (q *Queries) ListMembers(ctx context.Context) ([]Member, error) {
 	return items, nil
 }
 
-const listVersions = `-- name: ListVersions :many
-SELECT member, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE member = ? ORDER BY version DESC
+const listDeployments = `-- name: ListDeployments :many
+SELECT id, created_at, source, containers, versions, success, error, restore_of FROM deployments ORDER BY id DESC LIMIT ?
 `
 
-func (q *Queries) ListVersions(ctx context.Context, member string) ([]Version, error) {
-	rows, err := q.db.QueryContext(ctx, listVersions, member)
+func (q *Queries) ListDeployments(ctx context.Context, limit int64) ([]Deployment, error) {
+	rows, err := q.db.QueryContext(ctx, listDeployments, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Deployment{}
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Source,
+			&i.Containers,
+			&i.Versions,
+			&i.Success,
+			&i.Error,
+			&i.RestoreOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVersions = `-- name: ListVersions :many
+SELECT container, version, config, shared_env, created_at, deployed_at, files_snapshot, images, rollback_of, git_commit FROM versions WHERE container = ? ORDER BY version DESC
+`
+
+func (q *Queries) ListVersions(ctx context.Context, container string) ([]Version, error) {
+	rows, err := q.db.QueryContext(ctx, listVersions, container)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (q *Queries) ListVersions(ctx context.Context, member string) ([]Version, e
 	for rows.Next() {
 		var i Version
 		if err := rows.Scan(
-			&i.Member,
+			&i.Container,
 			&i.Version,
 			&i.Config,
 			&i.SharedEnv,
@@ -357,7 +357,7 @@ func (q *Queries) ListVersions(ctx context.Context, member string) ([]Version, e
 
 const replaceUndeployedVersion = `-- name: ReplaceUndeployedVersion :exec
 UPDATE versions SET config = ?, shared_env = ?, created_at = ?, rollback_of = ?, files_snapshot = '', images = '{}', git_commit = ''
-WHERE member = ? AND version = ? AND deployed_at IS NULL
+WHERE container = ? AND version = ? AND deployed_at IS NULL
 `
 
 type ReplaceUndeployedVersionParams struct {
@@ -365,7 +365,7 @@ type ReplaceUndeployedVersionParams struct {
 	SharedEnv  []byte
 	CreatedAt  int64
 	RollbackOf int64
-	Member     string
+	Container  string
 	Version    int64
 }
 
@@ -375,95 +375,95 @@ func (q *Queries) ReplaceUndeployedVersion(ctx context.Context, arg ReplaceUndep
 		arg.SharedEnv,
 		arg.CreatedAt,
 		arg.RollbackOf,
-		arg.Member,
+		arg.Container,
 		arg.Version,
 	)
 	return err
 }
 
+const setContainerCommit = `-- name: SetContainerCommit :exec
+UPDATE containers SET last_commit = ? WHERE name = ?
+`
+
+type SetContainerCommitParams struct {
+	LastCommit string
+	Name       string
+}
+
+func (q *Queries) SetContainerCommit(ctx context.Context, arg SetContainerCommitParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerCommit, arg.LastCommit, arg.Name)
+	return err
+}
+
+const setContainerDeployed = `-- name: SetContainerDeployed :exec
+UPDATE containers SET deployed_version = ? WHERE name = ?
+`
+
+type SetContainerDeployedParams struct {
+	DeployedVersion int64
+	Name            string
+}
+
+func (q *Queries) SetContainerDeployed(ctx context.Context, arg SetContainerDeployedParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerDeployed, arg.DeployedVersion, arg.Name)
+	return err
+}
+
+const setContainerFilesRoot = `-- name: SetContainerFilesRoot :exec
+UPDATE containers SET last_files_root = ? WHERE name = ?
+`
+
+type SetContainerFilesRootParams struct {
+	LastFilesRoot string
+	Name          string
+}
+
+func (q *Queries) SetContainerFilesRoot(ctx context.Context, arg SetContainerFilesRootParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerFilesRoot, arg.LastFilesRoot, arg.Name)
+	return err
+}
+
+const setContainerImportedPorts = `-- name: SetContainerImportedPorts :exec
+UPDATE containers SET imported_ports = ? WHERE name = ?
+`
+
+type SetContainerImportedPortsParams struct {
+	ImportedPorts string
+	Name          string
+}
+
+func (q *Queries) SetContainerImportedPorts(ctx context.Context, arg SetContainerImportedPortsParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerImportedPorts, arg.ImportedPorts, arg.Name)
+	return err
+}
+
+const setContainerRevision = `-- name: SetContainerRevision :exec
+UPDATE containers SET revision = ? WHERE name = ?
+`
+
+type SetContainerRevisionParams struct {
+	Revision int64
+	Name     string
+}
+
+func (q *Queries) SetContainerRevision(ctx context.Context, arg SetContainerRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerRevision, arg.Revision, arg.Name)
+	return err
+}
+
 const setDraft = `-- name: SetDraft :exec
-INSERT INTO drafts (member, config, updated_at) VALUES (?, ?, ?)
-ON CONFLICT (member) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at
+INSERT INTO drafts (container, config, updated_at) VALUES (?, ?, ?)
+ON CONFLICT (container) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at
 `
 
 type SetDraftParams struct {
-	Member    string
+	Container string
 	Config    []byte
 	UpdatedAt int64
 }
 
 func (q *Queries) SetDraft(ctx context.Context, arg SetDraftParams) error {
-	_, err := q.db.ExecContext(ctx, setDraft, arg.Member, arg.Config, arg.UpdatedAt)
-	return err
-}
-
-const setMemberCommit = `-- name: SetMemberCommit :exec
-UPDATE members SET last_commit = ? WHERE name = ?
-`
-
-type SetMemberCommitParams struct {
-	LastCommit string
-	Name       string
-}
-
-func (q *Queries) SetMemberCommit(ctx context.Context, arg SetMemberCommitParams) error {
-	_, err := q.db.ExecContext(ctx, setMemberCommit, arg.LastCommit, arg.Name)
-	return err
-}
-
-const setMemberDeployed = `-- name: SetMemberDeployed :exec
-UPDATE members SET deployed_version = ? WHERE name = ?
-`
-
-type SetMemberDeployedParams struct {
-	DeployedVersion int64
-	Name            string
-}
-
-func (q *Queries) SetMemberDeployed(ctx context.Context, arg SetMemberDeployedParams) error {
-	_, err := q.db.ExecContext(ctx, setMemberDeployed, arg.DeployedVersion, arg.Name)
-	return err
-}
-
-const setMemberFilesRoot = `-- name: SetMemberFilesRoot :exec
-UPDATE members SET last_files_root = ? WHERE name = ?
-`
-
-type SetMemberFilesRootParams struct {
-	LastFilesRoot string
-	Name          string
-}
-
-func (q *Queries) SetMemberFilesRoot(ctx context.Context, arg SetMemberFilesRootParams) error {
-	_, err := q.db.ExecContext(ctx, setMemberFilesRoot, arg.LastFilesRoot, arg.Name)
-	return err
-}
-
-const setMemberImportedPorts = `-- name: SetMemberImportedPorts :exec
-UPDATE members SET imported_ports = ? WHERE name = ?
-`
-
-type SetMemberImportedPortsParams struct {
-	ImportedPorts string
-	Name          string
-}
-
-func (q *Queries) SetMemberImportedPorts(ctx context.Context, arg SetMemberImportedPortsParams) error {
-	_, err := q.db.ExecContext(ctx, setMemberImportedPorts, arg.ImportedPorts, arg.Name)
-	return err
-}
-
-const setMemberRevision = `-- name: SetMemberRevision :exec
-UPDATE members SET revision = ? WHERE name = ?
-`
-
-type SetMemberRevisionParams struct {
-	Revision int64
-	Name     string
-}
-
-func (q *Queries) SetMemberRevision(ctx context.Context, arg SetMemberRevisionParams) error {
-	_, err := q.db.ExecContext(ctx, setMemberRevision, arg.Revision, arg.Name)
+	_, err := q.db.ExecContext(ctx, setDraft, arg.Container, arg.Config, arg.UpdatedAt)
 	return err
 }
 
@@ -483,14 +483,14 @@ func (q *Queries) SetMeta(ctx context.Context, arg SetMetaParams) error {
 }
 
 const setVersionDeployed = `-- name: SetVersionDeployed :exec
-UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE member = ? AND version = ?
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ? WHERE container = ? AND version = ?
 `
 
 type SetVersionDeployedParams struct {
 	DeployedAt sql.NullInt64
 	Images     string
 	GitCommit  string
-	Member     string
+	Container  string
 	Version    int64
 }
 
@@ -499,23 +499,23 @@ func (q *Queries) SetVersionDeployed(ctx context.Context, arg SetVersionDeployed
 		arg.DeployedAt,
 		arg.Images,
 		arg.GitCommit,
-		arg.Member,
+		arg.Container,
 		arg.Version,
 	)
 	return err
 }
 
 const setVersionFiles = `-- name: SetVersionFiles :exec
-UPDATE versions SET files_snapshot = ? WHERE member = ? AND version = ?
+UPDATE versions SET files_snapshot = ? WHERE container = ? AND version = ?
 `
 
 type SetVersionFilesParams struct {
 	FilesSnapshot string
-	Member        string
+	Container     string
 	Version       int64
 }
 
 func (q *Queries) SetVersionFiles(ctx context.Context, arg SetVersionFilesParams) error {
-	_, err := q.db.ExecContext(ctx, setVersionFiles, arg.FilesSnapshot, arg.Member, arg.Version)
+	_, err := q.db.ExecContext(ctx, setVersionFiles, arg.FilesSnapshot, arg.Container, arg.Version)
 	return err
 }

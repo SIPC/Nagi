@@ -130,11 +130,11 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		c.prevNetRx, c.prevNetTx = rx, tx
 	}
 
-	containers, err := c.docker.ManagedContainers(ctx, labelLabel)
+	containers, err := c.docker.ManagedInstances(ctx, labelLabel)
 	if err == nil {
 		seen := map[string]bool{}
 		for _, ct := range containers {
-			prefix := "c:" + ct.Project + "/" + ct.Member + "/" + ct.Service + ":"
+			prefix := "c:" + ct.Project + "/" + ct.Container + "/" + ct.Service + ":"
 			if n, err := c.docker.RestartCount(ctx, ct.ID); err == nil {
 				if c.ExtraRestarts != nil {
 					n += c.ExtraRestarts(ct.ID)

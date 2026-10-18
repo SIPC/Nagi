@@ -14,24 +14,24 @@ import (
 
 // 管理标签：agent 靠它识别自己管理的容器。
 const (
-	LabelProject = "nagi.project"
-	LabelMember  = "nagi.member"
-	LabelVersion = "nagi.version"
-	// LabelSingle 标出单容器成员的容器：它由 compose 加入项目内网，别名就是服务名（成员名）。
+	LabelProject   = "nagi.project"
+	LabelContainer = "nagi.container"
+	LabelVersion   = "nagi.version"
+	// LabelSingle 标出单个容器的容器：它由 compose 加入项目内网，别名就是服务名（容器名）。
 	LabelSingle = "nagi.single"
 )
 
-// overrideInput 是生成一个成员的叠加配置要用的东西。
+// overrideInput 是生成一个容器的叠加配置要用的东西。
 type overrideInput struct {
 	proj      *types.Project
-	mp        memberPaths
+	mp        containerPaths
 	projectID string
-	member    string
+	container string
 	version   int64
 	single    bool
-	// intranet：项目内网开启。单容器成员这时只在项目内网里，不建自己的网络。
+	// intranet：项目内网开启。单个容器这时只在项目内网里，不建自己的网络。
 	intranet bool
-	// subnet 是成员自己的默认网络的网段（compose 成员，或者内网关闭时的单容器成员）。
+	// subnet 是容器自己的默认网络的网段（容器组，或者内网关闭时的单个容器）。
 	subnet         string
 	senv           map[string][]*nagiv1.EnvVar
 	pins           map[string]string
@@ -41,16 +41,16 @@ type overrideInput struct {
 // buildOverride 生成 Nagi 的叠加配置。override 里写的值会覆盖用户的值，
 // 所以默认值只补在用户没写的地方。
 // managedRestart 时容器的重启策略一律写成 no，由节点代管（见 restart.go）。
-// compose 成员不在这里加入项目内网和共享网络：compose 会把服务原名注册到它加入的每个网络上，
+// 容器组不在这里加入项目内网和共享网络：compose 会把服务原名注册到它加入的每个网络上，
 // 由节点用 network connect 只带指定的别名接入（见 network.go）。
 func buildOverride(in overrideInput) (map[string]any, error) {
 	services := map[string]any{}
 	joinIntranet := in.single && in.intranet
 	for name, svc := range in.proj.Services {
 		labels := map[string]string{
-			LabelProject: in.projectID,
-			LabelMember:  in.member,
-			LabelVersion: strconv.FormatInt(in.version, 10),
+			LabelProject:   in.projectID,
+			LabelContainer: in.container,
+			LabelVersion:   strconv.FormatInt(in.version, 10),
 		}
 		if in.single {
 			labels[LabelSingle] = "1"
@@ -92,12 +92,12 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 	out := map[string]any{"services": services}
 
 	if joinIntranet {
-		// 单容器成员只在项目内网里：服务名就是成员名，compose 自动把它注册为别名。
+		// 单个容器只在项目内网里：服务名就是容器名，compose 自动把它注册为别名。
 		out["networks"] = map[string]any{
 			"nagi": map[string]any{"name": projectNetwork(in.projectID), "external": true},
 		}
 	} else {
-		// 成员自己的默认网络，用从节点容器网段池分配的网段。
+		// 容器自己的默认网络，用从节点容器网段池分配的网段。
 		out["networks"] = map[string]any{
 			"default": map[string]any{
 				"ipam": map[string]any{
@@ -107,7 +107,7 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 		}
 	}
 
-	// 命名 volume 落到成员目录的 volumes/<名字>。外部 volume 和自定义 driver 的保持原样。
+	// 命名 volume 落到容器目录的 volumes/<名字>。外部 volume 和自定义 driver 的保持原样。
 	volumes := map[string]any{}
 	for key, v := range in.proj.Volumes {
 		if !managedVolume(v) {
@@ -141,7 +141,7 @@ func writeOverride(path string, override map[string]any) error {
 	return writeFileAtomic(path, append(header, data...), 0o644)
 }
 
-// managedVolume 判断命名 volume 是否由 Nagi 绑定到成员的 volumes/（在快照范围内）。
+// managedVolume 判断命名 volume 是否由 Nagi 绑定到容器的 volumes/（在快照范围内）。
 // external 的和用了自定义 driver 或 driver_opts 的保持原样，不在快照范围内。
 func managedVolume(v types.VolumeConfig) bool {
 	return !bool(v.External) && (v.Driver == "" || v.Driver == "local") && len(v.DriverOpts) == 0

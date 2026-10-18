@@ -71,11 +71,11 @@ DELETE FROM subnets WHERE owner = ?1 OR owner LIKE ?2
 
 type DeleteProjectSubnetsParams struct {
 	ProjectOwner string
-	MemberPrefix string
+	GroupPrefix  string
 }
 
 func (q *Queries) DeleteProjectSubnets(ctx context.Context, arg DeleteProjectSubnetsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectSubnets, arg.ProjectOwner, arg.MemberPrefix)
+	_, err := q.db.ExecContext(ctx, deleteProjectSubnets, arg.ProjectOwner, arg.GroupPrefix)
 	return err
 }
 

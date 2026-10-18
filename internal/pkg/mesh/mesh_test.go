@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-type member struct {
+type testNode struct {
 	m    *Mesh
 	port uint16
 }
 
-func newMember(t *testing.T, relay bool) member {
+func newNode(t *testing.T, relay bool) testNode {
 	t.Helper()
 	var priv Key
 	_, _ = rand.Read(priv[:])
@@ -24,7 +24,7 @@ func newMember(t *testing.T, relay bool) member {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Close)
-	return member{m: m, port: m.Port()}
+	return testNode{m: m, port: m.Port()}
 }
 
 func local(port uint16) []netip.AddrPort {
@@ -32,13 +32,13 @@ func local(port uint16) []netip.AddrPort {
 }
 
 // setup 建一个面板 P 和两个节点 A、B：节点都能直连面板、互相也能直连，并且各有一条到面板的控制连接。
-func setup(t *testing.T) (p, a, b member) {
-	p, a, b = newMember(t, true), newMember(t, false), newMember(t, false)
+func setup(t *testing.T) (p, a, b testNode) {
+	p, a, b = newNode(t, true), newNode(t, false), newNode(t, false)
 	pk, ak, bk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
 	_ = a.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
 	_ = b.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: ak, Endpoints: local(a.port), Relays: []Key{pk}}})
-	for _, n := range []member{a, b} {
+	for _, n := range []testNode{a, b} {
 		node := n
 		// 节点 → 面板：面板按连接确认发送方，不信任包里写的来源。
 		node.m.AttachLink(pk, func(_, dst Key, payload []byte) error {
@@ -54,7 +54,7 @@ func setup(t *testing.T) (p, a, b member) {
 }
 
 // echo 在 B 上监听，从 A 经 mesh 连过去，确认能收发。
-func echo(t *testing.T, a, b member) {
+func echo(t *testing.T, a, b testNode) {
 	t.Helper()
 	ln, err := b.m.Listen(7000)
 	if err != nil {

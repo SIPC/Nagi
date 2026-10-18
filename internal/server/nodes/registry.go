@@ -240,10 +240,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 			}
 		}
 	}
-	// 每个成员一个 webhook。节点上已经没有的项目或成员，令牌一并删掉。
+	// 每个容器一个 webhook。节点上已经没有的项目或容器，令牌一并删掉。
 	tokens := map[string]bool{}
 	for _, s := range req.GetProjects() {
-		for _, m := range s.GetProject().GetMembers() {
+		for _, m := range s.GetProject().GetContainers() {
 			if t := m.GetWebhookToken(); t != "" {
 				tokens[hashToken(t)] = true
 			}
@@ -269,16 +269,16 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		if err != nil {
 			continue
 		}
-		for _, m := range proj.GetMembers() {
+		for _, m := range proj.GetContainers() {
 			t := m.GetWebhookToken()
 			if t == "" {
 				continue
 			}
 			// 令牌跟着项目走（顶替、迁移后不变），所以按令牌登记：项目换了节点，地址照常能用。
 			if err := p.r.q.UpsertWebhook(ctx, store.UpsertWebhookParams{
-				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Member: m.GetName(),
+				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Container: m.GetName(),
 			}); err != nil {
-				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "member", m.GetName(), "err", err)
+				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "container", m.GetName(), "err", err)
 			}
 		}
 		var key []byte

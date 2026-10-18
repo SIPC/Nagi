@@ -20,7 +20,7 @@ INSERT INTO subnets (subnet, owner) VALUES (?, ?);
 DELETE FROM subnets WHERE owner = ?;
 
 -- name: DeleteProjectSubnets :exec
-DELETE FROM subnets WHERE owner = @project_owner OR owner LIKE @member_prefix;
+DELETE FROM subnets WHERE owner = @project_owner OR owner LIKE @group_prefix;
 
 -- name: InsertSharedNetwork :exec
 INSERT INTO shared_networks (name, created_at) VALUES (?, ?);

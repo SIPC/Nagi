@@ -44,7 +44,7 @@ func policyOf(svc types.ServiceConfig) restartPolicy {
 	return restartPolicy{mode: "unless-stopped"}
 }
 
-// policies 返回项目每个服务的重启策略，键是"成员/服务"。按各成员部署的版本（没部署过时用最新版本）读。
+// policies 返回项目每个服务的重启策略，键是"容器/服务"。按各容器部署的版本（没部署过时用最新版本）读。
 func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPolicy, error) {
 	row, err := m.projectRow(ctx, id)
 	if err != nil {
@@ -55,14 +55,14 @@ func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPo
 		return nil, err
 	}
 	defer pdb.Close()
-	members, err := pdb.q.ListMembers(ctx)
+	containers, err := pdb.q.ListContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
 	current := pdb.settings(ctx).GetSharedEnv()
 	p := paths{root: row.Dir}
 	out := map[string]restartPolicy{}
-	for _, mem := range members {
+	for _, mem := range containers {
 		cfg, err := pdb.current(ctx, mem)
 		if err != nil {
 			continue
@@ -71,7 +71,7 @@ func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPo
 		if v, err := pdb.deployed(ctx, mem); err == nil && v != nil {
 			shared = unmarshalEnv(v.SharedEnv)
 		}
-		cp, err := loadMember(ctx, cfg, mem.Name, shared, p.member(mem.Name).dataDir(), composeProjectName(id, mem.Name))
+		cp, err := loadContainer(ctx, cfg, mem.Name, shared, p.container(mem.Name).dataDir(), composeProjectName(id, mem.Name))
 		if err != nil {
 			continue
 		}
@@ -89,14 +89,14 @@ func (m *Manager) SetManagedRestart(ctx context.Context, id string, managed bool
 	if err != nil {
 		return err
 	}
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return err
 	}
 	for _, c := range containers {
 		p := restartPolicy{mode: "no"}
 		if !managed {
-			p = pol[c.Member+"/"+c.Service]
+			p = pol[c.Container+"/"+c.Service]
 		}
 		if err := m.docker.SetRestartPolicy(ctx, c.ID, p.mode, p.maxRetries); err != nil {
 			return err
@@ -133,7 +133,7 @@ func (m *Manager) Supervise(ctx context.Context, id string) {
 		return
 	}
 	defer l.Unlock()
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return
 	}
@@ -157,7 +157,7 @@ func (m *Manager) Supervise(ctx context.Context, id string) {
 				return
 			}
 		}
-		p := pol[c.Member+"/"+c.Service]
+		p := pol[c.Container+"/"+c.Service]
 		code, _, err := m.docker.ExitInfo(ctx, c.ID)
 		if err != nil {
 			continue

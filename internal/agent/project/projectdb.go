@@ -41,7 +41,7 @@ func writeFormat(p paths) error {
 	return writeFileAtomic(p.formatFile(), []byte(strconv.Itoa(formatVersion)+"\n"), 0o644)
 }
 
-// readFormat 读取目录的格式版本号，没有这个文件时返回 0（成员模型之前的旧格式）。
+// readFormat 读取目录的格式版本号，没有这个文件时返回 0（容器模型之前的旧格式）。
 func readFormat(dir string) (int, error) {
 	b, err := os.ReadFile(paths{root: dir}.formatFile())
 	if errors.Is(err, os.ErrNotExist) {
@@ -157,31 +157,31 @@ func (p *projectDB) sharedEnvDraft(ctx context.Context) *nagiv1.EnvList {
 	return l
 }
 
-// ---- 成员 ----
+// ---- 容器 ----
 
-// member 返回成员记录，不存在时返回 ErrNotFound。
-func (p *projectDB) member(ctx context.Context, name string) (projectstore.Member, error) {
-	m, err := p.q.GetMember(ctx, name)
+// container 返回容器记录，不存在时返回 ErrNotFound。
+func (p *projectDB) container(ctx context.Context, name string) (projectstore.Container, error) {
+	m, err := p.q.GetContainer(ctx, name)
 	if errors.Is(err, sql.ErrNoRows) {
-		return m, notFoundError{fmt.Sprintf("成员 %s 不存在", name)}
+		return m, notFoundError{fmt.Sprintf("容器 %s 不存在", name)}
 	}
 	return m, err
 }
 
-// checkMemberRevision 检查成员的修订号。base 为 0 表示不检查。
-func checkMemberRevision(m projectstore.Member, base int64) error {
+// checkContainerRevision 检查容器的修订号。base 为 0 表示不检查。
+func checkContainerRevision(m projectstore.Container, base int64) error {
 	if base != 0 && base != m.Revision {
 		return ErrConflict
 	}
 	return nil
 }
 
-func (p *projectDB) bumpMember(ctx context.Context, m projectstore.Member) error {
-	return p.q.SetMemberRevision(ctx, projectstore.SetMemberRevisionParams{Revision: m.Revision + 1, Name: m.Name})
+func (p *projectDB) bumpContainer(ctx context.Context, m projectstore.Container) error {
+	return p.q.SetContainerRevision(ctx, projectstore.SetContainerRevisionParams{Revision: m.Revision + 1, Name: m.Name})
 }
 
-func unmarshalConfig(b []byte) (*nagiv1.MemberConfig, error) {
-	cfg := &nagiv1.MemberConfig{}
+func unmarshalConfig(b []byte) (*nagiv1.ContainerConfig, error) {
+	cfg := &nagiv1.ContainerConfig{}
 	return cfg, proto.Unmarshal(b, cfg)
 }
 
@@ -191,9 +191,9 @@ func unmarshalEnv(b []byte) []*nagiv1.EnvVar {
 	return l.GetVars()
 }
 
-// latest 返回成员最新版本的配置和版本号。
-func (p *projectDB) latest(ctx context.Context, member string) (*nagiv1.MemberConfig, int64, error) {
-	v, err := p.q.LatestVersion(ctx, member)
+// latest 返回容器最新版本的配置和版本号。
+func (p *projectDB) latest(ctx context.Context, container string) (*nagiv1.ContainerConfig, int64, error) {
+	v, err := p.q.LatestVersion(ctx, container)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -201,20 +201,20 @@ func (p *projectDB) latest(ctx context.Context, member string) (*nagiv1.MemberCo
 	return cfg, v.Version, err
 }
 
-// deployed 返回成员最近一次部署的版本；从未部署时返回 nil。
-func (p *projectDB) deployed(ctx context.Context, m projectstore.Member) (*projectstore.Version, error) {
+// deployed 返回容器最近一次部署的版本；从未部署时返回 nil。
+func (p *projectDB) deployed(ctx context.Context, m projectstore.Container) (*projectstore.Version, error) {
 	if m.DeployedVersion == 0 {
 		return nil, nil
 	}
-	v, err := p.q.GetVersion(ctx, projectstore.GetVersionParams{Member: m.Name, Version: m.DeployedVersion})
+	v, err := p.q.GetVersion(ctx, projectstore.GetVersionParams{Container: m.Name, Version: m.DeployedVersion})
 	if err != nil {
 		return nil, err
 	}
 	return &v, nil
 }
 
-// current 返回成员当前的配置：部署过的版本，没部署过时用最新版本。
-func (p *projectDB) current(ctx context.Context, m projectstore.Member) (*nagiv1.MemberConfig, error) {
+// current 返回容器当前的配置：部署过的版本，没部署过时用最新版本。
+func (p *projectDB) current(ctx context.Context, m projectstore.Container) (*nagiv1.ContainerConfig, error) {
 	if v, err := p.deployed(ctx, m); err == nil && v != nil {
 		return unmarshalConfig(v.Config)
 	}
@@ -222,9 +222,9 @@ func (p *projectDB) current(ctx context.Context, m projectstore.Member) (*nagiv1
 	return cfg, err
 }
 
-// draft 返回成员的草稿；没有草稿时返回 nil。
-func (p *projectDB) draft(ctx context.Context, member string) (*nagiv1.MemberConfig, error) {
-	d, err := p.q.GetDraft(ctx, member)
+// draft 返回容器的草稿；没有草稿时返回 nil。
+func (p *projectDB) draft(ctx context.Context, container string) (*nagiv1.ContainerConfig, error) {
+	d, err := p.q.GetDraft(ctx, container)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -234,19 +234,19 @@ func (p *projectDB) draft(ctx context.Context, member string) (*nagiv1.MemberCon
 	return unmarshalConfig(d.Config)
 }
 
-func (p *projectDB) setDraft(ctx context.Context, member string, cfg *nagiv1.MemberConfig) error {
+func (p *projectDB) setDraft(ctx context.Context, container string, cfg *nagiv1.ContainerConfig) error {
 	data, err := proto.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return p.q.SetDraft(ctx, projectstore.SetDraftParams{Member: member, Config: data, UpdatedAt: time.Now().Unix()})
+	return p.q.SetDraft(ctx, projectstore.SetDraftParams{Container: container, Config: data, UpdatedAt: time.Now().Unix()})
 }
 
 // ---- 组装 ----
 
-// project 组装对外的项目信息：元数据、设置、成员（最新版本的配置和草稿）、映射。
+// project 组装对外的项目信息：元数据、设置、容器（最新版本的配置和草稿）、映射。
 func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Project, error) {
-	rows, err := p.q.ListMembers(ctx)
+	rows, err := p.q.ListContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +276,8 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 		if err != nil {
 			return nil, err
 		}
-		mp := pp.member(r.Name)
-		mem := &nagiv1.Member{
+		mp := pp.container(r.Name)
+		mem := &nagiv1.Container{
 			Name:            r.Name,
 			Revision:        r.Revision,
 			LatestVersion:   version,
@@ -289,8 +289,9 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 			DeployKey:       readDeployKey(mp),
 			WebhookToken:    r.WebhookToken,
 			LastCommit:      r.LastCommit,
+			Kind:            containerKind(cfg),
 		}
-		if cp, err := loadMember(ctx, cfg, r.Name, settings.GetSharedEnv(), mp.dataDir(), composeProjectName(id, r.Name)); err == nil {
+		if cp, err := loadContainer(ctx, cfg, r.Name, settings.GetSharedEnv(), mp.dataDir(), composeProjectName(id, r.Name)); err == nil {
 			mem.Stateful = isStateful(cfg, cp, preservePaths(cfg, cp, mp.dataDir()))
 			mem.UnmanagedVolumes, mem.HostNetworkServices = unmanagedVolumes(cp), hostNetworkServices(cp)
 		}
@@ -300,16 +301,24 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 			}
 		}
 		proj.Stateful = proj.Stateful || mem.Stateful
-		proj.Members = append(proj.Members, mem)
+		proj.Containers = append(proj.Containers, mem)
 	}
 	proj.Routes = readRoutes(pp, names)
 	return proj, nil
 }
 
-func readDeployKey(p memberPaths) string {
+func readDeployKey(p containerPaths) string {
 	b, err := os.ReadFile(p.deployKeyPub())
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// containerKind 返回容器的种类：single（单个容器，镜像表单）或 group（容器组，一份 compose）。
+func containerKind(cfg *nagiv1.ContainerConfig) string {
+	if isSingle(cfg) {
+		return "single"
+	}
+	return "group"
 }

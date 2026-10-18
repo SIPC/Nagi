@@ -27,8 +27,8 @@ import (
 )
 
 // 跨节点连接共享网络（见 docs/agent.md#跨节点连接共享网络）：
-//   - 每 10 秒经 mesh 问一遍相连的节点"你这里的网络里有哪些成员、开着哪些端口"（SharedNetworkInfo）；
-//   - 对方的每个成员在本节点的网络里有一个同名的代理容器（nagi link-proxy），
+//   - 每 10 秒经 mesh 问一遍相连的节点"你这里的网络里有哪些容器、开着哪些端口"（SharedNetworkInfo）；
+//   - 对方的每个容器在本节点的网络里有一个同名的代理容器（nagi link-proxy），
 //     代理把连接经 unix socket 交给节点，节点经 mesh 的 7001 端口交给对方节点；
 //   - 对方节点检查调用方和这个网络相连，再连到网络里的那个容器，然后双向转发。
 // 代理在每次连接时才查名字现在在哪个节点，所以项目顶替、迁移到另一个相连的节点后会自动跟过去。
@@ -41,7 +41,7 @@ const (
 	labelLinkAlias = "nagi.link.alias"
 	labelLinkPorts = "nagi.link.ports"
 	labelLinkBuild = "nagi.link.build"
-	// 对方成员所在的节点，节点重启后先按这些标签恢复成员列表，免得联系上对方之前把代理都删了。
+	// 对方容器所在的节点，节点重启后先按这些标签恢复容器列表，免得联系上对方之前把代理都删了。
 	labelLinkNode     = "nagi.link.node"
 	labelLinkNodeName = "nagi.link.node-name"
 	labelLinkProject  = "nagi.link.project"
@@ -59,13 +59,13 @@ type links struct {
 	a      *agent
 	kick   chan struct{}
 	syncMu sync.Mutex // 同一时间只有一次同步（定时的、面板改了连接后立即做的）
-	seeded bool       // 已经按现有的代理容器恢复过成员列表
+	seeded bool       // 已经按现有的代理容器恢复过容器列表
 
 	mu      sync.Mutex
 	linked  map[string][]project.LinkPeer          // 网络 → 相连的节点（数据库的缓存）
 	peers   map[string]map[mesh.Key]*linkPeerState // 网络 → 相连节点上次的回答
-	local   map[string][]project.LinkEndpoint      // 网络 → 本节点的成员（缓存）
-	localAt map[string]time.Time                   // 网络 → 上次读取本节点成员的时间
+	local   map[string][]project.LinkEndpoint      // 网络 → 本节点的容器（缓存）
+	localAt map[string]time.Time                   // 网络 → 上次读取本节点容器的时间
 	socks   map[string]net.Listener                // 网络 → 代理连进来的 unix socket
 	warned  map[string]bool                        // 已经告警过的撞名
 	build   string                                 // 代理容器标签：nagi 换了版本就重建
@@ -103,7 +103,7 @@ func (l *links) trigger() {
 	}
 }
 
-// run 维持代理容器和成员列表，直到 ctx 取消。
+// run 维持代理容器和容器列表，直到 ctx 取消。
 func (l *links) run(ctx context.Context) {
 	go l.serve(ctx)
 	t := time.NewTicker(10 * time.Second)
@@ -184,8 +184,8 @@ func (l *links) sync(ctx context.Context) {
 				st.ok, st.endpoints = true, a.resp.GetEndpoints()
 			} else {
 				st.err = linkError(a.err)
-				// 暂时联系不上：保留上次的成员，代理容器不动（连接会失败），恢复后照常。
-				// 对方明确说没有相连（断开了连接）时删掉它的成员。
+				// 暂时联系不上：保留上次的容器，代理容器不动（连接会失败），恢复后照常。
+				// 对方明确说没有相连（断开了连接）时删掉它的容器。
 				if old := l.peers[network][k]; old != nil && status.Code(a.err) != codes.PermissionDenied {
 					st.endpoints = old.endpoints
 				}
@@ -202,9 +202,9 @@ func (l *links) sync(ctx context.Context) {
 	}
 }
 
-// seed 节点刚启动时按现有的代理容器恢复对方的成员列表：联系上对方之前代理照常工作，不会被删掉再重建。
+// seed 节点刚启动时按现有的代理容器恢复对方的容器列表：联系上对方之前代理照常工作，不会被删掉再重建。
 func (l *links) seed(ctx context.Context) {
-	cs, err := l.a.docker.ManagedContainers(ctx, labelLink)
+	cs, err := l.a.docker.ManagedInstances(ctx, labelLink)
 	if err != nil {
 		return
 	}
@@ -254,7 +254,7 @@ func linkError(err error) string {
 	return err.Error()
 }
 
-// query 经 mesh 问一个节点它的网络 network 里有哪些成员。
+// query 经 mesh 问一个节点它的网络 network 里有哪些容器。
 func (l *links) query(ctx context.Context, k mesh.Key, network string) (*nagiv1.SharedNetworkInfoResponse, error) {
 	if l.a.mesh == nil {
 		return nil, errors.New("mesh 没有启动")
@@ -269,7 +269,7 @@ func (l *links) query(ctx context.Context, k mesh.Key, network string) (*nagiv1.
 	return nagiv1.NewMeshServiceClient(cc).SharedNetworkInfo(ctx, &nagiv1.SharedNetworkInfoRequest{Name: network})
 }
 
-// refreshLocal 重新读取本节点网络 network 里的成员。
+// refreshLocal 重新读取本节点网络 network 里的容器。
 func (l *links) refreshLocal(ctx context.Context, network string) []project.LinkEndpoint {
 	eps, err := l.a.projects.LinkEndpoints(ctx, network)
 	if err != nil {
@@ -284,7 +284,7 @@ func (l *links) refreshLocal(ctx context.Context, network string) []project.Link
 	return eps
 }
 
-// localEndpoint 找本节点网络 network 里名字是 alias 的成员。缓存里没有时（最多每秒一次）重新读取。
+// localEndpoint 找本节点网络 network 里名字是 alias 的容器。缓存里没有时（最多每秒一次）重新读取。
 func (l *links) localEndpoint(ctx context.Context, network, alias string) (project.LinkEndpoint, bool) {
 	find := func(eps []project.LinkEndpoint) (project.LinkEndpoint, bool) {
 		for _, e := range eps {
@@ -326,7 +326,7 @@ func (l *links) isLinked(ctx context.Context, network string, k mesh.Key) bool {
 	return err == nil && has(m)
 }
 
-// remoteEndpoint 是代理容器要代表的一个对方成员。
+// remoteEndpoint 是代理容器要代表的一个对方容器。
 type remoteEndpoint struct {
 	network, alias string
 	node           mesh.Key
@@ -335,7 +335,7 @@ type remoteEndpoint struct {
 	ports          []uint32
 }
 
-// remotes 返回各网络里对方节点上的成员：本节点也有的名字不算；几个节点都有时按节点公钥顺序取第一个并告警。
+// remotes 返回各网络里对方节点上的容器：本节点也有的名字不算；几个节点都有时按节点公钥顺序取第一个并告警。
 func (l *links) remotes() map[string]map[string]remoteEndpoint {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -390,7 +390,7 @@ func portsLabel(ports []uint32) string {
 	return strings.Join(s, ",")
 }
 
-// reconcile 让代理容器和对方的成员一致：多的删掉，缺的建上，端口变了或者 nagi 升级了就重建。
+// reconcile 让代理容器和对方的容器一致：多的删掉，缺的建上，端口变了或者 nagi 升级了就重建。
 func (l *links) reconcile(ctx context.Context) error {
 	want := map[string]remoteEndpoint{}
 	for _, m := range l.remotes() {
@@ -398,7 +398,7 @@ func (l *links) reconcile(ctx context.Context) error {
 			want[linkContainerName(e.network, e.alias)] = e
 		}
 	}
-	existing, err := l.a.docker.ManagedContainers(ctx, labelLink)
+	existing, err := l.a.docker.ManagedInstances(ctx, labelLink)
 	if err != nil {
 		return err
 	}
@@ -648,7 +648,7 @@ func splice(a net.Conn, ar io.Reader, b net.Conn, br io.Reader) {
 
 // ---- 接口 ----
 
-// decorate 给节点的共享网络列表补上相连节点的状态和对方的成员。
+// decorate 给节点的共享网络列表补上相连节点的状态和对方的容器。
 func (l *links) decorate(list []*nagiv1.SharedNetwork) {
 	remotes := l.remotes()
 	l.mu.Lock()
@@ -700,7 +700,7 @@ func (l *links) remoteProjects(ctx context.Context, network string) ([]*nagiv1.S
 	return out, nil
 }
 
-// SharedNetworkInfo 回答相连节点的查询：本节点这个网络里的成员和加入的项目。
+// SharedNetworkInfo 回答相连节点的查询：本节点这个网络里的容器和加入的项目。
 func (s *meshService) SharedNetworkInfo(ctx context.Context, req *nagiv1.SharedNetworkInfoRequest) (*nagiv1.SharedNetworkInfoResponse, error) {
 	caller, ok := mesh.Caller(ctx, s.M)
 	if !ok || s.a.links == nil || !s.a.links.isLinked(ctx, req.GetName(), caller) {

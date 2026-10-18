@@ -21,7 +21,7 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 		if len(files) == 0 {
 			continue
 		}
-		containers, err := m.docker.Containers(ctx, projectLabel(r.ID))
+		containers, err := m.docker.Instances(ctx, projectLabel(r.ID))
 		if err != nil {
 			return nil, err
 		}
@@ -32,19 +32,19 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 			route := proxy.Route{
 				Project:   r.ID,
 				Name:      e.GetName(),
-				Service:   e.GetMember() + "/" + e.GetService(),
+				Service:   e.GetContainer() + "/" + e.GetService(),
 				Protocol:  e.GetProtocol(),
 				Published: e.GetPublished(),
 				Domains:   e.GetDomains(),
 				HTTPOnly:  e.GetHttpOnly(),
 			}
-			// 优先用成员自己的默认网络里的地址（compose 成员），其次是项目内网（单容器成员）。
-			memberNet := composeProjectName(r.ID, e.GetMember()) + "_default"
+			// 优先用容器自己的默认网络里的地址（容器组），其次是项目内网（单个容器）。
+			containerNet := composeProjectName(r.ID, e.GetContainer()) + "_default"
 			for _, c := range containers {
-				if c.Member != e.GetMember() || c.Service != e.GetService() || c.State != "running" {
+				if c.Container != e.GetContainer() || c.Service != e.GetService() || c.State != "running" {
 					continue
 				}
-				ip, ok := c.IPs[memberNet]
+				ip, ok := c.IPs[containerNet]
 				if !ok {
 					ip, ok = c.IPs[projectNetwork(r.ID)]
 				}

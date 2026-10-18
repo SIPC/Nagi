@@ -45,7 +45,7 @@ type MeshServiceClient interface {
 	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error)
-	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
 	SharedNetworkInfo(ctx context.Context, in *SharedNetworkInfoRequest, opts ...grpc.CallOption) (*SharedNetworkInfoResponse, error)
 }
 
@@ -150,7 +150,7 @@ type MeshServiceServer interface {
 	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error)
-	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
 	SharedNetworkInfo(context.Context, *SharedNetworkInfoRequest) (*SharedNetworkInfoResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }

@@ -29,12 +29,12 @@ type meshNode struct {
 		Warn(string, ...any)
 	}
 
-	mu        sync.Mutex
-	members   map[string][]*nagiv1.MeshPeer // 面板指纹 → 这个面板告诉我们的成员
-	panelKeys map[string]mesh.Key           // 面板指纹 → 面板的 WireGuard 公钥
-	panelAddr map[string]string             // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
-	names     map[mesh.Key]string
-	file      string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
+	mu         sync.Mutex
+	panelPeers map[string][]*nagiv1.MeshPeer // 面板指纹 → 这个面板告诉我们的成员
+	panelKeys  map[string]mesh.Key           // 面板指纹 → 面板的 WireGuard 公钥
+	panelAddr  map[string]string             // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
+	names      map[mesh.Key]string
+	file       string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
 }
 
 type savedPanel struct {
@@ -46,7 +46,7 @@ type savedPanel struct {
 // save 把各面板告诉我们的成员列表写盘。调用方持有 n.mu。
 func (n *meshNode) save() {
 	out := map[string]savedPanel{}
-	for fp, peers := range n.members {
+	for fp, peers := range n.panelPeers {
 		k := n.panelKeys[fp]
 		sp := savedPanel{Key: k[:], Address: n.panelAddr[fp]}
 		for _, p := range peers {
@@ -86,7 +86,7 @@ func (n *meshNode) load() {
 				peers = append(peers, p)
 			}
 		}
-		n.members[fp], n.panelKeys[fp], n.panelAddr[fp] = peers, k, sp.Address
+		n.panelPeers[fp], n.panelKeys[fp], n.panelAddr[fp] = peers, k, sp.Address
 	}
 	n.mu.Unlock()
 	n.apply()
@@ -117,7 +117,7 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 	}
 	_ = os.WriteFile(file, []byte(strconv.Itoa(int(m.Port()))), 0o600)
 	a.mesh = &meshNode{
-		m: m, log: log, members: map[string][]*nagiv1.MeshPeer{}, panelKeys: map[string]mesh.Key{},
+		m: m, log: log, panelPeers: map[string][]*nagiv1.MeshPeer{}, panelKeys: map[string]mesh.Key{},
 		panelAddr: map[string]string{}, names: map[mesh.Key]string{},
 	}
 	a.mesh.file = filepath.Join(a.cfg.DataDir, "identity", "mesh-peers.json")
@@ -158,7 +158,7 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 		return mesh.Key{}, false
 	}
 	n.mu.Lock()
-	n.members[fingerprint] = cfg.GetPeers()
+	n.panelPeers[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
 	n.save()
@@ -174,9 +174,9 @@ func (n *meshNode) retain(fingerprints []string) {
 	}
 	n.mu.Lock()
 	changed := false
-	for fp := range n.members {
+	for fp := range n.panelPeers {
 		if !slices.Contains(fingerprints, fp) {
-			delete(n.members, fp)
+			delete(n.panelPeers, fp)
 			delete(n.panelKeys, fp)
 			delete(n.panelAddr, fp)
 			changed = true
@@ -197,7 +197,7 @@ func (n *meshNode) apply() {
 	n.mu.Lock()
 	merged := map[mesh.Key]*mesh.Peer{}
 	var order []mesh.Key
-	for fp, peers := range n.members {
+	for fp, peers := range n.panelPeers {
 		pk := n.panelKeys[fp]
 		for _, mp := range peers {
 			k, err := mesh.ParseKey(mp.GetPublicKey())

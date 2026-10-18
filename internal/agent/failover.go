@@ -85,7 +85,7 @@ func leaseOf(cfg *nagiv1.FailoverConfig) time.Duration {
 	return defaultLease
 }
 
-func members(cfg *nagiv1.FailoverConfig) [][]byte {
+func participants(cfg *nagiv1.FailoverConfig) [][]byte {
 	return [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
 }
 
@@ -153,7 +153,7 @@ func (a *agent) selfKey() []byte {
 }
 
 // self 返回本节点在设置里是 A 还是 B（是见证人时返回 nil），以及另一个节点。
-func (a *agent) selfMember(cfg *nagiv1.FailoverConfig) (me, other *nagiv1.FailoverMember) {
+func (a *agent) selfParticipant(cfg *nagiv1.FailoverConfig) (me, other *nagiv1.FailoverParticipant) {
 	k := a.selfKey()
 	switch {
 	case bytes.Equal(cfg.GetA().GetKey(), k):
@@ -164,8 +164,8 @@ func (a *agent) selfMember(cfg *nagiv1.FailoverConfig) (me, other *nagiv1.Failov
 	return nil, nil
 }
 
-func memberName(cfg *nagiv1.FailoverConfig, key []byte) string {
-	for _, m := range []*nagiv1.FailoverMember{cfg.GetA(), cfg.GetB(), cfg.GetWitness()} {
+func participantName(cfg *nagiv1.FailoverConfig, key []byte) string {
+	for _, m := range []*nagiv1.FailoverParticipant{cfg.GetA(), cfg.GetB(), cfg.GetWitness()} {
 		if bytes.Equal(m.GetKey(), key) {
 			return m.GetName()
 		}
@@ -185,12 +185,12 @@ func (s *meshService) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteReques
 	if st == nil {
 		return nil, status.Error(codes.NotFound, "本节点没有这个项目的顶替设置")
 	}
-	granted, holder, epoch := f.voter.Vote(req.GetProjectId(), members(st.cfg), caller[:], req.GetEpoch(), leaseOf(st.cfg))
+	granted, holder, epoch := f.voter.Vote(req.GetProjectId(), participants(st.cfg), caller[:], req.GetEpoch(), leaseOf(st.cfg))
 	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
 }
 
 // requestVote 向另一个参与者要票。
-func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverMember, id string, epoch uint64) (*nagiv1.LeaseVoteResponse, error) {
+func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, id string, epoch uint64) (*nagiv1.LeaseVoteResponse, error) {
 	k, err := mesh.ParseKey(m.GetKey())
 	if err != nil {
 		return nil, err
@@ -211,13 +211,13 @@ type voteResult struct {
 }
 
 // collect 并行向 others 要票。
-func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverMember, id string, epoch uint64) voteResult {
+func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverParticipant, id string, epoch uint64) voteResult {
 	var r voteResult
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, m := range others {
 		wg.Add(1)
-		go func(m *nagiv1.FailoverMember) {
+		go func(m *nagiv1.FailoverParticipant) {
 			defer wg.Done()
 			resp, err := a.requestVote(ctx, m, id, epoch)
 			if err != nil {
@@ -247,7 +247,7 @@ func (a *agent) startFailover(ctx context.Context, id string) {
 		f.mu.Unlock()
 		return
 	}
-	if me, _ := a.selfMember(st.cfg); me == nil {
+	if me, _ := a.selfParticipant(st.cfg); me == nil {
 		f.mu.Unlock()
 		return // 见证人只投票
 	}
@@ -277,7 +277,7 @@ func (a *agent) failoverTick(ctx context.Context, id string) {
 	f.mu.Lock()
 	cfg, holder, epoch := st.cfg, st.holder, st.epoch
 	f.mu.Unlock()
-	me, other := a.selfMember(cfg)
+	me, other := a.selfParticipant(cfg)
 	if me == nil {
 		return
 	}
@@ -288,7 +288,7 @@ func (a *agent) failoverTick(ctx context.Context, id string) {
 	}
 }
 
-func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cfg *nagiv1.FailoverConfig, me, other *nagiv1.FailoverMember, epoch uint64) {
+func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cfg *nagiv1.FailoverConfig, me, other *nagiv1.FailoverParticipant, epoch uint64) {
 	f := a.failovers
 	L := leaseOf(cfg)
 	now := time.Now()
@@ -297,8 +297,8 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	f.mu.Unlock()
 	if due {
 		sent := time.Now()
-		r := a.collect(ctx, []*nagiv1.FailoverMember{other, cfg.GetWitness()}, id, epoch)
-		self, _, _ := f.voter.Vote(id, members(cfg), me.GetKey(), epoch, L)
+		r := a.collect(ctx, []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, id, epoch)
+		self, _, _ := f.voter.Vote(id, participants(cfg), me.GetKey(), epoch, L)
 		votes := r.granted
 		if self {
 			votes++
@@ -377,7 +377,7 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 	a.failovers.mu.Lock()
 	cfg := st.cfg
 	a.failovers.mu.Unlock()
-	_, other := a.selfMember(cfg)
+	_, other := a.selfParticipant(cfg)
 	if other == nil {
 		return
 	}
@@ -398,7 +398,7 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 	}
 }
 
-func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, cfg *nagiv1.FailoverConfig, me, other *nagiv1.FailoverMember) {
+func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, cfg *nagiv1.FailoverConfig, me, other *nagiv1.FailoverParticipant) {
 	f := a.failovers
 	L := leaseOf(cfg)
 	holder, epoch, expired := f.voter.State(id, L)
@@ -441,11 +441,11 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	// 先向见证人和原持有者要票，拿到一票再投自己。
 	newEpoch := epoch + 1
 	sent := time.Now()
-	r := a.collect(ctx, []*nagiv1.FailoverMember{cfg.GetWitness(), other}, id, newEpoch)
+	r := a.collect(ctx, []*nagiv1.FailoverParticipant{cfg.GetWitness(), other}, id, newEpoch)
 	if r.granted == 0 {
 		return
 	}
-	if ok, _, _ := f.voter.Vote(id, members(cfg), me.GetKey(), newEpoch, L); !ok {
+	if ok, _, _ := f.voter.Vote(id, participants(cfg), me.GetKey(), newEpoch, L); !ok {
 		return
 	}
 	a.log.Warn("拿到多数票，顶替项目", "project", id, "epoch", newEpoch)
@@ -479,8 +479,8 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 			a.alerts.Fire(ctx, "takeover:"+id, "顶替失败", err.Error(), "")
 			return
 		}
-		a.log.Info("已顶替项目", "project", id, "from", memberName(cfg, holder))
-		a.alerts.Notify(ctx, "已顶替项目", "原节点 "+memberName(cfg, holder)+" 失联，项目已在本节点启动", id)
+		a.log.Info("已顶替项目", "project", id, "from", participantName(cfg, holder))
+		a.alerts.Notify(ctx, "已顶替项目", "原节点 "+participantName(cfg, holder)+" 失联，项目已在本节点启动", id)
 		a.changed()
 		f.mu.Lock()
 		st.nextSync = time.Now() // 立即开始同步给原节点（它回来后接收）
@@ -498,7 +498,7 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	f.mu.Lock()
 	cfg := st.cfg
 	f.mu.Unlock()
-	name := memberName(cfg, holder)
+	name := participantName(cfg, holder)
 	a.log.Warn("项目已被顶替，本节点转为热备", "project", id, "holder", name, "epoch", epoch)
 	if a.projects.Has(ctx, id) {
 		kept, err := a.projects.Demote(ctx, id, func(string) {})
@@ -595,7 +595,7 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 	if a.mesh == nil {
 		return nil, status.Error(codes.FailedPrecondition, "mesh 没有启动")
 	}
-	me, _ := a.selfMember(cfg)
+	me, _ := a.selfParticipant(cfg)
 	// 新设置时 A 上必须有项目；已有设置（例如顶替之后更换见证人）时 A 可能已经退位成了热备。
 	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && f.get(id) == nil && !a.projects.Has(ctx, id) {
 		return nil, status.Error(codes.FailedPrecondition, "A 节点上没有这个项目")
@@ -632,7 +632,7 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 	// 热备接收持有者的同步。
 	if me != nil && !bytes.Equal(me.GetKey(), holder) {
 		if err := a.replicas.save(&replicaMeta{ProjectID: id, ProjectName: cfg.GetProjectName(), SourceKey: holder,
-			SourceNodeID: cfg.GetA().GetNodeId(), SourceName: memberName(cfg, holder)}); err != nil {
+			SourceNodeID: cfg.GetA().GetNodeId(), SourceName: participantName(cfg, holder)}); err != nil {
 			return nil, err
 		}
 	}
@@ -654,16 +654,16 @@ func (a *agent) failoverStatus(ctx context.Context, id string) *nagiv1.FailoverS
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := &nagiv1.FailoverStatus{
-		Config: st.cfg, HolderName: memberName(st.cfg, st.holder), HolderKey: st.holder, Epoch: st.epoch,
+		Config: st.cfg, HolderName: participantName(st.cfg, st.holder), HolderKey: st.holder, Epoch: st.epoch,
 		PendingConfirm: st.pending, LastError: st.lastError,
 	}
-	me, _ := a.selfMember(st.cfg)
+	me, _ := a.selfParticipant(st.cfg)
 	switch {
 	case me == nil:
 		out.Role = "witness"
 		// 见证人只投票：持有者和轮次以自己的票为准。
 		if h, e, _ := f.voter.State(id, leaseOf(st.cfg)); len(h) > 0 {
-			out.HolderName, out.HolderKey, out.Epoch = memberName(st.cfg, h), h, e
+			out.HolderName, out.HolderKey, out.Epoch = participantName(st.cfg, h), h, e
 		}
 	case bytes.Equal(me.GetKey(), st.holder):
 		out.Role = "holder"

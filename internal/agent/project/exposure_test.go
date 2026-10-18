@@ -16,14 +16,14 @@ func TestReadRoutes(t *testing.T) {
 	p := paths{root: t.TempDir()}
 	os.MkdirAll(p.routesDir(), 0o755)
 	files := map[string]string{
-		"web-80.yml":   "member: web\nport: 80\nprotocol: http\ndomains: [example.com]\n",
-		"db-5432.yml":  "member: umami\nservice: db\nport: 5432\nprotocol: tcp\npublished: 15432\n",
-		"dup.yml":      "member: web\nport: 1\nprotocol: tcp\npublished: 15432\n",
-		"bad.yml":      "service: [",
-		"proto.yml":    "member: web\nport: 1\nprotocol: ftp\npublished: 9\n",
-		"nomember.yml": "service: x\nport: 2\nprotocol: tcp\npublished: 19\n",
-		"gone-80.yml":  "member: gone\nport: 80\nprotocol: tcp\npublished: 18\n",
-		"note.txt":     "ignored",
+		"web-80.yml":      "container: web\nport: 80\nprotocol: http\ndomains: [example.com]\n",
+		"db-5432.yml":     "container: umami\nservice: db\nport: 5432\nprotocol: tcp\npublished: 15432\n",
+		"dup.yml":         "container: web\nport: 1\nprotocol: tcp\npublished: 15432\n",
+		"bad.yml":         "service: [",
+		"proto.yml":       "container: web\nport: 1\nprotocol: ftp\npublished: 9\n",
+		"nocontainer.yml": "service: x\nport: 2\nprotocol: tcp\npublished: 19\n",
+		"gone-80.yml":     "container: gone\nport: 80\nprotocol: tcp\npublished: 18\n",
+		"note.txt":        "ignored",
 	}
 	for name, content := range files {
 		os.WriteFile(filepath.Join(p.routesDir(), name), []byte(content), 0o644)
@@ -33,7 +33,7 @@ func TestReadRoutes(t *testing.T) {
 	for _, r := range routes {
 		got[r.GetName()] = r.GetError()
 		if r.GetName() == "web-80" && r.GetService() != "web" {
-			t.Errorf("single member route should default service to the member name: %q", r.GetService())
+			t.Errorf("single container route should default service to the container name: %q", r.GetService())
 		}
 	}
 	if len(got) != 7 {
@@ -44,7 +44,7 @@ func TestReadRoutes(t *testing.T) {
 			t.Errorf("%s should be valid: %s", ok, got[ok])
 		}
 	}
-	for _, bad := range []string{"dup", "bad", "proto", "nomember", "gone-80"} {
+	for _, bad := range []string{"dup", "bad", "proto", "nocontainer", "gone-80"} {
 		if got[bad] == "" {
 			t.Errorf("%s should be invalid", bad)
 		}
@@ -74,17 +74,17 @@ func TestImportPortsOnlyNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pdb.Close()
-	if err := pdb.q.InsertMember(ctx, projectstore.InsertMemberParams{Name: "web", WebhookToken: "t"}); err != nil {
+	if err := pdb.q.InsertContainer(ctx, projectstore.InsertContainerParams{Name: "web", WebhookToken: "t"}); err != nil {
 		t.Fatal(err)
 	}
 
 	load := func(compose string) {
 		t.Helper()
-		proj, err := loadCompose(ctx, compose, nil, p.member("web").dataDir(), "nagi-p1-web")
+		proj, err := loadCompose(ctx, compose, nil, p.container("web").dataDir(), "nagi-p1-web")
 		if err != nil {
 			t.Fatal(err)
 		}
-		mrow, err := pdb.member(ctx, "web")
+		mrow, err := pdb.container(ctx, "web")
 		if err != nil {
 			t.Fatal(err)
 		}

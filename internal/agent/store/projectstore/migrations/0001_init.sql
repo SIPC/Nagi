@@ -4,8 +4,8 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 
--- 成员：项目里独立部署的单位。成员名创建后不能改。
-CREATE TABLE members (
+-- 容器：项目里独立部署的单位，单个容器（镜像表单）或容器组（一份 compose）。容器名创建后不能改。
+CREATE TABLE containers (
     name             TEXT    PRIMARY KEY,
     -- 创建顺序
     position         INTEGER NOT NULL,
@@ -22,9 +22,9 @@ CREATE TABLE members (
     last_files_root  TEXT    NOT NULL DEFAULT ''
 );
 
--- 成员的每个版本：配置（MemberConfig，protobuf 二进制）、部署时用的共享变量（EnvList）、文件快照、镜像摘要。版本不可变。
+-- 容器的每个版本：配置（ContainerConfig，protobuf 二进制）、部署时用的共享变量（EnvList）、文件快照、镜像摘要。版本不可变。
 CREATE TABLE versions (
-    member         TEXT    NOT NULL,
+    container      TEXT    NOT NULL,
     version        INTEGER NOT NULL,
     config         BLOB    NOT NULL,
     shared_env     BLOB    NOT NULL DEFAULT x'',
@@ -36,24 +36,24 @@ CREATE TABLE versions (
     images         TEXT    NOT NULL DEFAULT '{}',
     rollback_of    INTEGER NOT NULL DEFAULT 0,
     git_commit     TEXT    NOT NULL DEFAULT '',
-    PRIMARY KEY (member, version)
+    PRIMARY KEY (container, version)
 );
 
--- 成员未部署的草稿，每个成员最多一份。
+-- 容器未部署的草稿，每个容器最多一份。
 CREATE TABLE drafts (
-    member     TEXT    PRIMARY KEY,
+    container  TEXT    PRIMARY KEY,
     config     BLOB    NOT NULL,
     updated_at INTEGER NOT NULL
 );
 
--- 部署记录：每次部署（一个或多个成员）一条，记下部署完成后所有成员各自的版本。
+-- 部署记录：每次部署（一个或多个容器）一条，记下部署完成后所有容器各自的版本。
 CREATE TABLE deployments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at INTEGER NOT NULL,
     source     TEXT    NOT NULL,
-    -- 这次动到的成员（JSON 数组）
-    members    TEXT    NOT NULL,
-    -- 成员名 → 版本（JSON）
+    -- 这次动到的容器（JSON 数组）
+    containers TEXT    NOT NULL,
+    -- 容器名 → 版本（JSON）
     versions   TEXT    NOT NULL,
     success    INTEGER NOT NULL,
     error      TEXT    NOT NULL DEFAULT '',

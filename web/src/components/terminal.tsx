@@ -5,7 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
 
 // 容器终端：通过 WebSocket 连到面板，面板转发到节点上的 docker exec。
-export function TerminalCard({ nodeId, projectId, member, services }: { nodeId: string; projectId: string; member: string; services: string[] }) {
+export function TerminalCard({ nodeId, projectId, container, services }: { nodeId: string; projectId: string; container: string; services: string[] }) {
   const [service, setService] = useState("");
   const [session, setSession] = useState(0);
   const [status, setStatus] = useState("");
@@ -22,7 +22,7 @@ export function TerminalCard({ nodeId, projectId, member, services }: { nodeId: 
     const params = new URLSearchParams({
       node: nodeId,
       project: projectId,
-      member,
+      container,
       service: selected,
       cols: String(term.cols),
       rows: String(term.rows),
@@ -57,7 +57,7 @@ export function TerminalCard({ nodeId, projectId, member, services }: { nodeId: 
       ws.close();
       term.dispose();
     };
-  }, [session, nodeId, projectId, member, selected]);
+  }, [session, nodeId, projectId, container, selected]);
 
   return (
     <Card>

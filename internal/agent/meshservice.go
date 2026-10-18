@@ -56,11 +56,11 @@ func (s *meshService) Upload(stream nagiv1.MeshService_UploadServer) error {
 			}
 		}
 	}()
-	res, err := s.a.projects.ReceiveUpload(stream.Context(), first.GetProjectId(), first.GetMember(), pr)
+	res, err := s.a.projects.ReceiveUpload(stream.Context(), first.GetProjectId(), first.GetContainer(), pr)
 	pr.Close()
 	if err != nil {
 		return toStatus(err)
 	}
-	s.a.log.Info("收到上传的项目文件", "project", first.GetProjectId(), "member", first.GetMember(), "bytes", res.Bytes, "files", res.Files)
+	s.a.log.Info("收到上传的项目文件", "project", first.GetProjectId(), "container", first.GetContainer(), "bytes", res.Bytes, "files", res.Files)
 	return stream.SendAndClose(&nagiv1.UploadResponse{Bytes: uint64(res.Bytes), Files: uint32(res.Files), Stripped: res.Stripped})
 }

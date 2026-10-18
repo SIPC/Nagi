@@ -59,7 +59,7 @@ func (a *API) TerminalHandler() http.Handler {
 		}
 		if err := stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: &nagiv1.ExecStart{
 			ProjectId: q.Get("project"),
-			Member:    q.Get("member"),
+			Container: q.Get("container"),
 			Service:   q.Get("service"),
 			Size:      &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)},
 		}}}); err != nil {

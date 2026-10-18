@@ -41,7 +41,7 @@ function MeshTable({
       <table className="w-full">
         <thead className="text-left text-muted-foreground">
           <tr>
-            <th className="py-1 pr-3 font-medium">成员</th>
+            <th className="py-1 pr-3 font-medium">节点和面板</th>
             <th className="py-1 pr-3 font-medium">路径</th>
             <th className="py-1 pr-3 font-medium">握手</th>
             <th className="py-1 pr-3 font-medium">收 / 发</th>

@@ -248,7 +248,7 @@ func (r *Repo) List(ctx context.Context, kinds ...Kind) ([]Info, error) {
 }
 
 // Restore 把快照里的目录 name 恢复到 target。name 是顶层目录名，也可以用 / 指向里面的子目录
-// （例如 member.web/data）。target 里多余的文件会被删除，
+// （例如 container.web/data）。target 里多余的文件会被删除，
 // 所以调用方要先决定好恢复到哪里（例如先恢复到临时目录，再按保留路径合并）。
 func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
 	man, err := snapshot.LoadSnapshot(ctx, r.rep, manifest.ID(id))

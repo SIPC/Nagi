@@ -10,11 +10,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// 项目设置（见 docs/agent.md#修改与部署）：名称、内网、共享网络、快照间隔不进成员的版本，改了立即生效；
-// 共享变量走草稿，部署时写进 config/.env，并记进部署的成员的版本。
+// 项目设置（见 docs/agent.md#修改与部署）：名称、内网、共享网络、快照间隔不进容器的版本，改了立即生效；
+// 共享变量走草稿，部署时写进 config/.env，并记进部署的容器的版本。
 
 // UpdateSettings 修改项目设置，立即生效。settings.shared_env 在这里不生效（共享变量走草稿）。
-// 开关内网时单容器成员要重建（它的网络变了），compose 成员只接入或断开项目内网。
+// 开关内网时单个容器要重建（它的网络变了），容器组只接入或断开项目内网。
 func (m *Manager) UpdateSettings(ctx context.Context, id string, baseRevision int64, name string, in *nagiv1.ProjectSettings, onLine func(string)) (*nagiv1.Project, error) {
 	if in == nil {
 		in = &nagiv1.ProjectSettings{}
@@ -78,12 +78,12 @@ func (m *Manager) UpdateSettings(ctx context.Context, id string, baseRevision in
 				return nil, err
 			}
 		}
-		// 单容器成员的网络写在叠加配置里，换网络要重建容器。
-		members, err := pdb.q.ListMembers(ctx)
+		// 单个容器的网络写在叠加配置里，换网络要重建容器。
+		containers, err := pdb.q.ListContainers(ctx)
 		if err != nil {
 			return nil, err
 		}
-		for _, mem := range members {
+		for _, mem := range containers {
 			v, err := pdb.deployed(ctx, mem)
 			if err != nil || v == nil {
 				continue
@@ -92,7 +92,7 @@ func (m *Manager) UpdateSettings(ctx context.Context, id string, baseRevision in
 			if err != nil || !isSingle(cfg) {
 				continue
 			}
-			onLine("重建单容器成员 " + mem.Name + "（网络变了）")
+			onLine("重建单个容器 " + mem.Name + "（网络变了）")
 			if err := m.startDeployed(ctx, pdb, p, id, mem, onLine); err != nil {
 				return nil, err
 			}
@@ -107,7 +107,7 @@ func (m *Manager) UpdateSettings(ctx context.Context, id string, baseRevision in
 	return pdb.project(ctx, id, row.Dir)
 }
 
-// SaveSharedEnv 保存共享变量的草稿，返回引用了改动变量的成员（部署共享变量时默认一起部署）。
+// SaveSharedEnv 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 func (m *Manager) SaveSharedEnv(ctx context.Context, id string, baseRevision int64, vars []*nagiv1.EnvVar) (*nagiv1.Project, []string, error) {
 	if err := checkEnv(vars); err != nil {
 		return nil, nil, err
@@ -131,7 +131,7 @@ func (m *Manager) SaveSharedEnv(ctx context.Context, id string, baseRevision int
 	if err := pdb.bumpRevision(ctx); err != nil {
 		return nil, nil, err
 	}
-	affected, err := affectedMembers(ctx, pdb, pdb.settings(ctx).GetSharedEnv(), vars)
+	affected, err := affectedContainers(ctx, pdb, pdb.settings(ctx).GetSharedEnv(), vars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,9 +139,9 @@ func (m *Manager) SaveSharedEnv(ctx context.Context, id string, baseRevision int
 	return proj, affected, err
 }
 
-// affectedMembers 返回引用了 before 和 after 之间有变化的共享变量的成员。
-func affectedMembers(ctx context.Context, pdb *projectDB, before, after []*nagiv1.EnvVar) ([]string, error) {
-	rows, err := pdb.q.ListMembers(ctx)
+// affectedContainers 返回引用了 before 和 after 之间有变化的共享变量的容器。
+func affectedContainers(ctx context.Context, pdb *projectDB, before, after []*nagiv1.EnvVar) ([]string, error) {
+	rows, err := pdb.q.ListContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (m *Manager) DiscardSharedEnv(ctx context.Context, id string, baseRevision 
 	return pdb.project(ctx, id, row.Dir)
 }
 
-// applySharedEnv 让共享变量的草稿生效：写进项目设置和 config/.env，删除草稿。之后部署的成员都用新的值。
+// applySharedEnv 让共享变量的草稿生效：写进项目设置和 config/.env，删除草稿。之后部署的容器都用新的值。
 func applySharedEnv(ctx context.Context, pdb *projectDB, p paths) error {
 	d := pdb.sharedEnvDraft(ctx)
 	if d == nil {

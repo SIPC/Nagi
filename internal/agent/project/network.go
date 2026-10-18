@@ -13,11 +13,11 @@ import (
 )
 
 // 网络（见 docs/agent.md#网络）：
-//   - 项目内网 nagi-<项目 ID>：默认开启。单容器成员由 compose 加入（别名是成员名），
-//     compose 成员由节点用 network connect 接入，别名是"服务.成员"。
-//   - 共享网络 nagi-shared-<名字>：节点上的命名网络，项目在设置里加入；成员由节点接入，
-//     别名是"成员.网络名"（单容器）或"服务.成员.网络名"（compose）。
-// compose 会把服务原名注册到它加入的每个网络上，所以 compose 成员不能在 compose 里加入这些网络，
+//   - 项目内网 nagi-<项目 ID>：默认开启。单个容器由 compose 加入（别名是容器名），
+//     容器组由节点用 network connect 接入，别名是"服务.容器组"。
+//   - 共享网络 nagi-shared-<名字>：节点上的命名网络，项目在设置里加入；容器由节点接入，
+//     别名是"容器.网络名"（单容器）或"服务.容器组.网络名"（compose）。
+// compose 会把服务原名注册到它加入的每个网络上，所以 容器组不能在 compose 里加入这些网络，
 // 否则两份 compose 都有 db 时就会撞名。容器重建后由 SyncNetworks 重新接入（节点监听 Docker 事件）。
 
 const sharedNetworkPrefix = "nagi-shared-"
@@ -50,8 +50,8 @@ func (m *Manager) netLock(id string) *sync.Mutex {
 	return l
 }
 
-// SyncNetworks 让项目所有容器的网络连接和项目设置一致：compose 成员接入项目内网（内网开启时），
-// 所有成员接入项目加入的共享网络，别名按规则设置；多余的连接断开。单容器成员的项目内网由 compose 管理。
+// SyncNetworks 让项目所有容器的网络连接和项目设置一致：容器组接入项目内网（内网开启时），
+// 所有容器接入项目加入的共享网络，别名按规则设置；多余的连接断开。单个容器的项目内网由 compose 管理。
 func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 	row, err := m.projectRow(ctx, id)
 	if err != nil {
@@ -67,7 +67,7 @@ func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 	l := m.netLock(id)
 	l.Lock()
 	defer l.Unlock()
-	containers, err := m.docker.Containers(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, projectLabel(id))
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 	}
 	var firstErr error
 	for _, c := range containers {
-		if c.Member == "" || c.Service == "" {
+		if c.Container == "" || c.Service == "" {
 			continue
 		}
 		current, err := m.docker.NetworkAliases(ctx, c.ID)
@@ -98,18 +98,18 @@ func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 		single := c.Single
 		want := map[string][]string{}
 		if intranet && !single {
-			want[projectNetwork(id)] = []string{c.Service + "." + c.Member}
+			want[projectNetwork(id)] = []string{c.Service + "." + c.Container}
 		}
 		if nn := settings.GetNetworkName(); nn != "" {
 			for _, s := range settings.GetSharedNetworks() {
-				alias := c.Member + "." + nn
+				alias := c.Container + "." + nn
 				if !single {
 					alias = c.Service + "." + alias
 				}
 				want[sharedNetwork(s)] = []string{alias}
 			}
 		}
-		// 断开不该连着的（项目内网对单容器成员由 compose 管理，不碰）。
+		// 断开不该连着的（项目内网对单个容器由 compose 管理，不碰）。
 		for net := range current {
 			managed := strings.HasPrefix(net, sharedNetworkPrefix) || (net == projectNetwork(id) && !single)
 			if _, ok := want[net]; managed && !ok {
@@ -126,7 +126,7 @@ func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 				_ = m.docker.Disconnect(ctx, net, c.ID)
 			}
 			if err := m.docker.Connect(ctx, net, c.ID, aliases); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("把 %s/%s 接入网络 %s: %w", c.Member, c.Service, net, err)
+				firstErr = fmt.Errorf("把 %s/%s 接入网络 %s: %w", c.Container, c.Service, net, err)
 			}
 		}
 	}
@@ -161,7 +161,7 @@ func (m *Manager) SharedNetworks(ctx context.Context) ([]*nagiv1.SharedNetwork, 
 	if err != nil {
 		return nil, err
 	}
-	joined := m.sharedMembers(ctx)
+	joined := m.sharedContainers(ctx)
 	links, err := m.SharedNetworkLinks(ctx)
 	if err != nil {
 		return nil, err
@@ -178,8 +178,8 @@ func (m *Manager) SharedNetworks(ctx context.Context) ([]*nagiv1.SharedNetwork, 
 	return out, nil
 }
 
-// sharedMembers 返回每个共享网络里加入的项目。
-func (m *Manager) sharedMembers(ctx context.Context) map[string][]*nagiv1.SharedNetworkProject {
+// sharedContainers 返回每个共享网络里加入的项目。
+func (m *Manager) sharedContainers(ctx context.Context) map[string][]*nagiv1.SharedNetworkProject {
 	out := map[string][]*nagiv1.SharedNetworkProject{}
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
@@ -231,7 +231,7 @@ func (m *Manager) CreateSharedNetwork(ctx context.Context, name string) ([]*nagi
 
 // DeleteSharedNetwork 删除共享网络。还有项目加入时拒绝。
 func (m *Manager) DeleteSharedNetwork(ctx context.Context, name string) ([]*nagiv1.SharedNetwork, error) {
-	if p := m.sharedMembers(ctx)[name]; len(p) > 0 {
+	if p := m.sharedContainers(ctx)[name]; len(p) > 0 {
 		return nil, invalid("还有 %d 个项目加入了共享网络 %s（例如 %s），请先在项目设置里退出", len(p), name, p[0].GetProjectName())
 	}
 	if links, err := m.SharedNetworkLinks(ctx); err != nil {

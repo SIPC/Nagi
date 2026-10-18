@@ -14,7 +14,7 @@ import (
 // 跨节点连接共享网络（见 docs/agent.md#跨节点连接共享网络）：连接关系存在各节点上，面板只负责
 // 把一组节点同时设置好。两组已经连通的节点连在一起时合并成一组，组里每两个节点之间都相连。
 
-type linkMember struct {
+type linkNode struct {
 	conn   *nodes.Conn
 	key    []byte
 	name   string
@@ -31,8 +31,8 @@ func findNetwork(list []*nagiv1.SharedNetwork, name string) *nagiv1.SharedNetwor
 	return nil
 }
 
-// linkMemberOf 读取一个在线节点上的网络 name。
-func (s *nodeService) linkMemberOf(ctx context.Context, conn *nodes.Conn, name string) (*linkMember, error) {
+// linkNodeOf 读取一个在线节点上的网络 name。
+func (s *nodeService) linkNodeOf(ctx context.Context, conn *nodes.Conn, name string) (*linkNode, error) {
 	key, err := s.Nodes.NodeMeshKey(conn.NodeID)
 	if err != nil {
 		return nil, fmt.Errorf("节点 %s：%w", conn.Name(), err)
@@ -41,7 +41,7 @@ func (s *nodeService) linkMemberOf(ctx context.Context, conn *nodes.Conn, name s
 	if err != nil {
 		return nil, fmt.Errorf("读取节点 %s 的共享网络：%w", conn.Name(), fromGRPC(err))
 	}
-	return &linkMember{conn: conn, key: key[:], name: conn.Name(), nodeID: conn.NodeID, net: findNetwork(resp.GetNetworks(), name)}, nil
+	return &linkNode{conn: conn, key: key[:], name: conn.Name(), nodeID: conn.NodeID, net: findNetwork(resp.GetNetworks(), name)}, nil
 }
 
 func (s *nodeService) LinkNodeSharedNetwork(ctx context.Context, req *connect.Request[nagiv1.LinkNodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
@@ -49,7 +49,7 @@ func (s *nodeService) LinkNodeSharedNetwork(ctx context.Context, req *connect.Re
 	if req.Msg.GetNodeId() == req.Msg.GetPeerNodeId() {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("请选另一个节点"))
 	}
-	group := []*linkMember{}
+	group := []*linkNode{}
 	has := func(k []byte) bool {
 		for _, m := range group {
 			if bytes.Equal(m.key, k) {
@@ -63,7 +63,7 @@ func (s *nodeService) LinkNodeSharedNetwork(ctx context.Context, req *connect.Re
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, err)
 		}
-		m, err := s.linkMemberOf(ctx, conn, name)
+		m, err := s.linkNodeOf(ctx, conn, name)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, err)
 		}
@@ -85,7 +85,7 @@ func (s *nodeService) LinkNodeSharedNetwork(ctx context.Context, req *connect.Re
 				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
 					"节点 %s 上的 %s 还和节点 %s 相连，它不在线或者不归这个面板管理；要合并的组里所有节点都必须在这个面板下并且在线", group[i].name, name, p.GetName()))
 			}
-			m, err := s.linkMemberOf(ctx, conn, name)
+			m, err := s.linkNodeOf(ctx, conn, name)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeUnavailable, err)
 			}
@@ -130,7 +130,7 @@ func (s *nodeService) UnlinkNodeSharedNetwork(ctx context.Context, req *connect.
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
-	self, err := s.linkMemberOf(ctx, conn, name)
+	self, err := s.linkNodeOf(ctx, conn, name)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
@@ -143,7 +143,7 @@ func (s *nodeService) UnlinkNodeSharedNetwork(ctx context.Context, req *connect.
 		if !ok {
 			continue
 		}
-		m, err := s.linkMemberOf(ctx, c, name)
+		m, err := s.linkNodeOf(ctx, c, name)
 		if err != nil || m.net == nil {
 			continue
 		}

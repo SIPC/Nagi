@@ -312,7 +312,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const getWebhook = `-- name: GetWebhook :one
-SELECT token_hash, node_id, project_id, member FROM webhooks WHERE token_hash = ?
+SELECT token_hash, node_id, project_id, container FROM webhooks WHERE token_hash = ?
 `
 
 func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, error) {
@@ -322,7 +322,7 @@ func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, er
 		&i.TokenHash,
 		&i.NodeID,
 		&i.ProjectID,
-		&i.Member,
+		&i.Container,
 	)
 	return i, err
 }
@@ -368,7 +368,7 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 }
 
 const listNodeWebhooks = `-- name: ListNodeWebhooks :many
-SELECT token_hash, node_id, project_id, member FROM webhooks WHERE node_id = ?
+SELECT token_hash, node_id, project_id, container FROM webhooks WHERE node_id = ?
 `
 
 func (q *Queries) ListNodeWebhooks(ctx context.Context, nodeID string) ([]Webhook, error) {
@@ -384,7 +384,7 @@ func (q *Queries) ListNodeWebhooks(ctx context.Context, nodeID string) ([]Webhoo
 			&i.TokenHash,
 			&i.NodeID,
 			&i.ProjectID,
-			&i.Member,
+			&i.Container,
 		); err != nil {
 			return nil, err
 		}
@@ -620,14 +620,14 @@ func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBack
 }
 
 const upsertWebhook = `-- name: UpsertWebhook :exec
-INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, member) VALUES (?, ?, ?, ?)
+INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, container) VALUES (?, ?, ?, ?)
 `
 
 type UpsertWebhookParams struct {
 	TokenHash string
 	NodeID    string
 	ProjectID string
-	Member    string
+	Container string
 }
 
 func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) error {
@@ -635,7 +635,7 @@ func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) er
 		arg.TokenHash,
 		arg.NodeID,
 		arg.ProjectID,
-		arg.Member,
+		arg.Container,
 	)
 	return err
 }

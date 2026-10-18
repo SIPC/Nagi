@@ -76,7 +76,7 @@ service NodeService {
   rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
   // 节点的 mesh 状态。
   rpc GetNodeMesh(GetNodeMeshRequest) returns (MeshStatus);
-  // 让节点经 mesh 连一下某个成员。
+  // 让节点经 mesh 连一下某个容器。
   rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
   // 面板自己的 mesh 状态。
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
@@ -339,8 +339,8 @@ service ProjectService {
   rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
   rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
   rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
-  rpc AddNodeProjectMember(AddNodeProjectMemberRequest) returns (AddMemberResponse);
-  rpc DeleteNodeProjectMember(DeleteNodeProjectMemberRequest) returns (DeleteMemberResponse);
+  rpc AddNodeProjectContainer(AddNodeProjectContainerRequest) returns (AddContainerResponse);
+  rpc DeleteNodeProjectContainer(DeleteNodeProjectContainerRequest) returns (DeleteContainerResponse);
   rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
   rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
   rpc UpdateNodeProjectSettings(UpdateNodeProjectSettingsRequest) returns (UpdateProjectSettingsResponse);
@@ -350,7 +350,7 @@ service ProjectService {
   // 回到某次部署时的状态。
   rpc RestoreNodeProjectDeployment(RestoreNodeProjectDeploymentRequest) returns (stream DeployEvent);
   rpc DeleteNodeProject(DeleteNodeProjectRequest) returns (DeleteNodeProjectResponse);
-  rpc ListNodeProjectVersions(NodeMemberRef) returns (ListVersionsResponse);
+  rpc ListNodeProjectVersions(NodeContainerRef) returns (ListVersionsResponse);
   rpc RollbackNodeProject(RollbackNodeProjectRequest) returns (stream DeployEvent);
   rpc ListNodeProjectSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
   rpc CreateNodeProjectSnapshot(NodeProjectRef) returns (stream DeployEvent);
@@ -453,22 +453,22 @@ message CreateNodeProjectRequest {
   string dir = 3;
   reserved 4, 5;
   ProjectSettings settings = 6;
-  // 可选：第一个成员。
-  string member_name = 7;
-  MemberConfig member = 8;
+  // 可选：第一个容器。
+  string container_name = 7;
+  ContainerConfig container = 8;
 }
 
-message AddNodeProjectMemberRequest {
+message AddNodeProjectContainerRequest {
   string node_id = 1;
   string project_id = 2;
   string name = 3;
-  MemberConfig config = 4;
+  ContainerConfig config = 4;
 }
 
-message DeleteNodeProjectMemberRequest {
+message DeleteNodeProjectContainerRequest {
   string node_id = 1;
   string project_id = 2;
-  string member = 3;
+  string container = 3;
   int64 base_revision = 4;
   bool delete_dir = 5;
 }
@@ -500,10 +500,10 @@ message RestoreNodeProjectDeploymentRequest {
   int64 deployment_id = 3;
 }
 
-message NodeMemberRef {
+message NodeContainerRef {
   string node_id = 1;
   string project_id = 2;
-  string member = 3;
+  string container = 3;
 }
 
 message NodeSharedNetworkRequest {
@@ -522,8 +522,8 @@ message SaveNodeProjectDraftRequest {
   string node_id = 1;
   string project_id = 2;
   int64 base_revision = 3;
-  MemberConfig config = 4;
-  string member = 5;
+  ContainerConfig config = 4;
+  string container = 5;
 }
 
 message SaveNodeProjectDraftResponse {
@@ -534,7 +534,7 @@ message DiscardNodeProjectDraftRequest {
   string node_id = 1;
   string project_id = 2;
   int64 base_revision = 3;
-  string member = 4;
+  string container = 4;
 }
 
 message DiscardNodeProjectDraftResponse {
@@ -571,15 +571,15 @@ message RollbackNodeProjectRequest {
   string project_id = 2;
   int64 version = 3;
   bool restore_data = 4;
-  string member = 5;
+  string container = 5;
 }
 
 message RestoreNodeProjectSnapshotRequest {
   string node_id = 1;
   string project_id = 2;
   string snapshot_id = 3;
-  // 只恢复这个成员；为空时恢复整个项目。
-  string member = 4;
+  // 只恢复这个容器；为空时恢复整个项目。
+  string container = 4;
 }
 
 message DeleteNodeProjectRequest {
@@ -611,7 +611,7 @@ message DeployNodeProjectRequest {
   reserved 3;
   // 部署前先从 git 拉取文件。
   bool pull = 4;
-  // 用刚上传的压缩包替换成员的 data/（先 POST /api/upload，只能部署一个成员）。
+  // 用刚上传的压缩包替换容器的 data/（先 POST /api/upload，只能部署一个容器）。
   bool use_upload = 5;
   // 先拉取最新的镜像（更新镜像）。
   bool pull_images = 6;
@@ -627,5 +627,5 @@ message StreamNodeProjectLogsRequest {
   string service = 3;
   int32 tail = 4;
   bool follow = 5;
-  string member = 6;
+  string container = 6;
 }
