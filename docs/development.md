@@ -93,12 +93,12 @@ nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器
 
 前端开发时可以用 `pnpm -C web dev`，它会把接口请求转发到 `https://127.0.0.1:28443`（可用 `NAGI_PANEL` 环境变量修改），浏览器打开 `http://localhost:5173`。
 
-**当前前端只是用来测试后端的临时界面，之后会重写。** 各文档里写到、临时界面还没做到的，正式界面要补上：
+**当前前端只是用来测试后端的临时界面，之后会重写。** 重写时别漏了各文档里写到的这些提示（临时界面里已经有了）：
 
 - 加入共享网络时网络名默认由项目名生成；改网络名时提示连它的项目要跟着改（[agent.md](agent.md#共享网络)）
-- 设置顶替、迁移时，提示搬过去以后会断开哪些共享网络的连接（[failover.md](failover.md#实现)）
-- 声明为 `external` 或用了自定义 driver 的 volume 提示"不在快照范围内"；`network_mode: host` 的服务醒目提示（[agent.md](agent.md#部署方式)）
-- 首页提醒开启两步验证；提醒单独备份面板主密钥文件（[panel.md](panel.md)）
+- 设置顶替、迁移、用配置备份重建时，提示搬过去以后会断开哪些共享网络的连接（[failover.md](failover.md#实现)）
+- 不在快照范围内的 volume（`external` 或自定义 driver，接口里是成员的 `unmanaged_volumes`）和 `network_mode: host` 的服务（`host_network_services`）醒目提示（[agent.md](agent.md#部署方式)）
+- 首页提醒开启两步验证；提醒单独备份面板主密钥文件（设置里的 `master_key_path`，见 [panel.md](panel.md)）
 
 ## 第 1 步的完成标准
 

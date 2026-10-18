@@ -2285,7 +2285,9 @@ type PanelSettings struct {
 	// 面板的版本，节点版本和它不一样时可以升级。
 	Version string `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
 	// 面板绑定的域名，为空表示没绑定。
-	Domain        string `protobuf:"bytes,5,opt,name=domain,proto3" json:"domain,omitempty"`
+	Domain string `protobuf:"bytes,5,opt,name=domain,proto3" json:"domain,omitempty"`
+	// 面板主密钥文件的路径。数据库里的密钥都用它加密，要单独备份。
+	MasterKeyPath string `protobuf:"bytes,6,opt,name=master_key_path,json=masterKeyPath,proto3" json:"master_key_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2351,6 +2353,13 @@ func (x *PanelSettings) GetVersion() string {
 func (x *PanelSettings) GetDomain() string {
 	if x != nil {
 		return x.Domain
+	}
+	return ""
+}
+
+func (x *PanelSettings) GetMasterKeyPath() string {
+	if x != nil {
+		return x.MasterKeyPath
 	}
 	return ""
 }
@@ -5183,13 +5192,14 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x06config\x18\x01 \x01(\v2\x14.nagi.v1.AlertConfigR\x06config\"J\n" +
 	"\x17TestAlertChannelRequest\x12/\n" +
 	"\achannel\x18\x01 \x01(\v2\x15.nagi.v1.AlertChannelR\achannel\"\x1a\n" +
-	"\x18TestAlertChannelResponse\"\x9e\x01\n" +
+	"\x18TestAlertChannelResponse\"\xc6\x01\n" +
 	"\rPanelSettings\x12%\n" +
 	"\x0epublic_address\x18\x01 \x01(\tR\rpublicAddress\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12 \n" +
 	"\vfingerprint\x18\x03 \x01(\tR\vfingerprint\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\tR\aversion\x12\x16\n" +
-	"\x06domain\x18\x05 \x01(\tR\x06domain\"\x14\n" +
+	"\x06domain\x18\x05 \x01(\tR\x06domain\x12&\n" +
+	"\x0fmaster_key_path\x18\x06 \x01(\tR\rmasterKeyPath\"\x14\n" +
 	"\x12GetSettingsRequest\"2\n" +
 	"\x18SetPanelDomainApiRequest\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\"I\n" +

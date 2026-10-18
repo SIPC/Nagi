@@ -296,6 +296,8 @@ message PanelSettings {
   string version = 4;
   // 面板绑定的域名，为空表示没绑定。
   string domain = 5;
+  // 面板主密钥文件的路径。数据库里的密钥都用它加密，要单独备份。
+  string master_key_path = 6;
 }
 
 message GetSettingsRequest {}

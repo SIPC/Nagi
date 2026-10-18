@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -109,7 +110,7 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 	// 命名 volume 落到成员目录的 volumes/<名字>。外部 volume 和自定义 driver 的保持原样。
 	volumes := map[string]any{}
 	for key, v := range in.proj.Volumes {
-		if v.External || (v.Driver != "" && v.Driver != "local") || len(v.DriverOpts) > 0 {
+		if !managedVolume(v) {
 			continue
 		}
 		dir := filepath.Join(in.mp.volumesDir(), key)
@@ -138,4 +139,33 @@ func writeOverride(path string, override map[string]any) error {
 	}
 	header := []byte("# 由 Nagi 生成，每次部署时重新生成，请勿手动修改。\n")
 	return writeFileAtomic(path, append(header, data...), 0o644)
+}
+
+// managedVolume 判断命名 volume 是否由 Nagi 绑定到成员的 volumes/（在快照范围内）。
+// external 的和用了自定义 driver 或 driver_opts 的保持原样，不在快照范围内。
+func managedVolume(v types.VolumeConfig) bool {
+	return !bool(v.External) && (v.Driver == "" || v.Driver == "local") && len(v.DriverOpts) == 0
+}
+
+// unmanagedVolumes 返回不在快照范围内的命名 volume，按名字排序。
+func unmanagedVolumes(proj *types.Project) []string {
+	var out []string
+	for key, v := range proj.Volumes {
+		if !managedVolume(v) {
+			out = append(out, key)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// hostNetworkServices 返回用 network_mode: host 的服务。
+func hostNetworkServices(proj *types.Project) []string {
+	var out []string
+	for _, name := range proj.ServiceNames() {
+		if proj.Services[name].NetworkMode == "host" {
+			out = append(out, name)
+		}
+	}
+	return out
 }

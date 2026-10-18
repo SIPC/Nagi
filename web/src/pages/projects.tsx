@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderOpen, Plus, Server } from "lucide-react";
-import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { authClient, errorMessage, nodeClient, projectClient, settingsClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
 import { useMemberForm } from "@/components/member-form";
+import { SharedNetworkWarning } from "@/pages/backup";
 import {
   Alert,
   Badge,
@@ -21,6 +22,65 @@ import {
   Spinner,
 } from "@/components/ui";
 
+// Reminders：首页提醒开启两步验证、单独备份面板主密钥。可以"不再提醒"（只记在这个浏览器里）。
+function Reminders() {
+  const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  const read = (k: string) => {
+    try {
+      return localStorage.getItem(k) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const [hidden, setHidden] = useState({ totp: read("nagi.hide.totp"), key: read("nagi.hide.masterkey") });
+  const hide = (k: "totp" | "key", storageKey: string) => {
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {
+      // 存不了就只在这次隐藏。
+    }
+    setHidden({ ...hidden, [k]: true });
+  };
+  const items: { key: "totp" | "key"; storage: string; text: React.ReactNode }[] = [];
+  if (me.data && !me.data.totpEnabled && !hidden.totp) {
+    items.push({
+      key: "totp",
+      storage: "nagi.hide.totp",
+      text: (
+        <>
+          还没有开启两步验证。建议在<Link to="/nodes" className="mx-1 underline">节点页的"账号安全"</Link>里开启。
+        </>
+      ),
+    });
+  }
+  const path = settings.data?.settings?.masterKeyPath;
+  if (path && !hidden.key) {
+    items.push({
+      key: "key",
+      storage: "nagi.hide.masterkey",
+      text: (
+        <>
+          请单独备份面板主密钥 <span className="font-mono">{path}</span>：面板数据库里的密钥都用它加密，丢了就解不开。
+        </>
+      ),
+    });
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-4 grid gap-2">
+      {items.map((it) => (
+        <div key={it.key} className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/15 px-3 py-2 text-sm">
+          <span className="flex-1">{it.text}</span>
+          <Button size="sm" variant="ghost" onClick={() => hide(it.key, it.storage)}>
+            不再提醒
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ProjectsPage() {
   const projects = useQuery({
     queryKey: ["projects"],
@@ -30,7 +90,7 @@ export function ProjectsPage() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
-  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string } | null>(null);
+  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string; sharedNetworks: string[] } | null>(null);
 
   return (
     <>
@@ -46,6 +106,7 @@ export function ProjectsPage() {
           </Link>
         }
       />
+      <Reminders />
       {rebuild && <RebuildCard {...rebuild} onClose={() => setRebuild(null)} />}
       {projects.isPending ? (
         <Spinner />
@@ -77,7 +138,7 @@ export function ProjectsPage() {
                       <span>{p.members.length} 个成员 · 显示的是面板上的配置备份</span>
                     </div>
                     <div>
-                      <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name })}>
+                      <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name, sharedNetworks: p.settings?.sharedNetworks ?? [] })}>
                         用配置备份重建
                       </Button>
                     </div>
@@ -118,7 +179,19 @@ export function ProjectsPage() {
 }
 
 // RebuildCard：用面板上的配置备份，把离线节点上的项目重建到另一个节点（新项目 ID）。
-function RebuildCard({ nodeId, projectId, name, onClose }: { nodeId: string; projectId: string; name: string; onClose: () => void }) {
+function RebuildCard({
+  nodeId,
+  projectId,
+  name,
+  sharedNetworks,
+  onClose,
+}: {
+  nodeId: string;
+  projectId: string;
+  name: string;
+  sharedNetworks: string[];
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const navigate = useNavigate();
@@ -182,6 +255,7 @@ function RebuildCard({ nodeId, projectId, name, onClose }: { nodeId: string; pro
             关闭
           </Button>
         </div>
+        <SharedNetworkWarning fromNodeId={nodeId} targetNodeId={target} networks={sharedNetworks} />
         {result && <div>{result}</div>}
         {created && (
           <div>

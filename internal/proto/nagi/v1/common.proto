@@ -75,6 +75,10 @@ message Member {
   bool stateful = 12;
   // 共享变量有更新：这个成员引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
   bool shared_env_outdated = 13;
+  // 不在快照范围内的命名 volume（external 或用了自定义 driver），按最新版本的配置算。
+  repeated string unmanaged_volumes = 14;
+  // 用 network_mode: host 的服务：不经过 Caddy、不在项目内网里，端口直接对外。
+  repeated string host_network_services = 15;
 }
 
 // MemberConfig 是成员一个版本的完整配置。

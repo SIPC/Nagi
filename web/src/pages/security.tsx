@@ -39,6 +39,7 @@ export function SecurityCard() {
   };
 
   const s = sec.data;
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -47,6 +48,12 @@ export function SecurityCard() {
       <CardContent className="grid gap-4 text-sm">
         {error && <Alert>{error}</Alert>}
         {msg && <div className="text-muted-foreground">{msg}</div>}
+        {settings.data?.settings?.masterKeyPath && (
+          <p className="text-muted-foreground">
+            面板主密钥：<span className="font-mono">{settings.data.settings.masterKeyPath}</span>
+            。配置备份里的密钥、两步验证密钥、告警令牌都用它加密，请单独备份这个文件；丢了它，换一台机器恢复面板数据库也解不开这些密钥。
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24">修改密码</span>
           <Input

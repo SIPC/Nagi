@@ -14,6 +14,45 @@ import {
   Spinner,
 } from "@/components/ui";
 
+// SharedNetworkWarning：项目搬到目标节点（迁移、顶替、重建）以后，会断开哪些共享网络的连接。
+// 目标节点上没有的网络会退出；有同名网络、但没和原节点相连的，和原节点上的项目断开。
+export function SharedNetworkWarning({
+  fromNodeId,
+  targetNodeId,
+  networks,
+}: {
+  fromNodeId: string;
+  targetNodeId: string;
+  networks: string[];
+}) {
+  const list = useQuery({
+    queryKey: ["shared-networks", targetNodeId],
+    queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId: targetNodeId }),
+    enabled: !!targetNodeId && networks.length > 0,
+  });
+  if (!targetNodeId || networks.length === 0 || !list.data) return null;
+  const missing: string[] = [];
+  const unlinked: string[] = [];
+  for (const n of networks) {
+    const t = list.data.networks.find((x) => x.name === n);
+    if (!t) missing.push(n);
+    else if (!t.peers.some((p) => p.nodeId === fromNodeId)) unlinked.push(n);
+  }
+  if (missing.length === 0 && unlinked.length === 0) return null;
+  return (
+    <div className="grid gap-1 rounded border border-warning/40 bg-warning/15 px-2 py-1 text-xs">
+      {missing.length > 0 && (
+        <span>目标节点上没有共享网络 {missing.join("、")}：搬过去以后项目会退出这些网络，和里面的其他项目断开。</span>
+      )}
+      {unlinked.length > 0 && (
+        <span>
+          目标节点上的 {unlinked.join("、")} 没和原节点的同名网络相连：搬过去以后和原节点上的项目断开（可以先在节点页把网络连起来）。
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ---- 备份节点（临时测试界面）----
 
 function fmtBytes(v: number) {
@@ -292,10 +331,12 @@ export function MigrateCard({
   nodeId,
   projectId,
   name,
+  sharedNetworks = [],
 }: {
   nodeId: string;
   projectId: string;
   name: string;
+  sharedNetworks?: string[];
 }) {
   const queryClient = useQueryClient();
   const nodes = useQuery({
@@ -375,6 +416,7 @@ export function MigrateCard({
             {busy ? <Spinner /> : null}迁移
           </Button>
         </div>
+        <SharedNetworkWarning fromNodeId={nodeId} targetNodeId={target} networks={sharedNetworks} />
         {result && <div>{result}</div>}
         {lines.length > 0 && (
           <pre className="max-h-60 overflow-auto rounded bg-zinc-950 p-3 font-mono text-xs text-zinc-200">
@@ -397,10 +439,12 @@ export function FailoverCard({
   nodeId,
   projectId,
   name,
+  sharedNetworks = [],
 }: {
   nodeId: string;
   projectId: string;
   name: string;
+  sharedNetworks?: string[];
 }) {
   const nodes = useQuery({
     queryKey: ["nodes"],
@@ -577,6 +621,7 @@ export function FailoverCard({
                 设置顶替
               </Button>
             </div>
+            <SharedNetworkWarning fromNodeId={nodeId} targetNodeId={standby} networks={sharedNetworks} />
           </>
         )}
       </CardContent>

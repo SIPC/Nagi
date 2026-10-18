@@ -324,8 +324,12 @@ type Member struct {
 	Stateful bool `protobuf:"varint,12,opt,name=stateful,proto3" json:"stateful,omitempty"`
 	// 共享变量有更新：这个成员引用的共享变量和它当前版本记的值不一样，下次部署它时用上。
 	SharedEnvOutdated bool `protobuf:"varint,13,opt,name=shared_env_outdated,json=sharedEnvOutdated,proto3" json:"shared_env_outdated,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 不在快照范围内的命名 volume（external 或用了自定义 driver），按最新版本的配置算。
+	UnmanagedVolumes []string `protobuf:"bytes,14,rep,name=unmanaged_volumes,json=unmanagedVolumes,proto3" json:"unmanaged_volumes,omitempty"`
+	// 用 network_mode: host 的服务：不经过 Caddy、不在项目内网里，端口直接对外。
+	HostNetworkServices []string `protobuf:"bytes,15,rep,name=host_network_services,json=hostNetworkServices,proto3" json:"host_network_services,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Member) Reset() {
@@ -447,6 +451,20 @@ func (x *Member) GetSharedEnvOutdated() bool {
 		return x.SharedEnvOutdated
 	}
 	return false
+}
+
+func (x *Member) GetUnmanagedVolumes() []string {
+	if x != nil {
+		return x.UnmanagedVolumes
+	}
+	return nil
+}
+
+func (x *Member) GetHostNetworkServices() []string {
+	if x != nil {
+		return x.HostNetworkServices
+	}
+	return nil
 }
 
 // MemberConfig 是成员一个版本的完整配置。
@@ -3550,7 +3568,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0fshared_networks\x18\x04 \x03(\tR\x0esharedNetworks\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x05 \x01(\rR\x17snapshotIntervalMinutes\x12\x1d\n" +
 	"\n" +
-	"link_ports\x18\x06 \x03(\tR\tlinkPorts\"\xef\x03\n" +
+	"link_ports\x18\x06 \x03(\tR\tlinkPorts\"\xd0\x04\n" +
 	"\x06Member\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -3568,7 +3586,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vlast_commit\x18\v \x01(\tR\n" +
 	"lastCommit\x12\x1a\n" +
 	"\bstateful\x18\f \x01(\bR\bstateful\x12.\n" +
-	"\x13shared_env_outdated\x18\r \x01(\bR\x11sharedEnvOutdated\"\xab\x03\n" +
+	"\x13shared_env_outdated\x18\r \x01(\bR\x11sharedEnvOutdated\x12+\n" +
+	"\x11unmanaged_volumes\x18\x0e \x03(\tR\x10unmanagedVolumes\x122\n" +
+	"\x15host_network_services\x18\x0f \x03(\tR\x13hostNetworkServices\"\xab\x03\n" +
 	"\fMemberConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12F\n" +

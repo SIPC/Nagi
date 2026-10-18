@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,6 +67,7 @@ func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
 		Fingerprint:   p.Fingerprint,
 		Version:       p.Version,
 		Domain:        p.Domain(ctx),
+		MasterKeyPath: masterKeyPath(p.DataDir),
 	}
 }
 
@@ -223,4 +225,13 @@ func (s *settingsService) SetEntrance(ctx context.Context, req *connect.Request[
 		return nil, err
 	}
 	return connect.NewResponse(s.security(ctx)), nil
+}
+
+// masterKeyPath 返回面板主密钥文件的绝对路径（和 server 里 sealer.Load 用的一致）。
+func masterKeyPath(dataDir string) string {
+	path := filepath.Join(dataDir, "pki", "master.key")
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return path
 }

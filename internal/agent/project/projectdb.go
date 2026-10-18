@@ -292,6 +292,7 @@ func (p *projectDB) project(ctx context.Context, id, dir string) (*nagiv1.Projec
 		}
 		if cp, err := loadMember(ctx, cfg, r.Name, settings.GetSharedEnv(), mp.dataDir(), composeProjectName(id, r.Name)); err == nil {
 			mem.Stateful = isStateful(cfg, cp, preservePaths(cfg, cp, mp.dataDir()))
+			mem.UnmanagedVolumes, mem.HostNetworkServices = unmanagedVolumes(cp), hostNetworkServices(cp)
 		}
 		if v, err := p.deployed(ctx, r); err == nil && v != nil {
 			if dcfg, err := unmarshalConfig(v.Config); err == nil {

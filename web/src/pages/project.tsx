@@ -89,8 +89,8 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
           </CardContent>
         </Card>
         <BackupCard nodeId={nodeId} projectId={projectId} />
-        <FailoverCard nodeId={nodeId} projectId={projectId} name={p.name} />
-        <MigrateCard nodeId={nodeId} projectId={projectId} name={p.name} />
+        <FailoverCard nodeId={nodeId} projectId={projectId} name={p.name} sharedNetworks={p.settings?.sharedNetworks ?? []} />
+        <MigrateCard nodeId={nodeId} projectId={projectId} name={p.name} sharedNetworks={p.settings?.sharedNetworks ?? []} />
         <DeleteCard nodeId={nodeId} project={p} />
       </div>
     </>
@@ -257,6 +257,16 @@ function MembersCard({
                         </Badge>
                       )}
                       {m.stateful && <Badge className="ml-2">有状态</Badge>}
+                      {m.hostNetworkServices.length > 0 && (
+                        <Badge tone="danger" className="ml-2">
+                          host 网络
+                        </Badge>
+                      )}
+                      {m.unmanagedVolumes.length > 0 && (
+                        <Badge tone="warning" className="ml-2">
+                          有 volume 不在快照里
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-2 pr-4">
                       <ProjectState services={svc} deployed={m.deployedVersion > 0n} />
@@ -270,7 +280,8 @@ function MembersCard({
                         ? "—"
                         : memberKind(m) === "单容器"
                           ? m.name
-                          : [...new Set(svc.map((s) => `${s.name}.${m.name}`))].join(" ")}
+                          : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") ||
+                            "—"}
                     </td>
                   </tr>
                 );
@@ -345,6 +356,16 @@ function MemberPanel({
               {member.hasDraft ? "有未部署的修改：部署时会把草稿保存为新版本。" : "按当前版本执行 docker compose up。"}
               {member.sharedEnvOutdated && " 共享变量有更新，部署时用上。"}
             </p>
+            {member.hostNetworkServices.length > 0 && (
+              <p className="text-sm font-medium text-destructive">
+                ⚠ 服务 {member.hostNetworkServices.join("、")} 用的是 host 网络：不经过 Caddy、不在项目内网里，端口直接对外开放，防火墙要自己管。
+              </p>
+            )}
+            {member.unmanagedVolumes.length > 0 && (
+              <p className="rounded border border-warning/40 bg-warning/15 px-2 py-1 text-sm">
+                ⚠ volume {member.unmanagedVolumes.join("、")} 是 external 或用了自定义 driver，不在快照范围内：快照、迁移、顶替都不带它的数据。
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <input
@@ -815,6 +836,18 @@ function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: 
 
 // ---- 项目设置 ----
 
+// defaultNetworkName 由项目名生成加入共享网络用的网络名（小写字母、数字和 -，不超过 32 个字符）。
+// 项目名里没有能用的字符（例如全是中文）时用项目 ID 的前 8 位。
+function defaultNetworkName(name: string, id: string) {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return s || `p-${id.slice(0, 8)}`;
+}
+
 function SettingsCard({ nodeId, project }: { nodeId: string; project: Project }) {
   const queryClient = useQueryClient();
   const s = project.settings;
@@ -854,7 +887,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
         name,
         settings: {
           intranetDisabled: !intranet,
-          networkName,
+          networkName: networkName || (joined.length > 0 ? defaultNetworkName(name, project.id) : ""),
           sharedNetworks: joined,
           linkPorts: linkPorts.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
           snapshotIntervalMinutes: Number(interval) || 0,
@@ -906,14 +939,27 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
         </label>
         <div className="grid gap-2 rounded-md border p-3">
           <span className="font-medium">共享网络（和加入它的其他项目互通，成员在里面叫"成员.网络名"；网络和其他节点相连时也能跨节点访问）</span>
-          <Input value={networkName} onChange={(e) => setNetworkName(e.target.value)} placeholder="网络名，例如 base" className="max-w-60 font-mono" />
+          <Input
+            value={networkName}
+            onChange={(e) => setNetworkName(e.target.value)}
+            placeholder={`网络名，默认 ${defaultNetworkName(name, project.id)}`}
+            className="max-w-60 font-mono"
+          />
+          {s?.networkName && networkName !== s.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
+            <p className="rounded border border-warning/40 bg-warning/15 px-2 py-1 text-xs">
+              改网络名以后，其他项目里用"成员.{s.networkName}"访问本项目的地方，要跟着改成"成员.{networkName || defaultNetworkName(name, project.id)}"。
+            </p>
+          )}
           {networks.data?.networks.length ? (
             networks.data.networks.map((n) => (
               <label key={n.name} className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={joined.includes(n.name)}
-                  onChange={(e) => setJoined(e.target.checked ? [...joined, n.name] : joined.filter((x) => x !== n.name))}
+                  onChange={(e) => {
+                    if (e.target.checked && !networkName) setNetworkName(defaultNetworkName(name, project.id));
+                    setJoined(e.target.checked ? [...joined, n.name] : joined.filter((x) => x !== n.name));
+                  }}
                 />
                 <span className="font-mono">{n.name}</span>
                 <span className="text-xs text-muted-foreground">

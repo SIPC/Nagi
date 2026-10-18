@@ -210,3 +210,30 @@ func TestOverrideNetworks(t *testing.T) {
 		t.Fatal("compose member must not join the project network in compose")
 	}
 }
+
+func TestUnmanagedVolumes(t *testing.T) {
+	text := `services:
+  app:
+    image: nginx
+    network_mode: host
+    volumes: [data:/a, ext:/b, nfs:/c]
+  db:
+    image: postgres
+volumes:
+  data: {}
+  ext:
+    external: true
+  nfs:
+    driver_opts: {type: nfs, o: "addr=10.0.0.1", device: ":/x"}
+`
+	cp, err := loadCompose(context.Background(), text, nil, t.TempDir(), "nagi-p-m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unmanagedVolumes(cp); len(got) != 2 || got[0] != "ext" || got[1] != "nfs" {
+		t.Fatalf("unmanaged volumes: %v", got)
+	}
+	if got := hostNetworkServices(cp); len(got) != 1 || got[0] != "app" {
+		t.Fatalf("host network services: %v", got)
+	}
+}
