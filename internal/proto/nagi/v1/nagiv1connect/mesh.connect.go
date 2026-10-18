@@ -47,6 +47,9 @@ const (
 	MeshServiceReplicaCommitProcedure = "/nagi.v1.MeshService/ReplicaCommit"
 	// MeshServiceLeaseVoteProcedure is the fully-qualified name of the MeshService's LeaseVote RPC.
 	MeshServiceLeaseVoteProcedure = "/nagi.v1.MeshService/LeaseVote"
+	// MeshServiceSharedNetworkInfoProcedure is the fully-qualified name of the MeshService's
+	// SharedNetworkInfo RPC.
+	MeshServiceSharedNetworkInfoProcedure = "/nagi.v1.MeshService/SharedNetworkInfo"
 )
 
 // MeshServiceClient is a client for the nagi.v1.MeshService service.
@@ -62,6 +65,8 @@ type MeshServiceClient interface {
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
+	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	SharedNetworkInfo(context.Context, *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error)
 }
 
 // NewMeshServiceClient constructs a client for the nagi.v1.MeshService service. By default, it uses
@@ -111,17 +116,24 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("LeaseVote")),
 			connect.WithClientOptions(opts...),
 		),
+		sharedNetworkInfo: connect.NewClient[v1.SharedNetworkInfoRequest, v1.SharedNetworkInfoResponse](
+			httpClient,
+			baseURL+MeshServiceSharedNetworkInfoProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("SharedNetworkInfo")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // meshServiceClient implements MeshServiceClient.
 type meshServiceClient struct {
-	ping            *connect.Client[v1.PingRequest, v1.PingResponse]
-	upload          *connect.Client[v1.UploadChunk, v1.UploadResponse]
-	replicaManifest *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
-	replicaPut      *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
-	replicaCommit   *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
-	leaseVote       *connect.Client[v1.LeaseVoteRequest, v1.LeaseVoteResponse]
+	ping              *connect.Client[v1.PingRequest, v1.PingResponse]
+	upload            *connect.Client[v1.UploadChunk, v1.UploadResponse]
+	replicaManifest   *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
+	replicaPut        *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
+	replicaCommit     *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
+	leaseVote         *connect.Client[v1.LeaseVoteRequest, v1.LeaseVoteResponse]
+	sharedNetworkInfo *connect.Client[v1.SharedNetworkInfoRequest, v1.SharedNetworkInfoResponse]
 }
 
 // Ping calls nagi.v1.MeshService.Ping.
@@ -154,6 +166,11 @@ func (c *meshServiceClient) LeaseVote(ctx context.Context, req *connect.Request[
 	return c.leaseVote.CallUnary(ctx, req)
 }
 
+// SharedNetworkInfo calls nagi.v1.MeshService.SharedNetworkInfo.
+func (c *meshServiceClient) SharedNetworkInfo(ctx context.Context, req *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error) {
+	return c.sharedNetworkInfo.CallUnary(ctx, req)
+}
+
 // MeshServiceHandler is an implementation of the nagi.v1.MeshService service.
 type MeshServiceHandler interface {
 	Ping(context.Context, *connect.Request[v1.PingRequest]) (*connect.Response[v1.PingResponse], error)
@@ -167,6 +184,8 @@ type MeshServiceHandler interface {
 	ReplicaCommit(context.Context, *connect.Request[v1.ReplicaCommitRequest]) (*connect.Response[v1.ReplicaCommitResponse], error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error)
+	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	SharedNetworkInfo(context.Context, *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error)
 }
 
 // NewMeshServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -212,6 +231,12 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(meshServiceMethods.ByName("LeaseVote")),
 		connect.WithHandlerOptions(opts...),
 	)
+	meshServiceSharedNetworkInfoHandler := connect.NewUnaryHandler(
+		MeshServiceSharedNetworkInfoProcedure,
+		svc.SharedNetworkInfo,
+		connect.WithSchema(meshServiceMethods.ByName("SharedNetworkInfo")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.MeshService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MeshServicePingProcedure:
@@ -226,6 +251,8 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 			meshServiceReplicaCommitHandler.ServeHTTP(w, r)
 		case MeshServiceLeaseVoteProcedure:
 			meshServiceLeaseVoteHandler.ServeHTTP(w, r)
+		case MeshServiceSharedNetworkInfoProcedure:
+			meshServiceSharedNetworkInfoHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -257,4 +284,8 @@ func (UnimplementedMeshServiceHandler) ReplicaCommit(context.Context, *connect.R
 
 func (UnimplementedMeshServiceHandler) LeaseVote(context.Context, *connect.Request[v1.LeaseVoteRequest]) (*connect.Response[v1.LeaseVoteResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.LeaseVote is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) SharedNetworkInfo(context.Context, *connect.Request[v1.SharedNetworkInfoRequest]) (*connect.Response[v1.SharedNetworkInfoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.SharedNetworkInfo is not implemented"))
 }

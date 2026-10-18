@@ -183,3 +183,26 @@ func (r *Registry) ServeMesh(ctx context.Context) {
 		}
 	}
 }
+
+// NodeByMeshKey 返回 mesh 公钥是 k 的在线节点。
+func (r *Registry) NodeByMeshKey(k []byte) (*Conn, string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, c := range r.conns {
+		c.mu.RLock()
+		match := c.mesh != nil && slices.Equal(c.mesh.GetPublicKey(), k)
+		name := c.name
+		c.mu.RUnlock()
+		if match {
+			return c, name, true
+		}
+	}
+	return nil, "", false
+}
+
+// Name 返回节点的显示名称。
+func (c *Conn) Name() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.name
+}

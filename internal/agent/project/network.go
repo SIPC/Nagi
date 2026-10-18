@@ -27,6 +27,9 @@ func sharedNetwork(name string) string    { return sharedNetworkPrefix + name }
 func sharedOwner(name string) string      { return "s:" + name }
 func sharedNetworkName(net string) string { return strings.TrimPrefix(net, sharedNetworkPrefix) }
 
+// SharedNetworkDocker 返回共享网络对应的 Docker 网络名。
+func SharedNetworkDocker(name string) string { return sharedNetwork(name) }
+
 // ensureProjectNetwork 建好项目内网（不存在时）。
 func (m *Manager) ensureProjectNetwork(ctx context.Context, id string) error {
 	subnet, err := m.subnetFor(ctx, projectOwner(id))
@@ -159,10 +162,17 @@ func (m *Manager) SharedNetworks(ctx context.Context) ([]*nagiv1.SharedNetwork, 
 		return nil, err
 	}
 	joined := m.sharedMembers(ctx)
+	links, err := m.SharedNetworkLinks(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]*nagiv1.SharedNetwork, 0, len(rows))
 	for _, r := range rows {
 		n := &nagiv1.SharedNetwork{Name: r.Name, Projects: joined[r.Name]}
 		n.Subnet, _ = m.nodeQ.GetSubnet(ctx, sharedOwner(r.Name))
+		for _, p := range links[r.Name] {
+			n.Peers = append(n.Peers, &nagiv1.SharedNetworkPeer{PublicKey: p.Key, Name: p.Name, NodeId: p.NodeID})
+		}
 		out = append(out, n)
 	}
 	return out, nil
@@ -224,6 +234,11 @@ func (m *Manager) DeleteSharedNetwork(ctx context.Context, name string) ([]*nagi
 	if p := m.sharedMembers(ctx)[name]; len(p) > 0 {
 		return nil, invalid("还有 %d 个项目加入了共享网络 %s（例如 %s），请先在项目设置里退出", len(p), name, p[0].GetProjectName())
 	}
+	if links, err := m.SharedNetworkLinks(ctx); err != nil {
+		return nil, err
+	} else if len(links[name]) > 0 {
+		return nil, linkedNetworkError(name, links[name])
+	}
 	if err := m.docker.RemoveNetwork(ctx, sharedNetwork(name)); err != nil {
 		return nil, err
 	}
@@ -284,7 +299,12 @@ func (m *Manager) leaveForeignNetworks(ctx context.Context, pdb *projectDB, id s
 	if len(s.GetSharedNetworks()) == 0 {
 		return nil
 	}
-	if err := m.checkSharedSettings(ctx, id, s); err == nil {
+	err := m.checkSharedSettings(ctx, id, s)
+	if err == nil {
+		// 连不上的相连节点不检查（搬过来时不能因此失败）；真撞了名由代理按规则选一个并告警。
+		err = m.checkRemoteNames(ctx, id, s.GetNetworkName(), s.GetSharedNetworks(), false)
+	}
+	if err == nil {
 		return nil
 	} else {
 		onLine("项目原来加入的共享网络（" + strings.Join(s.GetSharedNetworks(), "、") + "）在本节点上用不了，已退出，需要时在项目设置里重新加入：" + err.Error())

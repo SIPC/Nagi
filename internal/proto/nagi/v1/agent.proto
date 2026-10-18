@@ -33,6 +33,8 @@ service AgentService {
   rpc CreateSharedNetwork(CreateSharedNetworkRequest) returns (ListSharedNetworksResponse);
   // 删除共享网络：还有项目加入时拒绝。
   rpc DeleteSharedNetwork(DeleteSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  // 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
+  rpc SetSharedNetworkPeers(SetSharedNetworkPeersRequest) returns (ListSharedNetworksResponse);
   // 新建或修改一条端口映射，立即生效。
   rpc SaveRoute(SaveRouteRequest) returns (SaveRouteResponse);
   rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
@@ -415,6 +417,12 @@ message CreateSharedNetworkRequest {
 
 message DeleteSharedNetworkRequest {
   string name = 1;
+}
+
+message SetSharedNetworkPeersRequest {
+  string name = 1;
+  // 只用 public_key、name、node_id。
+  repeated SharedNetworkPeer peers = 2;
 }
 
 message SaveRouteRequest {

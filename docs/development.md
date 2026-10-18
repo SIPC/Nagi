@@ -83,13 +83,13 @@ docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc generate
 pnpm -C web install && pnpm -C web build
 
 # 构建并运行（单机：面板 + 内嵌节点）
-go build -o bin/nagi ./cmd/nagi
+CGO_ENABLED=0 go build -o bin/nagi ./cmd/nagi
 ./bin/nagi server --data-dir .nagi-dev --port 28443
 ```
 
 在没法监听 80/443 的开发机上（例如 Windows），可以加 `--no-proxy`，内嵌节点不启动 Caddy。
 
-内嵌 Caddy 后二进制约 90MB；发布构建时加 `-ldflags "-s -w"` 去掉调试信息可以小不少。
+nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器用空镜像，运行的是挂进去的 nagi 本身。内嵌 Caddy 后二进制约 90MB；发布构建时加 `-ldflags "-s -w"` 去掉调试信息可以小不少。
 
 前端开发时可以用 `pnpm -C web dev`，它会把接口请求转发到 `https://127.0.0.1:28443`（可用 `NAGI_PANEL` 环境变量修改），浏览器打开 `http://localhost:5173`。
 

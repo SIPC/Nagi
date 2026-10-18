@@ -823,6 +823,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
   const [intranet, setIntranet] = useState(!s?.intranetDisabled);
   const [networkName, setNetworkName] = useState(s?.networkName ?? "");
   const [joined, setJoined] = useState<string[]>(s?.sharedNetworks ?? []);
+  const [linkPorts, setLinkPorts] = useState((s?.linkPorts ?? []).join("\n"));
   const [interval, setInterval] = useState(String(s?.snapshotIntervalMinutes ?? 0));
   const [sharedEnv, setSharedEnv] = useState(envToText(project.hasSharedEnvDraft ? project.sharedEnvDraft : s?.sharedEnv));
   const [affected, setAffected] = useState<Record<string, boolean>>({});
@@ -855,6 +856,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
           intranetDisabled: !intranet,
           networkName,
           sharedNetworks: joined,
+          linkPorts: linkPorts.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
           snapshotIntervalMinutes: Number(interval) || 0,
         },
       }),
@@ -903,7 +905,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
           项目内网：成员之间用"成员名"（单容器）或"服务.成员"（compose）互相访问
         </label>
         <div className="grid gap-2 rounded-md border p-3">
-          <span className="font-medium">共享网络（和本节点上的其他项目互通，成员在里面叫"成员.网络名"）</span>
+          <span className="font-medium">共享网络（和加入它的其他项目互通，成员在里面叫"成员.网络名"；网络和其他节点相连时也能跨节点访问）</span>
           <Input value={networkName} onChange={(e) => setNetworkName(e.target.value)} placeholder="网络名，例如 base" className="max-w-60 font-mono" />
           {networks.data?.networks.length ? (
             networks.data.networks.map((n) => (
@@ -916,12 +918,21 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
                 <span className="font-mono">{n.name}</span>
                 <span className="text-xs text-muted-foreground">
                   {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "还没有项目加入"}
+                  {n.peers.length > 0 && ` · 和 ${n.peers.map((p) => p.name).join("、")} 相连`}
                 </span>
               </label>
             ))
           ) : (
             <span className="text-xs text-muted-foreground">本节点还没有共享网络，在节点页里创建。</span>
           )}
+          <Field label="跨节点端口（相连节点经代理访问本项目时，容器没声明的端口；一行一个，如 pg:5432，compose 成员写 服务.成员:端口）" htmlFor="p-linkports">
+            <textarea
+              id="p-linkports"
+              className="min-h-16 rounded-md border bg-transparent px-3 py-2 font-mono text-sm"
+              value={linkPorts}
+              onChange={(e) => setLinkPorts(e.target.value)}
+            />
+          </Field>
         </div>
         <div>
           <Button size="sm" onClick={saveSettings} disabled={busy}>

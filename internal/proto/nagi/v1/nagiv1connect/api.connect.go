@@ -109,6 +109,12 @@ const (
 	// NodeServiceDeleteNodeSharedNetworkProcedure is the fully-qualified name of the NodeService's
 	// DeleteNodeSharedNetwork RPC.
 	NodeServiceDeleteNodeSharedNetworkProcedure = "/nagi.v1.NodeService/DeleteNodeSharedNetwork"
+	// NodeServiceLinkNodeSharedNetworkProcedure is the fully-qualified name of the NodeService's
+	// LinkNodeSharedNetwork RPC.
+	NodeServiceLinkNodeSharedNetworkProcedure = "/nagi.v1.NodeService/LinkNodeSharedNetwork"
+	// NodeServiceUnlinkNodeSharedNetworkProcedure is the fully-qualified name of the NodeService's
+	// UnlinkNodeSharedNetwork RPC.
+	NodeServiceUnlinkNodeSharedNetworkProcedure = "/nagi.v1.NodeService/UnlinkNodeSharedNetwork"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -545,6 +551,10 @@ type NodeServiceClient interface {
 	ListNodeSharedNetworks(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	CreateNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
+	LinkNodeSharedNetwork(context.Context, *connect.Request[v1.LinkNodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 断开节点上的共享网络和其他节点的连接。
+	UnlinkNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -677,6 +687,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeSharedNetwork")),
 			connect.WithClientOptions(opts...),
 		),
+		linkNodeSharedNetwork: connect.NewClient[v1.LinkNodeSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+NodeServiceLinkNodeSharedNetworkProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("LinkNodeSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
+		unlinkNodeSharedNetwork: connect.NewClient[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+NodeServiceUnlinkNodeSharedNetworkProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UnlinkNodeSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -719,6 +741,8 @@ type nodeServiceClient struct {
 	listNodeSharedNetworks   *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
 	createNodeSharedNetwork  *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
 	deleteNodeSharedNetwork  *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	linkNodeSharedNetwork    *connect.Client[v1.LinkNodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	unlinkNodeSharedNetwork  *connect.Client[v1.NodeSharedNetworkRequest, v1.ListSharedNetworksResponse]
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
@@ -819,6 +843,16 @@ func (c *nodeServiceClient) DeleteNodeSharedNetwork(ctx context.Context, req *co
 	return c.deleteNodeSharedNetwork.CallUnary(ctx, req)
 }
 
+// LinkNodeSharedNetwork calls nagi.v1.NodeService.LinkNodeSharedNetwork.
+func (c *nodeServiceClient) LinkNodeSharedNetwork(ctx context.Context, req *connect.Request[v1.LinkNodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.linkNodeSharedNetwork.CallUnary(ctx, req)
+}
+
+// UnlinkNodeSharedNetwork calls nagi.v1.NodeService.UnlinkNodeSharedNetwork.
+func (c *nodeServiceClient) UnlinkNodeSharedNetwork(ctx context.Context, req *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.unlinkNodeSharedNetwork.CallUnary(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -868,6 +902,10 @@ type NodeServiceHandler interface {
 	ListNodeSharedNetworks(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	CreateNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
+	LinkNodeSharedNetwork(context.Context, *connect.Request[v1.LinkNodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 断开节点上的共享网络和其他节点的连接。
+	UnlinkNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -996,6 +1034,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeSharedNetwork")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceLinkNodeSharedNetworkHandler := connect.NewUnaryHandler(
+		NodeServiceLinkNodeSharedNetworkProcedure,
+		svc.LinkNodeSharedNetwork,
+		connect.WithSchema(nodeServiceMethods.ByName("LinkNodeSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceUnlinkNodeSharedNetworkHandler := connect.NewUnaryHandler(
+		NodeServiceUnlinkNodeSharedNetworkProcedure,
+		svc.UnlinkNodeSharedNetwork,
+		connect.WithSchema(nodeServiceMethods.ByName("UnlinkNodeSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -1054,6 +1104,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceCreateNodeSharedNetworkHandler.ServeHTTP(w, r)
 		case NodeServiceDeleteNodeSharedNetworkProcedure:
 			nodeServiceDeleteNodeSharedNetworkHandler.ServeHTTP(w, r)
+		case NodeServiceLinkNodeSharedNetworkProcedure:
+			nodeServiceLinkNodeSharedNetworkHandler.ServeHTTP(w, r)
+		case NodeServiceUnlinkNodeSharedNetworkProcedure:
+			nodeServiceUnlinkNodeSharedNetworkHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -1143,6 +1197,14 @@ func (UnimplementedNodeServiceHandler) CreateNodeSharedNetwork(context.Context, 
 
 func (UnimplementedNodeServiceHandler) DeleteNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeSharedNetwork is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) LinkNodeSharedNetwork(context.Context, *connect.Request[v1.LinkNodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.LinkNodeSharedNetwork is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) UnlinkNodeSharedNetwork(context.Context, *connect.Request[v1.NodeSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UnlinkNodeSharedNetwork is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {

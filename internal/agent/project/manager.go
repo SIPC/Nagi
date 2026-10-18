@@ -75,6 +75,9 @@ type Manager struct {
 	ManagedRestart func(id string) bool
 	// ReservedDomain 返回 true 的域名已经被面板使用（面板绑定的域名），项目不能再用。
 	ReservedDomain func(domain string) bool
+	// RemoteProjects 返回和本节点共享网络 network 相连的节点上加入了它的项目（检查网络名是否重复）。
+	// 有相连的节点联系不上时返回已经拿到的部分和错误。
+	RemoteProjects func(ctx context.Context, network string) ([]*nagiv1.SharedNetworkProject, error)
 
 	restarts managedRestarts
 	images   imageUpdates

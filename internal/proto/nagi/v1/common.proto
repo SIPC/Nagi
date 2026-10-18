@@ -45,6 +45,8 @@ message ProjectSettings {
   repeated string shared_networks = 4;
   // 定时快照间隔（分钟），0 表示默认（60 分钟）。
   uint32 snapshot_interval_minutes = 5;
+  // 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"成员:端口"（compose 成员写"服务.成员:端口"）。
+  repeated string link_ports = 6;
 }
 
 // Member 是项目里独立部署的单位：单容器（镜像表单）或一份 compose。
@@ -143,6 +145,28 @@ message SharedNetwork {
   string name = 1;
   string subnet = 2;
   repeated SharedNetworkProject projects = 3;
+  // 跨节点连接：和本节点的这个网络相连的节点。
+  repeated SharedNetworkPeer peers = 4;
+  // 相连节点上的成员，本节点为每个放了一个同名的代理容器。
+  repeated SharedNetworkRemote remotes = 5;
+}
+
+message SharedNetworkPeer {
+  // 节点的 mesh 公钥。
+  bytes public_key = 1;
+  string name = 2;
+  string node_id = 3;
+  // 最近一次向它查询成员列表是否成功。
+  bool reachable = 4;
+  string error = 5;
+}
+
+message SharedNetworkRemote {
+  // 在网络里的名字，例如 pg.base。
+  string alias = 1;
+  string node_name = 2;
+  string project_name = 3;
+  repeated uint32 ports = 4;
 }
 
 message SharedNetworkProject {

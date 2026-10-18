@@ -28,7 +28,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), resetCmd(), versionCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), resetCmd(), versionCmd(), linkProxyCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -146,6 +146,18 @@ func enrollCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹")
 	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌")
 	return cmd
+}
+
+// linkProxyCmd 是跨节点共享网络的代理容器里运行的程序，由节点创建，不用手动运行。
+func linkProxyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "link-proxy",
+		Short:  "共享网络的代理（在代理容器里运行）",
+		Hidden: true,
+		RunE: func(*cobra.Command, []string) error {
+			return agent.RunLinkProxy()
+		},
+	}
 }
 
 // panelCmd 是节点本地命令：查看和修改信任的面板列表。用于旧面板已经挂掉、无法再发指令的情况。

@@ -18,6 +18,7 @@ import {
   CardTitle,
   Empty,
   Input,
+  Select,
   Spinner,
 } from "@/components/ui";
 
@@ -165,7 +166,7 @@ export function NodesPage() {
                             ) : open.tab === "replicas" ? (
                               <NodeReplicas nodeId={n.id} />
                             ) : open.tab === "networks" ? (
-                              <SharedNetworks nodeId={n.id} />
+                              <SharedNetworks nodeId={n.id} nodes={nodes.data.nodes.filter((o) => o.id !== n.id && o.online)} />
                             ) : (
                               <NodePanels nodeId={n.id} />
                             )
@@ -259,11 +260,17 @@ function AddNode() {
   );
 }
 
-// 节点上的共享网络：加入的项目之间可以互相访问（成员在里面叫"成员.网络名"）。只在本节点存在。
-function SharedNetworks({ nodeId }: { nodeId: string }) {
+// 节点上的共享网络：加入的项目之间可以互相访问（成员在里面叫"成员.网络名"）。
+// 可以和其他节点的同名网络连起来，对方的成员在本节点有一个同名的代理容器。
+function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string; name: string }[] }) {
   const queryClient = useQueryClient();
-  const list = useQuery({ queryKey: ["shared-networks", nodeId], queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }) });
+  const list = useQuery({
+    queryKey: ["shared-networks", nodeId],
+    queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }),
+    refetchInterval: 10000,
+  });
   const [name, setName] = useState("");
+  const [peer, setPeer] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const call = async (fn: () => Promise<unknown>) => {
     setError("");
@@ -279,14 +286,60 @@ function SharedNetworks({ nodeId }: { nodeId: string }) {
       {error && <Alert>{error}</Alert>}
       {list.data?.networks.length === 0 && <span className="text-muted-foreground">还没有共享网络。</span>}
       {list.data?.networks.map((n) => (
-        <div key={n.name} className="flex items-center gap-3">
-          <span className="font-mono">{n.name}</span>
-          <span className="text-xs text-muted-foreground">
-            {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "还没有项目加入"}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}>
-            删除
-          </Button>
+        <div key={n.name} className="grid gap-1 rounded-md border p-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono">{n.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "还没有项目加入"}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}>
+              删除
+            </Button>
+          </div>
+          {n.peers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground">相连的节点：</span>
+              {n.peers.map((p) => (
+                <Badge key={p.name} tone={p.reachable ? "success" : "danger"} title={p.error}>
+                  {p.name}
+                  {!p.reachable && "（" + (p.error || "联系不上") + "）"}
+                </Badge>
+              ))}
+              <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))}>
+                断开连接
+              </Button>
+            </div>
+          )}
+          {n.remotes.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              对方的成员（本节点有同名的代理）：
+              {n.remotes.map((r) => `${r.alias}（${r.nodeName}，${r.ports.length ? "端口 " + r.ports.join("、") : "没有端口"}）`).join("、")}
+            </div>
+          )}
+          {nodes.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select className="w-48" value={peer[n.name] ?? ""} onChange={(e) => setPeer({ ...peer, [n.name]: e.target.value })}>
+                <option value="">选择节点</option>
+                {nodes
+                  .filter((o) => !n.peers.some((p) => p.nodeId === o.id))
+                  .map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!peer[n.name]}
+                onClick={() =>
+                  call(() => nodeClient.linkNodeSharedNetwork({ nodeId, name: n.name, peerNodeId: peer[n.name] }))
+                }
+              >
+                连接到这个节点的同名网络
+              </Button>
+            </div>
+          )}
         </div>
       ))}
       <div className="flex gap-2">

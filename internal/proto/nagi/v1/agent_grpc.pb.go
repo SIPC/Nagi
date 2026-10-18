@@ -34,6 +34,7 @@ const (
 	AgentService_ListSharedNetworks_FullMethodName    = "/nagi.v1.AgentService/ListSharedNetworks"
 	AgentService_CreateSharedNetwork_FullMethodName   = "/nagi.v1.AgentService/CreateSharedNetwork"
 	AgentService_DeleteSharedNetwork_FullMethodName   = "/nagi.v1.AgentService/DeleteSharedNetwork"
+	AgentService_SetSharedNetworkPeers_FullMethodName = "/nagi.v1.AgentService/SetSharedNetworkPeers"
 	AgentService_SaveRoute_FullMethodName             = "/nagi.v1.AgentService/SaveRoute"
 	AgentService_DeleteRoute_FullMethodName           = "/nagi.v1.AgentService/DeleteRoute"
 	AgentService_ListVersions_FullMethodName          = "/nagi.v1.AgentService/ListVersions"
@@ -109,6 +110,8 @@ type AgentServiceClient interface {
 	CreateSharedNetwork(ctx context.Context, in *CreateSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	// 删除共享网络：还有项目加入时拒绝。
 	DeleteSharedNetwork(ctx context.Context, in *DeleteSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	// 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
+	SetSharedNetworkPeers(ctx context.Context, in *SetSharedNetworkPeersRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*SaveRouteResponse, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*DeleteRouteResponse, error)
@@ -349,6 +352,16 @@ func (c *agentServiceClient) DeleteSharedNetwork(ctx context.Context, in *Delete
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSharedNetworksResponse)
 	err := c.cc.Invoke(ctx, AgentService_DeleteSharedNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SetSharedNetworkPeers(ctx context.Context, in *SetSharedNetworkPeersRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, AgentService_SetSharedNetworkPeers_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -890,6 +903,8 @@ type AgentServiceServer interface {
 	CreateSharedNetwork(context.Context, *CreateSharedNetworkRequest) (*ListSharedNetworksResponse, error)
 	// 删除共享网络：还有项目加入时拒绝。
 	DeleteSharedNetwork(context.Context, *DeleteSharedNetworkRequest) (*ListSharedNetworksResponse, error)
+	// 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
+	SetSharedNetworkPeers(context.Context, *SetSharedNetworkPeersRequest) (*ListSharedNetworksResponse, error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error)
@@ -1021,6 +1036,9 @@ func (UnimplementedAgentServiceServer) CreateSharedNetwork(context.Context, *Cre
 }
 func (UnimplementedAgentServiceServer) DeleteSharedNetwork(context.Context, *DeleteSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteSharedNetwork not implemented")
+}
+func (UnimplementedAgentServiceServer) SetSharedNetworkPeers(context.Context, *SetSharedNetworkPeersRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSharedNetworkPeers not implemented")
 }
 func (UnimplementedAgentServiceServer) SaveRoute(context.Context, *SaveRouteRequest) (*SaveRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveRoute not implemented")
@@ -1431,6 +1449,24 @@ func _AgentService_DeleteSharedNetwork_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).DeleteSharedNetwork(ctx, req.(*DeleteSharedNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SetSharedNetworkPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSharedNetworkPeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetSharedNetworkPeers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetSharedNetworkPeers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetSharedNetworkPeers(ctx, req.(*SetSharedNetworkPeersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2204,6 +2240,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSharedNetwork",
 			Handler:    _AgentService_DeleteSharedNetwork_Handler,
+		},
+		{
+			MethodName: "SetSharedNetworkPeers",
+			Handler:    _AgentService_SetSharedNetworkPeers_Handler,
 		},
 		{
 			MethodName: "SaveRoute",

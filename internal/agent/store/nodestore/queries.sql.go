@@ -97,6 +97,15 @@ func (q *Queries) DeleteSharedNetwork(ctx context.Context, name string) error {
 	return err
 }
 
+const deleteSharedNetworkLinks = `-- name: DeleteSharedNetworkLinks :exec
+DELETE FROM shared_network_links WHERE network = ?
+`
+
+func (q *Queries) DeleteSharedNetworkLinks(ctx context.Context, network string) error {
+	_, err := q.db.ExecContext(ctx, deleteSharedNetworkLinks, network)
+	return err
+}
+
 const deleteSubnet = `-- name: DeleteSubnet :exec
 DELETE FROM subnets WHERE owner = ?
 `
@@ -187,6 +196,27 @@ func (q *Queries) InsertSharedNetwork(ctx context.Context, arg InsertSharedNetwo
 	return err
 }
 
+const insertSharedNetworkLink = `-- name: InsertSharedNetworkLink :exec
+INSERT INTO shared_network_links (network, peer_key, peer_name, peer_node) VALUES (?, ?, ?, ?)
+`
+
+type InsertSharedNetworkLinkParams struct {
+	Network  string
+	PeerKey  []byte
+	PeerName string
+	PeerNode string
+}
+
+func (q *Queries) InsertSharedNetworkLink(ctx context.Context, arg InsertSharedNetworkLinkParams) error {
+	_, err := q.db.ExecContext(ctx, insertSharedNetworkLink,
+		arg.Network,
+		arg.PeerKey,
+		arg.PeerName,
+		arg.PeerNode,
+	)
+	return err
+}
+
 const insertSubnet = `-- name: InsertSubnet :exec
 INSERT INTO subnets (subnet, owner) VALUES (?, ?)
 `
@@ -215,6 +245,38 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	for rows.Next() {
 		var i Project
 		if err := rows.Scan(&i.ID, &i.Dir, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSharedNetworkLinks = `-- name: ListSharedNetworkLinks :many
+SELECT network, peer_key, peer_name, peer_node FROM shared_network_links ORDER BY network, peer_name
+`
+
+func (q *Queries) ListSharedNetworkLinks(ctx context.Context) ([]SharedNetworkLink, error) {
+	rows, err := q.db.QueryContext(ctx, listSharedNetworkLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SharedNetworkLink{}
+	for rows.Next() {
+		var i SharedNetworkLink
+		if err := rows.Scan(
+			&i.Network,
+			&i.PeerKey,
+			&i.PeerName,
+			&i.PeerNode,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

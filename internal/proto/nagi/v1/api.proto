@@ -99,6 +99,10 @@ service NodeService {
   rpc ListNodeSharedNetworks(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
   rpc CreateNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
   rpc DeleteNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  // 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
+  rpc LinkNodeSharedNetwork(LinkNodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  // 断开节点上的共享网络和其他节点的连接。
+  rpc UnlinkNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
@@ -499,6 +503,12 @@ message NodeSharedNetworkRequest {
   string node_id = 1;
   // 创建、删除时的网络名。
   string name = 2;
+}
+
+message LinkNodeSharedNetworkRequest {
+  string node_id = 1;
+  string name = 2;
+  string peer_node_id = 3;
 }
 
 message SaveNodeProjectDraftRequest {

@@ -19,12 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MeshService_Ping_FullMethodName            = "/nagi.v1.MeshService/Ping"
-	MeshService_Upload_FullMethodName          = "/nagi.v1.MeshService/Upload"
-	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
-	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
-	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
-	MeshService_LeaseVote_FullMethodName       = "/nagi.v1.MeshService/LeaseVote"
+	MeshService_Ping_FullMethodName              = "/nagi.v1.MeshService/Ping"
+	MeshService_Upload_FullMethodName            = "/nagi.v1.MeshService/Upload"
+	MeshService_ReplicaManifest_FullMethodName   = "/nagi.v1.MeshService/ReplicaManifest"
+	MeshService_ReplicaPut_FullMethodName        = "/nagi.v1.MeshService/ReplicaPut"
+	MeshService_ReplicaCommit_FullMethodName     = "/nagi.v1.MeshService/ReplicaCommit"
+	MeshService_LeaseVote_FullMethodName         = "/nagi.v1.MeshService/LeaseVote"
+	MeshService_SharedNetworkInfo_FullMethodName = "/nagi.v1.MeshService/SharedNetworkInfo"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -44,6 +45,8 @@ type MeshServiceClient interface {
 	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error)
+	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	SharedNetworkInfo(ctx context.Context, in *SharedNetworkInfoRequest, opts ...grpc.CallOption) (*SharedNetworkInfoResponse, error)
 }
 
 type meshServiceClient struct {
@@ -120,6 +123,16 @@ func (c *meshServiceClient) LeaseVote(ctx context.Context, in *LeaseVoteRequest,
 	return out, nil
 }
 
+func (c *meshServiceClient) SharedNetworkInfo(ctx context.Context, in *SharedNetworkInfoRequest, opts ...grpc.CallOption) (*SharedNetworkInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SharedNetworkInfoResponse)
+	err := c.cc.Invoke(ctx, MeshService_SharedNetworkInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MeshServiceServer is the server API for MeshService service.
 // All implementations must embed UnimplementedMeshServiceServer
 // for forward compatibility.
@@ -137,6 +150,8 @@ type MeshServiceServer interface {
 	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error)
+	// 跨节点连接的共享网络：本节点这个网络里的成员和加入的项目。只接受和这个网络相连的节点。
+	SharedNetworkInfo(context.Context, *SharedNetworkInfoRequest) (*SharedNetworkInfoResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }
 
@@ -164,6 +179,9 @@ func (UnimplementedMeshServiceServer) ReplicaCommit(context.Context, *ReplicaCom
 }
 func (UnimplementedMeshServiceServer) LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaseVote not implemented")
+}
+func (UnimplementedMeshServiceServer) SharedNetworkInfo(context.Context, *SharedNetworkInfoRequest) (*SharedNetworkInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SharedNetworkInfo not implemented")
 }
 func (UnimplementedMeshServiceServer) mustEmbedUnimplementedMeshServiceServer() {}
 func (UnimplementedMeshServiceServer) testEmbeddedByValue()                     {}
@@ -272,6 +290,24 @@ func _MeshService_LeaseVote_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MeshService_SharedNetworkInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SharedNetworkInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).SharedNetworkInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_SharedNetworkInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).SharedNetworkInfo(ctx, req.(*SharedNetworkInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MeshService_ServiceDesc is the grpc.ServiceDesc for MeshService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -294,6 +330,10 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LeaseVote",
 			Handler:    _MeshService_LeaseVote_Handler,
+		},
+		{
+			MethodName: "SharedNetworkInfo",
+			Handler:    _MeshService_SharedNetworkInfo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

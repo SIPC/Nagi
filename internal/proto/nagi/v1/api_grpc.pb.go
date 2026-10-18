@@ -398,6 +398,8 @@ const (
 	NodeService_ListNodeSharedNetworks_FullMethodName   = "/nagi.v1.NodeService/ListNodeSharedNetworks"
 	NodeService_CreateNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/CreateNodeSharedNetwork"
 	NodeService_DeleteNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/DeleteNodeSharedNetwork"
+	NodeService_LinkNodeSharedNetwork_FullMethodName    = "/nagi.v1.NodeService/LinkNodeSharedNetwork"
+	NodeService_UnlinkNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/UnlinkNodeSharedNetwork"
 	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName         = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName               = "/nagi.v1.NodeService/RemoveNode"
@@ -439,6 +441,10 @@ type NodeServiceClient interface {
 	ListNodeSharedNetworks(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	CreateNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	DeleteNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
+	LinkNodeSharedNetwork(ctx context.Context, in *LinkNodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	// 断开节点上的共享网络和其他节点的连接。
+	UnlinkNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -653,6 +659,26 @@ func (c *nodeServiceClient) DeleteNodeSharedNetwork(ctx context.Context, in *Nod
 	return out, nil
 }
 
+func (c *nodeServiceClient) LinkNodeSharedNetwork(ctx context.Context, in *LinkNodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, NodeService_LinkNodeSharedNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) UnlinkNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSharedNetworksResponse)
+	err := c.cc.Invoke(ctx, NodeService_UnlinkNodeSharedNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEnrollCommandResponse)
@@ -719,6 +745,10 @@ type NodeServiceServer interface {
 	ListNodeSharedNetworks(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
 	CreateNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
 	DeleteNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
+	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
+	LinkNodeSharedNetwork(context.Context, *LinkNodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
+	// 断开节点上的共享网络和其他节点的连接。
+	UnlinkNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -790,6 +820,12 @@ func (UnimplementedNodeServiceServer) CreateNodeSharedNetwork(context.Context, *
 }
 func (UnimplementedNodeServiceServer) DeleteNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteNodeSharedNetwork not implemented")
+}
+func (UnimplementedNodeServiceServer) LinkNodeSharedNetwork(context.Context, *LinkNodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LinkNodeSharedNetwork not implemented")
+}
+func (UnimplementedNodeServiceServer) UnlinkNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlinkNodeSharedNetwork not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -1156,6 +1192,42 @@ func _NodeService_DeleteNodeSharedNetwork_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_LinkNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkNodeSharedNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).LinkNodeSharedNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_LinkNodeSharedNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).LinkNodeSharedNetwork(ctx, req.(*LinkNodeSharedNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_UnlinkNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeSharedNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).UnlinkNodeSharedNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_UnlinkNodeSharedNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).UnlinkNodeSharedNetwork(ctx, req.(*NodeSharedNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEnrollCommandRequest)
 	if err := dec(in); err != nil {
@@ -1288,6 +1360,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteNodeSharedNetwork",
 			Handler:    _NodeService_DeleteNodeSharedNetwork_Handler,
+		},
+		{
+			MethodName: "LinkNodeSharedNetwork",
+			Handler:    _NodeService_LinkNodeSharedNetwork_Handler,
+		},
+		{
+			MethodName: "UnlinkNodeSharedNetwork",
+			Handler:    _NodeService_UnlinkNodeSharedNetwork_Handler,
 		},
 		{
 			MethodName: "CreateEnrollCommand",

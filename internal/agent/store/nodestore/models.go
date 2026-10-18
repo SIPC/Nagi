@@ -27,6 +27,13 @@ type SharedNetwork struct {
 	CreatedAt int64
 }
 
+type SharedNetworkLink struct {
+	Network  string
+	PeerKey  []byte
+	PeerName string
+	PeerNode string
+}
+
 type Subnet struct {
 	Subnet string
 	Owner  string

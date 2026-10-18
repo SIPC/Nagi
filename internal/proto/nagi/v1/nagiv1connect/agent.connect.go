@@ -75,6 +75,9 @@ const (
 	// AgentServiceDeleteSharedNetworkProcedure is the fully-qualified name of the AgentService's
 	// DeleteSharedNetwork RPC.
 	AgentServiceDeleteSharedNetworkProcedure = "/nagi.v1.AgentService/DeleteSharedNetwork"
+	// AgentServiceSetSharedNetworkPeersProcedure is the fully-qualified name of the AgentService's
+	// SetSharedNetworkPeers RPC.
+	AgentServiceSetSharedNetworkPeersProcedure = "/nagi.v1.AgentService/SetSharedNetworkPeers"
 	// AgentServiceSaveRouteProcedure is the fully-qualified name of the AgentService's SaveRoute RPC.
 	AgentServiceSaveRouteProcedure = "/nagi.v1.AgentService/SaveRoute"
 	// AgentServiceDeleteRouteProcedure is the fully-qualified name of the AgentService's DeleteRoute
@@ -220,6 +223,8 @@ type AgentServiceClient interface {
 	CreateSharedNetwork(context.Context, *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 删除共享网络：还有项目加入时拒绝。
 	DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
+	SetSharedNetworkPeers(context.Context, *connect.Request[v1.SetSharedNetworkPeersRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
@@ -398,6 +403,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceDeleteSharedNetworkProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("DeleteSharedNetwork")),
+			connect.WithClientOptions(opts...),
+		),
+		setSharedNetworkPeers: connect.NewClient[v1.SetSharedNetworkPeersRequest, v1.ListSharedNetworksResponse](
+			httpClient,
+			baseURL+AgentServiceSetSharedNetworkPeersProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetSharedNetworkPeers")),
 			connect.WithClientOptions(opts...),
 		),
 		saveRoute: connect.NewClient[v1.SaveRouteRequest, v1.SaveRouteResponse](
@@ -678,6 +689,7 @@ type agentServiceClient struct {
 	listSharedNetworks    *connect.Client[v1.ListSharedNetworksRequest, v1.ListSharedNetworksResponse]
 	createSharedNetwork   *connect.Client[v1.CreateSharedNetworkRequest, v1.ListSharedNetworksResponse]
 	deleteSharedNetwork   *connect.Client[v1.DeleteSharedNetworkRequest, v1.ListSharedNetworksResponse]
+	setSharedNetworkPeers *connect.Client[v1.SetSharedNetworkPeersRequest, v1.ListSharedNetworksResponse]
 	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.SaveRouteResponse]
 	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.DeleteRouteResponse]
 	listVersions          *connect.Client[v1.ListVersionsRequest, v1.ListVersionsResponse]
@@ -796,6 +808,11 @@ func (c *agentServiceClient) CreateSharedNetwork(ctx context.Context, req *conne
 // DeleteSharedNetwork calls nagi.v1.AgentService.DeleteSharedNetwork.
 func (c *agentServiceClient) DeleteSharedNetwork(ctx context.Context, req *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
 	return c.deleteSharedNetwork.CallUnary(ctx, req)
+}
+
+// SetSharedNetworkPeers calls nagi.v1.AgentService.SetSharedNetworkPeers.
+func (c *agentServiceClient) SetSharedNetworkPeers(ctx context.Context, req *connect.Request[v1.SetSharedNetworkPeersRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return c.setSharedNetworkPeers.CallUnary(ctx, req)
 }
 
 // SaveRoute calls nagi.v1.AgentService.SaveRoute.
@@ -1039,6 +1056,8 @@ type AgentServiceHandler interface {
 	CreateSharedNetwork(context.Context, *connect.Request[v1.CreateSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 删除共享网络：还有项目加入时拒绝。
 	DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
+	// 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
+	SetSharedNetworkPeers(context.Context, *connect.Request[v1.SetSharedNetworkPeersRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error)
 	// 新建或修改一条端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.DeleteRouteResponse], error)
@@ -1213,6 +1232,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceDeleteSharedNetworkProcedure,
 		svc.DeleteSharedNetwork,
 		connect.WithSchema(agentServiceMethods.ByName("DeleteSharedNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetSharedNetworkPeersHandler := connect.NewUnaryHandler(
+		AgentServiceSetSharedNetworkPeersProcedure,
+		svc.SetSharedNetworkPeers,
+		connect.WithSchema(agentServiceMethods.ByName("SetSharedNetworkPeers")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceSaveRouteHandler := connect.NewUnaryHandler(
@@ -1505,6 +1530,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateSharedNetworkHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteSharedNetworkProcedure:
 			agentServiceDeleteSharedNetworkHandler.ServeHTTP(w, r)
+		case AgentServiceSetSharedNetworkPeersProcedure:
+			agentServiceSetSharedNetworkPeersHandler.ServeHTTP(w, r)
 		case AgentServiceSaveRouteProcedure:
 			agentServiceSaveRouteHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteRouteProcedure:
@@ -1658,6 +1685,10 @@ func (UnimplementedAgentServiceHandler) CreateSharedNetwork(context.Context, *co
 
 func (UnimplementedAgentServiceHandler) DeleteSharedNetwork(context.Context, *connect.Request[v1.DeleteSharedNetworkRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteSharedNetwork is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetSharedNetworkPeers(context.Context, *connect.Request[v1.SetSharedNetworkPeersRequest]) (*connect.Response[v1.ListSharedNetworksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetSharedNetworkPeers is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.SaveRouteResponse], error) {

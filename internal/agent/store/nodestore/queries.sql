@@ -58,3 +58,11 @@ WHERE instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY se
 -- name: QueryM5 :many
 SELECT series, ts, value FROM metrics_m5
 WHERE instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY series, ts;
+-- name: ListSharedNetworkLinks :many
+SELECT * FROM shared_network_links ORDER BY network, peer_name;
+
+-- name: InsertSharedNetworkLink :exec
+INSERT INTO shared_network_links (network, peer_key, peer_name, peer_node) VALUES (?, ?, ?, ?);
+
+-- name: DeleteSharedNetworkLinks :exec
+DELETE FROM shared_network_links WHERE network = ?;

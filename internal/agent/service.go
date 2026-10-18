@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sort"
@@ -167,27 +168,50 @@ func (s *agentService) RestoreDeployment(req *nagiv1.RestoreDeploymentRequest, s
 }
 
 func (s *agentService) ListSharedNetworks(ctx context.Context, _ *nagiv1.ListSharedNetworksRequest) (*nagiv1.ListSharedNetworksResponse, error) {
+	return s.sharedNetworks(ctx)
+}
+
+func (s *agentService) sharedNetworks(ctx context.Context) (*nagiv1.ListSharedNetworksResponse, error) {
 	list, err := s.projects.SharedNetworks(ctx)
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	s.node.links.decorate(list)
 	return &nagiv1.ListSharedNetworksResponse{Networks: list}, nil
+}
+
+func (s *agentService) SetSharedNetworkPeers(ctx context.Context, req *nagiv1.SetSharedNetworkPeersRequest) (*nagiv1.ListSharedNetworksResponse, error) {
+	var self []byte
+	if s.node.mesh != nil {
+		k := s.node.mesh.m.PublicKey()
+		self = k[:]
+	}
+	var peers []project.LinkPeer
+	for _, p := range req.GetPeers() {
+		if len(p.GetPublicKey()) != 32 || bytes.Equal(p.GetPublicKey(), self) {
+			continue
+		}
+		peers = append(peers, project.LinkPeer{Key: p.GetPublicKey(), Name: p.GetName(), NodeID: p.GetNodeId()})
+	}
+	if err := s.projects.SetSharedNetworkPeers(ctx, req.GetName(), peers); err != nil {
+		return nil, toStatus(err)
+	}
+	s.node.links.sync(ctx)
+	return s.sharedNetworks(ctx)
 }
 
 func (s *agentService) CreateSharedNetwork(ctx context.Context, req *nagiv1.CreateSharedNetworkRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	list, err := s.projects.CreateSharedNetwork(ctx, req.GetName())
-	if err != nil {
+	if _, err := s.projects.CreateSharedNetwork(ctx, req.GetName()); err != nil {
 		return nil, toStatus(err)
 	}
-	return &nagiv1.ListSharedNetworksResponse{Networks: list}, nil
+	return s.sharedNetworks(ctx)
 }
 
 func (s *agentService) DeleteSharedNetwork(ctx context.Context, req *nagiv1.DeleteSharedNetworkRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	list, err := s.projects.DeleteSharedNetwork(ctx, req.GetName())
-	if err != nil {
+	if _, err := s.projects.DeleteSharedNetwork(ctx, req.GetName()); err != nil {
 		return nil, toStatus(err)
 	}
-	return &nagiv1.ListSharedNetworksResponse{Networks: list}, nil
+	return s.sharedNetworks(ctx)
 }
 
 func (s *agentService) SaveRoute(ctx context.Context, req *nagiv1.SaveRouteRequest) (*nagiv1.SaveRouteResponse, error) {

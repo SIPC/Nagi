@@ -140,6 +140,8 @@ func Run(ctx context.Context, cfg Config) error {
 	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
 	projects.ManagedRestart = func(id string) bool { return a.failovers.get(id) != nil }
 	projects.ReservedDomain = func(d string) bool { return d != "" && d == a.panelDomain() }
+	a.links = newLinks(a)
+	projects.RemoteProjects = a.links.remoteProjects
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 
@@ -161,6 +163,7 @@ func Run(ctx context.Context, cfg Config) error {
 			case <-netSync:
 				time.Sleep(time.Second) // 一次部署会连续产生很多事件，攒一下再处理
 				projects.SyncAllNetworks(ctx)
+				a.links.trigger()
 			}
 		}
 	}()
@@ -181,6 +184,7 @@ func Run(ctx context.Context, cfg Config) error {
 			a.startFailover(ctx, id)
 		}
 	}
+	go a.links.run(ctx)
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
@@ -220,6 +224,7 @@ type agent struct {
 	mesh      *meshNode
 	replicas  *replicas
 	failovers *failovers
+	links     *links
 	ctx       context.Context
 	startedAt time.Time
 

@@ -46,7 +46,20 @@ func (m *Manager) UpdateSettings(ctx context.Context, id string, baseRevision in
 	if next.GetNetworkName() != "" && !nameRe.MatchString(next.GetNetworkName()) {
 		return nil, invalid("网络名只能用小写字母、数字和 -，不超过 32 个字符")
 	}
+	if next.LinkPorts, err = cleanLinkPorts(in.GetLinkPorts()); err != nil {
+		return nil, err
+	}
 	if err := m.checkSharedSettings(ctx, id, next); err != nil {
+		return nil, err
+	}
+	// 新加入的共享网络（或者改了网络名）要检查相连节点上的网络名。
+	var check []string
+	for _, n := range next.GetSharedNetworks() {
+		if old.GetNetworkName() != next.GetNetworkName() || !slices.Contains(old.GetSharedNetworks(), n) {
+			check = append(check, n)
+		}
+	}
+	if err := m.checkRemoteNames(ctx, id, next.GetNetworkName(), check, true); err != nil {
 		return nil, err
 	}
 	if err := pdb.setSettings(ctx, next); err != nil {
