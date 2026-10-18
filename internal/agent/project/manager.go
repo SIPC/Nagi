@@ -333,6 +333,19 @@ func (m *Manager) releaseProject(ctx context.Context, id string) error {
 // ---- 读取 ----
 
 // List 返回本节点所有项目及其状态。
+// Dirs 返回所有项目目录。
+func (m *Manager) Dirs(ctx context.Context) []string {
+	rows, err := m.nodeQ.ListProjects(ctx)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Dir)
+	}
+	return out
+}
+
 func (m *Manager) List(ctx context.Context) ([]*nagiv1.ProjectSummary, error) {
 	rows, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {

@@ -502,6 +502,9 @@ func (m *Manager) deployContainer(ctx context.Context, row nodestore.Project, pd
 	if err := m.SyncNetworks(ctx, id); err != nil {
 		onLine("警告：接入项目内网失败：" + err.Error())
 	}
+	if err := m.watchStart(ctx, files.ProjectName, onLine); err != nil {
+		return version, err
+	}
 
 	// 7. 记录镜像摘要和部署时间，清理过旧的版本。
 	images, _ := m.docker.ProjectImages(ctx, files.ProjectName)

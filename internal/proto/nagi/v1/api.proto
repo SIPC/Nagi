@@ -270,6 +270,9 @@ message GetAlertConfigRequest {}
 
 message GetAlertConfigResponse {
   AlertConfig config = 1;
+  // 告警配置随面板主密钥一起丢了（用 --new-master-key 启动过），还没有重新保存。
+  // 在那之前面板不给节点下发，节点继续按原来的配置发告警。
+  bool lost = 2;
 }
 
 message UpdateAlertConfigRequest {

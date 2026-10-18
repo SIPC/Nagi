@@ -221,6 +221,11 @@ func (e *Engine) evaluate(ctx context.Context) {
 	if v, ok := latest["node:disk"]; ok && v > rules.DiskPercent {
 		active["disk"] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘使用 %.0f%%，超过 %.0f%%", v, rules.DiskPercent)}
 	}
+	for series, v := range latest {
+		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && v > rules.DiskPercent {
+			active["disk:"+mount] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘 %s（项目目录所在）使用 %.0f%%，超过 %.0f%%", mount, v, rules.DiskPercent)}
+		}
+	}
 	if v, ok := latest["node:mem"]; ok && v > rules.MemPercent {
 		if e.memSince.IsZero() {
 			e.memSince = now

@@ -10,6 +10,28 @@ import (
 	"database/sql"
 )
 
+const clearTOTPSecrets = `-- name: ClearTOTPSecrets :exec
+UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != ''
+`
+
+func (q *Queries) ClearTOTPSecrets(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearTOTPSecrets)
+	return err
+}
+
+const countSealedData = `-- name: CountSealedData :one
+SELECT (SELECT count(*) FROM users WHERE totp_secret != '')
+     + (SELECT count(*) FROM settings WHERE key = 'alert_config')
+     + (SELECT count(*) FROM project_backups) AS n
+`
+
+func (q *Queries) CountSealedData(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSealedData)
+	var n int64
+	err := row.Scan(&n)
+	return n, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT count(*) FROM users
 `
@@ -103,6 +125,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const deleteAllProjectBackups = `-- name: DeleteAllProjectBackups :exec
+DELETE FROM project_backups
+`
+
+func (q *Queries) DeleteAllProjectBackups(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllProjectBackups)
+	return err
 }
 
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec

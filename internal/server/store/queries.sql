@@ -125,3 +125,14 @@ DELETE FROM sessions WHERE user_id = ?;
 
 -- name: DeleteOtherSessions :exec
 DELETE FROM sessions WHERE user_id = ? AND token_hash != ?;
+
+-- name: CountSealedData :one
+SELECT (SELECT count(*) FROM users WHERE totp_secret != '')
+     + (SELECT count(*) FROM settings WHERE key = 'alert_config')
+     + (SELECT count(*) FROM project_backups) AS n;
+
+-- name: ClearTOTPSecrets :exec
+UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != '';
+
+-- name: DeleteAllProjectBackups :exec
+DELETE FROM project_backups;

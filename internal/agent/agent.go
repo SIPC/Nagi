@@ -169,6 +169,8 @@ func Run(ctx context.Context, cfg Config) error {
 	}()
 	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
+	a.metrics.ProjectDirs = func() []string { return projects.Dirs(context.Background()) }
+	hintDirs = func() []string { return append([]string{cfg.DataDir}, projects.Dirs(context.Background())...) }
 	if !cfg.DisableProxy {
 		a.metrics.AddSource(routeMetrics())
 	}
@@ -447,7 +449,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 	defer sess.Close()
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary), grpc.ChainStreamInterceptor(explainStream))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
 	})

@@ -42,6 +42,8 @@ type Config struct {
 	Version string
 	// SelfTLS：本机没有 Caddy（--no-agent 或 --no-proxy），绑定域名时由面板自己申请证书、监听 80/443。
 	SelfTLS bool
+	// NewMasterKey：用户确认主密钥丢了（--new-master-key）。见 checkMasterKey。
+	NewMasterKey bool
 }
 
 const (
@@ -69,6 +71,35 @@ type Server struct {
 	domainCh chan string
 }
 
+// checkMasterKey 在主密钥文件不见了、数据库里却有用它加密的数据时拒绝启动：悄悄生成新密钥，
+// 这些数据就再也解不开了，而用户多半只是忘了把备份的密钥放回来。
+// 用户确认密钥确实丢了（NewMasterKey）时清掉解不开的数据，接着生成新密钥。
+func (s *Server) checkMasterKey(ctx context.Context, path string) error {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	n, err := s.q.CountSealedData(ctx)
+	if err != nil || n == 0 {
+		return err
+	}
+	if !s.cfg.NewMasterKey {
+		return fmt.Errorf("找不到面板主密钥 %s，但数据库里有用它加密的数据（两步验证、告警配置、项目配置备份）。"+
+			"请把备份的主密钥文件放回这个位置再启动。确实丢了的话，加 --new-master-key 启动：生成新的主密钥，"+
+			"关闭两步验证，清掉告警配置（要重新填写，在那之前节点继续按原来的配置发告警）和项目配置备份（在线节点会重新上报）", path)
+	}
+	if err := s.q.ClearTOTPSecrets(ctx); err != nil {
+		return err
+	}
+	if err := nodes.MarkAlertConfigLost(ctx, s.q); err != nil {
+		return err
+	}
+	if err := s.q.DeleteAllProjectBackups(ctx); err != nil {
+		return err
+	}
+	s.log.Warn("主密钥丢失：已生成新的主密钥，关闭了两步验证，清掉了告警配置和项目配置备份", "path", path)
+	return nil
+}
+
 // New 打开数据库、准备证书、监听面板端口。
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	log := cfg.Logger
@@ -93,7 +124,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
-	s.sealer, err = sealer.Load(filepath.Join(cfg.DataDir, "pki", "master.key"))
+	keyPath := filepath.Join(cfg.DataDir, "pki", "master.key")
+	if err := s.checkMasterKey(ctx, keyPath); err != nil {
+		d.Close()
+		return nil, err
+	}
+	s.sealer, err = sealer.Load(keyPath)
 	if err != nil {
 		d.Close()
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)

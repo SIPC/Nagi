@@ -130,7 +130,7 @@ func (s *settingsService) GetAlertConfig(ctx context.Context, _ *connect.Request
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&nagiv1.GetAlertConfigResponse{Config: cfg}), nil
+	return connect.NewResponse(&nagiv1.GetAlertConfigResponse{Config: cfg, Lost: s.Nodes.AlertConfigLost(ctx)}), nil
 }
 
 func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Request[nagiv1.UpdateAlertConfigRequest]) (*connect.Response[nagiv1.UpdateAlertConfigResponse], error) {

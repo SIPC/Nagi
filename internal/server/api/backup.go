@@ -136,7 +136,7 @@ func (s *nodeService) RestoreNodeReplica(ctx context.Context, req *connect.Reque
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {
 				return nil
 			}
-			return fromGRPC(err)
+			return fromStream(err)
 		}
 		if err := out.Send(ev); err != nil {
 			return err
@@ -174,7 +174,7 @@ func forward(stream deployStream, err error, out *connect.ServerStream[nagiv1.De
 			return &nagiv1.DeployResult{Error: "节点没有返回结果"}
 		}
 		if err != nil {
-			return &nagiv1.DeployResult{Error: connectMessage(fromGRPC(err))}
+			return &nagiv1.DeployResult{Error: connectMessage(fromStream(err))}
 		}
 		if r := ev.GetResult(); r != nil {
 			return r

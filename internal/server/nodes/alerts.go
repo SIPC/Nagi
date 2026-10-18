@@ -20,6 +20,24 @@ const settingAlertConfig = "alert_config"
 
 var alertConfigContext = []byte("alert_config")
 
+// settingAlertConfigLost 标记告警配置随主密钥一起丢了：在用户重新保存之前不给节点下发（下发的会是空配置），
+// 节点继续按原来的配置发告警。
+const settingAlertConfigLost = "alert_config_lost"
+
+// MarkAlertConfigLost 在主密钥丢失、重新生成时调用：删掉解不开的告警配置并做标记。
+func MarkAlertConfigLost(ctx context.Context, q *store.Queries) error {
+	if err := q.DeleteSetting(ctx, settingAlertConfig); err != nil {
+		return err
+	}
+	return q.SetSetting(ctx, store.SetSettingParams{Key: settingAlertConfigLost, Value: "1"})
+}
+
+// AlertConfigLost 返回告警配置是否随主密钥丢了、还没有重新保存。
+func (r *Registry) AlertConfigLost(ctx context.Context) bool {
+	v, err := r.q.GetSetting(ctx, settingAlertConfigLost)
+	return err == nil && v != ""
+}
+
 // AlertConfig 读取告警配置，没有配置时返回空配置。
 func (r *Registry) AlertConfig(ctx context.Context) (*nagiv1.AlertConfig, error) {
 	cfg := &nagiv1.AlertConfig{}
@@ -53,6 +71,9 @@ func (r *Registry) SetAlertConfig(ctx context.Context, cfg *nagiv1.AlertConfig) 
 	}); err != nil {
 		return err
 	}
+	if err := r.q.DeleteSetting(ctx, settingAlertConfigLost); err != nil {
+		return err
+	}
 	r.mu.RLock()
 	conns := make([]*Conn, 0, len(r.conns))
 	for _, c := range r.conns {
@@ -68,6 +89,9 @@ func (r *Registry) SetAlertConfig(ctx context.Context, cfg *nagiv1.AlertConfig) 
 // pushAlertConfig 把告警配置下发给一个节点。cfg 为 nil 时读取当前配置。
 func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.AlertConfig) {
 	if cfg == nil {
+		if r.AlertConfigLost(ctx) {
+			return
+		}
 		var err error
 		if cfg, err = r.AlertConfig(ctx); err != nil {
 			r.log.Warn("读取告警配置失败", "err", err)

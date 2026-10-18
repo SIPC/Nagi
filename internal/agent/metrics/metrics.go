@@ -4,6 +4,7 @@
 // 序列名：
 //   - node:cpu、node:mem（百分比），node:mem_used、node:disk_free（字节），node:disk（百分比），
 //     node:net_rx、node:net_tx（字节/秒）
+//   - node:disk@<挂载点>（百分比）：项目目录所在、和节点目录不是同一块的磁盘
 //   - c:<项目 ID>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
 //   - r:<项目 ID>/<规则名>:req、:5xx（请求/秒）、:lat（平均耗时，毫秒），由 AddSource 提供
 package metrics
@@ -57,6 +58,8 @@ type Collector struct {
 
 	// ExtraRestarts 返回节点代为重启某个容器的次数（顶替项目由节点代管重启，Docker 不计数）。
 	ExtraRestarts func(containerID string) int
+	// ProjectDirs 返回所有项目目录。项目目录可能在另一块磁盘上（例如 /srv 挂的数据盘），那块盘也要监控。
+	ProjectDirs func() []string
 }
 
 // Source 是额外的指标来源，每次采样时调用，elapsed 是距上次采样的秒数。
@@ -64,6 +67,32 @@ type Source func(elapsed float64) map[string]float64
 
 // AddSource 添加额外的指标来源。需要在 Run 之前调用。
 func (c *Collector) AddSource(s Source) { c.sources = append(c.sources, s) }
+
+// projectDisks 返回项目目录所在、和节点目录不是同一块的磁盘的使用率，键是挂载点。
+func (c *Collector) projectDisks() map[string]float64 {
+	if c.ProjectDirs == nil {
+		return nil
+	}
+	out := map[string]float64{}
+	seen := map[string]bool{mountOf(c.diskPath): true}
+	for _, dir := range c.ProjectDirs() {
+		mount := mountOf(dir)
+		if mount == "" || seen[mount] {
+			continue
+		}
+		seen[mount] = true
+		if total, free, ok := readDisk(mount); ok && total > 0 {
+			out[mount] = 100 * float64(total-free) / float64(total)
+		}
+	}
+	return out
+}
+
+// DiskFree 返回 path 所在的挂载点和剩余空间（字节）。不支持的系统上 ok 为 false。
+func DiskFree(path string) (mount string, free uint64, ok bool) {
+	_, free, ok = readDisk(path)
+	return mountOf(path), free, ok
+}
 
 // New 创建采集器。diskPath 用来计算磁盘使用率（节点目录所在的文件系统）。
 func New(db *sql.DB, dc *docker.Client, diskPath string, log *slog.Logger) *Collector {
@@ -121,6 +150,9 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	if total, free, ok := readDisk(c.diskPath); ok && total > 0 {
 		v["node:disk"] = 100 * float64(total-free) / float64(total)
 		v["node:disk_free"] = float64(free)
+	}
+	for mount, pct := range c.projectDisks() {
+		v["node:disk@"+mount] = pct
 	}
 	if rx, tx, ok := readNet(); ok {
 		if !first && elapsed > 0 && rx >= c.prevNetRx && tx >= c.prevNetTx {

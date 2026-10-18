@@ -23,6 +23,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -404,7 +405,7 @@ func forwardEvents(ctx context.Context, recv func() (*nagiv1.DeployEvent, error)
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {
 				return nil
 			}
-			return fromGRPC(err)
+			return fromStream(err)
 		}
 		if err := out.Send(ev); err != nil {
 			return err
@@ -488,7 +489,7 @@ func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Req
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {
 				return nil
 			}
-			return fromGRPC(err)
+			return fromStream(err)
 		}
 		if err := out.Send(ev); err != nil {
 			return err
@@ -707,6 +708,15 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 // ---- 错误转换 ----
 
 // fromGRPC 把节点返回的 gRPC 错误转换成 Connect 错误。两者的错误码编号相同。
+// fromStream 转换节点的流式调用（部署、迁移等）中途返回的错误。连接在中途断了（节点重启、网络中断）时，
+// 操作可能没做完也可能已经做完，gRPC 的原始信息（"error reading from server: EOF"）用户看不懂，换成说明。
+func fromStream(err error) error {
+	if status.Code(err) == codes.Unavailable {
+		return connect.NewError(connect.CodeUnavailable, errors.New("和节点的连接在操作过程中断开了，操作可能没做完，也可能已经做完。等节点重新连上后，看一下项目的状态和部署记录"))
+	}
+	return fromGRPC(err)
+}
+
 func fromGRPC(err error) error {
 	st, ok := status.FromError(err)
 	if !ok {

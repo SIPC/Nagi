@@ -105,6 +105,11 @@ export function AlertSettings() {
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
         {error && <Alert>{error}</Alert>}
+        {cfg.data?.lost && (
+          <Alert>
+            面板主密钥重新生成过，原来的告警配置解不开了，请重新填写并保存。在那之前各节点继续按原来的配置发告警，面板自己的"节点失联"告警发不出去。
+          </Alert>
+        )}
         {msg && <div className="text-muted-foreground">{msg}</div>}
         <div className="grid gap-2">
           <div className="font-medium">渠道</div>

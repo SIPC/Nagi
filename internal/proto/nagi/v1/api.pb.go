@@ -2064,8 +2064,11 @@ func (*GetAlertConfigRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetAlertConfigResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Config        *AlertConfig           `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Config *AlertConfig           `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	// 告警配置随面板主密钥一起丢了（用 --new-master-key 启动过），还没有重新保存。
+	// 在那之前面板不给节点下发，节点继续按原来的配置发告警。
+	Lost          bool `protobuf:"varint,2,opt,name=lost,proto3" json:"lost,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2105,6 +2108,13 @@ func (x *GetAlertConfigResponse) GetConfig() *AlertConfig {
 		return x.Config
 	}
 	return nil
+}
+
+func (x *GetAlertConfigResponse) GetLost() bool {
+	if x != nil {
+		return x.Lost
+	}
+	return false
 }
 
 type UpdateAlertConfigRequest struct {
@@ -5193,9 +5203,10 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x13RevokeInviteRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
 	"\x14RevokeInviteResponse\"\x17\n" +
-	"\x15GetAlertConfigRequest\"F\n" +
+	"\x15GetAlertConfigRequest\"Z\n" +
 	"\x16GetAlertConfigResponse\x12,\n" +
-	"\x06config\x18\x01 \x01(\v2\x14.nagi.v1.AlertConfigR\x06config\"H\n" +
+	"\x06config\x18\x01 \x01(\v2\x14.nagi.v1.AlertConfigR\x06config\x12\x12\n" +
+	"\x04lost\x18\x02 \x01(\bR\x04lost\"H\n" +
 	"\x18UpdateAlertConfigRequest\x12,\n" +
 	"\x06config\x18\x01 \x01(\v2\x14.nagi.v1.AlertConfigR\x06config\"I\n" +
 	"\x19UpdateAlertConfigResponse\x12,\n" +

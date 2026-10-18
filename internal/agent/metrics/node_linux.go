@@ -68,6 +68,47 @@ func readDisk(path string) (total, free uint64, ok bool) {
 	return st.Blocks * uint64(st.Bsize), st.Bavail * uint64(st.Bsize), true
 }
 
+// mountOf 返回 path 所在的挂载点：/proc/self/mountinfo 里是 path 前缀的最长的挂载点。
+func mountOf(path string) string {
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	best := ""
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) < 5 {
+			continue
+		}
+		mp := unescapeMount(fields[4])
+		if (path == mp || mp == "/" || strings.HasPrefix(path, mp+"/")) && len(mp) > len(best) {
+			best = mp
+		}
+	}
+	return best
+}
+
+// unescapeMount 还原 mountinfo 里转义的字符（例如空格写成 \040）。
+func unescapeMount(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+3 < len(s) {
+			if n, err := strconv.ParseUint(s[i+1:i+4], 8, 8); err == nil {
+				b.WriteByte(byte(n))
+				i += 3
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 // readNet 返回物理网卡累计收发的字节数，不算回环、Docker 网桥、容器虚拟网卡和 WireGuard。
 func readNet() (rx, tx uint64, ok bool) {
 	f, err := os.Open("/proc/net/dev")

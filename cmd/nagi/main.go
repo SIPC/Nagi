@@ -45,6 +45,7 @@ func serverCmd() *cobra.Command {
 		port    int
 		noAgent bool
 		noProxy bool
+		newKey  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -55,11 +56,12 @@ func serverCmd() *cobra.Command {
 			log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 			srv, err := server.New(ctx, server.Config{
-				DataDir: filepath.Join(dataDir, "panel"),
-				Port:    port,
-				Logger:  log.With("component", "panel"),
-				Version: version,
-				SelfTLS: noAgent || noProxy,
+				DataDir:      filepath.Join(dataDir, "panel"),
+				Port:         port,
+				Logger:       log.With("component", "panel"),
+				Version:      version,
+				SelfTLS:      noAgent || noProxy,
+				NewMasterKey: newKey,
 			})
 			if err != nil {
 				return err
@@ -84,6 +86,7 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 0, "面板端口（默认首次启动时随机选择并记住）")
 	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "只运行面板，不启动内嵌节点")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
+	cmd.Flags().BoolVar(&newKey, "new-master-key", false, "面板主密钥确实丢了时使用：生成新的主密钥，清掉用旧密钥加密的数据")
 	return cmd
 }
 

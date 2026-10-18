@@ -157,6 +157,12 @@ func (s *agentService) ListDeployments(ctx context.Context, req *nagiv1.ListDepl
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	// 记录里存的是原始错误。磁盘满的说明要看出错时的剩余空间，这里只补拉取镜像的说明。
+	for _, d := range list {
+		if h := dockerHint(d.GetError()); h != "" {
+			d.Error = h + "（原始错误：" + d.GetError() + "）"
+		}
+	}
 	return &nagiv1.ListDeploymentsResponse{Deployments: list}, nil
 }
 
@@ -365,7 +371,7 @@ func runStream(send func(*nagiv1.DeployEvent) error, op func(onLine func(string)
 	}
 	result := &nagiv1.DeployResult{Success: err == nil, Version: version}
 	if err != nil {
-		result.Error = err.Error()
+		result.Error = explain(err.Error())
 	}
 	return send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: result}})
 }

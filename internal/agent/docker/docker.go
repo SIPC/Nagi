@@ -426,6 +426,26 @@ func (d *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
 	return out, nil
 }
 
+// StartInfo 是容器的运行状态，部署后观察容器有没有起来用。
+type StartInfo struct {
+	State        string
+	ExitCode     int
+	RestartCount int
+}
+
+// StartInfo 返回容器的状态、退出码和被 Docker 自动重启的次数。
+func (d *Client) StartInfo(ctx context.Context, id string) (StartInfo, error) {
+	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err != nil {
+		return StartInfo{}, err
+	}
+	out := StartInfo{RestartCount: info.Container.RestartCount}
+	if st := info.Container.State; st != nil {
+		out.State, out.ExitCode = string(st.Status), st.ExitCode
+	}
+	return out, nil
+}
+
 // RestartCount 返回容器被 Docker 自动重启的次数。
 func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
 	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
