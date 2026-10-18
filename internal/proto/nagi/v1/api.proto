@@ -369,6 +369,8 @@ service ProjectService {
   // 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
   // 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
   rpc MigrateNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
+  // 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
+  rpc RebuildNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
   // 设置顶替（standby_node_id 为空表示取消）。
   rpc SetNodeProjectFailover(SetNodeProjectFailoverRequest) returns (FailoverStatus);
   rpc GetNodeProjectFailover(NodeProjectRef) returns (FailoverStatus);

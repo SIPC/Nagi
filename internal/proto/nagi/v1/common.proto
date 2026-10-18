@@ -327,6 +327,8 @@ message DeployResult {
   bool success = 1;
   string error = 2;
   int64 version = 3;
+  // 用配置备份重建时新项目的 ID（项目建好了就有，部署失败也有）。
+  string project_id = 4;
 }
 
 // MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。

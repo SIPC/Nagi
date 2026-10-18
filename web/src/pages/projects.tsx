@@ -1,12 +1,25 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderOpen, Plus, Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
 import { useMemberForm } from "@/components/member-form";
-import { Alert, Button, Card, CardContent, Empty, Field, Input, Select, Spinner } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Empty,
+  Field,
+  Input,
+  Select,
+  Spinner,
+} from "@/components/ui";
 
 export function ProjectsPage() {
   const projects = useQuery({
@@ -16,6 +29,8 @@ export function ProjectsPage() {
   });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
+  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string } | null>(null);
 
   return (
     <>
@@ -31,6 +46,7 @@ export function ProjectsPage() {
           </Link>
         }
       />
+      {rebuild && <RebuildCard {...rebuild} onClose={() => setRebuild(null)} />}
       {projects.isPending ? (
         <Spinner />
       ) : projects.error ? (
@@ -44,6 +60,31 @@ export function ProjectsPage() {
             if (!p) return null;
             const services = summary.status?.services ?? [];
             const deployed = p.members.filter((m) => m.deployedVersion > 0n).length;
+            if (offline(nodeId)) {
+              // 节点离线：显示的是面板上的配置备份，项目页打不开；可以用备份在别的节点上重建。
+              return (
+                <Card key={`${nodeId}/${p.id}`} className="h-full border-dashed">
+                  <CardContent className="grid gap-3 pt-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="truncate font-medium">{p.name}</span>
+                      <Badge tone="warning">节点离线</Badge>
+                    </div>
+                    <div className="grid gap-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Server className="size-3.5" />
+                        {nodeName(nodeId)}
+                      </span>
+                      <span>{p.members.length} 个成员 · 显示的是面板上的配置备份</span>
+                    </div>
+                    <div>
+                      <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name })}>
+                        用配置备份重建
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
             return (
               <Link key={`${nodeId}/${p.id}`} to="/projects/$nodeId/$projectId" params={{ nodeId, projectId: p.id }}>
                 <Card className="h-full transition-colors hover:border-ring/60">
@@ -73,6 +114,87 @@ export function ProjectsPage() {
         </div>
       )}
     </>
+  );
+}
+
+// RebuildCard：用面板上的配置备份，把离线节点上的项目重建到另一个节点（新项目 ID）。
+function RebuildCard({ nodeId, projectId, name, onClose }: { nodeId: string; projectId: string; name: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const navigate = useNavigate();
+  const [target, setTarget] = useState("");
+  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [lines, setLines] = useState<string[]>([]);
+  const [result, setResult] = useState("");
+  const [created, setCreated] = useState<{ nodeId: string; projectId: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    setLines([]);
+    setResult("");
+    setCreated(null);
+    try {
+      for await (const ev of projectClient.rebuildNodeProject({ nodeId, projectId, targetNodeId: target, dir })) {
+        if (ev.event.case === "output") {
+          const l = ev.event.value;
+          setLines((x) => [...x, l]);
+        } else if (ev.event.case === "result") {
+          const r = ev.event.value;
+          if (r.projectId) setCreated({ nodeId: target, projectId: r.projectId });
+          setResult(r.success ? "✅ 重建完成" : `❌ ${r.error}`);
+        }
+      }
+    } catch (err) {
+      setResult(`❌ ${errorMessage(err)}`);
+    } finally {
+      setBusy(false);
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    }
+  };
+
+  const others = nodes.data?.nodes.filter((n) => n.id !== nodeId && n.online) ?? [];
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>用配置备份重建 {name}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p className="text-muted-foreground">
+          在另一个节点上建一个新项目（新的项目 ID），带上各成员最新的配置、草稿、项目设置和端口映射。
+          项目文件、运行数据和历史版本不在备份里。deploy key 和 webhook 地址都是新的。
+          从 git 拉文件的、不用 data/ 文件的成员会自动部署，其余的要先上传文件。原节点修好回来时，两个项目互不干扰。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select className="w-48" value={target} onChange={(e) => setTarget(e.target.value)} disabled={busy}>
+            <option value="">选择目标节点</option>
+            {others.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </Select>
+          <Input className="w-72 font-mono" value={dir} onChange={(e) => setDir(e.target.value)} disabled={busy} />
+          <Button size="sm" disabled={busy || !target} onClick={run}>
+            {busy ? <Spinner /> : null}重建
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={onClose}>
+            关闭
+          </Button>
+        </div>
+        {result && <div>{result}</div>}
+        {created && (
+          <div>
+            <Button size="sm" variant="outline" onClick={() => navigate({ to: "/projects/$nodeId/$projectId", params: created })}>
+              打开新项目
+            </Button>
+          </div>
+        )}
+        {lines.length > 0 && (
+          <pre className="max-h-60 overflow-auto rounded bg-zinc-950 p-3 font-mono text-xs text-zinc-200">{lines.join("\n")}</pre>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

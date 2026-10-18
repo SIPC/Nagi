@@ -52,6 +52,8 @@ service AgentService {
   // 删除项目：停止并删除容器。项目目录默认保留。
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
+  // 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+  rpc RebuildProject(RebuildProjectRequest) returns (stream DeployEvent);
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
   rpc Exec(stream ExecInput) returns (stream ExecOutput);
@@ -417,6 +419,13 @@ message CreateSharedNetworkRequest {
 
 message DeleteSharedNetworkRequest {
   string name = 1;
+}
+
+message RebuildProjectRequest {
+  // 配置备份里的项目。
+  Project project = 1;
+  // 本节点上的项目目录。
+  string dir = 2;
 }
 
 message SetSharedNetworkPeersRequest {

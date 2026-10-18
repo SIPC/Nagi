@@ -46,6 +46,7 @@ const (
 	AgentService_QueryMetrics_FullMethodName          = "/nagi.v1.AgentService/QueryMetrics"
 	AgentService_DeleteProject_FullMethodName         = "/nagi.v1.AgentService/DeleteProject"
 	AgentService_DeployProject_FullMethodName         = "/nagi.v1.AgentService/DeployProject"
+	AgentService_RebuildProject_FullMethodName        = "/nagi.v1.AgentService/RebuildProject"
 	AgentService_StreamLogs_FullMethodName            = "/nagi.v1.AgentService/StreamLogs"
 	AgentService_Exec_FullMethodName                  = "/nagi.v1.AgentService/Exec"
 	AgentService_ListPanels_FullMethodName            = "/nagi.v1.AgentService/ListPanels"
@@ -129,6 +130,8 @@ type AgentServiceClient interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	DeployProject(ctx context.Context, in *DeployProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	RebuildProject(ctx context.Context, in *RebuildProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error)
@@ -514,9 +517,28 @@ func (c *agentServiceClient) DeployProject(ctx context.Context, in *DeployProjec
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_DeployProjectClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *agentServiceClient) RebuildProject(ctx context.Context, in *RebuildProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_RebuildProject_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RebuildProjectRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RebuildProjectClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +557,7 @@ type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
 func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_Exec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_Exec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -668,7 +690,7 @@ func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, in *Repli
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -707,7 +729,7 @@ func (c *agentServiceClient) CheckRestore(ctx context.Context, in *CheckRestoreR
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -726,7 +748,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ReplicaRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -922,6 +944,8 @@ type AgentServiceServer interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	RebuildProject(*RebuildProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error
@@ -1072,6 +1096,9 @@ func (UnimplementedAgentServiceServer) DeleteProject(context.Context, *DeletePro
 }
 func (UnimplementedAgentServiceServer) DeployProject(*DeployProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method DeployProject not implemented")
+}
+func (UnimplementedAgentServiceServer) RebuildProject(*RebuildProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RebuildProject not implemented")
 }
 func (UnimplementedAgentServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
@@ -1640,6 +1667,17 @@ func _AgentService_DeployProject_Handler(srv interface{}, stream grpc.ServerStre
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_DeployProjectServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_RebuildProject_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RebuildProjectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).RebuildProject(m, &grpc.GenericServerStream[RebuildProjectRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RebuildProjectServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _AgentService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamLogsRequest)
@@ -2406,6 +2444,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "DeployProject",
 			Handler:       _AgentService_DeployProject_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RebuildProject",
+			Handler:       _AgentService_RebuildProject_Handler,
 			ServerStreams: true,
 		},
 		{

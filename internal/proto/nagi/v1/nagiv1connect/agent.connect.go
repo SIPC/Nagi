@@ -109,6 +109,9 @@ const (
 	// AgentServiceDeployProjectProcedure is the fully-qualified name of the AgentService's
 	// DeployProject RPC.
 	AgentServiceDeployProjectProcedure = "/nagi.v1.AgentService/DeployProject"
+	// AgentServiceRebuildProjectProcedure is the fully-qualified name of the AgentService's
+	// RebuildProject RPC.
+	AgentServiceRebuildProjectProcedure = "/nagi.v1.AgentService/RebuildProject"
 	// AgentServiceStreamLogsProcedure is the fully-qualified name of the AgentService's StreamLogs RPC.
 	AgentServiceStreamLogsProcedure = "/nagi.v1.AgentService/StreamLogs"
 	// AgentServiceExecProcedure is the fully-qualified name of the AgentService's Exec RPC.
@@ -242,6 +245,8 @@ type AgentServiceClient interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	RebuildProject(context.Context, *connect.Request[v1.RebuildProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
@@ -477,6 +482,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("DeployProject")),
 			connect.WithClientOptions(opts...),
 		),
+		rebuildProject: connect.NewClient[v1.RebuildProjectRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRebuildProjectProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RebuildProject")),
+			connect.WithClientOptions(opts...),
+		),
 		streamLogs: connect.NewClient[v1.StreamLogsRequest, v1.LogLine](
 			httpClient,
 			baseURL+AgentServiceStreamLogsProcedure,
@@ -701,6 +712,7 @@ type agentServiceClient struct {
 	queryMetrics          *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	deleteProject         *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	deployProject         *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
+	rebuildProject        *connect.Client[v1.RebuildProjectRequest, v1.DeployEvent]
 	streamLogs            *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 	exec                  *connect.Client[v1.ExecInput, v1.ExecOutput]
 	listPanels            *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
@@ -868,6 +880,11 @@ func (c *agentServiceClient) DeleteProject(ctx context.Context, req *connect.Req
 // DeployProject calls nagi.v1.AgentService.DeployProject.
 func (c *agentServiceClient) DeployProject(ctx context.Context, req *connect.Request[v1.DeployProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.deployProject.CallServerStream(ctx, req)
+}
+
+// RebuildProject calls nagi.v1.AgentService.RebuildProject.
+func (c *agentServiceClient) RebuildProject(ctx context.Context, req *connect.Request[v1.RebuildProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.rebuildProject.CallServerStream(ctx, req)
 }
 
 // StreamLogs calls nagi.v1.AgentService.StreamLogs.
@@ -1075,6 +1092,8 @@ type AgentServiceHandler interface {
 	// 删除项目：停止并删除容器。项目目录默认保留。
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的成员。
+	RebuildProject(context.Context, *connect.Request[v1.RebuildProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
@@ -1304,6 +1323,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceDeployProjectProcedure,
 		svc.DeployProject,
 		connect.WithSchema(agentServiceMethods.ByName("DeployProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRebuildProjectHandler := connect.NewServerStreamHandler(
+		AgentServiceRebuildProjectProcedure,
+		svc.RebuildProject,
+		connect.WithSchema(agentServiceMethods.ByName("RebuildProject")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceStreamLogsHandler := connect.NewServerStreamHandler(
@@ -1554,6 +1579,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case AgentServiceDeployProjectProcedure:
 			agentServiceDeployProjectHandler.ServeHTTP(w, r)
+		case AgentServiceRebuildProjectProcedure:
+			agentServiceRebuildProjectHandler.ServeHTTP(w, r)
 		case AgentServiceStreamLogsProcedure:
 			agentServiceStreamLogsHandler.ServeHTTP(w, r)
 		case AgentServiceExecProcedure:
@@ -1733,6 +1760,10 @@ func (UnimplementedAgentServiceHandler) DeleteProject(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) DeployProject(context.Context, *connect.Request[v1.DeployProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeployProject is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RebuildProject(context.Context, *connect.Request[v1.RebuildProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RebuildProject is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error {

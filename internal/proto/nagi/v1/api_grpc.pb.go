@@ -2038,6 +2038,7 @@ const (
 	ProjectService_LoginNodeProjectRegistry_FullMethodName     = "/nagi.v1.ProjectService/LoginNodeProjectRegistry"
 	ProjectService_LogoutNodeProjectRegistry_FullMethodName    = "/nagi.v1.ProjectService/LogoutNodeProjectRegistry"
 	ProjectService_MigrateNodeProject_FullMethodName           = "/nagi.v1.ProjectService/MigrateNodeProject"
+	ProjectService_RebuildNodeProject_FullMethodName           = "/nagi.v1.ProjectService/RebuildNodeProject"
 	ProjectService_SetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectFailover"
 	ProjectService_GetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectFailover"
 	ProjectService_ChangeNodeProjectWitness_FullMethodName     = "/nagi.v1.ProjectService/ChangeNodeProjectWitness"
@@ -2085,6 +2086,8 @@ type ProjectServiceClient interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
+	RebuildNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(ctx context.Context, in *SetNodeProjectFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
 	GetNodeProjectFailover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
@@ -2473,6 +2476,25 @@ func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, in *Migra
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_MigrateNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *projectServiceClient) RebuildNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RebuildNodeProject_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MigrateNodeProjectRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RebuildNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *projectServiceClient) SetNodeProjectFailover(ctx context.Context, in *SetNodeProjectFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FailoverStatus)
@@ -2545,6 +2567,8 @@ type ProjectServiceServer interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
+	RebuildNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *SetNodeProjectFailoverRequest) (*FailoverStatus, error)
 	GetNodeProjectFailover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
@@ -2652,6 +2676,9 @@ func (UnimplementedProjectServiceServer) LogoutNodeProjectRegistry(context.Conte
 }
 func (UnimplementedProjectServiceServer) MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method MigrateNodeProject not implemented")
+}
+func (UnimplementedProjectServiceServer) RebuildNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RebuildNodeProject not implemented")
 }
 func (UnimplementedProjectServiceServer) SetNodeProjectFailover(context.Context, *SetNodeProjectFailoverRequest) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectFailover not implemented")
@@ -3192,6 +3219,17 @@ func _ProjectService_MigrateNodeProject_Handler(srv interface{}, stream grpc.Ser
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_MigrateNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
 
+func _ProjectService_RebuildNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MigrateNodeProjectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).RebuildNodeProject(m, &grpc.GenericServerStream[MigrateNodeProjectRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RebuildNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _ProjectService_SetNodeProjectFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetNodeProjectFailoverRequest)
 	if err := dec(in); err != nil {
@@ -3396,6 +3434,11 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "MigrateNodeProject",
 			Handler:       _ProjectService_MigrateNodeProject_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RebuildNodeProject",
+			Handler:       _ProjectService_RebuildNodeProject_Handler,
 			ServerStreams: true,
 		},
 	},

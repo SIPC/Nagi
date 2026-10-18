@@ -258,6 +258,9 @@ const (
 	// ProjectServiceMigrateNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// MigrateNodeProject RPC.
 	ProjectServiceMigrateNodeProjectProcedure = "/nagi.v1.ProjectService/MigrateNodeProject"
+	// ProjectServiceRebuildNodeProjectProcedure is the fully-qualified name of the ProjectService's
+	// RebuildNodeProject RPC.
+	ProjectServiceRebuildNodeProjectProcedure = "/nagi.v1.ProjectService/RebuildNodeProject"
 	// ProjectServiceSetNodeProjectFailoverProcedure is the fully-qualified name of the ProjectService's
 	// SetNodeProjectFailover RPC.
 	ProjectServiceSetNodeProjectFailoverProcedure = "/nagi.v1.ProjectService/SetNodeProjectFailover"
@@ -1685,6 +1688,8 @@ type ProjectServiceClient interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
+	RebuildNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
@@ -1889,6 +1894,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
 			connect.WithClientOptions(opts...),
 		),
+		rebuildNodeProject: connect.NewClient[v1.MigrateNodeProjectRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRebuildNodeProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RebuildNodeProject")),
+			connect.WithClientOptions(opts...),
+		),
 		setNodeProjectFailover: connect.NewClient[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus](
 			httpClient,
 			baseURL+ProjectServiceSetNodeProjectFailoverProcedure,
@@ -1943,6 +1954,7 @@ type projectServiceClient struct {
 	loginNodeProjectRegistry     *connect.Client[v1.LoginNodeProjectRegistryRequest, v1.RegistriesResponse]
 	logoutNodeProjectRegistry    *connect.Client[v1.LogoutNodeProjectRegistryRequest, v1.RegistriesResponse]
 	migrateNodeProject           *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
+	rebuildNodeProject           *connect.Client[v1.MigrateNodeProjectRequest, v1.DeployEvent]
 	setNodeProjectFailover       *connect.Client[v1.SetNodeProjectFailoverRequest, v1.FailoverStatus]
 	getNodeProjectFailover       *connect.Client[v1.NodeProjectRef, v1.FailoverStatus]
 	changeNodeProjectWitness     *connect.Client[v1.ChangeNodeProjectWitnessRequest, v1.FailoverStatus]
@@ -2103,6 +2115,11 @@ func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, req *conn
 	return c.migrateNodeProject.CallServerStream(ctx, req)
 }
 
+// RebuildNodeProject calls nagi.v1.ProjectService.RebuildNodeProject.
+func (c *projectServiceClient) RebuildNodeProject(ctx context.Context, req *connect.Request[v1.MigrateNodeProjectRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.rebuildNodeProject.CallServerStream(ctx, req)
+}
+
 // SetNodeProjectFailover calls nagi.v1.ProjectService.SetNodeProjectFailover.
 func (c *projectServiceClient) SetNodeProjectFailover(ctx context.Context, req *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
 	return c.setNodeProjectFailover.CallUnary(ctx, req)
@@ -2158,6 +2175,8 @@ type ProjectServiceHandler interface {
 	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
 	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
 	MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
+	RebuildNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 设置顶替（standby_node_id 为空表示取消）。
 	SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	GetNodeProjectFailover(context.Context, *connect.Request[v1.NodeProjectRef]) (*connect.Response[v1.FailoverStatus], error)
@@ -2358,6 +2377,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("MigrateNodeProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceRebuildNodeProjectHandler := connect.NewServerStreamHandler(
+		ProjectServiceRebuildNodeProjectProcedure,
+		svc.RebuildNodeProject,
+		connect.WithSchema(projectServiceMethods.ByName("RebuildNodeProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceSetNodeProjectFailoverHandler := connect.NewUnaryHandler(
 		ProjectServiceSetNodeProjectFailoverProcedure,
 		svc.SetNodeProjectFailover,
@@ -2440,6 +2465,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceLogoutNodeProjectRegistryHandler.ServeHTTP(w, r)
 		case ProjectServiceMigrateNodeProjectProcedure:
 			projectServiceMigrateNodeProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceRebuildNodeProjectProcedure:
+			projectServiceRebuildNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceSetNodeProjectFailoverProcedure:
 			projectServiceSetNodeProjectFailoverHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectFailoverProcedure:
@@ -2577,6 +2604,10 @@ func (UnimplementedProjectServiceHandler) LogoutNodeProjectRegistry(context.Cont
 
 func (UnimplementedProjectServiceHandler) MigrateNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.MigrateNodeProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RebuildNodeProject(context.Context, *connect.Request[v1.MigrateNodeProjectRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RebuildNodeProject is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SetNodeProjectFailover(context.Context, *connect.Request[v1.SetNodeProjectFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {

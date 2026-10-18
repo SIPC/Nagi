@@ -261,6 +261,22 @@ func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream na
 	})
 }
 
+// RebuildProject 用面板的配置备份在本节点上重建项目。项目建好以后部署失败时，结果里仍带新项目的 ID。
+func (s *agentService) RebuildProject(req *nagiv1.RebuildProjectRequest, stream nagiv1.AgentService_RebuildProjectServer) error {
+	defer s.changed()
+	id, err := s.projects.Rebuild(stream.Context(), req.GetProject(), req.GetDir(), func(line string) {
+		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
+	})
+	if id == "" && err != nil {
+		return toStatus(err)
+	}
+	result := &nagiv1.DeployResult{Success: err == nil, ProjectId: id}
+	if err != nil {
+		result.Error = err.Error()
+	}
+	return stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: result}})
+}
+
 func (s *agentService) StreamLogs(req *nagiv1.StreamLogsRequest, stream nagiv1.AgentService_StreamLogsServer) error {
 	err := s.projects.Logs(stream.Context(), req.GetId(), req.GetMember(), req.GetService(), int(req.GetTail()), req.GetFollow(), func(l docker.LogLine) {
 		_ = stream.Send(&nagiv1.LogLine{
