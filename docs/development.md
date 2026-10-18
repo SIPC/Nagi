@@ -6,7 +6,7 @@
 
 - Go module：`github.com/SIPC/nagi`
 - 许可证：Apache-2.0
-- Go 版本：开始写代码时的最新稳定版
+- Go 版本：1.26（见 `go.mod`）
 - 运行平台：Linux（amd64 / arm64），以 systemd 服务运行
 
 ## 仓库结构
@@ -24,20 +24,20 @@ internal/
 │   ├── alert/        告警发送（webhook、Telegram），面板和节点共用
 │   ├── invite/       面板接入码的编码与解析
 │   ├── lease/        顶替的租约投票（面板和节点共用）
-│   ├── mesh/         WireGuard mesh：收发层（直连 / UDP 中转 / TLS 中转）、进程内网络栈、MeshService
-│   └── log/
-├── server/           面板
-│   ├── api/          Connect-RPC 接口
+│   └── mesh/         WireGuard mesh：收发层（直连 / UDP 中转 / TLS 中转）、进程内网络栈、MeshService
+├── server/           面板（证书签发在 pkg/tlsutil）
+│   ├── api/          Connect-RPC 接口、安装脚本、上传、webhook、终端
 │   ├── auth/         登录、TOTP、安全入口
-│   ├── ca/           签发节点证书
-│   ├── nodes/        节点连接管理与操作转发
+│   ├── nodes/        节点连接管理、上报、mesh、见证人
+│   ├── sealer/       面板主密钥加密
 │   └── store/        面板数据库（sqlc）
-└── agent/            节点
-    ├── project/      项目目录、版本、override 生成
+└── agent/            节点：连接面板、信任列表、mesh、副本同步、顶替、跨节点共享网络
+    ├── project/      项目和成员、网络、版本与回滚、快照、端口映射、override 生成、重建
     ├── compose/      调用 docker compose
-    ├── docker/       Docker Engine API：状态、日志、终端、事件
-    ├── caddy/
-    ├── snapshot/
+    ├── docker/       Docker Engine API：状态、日志、终端、事件、网络、代理容器
+    ├── proxy/        内嵌 Caddy
+    ├── snapshot/     kopia
+    ├── store/        节点数据库（nodestore）和项目数据库（projectstore），sqlc
     ├── metrics/      指标采集与存储
     └── alerts/       告警规则判断、发送、代发与补发
 web/                  前端
@@ -93,7 +93,12 @@ nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器
 
 前端开发时可以用 `pnpm -C web dev`，它会把接口请求转发到 `https://127.0.0.1:28443`（可用 `NAGI_PANEL` 环境变量修改），浏览器打开 `http://localhost:5173`。
 
-**当前前端只是用来测试后端的临时界面，之后会重写。**
+**当前前端只是用来测试后端的临时界面，之后会重写。** 各文档里写到、临时界面还没做到的，正式界面要补上：
+
+- 加入共享网络时网络名默认由项目名生成；改网络名时提示连它的项目要跟着改（[agent.md](agent.md#共享网络)）
+- 设置顶替、迁移时，提示搬过去以后会断开哪些共享网络的连接（[failover.md](failover.md#实现)）
+- 声明为 `external` 或用了自定义 driver 的 volume 提示"不在快照范围内"；`network_mode: host` 的服务醒目提示（[agent.md](agent.md#部署方式)）
+- 首页提醒开启两步验证；提醒单独备份面板主密钥文件（[panel.md](panel.md)）
 
 ## 第 1 步的完成标准
 

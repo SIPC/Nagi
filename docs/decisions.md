@@ -44,7 +44,7 @@
 | WireGuard 实现 | **全部用用户态 wireguard-go，自己实现直连 / UDP 中转 / TLS 中转** | 一套代码路径；内核版做不到套 TLS 中转 | [mesh.md](mesh.md#实现全部使用用户态-wireguard-go) |
 | mesh 地址 | **由 WireGuard 公钥推导的 IPv6** | 不用分配，mesh 合并不冲突，无法冒用他人地址 | [mesh.md](mesh.md#地址) |
 | 容器网段 | **节点本地分配，默认 `10.200.0.0/16`，项目内网、compose 成员、共享网络各一个 /26** | 不需要全局协调 | [mesh.md](mesh.md#容器网段只在节点内分配) |
-| 租约投票通道 | **全部走 WireGuard mesh，面板加入 mesh** | 投票只有一套代码；面板在 mesh 里也负责中转项目文件上传 | [mesh.md](mesh.md) |
+| 租约投票通道 | **全部走 WireGuard mesh，面板加入 mesh** | 投票只有一套代码；面板在 mesh 里也负责上传项目文件、中转 mesh 流量 | [mesh.md](mesh.md) |
 
 ## 高可用与备份
 
@@ -55,7 +55,7 @@
 | 租约安全余量 | **A 在到期前 5 秒已停完，B 在到期后 5 秒启动** | 中间留 10 秒空档，即使两边计时有误差也不会同时运行 | [failover.md](failover.md) |
 | 快照工具 | **kopia，作为 Go 库内嵌** | 增量、去重、自带加密，以后接 S3 是现成的；仍然只有一个二进制 | [snapshot.md](snapshot.md) |
 | 快照一致性 | **暂停快照，30 秒上限；不针对具体数据库做导出导入** | 恢复、迁移和顶替都只是拷文件，快且通用，不用为每种数据库做适配 | [snapshot.md](snapshot.md#一致性) |
-| 快照同步频率 | **设了顶替的项目每 15 分钟，其余每小时** | kopia 是增量的，频率高也不会占用太多资源 | [snapshot.md](snapshot.md#频率) |
+| 快照同步频率 | **设了顶替的项目最长每 15 分钟，其余默认每小时** | kopia 是增量的，频率高也不会占用太多资源 | [snapshot.md](snapshot.md#频率) |
 | 异地副本 | **顶替节点，或只同步不顶替的备份节点** | 复用同步代码；S3 以后再加 | [snapshot.md](snapshot.md#异地副本) |
 | 版本记录随项目走 | **同步时带上 project.db 的一致副本** | 顶替、迁移以后还能接着回滚 | [snapshot.md](snapshot.md#备份节点的实现) |
 | 面板上的密钥 | **面板主密钥加密** | 数据库文件泄露也读不出密钥；需提醒用户单独备份主密钥文件 | [panel.md](panel.md#配置备份) |

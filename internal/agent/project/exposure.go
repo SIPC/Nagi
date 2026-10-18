@@ -417,7 +417,7 @@ func normalizeDomains(list []string) []string {
 
 // ---- 从 compose 导入 ----
 
-// importPorts 把成员 compose 里新出现的 ports 导入成映射文件（按 tcp/udp 原样开放）。
+// importPorts 把成员 compose 里新出现的 ports 导入成映射文件：写了 app_protocol: http 或者是常见网站端口的按 http，其余按 tcp/udp 原样开放。
 // 导入过的端口记在成员的记录里：用户改过或删掉的映射不会被覆盖或加回来。
 // 和其他映射冲突的端口不导入，只在部署日志里提示。
 func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id string, mrow projectstore.Member, proj *types.Project, onLine func(string)) error {

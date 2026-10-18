@@ -49,7 +49,8 @@
   - 5xx 错误率超过 5%（最近 5 分钟，至少 20 个请求）
   - 证书申请失败，或证书 7 天内过期
   - 快照失败，或因暂停超过 30 秒而放弃
-  - 发生顶替
+  - 同步到备份节点或热备失败
+  - 顶替：续不上租约而停止项目、无法顶替（热备还没收到过同步）、有状态项目等待确认、顶替失败；已顶替、已被顶替是一次性通知
 - **重复告警**：问题出现时发一次，恢复时发"已恢复"；一直没恢复就每 4 小时提醒一次。
 
 ### 实现
@@ -82,4 +83,4 @@ webhook 收到 POST JSON：
 }
 ```
 
-`status` 是 `firing`、`resolved`，或者一次性通知 `info`（例如"已顶替项目"，没有对应的恢复）；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<成员>/<服务>`、`health:<项目 ID>/<成员>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`offline`。Telegram 收到的是 `text` 的内容。
+`status` 是 `firing`、`resolved`，或者一次性通知 `info`（例如"已顶替项目"，没有对应的恢复）；`key` 标识同一个问题，例如 `disk`、`mem`、`restart:c:<项目 ID>/<成员>/<服务>`、`health:<项目 ID>/<成员>/<服务>`、`cert:<域名>`、`errors:<项目 ID>/<规则名>`、`event:snapshot:<项目 ID>`、`event:cert_failed:<域名>`、`event:backup:<项目 ID>`、`event:standby:<项目 ID>`、`event:lease:<项目 ID>`、`event:takeover:<项目 ID>`、`offline`。Telegram 收到的是 `text` 的内容。
