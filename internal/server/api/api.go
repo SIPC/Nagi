@@ -244,6 +244,12 @@ type projectService struct{ *API }
 func (s *projectService) agent(nodeID string) (nagiv1.AgentServiceClient, error) {
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {
+		// 一个操作常常要同时用到几个节点（迁移、顶替、更换见证人），说清楚是哪一个不在线。
+		if errors.Is(err, nodes.ErrOffline) {
+			if name := s.nodeName(context.Background(), nodeID); name != nodeID {
+				err = fmt.Errorf("节点 %s 不在线", name)
+			}
+		}
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
 	return conn.Agent, nil

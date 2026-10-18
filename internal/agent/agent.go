@@ -176,6 +176,19 @@ func Run(ctx context.Context, cfg Config) error {
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.Name(context.Background(), id) }, a.relayAlert)
+	a.alerts.Domains = func() map[string]bool {
+		routes, err := projects.Routes(context.Background())
+		if err != nil {
+			return nil
+		}
+		out := map[string]bool{}
+		for _, r := range append(routes, a.panelRoutes()...) {
+			for _, d := range r.Domains {
+				out[d] = true
+			}
+		}
+		return out
+	}
 	go a.alerts.Run(ctx)
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)

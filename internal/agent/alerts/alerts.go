@@ -38,6 +38,8 @@ type Engine struct {
 	docker      *docker.Client
 	projectName func(id string) string
 	relay       Relay
+	// Domains 返回现在还在用的域名（项目映射和面板域名），只检查这些域名的证书。为 nil 时检查全部。
+	Domains func() map[string]bool
 
 	mu       sync.Mutex
 	configs  map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
@@ -360,11 +362,23 @@ func splitContainer(name string) (project, service string) {
 	return project, service
 }
 
-// certExpiries 读取 Caddy 已经拿到的证书的过期时间。
+// certExpiries 读取 Caddy 已经拿到的证书的过期时间。跳过两种：
+//   - Caddy 本地 CA 签的（.localhost 等内部域名，certificates/local/ 下），有效期本来就只有几小时，Caddy 自动续；
+//   - 已经不用的域名（解绑以后旧证书还留在存储里，不会再续）。
 func (e *Engine) certExpiries() map[string]time.Time {
 	out := map[string]time.Time{}
+	var inUse map[string]bool
+	if e.Domains != nil {
+		inUse = e.Domains()
+	}
 	files, _ := filepath.Glob(filepath.Join(e.certDir, "certificates", "*", "*", "*.crt"))
 	for _, f := range files {
+		if filepath.Base(filepath.Dir(filepath.Dir(f))) == "local" {
+			continue
+		}
+		if inUse != nil && !inUse[strings.TrimSuffix(filepath.Base(f), ".crt")] {
+			continue
+		}
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue

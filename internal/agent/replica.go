@@ -263,7 +263,11 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 
 // ---- 源节点一侧：同步 ----
 
+// errAlreadySyncing：这个项目已经有一次同步在进行（同一个项目同时只有一次同步）。
+var errAlreadySyncing = errors.New("已经在同步")
+
 // runBackupSync 同步一次并记录结果；同步失败时告警，下一次成功时恢复。
+// 已经有一次同步在进行时直接返回 errAlreadySyncing。
 func (a *agent) runBackupSync(ctx context.Context, id string) error {
 	a.mu.Lock()
 	if a.syncing == nil {
@@ -271,7 +275,7 @@ func (a *agent) runBackupSync(ctx context.Context, id string) error {
 	}
 	if a.syncing[id] {
 		a.mu.Unlock()
-		return nil // 已经在同步
+		return errAlreadySyncing
 	}
 	a.syncing[id] = true
 	a.mu.Unlock()
@@ -434,8 +438,19 @@ func (s *agentService) GetBackupStatus(ctx context.Context, req *nagiv1.GetBacku
 	return s.node.backupStatus(ctx, req.GetProjectId())
 }
 
+// SyncBackup 立即同步一次，同步完才返回。已经有一次同步在进行时（例如快照之后自动开始的），
+// 等它结束再做一次：那一次可能是在最新的快照之前开始的。
 func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.GetBackupStatusRequest) (*nagiv1.BackupStatus, error) {
-	if err := s.node.runBackupSync(ctx, req.GetProjectId()); err != nil {
+	err := s.node.runBackupSync(ctx, req.GetProjectId())
+	for errors.Is(err, errAlreadySyncing) {
+		select {
+		case <-ctx.Done():
+			return nil, toStatus(ctx.Err())
+		case <-time.After(500 * time.Millisecond):
+		}
+		err = s.node.runBackupSync(ctx, req.GetProjectId())
+	}
+	if err != nil {
 		st, _ := s.node.backupStatus(ctx, req.GetProjectId())
 		if st != nil {
 			return st, nil
