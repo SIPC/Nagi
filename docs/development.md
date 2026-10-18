@@ -95,7 +95,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：跨节点共享网络的代理容器
 
 **当前前端只是用来测试后端的临时界面，之后会重写。** 重写时别漏了各文档里写到的这些提示（临时界面里已经有了）：
 
-- 加入共享网络时网络名默认由项目名生成；改网络名时提示连它的项目要跟着改（[agent.md](agent.md#共享网络)）
+- 加入共享网络时网络名默认由项目名生成（中文名要自己填）；改网络名时提示连它的项目要跟着改；项目设置里列出各容器在共享网络里的地址（[agent.md](agent.md#共享网络)）
 - 设置顶替、迁移、用配置备份重建时，提示搬过去以后会断开哪些共享网络的连接（[failover.md](failover.md#实现)）
 - 不在快照范围内的 volume（`external` 或自定义 driver，接口里是容器的 `unmanaged_volumes`）和 `network_mode: host` 的服务（`host_network_services`）醒目提示（[agent.md](agent.md#部署方式)）
 - 首页提醒开启两步验证；提醒单独备份面板主密钥文件（设置里的 `master_key_path`，见 [panel.md](panel.md)）

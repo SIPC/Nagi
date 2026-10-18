@@ -113,7 +113,7 @@ export function ProjectsPage() {
       ) : projects.error ? (
         <Alert>{errorMessage(projects.error)}</Alert>
       ) : projects.data.projects.length === 0 ? (
-        <Empty title="还没有项目">新建一个项目，往里加容器（单容器或 compose），就能部署到节点上。</Empty>
+        <Empty title="还没有项目">新建一个项目，往里加容器或容器组（一份 compose），就能部署到节点上。</Empty>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.data.projects.map(({ nodeId, project: summary }) => {
@@ -339,7 +339,7 @@ export function NewProjectPage() {
             </label>
             {withContainer && (
               <>
-                <Field label="容器名" htmlFor="container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
+                <Field label={container.mode === "compose" ? "容器组名" : "容器名"} htmlFor="container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
                   <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" />
                 </Field>
                 {container.fields}

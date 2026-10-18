@@ -105,20 +105,24 @@ func (s *nodeService) LinkNodeSharedNetwork(ctx context.Context, req *connect.Re
 			uses[p.GetNetworkName()] = use{p.GetProjectId(), p.GetProjectName(), m.name}
 		}
 	}
+	// 节点设置连接时会马上问一遍相连的节点，先设置的节点问到的是还没设置好的节点（会被拒绝）。
+	// 所以设置两遍（设置是幂等的）：第二遍时大家都已经互相记着了，返回的状态就是对的。
 	var first *nagiv1.ListSharedNetworksResponse
-	for _, m := range group {
-		var peers []*nagiv1.SharedNetworkPeer
-		for _, o := range group {
-			if o != m {
-				peers = append(peers, &nagiv1.SharedNetworkPeer{PublicKey: o.key, Name: o.name, NodeId: o.nodeID})
+	for pass := 0; pass < 2; pass++ {
+		for _, m := range group {
+			var peers []*nagiv1.SharedNetworkPeer
+			for _, o := range group {
+				if o != m {
+					peers = append(peers, &nagiv1.SharedNetworkPeer{PublicKey: o.key, Name: o.name, NodeId: o.nodeID})
+				}
 			}
-		}
-		resp, err := m.conn.Agent.SetSharedNetworkPeers(ctx, &nagiv1.SetSharedNetworkPeersRequest{Name: name, Peers: peers})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("设置节点 %s：%w（可以重试，设置是幂等的）", m.name, fromGRPC(err)))
-		}
-		if m.nodeID == req.Msg.GetNodeId() {
-			first = resp
+			resp, err := m.conn.Agent.SetSharedNetworkPeers(ctx, &nagiv1.SetSharedNetworkPeersRequest{Name: name, Peers: peers})
+			if err != nil {
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("设置节点 %s：%w（可以重试，设置是幂等的）", m.name, fromGRPC(err)))
+			}
+			if m.nodeID == req.Msg.GetNodeId() {
+				first = resp
+			}
 		}
 	}
 	return connect.NewResponse(first), nil

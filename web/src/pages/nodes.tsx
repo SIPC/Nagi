@@ -310,7 +310,14 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
                   {!p.reachable && "（" + (p.error || "联系不上") + "）"}
                 </Badge>
               ))}
-              <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  confirm(`断开共享网络 ${n.name} 和 ${n.peers.map((p) => p.name).join("、")} 的连接？本节点上的项目会访问不到对方节点上的容器，对方也访问不到这边。`) &&
+                  call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))
+                }
+              >
                 断开连接
               </Button>
             </div>

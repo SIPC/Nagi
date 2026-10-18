@@ -53,7 +53,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
         }
         description={
           <span className="font-mono text-xs">
-            {p.dir} · {p.containers.length} 个容器 · 项目内网{p.settings?.intranetDisabled ? "已关闭" : "开启"} · 创建于 {timeAgo(toDate(p.createdAt))}
+            {p.dir} · {countContainers(p.containers)} · 项目内网{p.settings?.intranetDisabled ? "已关闭" : "开启"} · 创建于 {timeAgo(toDate(p.createdAt))}
           </span>
         }
       />
@@ -77,7 +77,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
             hasImageUpdate={imageUpdates.some((u) => u.container === container.name)}
           />
         )}
-        <SettingsCard key={`settings-${p.revision}`} nodeId={nodeId} project={p} />
+        <SettingsCard key={`settings-${p.revision}`} nodeId={nodeId} project={p} services={services} />
         <DeploymentsCard nodeId={nodeId} project={p} />
         <RoutesCard nodeId={nodeId} project={p} services={services} />
         <SnapshotsCard nodeId={nodeId} project={p} />
@@ -184,6 +184,14 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
 function shortImage(image: string) {
   const i = image.indexOf("@sha256:");
   return i < 0 ? image : image.slice(0, i + 8 + 12);
+}
+
+// countContainers 按种类数，例如"2 个容器 · 1 个容器组"。
+function countContainers(cs: Container[]) {
+  if (cs.length === 0) return "还没有容器";
+  const groups = cs.filter((c) => c.kind === "group").length;
+  const singles = cs.length - groups;
+  return [singles > 0 && `${singles} 个容器`, groups > 0 && `${groups} 个容器组`].filter(Boolean).join(" · ");
 }
 
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
@@ -354,8 +362,9 @@ function ContainerPanel({
   };
 
   const remove = async () => {
-    const deleteDir = confirm(`删除容器 ${container.name}？容器会被删除。\n\n点"确定"同时删除容器目录（数据会删掉），点"取消"只删容器、保留目录。`);
-    if (!deleteDir && !confirm(`只删除容器 ${container.name} 的容器，保留容器目录？`)) return;
+    const kind = containerKind(container);
+    const deleteDir = confirm(`删除${kind} ${container.name}？${kind === "容器组" ? "组里的容器都会" : "容器会"}被删除。\n\n点"确定"同时删除${kind}目录（数据会删掉），点"取消"只删容器、保留目录。`);
+    if (!deleteDir && !confirm(`只删除${kind} ${container.name} 的容器，保留${kind}目录？`)) return;
     try {
       await projectClient.deleteNodeProjectContainer({ nodeId, projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
       queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
@@ -424,7 +433,7 @@ function ContainerPanel({
               {busy ? "部署中" : container.hasDraft ? "部署草稿" : container.deployedVersion > 0n ? "重新部署" : "部署"}
             </Button>
             <Button variant="ghost" size="sm" onClick={remove} disabled={busy}>
-              删除容器
+              删除{containerKind(container)}
             </Button>
           </div>
         </CardHeader>
@@ -838,7 +847,7 @@ function AddContainerCard({ nodeId, project, onAdded }: { nodeId: string; projec
               add();
             }}
           >
-            <Field label="容器名" htmlFor="new-container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
+            <Field label={form.mode === "compose" ? "容器组名" : "容器名"} htmlFor="new-container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
               <Input id="new-container" value={name} onChange={(e) => setName(e.target.value)} required className="font-mono" placeholder="api" />
             </Field>
             {form.fields}
@@ -862,12 +871,21 @@ function AddContainerCard({ nodeId, project, onAdded }: { nodeId: string; projec
 // ---- 项目设置 ----
 
 // defaultNetworkName 由项目名生成加入共享网络用的网络名（小写字母、数字和 -，不超过 32 个字符）。
-// 项目名里没有能用的字符（例如全是中文）时用项目 ID 的前 8 位。
-function defaultNetworkName(name: string, id: string) {
-  return slugName(name, `p-${id.slice(0, 8)}`);
+// 项目名里没有能用的字符（例如全是中文）时返回空，让用户自己起一个：别人要用它访问本项目，ID 前缀不好记。
+function defaultNetworkName(name: string) {
+  return slugName(name, "");
 }
 
-function SettingsCard({ nodeId, project }: { nodeId: string; project: Project }) {
+// sharedAddresses 列出本项目的容器在共享网络里的地址：单个容器是"容器.网络名"，容器组里的是"容器.容器组.网络名"。
+function sharedAddresses(project: Project, services: ServiceStatus[], networkName: string) {
+  return project.containers.flatMap((c) => {
+    if (c.kind !== "group") return [`${c.name}.${networkName}`];
+    const names = [...new Set(services.filter((s) => s.container === c.name).map((s) => s.name))];
+    return names.length ? names.map((s) => `${s}.${c.name}.${networkName}`) : [`<容器>.${c.name}.${networkName}`];
+  });
+}
+
+function SettingsCard({ nodeId, project, services }: { nodeId: string; project: Project; services: ServiceStatus[] }) {
   const queryClient = useQueryClient();
   const s = project.settings;
   const networks = useQuery({ queryKey: ["shared-networks", nodeId], queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }) });
@@ -897,8 +915,13 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
     }
   };
 
-  const saveSettings = () =>
-    call(() =>
+  const effectiveName = networkName || defaultNetworkName(name);
+  const saveSettings = () => {
+    if (joined.length > 0 && !effectiveName) {
+      setError("加入共享网络需要一个网络名（小写字母、数字和 -），别的项目用它访问本项目。");
+      return;
+    }
+    return call(() =>
       projectClient.updateNodeProjectSettings({
         nodeId,
         projectId: project.id,
@@ -906,13 +929,14 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
         name,
         settings: {
           intranetDisabled: !intranet,
-          networkName: networkName || (joined.length > 0 ? defaultNetworkName(name, project.id) : ""),
+          networkName: joined.length > 0 ? effectiveName : networkName,
           sharedNetworks: joined,
           linkPorts: linkPorts.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
           snapshotIntervalMinutes: Number(interval) || 0,
         },
       }),
     );
+  };
 
   const saveEnv = () =>
     call(async () => {
@@ -961,12 +985,12 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
           <Input
             value={networkName}
             onChange={(e) => setNetworkName(e.target.value)}
-            placeholder={`网络名，默认 ${defaultNetworkName(name, project.id)}`}
+            placeholder={defaultNetworkName(name) ? `网络名，默认 ${defaultNetworkName(name)}` : "网络名（英文），例如 shop"}
             className="max-w-60 font-mono"
           />
           {s?.networkName && networkName !== s.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
             <p className="rounded border border-warning/40 bg-warning/15 px-2 py-1 text-xs">
-              改网络名以后，其他项目里用"容器.{s.networkName}"访问本项目的地方，要跟着改成"容器.{networkName || defaultNetworkName(name, project.id)}"。
+              改网络名以后，其他项目里用"容器.{s.networkName}"访问本项目的地方，要跟着改成"容器.{effectiveName}"。
             </p>
           )}
           {networks.data?.networks.length ? (
@@ -976,7 +1000,7 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
                   type="checkbox"
                   checked={joined.includes(n.name)}
                   onChange={(e) => {
-                    if (e.target.checked && !networkName) setNetworkName(defaultNetworkName(name, project.id));
+                    if (e.target.checked && !networkName) setNetworkName(defaultNetworkName(name));
                     setJoined(e.target.checked ? [...joined, n.name] : joined.filter((x) => x !== n.name));
                   }}
                 />
@@ -989,6 +1013,11 @@ function SettingsCard({ nodeId, project }: { nodeId: string; project: Project })
             ))
           ) : (
             <span className="text-xs text-muted-foreground">本节点还没有共享网络，在节点页里创建。</span>
+          )}
+          {s?.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
+            <p className="text-xs text-muted-foreground">
+              其他项目这样访问本项目：<span className="font-mono">{sharedAddresses(project, services, s.networkName).join("、")}</span>
+            </p>
           )}
           <Field label="跨节点端口（相连节点经代理访问本项目时，容器没声明的端口；一行一个，如 pg:5432，容器组里的写 容器.容器组:端口）" htmlFor="p-linkports">
             <textarea
@@ -1353,7 +1382,7 @@ function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
   const [error, setError] = useState("");
 
   const remove = async () => {
-    if (!deleteDir && !confirm(`删除项目 ${project.name}？所有容器的容器会被删除，项目目录保留。`)) return;
+    if (!deleteDir && !confirm(`删除项目 ${project.name}？项目里的容器和容器组都会被删除，项目目录保留。`)) return;
     setError("");
     try {
       await projectClient.deleteNodeProject({
@@ -1377,7 +1406,7 @@ function DeleteCard({ nodeId, project }: { nodeId: string; project: Project }) {
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         {error && <Alert>{error}</Alert>}
-        <p className="text-muted-foreground">停止并删除所有容器的容器和项目网络。项目目录（含数据和快照）默认保留在 {project.dir}。</p>
+        <p className="text-muted-foreground">停止并删除项目里的所有容器、容器组和项目网络。项目目录（含数据和快照）默认保留在 {project.dir}。</p>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={deleteDir} onChange={(e) => setDeleteDir(e.target.checked)} />
           同时删除项目目录（数据、快照都会删掉，无法恢复）

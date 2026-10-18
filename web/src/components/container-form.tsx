@@ -19,7 +19,7 @@ export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
 // prefix 加在输入框的 id 前面：同一个页面上可能同时有"加容器"和"修改容器"两个表单。
 export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactNode; build: () => ImageFormInit } {
   const editing = !!initial;
-  const [image, setImage] = useState(initial?.image ?? "nginx:alpine");
+  const [image, setImage] = useState(initial?.image ?? "");
   const [command, setCommand] = useState(initial?.command ?? "");
   const [ports, setPorts] = useState(portsToText(initial?.ports));
   const [volumes, setVolumes] = useState((initial?.volumes ?? []).join("\n"));
@@ -95,7 +95,7 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
   return { fields, build };
 }
 
-// 新建项目和加容器共用的表单：单容器（镜像表单）或一份 compose。
+// 新建项目和加容器共用的表单：一个容器（镜像表单）或一个容器组（一份 compose）。
 // first 表示项目里的第一个容器（没有别的容器可依赖，不显示"先部署的容器"）。
 export function useContainerForm(first = false): { fields: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" } {
   const [mode, setMode] = useState<"compose" | "image">("image");
@@ -113,10 +113,10 @@ export function useContainerForm(first = false): { fields: ReactNode; build: () 
     <>
       <div className="flex gap-2">
         <Button type="button" size="sm" variant={mode === "image" ? "default" : "outline"} onClick={() => setMode("image")}>
-          单容器（镜像表单）
+          容器
         </Button>
         <Button type="button" size="sm" variant={mode === "compose" ? "default" : "outline"} onClick={() => setMode("compose")}>
-          compose
+          容器组（compose）
         </Button>
       </div>
       {mode === "compose" ? (
