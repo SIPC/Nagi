@@ -49,7 +49,7 @@ function Reminders() {
       storage: "nagi.hide.totp",
       text: (
         <>
-          还没有开启两步验证。建议在<Link to="/nodes" className="mx-1 underline">节点页的"账号安全"</Link>里开启。
+          还没有开启两步验证。建议在<Link to="/settings" className="mx-1 underline">设置的"账号安全"</Link>里开启。
         </>
       ),
     });
@@ -90,7 +90,7 @@ export function ProjectsPage() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
-  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string; sharedNetworks: string[] } | null>(null);
+  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string; dir: string; sharedNetworks: string[] } | null>(null);
 
   return (
     <>
@@ -138,7 +138,7 @@ export function ProjectsPage() {
                       <span>{p.members.length} 个成员 · 显示的是面板上的配置备份</span>
                     </div>
                     <div>
-                      <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name, sharedNetworks: p.settings?.sharedNetworks ?? [] })}>
+                      <Button size="sm" variant="outline" onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name, dir: p.dir, sharedNetworks: p.settings?.sharedNetworks ?? [] })}>
                         用配置备份重建
                       </Button>
                     </div>
@@ -183,12 +183,14 @@ function RebuildCard({
   nodeId,
   projectId,
   name,
+  dir: defaultDir,
   sharedNetworks,
   onClose,
 }: {
   nodeId: string;
   projectId: string;
   name: string;
+  dir: string;
   sharedNetworks: string[];
   onClose: () => void;
 }) {
@@ -196,7 +198,7 @@ function RebuildCard({
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const navigate = useNavigate();
   const [target, setTarget] = useState("");
-  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [dir, setDir] = useState(defaultDir);
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState("");
   const [created, setCreated] = useState<{ nodeId: string; projectId: string } | null>(null);
@@ -281,7 +283,7 @@ export function NewProjectPage() {
   const [dir, setDir] = useState("");
   const [withMember, setWithMember] = useState(true);
   const [memberName, setMemberName] = useState("web");
-  const member = useMemberForm();
+  const member = useMemberForm(true);
   const selectedNode = nodeId || onlineNodes[0]?.id || "";
 
   const create = useMutation({
@@ -337,7 +339,7 @@ export function NewProjectPage() {
             </label>
             {withMember && (
               <>
-                <Field label="成员名" htmlFor="member" hint="小写字母、数字和 -，创建后不能改。项目内网里其他成员用这个名字访问它。">
+                <Field label="成员名" htmlFor="member" hint="小写字母、数字和 -，创建后不能改。单容器成员在项目内网里就叫这个名字；compose 里的服务叫“服务.成员名”。">
                   <Input id="member" value={memberName} onChange={(e) => setMemberName(e.target.value)} required className="font-mono" />
                 </Field>
                 {member.fields}

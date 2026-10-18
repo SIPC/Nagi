@@ -41,6 +41,8 @@ type failoverFile struct {
 	Config json.RawMessage `json:"config"`
 	Holder []byte          `json:"holder"`
 	Epoch  uint64          `json:"epoch"`
+	// 最近一次同步给热备（持有者）或收到同步（热备）的时间，重启后界面上照常显示。
+	LastSync int64 `json:"last_sync,omitempty"`
 }
 
 type failoverState struct {
@@ -95,7 +97,11 @@ func (f *failovers) save(id string, st *failoverState) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.Marshal(failoverFile{Config: cfg, Holder: st.holder, Epoch: st.epoch})
+	ff := failoverFile{Config: cfg, Holder: st.holder, Epoch: st.epoch}
+	if !st.lastSync.IsZero() {
+		ff.LastSync = st.lastSync.Unix()
+	}
+	b, _ := json.Marshal(ff)
 	if err := os.MkdirAll(f.dir, 0o700); err != nil {
 		return err
 	}
@@ -122,7 +128,11 @@ func (f *failovers) loadAll() {
 		if json.Unmarshal(b, &ff) != nil || protojson.Unmarshal(ff.Config, cfg) != nil {
 			continue
 		}
-		f.m[id] = &failoverState{cfg: cfg, holder: ff.Holder, epoch: ff.Epoch}
+		st := &failoverState{cfg: cfg, holder: ff.Holder, epoch: ff.Epoch}
+		if ff.LastSync > 0 {
+			st.lastSync = time.Unix(ff.LastSync, 0)
+		}
+		f.m[id] = st
 	}
 }
 
@@ -378,6 +388,7 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 		st.nextSync = time.Now().Add(time.Minute) // 热备可能暂时不在，1 分钟后重试
 	} else {
 		st.lastError, st.lastSync = "", time.Now()
+		_ = a.failovers.save(id, st)
 	}
 	a.failovers.mu.Unlock()
 	if err != nil {
@@ -540,6 +551,7 @@ func (a *agent) prePull(ctx context.Context, id string) {
 	}
 	st.lastPull = time.Now()
 	st.lastSync = time.Now()
+	_ = a.failovers.save(id, st)
 	a.failovers.mu.Unlock()
 	_, root, err := a.replicas.load(id)
 	if err != nil {
@@ -587,6 +599,12 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 	// 新设置时 A 上必须有项目；已有设置（例如顶替之后更换见证人）时 A 可能已经退位成了热备。
 	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && f.get(id) == nil && !a.projects.Has(ctx, id) {
 		return nil, status.Error(codes.FailedPrecondition, "A 节点上没有这个项目")
+	}
+	// 顶替和备份节点二选一：两套同步会写备份节点上同一个副本目录。
+	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && f.get(id) == nil {
+		if bs, err := a.projects.BackupState(ctx, id); err == nil && bs.Target != nil {
+			return nil, status.Errorf(codes.FailedPrecondition, "这个项目设了备份节点 %s，先取消备份节点再设顶替（顶替节点本身就有一份随时更新的副本）", bs.Target.Name)
+		}
 	}
 	// 初始租约归 A，第 1 轮；更换见证人时新见证人从当前的持有者和轮次开始。
 	// 已经有设置时（修改参数、更换见证人）保留当前的持有者和轮次。

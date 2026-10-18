@@ -67,7 +67,8 @@ export function SetupPage({ token }: { token: string }) {
     },
   });
 
-  if (state.data?.initialized) return <Navigate to="/login" />;
+  // 已经初始化：去项目页（刚初始化完已经登录；没登录的话项目页会再转去登录页）。
+  if (state.data?.initialized) return <Navigate to="/projects" />;
 
   return (
     <AuthShell
@@ -141,6 +142,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needCode, setNeedCode] = useState(false);
+  const setupState = useQuery({ queryKey: ["setup-state"], queryFn: () => setupClient.getSetupState({}) });
 
   const login = useMutation({
     mutationFn: () => authClient.login({ username, password, totpCode }),
@@ -157,6 +159,11 @@ export function LoginPage() {
 
   return (
     <AuthShell title="登录" description="登录到 Nagi 面板。">
+      {setupState.data && !setupState.data.initialized ? (
+        <Alert>
+          面板还没有初始化，没有可以登录的账号。请打开面板启动日志里打印的初始化链接（形如 https://地址:端口/setup?token=…），设置管理员账号。
+        </Alert>
+      ) : (
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -205,6 +212,7 @@ export function LoginPage() {
           登录
         </Button>
       </form>
+      )}
     </AuthShell>
   );
 }

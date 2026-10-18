@@ -15,17 +15,20 @@ import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage } from "@/pages/project";
 import { NodesPage } from "@/pages/nodes";
+import { SettingsPage } from "@/pages/settings";
 import "./index.css";
 
-// 任何接口返回“未登录”时回到登录页。
+// 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
+// 它由 appRoute 处理，未初始化时要去初始化页而不是登录页。
 const onError = (err: unknown) => {
-  if (isUnauthenticated(err) && router.state.location.pathname !== "/login") {
+  const path = router.state.location.pathname;
+  if (isUnauthenticated(err) && path !== "/login" && path !== "/setup") {
     router.navigate({ to: "/login" });
   }
 };
 
 const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError }),
+  queryCache: new QueryCache({ onError: (err, query) => query.queryKey[0] !== "me" && onError(err) }),
   mutationCache: new MutationCache({ onError }),
   defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && count < 2 } },
 });
@@ -89,10 +92,12 @@ const projectRoute = createRoute({
 
 const nodesRoute = createRoute({ getParentRoute: () => appRoute, path: "/nodes", component: NodesPage });
 
+const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsPage });
+
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
-  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, nodesRoute]),
+  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, nodesRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });

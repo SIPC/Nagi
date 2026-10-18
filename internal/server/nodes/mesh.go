@@ -206,3 +206,10 @@ func (c *Conn) Name() string {
 	defer c.mu.RUnlock()
 	return c.name
 }
+
+// Remote 返回节点这条连接的来源地址。
+func (c *Conn) Remote() netip.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.remote
+}

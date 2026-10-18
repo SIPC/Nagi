@@ -3,11 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
-import { AlertSettings, NodeMetrics } from "@/pages/alerts";
-import { HandOverCard, InviteCard, NodePanels } from "@/pages/panels";
-import { NodeMesh, PanelMeshCard } from "@/pages/mesh";
+import { NodeMetrics } from "@/pages/alerts";
+import { HandOverCard, NodePanels } from "@/pages/panels";
+import { NodeMesh } from "@/pages/mesh";
 import { NodeReplicas } from "@/pages/backup";
-import { SecurityCard } from "@/pages/security";
 import {
   Alert,
   Badge,
@@ -44,11 +43,6 @@ export function NodesPage() {
         description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。"
       />
       <AddNode />
-      <SecurityCard />
-      <AlertSettings />
-      <PanelMeshCard />
-      <InviteCard />
-      {nodes.data && <HandOverCard nodes={nodes.data.nodes} />}
       {nodes.isPending ? (
         <Spinner />
       ) : nodes.error ? (
@@ -74,9 +68,14 @@ export function NodesPage() {
                   <Fragment key={n.id}>
                     <tr className="border-b last:border-0">
                       <td className="py-3 pr-4">
-                        <div className="font-medium">{n.name}</div>
+                        <div className="font-medium">
+                          {n.name}
+                          {n.info?.embedded && (
+                            <Badge className="ml-2">面板自带</Badge>
+                          )}
+                        </div>
                         <div className="font-mono text-xs text-muted-foreground">
-                          {n.id}
+                          {n.address || n.id}
                         </div>
                       </td>
                       <td className="py-3 pr-4">
@@ -114,7 +113,7 @@ export function NodesPage() {
                           size="sm"
                           onClick={() => toggle(n.id, "panels")}
                         >
-                          面板
+                          信任的面板
                         </Button>
                         <Button
                           variant="ghost"
@@ -128,7 +127,7 @@ export function NodesPage() {
                           size="sm"
                           onClick={() => toggle(n.id, "replicas")}
                         >
-                          副本
+                          收到的副本
                         </Button>
                         <Button
                           variant="ghost"
@@ -183,6 +182,7 @@ export function NodesPage() {
           </CardContent>
         </Card>
       )}
+      {nodes.data && nodes.data.nodes.length > 0 && <HandOverCard nodes={nodes.data.nodes} />}
     </>
   );
 }
@@ -247,8 +247,9 @@ function AddNode() {
         </div>
         {command && (
           <div className="grid gap-1">
-            <span className="text-muted-foreground">
-              在新机器上用 root 执行（令牌一次性，1 小时内有效）：
+            <span className="flex items-center gap-2 text-muted-foreground">
+              在新机器上用 root 执行（令牌一次性：一台机器一条，1 小时内有效）：
+              <CopyButton text={command} />
             </span>
             <code className="break-all rounded bg-muted p-3 font-mono text-xs">
               {command}
@@ -283,8 +284,12 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
   };
   return (
     <div className="grid gap-3 py-3 text-sm">
+      <p className="text-muted-foreground">
+        项目之间默认互相访问不了。共享网络让几个项目互通，例如几个应用共用一个数据库项目：建好以后在各项目的"项目设置"里加入，成员在里面叫"成员.网络名"。
+        和其他节点的同名网络连起来，不同节点上的项目也能这样访问。
+      </p>
       {error && <Alert>{error}</Alert>}
-      {list.data?.networks.length === 0 && <span className="text-muted-foreground">还没有共享网络。</span>}
+      {list.data?.networks.length === 0 && <span className="text-muted-foreground">这个节点上还没有共享网络。</span>}
       {list.data?.networks.map((n) => (
         <div key={n.name} className="grid gap-1 rounded-md border p-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -357,5 +362,27 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
         </Button>
       </div>
     </div>
+  );
+}
+
+// CopyButton 把文字复制到剪贴板。
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setDone(true);
+          setTimeout(() => setDone(false), 2000);
+        } catch {
+          // 非 HTTPS 等情况下浏览器不让写剪贴板，只能手动选中复制。
+        }
+      }}
+    >
+      {done ? "已复制" : "复制"}
+    </Button>
   );
 }

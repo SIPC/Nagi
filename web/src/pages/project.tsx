@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, slugName, timeAgo } from "@/lib/utils";
 import { ProjectMetrics } from "@/pages/alerts";
 import { BackupCard, FailoverCard, MigrateCard } from "@/pages/backup";
 import { PageHeader } from "@/pages/layout";
@@ -11,7 +11,7 @@ import { ProjectState, ServiceState } from "@/components/status";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { TerminalCard } from "@/components/terminal";
-import { useMemberForm } from "@/components/member-form";
+import { useImageForm, useMemberForm } from "@/components/member-form";
 import type { Member, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
 // 测试界面：项目由多个成员组成，每个成员单独部署、记版本、回滚（见 docs/agent.md#项目与成员）。
@@ -30,6 +30,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
       <>
         <BackLink />
         <Alert>{errorMessage(project.error)}</Alert>
+        <MovedProject nodeId={nodeId} projectId={projectId} />
       </>
     );
   }
@@ -59,6 +60,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
 
       <div className="grid gap-6">
         <MembersCard nodeId={nodeId} project={p} services={services} selected={member?.name ?? ""} onSelect={setSelected} />
+        <AddMemberCard nodeId={nodeId} project={p} onAdded={setSelected} />
         {imageUpdates.length > 0 && (
           <Alert>
             有新版本的镜像：
@@ -75,7 +77,6 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
             hasImageUpdate={imageUpdates.some((u) => u.member === member.name)}
           />
         )}
-        <AddMemberCard nodeId={nodeId} project={p} onAdded={setSelected} />
         <SettingsCard key={`settings-${p.revision}`} nodeId={nodeId} project={p} />
         <DeploymentsCard nodeId={nodeId} project={p} />
         <RoutesCard nodeId={nodeId} project={p} services={services} />
@@ -89,12 +90,24 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
           </CardContent>
         </Card>
         <BackupCard nodeId={nodeId} projectId={projectId} />
-        <FailoverCard nodeId={nodeId} projectId={projectId} name={p.name} sharedNetworks={p.settings?.sharedNetworks ?? []} />
-        <MigrateCard nodeId={nodeId} projectId={projectId} name={p.name} sharedNetworks={p.settings?.sharedNetworks ?? []} />
+        <FailoverCard nodeId={nodeId} projectId={projectId} dir={p.dir} sharedNetworks={p.settings?.sharedNetworks ?? []} />
+        <MigrateCard nodeId={nodeId} projectId={projectId} name={p.name} dir={p.dir} sharedNetworks={p.settings?.sharedNetworks ?? []} />
         <DeleteCard nodeId={nodeId} project={p} />
       </div>
     </>
   );
+}
+
+// MovedProject：项目在这个节点上找不到时（迁移、顶替、恢复到了别的节点），按项目 ID 在所有节点里找，找到了就跳过去。
+function MovedProject({ nodeId, projectId }: { nodeId: string; projectId: string }) {
+  const navigate = useNavigate();
+  const all = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listAllProjects({}) });
+  const found = all.data?.projects.find((x) => x.project?.project?.id === projectId && x.nodeId !== nodeId);
+  useEffect(() => {
+    if (found) navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: found.nodeId, projectId }, replace: true });
+  }, [found, navigate, projectId]);
+  if (all.isPending) return <Spinner />;
+  return found ? <p className="mt-4 text-sm text-muted-foreground">项目已经在另一个节点上，正在跳转……</p> : null;
 }
 
 function BackLink() {
@@ -167,6 +180,12 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
 
 // ---- 成员列表与一起部署 ----
 
+// shortImage 把固定了摘要的镜像（回滚、迁移、顶替后会固定到当时的摘要）缩短显示，例如 redis@sha256:858f009f9709。
+function shortImage(image: string) {
+  const i = image.indexOf("@sha256:");
+  return i < 0 ? image : image.slice(0, i + 8 + 12);
+}
+
 function memberKind(m: Member) {
   return (m.draft ?? m.config)?.form ? "单容器" : "compose";
 }
@@ -208,7 +227,7 @@ function MembersCard({
         <div className="flex gap-2">
           {changed.length > 0 && (
             <Button variant="outline" size="sm" disabled={busy} onClick={() => deploy(changed)}>
-              部署有改动的（{changed.length}）
+              部署未部署和有改动的（{changed.length}）
             </Button>
           )}
           <Button size="sm" disabled={busy || targets.length === 0} onClick={() => deploy(targets)}>
@@ -353,7 +372,11 @@ function MemberPanel({
               成员 {member.name} <span className="text-sm font-normal text-muted-foreground">（{memberKind(member)}）</span>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {member.hasDraft ? "有未部署的修改：部署时会把草稿保存为新版本。" : "按当前版本执行 docker compose up。"}
+              {member.hasDraft
+                ? "有未部署的修改：部署时会把草稿保存为新版本。"
+                : member.deployedVersion > 0n
+                  ? `运行的是版本 v${member.deployedVersion}。`
+                  : "还没部署过。"}
               {member.sharedEnvOutdated && " 共享变量有更新，部署时用上。"}
             </p>
             {member.hostNetworkServices.length > 0 && (
@@ -379,9 +402,11 @@ function MemberPanel({
                 if (f) upload(f);
               }}
             />
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
-              上传并部署
-            </Button>
+            {(!cfg?.form || cfg.form.workdir) && (
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
+                上传并部署
+              </Button>
+            )}
             {cfg?.source?.gitUrl && (
               <Button variant="outline" size="sm" onClick={() => deploy({ pull: true })} disabled={busy}>
                 拉取并部署
@@ -394,7 +419,7 @@ function MemberPanel({
             )}
             <Button size="sm" onClick={() => deploy({})} disabled={busy}>
               {busy ? <Spinner /> : <Rocket />}
-              {busy ? "部署中" : member.hasDraft ? "部署草稿" : "重新部署"}
+              {busy ? "部署中" : member.hasDraft ? "部署草稿" : member.deployedVersion > 0n ? "重新部署" : "部署"}
             </Button>
             <Button variant="ghost" size="sm" onClick={remove} disabled={busy}>
               删除成员
@@ -411,7 +436,9 @@ function MemberPanel({
                   <td className="py-2 pr-4">
                     <ServiceState service={s} />
                   </td>
-                  <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{s.image}</td>
+                  <td className="py-2 pr-4 font-mono text-xs text-muted-foreground" title={s.image}>
+                    {shortImage(s.image)}
+                  </td>
                   <td className="py-2 text-xs text-muted-foreground">{s.status}</td>
                 </tr>
               ))}
@@ -542,8 +569,7 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
   const [serviceEnv, setServiceEnv] = useState<Record<string, string>>(() =>
     Object.fromEntries(services.map((s) => [s, envToText(base?.serviceEnv[s]?.vars)])),
   );
-  const [formEnv, setFormEnv] = useState(envToText(base?.form?.env));
-  const [image, setImage] = useState(base?.form?.image ?? "");
+  const imageForm = useImageForm(base?.form, "edit-");
   const [gitUrl, setGitUrl] = useState(base?.source?.gitUrl ?? "");
   const [gitRef, setGitRef] = useState(base?.source?.gitRef ?? "");
   const [preserve, setPreserve] = useState((base?.preserve ?? []).join("\n"));
@@ -573,7 +599,7 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
         member: member.name,
         baseRevision: member.revision,
         config: isForm
-          ? { ...common, form: { ...base!.form!, image, env: textToEnv(formEnv) } }
+          ? { ...common, form: imageForm.build() }
           : {
               ...common,
               compose,
@@ -627,12 +653,13 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
       <CardContent className="grid gap-4">
         {error && <Alert>{error}</Alert>}
         {isForm ? (
-          <Field label="镜像" htmlFor="m-image" hint="单容器成员：其他运行参数在创建时的表单里，这里只改镜像和环境变量。">
-            <Input id="m-image" value={image} onChange={(e) => setImage(e.target.value)} className="font-mono" />
-          </Field>
+          imageForm.fields
         ) : (
           <div className="grid gap-1.5">
             <span className="text-sm font-medium">compose</span>
+            <span className="text-xs text-muted-foreground">
+              ports 只在第一次出现时变成端口映射；已有的对外端口、域名在下面的"端口映射"里改，改这里的 ports 不会生效。
+            </span>
             <Textarea
               value={compose}
               onChange={(e) => setCompose(e.target.value)}
@@ -661,16 +688,13 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
             <Input value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
           </div>
         </div>
-        <div className="grid gap-1.5">
-          <span className="text-sm font-medium">成员变量（替换 compose 里的 ${"{变量}"}，同名时覆盖项目的共享变量；KEY=VALUE 每行一个）</span>
-          <Textarea value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
-        </div>
-        {isForm ? (
+        {!isForm && (
           <div className="grid gap-1.5">
-            <span className="text-sm font-medium">容器环境变量</span>
-            <Textarea value={formEnv} onChange={(e) => setFormEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
+            <span className="text-sm font-medium">成员变量（替换 compose 里的 ${"{变量}"}，同名时覆盖项目的共享变量；KEY=VALUE 每行一个）</span>
+            <Textarea value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
           </div>
-        ) : (
+        )}
+        {!isForm &&
           services.map((s) => (
             <div key={s} className="grid gap-1.5">
               <span className="text-sm font-medium">服务 {s} 的环境变量（只注入这个服务的容器）</span>
@@ -681,8 +705,7 @@ function MemberConfigCard({ nodeId, project, member, services }: { nodeId: strin
                 className="font-mono text-[13px]"
               />
             </div>
-          ))
-        )}
+          ))}
       </CardContent>
     </Card>
   );
@@ -813,7 +836,7 @@ function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: 
               add();
             }}
           >
-            <Field label="成员名" htmlFor="new-member" hint="小写字母、数字和 -，创建后不能改。单容器成员在项目内网里就用这个名字访问。">
+            <Field label="成员名" htmlFor="new-member" hint="小写字母、数字和 -，创建后不能改。单容器成员在项目内网里就叫这个名字；compose 里的服务叫“服务.成员名”。">
               <Input id="new-member" value={name} onChange={(e) => setName(e.target.value)} required className="font-mono" placeholder="api" />
             </Field>
             {form.fields}
@@ -839,13 +862,7 @@ function AddMemberCard({ nodeId, project, onAdded }: { nodeId: string; project: 
 // defaultNetworkName 由项目名生成加入共享网络用的网络名（小写字母、数字和 -，不超过 32 个字符）。
 // 项目名里没有能用的字符（例如全是中文）时用项目 ID 的前 8 位。
 function defaultNetworkName(name: string, id: string) {
-  const s = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32)
-    .replace(/-+$/, "");
-  return s || `p-${id.slice(0, 8)}`;
+  return slugName(name, `p-${id.slice(0, 8)}`);
 }
 
 function SettingsCard({ nodeId, project }: { nodeId: string; project: Project }) {
@@ -1063,7 +1080,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
         {list.data?.deployments.length === 0 && <p className="text-muted-foreground">还没有部署过。</p>}
         <table className="w-full text-xs">
           <tbody>
-            {list.data?.deployments.map((d) => (
+            {list.data?.deployments.map((d, i) => (
               <tr key={String(d.id)} className="border-b last:border-0">
                 <td className="py-1.5 pr-3 font-mono">#{String(d.id)}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">{timeAgo(toDate(d.time))}</td>
@@ -1078,6 +1095,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
                     .join(" · ")}
                 </td>
                 <td className="py-1.5 text-right">
+                  {i > 0 && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -1089,6 +1107,7 @@ function DeploymentsCard({ nodeId, project }: { nodeId: string; project: Project
                   >
                     回到这次部署时
                   </Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -1109,6 +1128,14 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
   const member = form.member || project.members[0]?.name || "";
   const memberServices = [...new Set(services.filter((s) => s.member === member).map((s) => s.name))];
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const address = nodes.data?.nodes.find((n) => n.id === nodeId)?.address ?? "";
+  // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
+  const accessURL = (r: (typeof project.routes)[number]) => {
+    if (r.domains.length) return `${r.httpOnly ? "http" : "https"}://${r.domains[0]}`;
+    if (!address || !r.published) return "";
+    return r.protocol === "http" ? `http://${address}:${r.published}` : "";
+  };
 
   const save = async () => {
     setError("");
@@ -1170,6 +1197,16 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
                         {r.member}
                         {r.service !== r.member && `/${r.service}`}:{r.target} →{" "}
                         {r.domains.length ? r.domains.join(", ") + (r.httpOnly ? "（仅 HTTP）" : "") : `${r.protocol}/${r.published}`}
+                      </span>
+                    )}
+                    {!r.error && accessURL(r) && (
+                      <a href={accessURL(r)} target="_blank" rel="noreferrer" className="ml-3 text-xs underline">
+                        打开 {accessURL(r)}
+                      </a>
+                    )}
+                    {!r.error && !accessURL(r) && address && r.published > 0 && (
+                      <span className="ml-3 font-mono text-xs text-muted-foreground">
+                        {address}:{r.published}
                       </span>
                     )}
                   </td>
@@ -1235,6 +1272,13 @@ function RoutesCard({ nodeId, project, services }: { nodeId: string; project: Pr
 
 // ---- 快照 ----
 
+const snapshotKinds: Record<string, string> = {
+  scheduled: "定时",
+  manual: "手动",
+  predeploy: "部署前的数据",
+  version: "版本文件",
+};
+
 function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }) {
   const { run, busy, output } = useRun(nodeId, project.id);
   const ref = { nodeId, projectId: project.id };
@@ -1245,7 +1289,16 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-4">
         <CardTitle>快照</CardTitle>
-        <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => projectClient.createNodeProjectSnapshot(ref))}>
+          立即快照
+        </Button>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p className="text-muted-foreground">
+          定时和手动快照保存所有成员的数据（data/ 和 volumes/），可以在这里恢复，配置不变。"部署前的数据"和"版本文件"供回滚用，在成员的版本列表里回滚。
+        </p>
+        <label className="flex items-center gap-2">
+          <span>恢复时：</span>
           <Select value={member} onChange={(e) => setMember(e.target.value)} className="w-44">
             <option value="">恢复整个项目</option>
             {project.members.map((m) => (
@@ -1254,18 +1307,13 @@ function SnapshotsCard({ nodeId, project }: { nodeId: string; project: Project }
               </option>
             ))}
           </Select>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => projectClient.createNodeProjectSnapshot(ref))}>
-            立即快照
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
+        </label>
         {output}
         <table className="w-full text-xs">
           <tbody>
             {snapshots.data?.snapshots.map((sn) => (
               <tr key={sn.id} className="border-b last:border-0">
-                <td className="py-1.5 pr-3">{sn.kind}</td>
+                <td className="py-1.5 pr-3">{snapshotKinds[sn.kind] ?? sn.kind}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">{timeAgo(toDate(sn.time))}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">
                   {sn.member && `${sn.member} `}

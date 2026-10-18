@@ -324,6 +324,9 @@ message Node {
   bool online = 3;
   google.protobuf.Timestamp last_seen = 4;
   NodeInfo info = 5;
+  // 访问这个节点上的服务用的地址：面板看到的节点来源 IP；面板自带的节点用面板的对外地址。
+  // 节点在 NAT 后面时是 NAT 的出口地址，不一定能从外面访问。
+  string address = 6;
 }
 
 message ListNodesRequest {}

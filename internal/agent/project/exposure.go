@@ -467,9 +467,9 @@ func (m *Manager) importPorts(ctx context.Context, pdb *projectDB, p paths, id s
 				return err
 			}
 			if guessed {
-				onLine("已从 compose 导入映射：" + routeLabel(r) + "（按端口猜测是网站，按 HTTP 开放；不是的话在映射里改成 TCP）")
+				onLine("已按配置里的端口添加映射：" + routeLabel(r) + "（按端口猜测是网站，按 HTTP 开放；不是的话在端口映射里改成 TCP）")
 			} else {
-				onLine("已从 compose 导入映射：" + routeLabel(r))
+				onLine("已按配置里的端口添加映射：" + routeLabel(r))
 			}
 		}
 	}

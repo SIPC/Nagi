@@ -17,3 +17,15 @@ export function timeAgo(date: Date | undefined): string {
   if (abs < 86400) return rtf.format(Math.round(seconds / 3600), "hour");
   return rtf.format(Math.round(seconds / 86400), "day");
 }
+
+// slugName 由名字生成小写字母、数字和 - 组成的标识（不超过 32 个字符）；
+// 名字里没有能用的字符（例如全是中文）时用 fallback（通常是 ID 的前几位）。
+export function slugName(name: string, fallback: string) {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return s || fallback;
+}

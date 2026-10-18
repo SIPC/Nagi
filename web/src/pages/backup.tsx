@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
+import { slugName } from "@/lib/utils";
 import {
   Alert,
   Badge,
@@ -100,6 +102,22 @@ export function BackupCard({
 
   const others = nodes.data?.nodes.filter((n) => n.id !== nodeId) ?? [];
   const s = st.data;
+  const failover = useQuery({
+    queryKey: ["failover", nodeId, projectId],
+    queryFn: () => projectClient.getNodeProjectFailover({ nodeId, projectId }),
+  });
+  if (failover.data?.config && !s?.targetNodeId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>备份节点</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          这个项目设了顶替，顶替节点上已经有一份随时更新的副本，不用再设备份节点。
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader>
@@ -251,7 +269,7 @@ function RestoreReplica({
     queryKey: ["replica-snapshots", nodeId, projectId],
     queryFn: () => nodeClient.listNodeReplicaSnapshots({ nodeId, projectId }),
   });
-  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [dir, setDir] = useState(`/srv/${slugName(name, projectId.slice(0, 8))}`);
   const [snap, setSnap] = useState("");
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState("");
@@ -331,20 +349,24 @@ export function MigrateCard({
   nodeId,
   projectId,
   name,
+  dir: currentDir,
   sharedNetworks = [],
 }: {
   nodeId: string;
   projectId: string;
   name: string;
+  dir: string;
   sharedNetworks?: string[];
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const nodes = useQuery({
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
   const [target, setTarget] = useState("");
-  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  // 默认用项目现在的目录：换一台机器用同一个路径最自然。
+  const [dir, setDir] = useState(currentDir);
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
@@ -366,11 +388,12 @@ export function MigrateCard({
           const l = ev.event.value;
           setLines((x) => [...x, l]);
         } else if (ev.event.case === "result") {
-          setResult(
-            ev.event.value.success
-              ? "✅ 迁移完成，到项目列表里查看新节点上的项目"
-              : `❌ ${ev.event.value.error}`,
-          );
+          if (ev.event.value.success) {
+            setResult("✅ 迁移完成，正在打开新节点上的项目……");
+            setTimeout(() => navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: target, projectId } }), 1500);
+          } else {
+            setResult(`❌ ${ev.event.value.error}`);
+          }
         }
       }
     } catch (err) {
@@ -382,6 +405,22 @@ export function MigrateCard({
   };
 
   const others = nodes.data?.nodes.filter((n) => n.id !== nodeId) ?? [];
+  const failover = useQuery({
+    queryKey: ["failover", nodeId, projectId],
+    queryFn: () => projectClient.getNodeProjectFailover({ nodeId, projectId }),
+  });
+  if (failover.data?.config) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>迁移到其他节点</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          这个项目设了顶替。迁移和顶替各管一件事：要迁移，先在上面取消顶替，迁移完成后在新节点上重新设置。
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader>
@@ -438,12 +477,12 @@ const roleLabel: Record<string, string> = {
 export function FailoverCard({
   nodeId,
   projectId,
-  name,
+  dir: currentDir,
   sharedNetworks = [],
 }: {
   nodeId: string;
   projectId: string;
-  name: string;
+  dir: string;
   sharedNetworks?: string[];
 }) {
   const nodes = useQuery({
@@ -456,7 +495,7 @@ export function FailoverCard({
     refetchInterval: 3000,
   });
   const [standby, setStandby] = useState("");
-  const [dir, setDir] = useState(`/opt/nagi/${name}`);
+  const [dir, setDir] = useState(currentDir);
   const [witness, setWitness] = useState("");
   const [auto, setAuto] = useState(false);
   const [error, setError] = useState("");
@@ -476,6 +515,10 @@ export function FailoverCard({
   };
 
   const others = nodes.data?.nodes.filter((n) => n.id !== nodeId) ?? [];
+  const backup = useQuery({
+    queryKey: ["backup", nodeId, projectId],
+    queryFn: () => projectClient.getNodeProjectBackup({ nodeId, projectId }),
+  });
   const s = st.data;
   const cfg = s?.config;
   return (
@@ -557,6 +600,9 @@ export function FailoverCard({
           </>
         ) : (
           <>
+            {backup.data?.targetNodeId && (
+              <Alert>这个项目设了备份节点 {backup.data.targetName}。顶替和备份节点二选一：先在上面把备份节点改成"不备份"，再设顶替（顶替节点本身就有一份随时更新的副本）。</Alert>
+            )}
             <p className="text-muted-foreground">
               指定一个顶替节点：这个节点失联约 40
               秒后，由顶替节点用最近一次同步的数据启动项目。见证人负责投第三票。

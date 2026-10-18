@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { Button, Field, Input, Textarea } from "@/components/ui";
-import { lines, textToEnv, textToPorts } from "@/lib/config";
-import type { MemberConfigSchema } from "@/gen/nagi/v1/common_pb";
+import { envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
+import type { ImageForm, ImageFormSchema, MemberConfigSchema } from "@/gen/nagi/v1/common_pb";
 
 const exampleCompose = `services:
   web:
@@ -12,26 +12,101 @@ const exampleCompose = `services:
 `;
 
 export type MemberConfigInit = MessageInitShape<typeof MemberConfigSchema>;
+export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
+
+// useImageForm 是单容器成员的镜像表单：新建成员和修改成员共用，所以所有字段建好以后都能改。
+// 例外是对外端口：它只在第一次部署时导入成端口映射，之后以"端口映射"为准，所以修改时（传了 initial）不显示。
+// prefix 加在输入框的 id 前面：同一个页面上可能同时有"加成员"和"修改成员"两个表单。
+export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactNode; build: () => ImageFormInit } {
+  const editing = !!initial;
+  const [image, setImage] = useState(initial?.image ?? "nginx:alpine");
+  const [command, setCommand] = useState(initial?.command ?? "");
+  const [ports, setPorts] = useState(portsToText(initial?.ports));
+  const [volumes, setVolumes] = useState((initial?.volumes ?? []).join("\n"));
+  const [workdir, setWorkdir] = useState(initial?.workdir ?? "");
+  const [env, setEnv] = useState(envToText(initial?.env));
+  const [memory, setMemory] = useState(initial?.memoryMb ? String(initial.memoryMb) : "");
+  const [cpus, setCpus] = useState(initial?.cpus ? String(initial.cpus) : "");
+  const [health, setHealth] = useState(initial?.healthCommand ?? "");
+  const [healthInterval, setHealthInterval] = useState(initial?.healthIntervalSeconds ? String(initial.healthIntervalSeconds) : "");
+  const advanced = !!(initial?.memoryMb || initial?.cpus || initial?.healthCommand);
+
+  const build = (): ImageFormInit => ({
+    image: image.trim(),
+    command,
+    ports: textToPorts(ports),
+    volumes: lines(volumes),
+    workdir: workdir.trim(),
+    env: textToEnv(env),
+    memoryMb: Number(memory) || 0,
+    cpus: Number(cpus) || 0,
+    healthCommand: health.trim(),
+    healthIntervalSeconds: Number(healthInterval) || 0,
+  });
+
+  const fields = (
+    <div className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="镜像" htmlFor={prefix + "image"}>
+          <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" placeholder="nginx:alpine" />
+        </Field>
+        <Field label="运行命令" htmlFor={prefix + "command"} hint="为空时使用镜像默认命令">
+          <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} className="font-mono" />
+        </Field>
+        {editing ? (
+          <div className="grid gap-1.5 text-sm">
+            <span className="font-medium">对外端口</span>
+            <p className="text-muted-foreground">在下面的"端口映射"里改：映射改了立即生效，不用重新部署，还可以绑域名。</p>
+          </div>
+        ) : (
+          <Field label="对外端口" htmlFor={prefix + "ports"} hint="节点端口:容器端口，空格分隔，例如 8080:80 53:53/udp。部署时变成端口映射，经 Caddy 对外开放；之后在项目页的&quot;端口映射&quot;里改或绑域名">
+            <Input id={prefix + "ports"} value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" />
+          </Field>
+        )}
+        <Field label="工作目录" htmlFor={prefix + "workdir"} hint="把成员的 data/（上传或从 git 拉的文件）挂到容器内这个路径；为空表示不挂载文件">
+          <Input id={prefix + "workdir"} value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
+        </Field>
+        <Field label="持久化目录" htmlFor={prefix + "volumes"} hint="容器内路径，每行一个；数据保存在成员目录的 volumes/ 下，随快照备份">
+          <Textarea id={prefix + "volumes"} value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono" placeholder="/data" />
+        </Field>
+        <Field label="环境变量" htmlFor={prefix + "env"} hint="KEY=VALUE，每行一个">
+          <Textarea id={prefix + "env"} value={env} onChange={(e) => setEnv(e.target.value)} className="font-mono" />
+        </Field>
+      </div>
+      <details open={advanced} className="rounded-md border p-3">
+        <summary className="cursor-pointer text-sm font-medium">高级：资源限制、健康检查</summary>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <Field label="内存上限（MB）" htmlFor={prefix + "memory"} hint="为空表示不限制">
+            <Input id={prefix + "memory"} value={memory} onChange={(e) => setMemory(e.target.value)} inputMode="numeric" className="font-mono" />
+          </Field>
+          <Field label="CPU 上限（核）" htmlFor={prefix + "cpus"} hint="可以是小数，例如 0.5；为空表示不限制">
+            <Input id={prefix + "cpus"} value={cpus} onChange={(e) => setCpus(e.target.value)} inputMode="decimal" className="font-mono" />
+          </Field>
+          <Field label="健康检查命令" htmlFor={prefix + "health"} hint="在容器里用 sh -c 执行，退出码 0 表示健康，连续失败 3 次算不健康">
+            <Input id={prefix + "health"} value={health} onChange={(e) => setHealth(e.target.value)} className="font-mono" placeholder="wget -qO- http://localhost/ || exit 1" />
+          </Field>
+          <Field label="检查间隔（秒）" htmlFor={prefix + "health-interval"} hint="为空表示 30 秒">
+            <Input id={prefix + "health-interval"} value={healthInterval} onChange={(e) => setHealthInterval(e.target.value)} inputMode="numeric" className="font-mono" />
+          </Field>
+        </div>
+      </details>
+    </div>
+  );
+  return { fields, build };
+}
 
 // 新建项目和加成员共用的表单：单容器（镜像表单）或一份 compose。
-export function useMemberForm(): { fields: ReactNode; build: () => MemberConfigInit; mode: "compose" | "image" } {
+// first 表示项目里的第一个成员（没有别的成员可依赖，不显示"先部署的成员"）。
+export function useMemberForm(first = false): { fields: ReactNode; build: () => MemberConfigInit; mode: "compose" | "image" } {
   const [mode, setMode] = useState<"compose" | "image">("image");
   const [compose, setCompose] = useState(exampleCompose);
-  const [image, setImage] = useState("nginx:alpine");
-  const [command, setCommand] = useState("");
-  const [ports, setPorts] = useState("");
-  const [volumes, setVolumes] = useState("");
-  const [workdir, setWorkdir] = useState("");
-  const [env, setEnv] = useState("");
   const [dependsOn, setDependsOn] = useState("");
+  const imageForm = useImageForm();
 
   const build = (): MemberConfigInit => {
     const deps = dependsOn.split(/[\s,]+/).filter(Boolean);
     if (mode === "compose") return { compose, dependsOn: deps };
-    return {
-      dependsOn: deps,
-      form: { image, command, ports: textToPorts(ports), volumes: lines(volumes), workdir, env: textToEnv(env) },
-    };
+    return { dependsOn: deps, form: imageForm.build() };
   };
 
   const fields = (
@@ -56,30 +131,13 @@ export function useMemberForm(): { fields: ReactNode; build: () => MemberConfigI
           />
         </Field>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="镜像" htmlFor="image">
-            <Input id="image" value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" />
-          </Field>
-          <Field label="运行命令" htmlFor="command" hint="为空时使用镜像默认命令">
-            <Input id="command" value={command} onChange={(e) => setCommand(e.target.value)} className="font-mono" />
-          </Field>
-          <Field label="端口" htmlFor="ports" hint="节点端口:容器端口，空格分隔，例如 8080:80 53:53/udp">
-            <Input id="ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" />
-          </Field>
-          <Field label="工作目录" htmlFor="workdir" hint="把成员的 data/ 挂到容器内这个路径；为空表示不挂载文件">
-            <Input id="workdir" value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
-          </Field>
-          <Field label="持久化目录" htmlFor="volumes" hint="容器内路径，每行一个">
-            <Textarea id="volumes" value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono" placeholder="/data" />
-          </Field>
-          <Field label="环境变量" htmlFor="env" hint="KEY=VALUE，每行一个">
-            <Textarea id="env" value={env} onChange={(e) => setEnv(e.target.value)} className="font-mono" />
-          </Field>
-        </div>
+        imageForm.fields
       )}
-      <Field label="先部署的成员（可选）" htmlFor="deps" hint="一起部署时排在这些成员后面，例如后端依赖数据库。成员名，逗号分隔。">
-        <Input id="deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
-      </Field>
+      {!first && (
+        <Field label="先部署的成员（可选）" htmlFor="deps" hint="一起部署时排在这些成员后面，例如后端依赖数据库。成员名，逗号分隔。">
+          <Input id="deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
+        </Field>
+      )}
     </>
   );
   return { fields, build, mode };

@@ -2577,12 +2577,15 @@ func (x *UpdateSettingsResponse) GetSettings() *PanelSettings {
 }
 
 type Node struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Online        bool                   `protobuf:"varint,3,opt,name=online,proto3" json:"online,omitempty"`
-	LastSeen      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
-	Info          *NodeInfo              `protobuf:"bytes,5,opt,name=info,proto3" json:"info,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name     string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Online   bool                   `protobuf:"varint,3,opt,name=online,proto3" json:"online,omitempty"`
+	LastSeen *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	Info     *NodeInfo              `protobuf:"bytes,5,opt,name=info,proto3" json:"info,omitempty"`
+	// 访问这个节点上的服务用的地址：面板看到的节点来源 IP；面板自带的节点用面板的对外地址。
+	// 节点在 NAT 后面时是 NAT 的出口地址，不一定能从外面访问。
+	Address       string `protobuf:"bytes,6,opt,name=address,proto3" json:"address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2650,6 +2653,13 @@ func (x *Node) GetInfo() *NodeInfo {
 		return x.Info
 	}
 	return nil
+}
+
+func (x *Node) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
 }
 
 type ListNodesRequest struct {
@@ -5208,13 +5218,14 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x15UpdateSettingsRequest\x12%\n" +
 	"\x0epublic_address\x18\x01 \x01(\tR\rpublicAddress\"L\n" +
 	"\x16UpdateSettingsResponse\x122\n" +
-	"\bsettings\x18\x01 \x01(\v2\x16.nagi.v1.PanelSettingsR\bsettings\"\xa2\x01\n" +
+	"\bsettings\x18\x01 \x01(\v2\x16.nagi.v1.PanelSettingsR\bsettings\"\xbc\x01\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
 	"\x06online\x18\x03 \x01(\bR\x06online\x127\n" +
 	"\tlast_seen\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\x12%\n" +
-	"\x04info\x18\x05 \x01(\v2\x11.nagi.v1.NodeInfoR\x04info\"\x12\n" +
+	"\x04info\x18\x05 \x01(\v2\x11.nagi.v1.NodeInfoR\x04info\x12\x18\n" +
+	"\aaddress\x18\x06 \x01(\tR\aaddress\"\x12\n" +
 	"\x10ListNodesRequest\"8\n" +
 	"\x11ListNodesResponse\x12#\n" +
 	"\x05nodes\x18\x01 \x03(\v2\r.nagi.v1.NodeR\x05nodes\"\x81\x01\n" +

@@ -164,6 +164,11 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		}
 		if conn, err := s.Nodes.Get(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
+			if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !n.Info.GetEmbedded() {
+				n.Address = ip.String()
+			} else {
+				n.Address = s.Panel.PublicAddress(ctx)
+			}
 		} else if len(row.Info) > 0 {
 			info := &nagiv1.NodeInfo{}
 			if proto.Unmarshal(row.Info, info) == nil {

@@ -14,6 +14,8 @@ export default defineConfig({
   server: {
     proxy: {
       "/nagi.v1.": { target: panel, secure: false, changeOrigin: true },
+      // 网页上传项目文件。
+      "/api": { target: panel, secure: false, changeOrigin: true },
       // 终端走 WebSocket。不改 Host，面板会检查 Origin 与 Host 是否同源。
       "/ws": { target: panel, secure: false, ws: true },
     },

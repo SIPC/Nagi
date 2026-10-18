@@ -422,6 +422,10 @@ func (s *agentService) SetBackupTarget(ctx context.Context, req *nagiv1.SetBacku
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		t = &project.BackupTarget{NodeID: req.GetTargetNodeId(), Name: req.GetTargetName(), Key: req.GetTargetKey()}
+		// 顶替节点上已经有一份随时更新的副本；两套同步还会写同一个副本目录。
+		if s.node.failovers.get(req.GetProjectId()) != nil {
+			return nil, status.Error(codes.FailedPrecondition, "这个项目设了顶替，顶替节点上已经有一份随时更新的副本，不用再设备份节点")
+		}
 	}
 	if err := s.projects.SetBackupTarget(ctx, req.GetProjectId(), t); err != nil {
 		return nil, toStatus(err)

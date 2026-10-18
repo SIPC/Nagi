@@ -51,6 +51,9 @@ export function AppLayout() {
             <Link to="/nodes" className={navLink}>
               节点
             </Link>
+            <Link to="/settings" className={navLink}>
+              设置
+            </Link>
           </nav>
           <div className="ml-auto flex items-center gap-1">
             <span className="mr-2 hidden text-sm text-muted-foreground sm:inline">{me.data?.username}</span>

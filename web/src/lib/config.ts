@@ -35,3 +35,9 @@ export function lines(text: string): string[] {
     .map((l) => l.trim())
     .filter(Boolean);
 }
+
+export function portsToText(ports: PortMapping[] | undefined): string {
+  return (ports ?? [])
+    .map((p) => `${p.published}:${p.target}${p.protocol && p.protocol !== "tcp" ? "/" + p.protocol : ""}`)
+    .join(" ");
+}

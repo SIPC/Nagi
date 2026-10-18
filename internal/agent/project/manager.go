@@ -242,7 +242,7 @@ func (m *Manager) checkDir(ctx context.Context, dir string) (string, error) {
 		return "", invalid("不能使用根目录作为项目目录")
 	}
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return "", invalid("目录 %s 已存在且不为空", dir)
+		return "", invalid("目录 %s 已存在且不为空：换一个目录；如果是迁移、顶替或删除项目后留下的旧目录，确认没用以后在节点上删掉它", dir)
 	}
 	existing, err := m.nodeQ.ListProjects(ctx)
 	if err != nil {
