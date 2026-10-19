@@ -204,7 +204,7 @@ func (s *settingsService) BeginTOTP(ctx context.Context, _ *connect.Request[nagi
 
 func (s *settingsService) EnableTOTP(ctx context.Context, req *connect.Request[nagiv1.EnableTOTPRequest]) (*connect.Response[nagiv1.Security], error) {
 	u := auth.CurrentUser(ctx)
-	if err := s.Auth.EnableTOTP(ctx, u.ID, req.Msg.GetCode()); err != nil {
+	if err := s.Auth.EnableTOTP(ctx, u.ID, auth.SessionToken(req.Header()), req.Msg.GetCode()); err != nil {
 		return nil, err
 	}
 	s.Log.Info("已开启两步验证", "user", u.Name)

@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -124,30 +126,65 @@ var ErrTOTPRequired = errors.New("请输入两步验证码")
 
 // Login 校验用户名、密码和两步验证码（开启了的话），成功时返回新会话的 cookie。按客户端 IP 限速。
 func (s *Service) Login(ctx context.Context, ip, username, password, code string) (*http.Cookie, error) {
-	if wait := s.limiter.wait(ip); wait > 0 {
+	key := limitKey(ip)
+	done, wait := s.limiter.begin(key)
+	if done == nil && wait == 0 {
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("上一次登录还在处理，请稍后再试"))
+	}
+	if wait > 0 {
 		return nil, connect.NewError(connect.CodeResourceExhausted,
 			fmt.Errorf("登录失败次数过多，请 %d 秒后再试", int(wait.Seconds())+1))
 	}
+	failed := true
+	defer func() { done(failed) }()
 	user, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		failed = false // 数据库出错不算登录失败
 		return nil, err
 	}
-	if err != nil || !VerifyPassword(password, user.PasswordHash) {
-		s.limiter.fail(ip)
+	hash := user.PasswordHash
+	if err != nil {
+		// 用户不存在时也校验一次，耗时一样，不能从响应时间判断用户名是否存在。
+		hash = dummyHash()
+	}
+	ok, verr := verifyLimited(ctx, password, hash)
+	if verr != nil {
+		failed = false
+		return nil, verr
+	}
+	if err != nil || !ok {
 		return nil, connect.NewError(connect.CodeUnauthenticated, ErrBadCredentials)
 	}
 	if user.TotpSecret != "" {
 		if strings.TrimSpace(code) == "" {
+			failed = false
 			return nil, connect.NewError(connect.CodeFailedPrecondition, ErrTOTPRequired)
 		}
 		if err := s.useTOTP(ctx, user, code); err != nil {
-			s.limiter.fail(ip)
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
 	}
-	s.limiter.reset(ip)
+	failed = false
 	return s.NewSession(ctx, user.ID)
 }
+
+// verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。
+var verifySem = make(chan struct{}, max(2, runtime.NumCPU()))
+
+func verifyLimited(ctx context.Context, password, hash string) (bool, error) {
+	select {
+	case verifySem <- struct{}{}:
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+	defer func() { <-verifySem }()
+	return VerifyPassword(password, hash), nil
+}
+
+var dummyHash = sync.OnceValue(func() string {
+	h, _ := HashPassword("nagi-dummy-password")
+	return h
+})
 
 // NewSession 为用户创建会话，返回要设置的 cookie。
 func (s *Service) NewSession(ctx context.Context, userID int64) (*http.Cookie, error) {
@@ -344,49 +381,69 @@ func HashToken(token string) string {
 
 // ---- 登录限速 ----
 
-// limiter：同一 IP 连续失败 5 次以后，每次失败等待时间翻倍，最长 15 分钟。
+// limiter：同一来源连续失败 5 次以后，每次失败等待时间翻倍，最长 15 分钟。
+// 同一来源同时只处理一个登录请求：否则并发的请求都能在失败次数增加之前通过检查，限速就没用了。
 type limiter struct {
 	mu    sync.Mutex
 	state map[string]*attempts
+	calls int
 }
 
 type attempts struct {
 	failures int
 	until    time.Time
+	busy     bool
+	last     time.Time
 }
 
 func newLimiter() *limiter { return &limiter{state: map[string]*attempts{}} }
 
-func (l *limiter) wait(ip string) time.Duration {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	a, ok := l.state[ip]
-	if !ok {
-		return 0
+// limitKey 是限速的来源：IPv4 按地址，IPv6 按 /64（一个用户通常有一整个 /64，可以随便换地址）。
+func limitKey(ip string) string {
+	if a, err := netip.ParseAddr(ip); err == nil && a.Is6() && !a.Is4In6() {
+		p, _ := a.Prefix(64)
+		return p.String()
 	}
-	return time.Until(a.until)
+	return ip
 }
 
-func (l *limiter) fail(ip string) {
+// begin 开始一次登录尝试。被锁定时返回等待时间；同一来源有请求正在处理时 done 为 nil、等待时间为 0；
+// 否则返回 done，登录结束时调用，参数表示这次是否算失败。
+func (l *limiter) begin(key string) (done func(failed bool), wait time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	a, ok := l.state[ip]
+	now := time.Now()
+	l.calls++
+	if l.calls%1000 == 0 {
+		for k, a := range l.state {
+			if !a.busy && now.Sub(a.last) > 24*time.Hour {
+				delete(l.state, k)
+			}
+		}
+	}
+	a, ok := l.state[key]
 	if !ok {
 		a = &attempts{}
-		l.state[ip] = a
+		l.state[key] = a
 	}
-	a.failures++
-	if a.failures >= 5 {
-		d := time.Second << min(a.failures-5, 10)
-		if d > 15*time.Minute {
-			d = 15 * time.Minute
+	if a.busy {
+		return nil, 0
+	}
+	if w := a.until.Sub(now); w > 0 {
+		return nil, w
+	}
+	a.busy, a.last = true, now
+	return func(failed bool) {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		a.busy, a.last = false, time.Now()
+		if !failed {
+			a.failures, a.until = 0, time.Time{}
+			return
 		}
-		a.until = time.Now().Add(d)
-	}
-}
-
-func (l *limiter) reset(ip string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	delete(l.state, ip)
+		a.failures++
+		if a.failures >= 5 {
+			a.until = time.Now().Add(min(time.Second<<min(a.failures-5, 10), 15*time.Minute))
+		}
+	}, 0
 }

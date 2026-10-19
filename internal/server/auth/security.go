@@ -85,7 +85,8 @@ func (s *Service) BeginTOTP(userID int64) (string, error) {
 }
 
 // EnableTOTP 用验证器 App 显示的验证码确认并开启两步验证。
-func (s *Service) EnableTOTP(ctx context.Context, userID int64, code string) error {
+// token 是当前会话：开启后其他会话全部失效（开两步验证往往是因为担心账号泄露，已经被盗的登录不能继续用）。
+func (s *Service) EnableTOTP(ctx context.Context, userID int64, token, code string) error {
 	s.mu.Lock()
 	p, ok := s.pending[userID]
 	s.mu.Unlock()
@@ -108,7 +109,7 @@ func (s *Service) EnableTOTP(ctx context.Context, userID int64, code string) err
 	s.mu.Lock()
 	delete(s.pending, userID)
 	s.mu.Unlock()
-	return nil
+	return s.q.DeleteOtherSessions(ctx, store.DeleteOtherSessionsParams{UserID: userID, TokenHash: HashToken(token)})
 }
 
 // DisableTOTP 关闭两步验证，需要当前的验证码或者密码。

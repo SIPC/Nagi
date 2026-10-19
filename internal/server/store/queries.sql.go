@@ -19,6 +19,17 @@ func (q *Queries) ClearTOTPSecrets(ctx context.Context) error {
 	return err
 }
 
+const countActiveEnrollTokens = `-- name: CountActiveEnrollTokens :one
+SELECT count(*) FROM enroll_tokens WHERE expires_at > ? AND (used_at IS NULL OR multi_use = 1)
+`
+
+func (q *Queries) CountActiveEnrollTokens(ctx context.Context, expiresAt int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveEnrollTokens, expiresAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSealedData = `-- name: CountSealedData :one
 SELECT (SELECT count(*) FROM users WHERE totp_secret != '')
      + (SELECT count(*) FROM settings WHERE key = 'alert_config')

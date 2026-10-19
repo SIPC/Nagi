@@ -6,14 +6,7 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Nagi</title>
-    <script>
-      // 在页面渲染前确定深浅色，避免闪烁。
-      try {
-        const t = localStorage.getItem("theme");
-        const dark = t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.classList.toggle("dark", dark);
-      } catch {}
-    </script>
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

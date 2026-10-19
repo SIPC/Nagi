@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"text/template"
+	"time"
 )
 
 // installScript 是节点安装脚本，由面板填入自己的地址和公钥指纹后提供下载。
@@ -83,6 +84,12 @@ fi
 // InstallHandler 提供 GET /install.sh。
 func (a *API) InstallHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 只在有可用的加入令牌（刚生成了安装命令或接入码）时提供。安装脚本里有面板地址和指纹，
+		// 一直公开的话，开了安全入口也能被扫描器认出这是 Nagi 面板。
+		if n, err := a.Q.CountActiveEnrollTokens(r.Context(), time.Now().Unix()); err != nil || n == 0 {
+			http.NotFound(w, r)
+			return
+		}
 		var buf bytes.Buffer
 		if err := installScript.Execute(&buf, map[string]string{
 			"Panel":       a.Panel.PublicHostPort(r.Context()),

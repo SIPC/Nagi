@@ -136,3 +136,6 @@ UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != '';
 
 -- name: DeleteAllProjectBackups :exec
 DELETE FROM project_backups;
+
+-- name: CountActiveEnrollTokens :one
+SELECT count(*) FROM enroll_tokens WHERE expires_at > ? AND (used_at IS NULL OR multi_use = 1);

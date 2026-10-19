@@ -77,7 +77,7 @@ func (s *Server) startDomain(ctx context.Context, domain string, handler http.Ha
 		cache.Stop()
 		return nil, err
 	}
-	https := &http.Server{Handler: securityHeaders(handler), ReadHeaderTimeout: 10 * time.Second}
+	https := &http.Server{Handler: securityHeaders(handler, true), ReadHeaderTimeout: 10 * time.Second}
 	redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://"+domain+r.URL.RequestURI(), http.StatusPermanentRedirect)
 	})

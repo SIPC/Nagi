@@ -243,9 +243,10 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler:           securityHeaders(s.auth.EntranceMiddleware(mux)),
+		Handler:           securityHeaders(s.auth.EntranceMiddleware(mux), false),
 		TLSConfig:         s.tlsConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
 	}
 	go s.acceptLoop(ctx, httpLn)
@@ -339,17 +340,26 @@ func (s *Server) tlsConfig() *tls.Config {
 // acceptLoop 接受 TLS 连接，按 ALPN 分流：节点的控制连接交给节点注册表，其余交给 HTTP 服务。
 func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 	cfg := s.tlsConfig()
+	handshakes := make(chan struct{}, 256)
 	for {
 		raw, err := s.listener.Accept()
 		if err != nil {
 			httpLn.Close()
 			return
 		}
+		// 同时进行的 TLS 握手数有上限，防止大量不发数据的连接占满资源。
+		select {
+		case handshakes <- struct{}{}:
+		default:
+			raw.Close()
+			continue
+		}
 		go func() {
 			conn := tls.Server(raw, cfg)
 			hctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			err := conn.HandshakeContext(hctx)
 			cancel()
+			<-handshakes
 			if err != nil {
 				conn.Close()
 				return
@@ -405,13 +415,37 @@ func (l *chanListener) Close() error {
 
 func (l *chanListener) Addr() net.Addr { return l.addr }
 
-func securityHeaders(h http.Handler) http.Handler {
+// contentSecurityPolicy 只允许加载面板自己的脚本和资源。样式允许内联：终端（xterm）会插入 <style>。
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
+	"form-action 'self'; frame-ancestors 'none'"
+
+// securityHeaders 加上安全相关的响应头。HSTS 只在确定用的是正式证书时加（domainTLS：面板自己申请证书的域名入口；
+// 或者请求经本机 Caddy 按域名转发过来），自签证书加了 HSTS，浏览器就不让用户点"继续访问"了。
+func securityHeaders(h http.Handler, domainTLS bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		if domainTLS || viaLocalProxy(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// viaLocalProxy 判断请求是不是本机 Caddy 按面板域名转发过来的（来自回环地址、Host 是域名）。
+func viaLocalProxy(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+		return false
+	}
+	name := r.Host
+	if h, _, err := net.SplitHostPort(r.Host); err == nil {
+		name = h
+	}
+	return name != "" && name != "localhost" && net.ParseIP(name) == nil
 }
 
 // ---- 证书 ----
@@ -483,7 +517,7 @@ func (s *Server) setting(ctx context.Context, key string, def func() string) (st
 	return v, s.q.SetSetting(ctx, store.SetSettingParams{Key: key, Value: v})
 }
 
-// printSetupLink 在面板尚未初始化时生成一次性初始化令牌，并在日志里打印初始化链接。
+// printSetupLink 在面板尚未初始化时生成一次性初始化令牌（24 小时内有效），并在日志里打印初始化链接。
 func (s *Server) printSetupLink(ctx context.Context) error {
 	ok, err := s.auth.HasUsers(ctx)
 	if err != nil || ok {
@@ -493,12 +527,14 @@ func (s *Server) printSetupLink(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.q.SetSetting(ctx, store.SetSettingParams{Key: api.SettingSetupToken, Value: auth.HashToken(token)}); err != nil {
+	// 令牌 24 小时内有效（过期后重启面板会生成新的），记在哈希后面。
+	value := auth.HashToken(token) + ":" + strconv.FormatInt(time.Now().Add(api.SetupTokenTTL).Unix(), 10)
+	if err := s.q.SetSetting(ctx, store.SetSettingParams{Key: api.SettingSetupToken, Value: value}); err != nil {
 		return err
 	}
 	link := s.URL() + "/setup?token=" + token
 	s.log.Info("面板尚未初始化，请打开初始化链接设置管理员账号", "url", link)
-	fmt.Fprintf(os.Stderr, "\n  面板尚未初始化。请在浏览器中打开下面的链接，设置管理员账号：\n\n    %s\n\n  面板使用自签证书，浏览器会提示不安全，确认公钥指纹后继续即可：\n    %s\n\n", link, s.fingerprint)
+	fmt.Fprintf(os.Stderr, "\n  面板尚未初始化。请在浏览器中打开下面的链接（24 小时内有效），设置管理员账号：\n\n    %s\n\n  面板使用自签证书，浏览器会提示不安全，确认公钥指纹后继续即可：\n    %s\n\n", link, s.fingerprint)
 	return nil
 }
 

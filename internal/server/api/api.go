@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -29,6 +30,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// maxRequestBytes 是接口请求体（解压后）的上限。compose、环境变量这些都远小于它。
+const maxRequestBytes = 4 << 20
+
+// SetupTokenTTL 是面板初始化令牌的有效期。
+const SetupTokenTTL = 24 * time.Hour
+
 // SettingSetupToken 是面板初始化令牌哈希在 settings 表里的键。
 const SettingSetupToken = "setup_token"
 
@@ -45,13 +52,18 @@ type API struct {
 
 // Mount 把所有接口挂到 mux 上。
 func (a *API) Mount(mux *http.ServeMux) {
-	interceptors := connect.WithInterceptors(a.Auth.Interceptor(
-		nagiv1connect.SetupServiceGetSetupStateProcedure,
-		nagiv1connect.SetupServiceSetupProcedure,
-		nagiv1connect.AuthServiceLoginProcedure,
-		nagiv1connect.AuthServiceLogoutProcedure,
-		nagiv1connect.EnrollServiceEnrollProcedure,
-	))
+	interceptors := connect.WithHandlerOptions(
+		connect.WithInterceptors(a.Auth.Interceptor(
+			nagiv1connect.SetupServiceGetSetupStateProcedure,
+			nagiv1connect.SetupServiceSetupProcedure,
+			nagiv1connect.AuthServiceLoginProcedure,
+			nagiv1connect.AuthServiceLogoutProcedure,
+			nagiv1connect.EnrollServiceEnrollProcedure,
+		)),
+		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。
+		// 文件上传走 /api/upload，不经过这里。
+		connect.WithReadMaxBytes(maxRequestBytes),
+	)
 	mux.Handle(nagiv1connect.NewSetupServiceHandler(&setupService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewAuthServiceHandler(&authService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewNodeServiceHandler(&nodeService{a}, interceptors))
@@ -83,9 +95,13 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 	} else if ok {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("面板已经初始化过了"))
 	}
-	want, err := s.Q.GetSetting(ctx, SettingSetupToken)
+	stored, err := s.Q.GetSetting(ctx, SettingSetupToken)
 	if err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("初始化令牌无效，请使用启动日志里的初始化链接"))
+	}
+	want, expires, _ := strings.Cut(stored, ":")
+	if exp, _ := strconv.ParseInt(expires, 10, 64); time.Now().Unix() > exp {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("初始化链接已过期（24 小时内有效），重启面板获取新的链接"))
 	}
 	got := auth.HashToken(req.Msg.GetToken())
 	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
