@@ -97,9 +97,9 @@ func (m *Manager) replicaRefusal(ctx context.Context, id, trustID string, p path
 	if len(reasons) == 0 {
 		return nil
 	}
-	return invalid("配置来自别的节点，里面有能碰到本节点宿主机的设置，为了安全没有启动：%s。"+
-		"这样做是防止那个节点被攻破后借副本控制本节点。确认这个项目的配置可信的话，在面板的项目设置里勾选"+
-		"「允许在备份节点上使用特权配置」，再重新操作", strings.Join(reasons, "；"))
+	return invalid("配置来自别的节点，里面有能碰到本节点宿主机的设置：%s。为了防止那个节点被攻破后借副本控制本节点，"+
+		"这类配置不会自动启动。看过配置确认没问题的话，在项目页点部署启动它；以后顶替、恢复时也要自动启动的话，"+
+		"在项目页勾选「允许在备份节点上使用特权配置」", strings.Join(reasons, "；"))
 }
 
 // deployedConfigs 返回各容器部署的版本的配置和当时的共享变量。

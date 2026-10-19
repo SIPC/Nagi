@@ -454,7 +454,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 	defer sess.Close()
 
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary), grpc.ChainStreamInterceptor(explainStream))
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, detachStream))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
 	})

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { slugName } from "@/lib/utils";
 import {
@@ -186,6 +186,9 @@ export function BackupCard({
   );
 }
 
+// RestoreOutcome 是一次"恢复成项目"的结果。恢复以后副本变成了项目、从列表里消失，结果放在列表外面显示。
+type RestoreOutcome = { projectId: string; name: string; ok: boolean; created: boolean; message: string; lines: string[] };
+
 // NodeReplicas：节点作为备份节点保存的副本，可以恢复成项目。
 export function NodeReplicas({ nodeId }: { nodeId: string }) {
   const queryClient = useQueryClient();
@@ -194,16 +197,41 @@ export function NodeReplicas({ nodeId }: { nodeId: string }) {
     queryFn: () => nodeClient.listNodeReplicas({ nodeId }),
   });
   const [open, setOpen] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<RestoreOutcome | null>(null);
+  const outcomeView = outcome && (
+    <div className="grid gap-2 rounded border p-2">
+      <div className={outcome.ok ? "text-success" : "text-destructive"}>
+        {outcome.ok ? "✅" : "❌"} {outcome.name}：{outcome.message}
+      </div>
+      <div className="flex gap-2">
+        {outcome.created && (
+          <Link to="/projects/$nodeId/$projectId" params={{ nodeId, projectId: outcome.projectId }}>
+            <Button size="sm" variant="outline">
+              打开项目
+            </Button>
+          </Link>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => setOutcome(null)}>
+          关闭
+        </Button>
+      </div>
+      {outcome.lines.length > 0 && (
+        <pre className="max-h-60 overflow-auto rounded bg-zinc-950 p-3 font-mono text-zinc-200">{outcome.lines.join("\n")}</pre>
+      )}
+    </div>
+  );
   if (q.isPending) return <Spinner />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   if (q.data.replicas.length === 0)
     return (
-      <div className="py-2 text-xs text-muted-foreground">
-        这个节点上没有副本
+      <div className="grid gap-2 py-2 text-xs">
+        {outcomeView}
+        <div className="text-muted-foreground">这个节点上没有副本</div>
       </div>
     );
   return (
     <div className="grid gap-2 py-2 text-xs">
+      {outcomeView}
       {q.data.replicas.map((r) => (
         <div key={r.projectId} className="grid gap-2 rounded border p-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -247,6 +275,7 @@ export function NodeReplicas({ nodeId }: { nodeId: string }) {
               nodeId={nodeId}
               projectId={r.projectId}
               name={r.projectName}
+              onDone={setOutcome}
             />
           )}
         </div>
@@ -259,10 +288,12 @@ function RestoreReplica({
   nodeId,
   projectId,
   name,
+  onDone,
 }: {
   nodeId: string;
   projectId: string;
   name: string;
+  onDone: (o: RestoreOutcome) => void;
 }) {
   const queryClient = useQueryClient();
   const snaps = useQuery({
@@ -272,13 +303,14 @@ function RestoreReplica({
   const [dir, setDir] = useState(`/srv/${slugName(name, projectId.slice(0, 8))}`);
   const [snap, setSnap] = useState("");
   const [lines, setLines] = useState<string[]>([]);
-  const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
 
   const restore = async () => {
     setBusy(true);
     setLines([]);
-    setResult("");
+    const out: string[] = [];
+    let ok = false;
+    let message = "";
     try {
       for await (const ev of nodeClient.restoreNodeReplica({
         nodeId,
@@ -288,19 +320,19 @@ function RestoreReplica({
       })) {
         if (ev.event.case === "output") {
           const l = ev.event.value;
+          out.push(l);
           setLines((x) => [...x, l]);
         } else if (ev.event.case === "result") {
-          setResult(
-            ev.event.value.success
-              ? "✅ 已恢复并部署"
-              : `❌ ${ev.event.value.error}`,
-          );
+          ok = ev.event.value.success;
+          message = ok ? "已恢复成项目并启动" : ev.event.value.error;
         }
       }
     } catch (err) {
-      setResult(`❌ ${errorMessage(err)}`);
+      message = errorMessage(err);
     } finally {
       setBusy(false);
+      // 失败时项目也可能已经建好了（例如恢复了但没有启动），看错误信息开头。
+      onDone({ projectId, name, ok, created: ok || message.startsWith("项目已恢复"), message, lines: out });
       queryClient.invalidateQueries({ queryKey: ["replicas", nodeId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
@@ -334,8 +366,7 @@ function RestoreReplica({
           {busy ? <Spinner /> : null}恢复
         </Button>
       </div>
-      {result && <div>{result}</div>}
-      {lines.length > 0 && (
+      {busy && lines.length > 0 && (
         <pre className="max-h-60 overflow-auto rounded bg-zinc-950 p-3 font-mono text-zinc-200">
           {lines.join("\n")}
         </pre>
@@ -601,7 +632,9 @@ export function FailoverCard({
         ) : (
           <>
             {backup.data?.targetNodeId && (
-              <Alert>这个项目设了备份节点 {backup.data.targetName}。顶替和备份节点二选一：先在上面把备份节点改成"不备份"，再设顶替（顶替节点本身就有一份随时更新的副本）。</Alert>
+              <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                这个项目设了备份节点 {backup.data.targetName}。顶替和备份节点二选一：要设顶替，先在上面把备份节点改成"不备份"（顶替节点本身就有一份随时更新的副本）。
+              </p>
             )}
             <p className="text-muted-foreground">
               指定一个顶替节点：这个节点失联约 40

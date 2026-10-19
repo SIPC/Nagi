@@ -289,6 +289,14 @@ func (a *agent) runBackupSync(ctx context.Context, id string) error {
 	if errors.Is(err, errNoBackupTarget) {
 		return nil
 	}
+	if status.Code(err) == codes.NotFound {
+		// 备份节点上的副本登记没了：最常见的是副本已经在那里恢复成了项目。重新选一次备份节点会重新登记。
+		target := "备份节点"
+		if st, serr := a.projects.BackupState(ctx, id); serr == nil && st.Target != nil && st.Target.Name != "" {
+			target = st.Target.Name
+		}
+		err = fmt.Errorf("%s 上已经没有这个项目的副本（可能已经在那里恢复成了项目）。要继续备份，在项目页重新选一次备份节点（%w）", target, err)
+	}
 	a.projects.RecordBackupSync(ctx, id, err)
 	if err != nil {
 		a.log.Warn("同步到备份节点失败", "project", id, "err", err)
