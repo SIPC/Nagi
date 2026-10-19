@@ -152,7 +152,12 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 	if c, err := r.Peek(nodeID); err == nil {
 		c.mu.Lock()
 		c.pending = false
+		// 马上用最近一次上报的 mesh 信息加入 mesh，不用等下一次上报。
+		if m := c.report.GetMesh(); m != nil && bytes.Equal(m.GetPublicKey(), c.meshKey) {
+			c.mesh = m
+		}
 		c.mu.Unlock()
+		r.updateMesh()
 		go r.pushAlertConfig(context.Background(), c, nil)
 		go r.pushTrusted(context.Background(), c)
 	}
