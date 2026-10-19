@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/moby/moby/api/pkg/stdcopy"
@@ -203,9 +204,14 @@ func (d *Client) Logs(ctx context.Context, c Instance, tail int, follow bool, on
 	}
 	defer rc.Close()
 
+	// 每个流一个读取协程，返回前等它们读完，不然最后几行可能在返回之后才送出。
+	var wg sync.WaitGroup
+	defer wg.Wait()
 	emit := func(stream string) io.Writer {
 		pr, pw := io.Pipe()
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			sc := bufio.NewScanner(pr)
 			sc.Buffer(make([]byte, 64*1024), 1024*1024)
 			for sc.Scan() {

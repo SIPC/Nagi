@@ -180,7 +180,11 @@ export function NodesPage() {
                     {open?.id === n.id && (
                       <tr className="border-b">
                         <td colSpan={6}>
-                          {n.online ? (
+                          {n.pending ? (
+                            <p className="py-4 text-sm text-muted-foreground">
+                              这个节点是用接入码加入的，还没有批准。确认是自己的机器后点「批准」，之后才能查看和操作它。
+                            </p>
+                          ) : n.online ? (
                             open.tab === "metrics" ? (
                               <NodeMetrics nodeId={n.id} />
                             ) : open.tab === "mesh" ? (

@@ -311,6 +311,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		}
 	}
 	// 每个容器一个 webhook。节点上已经没有的项目或容器，令牌一并删掉。
+	// 读取失败的项目（例如磁盘满了）上报的只有 ID，它的 webhook 和配置备份都保留原样。
+	unreadable := map[string]bool{}
+	for _, s := range req.GetProjects() {
+		if s.GetError() != "" {
+			unreadable[s.GetProject().GetId()] = true
+		}
+	}
 	tokens := map[string]bool{}
 	for _, s := range req.GetProjects() {
 		for _, m := range s.GetProject().GetContainers() {
@@ -321,14 +328,14 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	}
 	if hooks, err := p.r.q.ListNodeWebhooks(ctx, p.conn.NodeID); err == nil {
 		for _, h := range hooks {
-			if !tokens[h.TokenHash] {
+			if !tokens[h.TokenHash] && !unreadable[h.ProjectID] {
 				_ = p.r.q.DeleteWebhook(ctx, h.TokenHash)
 			}
 		}
 	}
 	for _, s := range req.GetProjects() {
 		proj := s.GetProject()
-		if proj == nil || proj.GetId() == "" {
+		if proj == nil || proj.GetId() == "" || s.GetError() != "" {
 			continue
 		}
 		plain, err := proto.Marshal(proj)

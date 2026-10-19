@@ -358,7 +358,7 @@ func (m *Manager) List(ctx context.Context) ([]*nagiv1.ProjectSummary, error) {
 		s, err := m.summary(ctx, r.ID, r.Dir)
 		if err != nil {
 			// 单个项目读取失败不影响其他项目，只返回基本信息。
-			s = &nagiv1.ProjectSummary{Project: &nagiv1.Project{Id: r.ID, Name: r.ID, Dir: r.Dir}}
+			s = &nagiv1.ProjectSummary{Project: &nagiv1.Project{Id: r.ID, Name: r.ID, Dir: r.Dir}, Error: err.Error()}
 		}
 		out = append(out, s)
 	}

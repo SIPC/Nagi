@@ -505,7 +505,7 @@ func (m *Manager) deployContainer(ctx context.Context, row nodestore.Project, pd
 	if err := m.SyncNetworks(ctx, id); err != nil {
 		onLine("警告：接入项目内网失败：" + err.Error())
 	}
-	if err := m.watchStart(ctx, files.ProjectName, onLine); err != nil {
+	if err := m.watchStart(ctx, files.ProjectName, deployed > 0, onLine); err != nil {
 		return version, err
 	}
 

@@ -1873,9 +1873,11 @@ func (x *ImageUpdate) GetContainer() string {
 }
 
 type ProjectSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       *Project               `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	Status        *ProjectStatus         `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project *Project               `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Status  *ProjectStatus         `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	// 读取项目失败（例如磁盘满了、项目数据库坏了）时的原因，这时 project 里只有 ID 和目录。
+	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1922,6 +1924,13 @@ func (x *ProjectSummary) GetStatus() *ProjectStatus {
 		return x.Status
 	}
 	return nil
+}
+
+func (x *ProjectSummary) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
 }
 
 type NodeInfo struct {
@@ -3730,10 +3739,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12%\n" +
 	"\x0ecurrent_digest\x18\x03 \x01(\tR\rcurrentDigest\x12#\n" +
 	"\rlatest_digest\x18\x04 \x01(\tR\flatestDigest\x12\x1c\n" +
-	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
+	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"\x82\x01\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd0\x01\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xd0\x01\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +

@@ -67,6 +67,11 @@ func (s *agentService) ListProjects(ctx context.Context, _ *nagiv1.ListProjectsR
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	for _, p := range list {
+		if p.GetError() != "" {
+			p.Error = explain(p.GetError())
+		}
+	}
 	return &nagiv1.ListProjectsResponse{Projects: list}, nil
 }
 

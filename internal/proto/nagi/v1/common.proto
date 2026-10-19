@@ -299,6 +299,8 @@ message ImageUpdate {
 message ProjectSummary {
   Project project = 1;
   ProjectStatus status = 2;
+  // 读取项目失败（例如磁盘满了、项目数据库坏了）时的原因，这时 project 里只有 ID 和目录。
+  string error = 3;
 }
 
 message NodeInfo {

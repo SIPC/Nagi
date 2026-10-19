@@ -54,7 +54,7 @@ export function SetupPage({ token }: { token: string }) {
     queryKey: ["setup-state"],
     queryFn: () => setupClient.getSetupState({}),
   });
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [localError, setLocalError] = useState("");
@@ -98,6 +98,7 @@ export function SetupPage({ token }: { token: string }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              placeholder="例如 admin"
               required
             />
           </Field>

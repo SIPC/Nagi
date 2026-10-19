@@ -51,7 +51,7 @@ export function InviteCard() {
           <div className="grid gap-1">
             <span className="text-muted-foreground">
               复制到旧面板的「交给另一个面板」，或在节点上执行 nagi panel add
-              &lt;接入码&gt;。1 小时内可以给多个节点用：
+              &lt;接入码&gt;。1 小时内可以给多个节点用。用它加入的节点要在节点页「批准」后才能使用（接入码泄露的话别人也能加入）：
             </span>
             <code className="break-all rounded bg-muted p-3 font-mono text-xs">
               {code}

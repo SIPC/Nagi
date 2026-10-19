@@ -121,6 +121,23 @@ export function ProjectsPage() {
             if (!p) return null;
             const services = summary.status?.services ?? [];
             const deployed = p.containers.filter((m) => m.deployedVersion > 0n).length;
+            if (summary.error) {
+              // 节点在线，但读不了这个项目（例如磁盘满了）：说明原因，不要显示成"尚未部署"。
+              return (
+                <Link key={`${nodeId}/${p.id}`} to="/projects/$nodeId/$projectId" params={{ nodeId, projectId: p.id }}>
+                  <Card className="h-full border-destructive/40">
+                    <CardContent className="grid gap-2 pt-5 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="truncate font-mono">{p.dir}</span>
+                        <Badge tone="danger">读取失败</Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{nodeName(nodeId)}</span>
+                      <span className="text-xs text-destructive">{summary.error}</span>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            }
             if (offline(nodeId)) {
               // 节点离线：显示的是面板上的配置备份，项目页打不开；可以用备份在别的节点上重建。
               return (
@@ -282,7 +299,7 @@ export function NewProjectPage() {
   const [name, setName] = useState("");
   const [dir, setDir] = useState("");
   const [withContainer, setWithContainer] = useState(true);
-  const [containerName, setContainerName] = useState("web");
+  const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
   const selectedNode = nodeId || onlineNodes[0]?.id || "";
 
@@ -340,7 +357,7 @@ export function NewProjectPage() {
             {withContainer && (
               <>
                 <Field label={container.mode === "compose" ? "容器组名" : "容器名"} htmlFor="container" hint="小写字母、数字和 -，创建后不能改。单个容器在项目内网里就叫这个名字；容器组里的容器叫“容器.容器组名”。">
-                  <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" />
+                  <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" placeholder="web" />
                 </Field>
                 {container.fields}
               </>
