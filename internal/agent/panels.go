@@ -41,8 +41,8 @@ func (s *agentService) AddPanel(ctx context.Context, req *nagiv1.AddPanelRequest
 	if p, ok := a.id.panel(req.GetFingerprint()); ok {
 		// 已经信任这个面板，只更新地址，不消耗令牌。只能改自己的地址：
 		// 否则一个面板可以把另一个面板的地址改成连不上的，悄悄把它锁在外面。
-		if req.GetFingerprint() != s.panel {
-			return nil, status.Error(codes.PermissionDenied, "已经信任这个面板了；面板的地址只能由它自己修改")
+		if p.Address != req.GetAddress() && req.GetFingerprint() != s.panel {
+			return nil, status.Error(codes.PermissionDenied, "已经信任这个面板了，地址不一样；面板的地址只能由它自己修改")
 		}
 		if p.Address != req.GetAddress() {
 			p.Address = req.GetAddress()
