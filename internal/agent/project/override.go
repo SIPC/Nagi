@@ -44,6 +44,9 @@ type overrideInput struct {
 // 容器组不在这里加入项目内网和共享网络：compose 会把服务原名注册到它加入的每个网络上，
 // 由节点用 network connect 只带指定的别名接入（见 network.go）。
 func buildOverride(in overrideInput) (map[string]any, error) {
+	if err := checkMountSources(in.proj, in.mp.root); err != nil {
+		return nil, err
+	}
 	services := map[string]any{}
 	joinIntranet := in.single && in.intranet
 	for name, svc := range in.proj.Services {
@@ -113,7 +116,13 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 		if !managedVolume(v) {
 			continue
 		}
+		if key == "." || key == ".." {
+			return nil, invalid("volume 名不能是 %q", key)
+		}
 		dir := filepath.Join(in.mp.volumesDir(), key)
+		if err := noSymlinkBelow(in.mp.root, dir); err != nil {
+			return nil, err
+		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, fmt.Errorf("创建 volume 目录: %w", err)
 		}

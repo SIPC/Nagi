@@ -405,6 +405,10 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 				continue
 			}
 			onLine("副本里还没有定时快照，用版本文件恢复容器 " + mem.Name + " 的 data/（没有运行数据）")
+			if err := removeSymlinks(mp.dataDir()); err != nil {
+				rep.Close(ctx)
+				return fail(err)
+			}
 			if err := rep.Restore(ctx, v.FilesSnapshot, "data", mp.dataDir()); err != nil {
 				rep.Close(ctx)
 				return fail(fmt.Errorf("恢复容器 %s 的版本文件: %w", mem.Name, err))

@@ -387,6 +387,9 @@ func (m *Manager) deployContainer(ctx context.Context, row nodestore.Project, pd
 		if err := compose.Stop(ctx, files, onLine); err != nil {
 			return 0, err
 		}
+		if err := removeSymlinks(mp.volumesDir()); err != nil {
+			return 0, err
+		}
 		if err := rep.Restore(ctx, opts.restoreData, "volumes", mp.volumesDir()); err != nil {
 			return 0, fmt.Errorf("恢复 volumes: %w", err)
 		}
@@ -707,25 +710,45 @@ func restorePreserved(ctx context.Context, rep *snapshot.Repo, sid string, mp co
 	if err := rep.Restore(ctx, sid, "data", tmp); err != nil {
 		return fmt.Errorf("恢复数据: %w", err)
 	}
+	// data/ 是容器可写的，保留路径的任何一级都可能被换成符号链接，所以从 data/ 开始经 os.Root 操作。
+	root, err := openDirRoot(mp.dataDir())
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	for _, rel := range preserve {
 		src := filepath.Join(tmp, filepath.FromSlash(rel))
-		dst := filepath.Join(mp.dataDir(), filepath.FromSlash(rel))
-		info, err := os.Stat(src)
+		info, err := os.Lstat(src)
 		if errors.Is(err, os.ErrNotExist) {
-			os.RemoveAll(dst)
+			if err := root.RemoveAll(rel); err != nil {
+				return err
+			}
 			continue
 		} else if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			if err := syncDir(src, dst, nil, func(string) {}); err != nil {
+		if !info.IsDir() {
+			if err := root.RemoveAll(rel); err != nil {
 				return err
 			}
-		} else {
-			os.MkdirAll(filepath.Dir(dst), 0o755)
-			if err := copyFile(src, dst, info.Mode().Perm()); err != nil {
-				return err
+			if info.Mode().IsRegular() {
+				if err := copyFileInto(root, rel, src, info.Mode().Perm()); err != nil {
+					return err
+				}
 			}
+			continue
+		}
+		if err := root.MkdirAll(rel, info.Mode().Perm()|0o700); err != nil {
+			return err
+		}
+		sub, err := root.OpenRoot(rel)
+		if err != nil {
+			return err
+		}
+		err = syncRoot(sub, src, nil, func(string) {})
+		sub.Close()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1057,6 +1080,10 @@ func snapshotsProto(list []snapshot.Info) []*nagiv1.Snapshot {
 // 快照里每个容器的目录叫 container.<名字>，版本文件和部署前快照打的标签是 container=<名字>。
 
 // restoreContainerDir 从快照里恢复一个容器的 data/ 或 volumes/（sub）到 dst。
+// 恢复是原地覆盖的，先删掉容器可能留下的符号链接（见 removeSymlinks），调用前容器要已经停止。
 func restoreContainerDir(ctx context.Context, rep *snapshot.Repo, sid, name, sub, dst string) error {
+	if err := removeSymlinks(dst); err != nil {
+		return err
+	}
 	return rep.Restore(ctx, sid, "container."+name+"/"+sub, dst)
 }

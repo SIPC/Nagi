@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net"
 	"os"
 	"path"
@@ -227,97 +226,7 @@ func normalizePreserve(list []string) []string {
 	return out
 }
 
-// syncDir 让 dst 变成 src 的内容：删掉 dst 里不在保留路径中的所有东西，再复制 src。
-// 保留路径在 dst 里已经存在时，src 里的这部分被忽略，以 dst 现有内容为准；
-// 还不存在时（例如第一次部署），用 src 里的内容初始化。
-func syncDir(src, dst string, preserve []string, onLine func(string)) error {
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	// 1. 清理旧文件
-	err := filepath.WalkDir(dst, func(full string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dst, full)
-		rel = filepath.ToSlash(rel)
-		if rel == "." {
-			return nil
-		}
-		if preserved(rel, preserve) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.IsDir() && containsPreserved(rel, preserve) {
-			return nil
-		}
-		if err := os.RemoveAll(full); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return filepath.SkipDir
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	// 2. 复制新文件。节点上还没有的保留路径不算保留，照常复制。
-	var existing []string
-	for _, p := range preserve {
-		if _, err := os.Lstat(filepath.Join(dst, filepath.FromSlash(p))); err == nil {
-			existing = append(existing, p)
-		}
-	}
-	preserve = existing
-	ignored := map[string]bool{}
-	return filepath.WalkDir(src, func(full string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, full)
-		rel = filepath.ToSlash(rel)
-		if rel == "." {
-			return nil
-		}
-		target := filepath.Join(dst, filepath.FromSlash(rel))
-		if preserved(rel, preserve) {
-			root := rel
-			for _, p := range preserve {
-				if rel == p || strings.HasPrefix(rel, p+"/") {
-					root = p
-				}
-			}
-			if !ignored[root] {
-				ignored[root] = true
-				onLine("保留路径 " + root + " 以节点上现有内容为准，新文件里的这部分被忽略")
-			}
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		switch {
-		case d.IsDir():
-			return os.MkdirAll(target, info.Mode().Perm()|0o700)
-		case info.Mode()&os.ModeSymlink != 0:
-			link, err := os.Readlink(full)
-			if err != nil {
-				return err
-			}
-			return os.Symlink(link, target)
-		default:
-			return copyFile(full, target, info.Mode().Perm())
-		}
-	})
-}
-
+// copyFile 复制一个文件。只用于容器碰不到的目录；写进 data/、volumes/ 要用 safefs.go 里的函数。
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
