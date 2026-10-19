@@ -153,7 +153,7 @@ export function SecurityCard() {
                       await settingsClient.enableTOTP({ code });
                       setSetup(null);
                       setCode("");
-                    }, "已开启两步验证")
+                    }, "已开启两步验证，其他地方的登录都已退出")
                   }
                 >
                   确认开启

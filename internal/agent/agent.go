@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	mrand "math/rand/v2"
 	"net"
 	"os"
 	"path/filepath"
@@ -409,7 +410,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 	return info
 }
 
-// connectLoop 保持与一个面板的连接，断开后按指数退避重连。每次连接都读取信任列表里最新的条目
+// connectLoop 保持与一个面板的连接，断开后按指数退避重连（最长 10 秒）。每次连接都读取信任列表里最新的条目
 // （地址或证书可能已经更新），面板被移出列表后退出。
 func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 	backoff := time.Second
@@ -430,9 +431,11 @@ func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(backoff):
+		case <-time.After(backoff + time.Duration(mrand.Int64N(int64(backoff/5)+1))):
 		}
-		backoff = min(backoff*2, 30*time.Second)
+		// 上限不能太长：面板重启以后，节点要等到下一次重连才回来，这期间界面上所有项目都显示节点离线。
+		// 加上最多 20% 的随机等待，很多节点不会在同一刻一起连。
+		backoff = min(backoff*2, 10*time.Second)
 	}
 }
 
