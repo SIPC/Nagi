@@ -518,9 +518,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*n
 	defer cancel()
 	projects, err := a.projects.List(ctx)
 	for _, p := range projects {
-		if p.GetError() != "" {
-			p.Error = explain(p.GetError())
-		}
+		explainSummary(p)
 	}
 	if err != nil {
 		a.log.Warn("读取项目列表失败", "err", err)

@@ -59,6 +59,11 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
       />
 
       <div className="grid gap-6">
+        {project.data.project?.readOnlyReason && (
+          <Alert>
+            暂时只能查看：{project.data.project.readOnlyReason}。容器照常运行，查看状态、日志、终端都可以；修改配置、部署、快照这些要写入的操作会失败。
+          </Alert>
+        )}
         <ContainersCard nodeId={nodeId} project={p} services={services} selected={container?.name ?? ""} onSelect={setSelected} />
         <AddContainerCard nodeId={nodeId} project={p} onAdded={setSelected} />
         {imageUpdates.length > 0 && (

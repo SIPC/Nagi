@@ -301,6 +301,8 @@ message ProjectSummary {
   ProjectStatus status = 2;
   // 读取项目失败（例如磁盘满了、项目数据库坏了）时的原因，这时 project 里只有 ID 和目录。
   string error = 3;
+  // 项目数据库只能只读打开（多半是磁盘满了）的原因：项目照常显示，但修改、部署这些要写数据库的操作会失败。
+  string read_only_reason = 4;
 }
 
 message NodeInfo {

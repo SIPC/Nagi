@@ -70,6 +70,8 @@ func CheckFormat(v int) error {
 type projectDB struct {
 	db *sql.DB
 	q  *projectstore.Queries
+	// readOnlyReason 不为空时数据库是只读打开的（正常打开失败了，多半是磁盘满了），内容是原来的错误。
+	readOnlyReason string
 }
 
 func openProject(ctx context.Context, dir string) (*projectDB, error) {
@@ -82,9 +84,24 @@ func openProject(ctx context.Context, dir string) (*projectDB, error) {
 	}
 	d, err := db.OpenMigrated(ctx, paths{root: dir}.projectDB(), projectstore.Migrations)
 	if err != nil {
-		return nil, err
+		// 磁盘满了时连只读都打不开（WAL 模式要先在磁盘上建共享内存文件）。这时退回只读、不加锁的方式打开，
+		// 项目页还能看、还能操作那些不写数据库的东西，用户才好腾空间。数据库上次关闭时内容已经写回主文件，读到的是准的。
+		if !maybeDiskFull(err) {
+			return nil, err
+		}
+		ro, rerr := db.OpenReadOnly(paths{root: dir}.projectDB())
+		if rerr != nil {
+			return nil, err
+		}
+		return &projectDB{db: ro, q: projectstore.New(ro), readOnlyReason: err.Error()}, nil
 	}
 	return &projectDB{db: d, q: projectstore.New(d)}, nil
+}
+
+// maybeDiskFull 判断数据库错误是不是可能由磁盘满引起的。
+func maybeDiskFull(err error) bool {
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "disk i/o error") || strings.Contains(s, "disk is full") || strings.Contains(s, "no space left")
 }
 
 func (p *projectDB) Close() error { return p.db.Close() }

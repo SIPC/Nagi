@@ -184,6 +184,7 @@ export function ProjectsPage() {
                     <div className="text-xs text-muted-foreground">
                       {p.containers.length} 个容器和容器组 · {deployed > 0 ? `已部署 ${deployed} 个` : "尚未部署"}
                     </div>
+                    {summary.readOnlyReason && <div className="text-xs text-destructive">暂时只能查看：{summary.readOnlyReason}</div>}
                   </CardContent>
                 </Card>
               </Link>

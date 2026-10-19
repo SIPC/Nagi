@@ -40,6 +40,21 @@ func Open(path string) (*sql.DB, error) {
 	return d, nil
 }
 
+// OpenReadOnly 只读、不加锁（immutable）地打开数据库：不需要在磁盘上建任何文件，磁盘满了也能读。
+// 只能在没有别的连接正在写的时候用，读到的是主文件里的内容。
+func OpenReadOnly(path string) (*sql.DB, error) {
+	d, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro&immutable=1")
+	if err != nil {
+		return nil, err
+	}
+	d.SetMaxOpenConns(1)
+	if err := d.Ping(); err != nil {
+		d.Close()
+		return nil, err
+	}
+	return d, nil
+}
+
 // Migrate 按文件名顺序执行 migrations 目录下尚未执行的 SQL 文件。
 // 文件名必须以数字开头，例如 0001_init.sql。已执行的版本记录在 user_version 里。
 func Migrate(ctx context.Context, d *sql.DB, migrations fs.FS) error {

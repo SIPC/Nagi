@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
@@ -25,6 +26,16 @@ func explain(msg string) string {
 		return hint + "（原始错误：" + msg + "）"
 	}
 	return msg
+}
+
+// explainSummary 改写项目摘要里的读取错误和只读原因。
+func explainSummary(p *nagiv1.ProjectSummary) {
+	if p.GetError() != "" {
+		p.Error = explain(p.GetError())
+	}
+	if p.GetReadOnlyReason() != "" {
+		p.ReadOnlyReason = explain(p.GetReadOnlyReason())
+	}
 }
 
 // explainStatus 改写 gRPC 错误的信息，保留错误码。
@@ -53,7 +64,8 @@ func explainStream(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, hand
 func diskHint(msg string) string {
 	lower := strings.ToLower(msg)
 	explicit := strings.Contains(lower, "no space left on device") || strings.Contains(lower, "database or disk is full")
-	if !explicit && !strings.Contains(lower, "disk i/o error") {
+	// 数据库因为磁盘满而只读打开以后，写入时报的是"readonly database"。
+	if !explicit && !strings.Contains(lower, "disk i/o error") && !strings.Contains(lower, "readonly database") {
 		return ""
 	}
 	seen := map[string]bool{}

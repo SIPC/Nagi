@@ -423,7 +423,7 @@ func (m *Manager) summary(ctx context.Context, id, dir string) (*nagiv1.ProjectS
 		return nil, err
 	}
 	m.imageStatus(id, status)
-	return &nagiv1.ProjectSummary{Project: proj, Status: status}, nil
+	return &nagiv1.ProjectSummary{Project: proj, Status: status, ReadOnlyReason: pdb.readOnlyReason}, nil
 }
 
 // status 合并各容器 compose 里声明的服务和实际的容器。
