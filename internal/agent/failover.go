@@ -358,7 +358,8 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 
 	// 定时同步给热备（另外每次定时快照后也会同步）。
 	f.mu.Lock()
-	syncDue := !st.fenced && !st.restoring && time.Now().After(st.nextSync)
+	// 只有持有者同步给热备（刚被顶替、正在退位的节点不能再同步）。
+	syncDue := !st.fenced && !st.restoring && bytes.Equal(st.holder, a.selfKey()) && time.Now().After(st.nextSync)
 	if syncDue {
 		st.nextSync = time.Now().Add(syncEvery)
 	}
@@ -383,6 +384,11 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 	}
 	_, err := a.syncTo(ctx, id, &project.BackupTarget{NodeID: other.GetNodeId(), Name: other.GetName(), Key: other.GetKey()})
 	a.failovers.mu.Lock()
+	if err != nil && !bytes.Equal(st.holder, a.selfKey()) {
+		// 同步的过程中本节点被顶替、退为热备了：对方拒绝是正常的，不算失败。
+		a.failovers.mu.Unlock()
+		return
+	}
 	if err != nil {
 		st.lastError = "同步给热备失败：" + err.Error()
 		st.nextSync = time.Now().Add(time.Minute) // 热备可能暂时不在，1 分钟后重试

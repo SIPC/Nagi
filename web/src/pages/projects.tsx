@@ -90,6 +90,10 @@ export function ProjectsPage() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
+  // 在线节点上正在运行的项目：项目被顶替以后，原节点离线时面板上还有它的配置备份，同一个项目会出现两次。
+  const runningElsewhere = new Set(
+    (projects.data?.projects ?? []).filter(({ nodeId }) => !offline(nodeId)).map(({ project }) => project?.project?.id),
+  );
   const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string; dir: string; sharedNetworks: string[] } | null>(null);
 
   return (
@@ -119,6 +123,8 @@ export function ProjectsPage() {
           {projects.data.projects.map(({ nodeId, project: summary }) => {
             const p = summary?.project;
             if (!p) return null;
+            // 已经在别的节点上运行（被顶替或者迁移走了）的，不再显示离线节点上的那份配置备份。
+            if (offline(nodeId) && runningElsewhere.has(p.id)) return null;
             const services = summary.status?.services ?? [];
             const deployed = p.containers.filter((m) => m.deployedVersion > 0n).length;
             if (summary.error) {
