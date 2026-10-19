@@ -138,7 +138,12 @@ func (p *panelMesh) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteRequest)
 	if cfg == nil {
 		return nil, status.Error(codes.NotFound, "面板不是这个项目的见证人")
 	}
-	granted, holder, epoch := w.voter.Vote(req.GetProjectId(), [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()},
-		caller[:], req.GetEpoch(), leaseDuration(cfg))
+	parties := [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
+	if to := req.GetHandoverTo(); len(to) > 0 {
+		// 持有者把租约转让给另一方（自动切回原节点）。
+		granted, holder, epoch := w.voter.Handover(req.GetProjectId(), parties, caller[:], to, req.GetEpoch(), leaseDuration(cfg))
+		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+	}
+	granted, holder, epoch := w.voter.Vote(req.GetProjectId(), parties, caller[:], req.GetEpoch(), leaseDuration(cfg))
 	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
 }

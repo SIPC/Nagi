@@ -419,6 +419,8 @@ message SetNodeProjectFailoverRequest {
   bool auto_stateful = 6;
   // 租约时长（秒），0 表示默认 30。
   uint32 lease_seconds = 7;
+  // 原节点恢复并稳定 10 分钟后自动切回。
+  bool auto_failback = 8;
 }
 
 message MigrateNodeProjectRequest {

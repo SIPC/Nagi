@@ -188,9 +188,12 @@ func (x *LinkEndpoint) GetPorts() []uint32 {
 }
 
 type LeaseVoteRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Epoch         uint64                 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Epoch     uint64                 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	// 不为空时是转让：当前的持有者请投票者把票转给这一方（第 epoch 轮），用于切回原节点。
+	// 只有票现在投给的那一方本人能转让，epoch 必须正好是当前轮次加一。
+	HandoverTo    []byte `protobuf:"bytes,3,opt,name=handover_to,json=handoverTo,proto3" json:"handover_to,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -237,6 +240,13 @@ func (x *LeaseVoteRequest) GetEpoch() uint64 {
 		return x.Epoch
 	}
 	return 0
+}
+
+func (x *LeaseVoteRequest) GetHandoverTo() []byte {
+	if x != nil {
+		return x.HandoverTo
+	}
+	return nil
 }
 
 type LeaseVoteResponse struct {
@@ -860,11 +870,13 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12!\n" +
 	"\fproject_name\x18\x03 \x01(\tR\vprojectName\x12\x14\n" +
-	"\x05ports\x18\x04 \x03(\rR\x05ports\"G\n" +
+	"\x05ports\x18\x04 \x03(\rR\x05ports\"h\n" +
 	"\x10LeaseVoteRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
-	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\"[\n" +
+	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\x12\x1f\n" +
+	"\vhandover_to\x18\x03 \x01(\fR\n" +
+	"handoverTo\"[\n" +
 	"\x11LeaseVoteResponse\x12\x18\n" +
 	"\agranted\x18\x01 \x01(\bR\agranted\x12\x16\n" +
 	"\x06holder\x18\x02 \x01(\fR\x06holder\x12\x14\n" +

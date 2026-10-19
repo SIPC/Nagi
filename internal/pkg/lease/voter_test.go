@@ -53,3 +53,30 @@ func TestVote(t *testing.T) {
 		t.Fatalf("状态不对：%s %d %v", h, e, expired)
 	}
 }
+
+func TestHandover(t *testing.T) {
+	v := NewVoter(t.TempDir())
+	a, b, c := []byte("a"), []byte("b"), []byte("c")
+	parties := [][]byte{a, b}
+	if err := v.Set("p", b, 2, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _, _ := v.Handover("p", parties, a, a, 3, time.Minute); ok {
+		t.Fatal("不是持有者不能转让")
+	}
+	if ok, _, _ := v.Handover("p", parties, b, c, 3, time.Minute); ok {
+		t.Fatal("不能转给顶替设置以外的一方")
+	}
+	if ok, _, _ := v.Handover("p", parties, b, a, 4, time.Minute); ok {
+		t.Fatal("轮次必须正好加一")
+	}
+	if ok, h, e := v.Handover("p", parties, b, a, 3, time.Minute); !ok || string(h) != "a" || e != 3 {
+		t.Fatalf("持有者转让应该成功：%v %s %d", ok, h, e)
+	}
+	if ok, _, _ := v.Handover("p", parties, b, a, 3, time.Minute); !ok {
+		t.Fatal("重试同一个转让应该返回成功")
+	}
+	if ok, _, _ := v.Vote("p", parties, b, 3, time.Minute); ok {
+		t.Fatal("转让以后原持有者不能再续约")
+	}
+}

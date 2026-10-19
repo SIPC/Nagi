@@ -497,6 +497,9 @@ message FailoverConfig {
   uint32 lease_seconds = 7;
   // 有状态项目也自动顶替（接受丢失最后一次快照之后的数据）。默认只告警，等用户确认。
   bool auto_stateful = 8;
+  // 原节点（A）恢复并稳定一段时间后，自动把项目切回去：停止项目、同步最后的数据、把租约转给 A，
+  // 和手动迁移一样不丢数据，切换时项目短暂停止。
+  bool auto_failback = 9;
 }
 
 // FailoverStatus 是某个参与者看到的顶替状态。
@@ -517,4 +520,8 @@ message FailoverStatus {
   bool stateful = 9;
   // 当前持有租约的节点的 mesh 公钥。
   bytes holder_key = 10;
+  // 持有者上：原节点已经恢复，再过多久（毫秒）自动切回；0 表示不会切回（没开、原节点就是本节点或者还没恢复）。
+  int64 failback_in_ms = 11;
+  // 持有者上：正在切回原节点。
+  bool failing_back = 12;
 }

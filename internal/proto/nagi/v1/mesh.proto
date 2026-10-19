@@ -44,6 +44,9 @@ message LinkEndpoint {
 message LeaseVoteRequest {
   string project_id = 1;
   uint64 epoch = 2;
+  // 不为空时是转让：当前的持有者请投票者把票转给这一方（第 epoch 轮），用于切回原节点。
+  // 只有票现在投给的那一方本人能转让，epoch 必须正好是当前轮次加一。
+  bytes handover_to = 3;
 }
 
 message LeaseVoteResponse {

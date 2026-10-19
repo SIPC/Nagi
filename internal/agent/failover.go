@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +30,9 @@ import (
 //     先向见证人和原持有者要票，拿到一票再投自己，凑够 2 票就成为新的持有者（轮次加一），
 //     再等 5 秒，用副本恢复并启动项目。有状态项目默认先告警，等用户确认。
 //   - 原持有者回来后续约被拒绝，看到更高的轮次，就停掉项目、把目录改名保留，转为新持有者的热备。
+//   - 自动切回（auto_failback）：项目不在原节点 A 上运行、而 A 已经连续稳定 failbackAfter 时，持有者有计划地
+//     把项目交还给 A：同步一次、停止项目、再同步最后的数据，然后把租约转让给 A（自己的票、见证人的票、A 的票，
+//     轮次加一）。A 发现自己成了持有者、手上只有副本，就用副本恢复并启动。和手动迁移一样不丢数据。
 
 const (
 	defaultLease = 30 * time.Second
@@ -35,6 +40,8 @@ const (
 	safetyMargin = 5 * time.Second
 	syncEvery    = 15 * time.Minute
 	startupGrace = 10 * time.Second
+	// failbackAfter：原节点连续这么久每次续约都投了票，才自动切回，避免节点时好时坏时来回切。
+	failbackAfter = 10 * time.Minute
 )
 
 type failoverFile struct {
@@ -64,6 +71,9 @@ type failoverState struct {
 	lastError  string
 	lastPull   time.Time
 	cancelLoop context.CancelFunc
+	// 自动切回：原节点从什么时候起每次续约都投了票（零值表示现在不稳定），以及是否正在切回。
+	preferredSince time.Time
+	failingBack    bool
 }
 
 type failovers struct {
@@ -185,12 +195,16 @@ func (s *meshService) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteReques
 	if st == nil {
 		return nil, status.Error(codes.NotFound, "本节点没有这个项目的顶替设置")
 	}
+	if to := req.GetHandoverTo(); len(to) > 0 {
+		granted, holder, epoch := f.voter.Handover(req.GetProjectId(), participants(st.cfg), caller[:], to, req.GetEpoch(), leaseOf(st.cfg))
+		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+	}
 	granted, holder, epoch := f.voter.Vote(req.GetProjectId(), participants(st.cfg), caller[:], req.GetEpoch(), leaseOf(st.cfg))
 	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
 }
 
-// requestVote 向另一个参与者要票。
-func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, id string, epoch uint64) (*nagiv1.LeaseVoteResponse, error) {
+// requestVote 向另一个参与者要票；handoverTo 不为空时是请它把票转让给这一方。
+func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, id string, epoch uint64, handoverTo ...[]byte) (*nagiv1.LeaseVoteResponse, error) {
 	k, err := mesh.ParseKey(m.GetKey())
 	if err != nil {
 		return nil, err
@@ -202,12 +216,17 @@ func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, 
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	return nagiv1.NewMeshServiceClient(cc).LeaseVote(ctx, &nagiv1.LeaseVoteRequest{ProjectId: id, Epoch: epoch})
+	req := &nagiv1.LeaseVoteRequest{ProjectId: id, Epoch: epoch}
+	if len(handoverTo) > 0 {
+		req.HandoverTo = handoverTo[0]
+	}
+	return nagiv1.NewMeshServiceClient(cc).LeaseVote(ctx, req)
 }
 
 type voteResult struct {
-	granted int
-	higher  *nagiv1.LeaseVoteResponse // 某一方告诉我们的更高轮次
+	granted   int
+	grantedBy [][]byte                  // 投了票的各方的公钥
+	higher    *nagiv1.LeaseVoteResponse // 某一方告诉我们的更高轮次
 }
 
 // collect 并行向 others 要票。
@@ -227,6 +246,7 @@ func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverParticipan
 			defer mu.Unlock()
 			if resp.GetGranted() {
 				r.granted++
+				r.grantedBy = append(r.grantedBy, m.GetKey())
 			} else if resp.GetEpoch() > epoch && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
 				r.higher = resp
 			}
@@ -314,7 +334,30 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 			st.nextRenew = now.Add(2 * time.Second) // 续不上时尽快重试
 		}
 		wasFenced := st.fenced
+		// 自动切回：记下原节点（A）从什么时候起一直在投票。
+		startFailback := false
+		if cfg.GetAutoFailback() && !bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) {
+			if slices.ContainsFunc(r.grantedBy, func(k []byte) bool { return bytes.Equal(k, cfg.GetA().GetKey()) }) {
+				if st.preferredSince.IsZero() {
+					st.preferredSince = now
+				}
+			} else {
+				st.preferredSince = time.Time{}
+			}
+			startFailback = ok && !st.failingBack && !st.fenced && !st.restoring && !st.preferredSince.IsZero() &&
+				now.Sub(st.preferredSince) >= failbackAfter
+			if startFailback {
+				st.failingBack = true
+			}
+		}
 		f.mu.Unlock()
+		if startFailback && a.projects.Has(ctx, id) {
+			go a.failback(context.WithoutCancel(ctx), id)
+		} else if startFailback {
+			f.mu.Lock()
+			st.failingBack = false
+			f.mu.Unlock()
+		}
 		if !ok && r.higher != nil {
 			a.demote(ctx, id, r.higher.GetHolder(), r.higher.GetEpoch())
 			return
@@ -331,7 +374,7 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	}
 
 	f.mu.Lock()
-	leaseEnd, fenced, restoring, everOK := st.leaseEnd, st.fenced, st.restoring, st.everOK
+	leaseEnd, fenced, restoring, everOK, failingBack := st.leaseEnd, st.fenced, st.restoring, st.everOK, st.failingBack
 	superviseDue := time.Since(st.supervised) >= 2*time.Second
 	if superviseDue {
 		st.supervised = time.Now()
@@ -340,7 +383,7 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	// 刚启动时还要等 WireGuard 握手，头 10 秒内续不上先不停（Docker 不会自己拉起顶替项目的容器，
 	// 这段时间项目本来就没在运行）。
 	grace := !everOK && time.Since(a.startedAt) < startupGrace
-	if !fenced && !restoring && !grace && time.Now().After(leaseEnd.Add(-safetyMargin-stopTimeout)) && a.projects.Has(ctx, id) {
+	if !fenced && !restoring && !failingBack && !grace && time.Now().After(leaseEnd.Add(-safetyMargin-stopTimeout)) && a.projects.Has(ctx, id) {
 		a.log.Warn("续不上租约，停止项目", "project", id)
 		a.alerts.Fire(ctx, "lease:"+id, "续不上顶替租约，已停止项目", "联系不上另一个节点和见证人；恢复后会自动重新启动", id)
 		_ = a.projects.Fence(ctx, id, leaseEnd.Add(-safetyMargin), func(string) {})
@@ -352,14 +395,24 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	}
 
 	// 持有租约时，按用户原来的重启策略代为重启退出的容器；机器重启后也由这里把项目启动起来。
-	if superviseDue && !fenced && !restoring && everOK && time.Now().Before(leaseEnd) && a.projects.Has(ctx, id) {
+	if superviseDue && !fenced && !restoring && !failingBack && everOK && time.Now().Before(leaseEnd) && a.projects.Has(ctx, id) {
 		a.projects.Supervise(ctx, id)
+	}
+
+	// 成了持有者、手上却只有副本：对方把项目交还给了本节点（自动切回），用副本恢复并启动。
+	if everOK && !fenced && !restoring && !failingBack && !a.projects.Has(ctx, id) {
+		if _, _, err := a.replicas.load(id); err == nil {
+			f.mu.Lock()
+			st.restoring = true
+			f.mu.Unlock()
+			a.startFromReplica(ctx, id, st, me, 0, "项目已切回本节点", "原节点恢复后，项目从 "+other.GetName()+" 切回了本节点")
+		}
 	}
 
 	// 定时同步给热备（另外每次定时快照后也会同步）。
 	f.mu.Lock()
 	// 只有持有者同步给热备（刚被顶替、正在退位的节点不能再同步）。
-	syncDue := !st.fenced && !st.restoring && bytes.Equal(st.holder, a.selfKey()) && time.Now().After(st.nextSync)
+	syncDue := !st.fenced && !st.restoring && !st.failingBack && bytes.Equal(st.holder, a.selfKey()) && time.Now().After(st.nextSync)
 	if syncDue {
 		st.nextSync = time.Now().Add(syncEvery)
 	}
@@ -466,7 +519,13 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	f.mu.Unlock()
 	a.alerts.Resolve(ctx, "takeover:"+id)
 
-	// 恢复在后台进行，循环照常续约；租约丢了就取消恢复。
+	a.startFromReplica(ctx, id, st, me, safetyMargin, "已顶替项目", "原节点 "+participantName(cfg, holder)+" 失联，项目已在本节点启动")
+}
+
+// startFromReplica 成为持有者以后在后台用副本恢复并启动项目（顶替和切回共用），循环照常续约；租约丢了就取消恢复。
+// wait 是开始前先等的时间（顶替时等原持有者的租约彻底过期）。调用方已经把 st.restoring 设为 true。
+func (a *agent) startFromReplica(ctx context.Context, id string, st *failoverState, me *nagiv1.FailoverParticipant, wait time.Duration, title, message string) {
+	f := a.failovers
 	go func() {
 		defer func() {
 			f.mu.Lock()
@@ -476,26 +535,114 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(safetyMargin):
+		case <-time.After(wait):
 		}
 		var lines []string
 		_, err := a.restoreReplica(ctx, id, me.GetDir(), "", func(l string) { lines = append(lines, l) })
 		if err != nil {
-			a.log.Error("顶替失败", "project", id, "err", err)
-			a.alerts.Fire(ctx, "takeover:"+id, "顶替失败", err.Error(), "")
+			a.log.Error("用副本启动项目失败", "project", id, "err", err)
+			a.alerts.Fire(ctx, "takeover:"+id, "用副本启动项目失败", err.Error(), "")
 			return
 		}
-		a.log.Info("已顶替项目", "project", id, "from", participantName(cfg, holder))
-		a.alerts.Notify(ctx, "已顶替项目", "原节点 "+participantName(cfg, holder)+" 失联，项目已在本节点启动", id)
+		a.log.Info(title, "project", id)
+		a.alerts.Notify(ctx, title, message, id)
 		a.changed()
 		f.mu.Lock()
-		st.nextSync = time.Now() // 立即开始同步给原节点（它回来后接收）
+		st.nextSync = time.Now() // 立即开始同步给对方（它现在是热备）
 		f.mu.Unlock()
 	}()
 }
 
+// failback 把项目交还给原节点（A）：同步一次、停止项目、再同步最后的数据，然后把租约转让给 A，本节点转为热备。
+// 转让之前的任何一步失败，都在本节点重新启动项目，过 failbackAfter 再试。调用方已经把 st.failingBack 设为 true。
+func (a *agent) failback(ctx context.Context, id string) {
+	f := a.failovers
+	st := f.get(id)
+	if st == nil {
+		return
+	}
+	f.mu.Lock()
+	cfg, epoch := st.cfg, st.epoch
+	f.mu.Unlock()
+	me, other := a.selfParticipant(cfg)
+	if me == nil || other == nil {
+		return
+	}
+	target := &project.BackupTarget{NodeID: other.GetNodeId(), Name: other.GetName(), Key: other.GetKey()}
+	done := func(err error) {
+		f.mu.Lock()
+		st.failingBack = false
+		if err != nil {
+			st.preferredSince = time.Now() // 过一阵再试
+			st.lastError = "切回原节点失败：" + err.Error()
+		}
+		f.mu.Unlock()
+		if err != nil {
+			a.log.Warn("切回原节点失败，项目留在本节点", "project", id, "err", err)
+			a.alerts.Fire(ctx, "failback:"+id, "切回原节点失败", err.Error()+"。项目继续在本节点运行，过一阵会再试", id)
+		}
+	}
+	a.log.Info("原节点已稳定，切回项目", "project", id, "to", other.GetName())
+	// 先在项目运行时同步一次，停止以后只需要同步很少的增量，停机时间短。
+	if _, err := a.syncTo(ctx, id, target); err != nil {
+		done(err)
+		return
+	}
+	if _, err := a.projects.MigrateStop(ctx, id, func(string) {}); err != nil {
+		_ = a.projects.MigrateResume(ctx, id, func(string) {})
+		done(err)
+		return
+	}
+	resume := func(err error) {
+		if rerr := a.projects.MigrateResume(ctx, id, func(string) {}); rerr != nil {
+			a.log.Error("切回失败后重新启动项目也失败了", "project", id, "err", rerr)
+		}
+		done(err)
+	}
+	if _, err := a.syncTo(ctx, id, target); err != nil {
+		resume(err)
+		return
+	}
+	// 转让租约：先请对方和见证人转票，拿到其中一票（加上自己的就是多数）才算数。
+	newEpoch := epoch + 1
+	if n := a.collectHandover(ctx, []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, id, other.GetKey(), newEpoch); n == 0 {
+		resume(errors.New("对方和见证人都没有同意转让租约"))
+		return
+	}
+	if ok, _, _ := f.voter.Handover(id, participants(cfg), me.GetKey(), other.GetKey(), newEpoch, leaseOf(cfg)); !ok {
+		// 已经有一方转了票，不能再在本节点启动（可能两边同时运行）；对方凑够两票就会接手。
+		a.log.Warn("本节点的票没能转出，等对方接手", "project", id)
+	}
+	done(nil)
+	a.demote(ctx, id, other.GetKey(), newEpoch, false)
+	a.alerts.Resolve(ctx, "failback:"+id)
+	a.alerts.Notify(ctx, "项目已切回原节点", "原节点 "+other.GetName()+" 已经稳定，项目已交还给它", id)
+}
+
+// collectHandover 请 others 把票转让给 to（第 epoch 轮），返回同意的数量。
+func (a *agent) collectHandover(ctx context.Context, others []*nagiv1.FailoverParticipant, id string, to []byte, epoch uint64) int {
+	var n int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, m := range others {
+		wg.Add(1)
+		go func(m *nagiv1.FailoverParticipant) {
+			defer wg.Done()
+			resp, err := a.requestVote(ctx, m, id, epoch, to)
+			if err == nil && resp.GetGranted() {
+				mu.Lock()
+				n++
+				mu.Unlock()
+			}
+		}(m)
+	}
+	wg.Wait()
+	return n
+}
+
 // demote 本节点已经被顶替：停止项目，目录改名保留，转为新持有者的热备。
-func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint64) {
+// notify 为 false 时不发"已被顶替"的通知（自动切回是本节点主动交出去的，另外发通知）。
+func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint64, notify ...bool) {
 	f := a.failovers
 	st := f.get(id)
 	if st == nil {
@@ -523,7 +670,9 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	_ = f.save(id, st)
 	f.mu.Unlock()
 	a.alerts.Resolve(ctx, "lease:"+id)
-	a.alerts.Notify(ctx, "项目已被其他节点顶替", "现在由 "+name+" 运行，本节点转为热备；原目录改名保留", "")
+	if len(notify) == 0 || notify[0] {
+		a.alerts.Notify(ctx, "项目已被其他节点顶替", "现在由 "+name+" 运行，本节点转为热备；原目录改名保留", "")
+	}
 }
 
 // restoreReplica 把副本恢复成项目并删除副本（手动恢复和顶替共用）。
@@ -675,6 +824,10 @@ func (a *agent) failoverStatus(ctx context.Context, id string) *nagiv1.FailoverS
 		out.Role = "holder"
 		if !st.fenced {
 			out.LeaseRemainingMs = max(0, time.Until(st.leaseEnd).Milliseconds())
+		}
+		out.FailingBack = st.failingBack
+		if !st.failingBack && !st.preferredSince.IsZero() {
+			out.FailbackInMs = max(1, time.Until(st.preferredSince.Add(failbackAfter)).Milliseconds())
 		}
 	default:
 		out.Role = "standby"

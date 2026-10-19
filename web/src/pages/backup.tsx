@@ -529,6 +529,7 @@ export function FailoverCard({
   const [dir, setDir] = useState(currentDir);
   const [witness, setWitness] = useState("");
   const [auto, setAuto] = useState(false);
+  const [failback, setFailback] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -569,7 +570,14 @@ export function FailoverCard({
                   (cfg.autoStateful
                     ? "，有状态项目自动顶替"
                     : "，有状态项目顶替前需要确认")}
+                {cfg.autoFailback ? `，${cfg.a?.name} 恢复后自动切回` : ""}
               </div>
+              {s.failingBack && <div>正在切回 {cfg.a?.name}：同步最后的数据，项目会短暂停止。</div>}
+              {s.failbackInMs > 0n && (
+                <div>
+                  原节点 {cfg.a?.name} 已经恢复，再稳定约 {Math.ceil(Number(s.failbackInMs) / 60000)} 分钟后自动切回（项目会短暂停止，不丢数据）。
+                </div>
+              )}
               <div>
                 本节点：<Badge>{roleLabel[s.role] ?? s.role}</Badge> 持有者{" "}
                 {s.holderName}（第 {s.epoch.toString()} 轮）
@@ -681,6 +689,18 @@ export function FailoverCard({
                 />
                 有状态项目也自动顶替
               </label>
+              <label
+                className="text-xs"
+                title="项目被顶替到另一个节点以后，原节点恢复并稳定 10 分钟，自动把项目切回原节点。切换时项目短暂停止，不丢数据。"
+              >
+                <input
+                  type="checkbox"
+                  className="mr-1"
+                  checked={failback}
+                  onChange={(e) => setFailback(e.target.checked)}
+                />
+                原节点恢复后自动切回
+              </label>
               <Button
                 size="sm"
                 disabled={busy || !standby}
@@ -693,6 +713,7 @@ export function FailoverCard({
                       standbyDir: dir,
                       witnessNodeId: witness,
                       autoStateful: auto,
+                      autoFailback: failback,
                     }),
                   )
                 }

@@ -58,6 +58,7 @@ func (s *projectService) SetNodeProjectFailover(ctx context.Context, req *connec
 	cfg := &nagiv1.FailoverConfig{
 		ProjectId: id, ProjectName: proj.GetProject().GetProject().GetName(),
 		LeaseSeconds: req.Msg.GetLeaseSeconds(), AutoStateful: req.Msg.GetAutoStateful(),
+		AutoFailback: req.Msg.GetAutoFailback(),
 	}
 	if cfg.A, err = participant(aID, proj.GetProject().GetProject().GetDir()); err != nil {
 		return nil, err

@@ -3353,7 +3353,10 @@ type FailoverConfig struct {
 	// 租约时长（秒），默认 30，每 1/3 续约一次。
 	LeaseSeconds uint32 `protobuf:"varint,7,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
 	// 有状态项目也自动顶替（接受丢失最后一次快照之后的数据）。默认只告警，等用户确认。
-	AutoStateful  bool `protobuf:"varint,8,opt,name=auto_stateful,json=autoStateful,proto3" json:"auto_stateful,omitempty"`
+	AutoStateful bool `protobuf:"varint,8,opt,name=auto_stateful,json=autoStateful,proto3" json:"auto_stateful,omitempty"`
+	// 原节点（A）恢复并稳定一段时间后，自动把项目切回去：停止项目、同步最后的数据、把租约转给 A，
+	// 和手动迁移一样不丢数据，切换时项目短暂停止。
+	AutoFailback  bool `protobuf:"varint,9,opt,name=auto_failback,json=autoFailback,proto3" json:"auto_failback,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3444,6 +3447,13 @@ func (x *FailoverConfig) GetAutoStateful() bool {
 	return false
 }
 
+func (x *FailoverConfig) GetAutoFailback() bool {
+	if x != nil {
+		return x.AutoFailback
+	}
+	return false
+}
+
 // FailoverStatus 是某个参与者看到的顶替状态。
 type FailoverStatus struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -3462,7 +3472,11 @@ type FailoverStatus struct {
 	LastError string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	Stateful  bool                   `protobuf:"varint,9,opt,name=stateful,proto3" json:"stateful,omitempty"`
 	// 当前持有租约的节点的 mesh 公钥。
-	HolderKey     []byte `protobuf:"bytes,10,opt,name=holder_key,json=holderKey,proto3" json:"holder_key,omitempty"`
+	HolderKey []byte `protobuf:"bytes,10,opt,name=holder_key,json=holderKey,proto3" json:"holder_key,omitempty"`
+	// 持有者上：原节点已经恢复，再过多久（毫秒）自动切回；0 表示不会切回（没开、原节点就是本节点或者还没恢复）。
+	FailbackInMs int64 `protobuf:"varint,11,opt,name=failback_in_ms,json=failbackInMs,proto3" json:"failback_in_ms,omitempty"`
+	// 持有者上：正在切回原节点。
+	FailingBack   bool `protobuf:"varint,12,opt,name=failing_back,json=failingBack,proto3" json:"failing_back,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3565,6 +3579,20 @@ func (x *FailoverStatus) GetHolderKey() []byte {
 		return x.HolderKey
 	}
 	return nil
+}
+
+func (x *FailoverStatus) GetFailbackInMs() int64 {
+	if x != nil {
+		return x.FailbackInMs
+	}
+	return 0
+}
+
+func (x *FailoverStatus) GetFailingBack() bool {
+	if x != nil {
+		return x.FailingBack
+	}
+	return false
 }
 
 var File_nagi_v1_common_proto protoreflect.FileDescriptor
@@ -3871,7 +3899,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x10\n" +
-	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xd6\x02\n" +
+	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xfb\x02\n" +
 	"\x0eFailoverConfig\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -3881,7 +3909,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\awitness\x18\x05 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\awitness\x12(\n" +
 	"\x10witness_is_panel\x18\x06 \x01(\bR\x0ewitnessIsPanel\x12#\n" +
 	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
-	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\"\xf6\x02\n" +
+	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\x12#\n" +
+	"\rauto_failback\x18\t \x01(\bR\fautoFailback\"\xbf\x03\n" +
 	"\x0eFailoverStatus\x12/\n" +
 	"\x06config\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\x06config\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1f\n" +
@@ -3896,7 +3925,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bstateful\x18\t \x01(\bR\bstateful\x12\x1d\n" +
 	"\n" +
 	"holder_key\x18\n" +
-	" \x01(\fR\tholderKey*@\n" +
+	" \x01(\fR\tholderKey\x12$\n" +
+	"\x0efailback_in_ms\x18\v \x01(\x03R\ffailbackInMs\x12!\n" +
+	"\ffailing_back\x18\f \x01(\bR\vfailingBack*@\n" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +

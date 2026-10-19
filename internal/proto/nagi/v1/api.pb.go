@@ -2914,7 +2914,9 @@ type SetNodeProjectFailoverRequest struct {
 	WitnessNodeId string `protobuf:"bytes,5,opt,name=witness_node_id,json=witnessNodeId,proto3" json:"witness_node_id,omitempty"`
 	AutoStateful  bool   `protobuf:"varint,6,opt,name=auto_stateful,json=autoStateful,proto3" json:"auto_stateful,omitempty"`
 	// 租约时长（秒），0 表示默认 30。
-	LeaseSeconds  uint32 `protobuf:"varint,7,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
+	LeaseSeconds uint32 `protobuf:"varint,7,opt,name=lease_seconds,json=leaseSeconds,proto3" json:"lease_seconds,omitempty"`
+	// 原节点恢复并稳定 10 分钟后自动切回。
+	AutoFailback  bool `protobuf:"varint,8,opt,name=auto_failback,json=autoFailback,proto3" json:"auto_failback,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2996,6 +2998,13 @@ func (x *SetNodeProjectFailoverRequest) GetLeaseSeconds() uint32 {
 		return x.LeaseSeconds
 	}
 	return 0
+}
+
+func (x *SetNodeProjectFailoverRequest) GetAutoFailback() bool {
+	if x != nil {
+		return x.AutoFailback
+	}
+	return false
 }
 
 type MigrateNodeProjectRequest struct {
@@ -5434,7 +5443,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12&\n" +
-	"\x0fwitness_node_id\x18\x03 \x01(\tR\rwitnessNodeId\"\x92\x02\n" +
+	"\x0fwitness_node_id\x18\x03 \x01(\tR\rwitnessNodeId\"\xb7\x02\n" +
 	"\x1dSetNodeProjectFailoverRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -5444,7 +5453,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"standbyDir\x12&\n" +
 	"\x0fwitness_node_id\x18\x05 \x01(\tR\rwitnessNodeId\x12#\n" +
 	"\rauto_stateful\x18\x06 \x01(\bR\fautoStateful\x12#\n" +
-	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\"\x8b\x01\n" +
+	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
+	"\rauto_failback\x18\b \x01(\bR\fautoFailback\"\x8b\x01\n" +
 	"\x19MigrateNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +

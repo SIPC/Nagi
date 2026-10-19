@@ -101,6 +101,36 @@ func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch u
 	return false, x.For, x.Epoch
 }
 
+// Handover 处理持有者的转让请求（切回原节点）：caller 是票现在投给的一方，请求把票转给 to，轮次加一。
+// 和普通的投票不同，票还没作废也可以转，因为转出去的正是持有者本人：它已经停止了项目、同步好了数据。
+// 只有持有者本人能转，所以别人没法借此抢租约。
+func (v *Voter) Handover(project string, parties [][]byte, caller, to []byte, epoch uint64, lease time.Duration) (bool, []byte, uint64) {
+	if !idRe.MatchString(project) || bytes.Equal(caller, to) {
+		return false, nil, 0
+	}
+	allowed := false
+	for _, m := range parties {
+		if bytes.Equal(m, to) {
+			allowed = true
+		}
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	x := v.load(project, lease)
+	switch {
+	case bytes.Equal(x.For, to) && x.Epoch == epoch:
+		return true, x.For, x.Epoch // 已经转过了（重试）
+	case !allowed || !bytes.Equal(x.For, caller) || epoch != x.Epoch+1:
+		return false, x.For, x.Epoch
+	}
+	nx := &vote{For: append([]byte(nil), to...), Epoch: epoch, expires: time.Now().Add(lease)}
+	if err := v.save(project, nx); err != nil {
+		return false, x.For, x.Epoch
+	}
+	v.v[project] = nx
+	return true, nx.For, nx.Epoch
+}
+
 // Set 直接设置票（设置顶替时，初始租约归 A；或者知道了更新的持有者）。
 func (v *Voter) Set(project string, holder []byte, epoch uint64, lease time.Duration) error {
 	v.mu.Lock()
