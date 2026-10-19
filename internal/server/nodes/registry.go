@@ -154,6 +154,7 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 		c.pending = false
 		c.mu.Unlock()
 		go r.pushAlertConfig(context.Background(), c, nil)
+		go r.pushTrusted(context.Background(), c)
 	}
 	r.log.Info("节点已批准", "node", nodeID)
 	return nil
@@ -226,6 +227,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
 	if !c.pending {
 		go r.pushAlertConfig(ctx, c, nil)
+		go r.pushTrusted(ctx, c)
 	}
 
 	select {

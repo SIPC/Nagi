@@ -4951,10 +4951,12 @@ func (x *GetNodeProjectRequest) GetProjectId() string {
 }
 
 type GetNodeProjectResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       *ProjectSummary        `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project *ProjectSummary        `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// 管理员允许这个项目在备份节点、顶替节点、迁移目标上使用特权配置（见 SetProjectReplicaTrust）。
+	ReplicaTrusted bool `protobuf:"varint,2,opt,name=replica_trusted,json=replicaTrusted,proto3" json:"replica_trusted,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetNodeProjectResponse) Reset() {
@@ -4994,6 +4996,101 @@ func (x *GetNodeProjectResponse) GetProject() *ProjectSummary {
 	return nil
 }
 
+func (x *GetNodeProjectResponse) GetReplicaTrusted() bool {
+	if x != nil {
+		return x.ReplicaTrusted
+	}
+	return false
+}
+
+type SetProjectReplicaTrustRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Trusted       bool                   `protobuf:"varint,2,opt,name=trusted,proto3" json:"trusted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProjectReplicaTrustRequest) Reset() {
+	*x = SetProjectReplicaTrustRequest{}
+	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProjectReplicaTrustRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProjectReplicaTrustRequest) ProtoMessage() {}
+
+func (x *SetProjectReplicaTrustRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProjectReplicaTrustRequest.ProtoReflect.Descriptor instead.
+func (*SetProjectReplicaTrustRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *SetProjectReplicaTrustRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *SetProjectReplicaTrustRequest) GetTrusted() bool {
+	if x != nil {
+		return x.Trusted
+	}
+	return false
+}
+
+type SetProjectReplicaTrustResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProjectReplicaTrustResponse) Reset() {
+	*x = SetProjectReplicaTrustResponse{}
+	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProjectReplicaTrustResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProjectReplicaTrustResponse) ProtoMessage() {}
+
+func (x *SetProjectReplicaTrustResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProjectReplicaTrustResponse.ProtoReflect.Descriptor instead.
+func (*SetProjectReplicaTrustResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{98}
+}
+
 type DeployNodeProjectRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	NodeId    string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -5014,7 +5111,7 @@ type DeployNodeProjectRequest struct {
 
 func (x *DeployNodeProjectRequest) Reset() {
 	*x = DeployNodeProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	mi := &file_nagi_v1_api_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5026,7 +5123,7 @@ func (x *DeployNodeProjectRequest) String() string {
 func (*DeployNodeProjectRequest) ProtoMessage() {}
 
 func (x *DeployNodeProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	mi := &file_nagi_v1_api_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5039,7 +5136,7 @@ func (x *DeployNodeProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployNodeProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeployNodeProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{97}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *DeployNodeProjectRequest) GetNodeId() string {
@@ -5112,7 +5209,7 @@ type StreamNodeProjectLogsRequest struct {
 
 func (x *StreamNodeProjectLogsRequest) Reset() {
 	*x = StreamNodeProjectLogsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	mi := &file_nagi_v1_api_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5124,7 +5221,7 @@ func (x *StreamNodeProjectLogsRequest) String() string {
 func (*StreamNodeProjectLogsRequest) ProtoMessage() {}
 
 func (x *StreamNodeProjectLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	mi := &file_nagi_v1_api_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5137,7 +5234,7 @@ func (x *StreamNodeProjectLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamNodeProjectLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamNodeProjectLogsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{98}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *StreamNodeProjectLogsRequest) GetNodeId() string {
@@ -5499,9 +5596,15 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x15GetNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\"K\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\"t\n" +
 	"\x16GetNodeProjectResponse\x121\n" +
-	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\"\xb4\x02\n" +
+	"\aproject\x18\x01 \x01(\v2\x17.nagi.v1.ProjectSummaryR\aproject\x12'\n" +
+	"\x0freplica_trusted\x18\x02 \x01(\bR\x0ereplicaTrusted\"X\n" +
+	"\x1dSetProjectReplicaTrustRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x18\n" +
+	"\atrusted\x18\x02 \x01(\bR\atrusted\" \n" +
+	"\x1eSetProjectReplicaTrustResponse\"\xb4\x02\n" +
 	"\x18DeployNodeProjectRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -5572,9 +5675,10 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"EnableTOTP\x12\x1a.nagi.v1.EnableTOTPRequest\x1a\x11.nagi.v1.Security\x12=\n" +
 	"\vDisableTOTP\x12\x1b.nagi.v1.DisableTOTPRequest\x1a\x11.nagi.v1.Security\x12=\n" +
-	"\vSetEntrance\x12\x1b.nagi.v1.SetEntranceRequest\x1a\x11.nagi.v1.Security2\x87\x19\n" +
+	"\vSetEntrance\x12\x1b.nagi.v1.SetEntranceRequest\x1a\x11.nagi.v1.Security2\xf2\x19\n" +
 	"\x0eProjectService\x12T\n" +
-	"\x0fListAllProjects\x12\x1f.nagi.v1.ListAllProjectsRequest\x1a .nagi.v1.ListAllProjectsResponse\x12Z\n" +
+	"\x0fListAllProjects\x12\x1f.nagi.v1.ListAllProjectsRequest\x1a .nagi.v1.ListAllProjectsResponse\x12i\n" +
+	"\x16SetProjectReplicaTrust\x12&.nagi.v1.SetProjectReplicaTrustRequest\x1a'.nagi.v1.SetProjectReplicaTrustResponse\x12Z\n" +
 	"\x11CreateNodeProject\x12!.nagi.v1.CreateNodeProjectRequest\x1a\".nagi.v1.CreateNodeProjectResponse\x12Q\n" +
 	"\x0eGetNodeProject\x12\x1e.nagi.v1.GetNodeProjectRequest\x1a\x1f.nagi.v1.GetNodeProjectResponse\x12a\n" +
 	"\x17AddNodeProjectContainer\x12'.nagi.v1.AddNodeProjectContainerRequest\x1a\x1d.nagi.v1.AddContainerResponse\x12j\n" +
@@ -5622,7 +5726,7 @@ func file_nagi_v1_api_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_api_proto_rawDescData
 }
 
-var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 99)
+var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 101)
 var file_nagi_v1_api_proto_goTypes = []any{
 	(*GetSetupStateRequest)(nil),                // 0: nagi.v1.GetSetupStateRequest
 	(*GetSetupStateResponse)(nil),               // 1: nagi.v1.GetSetupStateResponse
@@ -5721,78 +5825,80 @@ var file_nagi_v1_api_proto_goTypes = []any{
 	(*CreateNodeProjectResponse)(nil),           // 94: nagi.v1.CreateNodeProjectResponse
 	(*GetNodeProjectRequest)(nil),               // 95: nagi.v1.GetNodeProjectRequest
 	(*GetNodeProjectResponse)(nil),              // 96: nagi.v1.GetNodeProjectResponse
-	(*DeployNodeProjectRequest)(nil),            // 97: nagi.v1.DeployNodeProjectRequest
-	(*StreamNodeProjectLogsRequest)(nil),        // 98: nagi.v1.StreamNodeProjectLogsRequest
-	(*timestamppb.Timestamp)(nil),               // 99: google.protobuf.Timestamp
-	(*TrustedPanel)(nil),                        // 100: nagi.v1.TrustedPanel
-	(*AlertConfig)(nil),                         // 101: nagi.v1.AlertConfig
-	(*AlertChannel)(nil),                        // 102: nagi.v1.AlertChannel
-	(*NodeInfo)(nil),                            // 103: nagi.v1.NodeInfo
-	(*ProjectSummary)(nil),                      // 104: nagi.v1.ProjectSummary
-	(*ProjectSettings)(nil),                     // 105: nagi.v1.ProjectSettings
-	(*ContainerConfig)(nil),                     // 106: nagi.v1.ContainerConfig
-	(*EnvVar)(nil),                              // 107: nagi.v1.EnvVar
-	(*Project)(nil),                             // 108: nagi.v1.Project
-	(*Exposure)(nil),                            // 109: nagi.v1.Exposure
-	(*DeployTarget)(nil),                        // 110: nagi.v1.DeployTarget
-	(*MeshStatus)(nil),                          // 111: nagi.v1.MeshStatus
-	(*MeshPingResponse)(nil),                    // 112: nagi.v1.MeshPingResponse
-	(*ListReplicasResponse)(nil),                // 113: nagi.v1.ListReplicasResponse
-	(*ListSnapshotsResponse)(nil),               // 114: nagi.v1.ListSnapshotsResponse
-	(*DeployEvent)(nil),                         // 115: nagi.v1.DeployEvent
-	(*DeleteReplicaResponse)(nil),               // 116: nagi.v1.DeleteReplicaResponse
-	(*ListFailoversResponse)(nil),               // 117: nagi.v1.ListFailoversResponse
-	(*FailoverStatus)(nil),                      // 118: nagi.v1.FailoverStatus
-	(*UpgradeResponse)(nil),                     // 119: nagi.v1.UpgradeResponse
-	(*Mirrors)(nil),                             // 120: nagi.v1.Mirrors
-	(*ListSharedNetworksResponse)(nil),          // 121: nagi.v1.ListSharedNetworksResponse
-	(*QueryMetricsResponse)(nil),                // 122: nagi.v1.QueryMetricsResponse
-	(*AddContainerResponse)(nil),                // 123: nagi.v1.AddContainerResponse
-	(*DeleteContainerResponse)(nil),             // 124: nagi.v1.DeleteContainerResponse
-	(*UpdateProjectSettingsResponse)(nil),       // 125: nagi.v1.UpdateProjectSettingsResponse
-	(*SaveSharedEnvResponse)(nil),               // 126: nagi.v1.SaveSharedEnvResponse
-	(*DiscardSharedEnvResponse)(nil),            // 127: nagi.v1.DiscardSharedEnvResponse
-	(*ListDeploymentsResponse)(nil),             // 128: nagi.v1.ListDeploymentsResponse
-	(*ListVersionsResponse)(nil),                // 129: nagi.v1.ListVersionsResponse
-	(*LogLine)(nil),                             // 130: nagi.v1.LogLine
-	(*BackupStatus)(nil),                        // 131: nagi.v1.BackupStatus
-	(*RegistriesResponse)(nil),                  // 132: nagi.v1.RegistriesResponse
-	(*CheckImagesResponse)(nil),                 // 133: nagi.v1.CheckImagesResponse
+	(*SetProjectReplicaTrustRequest)(nil),       // 97: nagi.v1.SetProjectReplicaTrustRequest
+	(*SetProjectReplicaTrustResponse)(nil),      // 98: nagi.v1.SetProjectReplicaTrustResponse
+	(*DeployNodeProjectRequest)(nil),            // 99: nagi.v1.DeployNodeProjectRequest
+	(*StreamNodeProjectLogsRequest)(nil),        // 100: nagi.v1.StreamNodeProjectLogsRequest
+	(*timestamppb.Timestamp)(nil),               // 101: google.protobuf.Timestamp
+	(*TrustedPanel)(nil),                        // 102: nagi.v1.TrustedPanel
+	(*AlertConfig)(nil),                         // 103: nagi.v1.AlertConfig
+	(*AlertChannel)(nil),                        // 104: nagi.v1.AlertChannel
+	(*NodeInfo)(nil),                            // 105: nagi.v1.NodeInfo
+	(*ProjectSummary)(nil),                      // 106: nagi.v1.ProjectSummary
+	(*ProjectSettings)(nil),                     // 107: nagi.v1.ProjectSettings
+	(*ContainerConfig)(nil),                     // 108: nagi.v1.ContainerConfig
+	(*EnvVar)(nil),                              // 109: nagi.v1.EnvVar
+	(*Project)(nil),                             // 110: nagi.v1.Project
+	(*Exposure)(nil),                            // 111: nagi.v1.Exposure
+	(*DeployTarget)(nil),                        // 112: nagi.v1.DeployTarget
+	(*MeshStatus)(nil),                          // 113: nagi.v1.MeshStatus
+	(*MeshPingResponse)(nil),                    // 114: nagi.v1.MeshPingResponse
+	(*ListReplicasResponse)(nil),                // 115: nagi.v1.ListReplicasResponse
+	(*ListSnapshotsResponse)(nil),               // 116: nagi.v1.ListSnapshotsResponse
+	(*DeployEvent)(nil),                         // 117: nagi.v1.DeployEvent
+	(*DeleteReplicaResponse)(nil),               // 118: nagi.v1.DeleteReplicaResponse
+	(*ListFailoversResponse)(nil),               // 119: nagi.v1.ListFailoversResponse
+	(*FailoverStatus)(nil),                      // 120: nagi.v1.FailoverStatus
+	(*UpgradeResponse)(nil),                     // 121: nagi.v1.UpgradeResponse
+	(*Mirrors)(nil),                             // 122: nagi.v1.Mirrors
+	(*ListSharedNetworksResponse)(nil),          // 123: nagi.v1.ListSharedNetworksResponse
+	(*QueryMetricsResponse)(nil),                // 124: nagi.v1.QueryMetricsResponse
+	(*AddContainerResponse)(nil),                // 125: nagi.v1.AddContainerResponse
+	(*DeleteContainerResponse)(nil),             // 126: nagi.v1.DeleteContainerResponse
+	(*UpdateProjectSettingsResponse)(nil),       // 127: nagi.v1.UpdateProjectSettingsResponse
+	(*SaveSharedEnvResponse)(nil),               // 128: nagi.v1.SaveSharedEnvResponse
+	(*DiscardSharedEnvResponse)(nil),            // 129: nagi.v1.DiscardSharedEnvResponse
+	(*ListDeploymentsResponse)(nil),             // 130: nagi.v1.ListDeploymentsResponse
+	(*ListVersionsResponse)(nil),                // 131: nagi.v1.ListVersionsResponse
+	(*LogLine)(nil),                             // 132: nagi.v1.LogLine
+	(*BackupStatus)(nil),                        // 133: nagi.v1.BackupStatus
+	(*RegistriesResponse)(nil),                  // 134: nagi.v1.RegistriesResponse
+	(*CheckImagesResponse)(nil),                 // 135: nagi.v1.CheckImagesResponse
 }
 var file_nagi_v1_api_proto_depIdxs = []int32{
-	99,  // 0: nagi.v1.QueryNodeMetricsRequest.from:type_name -> google.protobuf.Timestamp
-	99,  // 1: nagi.v1.QueryNodeMetricsRequest.to:type_name -> google.protobuf.Timestamp
-	100, // 2: nagi.v1.ListNodePanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
-	99,  // 3: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
-	99,  // 4: nagi.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
-	99,  // 5: nagi.v1.Invite.created_at:type_name -> google.protobuf.Timestamp
-	99,  // 6: nagi.v1.Invite.expires_at:type_name -> google.protobuf.Timestamp
+	101, // 0: nagi.v1.QueryNodeMetricsRequest.from:type_name -> google.protobuf.Timestamp
+	101, // 1: nagi.v1.QueryNodeMetricsRequest.to:type_name -> google.protobuf.Timestamp
+	102, // 2: nagi.v1.ListNodePanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
+	101, // 3: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
+	101, // 4: nagi.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
+	101, // 5: nagi.v1.Invite.created_at:type_name -> google.protobuf.Timestamp
+	101, // 6: nagi.v1.Invite.expires_at:type_name -> google.protobuf.Timestamp
 	42,  // 7: nagi.v1.ListInvitesResponse.invites:type_name -> nagi.v1.Invite
-	101, // 8: nagi.v1.GetAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
-	101, // 9: nagi.v1.UpdateAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
-	101, // 10: nagi.v1.UpdateAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
-	102, // 11: nagi.v1.TestAlertChannelRequest.channel:type_name -> nagi.v1.AlertChannel
+	103, // 8: nagi.v1.GetAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
+	103, // 9: nagi.v1.UpdateAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
+	103, // 10: nagi.v1.UpdateAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
+	104, // 11: nagi.v1.TestAlertChannelRequest.channel:type_name -> nagi.v1.AlertChannel
 	52,  // 12: nagi.v1.GetSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
 	52,  // 13: nagi.v1.UpdateSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
-	99,  // 14: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
-	103, // 15: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
+	101, // 14: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
+	105, // 15: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
 	58,  // 16: nagi.v1.ListNodesResponse.nodes:type_name -> nagi.v1.Node
-	104, // 17: nagi.v1.NodeProject.project:type_name -> nagi.v1.ProjectSummary
+	106, // 17: nagi.v1.NodeProject.project:type_name -> nagi.v1.ProjectSummary
 	68,  // 18: nagi.v1.ListAllProjectsResponse.projects:type_name -> nagi.v1.NodeProject
-	105, // 19: nagi.v1.CreateNodeProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
-	106, // 20: nagi.v1.CreateNodeProjectRequest.container:type_name -> nagi.v1.ContainerConfig
-	106, // 21: nagi.v1.AddNodeProjectContainerRequest.config:type_name -> nagi.v1.ContainerConfig
-	105, // 22: nagi.v1.UpdateNodeProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
-	107, // 23: nagi.v1.SaveNodeProjectSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
-	106, // 24: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.ContainerConfig
-	108, // 25: nagi.v1.SaveNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
-	108, // 26: nagi.v1.DiscardNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
-	109, // 27: nagi.v1.SaveNodeProjectRouteRequest.route:type_name -> nagi.v1.Exposure
-	108, // 28: nagi.v1.SaveNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
-	108, // 29: nagi.v1.DeleteNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
-	108, // 30: nagi.v1.CreateNodeProjectResponse.project:type_name -> nagi.v1.Project
-	104, // 31: nagi.v1.GetNodeProjectResponse.project:type_name -> nagi.v1.ProjectSummary
-	110, // 32: nagi.v1.DeployNodeProjectRequest.targets:type_name -> nagi.v1.DeployTarget
+	107, // 19: nagi.v1.CreateNodeProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
+	108, // 20: nagi.v1.CreateNodeProjectRequest.container:type_name -> nagi.v1.ContainerConfig
+	108, // 21: nagi.v1.AddNodeProjectContainerRequest.config:type_name -> nagi.v1.ContainerConfig
+	107, // 22: nagi.v1.UpdateNodeProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
+	109, // 23: nagi.v1.SaveNodeProjectSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
+	108, // 24: nagi.v1.SaveNodeProjectDraftRequest.config:type_name -> nagi.v1.ContainerConfig
+	110, // 25: nagi.v1.SaveNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
+	110, // 26: nagi.v1.DiscardNodeProjectDraftResponse.project:type_name -> nagi.v1.Project
+	111, // 27: nagi.v1.SaveNodeProjectRouteRequest.route:type_name -> nagi.v1.Exposure
+	110, // 28: nagi.v1.SaveNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
+	110, // 29: nagi.v1.DeleteNodeProjectRouteResponse.project:type_name -> nagi.v1.Project
+	110, // 30: nagi.v1.CreateNodeProjectResponse.project:type_name -> nagi.v1.Project
+	106, // 31: nagi.v1.GetNodeProjectResponse.project:type_name -> nagi.v1.ProjectSummary
+	112, // 32: nagi.v1.DeployNodeProjectRequest.targets:type_name -> nagi.v1.DeployTarget
 	0,   // 33: nagi.v1.SetupService.GetSetupState:input_type -> nagi.v1.GetSetupStateRequest
 	2,   // 34: nagi.v1.SetupService.Setup:input_type -> nagi.v1.SetupRequest
 	4,   // 35: nagi.v1.AuthService.Login:input_type -> nagi.v1.LoginRequest
@@ -5839,122 +5945,124 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	37,  // 76: nagi.v1.SettingsService.DisableTOTP:input_type -> nagi.v1.DisableTOTPRequest
 	38,  // 77: nagi.v1.SettingsService.SetEntrance:input_type -> nagi.v1.SetEntranceRequest
 	69,  // 78: nagi.v1.ProjectService.ListAllProjects:input_type -> nagi.v1.ListAllProjectsRequest
-	71,  // 79: nagi.v1.ProjectService.CreateNodeProject:input_type -> nagi.v1.CreateNodeProjectRequest
-	95,  // 80: nagi.v1.ProjectService.GetNodeProject:input_type -> nagi.v1.GetNodeProjectRequest
-	72,  // 81: nagi.v1.ProjectService.AddNodeProjectContainer:input_type -> nagi.v1.AddNodeProjectContainerRequest
-	73,  // 82: nagi.v1.ProjectService.DeleteNodeProjectContainer:input_type -> nagi.v1.DeleteNodeProjectContainerRequest
-	81,  // 83: nagi.v1.ProjectService.SaveNodeProjectDraft:input_type -> nagi.v1.SaveNodeProjectDraftRequest
-	83,  // 84: nagi.v1.ProjectService.DiscardNodeProjectDraft:input_type -> nagi.v1.DiscardNodeProjectDraftRequest
-	74,  // 85: nagi.v1.ProjectService.UpdateNodeProjectSettings:input_type -> nagi.v1.UpdateNodeProjectSettingsRequest
-	75,  // 86: nagi.v1.ProjectService.SaveNodeProjectSharedEnv:input_type -> nagi.v1.SaveNodeProjectSharedEnvRequest
-	76,  // 87: nagi.v1.ProjectService.DiscardNodeProjectSharedEnv:input_type -> nagi.v1.NodeProjectRevisionRef
-	89,  // 88: nagi.v1.ProjectService.ListNodeProjectDeployments:input_type -> nagi.v1.NodeProjectRef
-	77,  // 89: nagi.v1.ProjectService.RestoreNodeProjectDeployment:input_type -> nagi.v1.RestoreNodeProjectDeploymentRequest
-	92,  // 90: nagi.v1.ProjectService.DeleteNodeProject:input_type -> nagi.v1.DeleteNodeProjectRequest
-	78,  // 91: nagi.v1.ProjectService.ListNodeProjectVersions:input_type -> nagi.v1.NodeContainerRef
-	90,  // 92: nagi.v1.ProjectService.RollbackNodeProject:input_type -> nagi.v1.RollbackNodeProjectRequest
-	89,  // 93: nagi.v1.ProjectService.ListNodeProjectSnapshots:input_type -> nagi.v1.NodeProjectRef
-	89,  // 94: nagi.v1.ProjectService.CreateNodeProjectSnapshot:input_type -> nagi.v1.NodeProjectRef
-	91,  // 95: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:input_type -> nagi.v1.RestoreNodeProjectSnapshotRequest
-	85,  // 96: nagi.v1.ProjectService.SaveNodeProjectRoute:input_type -> nagi.v1.SaveNodeProjectRouteRequest
-	87,  // 97: nagi.v1.ProjectService.DeleteNodeProjectRoute:input_type -> nagi.v1.DeleteNodeProjectRouteRequest
-	97,  // 98: nagi.v1.ProjectService.DeployNodeProject:input_type -> nagi.v1.DeployNodeProjectRequest
-	98,  // 99: nagi.v1.ProjectService.StreamNodeProjectLogs:input_type -> nagi.v1.StreamNodeProjectLogsRequest
-	67,  // 100: nagi.v1.ProjectService.SetNodeProjectBackup:input_type -> nagi.v1.SetNodeProjectBackupRequest
-	89,  // 101: nagi.v1.ProjectService.GetNodeProjectBackup:input_type -> nagi.v1.NodeProjectRef
-	89,  // 102: nagi.v1.ProjectService.SyncNodeProjectBackup:input_type -> nagi.v1.NodeProjectRef
-	89,  // 103: nagi.v1.ProjectService.GetNodeProjectBackupKey:input_type -> nagi.v1.NodeProjectRef
-	89,  // 104: nagi.v1.ProjectService.ListNodeProjectRegistries:input_type -> nagi.v1.NodeProjectRef
-	89,  // 105: nagi.v1.ProjectService.CheckNodeProjectImages:input_type -> nagi.v1.NodeProjectRef
-	64,  // 106: nagi.v1.ProjectService.LoginNodeProjectRegistry:input_type -> nagi.v1.LoginNodeProjectRegistryRequest
-	65,  // 107: nagi.v1.ProjectService.LogoutNodeProjectRegistry:input_type -> nagi.v1.LogoutNodeProjectRegistryRequest
-	63,  // 108: nagi.v1.ProjectService.MigrateNodeProject:input_type -> nagi.v1.MigrateNodeProjectRequest
-	63,  // 109: nagi.v1.ProjectService.RebuildNodeProject:input_type -> nagi.v1.MigrateNodeProjectRequest
-	62,  // 110: nagi.v1.ProjectService.SetNodeProjectFailover:input_type -> nagi.v1.SetNodeProjectFailoverRequest
-	89,  // 111: nagi.v1.ProjectService.GetNodeProjectFailover:input_type -> nagi.v1.NodeProjectRef
-	61,  // 112: nagi.v1.ProjectService.ChangeNodeProjectWitness:input_type -> nagi.v1.ChangeNodeProjectWitnessRequest
-	1,   // 113: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
-	3,   // 114: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
-	7,   // 115: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
-	9,   // 116: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
-	11,  // 117: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
-	6,   // 118: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
-	60,  // 119: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
-	26,  // 120: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
-	28,  // 121: nagi.v1.NodeService.AddNodePanel:output_type -> nagi.v1.AddNodePanelResponse
-	30,  // 122: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
-	111, // 123: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
-	112, // 124: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
-	111, // 125: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
-	113, // 126: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListReplicasResponse
-	114, // 127: nagi.v1.NodeService.ListNodeReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	115, // 128: nagi.v1.NodeService.RestoreNodeReplica:output_type -> nagi.v1.DeployEvent
-	116, // 129: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteReplicaResponse
-	117, // 130: nagi.v1.NodeService.ListNodeFailovers:output_type -> nagi.v1.ListFailoversResponse
-	118, // 131: nagi.v1.NodeService.ConfirmNodeTakeover:output_type -> nagi.v1.FailoverStatus
-	119, // 132: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
-	120, // 133: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
-	120, // 134: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
-	121, // 135: nagi.v1.NodeService.ListNodeSharedNetworks:output_type -> nagi.v1.ListSharedNetworksResponse
-	121, // 136: nagi.v1.NodeService.CreateNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
-	121, // 137: nagi.v1.NodeService.DeleteNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
-	121, // 138: nagi.v1.NodeService.LinkNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
-	121, // 139: nagi.v1.NodeService.UnlinkNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
-	31,  // 140: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
-	122, // 141: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	16,  // 142: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
-	13,  // 143: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
-	55,  // 144: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
-	57,  // 145: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
-	57,  // 146: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
-	47,  // 147: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
-	49,  // 148: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
-	51,  // 149: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
-	40,  // 150: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
-	43,  // 151: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
-	45,  // 152: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
-	33,  // 153: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
-	35,  // 154: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
-	33,  // 155: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
-	33,  // 156: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
-	33,  // 157: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
-	70,  // 158: nagi.v1.ProjectService.ListAllProjects:output_type -> nagi.v1.ListAllProjectsResponse
-	94,  // 159: nagi.v1.ProjectService.CreateNodeProject:output_type -> nagi.v1.CreateNodeProjectResponse
-	96,  // 160: nagi.v1.ProjectService.GetNodeProject:output_type -> nagi.v1.GetNodeProjectResponse
-	123, // 161: nagi.v1.ProjectService.AddNodeProjectContainer:output_type -> nagi.v1.AddContainerResponse
-	124, // 162: nagi.v1.ProjectService.DeleteNodeProjectContainer:output_type -> nagi.v1.DeleteContainerResponse
-	82,  // 163: nagi.v1.ProjectService.SaveNodeProjectDraft:output_type -> nagi.v1.SaveNodeProjectDraftResponse
-	84,  // 164: nagi.v1.ProjectService.DiscardNodeProjectDraft:output_type -> nagi.v1.DiscardNodeProjectDraftResponse
-	125, // 165: nagi.v1.ProjectService.UpdateNodeProjectSettings:output_type -> nagi.v1.UpdateProjectSettingsResponse
-	126, // 166: nagi.v1.ProjectService.SaveNodeProjectSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
-	127, // 167: nagi.v1.ProjectService.DiscardNodeProjectSharedEnv:output_type -> nagi.v1.DiscardSharedEnvResponse
-	128, // 168: nagi.v1.ProjectService.ListNodeProjectDeployments:output_type -> nagi.v1.ListDeploymentsResponse
-	115, // 169: nagi.v1.ProjectService.RestoreNodeProjectDeployment:output_type -> nagi.v1.DeployEvent
-	93,  // 170: nagi.v1.ProjectService.DeleteNodeProject:output_type -> nagi.v1.DeleteNodeProjectResponse
-	129, // 171: nagi.v1.ProjectService.ListNodeProjectVersions:output_type -> nagi.v1.ListVersionsResponse
-	115, // 172: nagi.v1.ProjectService.RollbackNodeProject:output_type -> nagi.v1.DeployEvent
-	114, // 173: nagi.v1.ProjectService.ListNodeProjectSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	115, // 174: nagi.v1.ProjectService.CreateNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
-	115, // 175: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
-	86,  // 176: nagi.v1.ProjectService.SaveNodeProjectRoute:output_type -> nagi.v1.SaveNodeProjectRouteResponse
-	88,  // 177: nagi.v1.ProjectService.DeleteNodeProjectRoute:output_type -> nagi.v1.DeleteNodeProjectRouteResponse
-	115, // 178: nagi.v1.ProjectService.DeployNodeProject:output_type -> nagi.v1.DeployEvent
-	130, // 179: nagi.v1.ProjectService.StreamNodeProjectLogs:output_type -> nagi.v1.LogLine
-	131, // 180: nagi.v1.ProjectService.SetNodeProjectBackup:output_type -> nagi.v1.BackupStatus
-	131, // 181: nagi.v1.ProjectService.GetNodeProjectBackup:output_type -> nagi.v1.BackupStatus
-	131, // 182: nagi.v1.ProjectService.SyncNodeProjectBackup:output_type -> nagi.v1.BackupStatus
-	66,  // 183: nagi.v1.ProjectService.GetNodeProjectBackupKey:output_type -> nagi.v1.GetNodeProjectBackupKeyResponse
-	132, // 184: nagi.v1.ProjectService.ListNodeProjectRegistries:output_type -> nagi.v1.RegistriesResponse
-	133, // 185: nagi.v1.ProjectService.CheckNodeProjectImages:output_type -> nagi.v1.CheckImagesResponse
-	132, // 186: nagi.v1.ProjectService.LoginNodeProjectRegistry:output_type -> nagi.v1.RegistriesResponse
-	132, // 187: nagi.v1.ProjectService.LogoutNodeProjectRegistry:output_type -> nagi.v1.RegistriesResponse
-	115, // 188: nagi.v1.ProjectService.MigrateNodeProject:output_type -> nagi.v1.DeployEvent
-	115, // 189: nagi.v1.ProjectService.RebuildNodeProject:output_type -> nagi.v1.DeployEvent
-	118, // 190: nagi.v1.ProjectService.SetNodeProjectFailover:output_type -> nagi.v1.FailoverStatus
-	118, // 191: nagi.v1.ProjectService.GetNodeProjectFailover:output_type -> nagi.v1.FailoverStatus
-	118, // 192: nagi.v1.ProjectService.ChangeNodeProjectWitness:output_type -> nagi.v1.FailoverStatus
-	113, // [113:193] is the sub-list for method output_type
-	33,  // [33:113] is the sub-list for method input_type
+	97,  // 79: nagi.v1.ProjectService.SetProjectReplicaTrust:input_type -> nagi.v1.SetProjectReplicaTrustRequest
+	71,  // 80: nagi.v1.ProjectService.CreateNodeProject:input_type -> nagi.v1.CreateNodeProjectRequest
+	95,  // 81: nagi.v1.ProjectService.GetNodeProject:input_type -> nagi.v1.GetNodeProjectRequest
+	72,  // 82: nagi.v1.ProjectService.AddNodeProjectContainer:input_type -> nagi.v1.AddNodeProjectContainerRequest
+	73,  // 83: nagi.v1.ProjectService.DeleteNodeProjectContainer:input_type -> nagi.v1.DeleteNodeProjectContainerRequest
+	81,  // 84: nagi.v1.ProjectService.SaveNodeProjectDraft:input_type -> nagi.v1.SaveNodeProjectDraftRequest
+	83,  // 85: nagi.v1.ProjectService.DiscardNodeProjectDraft:input_type -> nagi.v1.DiscardNodeProjectDraftRequest
+	74,  // 86: nagi.v1.ProjectService.UpdateNodeProjectSettings:input_type -> nagi.v1.UpdateNodeProjectSettingsRequest
+	75,  // 87: nagi.v1.ProjectService.SaveNodeProjectSharedEnv:input_type -> nagi.v1.SaveNodeProjectSharedEnvRequest
+	76,  // 88: nagi.v1.ProjectService.DiscardNodeProjectSharedEnv:input_type -> nagi.v1.NodeProjectRevisionRef
+	89,  // 89: nagi.v1.ProjectService.ListNodeProjectDeployments:input_type -> nagi.v1.NodeProjectRef
+	77,  // 90: nagi.v1.ProjectService.RestoreNodeProjectDeployment:input_type -> nagi.v1.RestoreNodeProjectDeploymentRequest
+	92,  // 91: nagi.v1.ProjectService.DeleteNodeProject:input_type -> nagi.v1.DeleteNodeProjectRequest
+	78,  // 92: nagi.v1.ProjectService.ListNodeProjectVersions:input_type -> nagi.v1.NodeContainerRef
+	90,  // 93: nagi.v1.ProjectService.RollbackNodeProject:input_type -> nagi.v1.RollbackNodeProjectRequest
+	89,  // 94: nagi.v1.ProjectService.ListNodeProjectSnapshots:input_type -> nagi.v1.NodeProjectRef
+	89,  // 95: nagi.v1.ProjectService.CreateNodeProjectSnapshot:input_type -> nagi.v1.NodeProjectRef
+	91,  // 96: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:input_type -> nagi.v1.RestoreNodeProjectSnapshotRequest
+	85,  // 97: nagi.v1.ProjectService.SaveNodeProjectRoute:input_type -> nagi.v1.SaveNodeProjectRouteRequest
+	87,  // 98: nagi.v1.ProjectService.DeleteNodeProjectRoute:input_type -> nagi.v1.DeleteNodeProjectRouteRequest
+	99,  // 99: nagi.v1.ProjectService.DeployNodeProject:input_type -> nagi.v1.DeployNodeProjectRequest
+	100, // 100: nagi.v1.ProjectService.StreamNodeProjectLogs:input_type -> nagi.v1.StreamNodeProjectLogsRequest
+	67,  // 101: nagi.v1.ProjectService.SetNodeProjectBackup:input_type -> nagi.v1.SetNodeProjectBackupRequest
+	89,  // 102: nagi.v1.ProjectService.GetNodeProjectBackup:input_type -> nagi.v1.NodeProjectRef
+	89,  // 103: nagi.v1.ProjectService.SyncNodeProjectBackup:input_type -> nagi.v1.NodeProjectRef
+	89,  // 104: nagi.v1.ProjectService.GetNodeProjectBackupKey:input_type -> nagi.v1.NodeProjectRef
+	89,  // 105: nagi.v1.ProjectService.ListNodeProjectRegistries:input_type -> nagi.v1.NodeProjectRef
+	89,  // 106: nagi.v1.ProjectService.CheckNodeProjectImages:input_type -> nagi.v1.NodeProjectRef
+	64,  // 107: nagi.v1.ProjectService.LoginNodeProjectRegistry:input_type -> nagi.v1.LoginNodeProjectRegistryRequest
+	65,  // 108: nagi.v1.ProjectService.LogoutNodeProjectRegistry:input_type -> nagi.v1.LogoutNodeProjectRegistryRequest
+	63,  // 109: nagi.v1.ProjectService.MigrateNodeProject:input_type -> nagi.v1.MigrateNodeProjectRequest
+	63,  // 110: nagi.v1.ProjectService.RebuildNodeProject:input_type -> nagi.v1.MigrateNodeProjectRequest
+	62,  // 111: nagi.v1.ProjectService.SetNodeProjectFailover:input_type -> nagi.v1.SetNodeProjectFailoverRequest
+	89,  // 112: nagi.v1.ProjectService.GetNodeProjectFailover:input_type -> nagi.v1.NodeProjectRef
+	61,  // 113: nagi.v1.ProjectService.ChangeNodeProjectWitness:input_type -> nagi.v1.ChangeNodeProjectWitnessRequest
+	1,   // 114: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
+	3,   // 115: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
+	7,   // 116: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
+	9,   // 117: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
+	11,  // 118: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
+	6,   // 119: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
+	60,  // 120: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
+	26,  // 121: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
+	28,  // 122: nagi.v1.NodeService.AddNodePanel:output_type -> nagi.v1.AddNodePanelResponse
+	30,  // 123: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
+	113, // 124: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
+	114, // 125: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
+	113, // 126: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
+	115, // 127: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListReplicasResponse
+	116, // 128: nagi.v1.NodeService.ListNodeReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	117, // 129: nagi.v1.NodeService.RestoreNodeReplica:output_type -> nagi.v1.DeployEvent
+	118, // 130: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteReplicaResponse
+	119, // 131: nagi.v1.NodeService.ListNodeFailovers:output_type -> nagi.v1.ListFailoversResponse
+	120, // 132: nagi.v1.NodeService.ConfirmNodeTakeover:output_type -> nagi.v1.FailoverStatus
+	121, // 133: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
+	122, // 134: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
+	122, // 135: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
+	123, // 136: nagi.v1.NodeService.ListNodeSharedNetworks:output_type -> nagi.v1.ListSharedNetworksResponse
+	123, // 137: nagi.v1.NodeService.CreateNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
+	123, // 138: nagi.v1.NodeService.DeleteNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
+	123, // 139: nagi.v1.NodeService.LinkNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
+	123, // 140: nagi.v1.NodeService.UnlinkNodeSharedNetwork:output_type -> nagi.v1.ListSharedNetworksResponse
+	31,  // 141: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
+	124, // 142: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	16,  // 143: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
+	13,  // 144: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
+	55,  // 145: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
+	57,  // 146: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
+	57,  // 147: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
+	47,  // 148: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
+	49,  // 149: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
+	51,  // 150: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
+	40,  // 151: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
+	43,  // 152: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
+	45,  // 153: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
+	33,  // 154: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
+	35,  // 155: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
+	33,  // 156: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
+	33,  // 157: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
+	33,  // 158: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
+	70,  // 159: nagi.v1.ProjectService.ListAllProjects:output_type -> nagi.v1.ListAllProjectsResponse
+	98,  // 160: nagi.v1.ProjectService.SetProjectReplicaTrust:output_type -> nagi.v1.SetProjectReplicaTrustResponse
+	94,  // 161: nagi.v1.ProjectService.CreateNodeProject:output_type -> nagi.v1.CreateNodeProjectResponse
+	96,  // 162: nagi.v1.ProjectService.GetNodeProject:output_type -> nagi.v1.GetNodeProjectResponse
+	125, // 163: nagi.v1.ProjectService.AddNodeProjectContainer:output_type -> nagi.v1.AddContainerResponse
+	126, // 164: nagi.v1.ProjectService.DeleteNodeProjectContainer:output_type -> nagi.v1.DeleteContainerResponse
+	82,  // 165: nagi.v1.ProjectService.SaveNodeProjectDraft:output_type -> nagi.v1.SaveNodeProjectDraftResponse
+	84,  // 166: nagi.v1.ProjectService.DiscardNodeProjectDraft:output_type -> nagi.v1.DiscardNodeProjectDraftResponse
+	127, // 167: nagi.v1.ProjectService.UpdateNodeProjectSettings:output_type -> nagi.v1.UpdateProjectSettingsResponse
+	128, // 168: nagi.v1.ProjectService.SaveNodeProjectSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
+	129, // 169: nagi.v1.ProjectService.DiscardNodeProjectSharedEnv:output_type -> nagi.v1.DiscardSharedEnvResponse
+	130, // 170: nagi.v1.ProjectService.ListNodeProjectDeployments:output_type -> nagi.v1.ListDeploymentsResponse
+	117, // 171: nagi.v1.ProjectService.RestoreNodeProjectDeployment:output_type -> nagi.v1.DeployEvent
+	93,  // 172: nagi.v1.ProjectService.DeleteNodeProject:output_type -> nagi.v1.DeleteNodeProjectResponse
+	131, // 173: nagi.v1.ProjectService.ListNodeProjectVersions:output_type -> nagi.v1.ListVersionsResponse
+	117, // 174: nagi.v1.ProjectService.RollbackNodeProject:output_type -> nagi.v1.DeployEvent
+	116, // 175: nagi.v1.ProjectService.ListNodeProjectSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	117, // 176: nagi.v1.ProjectService.CreateNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
+	117, // 177: nagi.v1.ProjectService.RestoreNodeProjectSnapshot:output_type -> nagi.v1.DeployEvent
+	86,  // 178: nagi.v1.ProjectService.SaveNodeProjectRoute:output_type -> nagi.v1.SaveNodeProjectRouteResponse
+	88,  // 179: nagi.v1.ProjectService.DeleteNodeProjectRoute:output_type -> nagi.v1.DeleteNodeProjectRouteResponse
+	117, // 180: nagi.v1.ProjectService.DeployNodeProject:output_type -> nagi.v1.DeployEvent
+	132, // 181: nagi.v1.ProjectService.StreamNodeProjectLogs:output_type -> nagi.v1.LogLine
+	133, // 182: nagi.v1.ProjectService.SetNodeProjectBackup:output_type -> nagi.v1.BackupStatus
+	133, // 183: nagi.v1.ProjectService.GetNodeProjectBackup:output_type -> nagi.v1.BackupStatus
+	133, // 184: nagi.v1.ProjectService.SyncNodeProjectBackup:output_type -> nagi.v1.BackupStatus
+	66,  // 185: nagi.v1.ProjectService.GetNodeProjectBackupKey:output_type -> nagi.v1.GetNodeProjectBackupKeyResponse
+	134, // 186: nagi.v1.ProjectService.ListNodeProjectRegistries:output_type -> nagi.v1.RegistriesResponse
+	135, // 187: nagi.v1.ProjectService.CheckNodeProjectImages:output_type -> nagi.v1.CheckImagesResponse
+	134, // 188: nagi.v1.ProjectService.LoginNodeProjectRegistry:output_type -> nagi.v1.RegistriesResponse
+	134, // 189: nagi.v1.ProjectService.LogoutNodeProjectRegistry:output_type -> nagi.v1.RegistriesResponse
+	117, // 190: nagi.v1.ProjectService.MigrateNodeProject:output_type -> nagi.v1.DeployEvent
+	117, // 191: nagi.v1.ProjectService.RebuildNodeProject:output_type -> nagi.v1.DeployEvent
+	120, // 192: nagi.v1.ProjectService.SetNodeProjectFailover:output_type -> nagi.v1.FailoverStatus
+	120, // 193: nagi.v1.ProjectService.GetNodeProjectFailover:output_type -> nagi.v1.FailoverStatus
+	120, // 194: nagi.v1.ProjectService.ChangeNodeProjectWitness:output_type -> nagi.v1.FailoverStatus
+	114, // [114:195] is the sub-list for method output_type
+	33,  // [33:114] is the sub-list for method input_type
 	33,  // [33:33] is the sub-list for extension type_name
 	33,  // [33:33] is the sub-list for extension extendee
 	0,   // [0:33] is the sub-list for field type_name
@@ -5973,7 +6081,7 @@ func file_nagi_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_api_proto_rawDesc), len(file_nagi_v1_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   99,
+			NumMessages:   101,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

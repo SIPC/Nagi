@@ -43,6 +43,7 @@ const (
 	AgentService_CreateSnapshot_FullMethodName        = "/nagi.v1.AgentService/CreateSnapshot"
 	AgentService_RestoreSnapshot_FullMethodName       = "/nagi.v1.AgentService/RestoreSnapshot"
 	AgentService_SetAlertConfig_FullMethodName        = "/nagi.v1.AgentService/SetAlertConfig"
+	AgentService_SetTrustedProjects_FullMethodName    = "/nagi.v1.AgentService/SetTrustedProjects"
 	AgentService_QueryMetrics_FullMethodName          = "/nagi.v1.AgentService/QueryMetrics"
 	AgentService_DeleteProject_FullMethodName         = "/nagi.v1.AgentService/DeleteProject"
 	AgentService_DeployProject_FullMethodName         = "/nagi.v1.AgentService/DeployProject"
@@ -125,6 +126,10 @@ type AgentServiceClient interface {
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
+	// 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
+	// （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
+	// 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
+	SetTrustedProjects(ctx context.Context, in *SetTrustedProjectsRequest, opts ...grpc.CallOption) (*SetTrustedProjectsResponse, error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(ctx context.Context, in *QueryMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
@@ -472,6 +477,16 @@ func (c *agentServiceClient) SetAlertConfig(ctx context.Context, in *SetAlertCon
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAlertConfigResponse)
 	err := c.cc.Invoke(ctx, AgentService_SetAlertConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SetTrustedProjects(ctx context.Context, in *SetTrustedProjectsRequest, opts ...grpc.CallOption) (*SetTrustedProjectsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetTrustedProjectsResponse)
+	err := c.cc.Invoke(ctx, AgentService_SetTrustedProjects_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -939,6 +954,10 @@ type AgentServiceServer interface {
 	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
+	// 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
+	// （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
+	// 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
+	SetTrustedProjects(context.Context, *SetTrustedProjectsRequest) (*SetTrustedProjectsResponse, error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
@@ -1087,6 +1106,9 @@ func (UnimplementedAgentServiceServer) RestoreSnapshot(*RestoreSnapshotRequest, 
 }
 func (UnimplementedAgentServiceServer) SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAlertConfig not implemented")
+}
+func (UnimplementedAgentServiceServer) SetTrustedProjects(context.Context, *SetTrustedProjectsRequest) (*SetTrustedProjectsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetTrustedProjects not implemented")
 }
 func (UnimplementedAgentServiceServer) QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryMetrics not implemented")
@@ -1617,6 +1639,24 @@ func _AgentService_SetAlertConfig_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).SetAlertConfig(ctx, req.(*SetAlertConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SetTrustedProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTrustedProjectsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetTrustedProjects(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetTrustedProjects_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetTrustedProjects(ctx, req.(*SetTrustedProjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2302,6 +2342,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetAlertConfig",
 			Handler:    _AgentService_SetAlertConfig_Handler,
+		},
+		{
+			MethodName: "SetTrustedProjects",
+			Handler:    _AgentService_SetTrustedProjects_Handler,
 		},
 		{
 			MethodName: "QueryMetrics",

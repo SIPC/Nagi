@@ -61,6 +61,17 @@ func (m *Manager) Rebuild(ctx context.Context, src *nagiv1.Project, dir string, 
 		onLine("这些容器要用 data/ 里的文件，没有自动部署，请先上传文件再部署：" + strings.Join(waiting, "、"))
 	}
 	var deployErr error
+	// 配置备份是原来的节点上报的，那个节点被攻破过的话可能是恶意的：有危险设置、又没被面板允许的不自动部署。
+	// 管理员看过配置以后可以自己点部署。
+	configs := map[string]*nagiv1.ContainerConfig{}
+	shared := map[string][]*nagiv1.EnvVar{}
+	for _, j := range jobs {
+		configs[j.row.Name], shared[j.row.Name] = j.cfg, settings.GetSharedEnv()
+	}
+	if err := m.replicaRefusal(ctx, id, src.GetId(), paths{root: row.Dir}, configs, shared); err != nil {
+		deployErr = fmt.Errorf("项目已重建，但没有自动部署：%w。也可以检查配置以后在面板上手动部署", err)
+		jobs = nil
+	}
 	if len(jobs) > 0 {
 		_, deployErr = m.runJobs(ctx, row, pdb, id, jobs, "manual", 0, func(job) {}, onLine)
 	}

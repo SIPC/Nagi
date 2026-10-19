@@ -2050,6 +2050,7 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	ProjectService_ListAllProjects_FullMethodName              = "/nagi.v1.ProjectService/ListAllProjects"
+	ProjectService_SetProjectReplicaTrust_FullMethodName       = "/nagi.v1.ProjectService/SetProjectReplicaTrust"
 	ProjectService_CreateNodeProject_FullMethodName            = "/nagi.v1.ProjectService/CreateNodeProject"
 	ProjectService_GetNodeProject_FullMethodName               = "/nagi.v1.ProjectService/GetNodeProject"
 	ProjectService_AddNodeProjectContainer_FullMethodName      = "/nagi.v1.ProjectService/AddNodeProjectContainer"
@@ -2091,6 +2092,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProjectServiceClient interface {
 	ListAllProjects(ctx context.Context, in *ListAllProjectsRequest, opts ...grpc.CallOption) (*ListAllProjectsResponse, error)
+	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
+	// 面板直接下发给所有节点。
+	SetProjectReplicaTrust(ctx context.Context, in *SetProjectReplicaTrustRequest, opts ...grpc.CallOption) (*SetProjectReplicaTrustResponse, error)
 	CreateNodeProject(ctx context.Context, in *CreateNodeProjectRequest, opts ...grpc.CallOption) (*CreateNodeProjectResponse, error)
 	GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error)
 	AddNodeProjectContainer(ctx context.Context, in *AddNodeProjectContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error)
@@ -2149,6 +2153,16 @@ func (c *projectServiceClient) ListAllProjects(ctx context.Context, in *ListAllP
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAllProjectsResponse)
 	err := c.cc.Invoke(ctx, ProjectService_ListAllProjects_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SetProjectReplicaTrust(ctx context.Context, in *SetProjectReplicaTrustRequest, opts ...grpc.CallOption) (*SetProjectReplicaTrustResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProjectReplicaTrustResponse)
+	err := c.cc.Invoke(ctx, ProjectService_SetProjectReplicaTrust_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2572,6 +2586,9 @@ func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, in 
 // for forward compatibility.
 type ProjectServiceServer interface {
 	ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error)
+	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
+	// 面板直接下发给所有节点。
+	SetProjectReplicaTrust(context.Context, *SetProjectReplicaTrustRequest) (*SetProjectReplicaTrustResponse, error)
 	CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error)
 	GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error)
 	AddNodeProjectContainer(context.Context, *AddNodeProjectContainerRequest) (*AddContainerResponse, error)
@@ -2628,6 +2645,9 @@ type UnimplementedProjectServiceServer struct{}
 
 func (UnimplementedProjectServiceServer) ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAllProjects not implemented")
+}
+func (UnimplementedProjectServiceServer) SetProjectReplicaTrust(context.Context, *SetProjectReplicaTrustRequest) (*SetProjectReplicaTrustResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectReplicaTrust not implemented")
 }
 func (UnimplementedProjectServiceServer) CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateNodeProject not implemented")
@@ -2766,6 +2786,24 @@ func _ProjectService_ListAllProjects_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).ListAllProjects(ctx, req.(*ListAllProjectsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_SetProjectReplicaTrust_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProjectReplicaTrustRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetProjectReplicaTrust(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetProjectReplicaTrust_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetProjectReplicaTrust(ctx, req.(*SetProjectReplicaTrustRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3336,6 +3374,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAllProjects",
 			Handler:    _ProjectService_ListAllProjects_Handler,
+		},
+		{
+			MethodName: "SetProjectReplicaTrust",
+			Handler:    _ProjectService_SetProjectReplicaTrust_Handler,
 		},
 		{
 			MethodName: "CreateNodeProject",

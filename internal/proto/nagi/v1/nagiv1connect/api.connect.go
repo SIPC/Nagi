@@ -170,6 +170,9 @@ const (
 	// ProjectServiceListAllProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListAllProjects RPC.
 	ProjectServiceListAllProjectsProcedure = "/nagi.v1.ProjectService/ListAllProjects"
+	// ProjectServiceSetProjectReplicaTrustProcedure is the fully-qualified name of the ProjectService's
+	// SetProjectReplicaTrust RPC.
+	ProjectServiceSetProjectReplicaTrustProcedure = "/nagi.v1.ProjectService/SetProjectReplicaTrust"
 	// ProjectServiceCreateNodeProjectProcedure is the fully-qualified name of the ProjectService's
 	// CreateNodeProject RPC.
 	ProjectServiceCreateNodeProjectProcedure = "/nagi.v1.ProjectService/CreateNodeProject"
@@ -1683,6 +1686,9 @@ func (UnimplementedSettingsServiceHandler) SetEntrance(context.Context, *connect
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.
 type ProjectServiceClient interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
+	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
+	// 面板直接下发给所有节点。
+	SetProjectReplicaTrust(context.Context, *connect.Request[v1.SetProjectReplicaTrustRequest]) (*connect.Response[v1.SetProjectReplicaTrustResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
 	AddNodeProjectContainer(context.Context, *connect.Request[v1.AddNodeProjectContainerRequest]) (*connect.Response[v1.AddContainerResponse], error)
@@ -1744,6 +1750,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceListAllProjectsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListAllProjects")),
+			connect.WithClientOptions(opts...),
+		),
+		setProjectReplicaTrust: connect.NewClient[v1.SetProjectReplicaTrustRequest, v1.SetProjectReplicaTrustResponse](
+			httpClient,
+			baseURL+ProjectServiceSetProjectReplicaTrustProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetProjectReplicaTrust")),
 			connect.WithClientOptions(opts...),
 		),
 		createNodeProject: connect.NewClient[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse](
@@ -1956,6 +1968,7 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
 	listAllProjects              *connect.Client[v1.ListAllProjectsRequest, v1.ListAllProjectsResponse]
+	setProjectReplicaTrust       *connect.Client[v1.SetProjectReplicaTrustRequest, v1.SetProjectReplicaTrustResponse]
 	createNodeProject            *connect.Client[v1.CreateNodeProjectRequest, v1.CreateNodeProjectResponse]
 	getNodeProject               *connect.Client[v1.GetNodeProjectRequest, v1.GetNodeProjectResponse]
 	addNodeProjectContainer      *connect.Client[v1.AddNodeProjectContainerRequest, v1.AddContainerResponse]
@@ -1995,6 +2008,11 @@ type projectServiceClient struct {
 // ListAllProjects calls nagi.v1.ProjectService.ListAllProjects.
 func (c *projectServiceClient) ListAllProjects(ctx context.Context, req *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error) {
 	return c.listAllProjects.CallUnary(ctx, req)
+}
+
+// SetProjectReplicaTrust calls nagi.v1.ProjectService.SetProjectReplicaTrust.
+func (c *projectServiceClient) SetProjectReplicaTrust(ctx context.Context, req *connect.Request[v1.SetProjectReplicaTrustRequest]) (*connect.Response[v1.SetProjectReplicaTrustResponse], error) {
+	return c.setProjectReplicaTrust.CallUnary(ctx, req)
 }
 
 // CreateNodeProject calls nagi.v1.ProjectService.CreateNodeProject.
@@ -2170,6 +2188,9 @@ func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, req
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error)
+	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
+	// 面板直接下发给所有节点。
+	SetProjectReplicaTrust(context.Context, *connect.Request[v1.SetProjectReplicaTrustRequest]) (*connect.Response[v1.SetProjectReplicaTrustResponse], error)
 	CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error)
 	GetNodeProject(context.Context, *connect.Request[v1.GetNodeProjectRequest]) (*connect.Response[v1.GetNodeProjectResponse], error)
 	AddNodeProjectContainer(context.Context, *connect.Request[v1.AddNodeProjectContainerRequest]) (*connect.Response[v1.AddContainerResponse], error)
@@ -2227,6 +2248,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceListAllProjectsProcedure,
 		svc.ListAllProjects,
 		connect.WithSchema(projectServiceMethods.ByName("ListAllProjects")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSetProjectReplicaTrustHandler := connect.NewUnaryHandler(
+		ProjectServiceSetProjectReplicaTrustProcedure,
+		svc.SetProjectReplicaTrust,
+		connect.WithSchema(projectServiceMethods.ByName("SetProjectReplicaTrust")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceCreateNodeProjectHandler := connect.NewUnaryHandler(
@@ -2437,6 +2464,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		switch r.URL.Path {
 		case ProjectServiceListAllProjectsProcedure:
 			projectServiceListAllProjectsHandler.ServeHTTP(w, r)
+		case ProjectServiceSetProjectReplicaTrustProcedure:
+			projectServiceSetProjectReplicaTrustHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateNodeProjectProcedure:
 			projectServiceCreateNodeProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceGetNodeProjectProcedure:
@@ -2516,6 +2545,10 @@ type UnimplementedProjectServiceHandler struct{}
 
 func (UnimplementedProjectServiceHandler) ListAllProjects(context.Context, *connect.Request[v1.ListAllProjectsRequest]) (*connect.Response[v1.ListAllProjectsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListAllProjects is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetProjectReplicaTrust(context.Context, *connect.Request[v1.SetProjectReplicaTrustRequest]) (*connect.Response[v1.SetProjectReplicaTrustResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetProjectReplicaTrust is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) CreateNodeProject(context.Context, *connect.Request[v1.CreateNodeProjectRequest]) (*connect.Response[v1.CreateNodeProjectResponse], error) {

@@ -351,6 +351,9 @@ message ListNodesResponse {
 
 service ProjectService {
   rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
+  // 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
+  // 面板直接下发给所有节点。
+  rpc SetProjectReplicaTrust(SetProjectReplicaTrustRequest) returns (SetProjectReplicaTrustResponse);
   rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
   rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
   rpc AddNodeProjectContainer(AddNodeProjectContainerRequest) returns (AddContainerResponse);
@@ -617,7 +620,16 @@ message GetNodeProjectRequest {
 
 message GetNodeProjectResponse {
   ProjectSummary project = 1;
+  // 管理员允许这个项目在备份节点、顶替节点、迁移目标上使用特权配置（见 SetProjectReplicaTrust）。
+  bool replica_trusted = 2;
 }
+
+message SetProjectReplicaTrustRequest {
+  string project_id = 1;
+  bool trusted = 2;
+}
+
+message SetProjectReplicaTrustResponse {}
 
 message DeployNodeProjectRequest {
   string node_id = 1;

@@ -47,6 +47,10 @@ service AgentService {
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
   // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
   rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
+  // 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
+  // （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
+  // 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
+  rpc SetTrustedProjects(SetTrustedProjectsRequest) returns (SetTrustedProjectsResponse);
   // 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
   rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
   // 删除项目：停止并删除容器。项目目录默认保留。
@@ -494,6 +498,12 @@ message SetAlertConfigRequest {
 }
 
 message SetAlertConfigResponse {}
+
+message SetTrustedProjectsRequest {
+  repeated string project_ids = 1;
+}
+
+message SetTrustedProjectsResponse {}
 
 message QueryMetricsRequest {
   // 序列名前缀，例如 "node:"、"c:<项目 ID>/"。

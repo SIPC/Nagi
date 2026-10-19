@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -288,6 +289,16 @@ func (s *projectService) agent(nodeID string) (nagiv1.AgentServiceClient, error)
 	return conn.Agent, nil
 }
 
+func (s *projectService) SetProjectReplicaTrust(ctx context.Context, req *connect.Request[nagiv1.SetProjectReplicaTrustRequest]) (*connect.Response[nagiv1.SetProjectReplicaTrustResponse], error) {
+	if req.Msg.GetProjectId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("缺少项目 ID"))
+	}
+	if err := s.Nodes.SetProjectTrusted(ctx, req.Msg.GetProjectId(), req.Msg.GetTrusted()); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.SetProjectReplicaTrustResponse{}), nil
+}
+
 func (s *projectService) ListAllProjects(ctx context.Context, _ *connect.Request[nagiv1.ListAllProjectsRequest]) (*connect.Response[nagiv1.ListAllProjectsResponse], error) {
 	rows, err := s.Q.ListNodes(ctx)
 	if err != nil {
@@ -345,7 +356,10 @@ func (s *projectService) GetNodeProject(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, fromGRPC(err)
 	}
-	return connect.NewResponse(&nagiv1.GetNodeProjectResponse{Project: resp.GetProject()}), nil
+	return connect.NewResponse(&nagiv1.GetNodeProjectResponse{
+		Project:        resp.GetProject(),
+		ReplicaTrusted: slices.Contains(s.Nodes.TrustedProjects(ctx), req.Msg.GetProjectId()),
+	}), nil
 }
 
 func (s *projectService) SaveNodeProjectDraft(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectDraftRequest]) (*connect.Response[nagiv1.SaveNodeProjectDraftResponse], error) {

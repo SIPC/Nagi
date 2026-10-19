@@ -140,6 +140,10 @@ func Run(ctx context.Context, cfg Config) error {
 	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
 	projects.ManagedRestart = func(id string) bool { return a.failovers.get(id) != nil }
 	projects.ReservedDomain = func(d string) bool { return d != "" && d == a.panelDomain() }
+	a.trusted = newTrustedProjects(filepath.Join(cfg.DataDir, "identity"))
+	projects.TrustedProject = func(id string) bool {
+		return a.trusted.trusted(id, func(panel string) bool { _, ok := a.id.panel(panel); return ok })
+	}
 	a.links = newLinks(a)
 	projects.RemoteProjects = a.links.remoteProjects
 	a.startedAt = time.Now()
@@ -229,6 +233,7 @@ type agent struct {
 	id       *identity
 	docker   *docker.Client
 	projects *project.Manager
+	trusted  *trustedProjects
 	hostname string
 	info     *nagiv1.NodeInfo
 

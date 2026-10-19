@@ -89,6 +89,7 @@ export function ProjectPage({ nodeId, projectId }: { nodeId: string; projectId: 
             <ProjectMetrics nodeId={nodeId} projectId={projectId} />
           </CardContent>
         </Card>
+        <ReplicaTrustCard nodeId={nodeId} projectId={projectId} trusted={project.data.replicaTrusted} />
         <BackupCard nodeId={nodeId} projectId={projectId} />
         <FailoverCard nodeId={nodeId} projectId={projectId} dir={p.dir} sharedNetworks={p.settings?.sharedNetworks ?? []} />
         <MigrateCard nodeId={nodeId} projectId={projectId} name={p.name} dir={p.dir} sharedNetworks={p.settings?.sharedNetworks ?? []} />
@@ -864,6 +865,45 @@ function AddContainerCard({ nodeId, project, onAdded }: { nodeId: string; projec
           </form>
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+// ---- 备份节点上的特权配置 ----
+
+// ReplicaTrustCard：项目在别的节点上从副本启动（备份恢复、顶替、迁移、重建）时，配置里有特权设置的默认不启动，
+// 防止源节点被攻破后借副本控制别的节点。管理员确认配置可信后在这里允许。
+function ReplicaTrustCard({ nodeId, projectId, trusted }: { nodeId: string; projectId: string; trusted: boolean }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState("");
+  const toggle = async (next: boolean) => {
+    if (
+      next &&
+      !confirm(
+        "允许这个项目在备份节点、顶替节点、迁移目标上使用特权配置（特权模式、挂载宿主机路径、host 网络等）？\n\n只在确认项目配置可信时开启：源节点被攻破的话，它可以借副本在这些节点上拿到 root。",
+      )
+    )
+      return;
+    setError("");
+    try {
+      await projectClient.setProjectReplicaTrust({ projectId, trusted: next });
+      queryClient.invalidateQueries({ queryKey: ["project", nodeId, projectId] });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <Card>
+      <CardContent className="grid gap-2 pt-5 text-sm">
+        {error && <Alert>{error}</Alert>}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={trusted} onChange={(e) => toggle(e.target.checked)} />
+          允许在备份节点上使用特权配置
+        </label>
+        <p className="text-xs text-muted-foreground">
+          项目在别的节点上从副本启动（恢复备份、顶替、迁移过去、按配置备份重建）时，配置里有特权模式、挂载宿主机路径、host 网络这类设置的默认不启动：副本来自原来的节点，它被攻破的话，可以借副本控制别的节点。项目确实需要这些设置时在这里允许，由面板直接告诉各节点。
+        </p>
+      </CardContent>
     </Card>
   );
 }

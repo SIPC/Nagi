@@ -101,6 +101,9 @@ const (
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
 	// SetAlertConfig RPC.
 	AgentServiceSetAlertConfigProcedure = "/nagi.v1.AgentService/SetAlertConfig"
+	// AgentServiceSetTrustedProjectsProcedure is the fully-qualified name of the AgentService's
+	// SetTrustedProjects RPC.
+	AgentServiceSetTrustedProjectsProcedure = "/nagi.v1.AgentService/SetTrustedProjects"
 	// AgentServiceQueryMetricsProcedure is the fully-qualified name of the AgentService's QueryMetrics
 	// RPC.
 	AgentServiceQueryMetricsProcedure = "/nagi.v1.AgentService/QueryMetrics"
@@ -241,6 +244,10 @@ type AgentServiceClient interface {
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
+	// 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
+	// （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
+	// 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
+	SetTrustedProjects(context.Context, *connect.Request[v1.SetTrustedProjectsRequest]) (*connect.Response[v1.SetTrustedProjectsResponse], error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
@@ -463,6 +470,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceSetAlertConfigProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("SetAlertConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		setTrustedProjects: connect.NewClient[v1.SetTrustedProjectsRequest, v1.SetTrustedProjectsResponse](
+			httpClient,
+			baseURL+AgentServiceSetTrustedProjectsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetTrustedProjects")),
 			connect.WithClientOptions(opts...),
 		),
 		queryMetrics: connect.NewClient[v1.QueryMetricsRequest, v1.QueryMetricsResponse](
@@ -710,6 +723,7 @@ type agentServiceClient struct {
 	createSnapshot        *connect.Client[v1.CreateSnapshotRequest, v1.DeployEvent]
 	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
 	setAlertConfig        *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	setTrustedProjects    *connect.Client[v1.SetTrustedProjectsRequest, v1.SetTrustedProjectsResponse]
 	queryMetrics          *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	deleteProject         *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	deployProject         *connect.Client[v1.DeployProjectRequest, v1.DeployEvent]
@@ -866,6 +880,11 @@ func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, req *connect.R
 // SetAlertConfig calls nagi.v1.AgentService.SetAlertConfig.
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, req *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
 	return c.setAlertConfig.CallUnary(ctx, req)
+}
+
+// SetTrustedProjects calls nagi.v1.AgentService.SetTrustedProjects.
+func (c *agentServiceClient) SetTrustedProjects(ctx context.Context, req *connect.Request[v1.SetTrustedProjectsRequest]) (*connect.Response[v1.SetTrustedProjectsResponse], error) {
+	return c.setTrustedProjects.CallUnary(ctx, req)
 }
 
 // QueryMetrics calls nagi.v1.AgentService.QueryMetrics.
@@ -1088,6 +1107,10 @@ type AgentServiceHandler interface {
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
+	// 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
+	// （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
+	// 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
+	SetTrustedProjects(context.Context, *connect.Request[v1.SetTrustedProjectsRequest]) (*connect.Response[v1.SetTrustedProjectsResponse], error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 删除项目：停止并删除容器。项目目录默认保留。
@@ -1306,6 +1329,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceSetAlertConfigProcedure,
 		svc.SetAlertConfig,
 		connect.WithSchema(agentServiceMethods.ByName("SetAlertConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetTrustedProjectsHandler := connect.NewUnaryHandler(
+		AgentServiceSetTrustedProjectsProcedure,
+		svc.SetTrustedProjects,
+		connect.WithSchema(agentServiceMethods.ByName("SetTrustedProjects")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceQueryMetricsHandler := connect.NewUnaryHandler(
@@ -1574,6 +1603,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceRestoreSnapshotHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
 			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
+		case AgentServiceSetTrustedProjectsProcedure:
+			agentServiceSetTrustedProjectsHandler.ServeHTTP(w, r)
 		case AgentServiceQueryMetricsProcedure:
 			agentServiceQueryMetricsHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteProjectProcedure:
@@ -1749,6 +1780,10 @@ func (UnimplementedAgentServiceHandler) RestoreSnapshot(context.Context, *connec
 
 func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetAlertConfig is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetTrustedProjects(context.Context, *connect.Request[v1.SetTrustedProjectsRequest]) (*connect.Response[v1.SetTrustedProjectsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetTrustedProjects is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {

@@ -428,6 +428,12 @@ func (m *Manager) RestoreReplica(ctx context.Context, id, root, dir, snapshotID 
 
 	// 文件已经恢复好，启动失败时项目保留下来，用户可以修改配置后重新部署。
 	var startErr error
+	if configs, shared, err := deployedConfigs(ctx, pdb, containers); err != nil {
+		startErr = err
+	} else if err := m.replicaRefusal(ctx, id, id, p, configs, shared); err != nil {
+		startErr = fmt.Errorf("项目已恢复，但没有启动：%w", err)
+		containers = nil
+	}
 	for _, mem := range containers {
 		if mem.DeployedVersion == 0 {
 			continue
