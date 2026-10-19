@@ -12,6 +12,8 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -174,6 +176,15 @@ func (l *links) sync(ctx context.Context) {
 		got[a.network][a.key] = a
 	}
 
+	// 本节点加入各网络的项目用的网络名（不管是否在运行）：对方不能用这些名字，否则本地容器停了时会被对方顶替。
+	reserved := map[string]map[string]bool{}
+	for network := range got {
+		reserved[network] = map[string]bool{}
+		for _, p := range l.a.projects.SharedNetworkProjects(ctx, network) {
+			reserved[network][p.GetNetworkName()] = true
+		}
+	}
+
 	l.mu.Lock()
 	next := map[string]map[mesh.Key]*linkPeerState{}
 	for network, answers := range got {
@@ -181,7 +192,7 @@ func (l *links) sync(ctx context.Context) {
 		for k, a := range answers {
 			st := &linkPeerState{name: a.peer.Name, nodeID: a.peer.NodeID, at: time.Now()}
 			if a.err == nil {
-				st.ok, st.endpoints = true, a.resp.GetEndpoints()
+				st.ok, st.endpoints = true, checkRemoteEndpoints(a.resp, reserved[network])
 			} else {
 				st.err = linkError(a.err)
 				// 暂时联系不上：保留上次的容器，代理容器不动（连接会失败），恢复后照常。
@@ -239,6 +250,47 @@ func (l *links) seed(ctx context.Context) {
 			Alias: c.Labels[labelLinkAlias], ProjectName: c.Labels[labelLinkProject], Ports: ports,
 		})
 	}
+}
+
+// 每个相连节点在一个网络里最多接受的容器数、每个容器最多接受的端口数：防止对方让本节点建大量代理容器。
+const (
+	maxRemoteEndpoints = 256
+	maxRemotePorts     = 64
+)
+
+// remoteAliasRe 是对方容器的名字：容器.网络名，或者 容器.容器组.网络名。
+var remoteAliasRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*){1,2}$`)
+
+// checkRemoteEndpoints 只接受对方回答里合规的容器：名字以对方项目声明的网络名结尾，
+// 这个网络名没有被本节点的项目占用，数量不超过上限。对方节点不一定可信，
+// 不能让它冒用本节点项目的名字（本地容器停了时代理会顶上去，连接就被引到对方那里）。
+func checkRemoteEndpoints(resp *nagiv1.SharedNetworkInfoResponse, reserved map[string]bool) []*nagiv1.LinkEndpoint {
+	allowed := map[string]bool{}
+	for _, p := range resp.GetProjects() {
+		if nn := p.GetNetworkName(); nn != "" && !reserved[nn] {
+			allowed[nn] = true
+		}
+	}
+	var out []*nagiv1.LinkEndpoint
+	for _, e := range resp.GetEndpoints() {
+		alias := e.GetAlias()
+		dot := strings.LastIndexByte(alias, '.')
+		if !remoteAliasRe.MatchString(alias) || dot < 0 || !allowed[alias[dot+1:]] {
+			continue
+		}
+		var ports []uint32
+		for _, p := range e.GetPorts() {
+			if p > 0 && p <= 65535 && len(ports) < maxRemotePorts {
+				ports = append(ports, p)
+			}
+		}
+		e.Ports = ports
+		out = append(out, e)
+		if len(out) == maxRemoteEndpoints {
+			break
+		}
+	}
+	return out
 }
 
 func linkError(err error) string {
@@ -578,6 +630,11 @@ func (l *links) handleRemote(ctx context.Context, c net.Conn) {
 	e, ok := l.localEndpoint(ctx, network, alias)
 	if !ok {
 		reject("网络里没有 " + alias)
+		return
+	}
+	// 只转发开放的端口（容器声明的和项目设置里补的跨节点端口）。对方节点不一定可信，不能借此访问容器的其他端口。
+	if !slices.Contains(e.Ports, uint32(port)) {
+		reject(fmt.Sprintf("%s 没有开放端口 %d", alias, port))
 		return
 	}
 	tc, err := net.DialTimeout("tcp", netip.AddrPortFrom(e.IP, port).String(), 5*time.Second)

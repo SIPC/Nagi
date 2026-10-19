@@ -6,6 +6,8 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
 func TestParseLinkHeader(t *testing.T) {
@@ -80,5 +82,29 @@ func TestSplice(t *testing.T) {
 	got, _ := io.ReadAll(client)
 	if string(got) != "echo:hello" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestCheckRemoteEndpoints(t *testing.T) {
+	resp := &nagiv1.SharedNetworkInfoResponse{
+		Projects: []*nagiv1.SharedNetworkProject{{NetworkName: "shop"}, {NetworkName: "base"}},
+		Endpoints: []*nagiv1.LinkEndpoint{
+			{Alias: "api.shop", Ports: []uint32{8080, 0, 70000}},
+			{Alias: "redis.cache.shop", Ports: []uint32{6379}},
+			{Alias: "pg.base", Ports: []uint32{5432}},  // base 被本节点的项目占用
+			{Alias: "pg.other", Ports: []uint32{5432}}, // other 不是对方声明的网络名
+			{Alias: "bad", Ports: []uint32{1}},
+		},
+	}
+	got := checkRemoteEndpoints(resp, map[string]bool{"base": true})
+	var names []string
+	for _, e := range got {
+		names = append(names, e.GetAlias())
+	}
+	if strings.Join(names, ",") != "api.shop,redis.cache.shop" {
+		t.Fatalf("接受的容器 = %v", names)
+	}
+	if p := got[0].GetPorts(); len(p) != 1 || p[0] != 8080 {
+		t.Fatalf("端口 = %v，应该去掉 0 和超范围的", p)
 	}
 }

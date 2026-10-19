@@ -65,6 +65,11 @@ func (d *Client) RunLinkProxy(ctx context.Context, s LinkProxySpec) error {
 			NetworkMode:   container.NetworkMode(s.Network),
 			RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyUnlessStopped},
 			LogConfig:     container.LogConfig{Type: "json-file", Config: map[string]string{"max-size": "1m", "max-file": "1"}},
+			// 代理只需要监听端口、连挂进来的 socket：根文件系统只读，去掉其他权限。
+			ReadonlyRootfs: true,
+			CapDrop:        []string{"ALL"},
+			CapAdd:         []string{"NET_BIND_SERVICE"},
+			SecurityOpt:    []string{"no-new-privileges"},
 		},
 		NetworkingConfig: &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{
 			s.Network: {Aliases: []string{s.Alias}},
