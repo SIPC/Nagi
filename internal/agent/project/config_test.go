@@ -237,3 +237,19 @@ volumes:
 		t.Fatalf("host network services: %v", got)
 	}
 }
+
+// 表单里的命令原样交给容器里的 shell，$ 不能被 compose 当成变量替换掉。
+func TestFormCommandKeepsDollar(t *testing.T) {
+	cfg := &nagiv1.ContainerConfig{Form: &nagiv1.ImageForm{Image: "alpine", Command: `sh -c 'echo $HOME ${USER}'`, HealthCommand: "test -n $HOME"}}
+	cp, err := loadContainer(context.Background(), cfg, "app", nil, t.TempDir(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := cp.Services["app"]
+	if got := strings.Join(svc.Command, " "); !strings.Contains(got, "echo $HOME ${USER}") {
+		t.Fatalf("command = %q", got)
+	}
+	if got := strings.Join(svc.HealthCheck.Test, " "); !strings.Contains(got, "test -n $HOME") {
+		t.Fatalf("healthcheck = %q", got)
+	}
+}

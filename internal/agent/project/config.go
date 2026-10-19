@@ -48,6 +48,10 @@ func serviceEnv(cfg *nagiv1.ContainerConfig, container string) map[string][]*nag
 
 // formCompose 把镜像表单转换成 compose。环境变量不写进 compose，而是放在服务级环境变量文件里，
 // 这样导出的 compose 里不会带着密钥。
+// escapeDollar 把命令里的 $ 写成 $$：表单里填的命令是给容器里的 shell 执行的（例如 echo $HOME），
+// 不转义的话 compose 会先把 $HOME 当成自己的变量替换掉（通常变成空的）。
+func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$") }
+
 func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	image := strings.TrimSpace(f.GetImage())
 	if image == "" {
@@ -55,7 +59,7 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	}
 	svc := map[string]any{"image": image}
 	if cmd := strings.TrimSpace(f.GetCommand()); cmd != "" {
-		svc["command"] = cmd
+		svc["command"] = escapeDollar(cmd)
 	}
 	var ports []string
 	for _, p := range f.GetPorts() {
@@ -112,7 +116,7 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 			interval = 30
 		}
 		svc["healthcheck"] = map[string]any{
-			"test":         []string{"CMD-SHELL", hc},
+			"test":         []string{"CMD-SHELL", escapeDollar(hc)},
 			"interval":     fmt.Sprintf("%ds", interval),
 			"timeout":      fmt.Sprintf("%ds", min(interval, 10)),
 			"retries":      3,

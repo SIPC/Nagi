@@ -381,20 +381,21 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
           )}
         </div>
       ))}
-      <div className="flex gap-2">
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          call(async () => {
+            await nodeClient.createNodeSharedNetwork({ nodeId, name });
+            setName("");
+          });
+        }}
+      >
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="网络名，例如 db-shared" className="max-w-60 font-mono" />
-        <Button
-          size="sm"
-          onClick={() =>
-            call(async () => {
-              await nodeClient.createNodeSharedNetwork({ nodeId, name });
-              setName("");
-            })
-          }
-        >
+        <Button size="sm" type="submit">
           创建共享网络
         </Button>
-      </div>
+      </form>
     </div>
   );
 }
