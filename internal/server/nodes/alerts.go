@@ -11,6 +11,8 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -124,7 +126,40 @@ func (r *Registry) SendAlert(ctx context.Context, a *nagiv1.Alert, channelIDs []
 }
 
 // RelayAlert 替节点发送它直接发不出去的告警。
+// 每个节点在 relayWindow 内最多代发 relayLimit 条告警：节点不一定可信，不能借面板的渠道刷屏。
+const (
+	relayLimit  = 30
+	relayWindow = 10 * time.Minute
+)
+
+func (r *Registry) allowRelay(nodeID string) bool {
+	r.relayMu.Lock()
+	defer r.relayMu.Unlock()
+	if r.relayed == nil {
+		r.relayed = map[string][]time.Time{}
+	}
+	now := time.Now()
+	recent := r.relayed[nodeID][:0]
+	for _, t := range r.relayed[nodeID] {
+		if now.Sub(t) < relayWindow {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= relayLimit {
+		r.relayed[nodeID] = recent
+		return false
+	}
+	r.relayed[nodeID] = append(recent, now)
+	return true
+}
+
 func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertRequest) (*nagiv1.RelayAlertResponse, error) {
+	if p.conn.Pending() {
+		return nil, status.Error(codes.PermissionDenied, "节点还没有批准")
+	}
+	if !p.r.allowRelay(p.conn.NodeID) {
+		return nil, status.Error(codes.ResourceExhausted, "代发的告警太多，稍后再试")
+	}
 	a := req.GetAlert()
 	if node, err := p.r.q.GetNode(ctx, p.conn.NodeID); err == nil && node.Name != "" {
 		a.Node = node.Name

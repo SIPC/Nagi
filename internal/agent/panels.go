@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,7 +39,11 @@ func (s *agentService) AddPanel(ctx context.Context, req *nagiv1.AddPanelRequest
 		return nil, status.Error(codes.InvalidArgument, "需要面板地址、公钥指纹和令牌")
 	}
 	if p, ok := a.id.panel(req.GetFingerprint()); ok {
-		// 已经信任这个面板，只更新地址，不消耗令牌。
+		// 已经信任这个面板，只更新地址，不消耗令牌。只能改自己的地址：
+		// 否则一个面板可以把另一个面板的地址改成连不上的，悄悄把它锁在外面。
+		if req.GetFingerprint() != s.panel {
+			return nil, status.Error(codes.PermissionDenied, "已经信任这个面板了；面板的地址只能由它自己修改")
+		}
 		if p.Address != req.GetAddress() {
 			p.Address = req.GetAddress()
 			if err := a.id.addPanel(p); err != nil {
@@ -68,6 +73,15 @@ func (s *agentService) RemovePanel(_ context.Context, req *nagiv1.RemovePanelReq
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 	a.log.Info("已从信任列表移除面板", "panel", removed.Address, "by", s.panel)
+	if req.GetFingerprint() != s.panel && a.alerts != nil {
+		// 一个面板移除了另一个面板：被移除的面板之后就连不上这个节点了，发一条告警让管理员知道。
+		by := s.panel
+		if p, ok := a.id.panel(s.panel); ok {
+			by = p.Address
+		}
+		a.alerts.Fire(context.Background(), "panel-removed:"+req.GetFingerprint(),
+			fmt.Sprintf("面板 %s 把面板 %s 从本节点的信任列表里移除了", by, removed.Address), "", "")
+	}
 	// 移除的可能就是调用者自己：先把响应发回去，再断开连接。
 	go func() {
 		time.Sleep(time.Second)

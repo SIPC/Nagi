@@ -108,7 +108,16 @@ service NodeService {
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
   // 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
   rpc RemoveNode(RemoveNodeRequest) returns (RemoveNodeResponse);
+  // 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
+  // 所以这样加入的节点要管理员确认。
+  rpc ApproveNode(ApproveNodeRequest) returns (ApproveNodeResponse);
 }
+
+message ApproveNodeRequest {
+  string node_id = 1;
+}
+
+message ApproveNodeResponse {}
 
 message QueryNodeMetricsRequest {
   string node_id = 1;
@@ -330,6 +339,8 @@ message Node {
   // 访问这个节点上的服务用的地址：面板看到的节点来源 IP；面板自带的节点用面板的对外地址。
   // 节点在 NAT 后面时是 NAT 的出口地址，不一定能从外面访问。
   string address = 6;
+  // 用接入码加入、还没有批准的节点：不进 mesh、不下发告警配置、不能操作，在节点页批准后才可用。
+  bool pending = 7;
 }
 
 message ListNodesRequest {}

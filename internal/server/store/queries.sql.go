@@ -10,6 +10,18 @@ import (
 	"database/sql"
 )
 
+const approveNode = `-- name: ApproveNode :execrows
+UPDATE nodes SET pending = 0 WHERE id = ? AND revoked = 0
+`
+
+func (q *Queries) ApproveNode(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, approveNode, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const clearTOTPSecrets = `-- name: ClearTOTPSecrets :exec
 UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != ''
 `
@@ -85,17 +97,25 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) erro
 }
 
 const createNode = `-- name: CreateNode :exec
-INSERT INTO nodes (id, name, created_at) VALUES (?, ?, ?)
+INSERT INTO nodes (id, name, created_at, mesh_key, pending) VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateNodeParams struct {
 	ID        string
 	Name      string
 	CreatedAt int64
+	MeshKey   []byte
+	Pending   int64
 }
 
 func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) error {
-	_, err := q.db.ExecContext(ctx, createNode, arg.ID, arg.Name, arg.CreatedAt)
+	_, err := q.db.ExecContext(ctx, createNode,
+		arg.ID,
+		arg.Name,
+		arg.CreatedAt,
+		arg.MeshKey,
+		arg.Pending,
+	)
 	return err
 }
 
@@ -253,7 +273,7 @@ func (q *Queries) DeleteWebhook(ctx context.Context, tokenHash string) error {
 }
 
 const getNode = `-- name: GetNode :one
-SELECT id, name, created_at, last_seen, info, revoked FROM nodes WHERE id = ?
+SELECT id, name, created_at, last_seen, info, revoked, mesh_key, pending FROM nodes WHERE id = ?
 `
 
 func (q *Queries) GetNode(ctx context.Context, id string) (Node, error) {
@@ -266,6 +286,8 @@ func (q *Queries) GetNode(ctx context.Context, id string) (Node, error) {
 		&i.LastSeen,
 		&i.Info,
 		&i.Revoked,
+		&i.MeshKey,
+		&i.Pending,
 	)
 	return i, err
 }
@@ -442,7 +464,7 @@ func (q *Queries) ListNodeWebhooks(ctx context.Context, nodeID string) ([]Webhoo
 }
 
 const listNodes = `-- name: ListNodes :many
-SELECT id, name, created_at, last_seen, info, revoked FROM nodes WHERE revoked = 0 ORDER BY created_at
+SELECT id, name, created_at, last_seen, info, revoked, mesh_key, pending FROM nodes WHERE revoked = 0 ORDER BY created_at
 `
 
 func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
@@ -461,6 +483,8 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 			&i.LastSeen,
 			&i.Info,
 			&i.Revoked,
+			&i.MeshKey,
+			&i.Pending,
 		); err != nil {
 			return nil, err
 		}
@@ -543,6 +567,22 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const meshKeyOwner = `-- name: MeshKeyOwner :one
+SELECT id FROM nodes WHERE mesh_key = ? AND id != ? AND revoked = 0
+`
+
+type MeshKeyOwnerParams struct {
+	MeshKey []byte
+	ID      string
+}
+
+func (q *Queries) MeshKeyOwner(ctx context.Context, arg MeshKeyOwnerParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, meshKeyOwner, arg.MeshKey, arg.ID)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const revokeInvite = `-- name: RevokeInvite :execrows
 UPDATE enroll_tokens SET expires_at = 0 WHERE multi_use = 1 AND substr(token_hash, 1, 12) = ?
 `
@@ -561,6 +601,21 @@ UPDATE nodes SET revoked = 1 WHERE id = ?
 
 func (q *Queries) RevokeNode(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, revokeNode, id)
+	return err
+}
+
+const setNodeEnrollment = `-- name: SetNodeEnrollment :exec
+UPDATE nodes SET revoked = 0, mesh_key = ?, pending = ? WHERE id = ?
+`
+
+type SetNodeEnrollmentParams struct {
+	MeshKey []byte
+	Pending int64
+	ID      string
+}
+
+func (q *Queries) SetNodeEnrollment(ctx context.Context, arg SetNodeEnrollmentParams) error {
+	_, err := q.db.ExecContext(ctx, setNodeEnrollment, arg.MeshKey, arg.Pending, arg.ID)
 	return err
 }
 
@@ -590,15 +645,6 @@ type SetTOTPParams struct {
 
 func (q *Queries) SetTOTP(ctx context.Context, arg SetTOTPParams) error {
 	_, err := q.db.ExecContext(ctx, setTOTP, arg.TotpSecret, arg.ID)
-	return err
-}
-
-const unrevokeNode = `-- name: UnrevokeNode :exec
-UPDATE nodes SET revoked = 0 WHERE id = ?
-`
-
-func (q *Queries) UnrevokeNode(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, unrevokeNode, id)
 	return err
 }
 
@@ -682,9 +728,10 @@ func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) er
 	return err
 }
 
-const useEnrollToken = `-- name: UseEnrollToken :execrows
+const useEnrollToken = `-- name: UseEnrollToken :one
 UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
 WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1)
+RETURNING multi_use
 `
 
 type UseEnrollTokenParams struct {
@@ -694,11 +741,10 @@ type UseEnrollTokenParams struct {
 }
 
 func (q *Queries) UseEnrollToken(ctx context.Context, arg UseEnrollTokenParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, useEnrollToken, arg.UsedAt, arg.TokenHash, arg.ExpiresAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	row := q.db.QueryRowContext(ctx, useEnrollToken, arg.UsedAt, arg.TokenHash, arg.ExpiresAt)
+	var multi_use int64
+	err := row.Scan(&multi_use)
+	return multi_use, err
 }
 
 const useTOTPStep = `-- name: UseTOTPStep :execrows

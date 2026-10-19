@@ -73,6 +73,11 @@ export function NodesPage() {
                           {n.info?.embedded && (
                             <Badge className="ml-2">面板自带</Badge>
                           )}
+                          {n.pending && (
+                            <Badge tone="warning" className="ml-2">
+                              待批准
+                            </Badge>
+                          )}
                         </div>
                         <div className="font-mono text-xs text-muted-foreground">
                           {n.address || n.id}
@@ -101,6 +106,24 @@ export function NodesPage() {
                         {n.info?.version || "—"}
                       </td>
                       <td className="py-3 text-right">
+                        {n.pending && (
+                          <Button
+                            size="sm"
+                            title="这个节点是用接入码加入的。确认是自己的节点再批准：批准前它不进 mesh、拿不到告警配置，也不能操作"
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  `批准节点 ${n.name}（${n.address || n.id}）？它是用接入码加入的，接入码泄露的话别人也能加入。确认是自己的机器再批准。`,
+                                )
+                              )
+                                return;
+                              await nodeClient.approveNode({ nodeId: n.id });
+                              nodes.refetch();
+                            }}
+                          >
+                            批准
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

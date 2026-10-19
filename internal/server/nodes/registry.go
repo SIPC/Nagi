@@ -2,6 +2,7 @@
 package nodes
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -29,6 +30,9 @@ import (
 // ErrOffline 表示节点当前没有连上面板。
 var ErrOffline = errors.New("节点不在线")
 
+// ErrPending 表示节点是用接入码加入的，还没有批准。
+var ErrPending = errors.New("节点是用接入码加入的，还没有批准。在节点页确认是自己的节点后批准，才能操作它")
+
 // Registry 记录在线的节点。
 type Registry struct {
 	q      *store.Queries
@@ -41,6 +45,9 @@ type Registry struct {
 	mesh     *mesh.Mesh
 	meshName string
 	witness  *witness
+
+	relayMu sync.Mutex
+	relayed map[string][]time.Time // 每个节点最近代发告警的时间
 }
 
 // Conn 是一个在线节点的控制连接。
@@ -55,8 +62,19 @@ type Conn struct {
 	name   string
 	remote netip.Addr
 	mesh   *nagiv1.MeshInfo
+	// meshKey 是节点加入时提交的 WireGuard 公钥，上报的 mesh 信息必须和它一致。
+	meshKey []byte
+	// pending：用接入码加入、还没有批准的节点。
+	pending bool
 
 	domainSent bool
+}
+
+// Pending 返回节点是否在等管理员批准。
+func (c *Conn) Pending() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.pending
 }
 
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
@@ -99,7 +117,20 @@ func (r *Registry) BackupKey(ctx context.Context, nodeID, projectID string) (str
 }
 
 // Get 返回在线节点的连接。
+// 还没有批准的节点返回 ErrPending：不能对它做任何操作。
 func (r *Registry) Get(nodeID string) (*Conn, error) {
+	c, err := r.Peek(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if c.Pending() {
+		return nil, ErrPending
+	}
+	return c, nil
+}
+
+// Peek 返回节点的连接，不管是否已经批准。只用来显示节点的信息。
+func (r *Registry) Peek(nodeID string) (*Conn, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	c, ok := r.conns[nodeID]
@@ -107,6 +138,25 @@ func (r *Registry) Get(nodeID string) (*Conn, error) {
 		return nil, ErrOffline
 	}
 	return c, nil
+}
+
+// Approve 批准用接入码加入的节点：之后照常进 mesh、下发告警配置、可以操作。
+func (r *Registry) Approve(ctx context.Context, nodeID string) error {
+	n, err := r.q.ApproveNode(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errors.New("没有这个节点")
+	}
+	if c, err := r.Peek(nodeID); err == nil {
+		c.mu.Lock()
+		c.pending = false
+		c.mu.Unlock()
+		go r.pushAlertConfig(context.Background(), c, nil)
+	}
+	r.log.Info("节点已批准", "node", nodeID)
+	return nil
 }
 
 // Disconnect 断开节点的当前连接（例如节点被移除时）。
@@ -121,7 +171,7 @@ func (r *Registry) Disconnect(nodeID string) {
 
 // Online 判断节点是否在线。
 func (r *Registry) Online(nodeID string) bool {
-	_, err := r.Get(nodeID)
+	_, err := r.Peek(nodeID)
 	return err == nil
 }
 
@@ -151,7 +201,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	}
 	defer sess.Close()
 
-	c := &Conn{NodeID: nodeID, close: func() { sess.Close() }, name: node.Name}
+	c := &Conn{NodeID: nodeID, close: func() { sess.Close() }, name: node.Name, meshKey: node.MeshKey, pending: node.Pending != 0}
 	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
 		c.remote = ap.Addr().Unmap()
 	}
@@ -174,7 +224,9 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	r.conns[nodeID] = c
 	r.mu.Unlock()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
-	go r.pushAlertConfig(ctx, c, nil)
+	if !c.pending {
+		go r.pushAlertConfig(ctx, c, nil)
+	}
 
 	select {
 	case <-sess.CloseChan():
@@ -214,8 +266,15 @@ type panelService struct {
 func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*nagiv1.ReportResponse, error) {
 	p.conn.mu.Lock()
 	p.conn.report = req
-	if req.GetMesh() != nil {
-		p.conn.mesh = req.GetMesh()
+	pending := p.conn.pending
+	// mesh 信息只采用加入时登记的公钥：节点不能冒用别的节点的公钥（那样能抢走它经面板的中转、让它断网）。
+	// 还没批准的节点不进 mesh。
+	if m := req.GetMesh(); m != nil && !pending {
+		if bytes.Equal(m.GetPublicKey(), p.conn.meshKey) {
+			p.conn.mesh = m
+		} else if p.conn.mesh == nil {
+			p.r.log.Warn("节点上报的 WireGuard 公钥和加入时的不一致，不采用", "node", p.conn.NodeID)
+		}
 	}
 	pushDomain := req.GetNode().GetEmbedded() && !p.conn.domainSent
 	p.conn.domainSent = p.conn.domainSent || pushDomain
@@ -227,6 +286,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
+	if pending {
+		// 批准之前不登记它的项目备份和 webhook（webhook 令牌可能是从别的节点那里偷来的）。
+		return &nagiv1.ReportResponse{}, nil
+	}
 	// 保存项目配置备份。以节点为准，面板只是备份：节点上已经没有的项目，备份和 webhook 一并删掉。
 	now := time.Now().Unix()
 	reported := map[string]bool{}
@@ -275,6 +338,11 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 				continue
 			}
 			// 令牌跟着项目走（顶替、迁移后不变），所以按令牌登记：项目换了节点，地址照常能用。
+			// 令牌已经登记在别的节点上、而那个节点还在上报这个项目时不改：知道令牌的节点（例如备份节点）
+			// 不能把部署请求抢到自己这里。项目真的搬走以后，原节点不再上报它，下一次上报就会改过来。
+			if h, err := p.r.q.GetWebhook(ctx, hashToken(t)); err == nil && h.NodeID != p.conn.NodeID && p.r.reportsProject(h.NodeID, h.ProjectID) {
+				continue
+			}
 			if err := p.r.q.UpsertWebhook(ctx, store.UpsertWebhookParams{
 				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Container: m.GetName(),
 			}); err != nil {
@@ -293,6 +361,20 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		}
 	}
 	return &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}, nil
+}
+
+// reportsProject 判断节点是否在线并且最近一次上报里有这个项目。
+func (r *Registry) reportsProject(nodeID, projectID string) bool {
+	c, err := r.Peek(nodeID)
+	if err != nil {
+		return false
+	}
+	for _, s := range c.LastReport().GetProjects() {
+		if s.GetProject().GetId() == projectID {
+			return true
+		}
+	}
+	return false
 }
 
 // RenewCertificate 给节点续期证书。证书签名请求里的公钥必须就是这个节点的身份公钥。

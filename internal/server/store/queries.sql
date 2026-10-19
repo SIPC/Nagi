@@ -36,9 +36,10 @@ DELETE FROM sessions WHERE expires_at < ?;
 -- name: CreateEnrollToken :exec
 INSERT INTO enroll_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?);
 
--- name: UseEnrollToken :execrows
+-- name: UseEnrollToken :one
 UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
-WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1);
+WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1)
+RETURNING multi_use;
 
 -- name: CreateInvite :exec
 INSERT INTO enroll_tokens (token_hash, created_at, expires_at, multi_use) VALUES (?, ?, ?, 1);
@@ -51,7 +52,16 @@ WHERE multi_use = 1 AND expires_at > ? ORDER BY created_at DESC;
 UPDATE enroll_tokens SET expires_at = 0 WHERE multi_use = 1 AND substr(token_hash, 1, 12) = ?;
 
 -- name: CreateNode :exec
-INSERT INTO nodes (id, name, created_at) VALUES (?, ?, ?);
+INSERT INTO nodes (id, name, created_at, mesh_key, pending) VALUES (?, ?, ?, ?, ?);
+
+-- name: SetNodeEnrollment :exec
+UPDATE nodes SET revoked = 0, mesh_key = ?, pending = ? WHERE id = ?;
+
+-- name: MeshKeyOwner :one
+SELECT id FROM nodes WHERE mesh_key = ? AND id != ? AND revoked = 0;
+
+-- name: ApproveNode :execrows
+UPDATE nodes SET pending = 0 WHERE id = ? AND revoked = 0;
 
 -- name: GetNode :one
 SELECT * FROM nodes WHERE id = ?;
@@ -84,9 +94,6 @@ SELECT * FROM webhooks WHERE token_hash = ?;
 
 -- name: RevokeNode :exec
 UPDATE nodes SET revoked = 1 WHERE id = ?;
-
--- name: UnrevokeNode :exec
-UPDATE nodes SET revoked = 0 WHERE id = ?;
 
 -- name: DeleteNodeData :exec
 DELETE FROM project_backups WHERE node_id = ?;

@@ -175,11 +175,11 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 	}
 	out := &nagiv1.ListNodesResponse{}
 	for _, row := range rows {
-		n := &nagiv1.Node{Id: row.ID, Name: row.Name, Online: s.Nodes.Online(row.ID)}
+		n := &nagiv1.Node{Id: row.ID, Name: row.Name, Online: s.Nodes.Online(row.ID), Pending: row.Pending != 0}
 		if row.LastSeen > 0 {
 			n.LastSeen = timestamppb.New(time.Unix(row.LastSeen, 0))
 		}
-		if conn, err := s.Nodes.Get(row.ID); err == nil && conn.LastReport() != nil {
+		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !n.Info.GetEmbedded() {
 				n.Address = ip.String()
@@ -195,6 +195,14 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		out.Nodes = append(out.Nodes, n)
 	}
 	return connect.NewResponse(out), nil
+}
+
+// ApproveNode 批准用接入码加入的节点。
+func (s *nodeService) ApproveNode(ctx context.Context, req *connect.Request[nagiv1.ApproveNodeRequest]) (*connect.Response[nagiv1.ApproveNodeResponse], error) {
+	if err := s.Nodes.Approve(ctx, req.Msg.GetNodeId()); err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	return connect.NewResponse(&nagiv1.ApproveNodeResponse{}), nil
 }
 
 // QueryNodeMetrics 查询节点上的监控数据，监控数据存在节点本地。
@@ -267,6 +275,9 @@ func (s *projectService) agent(nodeID string) (nagiv1.AgentServiceClient, error)
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {
 		// 一个操作常常要同时用到几个节点（迁移、顶替、更换见证人），说清楚是哪一个不在线。
+		if errors.Is(err, nodes.ErrPending) {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+		}
 		if errors.Is(err, nodes.ErrOffline) {
 			if name := s.nodeName(context.Background(), nodeID); name != nodeID {
 				err = fmt.Errorf("节点 %s 不在线", name)
@@ -285,7 +296,7 @@ func (s *projectService) ListAllProjects(ctx context.Context, _ *connect.Request
 	out := &nagiv1.ListAllProjectsResponse{}
 	for _, row := range rows {
 		// 在线节点用最近一次上报；离线节点用面板上的配置备份（没有运行状态）。
-		if conn, err := s.Nodes.Get(row.ID); err == nil && conn.LastReport() != nil {
+		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			for _, p := range conn.LastReport().GetProjects() {
 				out.Projects = append(out.Projects, &nagiv1.NodeProject{NodeId: row.ID, Project: p})
 			}
@@ -672,31 +683,44 @@ func (s *nodeService) DeleteNodeSharedNetwork(ctx context.Context, req *connect.
 type enrollService struct{ *API }
 
 func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.EnrollRequest]) (*connect.Response[nagiv1.EnrollResponse], error) {
-	now := time.Now().Unix()
-	n, err := s.Q.UseEnrollToken(ctx, store.UseEnrollTokenParams{
-		UsedAt:    sql.NullInt64{Int64: now, Valid: true},
-		TokenHash: auth.HashToken(req.Msg.GetToken()),
-		ExpiresAt: now,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if n == 0 {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("加入令牌无效、已使用或已过期"))
-	}
-	if len(req.Msg.GetWireguardPublicKey()) != 32 {
+	// 先检查请求本身，全部合格再消耗令牌、改数据库：无效的请求不能用掉令牌，也不能借令牌恢复别的已移除节点。
+	meshKey := req.Msg.GetWireguardPublicKey()
+	if len(meshKey) != 32 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("WireGuard 公钥无效"))
 	}
 	csr, err := x509.ParseCertificateRequest(req.Msg.GetCsr())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("证书签名请求无效: %w", err))
 	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("证书签名请求的签名无效: %w", err))
+	}
 	// 节点 ID 由节点的身份公钥算出：同一个节点加入不同的面板，ID 都一样。
 	nodeID := nodes.NodeID(csr.RawSubjectPublicKeyInfo)
+	if owner, err := s.Q.MeshKeyOwner(ctx, store.MeshKeyOwnerParams{MeshKey: meshKey, ID: nodeID}); err == nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("这个 WireGuard 公钥已经属于节点 %s", owner))
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 
-	if n, err := s.Q.GetNode(ctx, nodeID); err == nil && n.Revoked != 0 {
-		// 已移除的节点用新令牌重新加入：恢复。
-		if err := s.Q.UnrevokeNode(ctx, nodeID); err != nil {
+	now := time.Now().Unix()
+	multiUse, err := s.Q.UseEnrollToken(ctx, store.UseEnrollTokenParams{
+		UsedAt:    sql.NullInt64{Int64: now, Valid: true},
+		TokenHash: auth.HashToken(req.Msg.GetToken()),
+		ExpiresAt: now,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("加入令牌无效、已使用或已过期"))
+	} else if err != nil {
+		return nil, err
+	}
+	// 用接入码（可以多次使用，经过别的面板转交）加入的节点要管理员批准；用安装命令加入的直接可用。
+	pending := multiUse
+	if n, err := s.Q.GetNode(ctx, nodeID); err == nil {
+		if n.Revoked == 0 && n.Pending == 0 {
+			pending = 0 // 已经批准过的节点重新加入，不用再批准
+		}
+		if err := s.Q.SetNodeEnrollment(ctx, store.SetNodeEnrollmentParams{MeshKey: meshKey, Pending: pending, ID: nodeID}); err != nil {
 			return nil, err
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
@@ -704,10 +728,10 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		if name == "" {
 			name = nodeID
 		}
-		if err := s.Q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: name, CreatedAt: now}); err != nil {
+		if err := s.Q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: name, CreatedAt: now, MeshKey: meshKey, Pending: pending}); err != nil {
 			return nil, err
 		}
-	} else if err != nil {
+	} else {
 		return nil, err
 	}
 

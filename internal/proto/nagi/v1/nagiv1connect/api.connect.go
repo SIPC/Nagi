@@ -123,6 +123,8 @@ const (
 	NodeServiceQueryNodeMetricsProcedure = "/nagi.v1.NodeService/QueryNodeMetrics"
 	// NodeServiceRemoveNodeProcedure is the fully-qualified name of the NodeService's RemoveNode RPC.
 	NodeServiceRemoveNodeProcedure = "/nagi.v1.NodeService/RemoveNode"
+	// NodeServiceApproveNodeProcedure is the fully-qualified name of the NodeService's ApproveNode RPC.
+	NodeServiceApproveNodeProcedure = "/nagi.v1.NodeService/ApproveNode"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -563,6 +565,9 @@ type NodeServiceClient interface {
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
+	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
+	// 所以这样加入的节点要管理员确认。
+	ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -720,6 +725,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RemoveNode")),
 			connect.WithClientOptions(opts...),
 		),
+		approveNode: connect.NewClient[v1.ApproveNodeRequest, v1.ApproveNodeResponse](
+			httpClient,
+			baseURL+NodeServiceApproveNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ApproveNode")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -749,6 +760,7 @@ type nodeServiceClient struct {
 	createEnrollCommand      *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics         *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode               *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
+	approveNode              *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -871,6 +883,11 @@ func (c *nodeServiceClient) RemoveNode(ctx context.Context, req *connect.Request
 	return c.removeNode.CallUnary(ctx, req)
 }
 
+// ApproveNode calls nagi.v1.NodeService.ApproveNode.
+func (c *nodeServiceClient) ApproveNode(ctx context.Context, req *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error) {
+	return c.approveNode.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -914,6 +931,9 @@ type NodeServiceHandler interface {
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
+	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
+	// 所以这样加入的节点要管理员确认。
+	ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1067,6 +1087,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RemoveNode")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceApproveNodeHandler := connect.NewUnaryHandler(
+		NodeServiceApproveNodeProcedure,
+		svc.ApproveNode,
+		connect.WithSchema(nodeServiceMethods.ByName("ApproveNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -1117,6 +1143,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceQueryNodeMetricsHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodeProcedure:
 			nodeServiceRemoveNodeHandler.ServeHTTP(w, r)
+		case NodeServiceApproveNodeProcedure:
+			nodeServiceApproveNodeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1220,6 +1248,10 @@ func (UnimplementedNodeServiceHandler) QueryNodeMetrics(context.Context, *connec
 
 func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ApproveNode is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.

@@ -403,6 +403,7 @@ const (
 	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName         = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName               = "/nagi.v1.NodeService/RemoveNode"
+	NodeService_ApproveNode_FullMethodName              = "/nagi.v1.NodeService/ApproveNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -450,6 +451,9 @@ type NodeServiceClient interface {
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error)
+	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
+	// 所以这样加入的节点要管理员确认。
+	ApproveNode(ctx context.Context, in *ApproveNodeRequest, opts ...grpc.CallOption) (*ApproveNodeResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -709,6 +713,16 @@ func (c *nodeServiceClient) RemoveNode(ctx context.Context, in *RemoveNodeReques
 	return out, nil
 }
 
+func (c *nodeServiceClient) ApproveNode(ctx context.Context, in *ApproveNodeRequest, opts ...grpc.CallOption) (*ApproveNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_ApproveNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -754,6 +768,9 @@ type NodeServiceServer interface {
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
 	RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error)
+	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
+	// 所以这样加入的节点要管理员确认。
+	ApproveNode(context.Context, *ApproveNodeRequest) (*ApproveNodeResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -835,6 +852,9 @@ func (UnimplementedNodeServiceServer) QueryNodeMetrics(context.Context, *QueryNo
 }
 func (UnimplementedNodeServiceServer) RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNode not implemented")
+}
+func (UnimplementedNodeServiceServer) ApproveNode(context.Context, *ApproveNodeRequest) (*ApproveNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveNode not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -1282,6 +1302,24 @@ func _NodeService_RemoveNode_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_ApproveNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ApproveNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ApproveNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ApproveNode(ctx, req.(*ApproveNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1380,6 +1418,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveNode",
 			Handler:    _NodeService_RemoveNode_Handler,
+		},
+		{
+			MethodName: "ApproveNode",
+			Handler:    _NodeService_ApproveNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

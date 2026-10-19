@@ -24,6 +24,8 @@ type Node struct {
 	LastSeen  int64
 	Info      []byte
 	Revoked   int64
+	MeshKey   []byte
+	Pending   int64
 }
 
 type ProjectBackup struct {
