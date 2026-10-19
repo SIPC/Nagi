@@ -24,6 +24,9 @@ import (
 // maxUploadSize 是解压后的总大小上限，防止压缩炸弹写满磁盘。
 const maxUploadSize = 10 << 30
 
+// maxUploadEntries 是压缩包里文件和目录数的上限：几百万个空文件不占多少空间，但会耗尽 inode。
+const maxUploadEntries = 200_000
+
 func (p containerPaths) uploadDir() string   { return filepath.Join(p.root, ".upload") }
 func (p containerPaths) uploadFiles() string { return filepath.Join(p.uploadDir(), "files") }
 
@@ -60,12 +63,15 @@ func (m *Manager) ReceiveUpload(ctx context.Context, id, container string, r io.
 	if err != nil {
 		return res, err
 	}
-	res.Bytes, err = io.Copy(f, r)
+	res.Bytes, err = io.Copy(f, io.LimitReader(r, maxUploadSize+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return res, fmt.Errorf("接收压缩包: %w", err)
+	}
+	if res.Bytes > maxUploadSize {
+		return res, invalid("压缩包超过 %d GiB", maxUploadSize>>30)
 	}
 	out := filepath.Join(tmp, "files")
 	if res.Files, err = extract(archive, out); err != nil {
@@ -130,7 +136,16 @@ func extract(archive, dst string) (int, error) {
 type extractor struct {
 	dst     string
 	files   int
+	entries int
 	written int64
+}
+
+func (x *extractor) count() error {
+	x.entries++
+	if x.entries > maxUploadEntries {
+		return fmt.Errorf("压缩包里的文件和目录超过 %d 个", maxUploadEntries)
+	}
+	return nil
 }
 
 // target 把压缩包里的路径变成 dst 下的路径。".." 等越界的部分在 dst 处截止。
@@ -144,6 +159,9 @@ func (x *extractor) target(name string) string {
 }
 
 func (x *extractor) file(name string, mode os.FileMode, r io.Reader) error {
+	if err := x.count(); err != nil {
+		return err
+	}
 	p := x.target(name)
 	if p == "" {
 		return nil
@@ -174,6 +192,9 @@ func (x *extractor) file(name string, mode os.FileMode, r io.Reader) error {
 }
 
 func (x *extractor) dir(name string) error {
+	if err := x.count(); err != nil {
+		return err
+	}
 	if p := x.target(name); p != "" {
 		return os.MkdirAll(p, 0o755)
 	}

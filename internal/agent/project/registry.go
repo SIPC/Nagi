@@ -44,7 +44,7 @@ func (m *Manager) Registries(ctx context.Context, id string) ([]string, error) {
 // Login 登录私有仓库（会向仓库验证账号），登录信息写进项目的 docker 配置。
 func (m *Manager) Login(ctx context.Context, id, registry, username, password string) ([]string, error) {
 	registry = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(registry), "https://"), "/")
-	if registry == "" || strings.ContainsAny(registry, " /") {
+	if registry == "" || strings.ContainsAny(registry, " /") || strings.HasPrefix(registry, "-") {
 		return nil, invalid("请填写仓库地址，例如 ghcr.io、registry.example.com:5000（Docker Hub 填 docker.io）")
 	}
 	if strings.TrimSpace(username) == "" || password == "" {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -59,8 +60,12 @@ func ensureDeployKey(p containerPaths) (string, error) {
 	return pub, nil
 }
 
+// scpURLRe 是 scp 风格的 SSH 地址：用户@主机:路径。主机里不能有 /，避免把 /srv/repo@x 这样的本地路径当成 SSH 地址
+// （go-git 会把本地路径当作本地仓库，拉取节点上的任意仓库）。
+var scpURLRe = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s]+$`)
+
 func isSSHURL(url string) bool {
-	return strings.HasPrefix(url, "ssh://") || (strings.Contains(url, "@") && !strings.Contains(url, "://"))
+	return strings.HasPrefix(url, "ssh://") || scpURLRe.MatchString(url)
 }
 
 // gitAuth 返回访问仓库用的认证：SSH 地址用容器的 deploy key，HTTPS 地址不认证（公开仓库）。
