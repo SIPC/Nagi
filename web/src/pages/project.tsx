@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Rocket, ScrollText } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, slugName, timeAgo } from "@/lib/utils";
-import { ProjectMetrics } from "@/pages/alerts";
+import { ProjectMetrics } from "@/components/metrics";
 import { BackupCard, FailoverCard, MigrateCard } from "@/pages/backup";
 import { PageHeader } from "@/pages/layout";
 import { ProjectState, ServiceState } from "@/components/status";

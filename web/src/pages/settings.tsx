@@ -2,7 +2,7 @@ import { PageHeader } from "@/pages/layout";
 import { SecurityCard } from "@/pages/security";
 import { AlertSettings } from "@/pages/alerts";
 import { PanelMeshCard } from "@/pages/mesh";
-import { InviteCard } from "@/pages/panels";
+import { InviteCard } from "@/pages/invite";
 
 // 面板自己的设置：账号安全、告警、面板的 mesh、接入码（让别的面板把节点交给本面板）。
 export function SettingsPage() {

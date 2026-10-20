@@ -6,7 +6,7 @@ import { authClient, errorMessage, nodeClient, projectClient, settingsClient } f
 import { PageHeader } from "@/pages/layout";
 import { ProjectState } from "@/components/status";
 import { useContainerForm } from "@/components/container-form";
-import { SharedNetworkWarning } from "@/pages/backup";
+import { SharedNetworkWarning } from "@/components/shared-network-warning";
 import {
   Alert,
   Badge,

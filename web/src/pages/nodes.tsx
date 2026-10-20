@@ -3,10 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
-import { NodeMetrics } from "@/pages/alerts";
+import { NodeMetrics } from "@/components/metrics";
 import { HandOverCard, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import { NodeReplicas } from "@/pages/backup";
+import { NodeReplicas } from "@/pages/replicas";
 import {
   Alert,
   Badge,

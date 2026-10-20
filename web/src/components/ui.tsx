@@ -1,22 +1,28 @@
-// 基础组件，风格参照 shadcn/ui。
+// 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
+import { useState } from "react";
 import type * as React from "react";
+import { Check as CheckIcon, CircleHelp, Copy, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// ---- 按钮与输入 ----
+
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border bg-card hover:bg-muted",
-        ghost: "hover:bg-muted",
+        default: "bg-primary text-primary-foreground hover:bg-primary/88",
+        outline: "border border-input bg-card hover:bg-accent",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
         destructive: "bg-destructive text-white hover:bg-destructive/90",
+        "destructive-outline": "border border-destructive/40 bg-card text-destructive hover:bg-destructive/8",
       },
       size: {
-        default: "h-9 px-4",
-        sm: "h-8 px-3 text-xs",
-        icon: "size-9",
+        default: "h-9 px-3.5",
+        sm: "h-8 px-3 text-[13px] [&_svg]:size-3.5",
+        xs: "h-7 px-2 text-xs [&_svg]:size-3.5",
+        icon: "size-8",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -27,98 +33,200 @@ export function Button({
   className,
   variant,
   size,
+  type = "button",
   ...props
 }: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  return <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
+const control =
+  "w-full rounded-md border border-input bg-card px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60";
+
 export function Input({ className, ...props }: React.ComponentProps<"input">) {
-  return (
-    <input
-      className={cn(
-        "h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <input className={cn(control, "h-9", className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return (
-    <textarea
-      className={cn(
-        "min-h-24 w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring",
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <textarea className={cn(control, "min-h-20 py-2 leading-relaxed", className)} {...props} />;
 }
 
 export function Select({ className, ...props }: React.ComponentProps<"select">) {
-  return (
-    <select
-      className={cn(
-        "h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <select className={cn(control, "h-9 pr-8", className)} {...props} />;
 }
 
 export function Label({ className, ...props }: React.ComponentProps<"label">) {
-  return <label className={cn("text-sm font-medium", className)} {...props} />;
+  return <label className={cn("text-[13px] font-medium", className)} {...props} />;
 }
 
+// HelpTip：字段或标题旁的问号，悬停或聚焦时显示详细说明。
+export function HelpTip({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn("group/help relative inline-flex align-middle", className)}>
+      <span tabIndex={0} className="inline-flex cursor-help text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground">
+        <CircleHelp className="size-3.5" />
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none invisible absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-72 -translate-x-1/2 rounded-md border bg-card px-2.5 py-1.5 text-xs leading-relaxed font-normal text-foreground opacity-0 shadow-lg transition-opacity group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+// Field：一个表单字段。label 下面是输入框；hint 是一行简短的格式说明；help 收进问号提示。
 export function Field({
   label,
   hint,
+  help,
   htmlFor,
+  className,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   hint?: React.ReactNode;
-  htmlFor: string;
+  help?: React.ReactNode;
+  htmlFor?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+    <div className={cn("grid content-start gap-1.5", className)}>
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={htmlFor}>{label}</Label>
+        {help && <HelpTip>{help}</HelpTip>}
+      </div>
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
+// Check：带文字的复选框。
+export function Check({
+  checked,
+  onChange,
+  disabled,
+  children,
+  help,
+  className,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  help?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <label className={cn("inline-flex cursor-pointer items-center gap-2 text-sm", disabled && "cursor-not-allowed opacity-60")}>
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        {children}
+      </label>
+      {help && <HelpTip>{help}</HelpTip>}
+    </span>
+  );
+}
+
+// ---- 区块 ----
+
+// Section：页面上的一个区块。标题一行、可选的一句描述和右侧操作；flush 时内容区不留左右内边距（放表格）。
+export function Section({
+  title,
+  description,
+  help,
+  actions,
+  flush,
+  tone,
+  className,
+  children,
+}: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  help?: React.ReactNode;
+  actions?: React.ReactNode;
+  flush?: boolean;
+  tone?: "danger";
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className={cn("rounded-lg border bg-card", tone === "danger" && "border-destructive/35", className)}>
+      {(title || actions) && (
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pt-4 pb-3">
+          <div className="min-w-0">
+            <h2 className={cn("flex items-center gap-1.5 text-sm font-semibold", tone === "danger" && "text-destructive")}>
+              {title}
+              {help && <HelpTip>{help}</HelpTip>}
+            </h2>
+            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
+          </div>
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        </header>
+      )}
+      {children !== undefined && children !== null && children !== false && (
+        <div className={cn(flush ? "pb-1" : "px-5 pb-5", !title && !actions && !flush && "pt-5")}>{children}</div>
+      )}
+    </section>
+  );
+}
+
+// 旧的卡片组件，部分页面还在用。
 export function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("rounded-lg border bg-card text-card-foreground shadow-xs", className)} {...props} />;
+  return <div className={cn("rounded-lg border bg-card text-card-foreground", className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1 p-5 pb-3", className)} {...props} />;
+  return <div className={cn("flex flex-col gap-1 px-5 pt-4 pb-3", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return <h3 className={cn("font-semibold leading-none", className)} {...props} />;
+  return <h3 className={cn("text-sm font-semibold", className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
+  return <p className={cn("text-[13px] text-muted-foreground", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("p-5 pt-0", className)} {...props} />;
+  return <div className={cn("px-5 pb-5", className)} {...props} />;
 }
 
-const badgeVariants = cva("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium", {
+// ---- 表格 ----
+
+export function Table({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div className="overflow-x-auto">
+      <table className={cn("w-full text-sm", className)} {...props} />
+    </div>
+  );
+}
+
+export function Th({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <th
+      className={cn("h-9 border-y bg-subtle px-3 text-left text-xs font-medium whitespace-nowrap text-muted-foreground first:pl-5 last:pr-5", className)}
+      {...props}
+    />
+  );
+}
+
+export function Td({ className, ...props }: React.ComponentProps<"td">) {
+  return <td className={cn("h-11 border-b px-3 py-2 align-middle first:pl-5 last:pr-5 [tr:last-child>&]:border-b-0", className)} {...props} />;
+}
+
+// ---- 状态与提示 ----
+
+const badgeVariants = cva("inline-flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-px text-[11px] leading-4 font-medium whitespace-nowrap", {
   variants: {
     tone: {
-      neutral: "bg-muted text-muted-foreground",
-      success: "border-success/30 bg-success/10 text-success",
-      warning: "border-warning/40 bg-warning/15 text-foreground",
-      danger: "border-destructive/30 bg-destructive/10 text-destructive",
+      neutral: "border-border bg-muted text-muted-foreground",
+      success: "border-success/25 bg-success/10 text-success",
+      warning: "border-warning/35 bg-warning/12 text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))]",
+      danger: "border-destructive/25 bg-destructive/10 text-destructive",
+      info: "border-info/25 bg-info/10 text-info",
     },
   },
   defaultVariants: { tone: "neutral" },
@@ -138,31 +246,206 @@ export function Badge({
   );
 }
 
-export function Alert({ className, ...props }: React.ComponentProps<"div">) {
+const dotColor = {
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-destructive",
+  info: "bg-info",
+  neutral: "bg-muted-foreground/50",
+};
+
+// Status：状态点加文字，用在表格和标题里。
+export function Status({ tone = "neutral", children, pulse }: { tone?: keyof typeof dotColor; children: React.ReactNode; pulse?: boolean }) {
   return (
-    <div
-      role="alert"
-      className={cn("rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive", className)}
-      {...props}
-    />
+    <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
+      <span className="relative flex size-2">
+        {pulse && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-60", dotColor[tone])} />}
+        <span className={cn("relative inline-flex size-2 rounded-full", dotColor[tone])} />
+      </span>
+      {children}
+    </span>
+  );
+}
+
+const noticeTone = {
+  danger: "border-destructive/30 bg-destructive/6 text-destructive",
+  warning: "border-warning/40 bg-warning/8 text-foreground",
+  info: "border-border bg-subtle text-foreground",
+  success: "border-success/30 bg-success/6 text-foreground",
+};
+
+// Notice：页面或区块里的提示条。
+export function Notice({
+  tone = "info",
+  title,
+  className,
+  children,
+  actions,
+}: {
+  tone?: keyof typeof noticeTone;
+  title?: React.ReactNode;
+  className?: string;
+  children?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div role={tone === "danger" ? "alert" : "status"} className={cn("flex flex-wrap items-start gap-x-4 gap-y-2 rounded-md border px-3.5 py-2.5 text-[13px] leading-relaxed", noticeTone[tone], className)}>
+      <div className="min-w-0 flex-1">
+        {title && <div className="font-medium">{title}</div>}
+        {children && <div className={cn(title && "mt-0.5 text-muted-foreground", tone === "danger" && "text-destructive")}>{children}</div>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+// Alert：错误提示（Notice 的简写）。
+export function Alert({ className, children }: { className?: string; children?: React.ReactNode }) {
+  return (
+    <Notice tone="danger" className={className}>
+      {children}
+    </Notice>
   );
 }
 
 export function Spinner({ className }: { className?: string }) {
+  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)} aria-label="加载中" />;
+}
+
+// Loading：整块区域加载中。
+export function Loading() {
   return (
-    <span
-      className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)}
-      aria-label="加载中"
-    />
+    <div className="flex items-center justify-center py-16 text-muted-foreground">
+      <Spinner />
+    </div>
   );
 }
 
-export function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
+// Empty：空状态。
+export function Empty({ title, children, action, icon }: { title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center">
-      <Waves className="h-6 w-16 text-wave" />
-      <p className="font-medium">{title}</p>
-      {children && <div className="text-sm text-muted-foreground">{children}</div>}
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
+      <div className="mb-1 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">{icon ?? <Inbox className="size-5" />}</div>
+      <p className="text-sm font-medium">{title}</p>
+      {children && <div className="max-w-md text-[13px] text-muted-foreground">{children}</div>}
+      {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+// EmptyRow：区块里没有内容时的一行说明。
+export function EmptyRow({ children }: { children: React.ReactNode }) {
+  return <p className="px-5 py-6 text-center text-[13px] text-muted-foreground">{children}</p>;
+}
+
+// ---- 文本 ----
+
+// KeyValue：两列的属性列表。
+export function KeyValue({ items, className }: { items: [React.ReactNode, React.ReactNode][]; className?: string }) {
+  return (
+    <dl className={cn("grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-6 gap-y-2 text-[13px]", className)}>
+      {items.map(([k, v], i) => (
+        <div key={i} className="contents">
+          <dt className="text-muted-foreground">{k}</dt>
+          <dd className="min-w-0 break-words">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// CopyButton：复制文字到剪贴板。
+export function CopyButton({ text, className }: { text: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className={cn("size-7", className)}
+      aria-label="复制"
+      title="复制"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        } catch {
+          // 非 HTTPS 等情况下浏览器不让写剪贴板，只能手动选中复制。
+        }
+      }}
+    >
+      {done ? <CheckIcon className="size-3.5" /> : <Copy className="size-3.5" />}
+    </Button>
+  );
+}
+
+// CodeBlock：一段等宽文字（命令、密钥、地址），右上角可复制。
+export function CodeBlock({ children, copy, className }: { children: string; copy?: boolean; className?: string }) {
+  return (
+    <div className={cn("relative rounded-md border bg-subtle", className)}>
+      <code className={cn("block px-3 py-2.5 font-mono text-xs leading-relaxed break-all", copy && "pr-10")}>{children}</code>
+      {copy && <CopyButton text={children} className="absolute top-1.5 right-1.5" />}
+    </div>
+  );
+}
+
+// LogBox：日志和命令输出的深色区域。
+export function LogBox({ className, ...props }: React.ComponentProps<"pre">) {
+  return <pre className={cn("overflow-auto rounded-md bg-log p-3.5 font-mono text-xs leading-relaxed text-log-foreground", className)} {...props} />;
+}
+
+// ---- 标签页 ----
+
+export function Tabs<T extends string>({
+  value,
+  onChange,
+  items,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  items: { value: T; label: React.ReactNode; count?: number }[];
+  className?: string;
+}) {
+  return (
+    <div role="tablist" className={cn("flex gap-5 overflow-x-auto border-b", className)}>
+      {items.map((it) => (
+        <button
+          key={it.value}
+          role="tab"
+          type="button"
+          aria-selected={value === it.value}
+          onClick={() => onChange(it.value)}
+          className={cn(
+            "-mb-px inline-flex h-10 cursor-pointer items-center gap-1.5 border-b-2 border-transparent text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
+            value === it.value && "border-foreground font-medium text-foreground",
+          )}
+        >
+          {it.label}
+          {it.count !== undefined && it.count > 0 && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{it.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// SegmentedControl：两三个选项之间切换（例如"容器 / 容器组"）。
+export function Segmented<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[] }) {
+  return (
+    <div className="inline-flex rounded-md border bg-muted p-0.5">
+      {items.map((it) => (
+        <button
+          key={it.value}
+          type="button"
+          onClick={() => onChange(it.value)}
+          className={cn(
+            "h-7 cursor-pointer rounded-[5px] px-3 text-[13px] text-muted-foreground transition-colors",
+            value === it.value && "bg-card font-medium text-foreground shadow-xs",
+          )}
+        >
+          {it.label}
+        </button>
+      ))}
     </div>
   );
 }

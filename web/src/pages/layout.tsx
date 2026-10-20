@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
 import { authClient } from "@/lib/api";
 import { Button, Waves } from "@/components/ui";
 
@@ -21,7 +21,7 @@ function useTheme() {
 }
 
 const navLink =
-  "rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground";
+  "relative flex h-14 items-center px-1 text-sm text-muted-foreground transition-colors hover:text-foreground data-[status=active]:text-foreground data-[status=active]:after:absolute data-[status=active]:after:inset-x-0 data-[status=active]:after:bottom-0 data-[status=active]:after:h-0.5 data-[status=active]:after:bg-foreground";
 
 export function AppLayout() {
   const { dark, toggle } = useTheme();
@@ -37,14 +37,13 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:gap-6">
-          <Link to="/projects" className="flex items-center gap-2 font-semibold">
-            <Waves className="h-4 w-9 text-wave" />
-            <span>凪</span>
-            <span className="hidden text-muted-foreground sm:inline">Nagi</span>
+      <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-8 px-6">
+          <Link to="/projects" className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+            <Waves className="h-3.5 w-8 text-wave" />
+            Nagi
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-6">
             <Link to="/projects" className={navLink}>
               项目
             </Link>
@@ -56,20 +55,40 @@ export function AppLayout() {
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-1">
-            <span className="mr-2 hidden text-sm text-muted-foreground sm:inline">{me.data?.username}</span>
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="切换深浅色">
+            {me.data?.username && <span className="mr-2 hidden text-[13px] text-muted-foreground sm:inline">{me.data.username}</span>}
+            <Button variant="ghost" size="icon" onClick={toggle} aria-label={dark ? "切换为浅色" : "切换为深色"} title={dark ? "浅色" : "深色"}>
               {dark ? <Sun /> : <Moon />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={logout} aria-label="退出登录">
+            <Button variant="ghost" size="icon" onClick={logout} aria-label="退出登录" title="退出登录">
               <LogOut />
             </Button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-6 pt-8 pb-16">
         <Outlet />
       </main>
     </div>
+  );
+}
+
+// Breadcrumb：页面顶部的上级链接。
+export function Breadcrumb({ items }: { items: { label: React.ReactNode; to?: string }[] }) {
+  return (
+    <nav className="mb-3 flex items-center gap-1 text-[13px] text-muted-foreground">
+      {items.map((it, i) => (
+        <span key={i} className="flex items-center gap-1">
+          {i > 0 && <ChevronRight className="size-3.5 opacity-60" />}
+          {it.to ? (
+            <Link to={it.to} className="hover:text-foreground">
+              {it.label}
+            </Link>
+          ) : (
+            <span className="text-foreground">{it.label}</span>
+          )}
+        </span>
+      ))}
+    </nav>
   );
 }
 
@@ -77,18 +96,21 @@ export function PageHeader({
   title,
   description,
   actions,
+  meta,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
+  meta?: React.ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description && <div className="mt-1 text-sm text-muted-foreground">{description}</div>}
+        <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold tracking-tight">{title}</h1>
+        {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
+        {meta && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">{meta}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
