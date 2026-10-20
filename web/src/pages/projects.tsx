@@ -209,7 +209,8 @@ export function useNodeChoice(networkName: string, containerName: string) {
   const [dir, setDir] = useState("");
   const selected = nodeId || onlineNodes[0]?.id || "";
   const root = onlineNodes.find((n) => n.id === selected)?.info?.projectsRoot || "/srv/nagi";
-  const defaultDir = `${root}/${networkName || "<网络名>"}/${containerName || "<容器名>"}`;
+  // 留空时用的目录：项目根目录/网络名/容器名（调用方传入已经确定的或示例的名字）。
+  const defaultDir = `${root}/${networkName}/${containerName}`;
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="节点" htmlFor="container-node" help="容器运行在这个节点上，之后可以迁移到其他节点。">
@@ -222,7 +223,7 @@ export function useNodeChoice(networkName: string, containerName: string) {
           ))}
         </Select>
       </Field>
-      <Field label="容器目录" htmlFor="container-dir" hint="留空则使用默认目录" help="容器的运行文件、数据和快照都在这个目录里。目录须不存在或为空。">
+      <Field label="容器目录" htmlFor="container-dir" help="容器的运行文件、数据和快照都在这个目录里，须不存在或为空。留空则使用默认目录：节点的项目根目录/网络名/容器名。">
         <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} className="font-mono" />
       </Field>
     </div>
@@ -237,7 +238,7 @@ export function NewProjectPage() {
   const [withContainer, setWithContainer] = useState(true);
   const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
-  const node = useNodeChoice(network || slugName(name, ""), containerName);
+  const node = useNodeChoice(network || slugName(name, "shop"), containerName || "web");
 
   const create = useMutation({
     mutationFn: () =>

@@ -783,7 +783,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContainerForm(project.containers.length === 0);
-  const node = useNodeChoice(project.networkName, name);
+  const node = useNodeChoice(project.networkName, name || "api");
 
   const add = async () => {
     setBusy(true);
