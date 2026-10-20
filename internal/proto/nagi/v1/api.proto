@@ -89,7 +89,7 @@ service NodeService {
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
-  // 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+  // 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
   rpc SetNodeProjectsRoot(SetNodeProjectsRootRequest) returns (SetProjectsRootResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);

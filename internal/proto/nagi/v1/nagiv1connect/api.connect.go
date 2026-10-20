@@ -532,7 +532,7 @@ type NodeServiceClient interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
-	// 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
@@ -790,7 +790,7 @@ type NodeServiceHandler interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
-	// 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)

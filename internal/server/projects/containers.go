@@ -59,11 +59,7 @@ func (s *Service) addContainer(ctx context.Context, req AddRequest) error {
 	}
 	dir := strings.TrimSpace(req.Dir)
 	if dir == "" {
-		root := conn.LastReport().GetNode().GetProjectsRoot()
-		if root == "" {
-			root = "/srv/nagi"
-		}
-		dir = path.Join(root, p.NetworkName, req.Name)
+		dir = s.defaultDir(ctx, conn, req.NodeID, p.ID, p.Name, req.Name)
 	}
 	if !strings.HasPrefix(dir, "/") {
 		return invalid("容器目录必须是绝对路径")

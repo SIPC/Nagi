@@ -41,11 +41,7 @@ func backupTarget(n store.Node) *nagiv1.BackupTarget {
 func (s *Service) placeDir(ctx context.Context, conn *nodes.Conn, p store.Project, c store.Container, dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
-		root := conn.LastReport().GetNode().GetProjectsRoot()
-		if root == "" {
-			root = "/srv/nagi"
-		}
-		dir = path.Join(root, p.NetworkName, c.Name)
+		dir = s.defaultDir(ctx, conn, conn.NodeID, p.ID, p.Name, c.Name)
 	}
 	if !strings.HasPrefix(dir, "/") {
 		return "", invalid("容器目录必须是绝对路径")
@@ -237,7 +233,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 		return err
 	}
 	if _, err := s.Nodes.Get(c.NodeID); err == nil {
-		return invalid("容器所在的节点在线，请用"+`"迁移"`+"把容器换到备份节点，不会丢数据")
+		return invalid("容器所在的节点在线，请用" + `"迁移"` + "把容器换到备份节点，不会丢数据")
 	}
 	target, _, err := s.targetNode(ctx, c.BackupNodeID)
 	if err != nil {

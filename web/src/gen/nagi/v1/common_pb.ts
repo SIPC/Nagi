@@ -36,8 +36,7 @@ export type Project = Message<"nagi.v1.Project"> & {
   name: string;
 
   /**
-   * 网络名：面板上唯一，小写字母、数字和 -。连接本项目的项目用"容器.网络名"访问本项目的容器；
-   * 容器目录默认按它命名。
+   * 网络名：面板上唯一，小写字母、数字和 -。连接本项目的项目用"容器.网络名"访问本项目的容器。
    *
    * @generated from field: string network_name = 3;
    */
@@ -1328,7 +1327,7 @@ export type NodeInfo = Message<"nagi.v1.NodeInfo"> & {
   embedded: boolean;
 
   /**
-   * 项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+   * 项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
    *
    * @generated from field: string projects_root = 8;
    */

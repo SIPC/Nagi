@@ -16,6 +16,7 @@ require (
 	github.com/mholt/caddy-l4 v0.1.2
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.6.2
+	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.57.0
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f

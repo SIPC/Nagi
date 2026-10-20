@@ -377,23 +377,8 @@ func (s *Service) status(p *nagiv1.Project) *nagiv1.ProjectStatus {
 
 // ---- 项目 ----
 
-// DefaultNetworkName 由项目名生成网络名：小写字母、数字和 -，不超过 32 个字符。项目名里没有能用的字符时返回空。
-func DefaultNetworkName(name string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
-			b.WriteByte('-')
-		}
-	}
-	out := strings.Trim(b.String(), "-")
-	if len(out) > 32 {
-		out = strings.Trim(out[:32], "-")
-	}
-	return out
-}
+// DefaultNetworkName 由项目名生成网络名：小写字母、数字和 -，汉字转成拼音，不超过 32 个字符。项目名里没有能用的字符时返回空。
+func DefaultNetworkName(name string) string { return spec.Slug(name) }
 
 func checkProjectName(name string) (string, error) {
 	name = strings.TrimSpace(name)

@@ -2424,7 +2424,7 @@ export const NodeService: GenService<{
     output: typeof MirrorsSchema;
   },
   /**
-   * 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+   * 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
    *
    * @generated from rpc nagi.v1.NodeService.SetNodeProjectsRoot
    */

@@ -79,8 +79,7 @@ type Project struct {
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// 显示名称，可以重名。
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// 网络名：面板上唯一，小写字母、数字和 -。连接本项目的项目用"容器.网络名"访问本项目的容器；
-	// 容器目录默认按它命名。
+	// 网络名：面板上唯一，小写字母、数字和 -。连接本项目的项目用"容器.网络名"访问本项目的容器。
 	NetworkName string `protobuf:"bytes,3,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
 	// 项目设置的修订号：修改名称、网络名、共享变量（草稿）、设置时加一，用于冲突检测。
 	// 容器有自己的修订号（Container.revision）。
@@ -2228,7 +2227,7 @@ type NodeInfo struct {
 	ComposeVersion string                 `protobuf:"bytes,6,opt,name=compose_version,json=composeVersion,proto3" json:"compose_version,omitempty"`
 	// 面板自带的节点（面板绑定域名时由它的 Caddy 反代面板）。
 	Embedded bool `protobuf:"varint,7,opt,name=embedded,proto3" json:"embedded,omitempty"`
-	// 项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+	// 项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	ProjectsRoot  string `protobuf:"bytes,8,opt,name=projects_root,json=projectsRoot,proto3" json:"projects_root,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

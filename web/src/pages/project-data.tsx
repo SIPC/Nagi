@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
@@ -6,6 +6,7 @@ import { useRun } from "@/components/run";
 import { fmtBytes } from "@/components/metrics";
 import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Notice, Section, Select, Spinner, Status, Table, Td, Th } from "@/components/ui";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
+import { useDefaultDir } from "@/pages/projects";
 
 // 「数据」标签页，按容器：快照、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -353,6 +354,7 @@ function Backup({ project, container, run }: { project: Project; container: Cont
 function RestoreFromBackup({ project, container, run }: { project: Project; container: Container; run: Run }) {
   const nodes = useNodes();
   const [dir, setDir] = useState("");
+  const [defDir, setDefDir] = useState("");
   const snapshots = useQuery({
     queryKey: ["backup-snapshots", project.id, container.name],
     queryFn: () =>
@@ -361,7 +363,6 @@ function RestoreFromBackup({ project, container, run }: { project: Project; cont
         container: container.name,
       }),
   });
-  const root = nodes.list.find((n) => n.id === container.backupNodeId)?.info?.projectsRoot || "/srv/nagi";
   const restore = (snapshotId: string) =>
     confirm(
       `在 ${nodes.name(container.backupNodeId)} 上恢复容器 ${container.name}？恢复后容器改在该节点上运行，原节点恢复上线时会停止其上的这个容器并保留目录。`,
@@ -371,20 +372,14 @@ function RestoreFromBackup({ project, container, run }: { project: Project; cont
         projectId: project.id,
         container: container.name,
         snapshotId,
-        dir: dir.trim(),
+        dir: dir.trim() || defDir,
       }),
     );
   return (
     <div className="grid gap-3 rounded-md border">
       <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
-        <Field label="恢复到目录" htmlFor="restore-dir" help="留空则使用默认目录：备份节点的项目根目录下按网络名和容器名生成。目录须不存在或为空。">
-          <Input
-            id="restore-dir"
-            value={dir}
-            onChange={(e) => setDir(e.target.value)}
-            placeholder={`${root}/${project.networkName}/${container.name}`}
-            className="min-w-80 font-mono"
-          />
+        <Field label="恢复到目录" htmlFor="restore-dir" help="默认是备份节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。">
+          <DirInput id="restore-dir" nodeId={container.backupNodeId} project={project} container={container.name} value={dir} onChange={setDir} onDefault={setDefDir} />
         </Field>
         <Button size="sm" disabled={run.busy} onClick={() => restore("")}>
           用最新的快照恢复
@@ -418,10 +413,10 @@ function Placement({ project, container, run }: { project: Project; container: C
   const nodes = useNodes();
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
+  const [defDir, setDefDir] = useState("");
   const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
   const choice =
     nodeId || (container.backupNodeId && candidates.some((n) => n.id === container.backupNodeId) ? container.backupNodeId : candidates[0]?.id) || "";
-  const root = candidates.find((n) => n.id === choice)?.info?.projectsRoot || "/srv/nagi";
   const online = nodes.online(container.nodeId);
   const target = nodes.name(choice);
 
@@ -432,7 +427,7 @@ function Placement({ project, container, run }: { project: Project; container: C
         projectId: project.id,
         container: container.name,
         nodeId: choice,
-        dir: dir.trim(),
+        dir: dir.trim() || defDir,
       }),
     );
   const redeploy = () =>
@@ -442,7 +437,7 @@ function Placement({ project, container, run }: { project: Project; container: C
         projectId: project.id,
         container: container.name,
         nodeId: choice,
-        dir: dir.trim(),
+        dir: dir.trim() || defDir,
       }),
     );
 
@@ -479,14 +474,8 @@ function Placement({ project, container, run }: { project: Project; container: C
                 ))}
               </Select>
             </Field>
-            <Field label="容器目录" htmlFor="move-dir" help="留空则使用默认目录：目标节点的项目根目录下按网络名和容器名生成。目录须不存在或为空。">
-              <Input
-                id="move-dir"
-                value={dir}
-                onChange={(e) => setDir(e.target.value)}
-                placeholder={`${root}/${project.networkName}/${container.name}`}
-                className="min-w-80 font-mono"
-              />
+            <Field label="容器目录" htmlFor="move-dir" help="默认是目标节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。">
+              <DirInput id="move-dir" nodeId={choice} project={project} container={container.name} value={dir} onChange={setDir} onDefault={setDefDir} />
             </Field>
             {online ? (
               <Button size="sm" disabled={run.busy || !choice} onClick={migrate}>
@@ -519,6 +508,7 @@ function Failover({ project, container }: { project: Project; container: Contain
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ standby: "", dir: "", witness: "", lease: "", autoStateful: false, autoFailback: true });
+  const [defDir, setDefDir] = useState("");
   const [witness, setWitness] = useState("-");
   const cfg = container.failover;
   const holder = container.failoverHolder;
@@ -544,7 +534,6 @@ function Failover({ project, container }: { project: Project; container: Contain
     const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
     const standbyId = form.standby || standbys[0]?.id || "";
     const witnesses = nodes.usable.filter((n) => n.id !== container.nodeId && n.id !== standbyId);
-    const root = standbys.find((n) => n.id === standbyId)?.info?.projectsRoot || "/srv/nagi";
     return (
       <Section
         title="顶替"
@@ -567,14 +556,8 @@ function Failover({ project, container }: { project: Project; container: Contain
                   ))}
                 </Select>
               </Field>
-              <Field label="顶替节点上的目录" htmlFor="fo-dir" help="留空则使用默认目录：顶替节点的项目根目录下按网络名和容器名生成。目录须不存在或为空。">
-                <Input
-                  id="fo-dir"
-                  value={form.dir}
-                  onChange={(e) => setForm({ ...form, dir: e.target.value })}
-                  placeholder={`${root}/${project.networkName}/${container.name}`}
-                  className="min-w-80 font-mono"
-                />
+              <Field label="顶替节点上的目录" htmlFor="fo-dir" help="默认是顶替节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。">
+                <DirInput id="fo-dir" nodeId={standbyId} project={project} container={container.name} value={form.dir} onChange={(v) => setForm({ ...form, dir: v })} onDefault={setDefDir} />
               </Field>
             </div>
             <div className="flex flex-wrap items-end gap-3">
@@ -627,7 +610,7 @@ function Failover({ project, container }: { project: Project; container: Contain
                     projectClient.setFailover({
                       ...ref,
                       standbyNodeId: standbyId,
-                      standbyDir: form.dir.trim(),
+                      standbyDir: form.dir.trim() || defDir,
                       witnessNodeId: form.witness,
                       leaseSeconds: Number(form.lease || 0),
                       autoStateful: form.autoStateful,
@@ -765,3 +748,28 @@ function Failover({ project, container }: { project: Project; container: Contain
     </Section>
   );
 }
+
+// DirInput：目标节点上的容器目录。占位文字是默认目录（项目根目录/项目名拼音/容器名），onDefault 告诉调用方，
+// 不填时提交这个默认目录。
+function DirInput({
+  id,
+  nodeId,
+  project,
+  container,
+  value,
+  onChange,
+  onDefault,
+}: {
+  id: string;
+  nodeId: string;
+  project: Project;
+  container: string;
+  value: string;
+  onChange: (v: string) => void;
+  onDefault: (v: string) => void;
+}) {
+  const def = useDefaultDir(nodeId, project.id, project.name, container);
+  useEffect(() => onDefault(def), [def, onDefault]);
+  return <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={def} className="min-w-80 font-mono" />;
+}
+

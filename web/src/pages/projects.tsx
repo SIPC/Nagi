@@ -202,15 +202,39 @@ export function ProjectsPage() {
 }
 
 // useNodeChoice：选择容器运行的节点和容器目录（留空时显示默认值）。新建项目和添加容器共用。
-export function useNodeChoice(networkName: string, containerName: string) {
+// useDefaultDir 返回容器在节点上的默认目录：<节点的项目根目录>/<项目名的拼音>/<容器名>（见 docs/agent.md#容器目录）。
+//   - 项目在这个节点上已经有容器时，沿用它们所在的项目文件夹；
+//   - 项目文件夹被别的项目用了（例如两个项目重名），在后面加 -2、-3……
+// 留空提交时就用这个路径（界面上看到的就是实际用的）。
+export function useDefaultDir(nodeId: string, projectId: string, projectName: string, container: string) {
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  const root = nodes.data?.nodes.find((n) => n.id === nodeId)?.info?.projectsRoot || "/srv/nagi";
+  const others: { projectId: string; dir: string }[] = [];
+  for (const sum of projects.data?.projects ?? []) {
+    for (const c of sum.project?.containers ?? []) {
+      if (c.nodeId === nodeId) others.push({ projectId: sum.project!.id, dir: c.dir });
+    }
+  }
+  const parentOf = (d: string) => d.slice(0, d.lastIndexOf("/"));
+  const mine = others.find((o) => o.projectId === projectId && parentOf(parentOf(o.dir)) === root);
+  if (projectId && mine) return `${parentOf(mine.dir)}/${container}`;
+  const base = slugName(projectName, "project");
+  const taken = (folder: string) => others.some((o) => o.projectId !== projectId && (o.dir === folder || o.dir.startsWith(folder + "/")));
+  let folder = `${root}/${base}`;
+  for (let i = 2; taken(folder); i++) folder = `${root}/${base}-${i}`;
+  return `${folder}/${container}`;
+}
+
+// useNodeChoice：选择容器运行的节点和容器目录。目录的占位文字是默认目录，随节点、项目名、容器名实时变化；
+// 不填时提交的就是这个默认目录。新建项目和添加容器共用。
+export function useNodeChoice(args: { projectId?: string; projectName: string; container: string }) {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const onlineNodes = nodes.data?.nodes.filter((n) => n.online && !n.pending) ?? [];
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
   const selected = nodeId || onlineNodes[0]?.id || "";
-  const root = onlineNodes.find((n) => n.id === selected)?.info?.projectsRoot || "/srv/nagi";
-  // 留空时用的目录：项目根目录/网络名/容器名（调用方传入已经确定的或示例的名字）。
-  const defaultDir = `${root}/${networkName}/${containerName}`;
+  const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="节点" htmlFor="container-node" help="容器运行在这个节点上，之后可以迁移到其他节点。">
@@ -223,12 +247,16 @@ export function useNodeChoice(networkName: string, containerName: string) {
           ))}
         </Select>
       </Field>
-      <Field label="容器目录" htmlFor="container-dir" help="容器的运行文件、数据和快照都在这个目录里，须不存在或为空。留空则使用默认目录：节点的项目根目录/网络名/容器名。">
+      <Field
+        label="容器目录"
+        htmlFor="container-dir"
+        help="容器的运行文件、数据和快照都在这个目录里，可以填任意绝对路径，须不存在或为空。不填则使用默认目录：节点的项目根目录下「项目名/容器名」，项目名转成拼音，重名时加 -2。"
+      >
         <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} className="font-mono" />
       </Field>
     </div>
   );
-  return { fields, nodeId: selected, dir: dir.trim() };
+  return { fields, nodeId: selected, dir: dir.trim() || defaultDir };
 }
 
 export function NewProjectPage() {
@@ -238,13 +266,13 @@ export function NewProjectPage() {
   const [withContainer, setWithContainer] = useState(true);
   const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
-  const node = useNodeChoice(network || slugName(name, "shop"), containerName || "web");
+  const node = useNodeChoice({ projectName: name || "shop", container: containerName || "web" });
 
   const create = useMutation({
     mutationFn: () =>
       projectClient.createProject({
         name,
-        networkName: network,
+        networkName: network.trim() || slugName(name, ""),
         ...(withContainer ? { containerName, container: container.build(), nodeId: node.nodeId, dir: node.dir } : {}),
       }),
     onSuccess: (p) => {
@@ -272,9 +300,15 @@ export function NewProjectPage() {
               label="网络名"
               htmlFor="network"
               hint="小写字母、数字和 -；留空则由名称生成"
-              help="在面板上唯一。连接本项目的项目通过「容器.网络名」访问本项目的容器；容器目录默认也按它命名。名称中没有英文字母或数字时须填写。"
+              help="在面板上唯一。连接本项目的项目通过「容器.网络名」访问本项目的容器。留空时由项目名生成，汉字转成拼音。"
             >
-              <Input id="network" value={network} onChange={(e) => setNetwork(e.target.value)} placeholder={slugName(name, "shop")} className="font-mono" />
+              <Input
+                id="network"
+                value={network}
+                onChange={(e) => setNetwork(e.target.value)}
+                placeholder={slugName(name, "shop")}
+                className="font-mono"
+              />
             </Field>
           </div>
         </Section>
