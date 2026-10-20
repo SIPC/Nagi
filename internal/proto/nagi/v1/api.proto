@@ -70,8 +70,9 @@ service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
   // 节点信任的面板列表。
   rpc ListNodePanels(ListNodePanelsRequest) returns (ListNodePanelsResponse);
-  // 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
-  rpc AddNodePanel(AddNodePanelRequest) returns (AddNodePanelResponse);
+  // 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
+  // 忘记这些节点和它们上面的项目。按整个项目：项目相关的节点（容器所在、顶替、备份、见证）必须都在里面。
+  rpc HandoverNodes(HandoverNodesRequest) returns (HandoverNodesResponse);
   // 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
   rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
   // 节点的 mesh 状态。
@@ -155,13 +156,21 @@ message ListNodePanelsResponse {
   repeated TrustedPanel panels = 1;
 }
 
-message AddNodePanelRequest {
-  string node_id = 1;
+message HandoverNodesRequest {
+  repeated string node_ids = 1;
   // 新面板生成的接入码。
   string invite = 2;
 }
 
-message AddNodePanelResponse {}
+message HandoverNodesResponse {
+  repeated HandoverResult results = 1;
+}
+
+message HandoverResult {
+  string node_id = 1;
+  // 为空表示成功。
+  string error = 2;
+}
 
 message RemoveNodePanelRequest {
   string node_id = 1;

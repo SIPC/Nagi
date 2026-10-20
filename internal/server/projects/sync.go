@@ -31,7 +31,7 @@ func (e offlineError) Is(target error) bool { return target == nodes.ErrOffline 
 
 func (s *Service) nodeErr(ctx context.Context, nodeID string, err error) error {
 	if errors.Is(err, nodes.ErrOffline) {
-		return offlineError{s.nodeName(ctx, nodeID)}
+		return offlineError{s.NodeName(ctx, nodeID)}
 	}
 	return err
 }
@@ -135,6 +135,10 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	have := map[string]*nagiv1.ContainerStatus{}
 	for _, cs := range req.GetContainers() {
 		have[cs.GetProjectId()+"/"+cs.GetName()] = cs
+	}
+	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
+	if !c.Pending() && s.needsRebuild(ctx, req.GetContainers()) {
+		s.rebuildFrom(ctx, c)
 	}
 	rows, err := s.Q.ListNodeContainers(ctx, c.NodeID)
 	if err != nil {

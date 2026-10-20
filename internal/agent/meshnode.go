@@ -35,6 +35,9 @@ type meshNode struct {
 	panelAddr  map[string]string             // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
 	names      map[mesh.Key]string
 	file       string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
+	// trusted 是现在信任的面板。移除的面板告诉我们的成员先留着，直到某个信任的面板给了成员列表：
+	// 移交时新面板批准本节点之前不给成员列表，这期间节点之间照常经 mesh 联系（顶替续约、项目内网）。
+	trusted []string
 }
 
 type savedPanel struct {
@@ -161,10 +164,27 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 	n.panelPeers[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
+	if n.trusted != nil {
+		n.prune()
+	}
 	n.save()
 	n.mu.Unlock()
 	n.apply()
 	return pk, true
+}
+
+// prune 删除已经不信任的面板告诉我们的成员。调用方持有 n.mu。
+func (n *meshNode) prune() bool {
+	changed := false
+	for fp := range n.panelPeers {
+		if !slices.Contains(n.trusted, fp) {
+			delete(n.panelPeers, fp)
+			delete(n.panelKeys, fp)
+			delete(n.panelAddr, fp)
+			changed = true
+		}
+	}
+	return changed
 }
 
 // retain 删除已经不信任的面板告诉我们的成员。
@@ -173,14 +193,17 @@ func (n *meshNode) retain(fingerprints []string) {
 		return
 	}
 	n.mu.Lock()
-	changed := false
-	for fp := range n.panelPeers {
-		if !slices.Contains(fingerprints, fp) {
-			delete(n.panelPeers, fp)
-			delete(n.panelKeys, fp)
-			delete(n.panelAddr, fp)
-			changed = true
+	n.trusted = slices.Clone(fingerprints)
+	// 还没有哪个信任的面板给过成员列表（例如刚移交、新面板还没批准本节点）：先留着旧的。
+	have := false
+	for _, fp := range fingerprints {
+		if _, ok := n.panelPeers[fp]; ok {
+			have = true
 		}
+	}
+	changed := false
+	if have {
+		changed = n.prune()
 	}
 	if changed {
 		n.save()

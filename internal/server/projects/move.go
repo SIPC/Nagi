@@ -250,7 +250,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if err != nil {
 		return err
 	}
-	out("在节点 " + s.nodeName(ctx, target.NodeID) + " 上恢复容器 " + name)
+	out("在节点 " + s.NodeName(ctx, target.NodeID) + " 上恢复容器 " + name)
 	stream, err := target.Agent.RestoreReplica(ctx, &nagiv1.RestoreReplicaRequest{Spec: sp, SnapshotId: snapshotID})
 	if err != nil {
 		return err
@@ -265,7 +265,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if err != nil {
 		return err
 	}
-	out("容器已在 " + s.nodeName(ctx, target.NodeID) + " 上运行。原节点回来后，它上面的这个容器会被停止，目录改名保留。")
+	out("容器已在 " + s.NodeName(ctx, target.NodeID) + " 上运行。原节点回来后，它上面的这个容器会被停止，目录改名保留。")
 	return nil
 }
 

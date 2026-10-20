@@ -40,6 +40,7 @@ const (
 	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
 	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
 	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
+	AgentService_GetCache_FullMethodName             = "/nagi.v1.AgentService/GetCache"
 	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
 	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
@@ -102,6 +103,8 @@ type AgentServiceClient interface {
 	SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
 	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
 	ConfirmTakeover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 节点上的全部缓存：容器的配置、顶替设置、代理计划。新面板（或换了主密钥的面板）据此把项目拼回来（见 docs/panel.md#项目数据）。
+	GetCache(ctx context.Context, in *GetCacheRequest, opts ...grpc.CallOption) (*NodeCache, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -414,6 +417,16 @@ func (c *agentServiceClient) ConfirmTakeover(ctx context.Context, in *ContainerR
 	return out, nil
 }
 
+func (c *agentServiceClient) GetCache(ctx context.Context, in *GetCacheRequest, opts ...grpc.CallOption) (*NodeCache, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeCache)
+	err := c.cc.Invoke(ctx, AgentService_GetCache_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetLinksResponse)
@@ -591,6 +604,8 @@ type AgentServiceServer interface {
 	SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error)
 	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
 	ConfirmTakeover(context.Context, *ContainerRef) (*FailoverStatus, error)
+	// 节点上的全部缓存：容器的配置、顶替设置、代理计划。新面板（或换了主密钥的面板）据此把项目拼回来（见 docs/panel.md#项目数据）。
+	GetCache(context.Context, *GetCacheRequest) (*NodeCache, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -689,6 +704,9 @@ func (UnimplementedAgentServiceServer) SetFailover(context.Context, *SetFailover
 }
 func (UnimplementedAgentServiceServer) ConfirmTakeover(context.Context, *ContainerRef) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfirmTakeover not implemented")
+}
+func (UnimplementedAgentServiceServer) GetCache(context.Context, *GetCacheRequest) (*NodeCache, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCache not implemented")
 }
 func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetLinks not implemented")
@@ -1068,6 +1086,24 @@ func _AgentService_ConfirmTakeover_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetCache_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetCache(ctx, req.(*GetCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LinkPlan)
 	if err := dec(in); err != nil {
@@ -1360,6 +1396,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConfirmTakeover",
 			Handler:    _AgentService_ConfirmTakeover_Handler,
+		},
+		{
+			MethodName: "GetCache",
+			Handler:    _AgentService_GetCache_Handler,
 		},
 		{
 			MethodName: "SetLinks",

@@ -60,9 +60,9 @@ const (
 	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
 	// ListNodePanels RPC.
 	NodeServiceListNodePanelsProcedure = "/nagi.v1.NodeService/ListNodePanels"
-	// NodeServiceAddNodePanelProcedure is the fully-qualified name of the NodeService's AddNodePanel
+	// NodeServiceHandoverNodesProcedure is the fully-qualified name of the NodeService's HandoverNodes
 	// RPC.
-	NodeServiceAddNodePanelProcedure = "/nagi.v1.NodeService/AddNodePanel"
+	NodeServiceHandoverNodesProcedure = "/nagi.v1.NodeService/HandoverNodes"
 	// NodeServiceRemoveNodePanelProcedure is the fully-qualified name of the NodeService's
 	// RemoveNodePanel RPC.
 	NodeServiceRemoveNodePanelProcedure = "/nagi.v1.NodeService/RemoveNodePanel"
@@ -507,8 +507,9 @@ type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
-	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
-	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
+	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
+	// 忘记这些节点和它们上面的项目。按整个项目：项目相关的节点（容器所在、顶替、备份、见证）必须都在里面。
+	HandoverNodes(context.Context, *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
 	// 节点的 mesh 状态。
@@ -557,10 +558,10 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("ListNodePanels")),
 			connect.WithClientOptions(opts...),
 		),
-		addNodePanel: connect.NewClient[v1.AddNodePanelRequest, v1.AddNodePanelResponse](
+		handoverNodes: connect.NewClient[v1.HandoverNodesRequest, v1.HandoverNodesResponse](
 			httpClient,
-			baseURL+NodeServiceAddNodePanelProcedure,
-			connect.WithSchema(nodeServiceMethods.ByName("AddNodePanel")),
+			baseURL+NodeServiceHandoverNodesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("HandoverNodes")),
 			connect.WithClientOptions(opts...),
 		),
 		removeNodePanel: connect.NewClient[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse](
@@ -642,7 +643,7 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type nodeServiceClient struct {
 	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
-	addNodePanel        *connect.Client[v1.AddNodePanelRequest, v1.AddNodePanelResponse]
+	handoverNodes       *connect.Client[v1.HandoverNodesRequest, v1.HandoverNodesResponse]
 	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
 	getNodeMesh         *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
 	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
@@ -667,9 +668,9 @@ func (c *nodeServiceClient) ListNodePanels(ctx context.Context, req *connect.Req
 	return c.listNodePanels.CallUnary(ctx, req)
 }
 
-// AddNodePanel calls nagi.v1.NodeService.AddNodePanel.
-func (c *nodeServiceClient) AddNodePanel(ctx context.Context, req *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error) {
-	return c.addNodePanel.CallUnary(ctx, req)
+// HandoverNodes calls nagi.v1.NodeService.HandoverNodes.
+func (c *nodeServiceClient) HandoverNodes(ctx context.Context, req *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error) {
+	return c.handoverNodes.CallUnary(ctx, req)
 }
 
 // RemoveNodePanel calls nagi.v1.NodeService.RemoveNodePanel.
@@ -737,8 +738,9 @@ type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
-	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
-	AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error)
+	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
+	// 忘记这些节点和它们上面的项目。按整个项目：项目相关的节点（容器所在、顶替、备份、见证）必须都在里面。
+	HandoverNodes(context.Context, *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
 	// 节点的 mesh 状态。
@@ -783,10 +785,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("ListNodePanels")),
 		connect.WithHandlerOptions(opts...),
 	)
-	nodeServiceAddNodePanelHandler := connect.NewUnaryHandler(
-		NodeServiceAddNodePanelProcedure,
-		svc.AddNodePanel,
-		connect.WithSchema(nodeServiceMethods.ByName("AddNodePanel")),
+	nodeServiceHandoverNodesHandler := connect.NewUnaryHandler(
+		NodeServiceHandoverNodesProcedure,
+		svc.HandoverNodes,
+		connect.WithSchema(nodeServiceMethods.ByName("HandoverNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	nodeServiceRemoveNodePanelHandler := connect.NewUnaryHandler(
@@ -867,8 +869,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
 		case NodeServiceListNodePanelsProcedure:
 			nodeServiceListNodePanelsHandler.ServeHTTP(w, r)
-		case NodeServiceAddNodePanelProcedure:
-			nodeServiceAddNodePanelHandler.ServeHTTP(w, r)
+		case NodeServiceHandoverNodesProcedure:
+			nodeServiceHandoverNodesHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodePanelProcedure:
 			nodeServiceRemoveNodePanelHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMeshProcedure:
@@ -910,8 +912,8 @@ func (UnimplementedNodeServiceHandler) ListNodePanels(context.Context, *connect.
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodePanels is not implemented"))
 }
 
-func (UnimplementedNodeServiceHandler) AddNodePanel(context.Context, *connect.Request[v1.AddNodePanelRequest]) (*connect.Response[v1.AddNodePanelResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AddNodePanel is not implemented"))
+func (UnimplementedNodeServiceHandler) HandoverNodes(context.Context, *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.HandoverNodes is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {

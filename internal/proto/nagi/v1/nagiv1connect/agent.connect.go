@@ -92,6 +92,8 @@ const (
 	// AgentServiceConfirmTakeoverProcedure is the fully-qualified name of the AgentService's
 	// ConfirmTakeover RPC.
 	AgentServiceConfirmTakeoverProcedure = "/nagi.v1.AgentService/ConfirmTakeover"
+	// AgentServiceGetCacheProcedure is the fully-qualified name of the AgentService's GetCache RPC.
+	AgentServiceGetCacheProcedure = "/nagi.v1.AgentService/GetCache"
 	// AgentServiceSetLinksProcedure is the fully-qualified name of the AgentService's SetLinks RPC.
 	AgentServiceSetLinksProcedure = "/nagi.v1.AgentService/SetLinks"
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
@@ -168,6 +170,8 @@ type AgentServiceClient interface {
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
 	ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 节点上的全部缓存：容器的配置、顶替设置、代理计划。新面板（或换了主密钥的面板）据此把项目拼回来（见 docs/panel.md#项目数据）。
+	GetCache(context.Context, *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
@@ -333,6 +337,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("ConfirmTakeover")),
 			connect.WithClientOptions(opts...),
 		),
+		getCache: connect.NewClient[v1.GetCacheRequest, v1.NodeCache](
+			httpClient,
+			baseURL+AgentServiceGetCacheProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetCache")),
+			connect.WithClientOptions(opts...),
+		),
 		setLinks: connect.NewClient[v1.LinkPlan, v1.SetLinksResponse](
 			httpClient,
 			baseURL+AgentServiceSetLinksProcedure,
@@ -437,6 +447,7 @@ type agentServiceClient struct {
 	migrateResume        *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	setFailover          *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
 	confirmTakeover      *connect.Client[v1.ContainerRef, v1.FailoverStatus]
+	getCache             *connect.Client[v1.GetCacheRequest, v1.NodeCache]
 	setLinks             *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
 	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
 	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
@@ -557,6 +568,11 @@ func (c *agentServiceClient) ConfirmTakeover(ctx context.Context, req *connect.R
 	return c.confirmTakeover.CallUnary(ctx, req)
 }
 
+// GetCache calls nagi.v1.AgentService.GetCache.
+func (c *agentServiceClient) GetCache(ctx context.Context, req *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error) {
+	return c.getCache.CallUnary(ctx, req)
+}
+
 // SetLinks calls nagi.v1.AgentService.SetLinks.
 func (c *agentServiceClient) SetLinks(ctx context.Context, req *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {
 	return c.setLinks.CallUnary(ctx, req)
@@ -664,6 +680,8 @@ type AgentServiceHandler interface {
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
 	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
 	ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.FailoverStatus], error)
+	// 节点上的全部缓存：容器的配置、顶替设置、代理计划。新面板（或换了主密钥的面板）据此把项目拼回来（见 docs/panel.md#项目数据）。
+	GetCache(context.Context, *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
@@ -825,6 +843,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("ConfirmTakeover")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceGetCacheHandler := connect.NewUnaryHandler(
+		AgentServiceGetCacheProcedure,
+		svc.GetCache,
+		connect.WithSchema(agentServiceMethods.ByName("GetCache")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetLinksHandler := connect.NewUnaryHandler(
 		AgentServiceSetLinksProcedure,
 		svc.SetLinks,
@@ -947,6 +971,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetFailoverHandler.ServeHTTP(w, r)
 		case AgentServiceConfirmTakeoverProcedure:
 			agentServiceConfirmTakeoverHandler.ServeHTTP(w, r)
+		case AgentServiceGetCacheProcedure:
+			agentServiceGetCacheHandler.ServeHTTP(w, r)
 		case AgentServiceSetLinksProcedure:
 			agentServiceSetLinksHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
@@ -1064,6 +1090,10 @@ func (UnimplementedAgentServiceHandler) SetFailover(context.Context, *connect.Re
 
 func (UnimplementedAgentServiceHandler) ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.FailoverStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ConfirmTakeover is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetCache(context.Context, *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetCache is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {

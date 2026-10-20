@@ -249,3 +249,12 @@ func toStatus(err error) error {
 	}
 	return status.Error(codes.Internal, err.Error())
 }
+
+// GetCache 返回本节点上的全部缓存，面板据此把项目拼回来。
+func (s *agentService) GetCache(ctx context.Context, _ *nagiv1.GetCacheRequest) (*nagiv1.NodeCache, error) {
+	out := &nagiv1.NodeCache{Failovers: s.node.failoverStatuses(ctx), Links: s.node.intranet.current()}
+	for _, c := range s.projects.List(ctx) {
+		out.Containers = append(out.Containers, c.Spec)
+	}
+	return out, nil
+}

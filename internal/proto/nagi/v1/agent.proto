@@ -53,6 +53,9 @@ service AgentService {
   // 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
   rpc ConfirmTakeover(ContainerRef) returns (FailoverStatus);
 
+  // 节点上的全部缓存：容器的配置、顶替设置、代理计划。新面板（或换了主密钥的面板）据此把项目拼回来（见 docs/panel.md#项目数据）。
+  rpc GetCache(GetCacheRequest) returns (NodeCache);
+
   // 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
   rpc SetLinks(LinkPlan) returns (SetLinksResponse);
 
@@ -83,6 +86,14 @@ service AgentService {
 }
 
 message SetLinksResponse {}
+
+message GetCacheRequest {}
+
+message NodeCache {
+  repeated ContainerSpec containers = 1;
+  repeated FailoverStatus failovers = 2;
+  LinkPlan links = 3;
+}
 
 message SetFailoverRequest {
   FailoverConfig config = 1;

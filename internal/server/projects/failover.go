@@ -267,8 +267,13 @@ func (s *Service) ChangeWitness(ctx context.Context, projectID, name, witnessNod
 	if witnessNodeID == cfg.GetA().GetNodeId() || witnessNodeID == cfg.GetB().GetNodeId() {
 		return nil, invalid("见证人不能是容器所在的节点或顶替节点")
 	}
-	if witnessNodeID == "" && cfg.GetWitnessIsPanel() || witnessNodeID != "" && cfg.GetWitness().GetNodeId() == witnessNodeID {
-		return nil, invalid("已经是见证人")
+	if witnessNodeID != "" && cfg.GetWitness().GetNodeId() == witnessNodeID {
+		return nil, invalid("这个节点已经是见证人")
+	}
+	if m := s.Nodes.Mesh(); witnessNodeID == "" && cfg.GetWitnessIsPanel() && m != nil {
+		if k := m.PublicKey(); string(cfg.GetWitness().GetKey()) == string(k[:]) {
+			return nil, invalid("本面板已经是见证人")
+		}
 	}
 	// 当前的持有者和轮次：A、B 上报的里轮次大的那个说了算。
 	var holder []byte
@@ -314,7 +319,9 @@ func (s *Service) ChangeWitness(ctx context.Context, projectID, name, witnessNod
 	}
 	// 清掉旧见证人。
 	if cfg.GetWitnessIsPanel() {
-		s.Nodes.ClearWitness(projectID, name)
+		if !next.GetWitnessIsPanel() {
+			s.Nodes.ClearWitness(projectID, name) // 旧见证人是另一个面板时，本面板没有这份设置，清了也没关系
+		}
 	} else if old, err := s.agent(ctx, cfg.GetWitness().GetNodeId()); err == nil {
 		_, _ = old.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: projectID, Container: name})
 	}
@@ -387,6 +394,7 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 		if !isParticipant(cur, conn.NodeID) {
 			continue
 		}
+		s.adoptWitness(c, cur)
 		l := s.lock(pid)
 		if !l.TryLock() {
 			continue
@@ -461,4 +469,40 @@ func failoverNodes(c store.Container) []string {
 		}
 	}
 	return out
+}
+
+// RelatedNodes 返回和项目有关的节点：容器所在的节点、顶替节点、作为见证人的节点、备份节点。
+func (s *Service) RelatedNodes(ctx context.Context, projectID string) (map[string]bool, error) {
+	rows, err := s.Q.ListContainers(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, c := range rows {
+		out[c.NodeID] = true
+		if c.BackupNodeID != "" {
+			out[c.BackupNodeID] = true
+		}
+		if cfg := failoverOf(c); cfg != nil {
+			for _, n := range []string{cfg.GetA().GetNodeId(), cfg.GetB().GetNodeId(), cfg.GetWitness().GetNodeId()} {
+				if n != "" {
+					out[n] = true
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// ForgetHandedOver 移交以后，本面板不再是这些项目的见证人。
+func (s *Service) ForgetHandedOver(ctx context.Context, projectID string) {
+	rows, err := s.Q.ListContainers(ctx, projectID)
+	if err != nil {
+		return
+	}
+	for _, c := range rows {
+		if cfg := failoverOf(c); cfg != nil && cfg.GetWitnessIsPanel() {
+			s.Nodes.ClearWitness(c.ProjectID, c.Name)
+		}
+	}
 }

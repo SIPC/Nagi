@@ -381,7 +381,7 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 const (
 	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
 	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
-	NodeService_AddNodePanel_FullMethodName        = "/nagi.v1.NodeService/AddNodePanel"
+	NodeService_HandoverNodes_FullMethodName       = "/nagi.v1.NodeService/HandoverNodes"
 	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
 	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
 	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
@@ -403,8 +403,9 @@ type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error)
-	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
-	AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error)
+	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
+	// 忘记这些节点和它们上面的项目。按整个项目：项目相关的节点（容器所在、顶替、备份、见证）必须都在里面。
+	HandoverNodes(ctx context.Context, in *HandoverNodesRequest, opts ...grpc.CallOption) (*HandoverNodesResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
@@ -458,10 +459,10 @@ func (c *nodeServiceClient) ListNodePanels(ctx context.Context, in *ListNodePane
 	return out, nil
 }
 
-func (c *nodeServiceClient) AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error) {
+func (c *nodeServiceClient) HandoverNodes(ctx context.Context, in *HandoverNodesRequest, opts ...grpc.CallOption) (*HandoverNodesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddNodePanelResponse)
-	err := c.cc.Invoke(ctx, NodeService_AddNodePanel_FullMethodName, in, out, cOpts...)
+	out := new(HandoverNodesResponse)
+	err := c.cc.Invoke(ctx, NodeService_HandoverNodes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -595,8 +596,9 @@ type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error)
-	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
-	AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error)
+	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
+	// 忘记这些节点和它们上面的项目。按整个项目：项目相关的节点（容器所在、顶替、备份、见证）必须都在里面。
+	HandoverNodes(context.Context, *HandoverNodesRequest) (*HandoverNodesResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
@@ -636,8 +638,8 @@ func (UnimplementedNodeServiceServer) ListNodes(context.Context, *ListNodesReque
 func (UnimplementedNodeServiceServer) ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodePanels not implemented")
 }
-func (UnimplementedNodeServiceServer) AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddNodePanel not implemented")
+func (UnimplementedNodeServiceServer) HandoverNodes(context.Context, *HandoverNodesRequest) (*HandoverNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method HandoverNodes not implemented")
 }
 func (UnimplementedNodeServiceServer) RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNodePanel not implemented")
@@ -732,20 +734,20 @@ func _NodeService_ListNodePanels_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NodeService_AddNodePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddNodePanelRequest)
+func _NodeService_HandoverNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandoverNodesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeServiceServer).AddNodePanel(ctx, in)
+		return srv.(NodeServiceServer).HandoverNodes(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: NodeService_AddNodePanel_FullMethodName,
+		FullMethod: NodeService_HandoverNodes_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).AddNodePanel(ctx, req.(*AddNodePanelRequest))
+		return srv.(NodeServiceServer).HandoverNodes(ctx, req.(*HandoverNodesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -982,8 +984,8 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_ListNodePanels_Handler,
 		},
 		{
-			MethodName: "AddNodePanel",
-			Handler:    _NodeService_AddNodePanel_Handler,
+			MethodName: "HandoverNodes",
+			Handler:    _NodeService_HandoverNodes_Handler,
 		},
 		{
 			MethodName: "RemoveNodePanel",

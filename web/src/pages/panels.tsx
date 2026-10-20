@@ -18,16 +18,12 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
   const run = async () => {
     if (!confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点和只在这些节点上的项目，新面板从节点上的缓存恢复这些项目。`)) return;
     setBusy(true);
-    const out: HandOverResult[] = [];
-    for (const id of selected) {
-      const name = nodes.find((n) => n.id === id)?.name ?? id;
-      try {
-        await nodeClient.addNodePanel({ nodeId: id, invite: code });
-        out.push({ name, ok: true, error: "" });
-      } catch (err) {
-        out.push({ name, ok: false, error: errorMessage(err) });
-      }
-      setResults([...out]);
+    const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
+    try {
+      const res = await nodeClient.handoverNodes({ nodeIds: selected, invite: code });
+      setResults(res.results.map((r) => ({ name: name(r.nodeId), ok: !r.error, error: r.error })));
+    } catch (err) {
+      setResults([{ name: "移交", ok: false, error: errorMessage(err) }]);
     }
     setBusy(false);
     setSelected([]);
@@ -38,7 +34,7 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
     <Section
       title="移交给其他面板"
       description="使用其他面板生成的接入码，将节点移交给该面板。"
-      help="接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行：项目还有容器在未选中的节点上时拒绝。离线节点无法选择。"
+      help="接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行：项目相关的节点（容器所在、顶替、备份、见证）须一并选中，否则拒绝并列出缺少的节点。离线节点无法选择。"
       actions={
         <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
           {busy && <Spinner className="size-3.5" />}

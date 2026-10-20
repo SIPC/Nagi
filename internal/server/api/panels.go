@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -16,6 +18,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -67,34 +70,44 @@ func (s *settingsService) RevokeInvite(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&nagiv1.RevokeInviteResponse{}), nil
 }
 
-// handoverProjects 返回节点上的容器所属的项目；有项目还有容器在别的节点上时返回错误。
-func (s *nodeService) handoverProjects(ctx context.Context, nodeID string) ([]string, error) {
-	rows, err := s.Q.ListNodeContainers(ctx, nodeID)
+// handoverProjects 返回移交这些节点时要一起移交的项目：和其中任何一个节点有关的项目。
+// 项目有关的节点（容器所在、顶替、备份、见证）有不在里面的，返回错误并列出缺了哪些节点。
+func (s *nodeService) handoverProjects(ctx context.Context, nodeIDs []string) ([]string, error) {
+	selected := map[string]bool{}
+	for _, id := range nodeIDs {
+		selected[id] = true
+	}
+	projects, err := s.Q.ListProjects(ctx)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, c := range rows {
-		if seen[c.ProjectID] {
-			continue
-		}
-		seen[c.ProjectID] = true
-		all, err := s.Q.ListContainers(ctx, c.ProjectID)
+	var out, problems []string
+	for _, p := range projects {
+		related, err := s.Projects.RelatedNodes(ctx, p.ID)
 		if err != nil {
 			return nil, err
 		}
-		for _, o := range all {
-			if o.NodeID != nodeID {
-				name := c.ProjectID
-				if p, err := s.Q.GetProject(ctx, c.ProjectID); err == nil {
-					name = p.Name
-				}
-				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
-					"项目 %s 还有容器在别的节点上，移交要按整个项目进行：先把它的容器迁移到同一个节点，或者把相关节点一起移交", name))
+		touched := false
+		var missing []string
+		for n := range related {
+			if selected[n] {
+				touched = true
+			} else {
+				missing = append(missing, s.Projects.NodeName(ctx, n))
 			}
 		}
-		out = append(out, c.ProjectID)
+		if !touched {
+			continue
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			problems = append(problems, fmt.Sprintf("项目 %s 还需要一起移交节点 %s", p.Name, strings.Join(missing, "、")))
+			continue
+		}
+		out = append(out, p.ID)
+	}
+	if len(problems) > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("移交按整个项目进行："+strings.Join(problems, "；")))
 	}
 	return out, nil
 }
@@ -122,7 +135,7 @@ func (s *nodeService) ListNodePanels(ctx context.Context, req *connect.Request[n
 	return connect.NewResponse(&nagiv1.ListNodePanelsResponse{Panels: resp.GetPanels()}), nil
 }
 
-func (s *nodeService) AddNodePanel(ctx context.Context, req *connect.Request[nagiv1.AddNodePanelRequest]) (*connect.Response[nagiv1.AddNodePanelResponse], error) {
+func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[nagiv1.HandoverNodesRequest]) (*connect.Response[nagiv1.HandoverNodesResponse], error) {
 	inv, err := invite.Decode(req.Msg.GetInvite())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -130,34 +143,57 @@ func (s *nodeService) AddNodePanel(ctx context.Context, req *connect.Request[nag
 	if inv.Fingerprint == s.Panel.Fingerprint {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("这是本面板自己的接入码，请到新面板上生成"))
 	}
-	nodeID := req.Msg.GetNodeId()
-	agent, err := s.agent(nodeID)
+	ids := req.Msg.GetNodeIds()
+	if len(ids) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("请选择要移交的节点"))
+	}
+	for _, id := range ids {
+		if _, err := s.agent(id); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("节点 %s 不在线", s.Projects.NodeName(ctx, id)))
+		}
+	}
+	// 移交按整个项目：项目相关的节点必须一起移交，免得项目被拆到两个面板上。
+	moving, err := s.handoverProjects(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	// 移交按整个项目：项目还有容器在别的节点上时拒绝，免得项目被拆到两个面板上。
-	moving, err := s.handoverProjects(ctx, nodeID)
-	if err != nil {
-		return nil, err
+	ctx = context.WithoutCancel(ctx)
+	out := &nagiv1.HandoverNodesResponse{}
+	failed := 0
+	for _, id := range ids {
+		res := &nagiv1.HandoverResult{NodeId: id}
+		out.Results = append(out.Results, res)
+		agent, err := s.agent(id)
+		if err == nil {
+			_, err = agent.AddPanel(ctx, &nagiv1.AddPanelRequest{Address: inv.Address, Fingerprint: inv.Fingerprint, Token: inv.Token})
+		}
+		if err == nil {
+			s.Log.Info("节点已加入另一个面板", "node", id, "panel", inv.Address)
+			if _, rerr := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); rerr != nil {
+				err = fmt.Errorf("已加入新面板，但移除本面板失败：%w", rerr)
+			}
+		}
+		if err != nil {
+			res.Error = status.Convert(err).Message()
+			failed++
+		}
 	}
-	if _, err := agent.AddPanel(ctx, &nagiv1.AddPanelRequest{
-		Address: inv.Address, Fingerprint: inv.Fingerprint, Token: inv.Token,
-	}); err != nil {
-		return nil, fromGRPC(err)
+	if failed > 0 {
+		// 有节点没移交成功：项目留在本面板上，已经移交的节点照常（新面板拿到的缓存是一样的）。
+		return connect.NewResponse(out), nil
 	}
-	s.Log.Info("节点已加入另一个面板", "node", nodeID, "panel", inv.Address)
-	if _, err := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("已加入新面板，但移除本面板失败：%w", fromGRPC(err)))
-	}
-	// 新面板从节点上缓存的配置拼回这些项目，本面板忘记它们。
+	// 新面板从节点上缓存的配置拼回这些项目，本面板忘记它们和这些节点。
 	for _, id := range moving {
+		s.Projects.ForgetHandedOver(ctx, id)
 		_ = s.Q.DeleteProject(ctx, id)
 	}
-	if err := s.forgetNode(ctx, nodeID); err != nil {
-		return nil, err
+	for _, id := range ids {
+		if err := s.forgetNode(ctx, id); err != nil {
+			return nil, err
+		}
 	}
-	s.Log.Info("节点已移交给另一个面板", "node", nodeID, "panel", inv.Address, "projects", len(moving))
-	return connect.NewResponse(&nagiv1.AddNodePanelResponse{}), nil
+	s.Log.Info("节点已移交给另一个面板", "nodes", len(ids), "panel", inv.Address, "projects", len(moving))
+	return connect.NewResponse(out), nil
 }
 
 func (s *nodeService) RemoveNodePanel(ctx context.Context, req *connect.Request[nagiv1.RemoveNodePanelRequest]) (*connect.Response[nagiv1.RemoveNodePanelResponse], error) {

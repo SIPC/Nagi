@@ -1,0 +1,311 @@
+package projects
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/spec"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/protobuf/proto"
+)
+
+// 从节点的缓存把项目拼回来（见 docs/panel.md#项目数据）：新面板接管节点、或者换了主密钥以后，节点上报了面板不知道的容器，
+// 面板向它要全部缓存（GetCache），按缓存里的配置建好项目和容器：
+//   - 项目：名称、网络名、共享变量、快照间隔、镜像仓库认证取项目修订号最大的那份；内部端口取节点代理计划里的；
+//   - 容器：所在节点和目录、当前部署的版本（配置、共享变量、镜像摘要）、端口映射、deploy key、快照仓库密码、备份节点、顶替设置；
+//   - 项目连接：两边的项目都拼回来以后，按节点代理计划里"容器.网络名"的代理连上。
+// 拼不回来的：草稿、旧版本和部署记录、webhook 令牌（重新生成，git 那边的 webhook 地址要更新）。
+
+// needsRebuild 判断节点上报的容器里有没有面板不知道的。
+func (s *Service) needsRebuild(ctx context.Context, report []*nagiv1.ContainerStatus) bool {
+	for _, cs := range report {
+		if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: cs.GetProjectId(), Name: cs.GetName()}); err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// rebuildFrom 向节点要全部缓存，把面板上没有的项目和容器拼回来。每条连接只做一次。
+func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn) {
+	s.mu.Lock()
+	if s.rebuilt == nil {
+		s.rebuilt = map[*nodes.Conn]bool{}
+	}
+	if s.rebuilt[conn] {
+		s.mu.Unlock()
+		return
+	}
+	s.rebuilt[conn] = true
+	live := map[*nodes.Conn]bool{}
+	for _, c := range s.Nodes.Conns() {
+		live[c] = true
+	}
+	for c := range s.rebuilt {
+		if !live[c] && c != conn {
+			delete(s.rebuilt, c) // 已经断开的连接
+		}
+	}
+	s.mu.Unlock()
+	s.rebuildMu.Lock()
+	defer s.rebuildMu.Unlock()
+
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	cache, err := conn.Agent.GetCache(cctx, &nagiv1.GetCacheRequest{})
+	cancel()
+	if err != nil {
+		s.Log.Warn("读取节点的配置缓存失败", "node", conn.NodeID, "err", err)
+		s.mu.Lock()
+		delete(s.rebuilt, conn) // 下次上报再试
+		s.mu.Unlock()
+		return
+	}
+	// 按项目分组，项目信息取项目修订号最大的那份。
+	byProject := map[string][]*nagiv1.ContainerSpec{}
+	for _, sp := range cache.GetContainers() {
+		if checkSpecIDs(sp) != nil {
+			continue
+		}
+		byProject[sp.GetProjectId()] = append(byProject[sp.GetProjectId()], sp)
+	}
+	internal := map[string][]string{}
+	for _, a := range cache.GetLinks().GetAllows() {
+		internal[a.GetProjectId()] = a.GetInternalPorts()
+	}
+	failovers := map[string]*nagiv1.FailoverStatus{}
+	for _, st := range cache.GetFailovers() {
+		if st.GetRole() == "holder" {
+			failovers[st.GetConfig().GetProjectId()+"/"+st.GetConfig().GetContainer()] = st
+		}
+	}
+	ids := make([]string, 0, len(byProject))
+	for id := range byProject {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	changed := false
+	for _, id := range ids {
+		specs := byProject[id]
+		sort.Slice(specs, func(i, j int) bool { return specs[i].GetName() < specs[j].GetName() })
+		created, err := s.rebuildProject(ctx, specs, internal[id])
+		if err != nil {
+			s.Log.Warn("从节点缓存拼回项目失败", "project", id, "node", conn.NodeID, "err", err)
+			continue
+		}
+		if created {
+			s.Log.Info("已从节点缓存拼回项目", "project", id, "name", specs[0].GetProjectName(), "node", conn.NodeID)
+		}
+		for _, sp := range specs {
+			if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: id, Name: sp.GetName()}); err == nil {
+				continue
+			}
+			if err := s.rebuildContainer(ctx, conn.NodeID, sp, failovers[id+"/"+sp.GetName()]); err != nil {
+				s.Log.Warn("从节点缓存拼回容器失败", "project", id, "container", sp.GetName(), "node", conn.NodeID, "err", err)
+				continue
+			}
+			changed = true
+			s.Log.Info("已从节点缓存拼回容器", "project", id, "container", sp.GetName(), "node", conn.NodeID)
+		}
+	}
+	// 项目连接：节点代理计划里为另一个项目的容器放的代理。
+	for _, px := range cache.GetLinks().GetProxies() {
+		a, b := px.GetProjectId(), px.GetTargetProject()
+		if a == b {
+			continue
+		}
+		if _, err := s.project(ctx, a); err != nil {
+			continue
+		}
+		if _, err := s.project(ctx, b); err != nil {
+			continue
+		}
+		linked, err := s.linkedMap(ctx)
+		if err != nil || containsString(linked[a], b) {
+			continue
+		}
+		x, y := linkPair(a, b)
+		if err := s.Q.InsertProjectLink(ctx, store.InsertProjectLinkParams{A: x, B: y, CreatedAt: time.Now().Unix()}); err == nil {
+			changed = true
+		}
+	}
+	if changed {
+		s.refreshLinks()
+	}
+}
+
+func containsString(list []string, x string) bool {
+	for _, v := range list {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+func checkSpecIDs(sp *nagiv1.ContainerSpec) error {
+	if len(sp.GetProjectId()) != 16 || spec.CheckContainerName(sp.GetName()) != nil || sp.GetConfig() == nil {
+		return errors.New("缓存的配置不完整")
+	}
+	return nil
+}
+
+// rebuildProject 建好项目（面板上还没有时），已有时按更新的项目修订号更新项目信息。返回是否新建。
+func (s *Service) rebuildProject(ctx context.Context, specs []*nagiv1.ContainerSpec, internalPorts []string) (bool, error) {
+	newest := specs[0]
+	for _, sp := range specs {
+		if sp.GetProjectRevision() > newest.GetProjectRevision() {
+			newest = sp
+		}
+	}
+	id := newest.GetProjectId()
+	if _, err := s.project(ctx, id); err == nil {
+		return false, nil
+	}
+	name := strings.TrimSpace(newest.GetProjectName())
+	if name == "" {
+		name = id
+	}
+	network := newest.GetNetworkName()
+	if spec.CheckNetworkName(network) != nil {
+		network = DefaultNetworkName(name)
+	}
+	// 网络名已经被别的项目用了（例如两个面板各自建过同名的项目）：加上项目 ID 的前几位。
+	if other, err := s.Q.ProjectByNetworkName(ctx, network); err == nil && other != id {
+		network = strings.TrimSuffix(network[:min(len(network), 27)], "-") + "-" + id[:4]
+	}
+	settings := &nagiv1.ProjectSettings{
+		SharedEnv: newest.GetSharedEnv(), SnapshotIntervalMinutes: newest.GetSnapshotIntervalMinutes(), InternalPorts: internalPorts,
+	}
+	sealed, err := s.seal(settings, settingsCtx(id))
+	if err != nil {
+		return false, err
+	}
+	if err := s.Q.InsertProject(ctx, store.InsertProjectParams{ID: id, Name: name, NetworkName: network, CreatedAt: time.Now().Unix(), Settings: sealed}); err != nil {
+		return false, err
+	}
+	if len(newest.GetDockerConfig()) > 0 {
+		if err := s.saveDocker(ctx, id, newest.GetDockerConfig()); err != nil {
+			s.Log.Warn("拼回项目的镜像仓库认证失败", "project", id, "err", err)
+		}
+	}
+	return true, nil
+}
+
+// rebuildContainer 按节点缓存的配置在面板上建好容器（所在节点是上报的节点）。
+func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv1.ContainerSpec, fo *nagiv1.FailoverStatus) error {
+	pid, name := sp.GetProjectId(), sp.GetName()
+	rows, err := s.Q.ListContainers(ctx, pid)
+	if err != nil {
+		return err
+	}
+	position := int64(1)
+	for _, r := range rows {
+		position = max(position, r.Position+1)
+	}
+	token, err := spec.RandomHex(32)
+	if err != nil {
+		return err
+	}
+	secretJSON, _ := json.Marshal(secrets{WebhookToken: token, DeployKey: sp.GetDeployKey(), BackupPassword: sp.GetBackupPassword()})
+	sealedSecrets, err := s.Sealer.Seal(secretJSON, []byte(secretsCtx(pid, name)))
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	if err := s.Q.InsertContainer(ctx, store.InsertContainerParams{
+		ProjectID: pid, Name: name, Position: position, NodeID: nodeID, Dir: sp.GetDir(), CreatedAt: now,
+		WebhookHash: HashToken(token), Secrets: sealedSecrets, DeployKeyPub: sp.GetDeployKeyPub(),
+	}); err != nil {
+		return err
+	}
+	fail := func(err error) error {
+		_ = s.Q.DeleteContainer(ctx, store.DeleteContainerParams{ProjectID: pid, Name: name})
+		return err
+	}
+	version := sp.GetVersion()
+	if version == 0 {
+		version = 1
+	}
+	sc, se, err := s.sealVersion(pid, name, version, sp.GetConfig(), sp.GetSharedEnv())
+	if err != nil {
+		return fail(err)
+	}
+	if err := s.Q.InsertVersion(ctx, store.InsertVersionParams{ProjectID: pid, Container: name, Version: version, Config: sc, SharedEnv: se, CreatedAt: now}); err != nil {
+		return fail(err)
+	}
+	if sp.GetVersion() > 0 {
+		images, _ := json.Marshal(sp.GetImages())
+		// 版本文件在节点的快照仓库里，回滚时节点按版本号找。
+		if err := s.Q.SetVersionDeployed(ctx, store.SetVersionDeployedParams{
+			DeployedAt: sql.NullInt64{Int64: now, Valid: true}, Images: string(images), HasFiles: 1, ProjectID: pid, Container: name, Version: version,
+		}); err != nil {
+			return fail(err)
+		}
+		if err := s.Q.SetContainerDeployed(ctx, store.SetContainerDeployedParams{DeployedVersion: version, ProjectID: pid, Name: name}); err != nil {
+			return fail(err)
+		}
+	}
+	for _, r := range sp.GetRoutes() {
+		if err := s.upsertRoute(ctx, pid, r); err != nil {
+			s.Log.Warn("拼回端口映射失败", "project", pid, "container", name, "route", r.GetName(), "err", err)
+		}
+	}
+	// compose 里现有的端口都算导入过：用户以前删掉的映射，下次部署时不会被加回来。
+	if cp, err := spec.Load(ctx, sp.GetConfig(), name, sp.GetSharedEnv(), checkData(store.Container{Dir: sp.GetDir()}), spec.ComposeProjectName(pid, name)); err == nil {
+		var keys []string
+		for _, p := range spec.ComposePorts(name, cp) {
+			keys = append(keys, p.Key)
+		}
+		raw, _ := json.Marshal(keys)
+		_ = s.Q.SetContainerImportedPorts(ctx, store.SetContainerImportedPortsParams{ImportedPorts: string(raw), ProjectID: pid, Name: name})
+	}
+	if t := sp.GetBackup(); t != nil {
+		if _, err := s.Q.GetNode(ctx, t.GetNodeId()); err == nil {
+			_ = s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: t.GetNodeId(), ProjectID: pid, Name: name})
+		}
+	}
+	if fo != nil && fo.GetConfig() != nil {
+		raw, _ := proto.Marshal(fo.GetConfig())
+		_ = s.Q.SetContainerFailover(ctx, store.SetContainerFailoverParams{Failover: raw, FailoverEpoch: int64(fo.GetEpoch()), ProjectID: pid, Name: name})
+	}
+	return nil
+}
+
+// adoptWitness 顶替设置里的见证人是别的面板（例如移交或拼回之前的旧面板）时，换成本面板。
+// 换之前 A、B 两票照常构成多数，顶替不受影响。节点每次上报时检查，同一个容器每分钟最多试一次。
+func (s *Service) adoptWitness(c store.Container, cfg *nagiv1.FailoverConfig) {
+	m := s.Nodes.Mesh()
+	if m == nil || !cfg.GetWitnessIsPanel() {
+		return
+	}
+	if self := m.PublicKey(); string(cfg.GetWitness().GetKey()) == string(self[:]) {
+		return
+	}
+	key := c.ProjectID + "/" + c.Name
+	s.mu.Lock()
+	if s.adoptTried == nil {
+		s.adoptTried = map[string]time.Time{}
+	}
+	if time.Since(s.adoptTried[key]) < time.Minute {
+		s.mu.Unlock()
+		return
+	}
+	s.adoptTried[key] = time.Now()
+	s.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if _, err := s.ChangeWitness(ctx, c.ProjectID, c.Name, ""); err != nil {
+			s.Log.Warn("把见证人换成本面板失败，稍后重试", "project", c.ProjectID, "container", c.Name, "err", err)
+			return
+		}
+		s.Log.Info("已把顶替的见证人换成本面板", "project", c.ProjectID, "container", c.Name)
+	}()
+}

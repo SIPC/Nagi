@@ -56,6 +56,11 @@ type Service struct {
 	locks map[string]*sync.Mutex
 	// 每个节点上次下发的代理计划（连接 + 摘要），连接换了或计划变了才重新下发。
 	linkSent map[string]linkSent
+	// 从节点缓存拼回项目：每条连接只做一次，同一时间只有一次。
+	rebuilt   map[*nodes.Conn]bool
+	rebuildMu sync.Mutex
+	// 上次尝试把某个容器的见证人换成本面板的时间。
+	adoptTried map[string]time.Time
 }
 
 // lock 返回项目的互斥锁：同一个项目的修改和部署串行执行。
@@ -660,7 +665,7 @@ func (s *Service) agent(ctx context.Context, nodeID string) (nagiv1.AgentService
 	return conn.Agent, nil
 }
 
-func (s *Service) nodeName(ctx context.Context, nodeID string) string {
+func (s *Service) NodeName(ctx context.Context, nodeID string) string {
 	if n, err := s.Q.GetNode(ctx, nodeID); err == nil {
 		return n.Name
 	}
