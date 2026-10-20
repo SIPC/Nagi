@@ -149,3 +149,21 @@ CREATE TABLE project_links (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (a, b)
 );
+
+-- 备用面板（见 docs/standby.md）：配对时登记，同步连接出示的客户端证书公钥必须对得上。
+CREATE TABLE standby_panels (
+    id         TEXT    PRIMARY KEY,
+    name       TEXT    NOT NULL,
+    -- 备用面板自己的对外地址（host:port），配对时提交
+    address    TEXT    NOT NULL,
+    -- 客户端证书公钥的指纹（sha256//...）
+    key_fp     TEXT    NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+);
+
+-- 配对码里的一次性令牌（哈希），1 小时内有效。
+CREATE TABLE standby_tokens (
+    token_hash TEXT    PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);

@@ -17,6 +17,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -35,6 +36,9 @@ type PanelInfo struct {
 	OnDomainChange func(domain string)
 	// NewEnrollToken 生成一次性加入令牌，返回令牌和过期时间。
 	NewEnrollToken func(ctx context.Context) (string, time.Time, error)
+	// 主备面板（见 docs/standby.md）：本面板是主面板时 Primary 不为空，是备用面板时 Standby 不为空。
+	Primary *standby.Primary
+	Standby *standby.Client
 }
 
 // PublicAddress 返回面板对外地址（不含端口）。
@@ -234,4 +238,61 @@ func masterKeyPath(dataDir string) string {
 		return abs
 	}
 	return path
+}
+
+// ---- 主备面板 ----
+
+func (s *settingsService) CreateStandbyCode(ctx context.Context, _ *connect.Request[nagiv1.CreateStandbyCodeRequest]) (*connect.Response[nagiv1.CreateStandbyCodeResponse], error) {
+	if s.Panel.Primary == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是备用面板，请在主面板上添加备用面板"))
+	}
+	addr := net.JoinHostPort(s.Panel.PublicAddress(ctx), strconv.Itoa(s.Panel.Port))
+	code, expires, err := s.Panel.Primary.NewCode(ctx, addr, s.Panel.Fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.CreateStandbyCodeResponse{Code: code, ExpiresAt: timestamppb.New(expires)}), nil
+}
+
+func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[nagiv1.GetStandbysRequest]) (*connect.Response[nagiv1.GetStandbysResponse], error) {
+	out := &nagiv1.GetStandbysResponse{}
+	if c := s.Panel.Standby; c != nil {
+		st := c.Status()
+		out.IsStandby, out.PrimaryAddress, out.Connected, out.LastError = true, c.Info.PrimaryAddress, st.Connected, st.LastError
+		if !st.LastSync.IsZero() {
+			out.LastSync = timestamppb.New(st.LastSync)
+		}
+		return connect.NewResponse(out), nil
+	}
+	rows, err := s.Q.ListStandbyPanels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		sp := &nagiv1.StandbyPanel{Id: r.ID, Name: r.Name, Address: r.Address, CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0))}
+		if s.Panel.Primary != nil {
+			st := s.Panel.Primary.StatusOf(r.ID)
+			sp.Connected = st.Connected
+			if !st.LastSync.IsZero() {
+				sp.LastSync = timestamppb.New(st.LastSync)
+			}
+		}
+		out.Standbys = append(out.Standbys, sp)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *settingsService) RemoveStandby(ctx context.Context, req *connect.Request[nagiv1.RemoveStandbyRequest]) (*connect.Response[nagiv1.RemoveStandbyResponse], error) {
+	if s.Panel.Primary == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是备用面板，请在主面板上操作"))
+	}
+	n, err := s.Q.DeleteStandbyPanel(ctx, req.Msg.GetId())
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("备用面板不存在"))
+	}
+	s.Log.Info("已移除备用面板", "standby", req.Msg.GetId())
+	return connect.NewResponse(&nagiv1.RemoveStandbyResponse{}), nil
 }

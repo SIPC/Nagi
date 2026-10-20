@@ -101,6 +101,20 @@ type Setting struct {
 	Value string
 }
 
+type StandbyPanel struct {
+	ID        string
+	Name      string
+	Address   string
+	KeyFp     string
+	CreatedAt int64
+}
+
+type StandbyToken struct {
+	TokenHash string
+	CreatedAt int64
+	ExpiresAt int64
+}
+
 type User struct {
 	ID           int64
 	Username     string

@@ -15,6 +15,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/server"
+	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +47,7 @@ func serverCmd() *cobra.Command {
 		noAgent bool
 		noProxy bool
 		newKey  bool
+		standby string
 	)
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -60,11 +62,16 @@ func serverCmd() *cobra.Command {
 				Port:         port,
 				Logger:       log.With("component", "panel"),
 				Version:      version,
-				SelfTLS:      noAgent || noProxy,
+				SelfTLS:      noAgent || noProxy || srvIsStandby(dataDir, standby),
 				NewMasterKey: newKey,
+				StandbyCode:  standby,
 			})
 			if err != nil {
 				return err
+			}
+			// 备用面板不带内嵌节点（见 docs/standby.md）。
+			if srv.IsStandby() {
+				noAgent = true
 			}
 
 			errc := make(chan error, 2)
@@ -87,7 +94,17 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "只运行面板，不启动内嵌节点")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
 	cmd.Flags().BoolVar(&newKey, "new-master-key", false, "面板主密钥确实丢了时使用：生成新的主密钥，清掉用旧密钥加密的数据")
+	cmd.Flags().StringVar(&standby, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空）")
 	return cmd
+}
+
+// srvIsStandby 判断这次启动的是不是备用面板（带了配对码，或者数据目录里已经配过对）。
+func srvIsStandby(dataDir, code string) bool {
+	if code != "" {
+		return true
+	}
+	info, _ := standby.Load(filepath.Join(dataDir, "panel"))
+	return info != nil
 }
 
 // runEmbeddedAgent 启动面板自带的节点。它和远程节点走完全相同的加入流程和控制连接。

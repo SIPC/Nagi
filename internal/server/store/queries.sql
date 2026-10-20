@@ -262,3 +262,22 @@ INSERT INTO project_links (a, b, created_at) VALUES (?, ?, ?);
 
 -- name: DeleteProjectLink :execrows
 DELETE FROM project_links WHERE a = ? AND b = ?;
+
+-- name: InsertStandbyToken :exec
+INSERT INTO standby_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?);
+
+-- name: UseStandbyToken :execrows
+DELETE FROM standby_tokens WHERE token_hash = ? AND expires_at > ?;
+
+-- name: InsertStandbyPanel :exec
+INSERT INTO standby_panels (id, name, address, key_fp, created_at) VALUES (?, ?, ?, ?, ?);
+
+-- name: ListStandbyPanels :many
+SELECT * FROM standby_panels ORDER BY created_at;
+
+-- name: GetStandbyPanel :one
+SELECT * FROM standby_panels WHERE id = ?;
+
+-- name: DeleteStandbyPanel :execrows
+DELETE FROM standby_panels WHERE id = ?;
+

@@ -343,6 +343,18 @@ func (q *Queries) DeleteSetting(ctx context.Context, key string) error {
 	return err
 }
 
+const deleteStandbyPanel = `-- name: DeleteStandbyPanel :execrows
+DELETE FROM standby_panels WHERE id = ?
+`
+
+func (q *Queries) DeleteStandbyPanel(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteStandbyPanel, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = ?
 `
@@ -496,6 +508,23 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (string, error) {
 	var value string
 	err := row.Scan(&value)
 	return value, err
+}
+
+const getStandbyPanel = `-- name: GetStandbyPanel :one
+SELECT id, name, address, key_fp, created_at FROM standby_panels WHERE id = ?
+`
+
+func (q *Queries) GetStandbyPanel(ctx context.Context, id string) (StandbyPanel, error) {
+	row := q.db.QueryRowContext(ctx, getStandbyPanel, id)
+	var i StandbyPanel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Address,
+		&i.KeyFp,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
@@ -663,6 +692,44 @@ type InsertProjectLinkParams struct {
 
 func (q *Queries) InsertProjectLink(ctx context.Context, arg InsertProjectLinkParams) error {
 	_, err := q.db.ExecContext(ctx, insertProjectLink, arg.A, arg.B, arg.CreatedAt)
+	return err
+}
+
+const insertStandbyPanel = `-- name: InsertStandbyPanel :exec
+INSERT INTO standby_panels (id, name, address, key_fp, created_at) VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertStandbyPanelParams struct {
+	ID        string
+	Name      string
+	Address   string
+	KeyFp     string
+	CreatedAt int64
+}
+
+func (q *Queries) InsertStandbyPanel(ctx context.Context, arg InsertStandbyPanelParams) error {
+	_, err := q.db.ExecContext(ctx, insertStandbyPanel,
+		arg.ID,
+		arg.Name,
+		arg.Address,
+		arg.KeyFp,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertStandbyToken = `-- name: InsertStandbyToken :exec
+INSERT INTO standby_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?)
+`
+
+type InsertStandbyTokenParams struct {
+	TokenHash string
+	CreatedAt int64
+	ExpiresAt int64
+}
+
+func (q *Queries) InsertStandbyToken(ctx context.Context, arg InsertStandbyTokenParams) error {
+	_, err := q.db.ExecContext(ctx, insertStandbyToken, arg.TokenHash, arg.CreatedAt, arg.ExpiresAt)
 	return err
 }
 
@@ -1098,6 +1165,39 @@ func (q *Queries) ListRoutes(ctx context.Context, projectID string) ([]Route, er
 			&i.Published,
 			&i.Domains,
 			&i.HttpOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStandbyPanels = `-- name: ListStandbyPanels :many
+SELECT id, name, address, key_fp, created_at FROM standby_panels ORDER BY created_at
+`
+
+func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error) {
+	rows, err := q.db.QueryContext(ctx, listStandbyPanels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StandbyPanel{}
+	for rows.Next() {
+		var i StandbyPanel
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Address,
+			&i.KeyFp,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1643,6 +1743,23 @@ func (q *Queries) UseEnrollToken(ctx context.Context, arg UseEnrollTokenParams) 
 	var multi_use int64
 	err := row.Scan(&multi_use)
 	return multi_use, err
+}
+
+const useStandbyToken = `-- name: UseStandbyToken :execrows
+DELETE FROM standby_tokens WHERE token_hash = ? AND expires_at > ?
+`
+
+type UseStandbyTokenParams struct {
+	TokenHash string
+	ExpiresAt int64
+}
+
+func (q *Queries) UseStandbyToken(ctx context.Context, arg UseStandbyTokenParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, useStandbyToken, arg.TokenHash, arg.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const useTOTPStep = `-- name: UseTOTPStep :execrows

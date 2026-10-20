@@ -28,6 +28,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/sealer"
+	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/SIPC/nagi/web"
 )
@@ -45,6 +46,8 @@ type Config struct {
 	SelfTLS bool
 	// NewMasterKey：用户确认主密钥丢了（--new-master-key）。见 checkMasterKey。
 	NewMasterKey bool
+	// StandbyCode：作为备用面板启动时主面板生成的配对码（只在第一次启动、数据目录为空时用）。
+	StandbyCode string
 }
 
 const (
@@ -71,7 +74,14 @@ type Server struct {
 	projects *projects.Service
 	sealer   *sealer.Sealer
 	domainCh chan string
+
+	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
+	primary *standby.Primary
+	standby *standby.Client
 }
+
+// IsStandby 判断本面板是不是备用面板。
+func (s *Server) IsStandby() bool { return s.standby != nil }
 
 // checkMasterKey 在主密钥文件不见了、数据库里却有用它加密的数据时拒绝启动：悄悄生成新密钥，
 // 这些数据就再也解不开了，而用户多半只是忘了把备份的密钥放回来。
@@ -123,13 +133,31 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.loadPKI(); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("准备证书: %w", err)
-	}
 	if err := s.listen(ctx); err != nil {
 		d.Close()
 		return nil, err
+	}
+	// 第一次以备用面板启动：先向主面板配对，拿到 CA 和主密钥。
+	info, err := standby.Load(cfg.DataDir)
+	if err != nil {
+		d.Close()
+		return nil, err
+	}
+	if info == nil && cfg.StandbyCode != "" {
+		host, _ := os.Hostname()
+		if err := standby.Pair(ctx, cfg.DataDir, cfg.StandbyCode, host, net.JoinHostPort(s.publicAddress, strconv.Itoa(s.port))); err != nil {
+			d.Close()
+			return nil, fmt.Errorf("与主面板配对: %w", err)
+		}
+		if info, err = standby.Load(cfg.DataDir); err != nil {
+			d.Close()
+			return nil, err
+		}
+		log.Info("已与主面板配对，本面板是备用面板", "primary", info.PrimaryAddress)
+	}
+	if err := s.loadPKI(); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("准备证书: %w", err)
 	}
 	keyPath := filepath.Join(cfg.DataDir, "pki", "master.key")
 	if err := s.checkMasterKey(ctx, keyPath); err != nil {
@@ -142,6 +170,11 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)
 	}
 	s.auth = auth.New(s.q, s.sealer)
+	if info != nil {
+		s.standby = &standby.Client{Info: info, DataDir: cfg.DataDir, DB: d, Log: log.With("component", "standby")}
+	} else {
+		s.primary = &standby.Primary{Q: s.q, DataDir: cfg.DataDir, CA: s.ca, Log: log.With("component", "standby")}
+	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log, Fingerprint: s.Fingerprint,
@@ -228,7 +261,9 @@ func (s *Server) CreateEnrollToken(ctx context.Context) (string, error) {
 // Run 提供服务，直到 ctx 取消。
 func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
-	if err := s.printSetupLink(ctx); err != nil {
+	if s.standby != nil {
+		go s.standby.Run(ctx)
+	} else if err := s.printSetupLink(ctx); err != nil {
 		return err
 	}
 	go s.auth.CleanupLoop(ctx)
@@ -250,8 +285,13 @@ func (s *Server) Run(ctx context.Context) error {
 			token, err := s.CreateEnrollToken(ctx)
 			return token, time.Now().Add(enrollTokenTTL), err
 		},
+		Primary: s.primary,
+		Standby: s.standby,
 	}}
 	a.Mount(mux)
+	if s.primary != nil {
+		mux.HandleFunc("/api/standby/pair", s.primary.HandlePair)
+	}
 	mux.Handle("/", web.Handler())
 
 	httpLn := newChanListener(s.listener.Addr())
@@ -263,8 +303,11 @@ func (s *Server) Run(ctx context.Context) error {
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
 	}
 	go s.acceptLoop(ctx, httpLn)
-	go s.nodes.RunOfflineAlerts(ctx)
-	go s.nodes.ServeMesh(ctx)
+	// 备用面板不发告警、不当 mesh 中转（节点还没连它，见 docs/standby.md）。
+	if s.standby == nil {
+		go s.nodes.RunOfflineAlerts(ctx)
+		go s.nodes.ServeMesh(ctx)
+	}
 	go s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
 	if m := s.nodes.Mesh(); m != nil {
 		defer m.Close()
@@ -334,15 +377,21 @@ func (s *Server) tlsConfig() *tls.Config {
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    s.ca.Pool(),
 	}
+	// 备用面板的同步连接：同样要出示本面板 CA 签发的客户端证书（见 docs/standby.md）。
+	standbyCfg := agent.Clone()
+	standbyCfg.NextProtos = []string{standby.ALPN}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{s.cert},
 		NextProtos:   []string{"h2", "http/1.1"},
-		// 按客户端声明的 ALPN 选择配置：只向节点索要客户端证书，浏览器不会弹出证书选择框。
+		// 按客户端声明的 ALPN 选择配置：只向节点和备用面板索要客户端证书，浏览器不会弹出证书选择框。
 		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 			for _, p := range hello.SupportedProtos {
 				if p == tunnel.ALPN {
 					return agent, nil
+				}
+				if p == standby.ALPN {
+					return standbyCfg, nil
 				}
 			}
 			return browser, nil
@@ -377,8 +426,16 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 				conn.Close()
 				return
 			}
-			if conn.ConnectionState().NegotiatedProtocol == tunnel.ALPN {
+			switch conn.ConnectionState().NegotiatedProtocol {
+			case tunnel.ALPN:
 				s.nodes.Handle(ctx, conn)
+				return
+			case standby.ALPN:
+				if s.primary != nil {
+					s.primary.Serve(ctx, conn)
+				} else {
+					conn.Close()
+				}
 				return
 			}
 			if !httpLn.put(conn) {

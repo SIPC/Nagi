@@ -128,6 +128,15 @@ const (
 	// SettingsServiceRevokeInviteProcedure is the fully-qualified name of the SettingsService's
 	// RevokeInvite RPC.
 	SettingsServiceRevokeInviteProcedure = "/nagi.v1.SettingsService/RevokeInvite"
+	// SettingsServiceCreateStandbyCodeProcedure is the fully-qualified name of the SettingsService's
+	// CreateStandbyCode RPC.
+	SettingsServiceCreateStandbyCodeProcedure = "/nagi.v1.SettingsService/CreateStandbyCode"
+	// SettingsServiceGetStandbysProcedure is the fully-qualified name of the SettingsService's
+	// GetStandbys RPC.
+	SettingsServiceGetStandbysProcedure = "/nagi.v1.SettingsService/GetStandbys"
+	// SettingsServiceRemoveStandbyProcedure is the fully-qualified name of the SettingsService's
+	// RemoveStandby RPC.
+	SettingsServiceRemoveStandbyProcedure = "/nagi.v1.SettingsService/RemoveStandby"
 	// SettingsServiceGetSecurityProcedure is the fully-qualified name of the SettingsService's
 	// GetSecurity RPC.
 	SettingsServiceGetSecurityProcedure = "/nagi.v1.SettingsService/GetSecurity"
@@ -1040,6 +1049,10 @@ type SettingsServiceClient interface {
 	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
+	// 主备面板（见 docs/standby.md）：生成配对码、列出和移除备用面板；备用面板上返回自己的同步状态。
+	CreateStandbyCode(context.Context, *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error)
+	GetStandbys(context.Context, *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error)
+	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1116,6 +1129,24 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
 			connect.WithClientOptions(opts...),
 		),
+		createStandbyCode: connect.NewClient[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse](
+			httpClient,
+			baseURL+SettingsServiceCreateStandbyCodeProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CreateStandbyCode")),
+			connect.WithClientOptions(opts...),
+		),
+		getStandbys: connect.NewClient[v1.GetStandbysRequest, v1.GetStandbysResponse](
+			httpClient,
+			baseURL+SettingsServiceGetStandbysProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetStandbys")),
+			connect.WithClientOptions(opts...),
+		),
+		removeStandby: connect.NewClient[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse](
+			httpClient,
+			baseURL+SettingsServiceRemoveStandbyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("RemoveStandby")),
+			connect.WithClientOptions(opts...),
+		),
 		getSecurity: connect.NewClient[v1.GetSecurityRequest, v1.Security](
 			httpClient,
 			baseURL+SettingsServiceGetSecurityProcedure,
@@ -1160,6 +1191,9 @@ type settingsServiceClient struct {
 	createInvite      *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
 	listInvites       *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
 	revokeInvite      *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
+	createStandbyCode *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
+	getStandbys       *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
+	removeStandby     *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
 	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
 	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
 	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
@@ -1212,6 +1246,21 @@ func (c *settingsServiceClient) RevokeInvite(ctx context.Context, req *connect.R
 	return c.revokeInvite.CallUnary(ctx, req)
 }
 
+// CreateStandbyCode calls nagi.v1.SettingsService.CreateStandbyCode.
+func (c *settingsServiceClient) CreateStandbyCode(ctx context.Context, req *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error) {
+	return c.createStandbyCode.CallUnary(ctx, req)
+}
+
+// GetStandbys calls nagi.v1.SettingsService.GetStandbys.
+func (c *settingsServiceClient) GetStandbys(ctx context.Context, req *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error) {
+	return c.getStandbys.CallUnary(ctx, req)
+}
+
+// RemoveStandby calls nagi.v1.SettingsService.RemoveStandby.
+func (c *settingsServiceClient) RemoveStandby(ctx context.Context, req *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error) {
+	return c.removeStandby.CallUnary(ctx, req)
+}
+
 // GetSecurity calls nagi.v1.SettingsService.GetSecurity.
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, req *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
 	return c.getSecurity.CallUnary(ctx, req)
@@ -1253,6 +1302,10 @@ type SettingsServiceHandler interface {
 	ListInvites(context.Context, *connect.Request[v1.ListInvitesRequest]) (*connect.Response[v1.ListInvitesResponse], error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error)
+	// 主备面板（见 docs/standby.md）：生成配对码、列出和移除备用面板；备用面板上返回自己的同步状态。
+	CreateStandbyCode(context.Context, *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error)
+	GetStandbys(context.Context, *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error)
+	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1325,6 +1378,24 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RevokeInvite")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceCreateStandbyCodeHandler := connect.NewUnaryHandler(
+		SettingsServiceCreateStandbyCodeProcedure,
+		svc.CreateStandbyCode,
+		connect.WithSchema(settingsServiceMethods.ByName("CreateStandbyCode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetStandbysHandler := connect.NewUnaryHandler(
+		SettingsServiceGetStandbysProcedure,
+		svc.GetStandbys,
+		connect.WithSchema(settingsServiceMethods.ByName("GetStandbys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceRemoveStandbyHandler := connect.NewUnaryHandler(
+		SettingsServiceRemoveStandbyProcedure,
+		svc.RemoveStandby,
+		connect.WithSchema(settingsServiceMethods.ByName("RemoveStandby")),
+		connect.WithHandlerOptions(opts...),
+	)
 	settingsServiceGetSecurityHandler := connect.NewUnaryHandler(
 		SettingsServiceGetSecurityProcedure,
 		svc.GetSecurity,
@@ -1375,6 +1446,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceListInvitesHandler.ServeHTTP(w, r)
 		case SettingsServiceRevokeInviteProcedure:
 			settingsServiceRevokeInviteHandler.ServeHTTP(w, r)
+		case SettingsServiceCreateStandbyCodeProcedure:
+			settingsServiceCreateStandbyCodeHandler.ServeHTTP(w, r)
+		case SettingsServiceGetStandbysProcedure:
+			settingsServiceGetStandbysHandler.ServeHTTP(w, r)
+		case SettingsServiceRemoveStandbyProcedure:
+			settingsServiceRemoveStandbyHandler.ServeHTTP(w, r)
 		case SettingsServiceGetSecurityProcedure:
 			settingsServiceGetSecurityHandler.ServeHTTP(w, r)
 		case SettingsServiceBeginTOTPProcedure:
@@ -1428,6 +1505,18 @@ func (UnimplementedSettingsServiceHandler) ListInvites(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) RevokeInvite(context.Context, *connect.Request[v1.RevokeInviteRequest]) (*connect.Response[v1.RevokeInviteResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeInvite is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CreateStandbyCode(context.Context, *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CreateStandbyCode is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetStandbys(context.Context, *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetStandbys is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RemoveStandby is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {

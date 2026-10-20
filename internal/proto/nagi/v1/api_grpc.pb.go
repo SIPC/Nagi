@@ -1128,6 +1128,9 @@ const (
 	SettingsService_CreateInvite_FullMethodName      = "/nagi.v1.SettingsService/CreateInvite"
 	SettingsService_ListInvites_FullMethodName       = "/nagi.v1.SettingsService/ListInvites"
 	SettingsService_RevokeInvite_FullMethodName      = "/nagi.v1.SettingsService/RevokeInvite"
+	SettingsService_CreateStandbyCode_FullMethodName = "/nagi.v1.SettingsService/CreateStandbyCode"
+	SettingsService_GetStandbys_FullMethodName       = "/nagi.v1.SettingsService/GetStandbys"
+	SettingsService_RemoveStandby_FullMethodName     = "/nagi.v1.SettingsService/RemoveStandby"
 	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
 	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
 	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
@@ -1153,6 +1156,10 @@ type SettingsServiceClient interface {
 	ListInvites(ctx context.Context, in *ListInvitesRequest, opts ...grpc.CallOption) (*ListInvitesResponse, error)
 	// 提前作废接入码。
 	RevokeInvite(ctx context.Context, in *RevokeInviteRequest, opts ...grpc.CallOption) (*RevokeInviteResponse, error)
+	// 主备面板（见 docs/standby.md）：生成配对码、列出和移除备用面板；备用面板上返回自己的同步状态。
+	CreateStandbyCode(ctx context.Context, in *CreateStandbyCodeRequest, opts ...grpc.CallOption) (*CreateStandbyCodeResponse, error)
+	GetStandbys(ctx context.Context, in *GetStandbysRequest, opts ...grpc.CallOption) (*GetStandbysResponse, error)
+	RemoveStandby(ctx context.Context, in *RemoveStandbyRequest, opts ...grpc.CallOption) (*RemoveStandbyResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1262,6 +1269,36 @@ func (c *settingsServiceClient) RevokeInvite(ctx context.Context, in *RevokeInvi
 	return out, nil
 }
 
+func (c *settingsServiceClient) CreateStandbyCode(ctx context.Context, in *CreateStandbyCodeRequest, opts ...grpc.CallOption) (*CreateStandbyCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateStandbyCodeResponse)
+	err := c.cc.Invoke(ctx, SettingsService_CreateStandbyCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetStandbys(ctx context.Context, in *GetStandbysRequest, opts ...grpc.CallOption) (*GetStandbysResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetStandbysResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetStandbys_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) RemoveStandby(ctx context.Context, in *RemoveStandbyRequest, opts ...grpc.CallOption) (*RemoveStandbyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveStandbyResponse)
+	err := c.cc.Invoke(ctx, SettingsService_RemoveStandby_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Security)
@@ -1330,6 +1367,10 @@ type SettingsServiceServer interface {
 	ListInvites(context.Context, *ListInvitesRequest) (*ListInvitesResponse, error)
 	// 提前作废接入码。
 	RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error)
+	// 主备面板（见 docs/standby.md）：生成配对码、列出和移除备用面板；备用面板上返回自己的同步状态。
+	CreateStandbyCode(context.Context, *CreateStandbyCodeRequest) (*CreateStandbyCodeResponse, error)
+	GetStandbys(context.Context, *GetStandbysRequest) (*GetStandbysResponse, error)
+	RemoveStandby(context.Context, *RemoveStandbyRequest) (*RemoveStandbyResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *GetSecurityRequest) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1375,6 +1416,15 @@ func (UnimplementedSettingsServiceServer) ListInvites(context.Context, *ListInvi
 }
 func (UnimplementedSettingsServiceServer) RevokeInvite(context.Context, *RevokeInviteRequest) (*RevokeInviteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeInvite not implemented")
+}
+func (UnimplementedSettingsServiceServer) CreateStandbyCode(context.Context, *CreateStandbyCodeRequest) (*CreateStandbyCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateStandbyCode not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetStandbys(context.Context, *GetStandbysRequest) (*GetStandbysResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStandbys not implemented")
+}
+func (UnimplementedSettingsServiceServer) RemoveStandby(context.Context, *RemoveStandbyRequest) (*RemoveStandbyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveStandby not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetSecurity(context.Context, *GetSecurityRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecurity not implemented")
@@ -1574,6 +1624,60 @@ func _SettingsService_RevokeInvite_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_CreateStandbyCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateStandbyCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).CreateStandbyCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_CreateStandbyCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).CreateStandbyCode(ctx, req.(*CreateStandbyCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetStandbys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStandbysRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetStandbys(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetStandbys_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetStandbys(ctx, req.(*GetStandbysRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_RemoveStandby_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveStandbyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).RemoveStandby(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_RemoveStandby_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).RemoveStandby(ctx, req.(*RemoveStandbyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SettingsService_GetSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSecurityRequest)
 	if err := dec(in); err != nil {
@@ -1706,6 +1810,18 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeInvite",
 			Handler:    _SettingsService_RevokeInvite_Handler,
+		},
+		{
+			MethodName: "CreateStandbyCode",
+			Handler:    _SettingsService_CreateStandbyCode_Handler,
+		},
+		{
+			MethodName: "GetStandbys",
+			Handler:    _SettingsService_GetStandbys_Handler,
+		},
+		{
+			MethodName: "RemoveStandby",
+			Handler:    _SettingsService_RemoveStandby_Handler,
 		},
 		{
 			MethodName: "GetSecurity",

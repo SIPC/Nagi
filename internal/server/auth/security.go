@@ -179,7 +179,7 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || strings.HasPrefix(p, "/download/") {
+		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || strings.HasPrefix(p, "/download/") || p == "/api/standby/pair" {
 			next.ServeHTTP(w, r)
 			return
 		}

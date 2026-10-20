@@ -220,6 +220,10 @@ service SettingsService {
   rpc ListInvites(ListInvitesRequest) returns (ListInvitesResponse);
   // 提前作废接入码。
   rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse);
+  // 主备面板（见 docs/standby.md）：生成配对码、列出和移除备用面板；备用面板上返回自己的同步状态。
+  rpc CreateStandbyCode(CreateStandbyCodeRequest) returns (CreateStandbyCodeResponse);
+  rpc GetStandbys(GetStandbysRequest) returns (GetStandbysResponse);
+  rpc RemoveStandby(RemoveStandbyRequest) returns (RemoveStandbyResponse);
   // 账号安全：两步验证和安全入口。
   rpc GetSecurity(GetSecurityRequest) returns (Security);
   // 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -485,6 +489,42 @@ message MoveContainerRequest {
   // 容器在目标节点上的目录，为空时按目标节点的项目根目录生成。
   string dir = 4;
 }
+
+message CreateStandbyCodeRequest {}
+
+message CreateStandbyCodeResponse {
+  string code = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message GetStandbysRequest {}
+
+message GetStandbysResponse {
+  // 本面板是不是备用面板。
+  bool is_standby = 1;
+  // 本面板是备用面板时：主面板地址和同步状态。
+  string primary_address = 2;
+  bool connected = 3;
+  google.protobuf.Timestamp last_sync = 4;
+  string last_error = 5;
+  // 本面板是主面板时：它的备用面板。
+  repeated StandbyPanel standbys = 6;
+}
+
+message StandbyPanel {
+  string id = 1;
+  string name = 2;
+  string address = 3;
+  google.protobuf.Timestamp created_at = 4;
+  bool connected = 5;
+  google.protobuf.Timestamp last_sync = 6;
+}
+
+message RemoveStandbyRequest {
+  string id = 1;
+}
+
+message RemoveStandbyResponse {}
 
 message ConnectProjectRequest {
   string project_id = 1;
