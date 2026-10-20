@@ -17,9 +17,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// 面板作为顶替的见证人：只投票，不运行项目。设置和票存在 <面板数据目录>/witness 下，面板重启后照常投票。
+// 面板作为顶替的见证人：只投票，不运行容器。设置和票按"项目 ID-容器名"存在 <面板数据目录>/witness 下，面板重启后照常投票。
 
-var witnessIDRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+var witnessIDRe = regexp.MustCompile(`^[a-f0-9]{16}-[a-z0-9-]{1,32}$`)
+
+func witnessID(projectID, container string) string { return projectID + "-" + container }
 
 type witness struct {
 	dir   string
@@ -63,7 +65,7 @@ func (r *Registry) SetWitness(cfg *nagiv1.FailoverConfig) error {
 // SetWitnessFrom 同 SetWitness，但新设置从 holder 的第 epoch 轮开始投票（更换见证人时用当前的持有者和轮次）。
 func (r *Registry) SetWitnessFrom(cfg *nagiv1.FailoverConfig, holder []byte, epoch uint64) error {
 	w := r.witness
-	id := cfg.GetProjectId()
+	id := witnessID(cfg.GetProjectId(), cfg.GetContainer())
 	if w == nil || !witnessIDRe.MatchString(id) {
 		return status.Error(codes.InvalidArgument, "顶替设置无效")
 	}
@@ -87,7 +89,7 @@ func (r *Registry) SetWitnessFrom(cfg *nagiv1.FailoverConfig, holder []byte, epo
 	return nil
 }
 
-// WitnessProjects 返回本面板担任见证人、而且 nodeID 是 A 或 B 的项目名。移除面板或忘记节点前检查用。
+// WitnessProjects 返回本面板担任见证人、而且 nodeID 是 A 或 B 的容器（"项目名/容器名"）。移除面板或忘记节点前检查用。
 func (r *Registry) WitnessProjects(nodeID string) []string {
 	w := r.witness
 	if w == nil {
@@ -98,14 +100,15 @@ func (r *Registry) WitnessProjects(nodeID string) []string {
 	var out []string
 	for _, cfg := range w.cfgs {
 		if nodeID == "" || cfg.GetA().GetNodeId() == nodeID || cfg.GetB().GetNodeId() == nodeID {
-			out = append(out, cfg.GetProjectName())
+			out = append(out, cfg.GetProjectName()+"/"+cfg.GetContainer())
 		}
 	}
 	return out
 }
 
 // ClearWitness 删除本面板担任见证人的顶替设置。
-func (r *Registry) ClearWitness(id string) {
+func (r *Registry) ClearWitness(projectID, container string) {
+	id := witnessID(projectID, container)
 	w := r.witness
 	if w == nil || !witnessIDRe.MatchString(id) {
 		return
@@ -130,20 +133,21 @@ func (p *panelMesh) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteRequest)
 	}
 	w := p.r.witness
 	if w == nil {
-		return nil, status.Error(codes.NotFound, "面板不是这个项目的见证人")
+		return nil, status.Error(codes.NotFound, "面板不是这个容器的见证人")
 	}
+	id := witnessID(req.GetProjectId(), req.GetContainer())
 	w.mu.Lock()
-	cfg := w.cfgs[req.GetProjectId()]
+	cfg := w.cfgs[id]
 	w.mu.Unlock()
 	if cfg == nil {
-		return nil, status.Error(codes.NotFound, "面板不是这个项目的见证人")
+		return nil, status.Error(codes.NotFound, "面板不是这个容器的见证人")
 	}
 	parties := [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
 	if to := req.GetHandoverTo(); len(to) > 0 {
 		// 持有者把租约转让给另一方（自动切回原节点）。
-		granted, holder, epoch := w.voter.Handover(req.GetProjectId(), parties, caller[:], to, req.GetEpoch(), leaseDuration(cfg))
+		granted, holder, epoch := w.voter.Handover(id, parties, caller[:], to, req.GetEpoch(), leaseDuration(cfg))
 		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
 	}
-	granted, holder, epoch := w.voter.Vote(req.GetProjectId(), parties, caller[:], req.GetEpoch(), leaseDuration(cfg))
+	granted, holder, epoch := w.voter.Vote(id, parties, caller[:], req.GetEpoch(), leaseDuration(cfg))
 	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
 }

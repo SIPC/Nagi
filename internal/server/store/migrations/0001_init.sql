@@ -81,6 +81,10 @@ CREATE TABLE containers (
     last_commit      TEXT    NOT NULL DEFAULT '',
     -- 备份节点（见 docs/snapshot.md#异地副本），空表示没有设置
     backup_node_id   TEXT    NOT NULL DEFAULT '',
+    -- 顶替设置（FailoverConfig，protobuf），NULL 表示没有设置（见 docs/failover.md）
+    failover         BLOB,
+    -- 面板知道的最新租约轮次：持有者上报更高的轮次时，面板据此改容器的所在节点
+    failover_epoch   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (project_id, name)
 );
 

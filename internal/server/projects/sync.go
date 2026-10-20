@@ -104,6 +104,8 @@ func (s *Service) push(ctx context.Context, projectID, name string) error {
 	if err != nil {
 		return err
 	}
+	// 设置了顶替的容器，热备上的配置也要跟着更新。
+	s.pushStandby(ctx, c)
 	agent, err := s.agent(ctx, c.NodeID)
 	if err != nil {
 		return err
@@ -138,6 +140,10 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	if err != nil {
 		return
 	}
+	s.syncFailovers(ctx, c, req.GetFailovers())
+	if rows, err = s.Q.ListNodeContainers(ctx, c.NodeID); err != nil {
+		return
+	}
 	s.retireMoved(ctx, c, req.GetContainers(), rows)
 	projects := map[string]store.Project{}
 	for _, r := range rows {
@@ -150,6 +156,10 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 		}
 		cs := have[r.ProjectID+"/"+r.Name]
 		if cs != nil && cs.GetRevision() == r.Revision && cs.GetProjectRevision() == p.Revision {
+			continue
+		}
+		// 设置了顶替的容器还没在这个节点上：节点正在（或将要）用副本恢复它，不能先放一份空的。
+		if cs == nil && len(r.Failover) > 0 {
 			continue
 		}
 		// 正在部署这个项目时跳过：部署完会推最新的配置。
@@ -182,6 +192,10 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 		}
 		row, err := s.container(ctx, cs.GetProjectId(), cs.GetName())
 		if err != nil || row.NodeID == c.NodeID {
+			continue
+		}
+		// 设置了顶替的容器由节点之间的租约决定谁运行，被顶替的一方自己会退位。
+		if cfg := failoverOf(row); cfg != nil && isParticipant(cfg, c.NodeID) {
 			continue
 		}
 		l := s.lock(cs.GetProjectId())

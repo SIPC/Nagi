@@ -38,6 +38,8 @@ const (
 	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
 	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
 	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
+	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
 	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
 	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
@@ -95,6 +97,11 @@ type AgentServiceClient interface {
 	MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// ---- 顶替（见 docs/failover.md） ----
+	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
+	SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
+	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
+	ConfirmTakeover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*FailoverStatus, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -387,6 +394,26 @@ func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_MigrateResumeClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *agentServiceClient) SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, AgentService_SetFailover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ConfirmTakeover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*FailoverStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailoverStatus)
+	err := c.cc.Invoke(ctx, AgentService_ConfirmTakeover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetLinksResponse)
@@ -559,6 +586,11 @@ type AgentServiceServer interface {
 	MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
+	// ---- 顶替（见 docs/failover.md） ----
+	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
+	SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error)
+	// 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
+	ConfirmTakeover(context.Context, *ContainerRef) (*FailoverStatus, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -651,6 +683,12 @@ func (UnimplementedAgentServiceServer) MigrateOut(*MigrateOutRequest, grpc.Serve
 }
 func (UnimplementedAgentServiceServer) MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method MigrateResume not implemented")
+}
+func (UnimplementedAgentServiceServer) SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFailover not implemented")
+}
+func (UnimplementedAgentServiceServer) ConfirmTakeover(context.Context, *ContainerRef) (*FailoverStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmTakeover not implemented")
 }
 func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetLinks not implemented")
@@ -994,6 +1032,42 @@ func _AgentService_MigrateResume_Handler(srv interface{}, stream grpc.ServerStre
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_MigrateResumeServer = grpc.ServerStreamingServer[DeployEvent]
 
+func _AgentService_SetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFailoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetFailover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetFailover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetFailover(ctx, req.(*SetFailoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ConfirmTakeover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ConfirmTakeover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ConfirmTakeover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ConfirmTakeover(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LinkPlan)
 	if err := dec(in); err != nil {
@@ -1278,6 +1352,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteReplica",
 			Handler:    _AgentService_DeleteReplica_Handler,
+		},
+		{
+			MethodName: "SetFailover",
+			Handler:    _AgentService_SetFailover_Handler,
+		},
+		{
+			MethodName: "ConfirmTakeover",
+			Handler:    _AgentService_ConfirmTakeover_Handler,
 		},
 		{
 			MethodName: "SetLinks",

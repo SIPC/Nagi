@@ -382,9 +382,14 @@ type Container struct {
 	// 备份节点（见 docs/snapshot.md#异地副本），为空表示没有设置。
 	BackupNodeId string `protobuf:"bytes,19,opt,name=backup_node_id,json=backupNodeId,proto3" json:"backup_node_id,omitempty"`
 	// 同步到备份节点的状态（容器所在节点上报的）。
-	Backup        *BackupStatus `protobuf:"bytes,20,opt,name=backup,proto3" json:"backup,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Backup *BackupStatus `protobuf:"bytes,20,opt,name=backup,proto3" json:"backup,omitempty"`
+	// 顶替设置（见 docs/failover.md），为空表示没有设置。
+	Failover *FailoverConfig `protobuf:"bytes,21,opt,name=failover,proto3" json:"failover,omitempty"`
+	// 持有租约的节点和热备上报的顶替状态（节点不在线时为空）。
+	FailoverHolder  *FailoverStatus `protobuf:"bytes,22,opt,name=failover_holder,json=failoverHolder,proto3" json:"failover_holder,omitempty"`
+	FailoverStandby *FailoverStatus `protobuf:"bytes,23,opt,name=failover_standby,json=failoverStandby,proto3" json:"failover_standby,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Container) Reset() {
@@ -553,6 +558,27 @@ func (x *Container) GetBackupNodeId() string {
 func (x *Container) GetBackup() *BackupStatus {
 	if x != nil {
 		return x.Backup
+	}
+	return nil
+}
+
+func (x *Container) GetFailover() *FailoverConfig {
+	if x != nil {
+		return x.Failover
+	}
+	return nil
+}
+
+func (x *Container) GetFailoverHolder() *FailoverStatus {
+	if x != nil {
+		return x.FailoverHolder
+	}
+	return nil
+}
+
+func (x *Container) GetFailoverStandby() *FailoverStatus {
+	if x != nil {
+		return x.FailoverStandby
 	}
 	return nil
 }
@@ -3478,7 +3504,7 @@ type FailoverParticipant struct {
 	// 节点 ID；面板为空。
 	NodeId string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Name   string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	// 项目在这个节点上的目录（只有 A、B 有）。
+	// 容器在这个节点上的目录（只有 A、B 有）。
 	Dir           string `protobuf:"bytes,4,opt,name=dir,proto3" json:"dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3542,12 +3568,13 @@ func (x *FailoverParticipant) GetDir() string {
 	return ""
 }
 
-// FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
+// FailoverConfig 是一个容器的顶替设置，A、B 和见证人各存一份，内容相同。
 type FailoverConfig struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId   string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	ProjectName string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	// 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
+	Container   string                 `protobuf:"bytes,10,opt,name=container,proto3" json:"container,omitempty"`
+	// 能运行容器的两个节点。设置时 A 是容器所在的节点（原节点），B 是顶替节点；之后谁运行由租约决定。
 	A *FailoverParticipant `protobuf:"bytes,3,opt,name=a,proto3" json:"a,omitempty"`
 	B *FailoverParticipant `protobuf:"bytes,4,opt,name=b,proto3" json:"b,omitempty"`
 	// 见证人：一个面板或另一台节点，只投票。
@@ -3604,6 +3631,13 @@ func (x *FailoverConfig) GetProjectId() string {
 func (x *FailoverConfig) GetProjectName() string {
 	if x != nil {
 		return x.ProjectName
+	}
+	return ""
+}
+
+func (x *FailoverConfig) GetContainer() string {
+	if x != nil {
+		return x.Container
 	}
 	return ""
 }
@@ -3679,9 +3713,12 @@ type FailoverStatus struct {
 	// 持有者上：原节点已经恢复，再过多久（毫秒）自动切回；0 表示不会切回（没开、原节点就是本节点或者还没恢复）。
 	FailbackInMs int64 `protobuf:"varint,11,opt,name=failback_in_ms,json=failbackInMs,proto3" json:"failback_in_ms,omitempty"`
 	// 持有者上：正在切回原节点。
-	FailingBack   bool `protobuf:"varint,12,opt,name=failing_back,json=failingBack,proto3" json:"failing_back,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	FailingBack bool `protobuf:"varint,12,opt,name=failing_back,json=failingBack,proto3" json:"failing_back,omitempty"`
+	// 热备上：面板登记副本时给的配置的修订号（容器的、项目的），面板据此补推最新的配置。
+	SpecRevision        int64 `protobuf:"varint,13,opt,name=spec_revision,json=specRevision,proto3" json:"spec_revision,omitempty"`
+	SpecProjectRevision int64 `protobuf:"varint,14,opt,name=spec_project_revision,json=specProjectRevision,proto3" json:"spec_project_revision,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *FailoverStatus) Reset() {
@@ -3796,6 +3833,20 @@ func (x *FailoverStatus) GetFailingBack() bool {
 		return x.FailingBack
 	}
 	return false
+}
+
+func (x *FailoverStatus) GetSpecRevision() int64 {
+	if x != nil {
+		return x.SpecRevision
+	}
+	return 0
+}
+
+func (x *FailoverStatus) GetSpecProjectRevision() int64 {
+	if x != nil {
+		return x.SpecProjectRevision
+	}
+	return 0
 }
 
 // LinkPlan 是面板告诉一个节点的代理计划（见 docs/agent.md#项目内网）：本节点要在哪些项目内网里放哪些代理，
@@ -4084,7 +4135,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"shared_env\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\tsharedEnv\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x02 \x01(\rR\x17snapshotIntervalMinutes\x12%\n" +
-	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\"\xed\x05\n" +
+	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\"\xa8\a\n" +
 	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -4109,7 +4160,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\anode_id\x18\x11 \x01(\tR\x06nodeId\x12\x10\n" +
 	"\x03dir\x18\x12 \x01(\tR\x03dir\x12$\n" +
 	"\x0ebackup_node_id\x18\x13 \x01(\tR\fbackupNodeId\x12-\n" +
-	"\x06backup\x18\x14 \x01(\v2\x15.nagi.v1.BackupStatusR\x06backup\"\xb1\x03\n" +
+	"\x06backup\x18\x14 \x01(\v2\x15.nagi.v1.BackupStatusR\x06backup\x123\n" +
+	"\bfailover\x18\x15 \x01(\v2\x17.nagi.v1.FailoverConfigR\bfailover\x12@\n" +
+	"\x0ffailover_holder\x18\x16 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0efailoverHolder\x12B\n" +
+	"\x10failover_standby\x18\x17 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0ffailoverStandby\"\xb1\x03\n" +
 	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +
@@ -4387,18 +4441,20 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x10\n" +
-	"\x03dir\x18\x04 \x01(\tR\x03dir\"\xfb\x02\n" +
+	"\x03dir\x18\x04 \x01(\tR\x03dir\"\x99\x03\n" +
 	"\x0eFailoverConfig\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
-	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12*\n" +
+	"\fproject_name\x18\x02 \x01(\tR\vprojectName\x12\x1c\n" +
+	"\tcontainer\x18\n" +
+	" \x01(\tR\tcontainer\x12*\n" +
 	"\x01a\x18\x03 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\x01a\x12*\n" +
 	"\x01b\x18\x04 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\x01b\x126\n" +
 	"\awitness\x18\x05 \x01(\v2\x1c.nagi.v1.FailoverParticipantR\awitness\x12(\n" +
 	"\x10witness_is_panel\x18\x06 \x01(\bR\x0ewitnessIsPanel\x12#\n" +
 	"\rlease_seconds\x18\a \x01(\rR\fleaseSeconds\x12#\n" +
 	"\rauto_stateful\x18\b \x01(\bR\fautoStateful\x12#\n" +
-	"\rauto_failback\x18\t \x01(\bR\fautoFailback\"\xbf\x03\n" +
+	"\rauto_failback\x18\t \x01(\bR\fautoFailback\"\x98\x04\n" +
 	"\x0eFailoverStatus\x12/\n" +
 	"\x06config\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\x06config\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1f\n" +
@@ -4415,7 +4471,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"holder_key\x18\n" +
 	" \x01(\fR\tholderKey\x12$\n" +
 	"\x0efailback_in_ms\x18\v \x01(\x03R\ffailbackInMs\x12!\n" +
-	"\ffailing_back\x18\f \x01(\bR\vfailingBack\"d\n" +
+	"\ffailing_back\x18\f \x01(\bR\vfailingBack\x12#\n" +
+	"\rspec_revision\x18\r \x01(\x03R\fspecRevision\x122\n" +
+	"\x15spec_project_revision\x18\x0e \x01(\x03R\x13specProjectRevision\"d\n" +
 	"\bLinkPlan\x12,\n" +
 	"\aproxies\x18\x01 \x03(\v2\x12.nagi.v1.LinkProxyR\aproxies\x12*\n" +
 	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\"\xc7\x01\n" +
@@ -4521,58 +4579,61 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	5,  // 8: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
 	5,  // 9: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
 	37, // 10: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
-	11, // 11: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	46, // 12: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
-	13, // 13: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
-	9,  // 14: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
-	0,  // 15: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	51, // 16: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	51, // 17: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	47, // 18: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	51, // 19: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	48, // 20: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	51, // 21: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
-	11, // 22: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
-	14, // 23: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
-	11, // 24: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
-	15, // 25: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
-	17, // 26: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	51, // 27: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	1,  // 28: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
-	16, // 29: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	5,  // 30: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
-	11, // 31: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	49, // 32: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
-	10, // 33: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
-	20, // 34: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
-	15, // 35: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
-	17, // 36: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	51, // 37: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	37, // 38: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
-	51, // 39: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	25, // 40: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	50, // 41: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
-	27, // 42: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
-	28, // 43: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	51, // 44: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	51, // 45: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	33, // 46: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	51, // 47: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	51, // 48: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	39, // 49: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	39, // 50: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	39, // 51: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	40, // 52: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	51, // 53: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	43, // 54: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	45, // 55: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	44, // 56: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	12, // 57: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	58, // [58:58] is the sub-list for method output_type
-	58, // [58:58] is the sub-list for method input_type
-	58, // [58:58] is the sub-list for extension type_name
-	58, // [58:58] is the sub-list for extension extendee
-	0,  // [0:58] is the sub-list for field type_name
+	40, // 11: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
+	41, // 12: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
+	41, // 13: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
+	11, // 14: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
+	46, // 15: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	13, // 16: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
+	9,  // 17: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
+	0,  // 18: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
+	51, // 19: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	51, // 20: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	47, // 21: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	51, // 22: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	48, // 23: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	51, // 24: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	11, // 25: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
+	14, // 26: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
+	11, // 27: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
+	15, // 28: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
+	17, // 29: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	51, // 30: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	1,  // 31: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
+	16, // 32: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
+	5,  // 33: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
+	11, // 34: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
+	49, // 35: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	10, // 36: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
+	20, // 37: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
+	15, // 38: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
+	17, // 39: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	51, // 40: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	37, // 41: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
+	51, // 42: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	25, // 43: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	50, // 44: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	27, // 45: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	28, // 46: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	51, // 47: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	51, // 48: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	33, // 49: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	51, // 50: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	51, // 51: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	39, // 52: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	39, // 53: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	39, // 54: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	40, // 55: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	51, // 56: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	43, // 57: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	45, // 58: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	44, // 59: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	12, // 60: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	61, // [61:61] is the sub-list for method output_type
+	61, // [61:61] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }

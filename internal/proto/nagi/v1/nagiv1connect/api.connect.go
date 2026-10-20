@@ -210,6 +210,18 @@ const (
 	// ProjectServiceRedeployElsewhereProcedure is the fully-qualified name of the ProjectService's
 	// RedeployElsewhere RPC.
 	ProjectServiceRedeployElsewhereProcedure = "/nagi.v1.ProjectService/RedeployElsewhere"
+	// ProjectServiceSetFailoverProcedure is the fully-qualified name of the ProjectService's
+	// SetFailover RPC.
+	ProjectServiceSetFailoverProcedure = "/nagi.v1.ProjectService/SetFailover"
+	// ProjectServiceClearFailoverProcedure is the fully-qualified name of the ProjectService's
+	// ClearFailover RPC.
+	ProjectServiceClearFailoverProcedure = "/nagi.v1.ProjectService/ClearFailover"
+	// ProjectServiceChangeWitnessProcedure is the fully-qualified name of the ProjectService's
+	// ChangeWitness RPC.
+	ProjectServiceChangeWitnessProcedure = "/nagi.v1.ProjectService/ChangeWitness"
+	// ProjectServiceConfirmTakeoverProcedure is the fully-qualified name of the ProjectService's
+	// ConfirmTakeover RPC.
+	ProjectServiceConfirmTakeoverProcedure = "/nagi.v1.ProjectService/ConfirmTakeover"
 	// ProjectServiceConnectProjectProcedure is the fully-qualified name of the ProjectService's
 	// ConnectProject RPC.
 	ProjectServiceConnectProjectProcedure = "/nagi.v1.ProjectService/ConnectProject"
@@ -1421,6 +1433,13 @@ type ProjectServiceClient interface {
 	MigrateContainer(context.Context, *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
 	RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 顶替（按容器，见 docs/failover.md#节点故障指定顶替节点）。
+	SetFailover(context.Context, *connect.Request[v1.SetFailoverApiRequest]) (*connect.Response[v1.Project], error)
+	ClearFailover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
+	// 更换见证人，顶替照常进行。
+	ChangeWitness(context.Context, *connect.Request[v1.ChangeWitnessRequest]) (*connect.Response[v1.Project], error)
+	// 有状态容器的所在节点失联时，确认由热备顶替。
+	ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
@@ -1600,6 +1619,30 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("RedeployElsewhere")),
 			connect.WithClientOptions(opts...),
 		),
+		setFailover: connect.NewClient[v1.SetFailoverApiRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetFailoverProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetFailover")),
+			connect.WithClientOptions(opts...),
+		),
+		clearFailover: connect.NewClient[v1.ContainerRef, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceClearFailoverProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ClearFailover")),
+			connect.WithClientOptions(opts...),
+		),
+		changeWitness: connect.NewClient[v1.ChangeWitnessRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceChangeWitnessProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ChangeWitness")),
+			connect.WithClientOptions(opts...),
+		),
+		confirmTakeover: connect.NewClient[v1.ContainerRef, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceConfirmTakeoverProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ConfirmTakeover")),
+			connect.WithClientOptions(opts...),
+		),
 		connectProject: connect.NewClient[v1.ConnectProjectRequest, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceConnectProjectProcedure,
@@ -1690,6 +1733,10 @@ type projectServiceClient struct {
 	restoreFromBackup     *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
 	migrateContainer      *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
 	redeployElsewhere     *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
+	setFailover           *connect.Client[v1.SetFailoverApiRequest, v1.Project]
+	clearFailover         *connect.Client[v1.ContainerRef, v1.Project]
+	changeWitness         *connect.Client[v1.ChangeWitnessRequest, v1.Project]
+	confirmTakeover       *connect.Client[v1.ContainerRef, v1.Project]
 	connectProject        *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	disconnectProject     *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
@@ -1827,6 +1874,26 @@ func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, req *conne
 	return c.redeployElsewhere.CallServerStream(ctx, req)
 }
 
+// SetFailover calls nagi.v1.ProjectService.SetFailover.
+func (c *projectServiceClient) SetFailover(ctx context.Context, req *connect.Request[v1.SetFailoverApiRequest]) (*connect.Response[v1.Project], error) {
+	return c.setFailover.CallUnary(ctx, req)
+}
+
+// ClearFailover calls nagi.v1.ProjectService.ClearFailover.
+func (c *projectServiceClient) ClearFailover(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return c.clearFailover.CallUnary(ctx, req)
+}
+
+// ChangeWitness calls nagi.v1.ProjectService.ChangeWitness.
+func (c *projectServiceClient) ChangeWitness(ctx context.Context, req *connect.Request[v1.ChangeWitnessRequest]) (*connect.Response[v1.Project], error) {
+	return c.changeWitness.CallUnary(ctx, req)
+}
+
+// ConfirmTakeover calls nagi.v1.ProjectService.ConfirmTakeover.
+func (c *projectServiceClient) ConfirmTakeover(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return c.confirmTakeover.CallUnary(ctx, req)
+}
+
 // ConnectProject calls nagi.v1.ProjectService.ConnectProject.
 func (c *projectServiceClient) ConnectProject(ctx context.Context, req *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
 	return c.connectProject.CallUnary(ctx, req)
@@ -1922,6 +1989,13 @@ type ProjectServiceHandler interface {
 	MigrateContainer(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
 	RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 顶替（按容器，见 docs/failover.md#节点故障指定顶替节点）。
+	SetFailover(context.Context, *connect.Request[v1.SetFailoverApiRequest]) (*connect.Response[v1.Project], error)
+	ClearFailover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
+	// 更换见证人，顶替照常进行。
+	ChangeWitness(context.Context, *connect.Request[v1.ChangeWitnessRequest]) (*connect.Response[v1.Project], error)
+	// 有状态容器的所在节点失联时，确认由热备顶替。
+	ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
@@ -2097,6 +2171,30 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("RedeployElsewhere")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetFailoverHandler := connect.NewUnaryHandler(
+		ProjectServiceSetFailoverProcedure,
+		svc.SetFailover,
+		connect.WithSchema(projectServiceMethods.ByName("SetFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceClearFailoverHandler := connect.NewUnaryHandler(
+		ProjectServiceClearFailoverProcedure,
+		svc.ClearFailover,
+		connect.WithSchema(projectServiceMethods.ByName("ClearFailover")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceChangeWitnessHandler := connect.NewUnaryHandler(
+		ProjectServiceChangeWitnessProcedure,
+		svc.ChangeWitness,
+		connect.WithSchema(projectServiceMethods.ByName("ChangeWitness")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceConfirmTakeoverHandler := connect.NewUnaryHandler(
+		ProjectServiceConfirmTakeoverProcedure,
+		svc.ConfirmTakeover,
+		connect.WithSchema(projectServiceMethods.ByName("ConfirmTakeover")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceConnectProjectHandler := connect.NewUnaryHandler(
 		ProjectServiceConnectProjectProcedure,
 		svc.ConnectProject,
@@ -2209,6 +2307,14 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceMigrateContainerHandler.ServeHTTP(w, r)
 		case ProjectServiceRedeployElsewhereProcedure:
 			projectServiceRedeployElsewhereHandler.ServeHTTP(w, r)
+		case ProjectServiceSetFailoverProcedure:
+			projectServiceSetFailoverHandler.ServeHTTP(w, r)
+		case ProjectServiceClearFailoverProcedure:
+			projectServiceClearFailoverHandler.ServeHTTP(w, r)
+		case ProjectServiceChangeWitnessProcedure:
+			projectServiceChangeWitnessHandler.ServeHTTP(w, r)
+		case ProjectServiceConfirmTakeoverProcedure:
+			projectServiceConfirmTakeoverHandler.ServeHTTP(w, r)
 		case ProjectServiceConnectProjectProcedure:
 			projectServiceConnectProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceDisconnectProjectProcedure:
@@ -2336,6 +2442,22 @@ func (UnimplementedProjectServiceHandler) MigrateContainer(context.Context, *con
 
 func (UnimplementedProjectServiceHandler) RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RedeployElsewhere is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetFailover(context.Context, *connect.Request[v1.SetFailoverApiRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetFailover is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ClearFailover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ClearFailover is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ChangeWitness(context.Context, *connect.Request[v1.ChangeWitnessRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ChangeWitness is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ConfirmTakeover(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ConfirmTakeover is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {

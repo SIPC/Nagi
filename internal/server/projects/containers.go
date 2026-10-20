@@ -192,6 +192,14 @@ func (s *Service) DeleteContainer(ctx context.Context, projectID, name string, b
 	if err := checkRevision(c.Revision, base); err != nil {
 		return nil, err
 	}
+	if _, err := s.agent(ctx, c.NodeID); err != nil {
+		return nil, err
+	}
+	if cfg := failoverOf(c); cfg != nil {
+		if err := s.dropFailover(ctx, c, cfg); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.deleteOnNode(ctx, c, deleteDir); err != nil {
 		return nil, err
 	}

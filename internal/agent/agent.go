@@ -143,6 +143,9 @@ func Run(ctx context.Context, cfg Config) error {
 	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.status
+	a.failovers = newFailovers(cfg.DataDir)
+	projects.ManagedRestart = a.managed
+	projects.FastSnapshot = a.managed
 
 	// 容器有变化时上报状态；容器重建后要重新接入项目内网（见 project/network.go）。
 	netSync := make(chan struct{}, 1)
@@ -195,6 +198,9 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
 	go a.intranet.run(ctx)
+	for _, id := range a.failovers.ids() {
+		a.startFailover(ctx, id)
+	}
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
@@ -235,6 +241,7 @@ type agent struct {
 	intranet  *intranet
 	replicas  *replicas
 	backups   *backupStates
+	failovers *failovers
 	ctx       context.Context
 	startedAt time.Time
 
@@ -517,7 +524,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*n
 	}
 	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
 	info.ProjectsRoot = a.projectsRoot()
-	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info()})
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx)})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。
@@ -598,8 +605,9 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			key := "snapshot:" + projectID + "/" + container
 			if err == nil {
 				a.alerts.Resolve(ctx, key)
-				// 每次定时快照成功后同步到备份节点（没有设置时什么都不做）。
+				// 每次定时快照成功后同步到备份节点或热备（没有设置时什么都不做）。
 				go a.runBackupSync(ctx, projectID, container)
+				go a.syncStandby(ctx, projectID+"-"+container)
 				return
 			}
 			a.log.Warn("定时快照失败", "project", projectID, "container", container, "err", err)

@@ -171,13 +171,22 @@ func validAlias(alias string) bool {
 // wanted 返回计划里要放的代理，键是代理容器名。本节点上没有容器的项目不放（项目内网不在本节点上）。
 func (n *intranet) wanted(ctx context.Context) map[string]*nagiv1.LinkProxy {
 	local := map[string]bool{}
+	here := map[string]bool{} // 本节点上的容器（项目 ID/容器名）
 	for _, c := range n.a.projects.List(ctx) {
 		local[c.Spec.GetProjectId()] = true
+		here[c.Spec.GetProjectId()+"/"+c.Spec.GetName()] = true
 	}
 	out := map[string]*nagiv1.LinkProxy{}
 	for _, p := range n.current().GetProxies() {
 		if len(out) >= maxProxies || !local[p.GetProjectId()] || !validAlias(p.GetAlias()) || len(p.GetPorts()) == 0 {
 			continue
+		}
+		// 同项目的容器已经在本节点上（例如刚顶替过来、面板还没更新计划）：名字由容器自己占着，不放代理。
+		if p.GetTargetProject() == p.GetProjectId() {
+			parts := strings.Split(p.GetTargetName(), ".")
+			if here[p.GetProjectId()+"/"+parts[len(parts)-1]] {
+				continue
+			}
 		}
 		out[linkContainerName(p.GetProjectId(), p.GetAlias())] = p
 	}

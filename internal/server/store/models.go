@@ -24,6 +24,8 @@ type Container struct {
 	ImportedPorts   string
 	LastCommit      string
 	BackupNodeID    string
+	Failover        []byte
+	FailoverEpoch   int64
 }
 
 type Deployment struct {

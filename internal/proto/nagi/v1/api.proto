@@ -378,6 +378,14 @@ service ProjectService {
   // 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
   rpc RedeployElsewhere(MoveContainerRequest) returns (stream DeployEvent);
 
+  // 顶替（按容器，见 docs/failover.md#节点故障指定顶替节点）。
+  rpc SetFailover(SetFailoverApiRequest) returns (Project);
+  rpc ClearFailover(ContainerRef) returns (Project);
+  // 更换见证人，顶替照常进行。
+  rpc ChangeWitness(ChangeWitnessRequest) returns (Project);
+  // 有状态容器的所在节点失联时，确认由热备顶替。
+  rpc ConfirmTakeover(ContainerRef) returns (Project);
+
   // 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
   rpc ConnectProject(ConnectProjectRequest) returns (Project);
   rpc DisconnectProject(ConnectProjectRequest) returns (Project);
@@ -404,6 +412,27 @@ message SetBackupNodeRequest {
   string node_id = 3;
   // 取消时同时删除备份节点上的副本。
   bool delete_replica = 4;
+}
+
+message SetFailoverApiRequest {
+  string project_id = 1;
+  string container = 2;
+  string standby_node_id = 3;
+  // 容器在顶替节点上的目录，为空时按顶替节点的项目根目录生成。
+  string standby_dir = 4;
+  // 见证人：为空表示面板。
+  string witness_node_id = 5;
+  // 租约时长（秒），0 表示默认 30。
+  uint32 lease_seconds = 6;
+  bool auto_stateful = 7;
+  bool auto_failback = 8;
+}
+
+message ChangeWitnessRequest {
+  string project_id = 1;
+  string container = 2;
+  // 为空表示面板。
+  string witness_node_id = 3;
 }
 
 message RestoreFromBackupRequest {

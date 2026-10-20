@@ -182,6 +182,12 @@ DELETE FROM containers WHERE project_id = ? AND name = ?;
 -- name: SetContainerBackupNode :exec
 UPDATE containers SET backup_node_id = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
 
+-- name: SetContainerFailover :exec
+UPDATE containers SET failover = ?, failover_epoch = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerHolder :exec
+UPDATE containers SET node_id = ?, dir = ?, failover_epoch = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
 -- name: MoveContainer :exec
 UPDATE containers SET node_id = ?, dir = ?, backup_node_id = '', revision = revision + 1 WHERE project_id = ? AND name = ?;
 

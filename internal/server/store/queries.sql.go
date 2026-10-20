@@ -368,7 +368,7 @@ func (q *Queries) DeleteVersionsBefore(ctx context.Context, arg DeleteVersionsBe
 }
 
 const getContainer = `-- name: GetContainer :one
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE project_id = ? AND name = ?
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch FROM containers WHERE project_id = ? AND name = ?
 `
 
 type GetContainerParams struct {
@@ -395,6 +395,8 @@ func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Con
 		&i.ImportedPorts,
 		&i.LastCommit,
 		&i.BackupNodeID,
+		&i.Failover,
+		&i.FailoverEpoch,
 	)
 	return i, err
 }
@@ -721,7 +723,7 @@ func (q *Queries) LatestVersion(ctx context.Context, arg LatestVersionParams) (V
 }
 
 const listAllContainers = `-- name: ListAllContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch FROM containers ORDER BY project_id, position
 `
 
 func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
@@ -749,6 +751,8 @@ func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
 			&i.ImportedPorts,
 			&i.LastCommit,
 			&i.BackupNodeID,
+			&i.Failover,
+			&i.FailoverEpoch,
 		); err != nil {
 			return nil, err
 		}
@@ -801,7 +805,7 @@ func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
 }
 
 const listContainers = `-- name: ListContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE project_id = ? ORDER BY position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch FROM containers WHERE project_id = ? ORDER BY position
 `
 
 func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Container, error) {
@@ -829,6 +833,8 @@ func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Conta
 			&i.ImportedPorts,
 			&i.LastCommit,
 			&i.BackupNodeID,
+			&i.Failover,
+			&i.FailoverEpoch,
 		); err != nil {
 			return nil, err
 		}
@@ -926,7 +932,7 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 }
 
 const listNodeContainers = `-- name: ListNodeContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE node_id = ? ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch FROM containers WHERE node_id = ? ORDER BY project_id, position
 `
 
 func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Container, error) {
@@ -954,6 +960,8 @@ func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Cont
 			&i.ImportedPorts,
 			&i.LastCommit,
 			&i.BackupNodeID,
+			&i.Failover,
+			&i.FailoverEpoch,
 		); err != nil {
 			return nil, err
 		}
@@ -1336,6 +1344,50 @@ type SetContainerDraftParams struct {
 
 func (q *Queries) SetContainerDraft(ctx context.Context, arg SetContainerDraftParams) error {
 	_, err := q.db.ExecContext(ctx, setContainerDraft, arg.Draft, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerFailover = `-- name: SetContainerFailover :exec
+UPDATE containers SET failover = ?, failover_epoch = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerFailoverParams struct {
+	Failover      []byte
+	FailoverEpoch int64
+	ProjectID     string
+	Name          string
+}
+
+func (q *Queries) SetContainerFailover(ctx context.Context, arg SetContainerFailoverParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerFailover,
+		arg.Failover,
+		arg.FailoverEpoch,
+		arg.ProjectID,
+		arg.Name,
+	)
+	return err
+}
+
+const setContainerHolder = `-- name: SetContainerHolder :exec
+UPDATE containers SET node_id = ?, dir = ?, failover_epoch = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerHolderParams struct {
+	NodeID        string
+	Dir           string
+	FailoverEpoch int64
+	ProjectID     string
+	Name          string
+}
+
+func (q *Queries) SetContainerHolder(ctx context.Context, arg SetContainerHolderParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerHolder,
+		arg.NodeID,
+		arg.Dir,
+		arg.FailoverEpoch,
+		arg.ProjectID,
+		arg.Name,
+	)
 	return err
 }
 

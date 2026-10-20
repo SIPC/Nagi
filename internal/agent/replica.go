@@ -339,6 +339,11 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 	if err := s.a.replicas.save(m, nil); err != nil {
 		return nil, err
 	}
+	// 热备：提前拉好镜像，顶替时只需要启动容器。
+	if s.a.managed(req.GetProjectId(), req.GetContainer()) {
+		go s.a.prePull(context.WithoutCancel(ctx), req.GetProjectId(), req.GetContainer())
+		s.a.changed()
+	}
 	return &nagiv1.ReplicaCommitResponse{}, nil
 }
 

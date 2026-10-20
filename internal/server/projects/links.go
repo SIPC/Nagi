@@ -23,6 +23,8 @@ import (
 type target struct {
 	project, container, name, nodeID string
 	ports                            []uint32
+	// nodes 是容器可能在的节点，所在节点在前（设置了顶替时还有另一方）。
+	nodes []string
 }
 
 // targets 返回项目里每个容器在项目内网里的名字和开放的端口：容器声明的端口（节点上报的）加上项目设置里补的内部端口。
@@ -60,7 +62,7 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 			}
 			ports := append(append([]uint32(nil), declared[svc]...), internal[name]...)
 			slices.Sort(ports)
-			out = append(out, target{project: c.ProjectID, container: c.Name, name: name, nodeID: c.NodeID, ports: slices.Compact(ports)})
+			out = append(out, target{project: c.ProjectID, container: c.Name, name: name, nodeID: c.NodeID, ports: slices.Compact(ports), nodes: failoverNodes(c)})
 		}
 	}
 	return out
@@ -95,13 +97,16 @@ func (s *Service) linkedMap(ctx context.Context) (map[string][]string, error) {
 //     对方在本节点上时由本节点直接转发）；
 //   - 本节点上的容器允许哪些节点连进来：同项目的容器、已连接项目的容器所在的节点。
 func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, error) {
-	local, err := s.Q.ListNodeContainers(ctx, nodeID)
+	// 本节点上有容器的项目，以及本节点是某个容器的热备的项目（顶替以后容器就在本节点上了）。
+	all, err := s.Q.ListAllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
 	projectIDs := map[string]bool{}
-	for _, c := range local {
-		projectIDs[c.ProjectID] = true
+	for _, c := range all {
+		if slices.Contains(failoverNodes(c), nodeID) {
+			projectIDs[c.ProjectID] = true
+		}
 	}
 	linked, err := s.linkedMap(ctx)
 	if err != nil {
@@ -149,13 +154,16 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		return i
 	}
 	proxy := func(projectID, alias string, t target) *nagiv1.LinkProxy {
-		if len(t.ports) == 0 || len(keys[t.nodeID]) == 0 {
+		px := &nagiv1.LinkProxy{ProjectId: projectID, Alias: alias, TargetProject: t.project, TargetName: t.name, Ports: t.ports}
+		for _, n := range t.nodes {
+			if len(keys[n]) > 0 {
+				px.Nodes = append(px.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
+			}
+		}
+		if len(t.ports) == 0 || len(px.Nodes) == 0 {
 			return nil
 		}
-		return &nagiv1.LinkProxy{
-			ProjectId: projectID, Alias: alias, TargetProject: t.project, TargetName: t.name, Ports: t.ports,
-			Nodes: []*nagiv1.LinkNode{{Key: keys[t.nodeID], Name: names[t.nodeID]}},
-		}
+		return px
 	}
 
 	plan := &nagiv1.LinkPlan{}
@@ -172,8 +180,10 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		allow := &nagiv1.LinkAllow{ProjectId: id, InternalPorts: self.settings.GetInternalPorts()}
 		addCallers := func(rows []store.Container) {
 			for _, c := range rows {
-				if c.NodeID != nodeID && len(keys[c.NodeID]) > 0 && !containsKey(allow.Callers, keys[c.NodeID]) {
-					allow.Callers = append(allow.Callers, keys[c.NodeID])
+				for _, n := range failoverNodes(c) {
+					if n != nodeID && len(keys[n]) > 0 && !containsKey(allow.Callers, keys[n]) {
+						allow.Callers = append(allow.Callers, keys[n])
+					}
 				}
 			}
 		}

@@ -303,6 +303,11 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
 		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID,
 	}
+	if cfg := failoverOf(c); cfg != nil {
+		mem.Failover = cfg
+		mem.FailoverHolder = s.reportedFailover(c.NodeID, c.ProjectID, c.Name)
+		mem.FailoverStandby = s.reportedFailover(standbyOf(cfg, c.NodeID).GetNodeId(), c.ProjectID, c.Name)
+	}
 	if c.BackupNodeID != "" {
 		if conn, err := s.Nodes.Peek(c.NodeID); err == nil {
 			for _, cs := range conn.LastReport().GetContainers() {

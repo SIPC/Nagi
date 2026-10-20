@@ -1678,6 +1678,10 @@ const (
 	ProjectService_RestoreFromBackup_FullMethodName     = "/nagi.v1.ProjectService/RestoreFromBackup"
 	ProjectService_MigrateContainer_FullMethodName      = "/nagi.v1.ProjectService/MigrateContainer"
 	ProjectService_RedeployElsewhere_FullMethodName     = "/nagi.v1.ProjectService/RedeployElsewhere"
+	ProjectService_SetFailover_FullMethodName           = "/nagi.v1.ProjectService/SetFailover"
+	ProjectService_ClearFailover_FullMethodName         = "/nagi.v1.ProjectService/ClearFailover"
+	ProjectService_ChangeWitness_FullMethodName         = "/nagi.v1.ProjectService/ChangeWitness"
+	ProjectService_ConfirmTakeover_FullMethodName       = "/nagi.v1.ProjectService/ConfirmTakeover"
 	ProjectService_ConnectProject_FullMethodName        = "/nagi.v1.ProjectService/ConnectProject"
 	ProjectService_DisconnectProject_FullMethodName     = "/nagi.v1.ProjectService/DisconnectProject"
 	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
@@ -1737,6 +1741,13 @@ type ProjectServiceClient interface {
 	MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
 	RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 顶替（按容器，见 docs/failover.md#节点故障指定顶替节点）。
+	SetFailover(ctx context.Context, in *SetFailoverApiRequest, opts ...grpc.CallOption) (*Project, error)
+	ClearFailover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
+	// 更换见证人，顶替照常进行。
+	ChangeWitness(ctx context.Context, in *ChangeWitnessRequest, opts ...grpc.CallOption) (*Project, error)
+	// 有状态容器的所在节点失联时，确认由热备顶替。
+	ConfirmTakeover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	DisconnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
@@ -2076,6 +2087,46 @@ func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveCo
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_RedeployElsewhereClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *projectServiceClient) SetFailover(ctx context.Context, in *SetFailoverApiRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetFailover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ClearFailover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_ClearFailover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ChangeWitness(ctx context.Context, in *ChangeWitnessRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_ChangeWitness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ConfirmTakeover(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_ConfirmTakeover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -2241,6 +2292,13 @@ type ProjectServiceServer interface {
 	MigrateContainer(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
 	RedeployElsewhere(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 顶替（按容器，见 docs/failover.md#节点故障指定顶替节点）。
+	SetFailover(context.Context, *SetFailoverApiRequest) (*Project, error)
+	ClearFailover(context.Context, *ContainerRef) (*Project, error)
+	// 更换见证人，顶替照常进行。
+	ChangeWitness(context.Context, *ChangeWitnessRequest) (*Project, error)
+	// 有状态容器的所在节点失联时，确认由热备顶替。
+	ConfirmTakeover(context.Context, *ContainerRef) (*Project, error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
 	DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
@@ -2341,6 +2399,18 @@ func (UnimplementedProjectServiceServer) MigrateContainer(*MoveContainerRequest,
 }
 func (UnimplementedProjectServiceServer) RedeployElsewhere(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method RedeployElsewhere not implemented")
+}
+func (UnimplementedProjectServiceServer) SetFailover(context.Context, *SetFailoverApiRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFailover not implemented")
+}
+func (UnimplementedProjectServiceServer) ClearFailover(context.Context, *ContainerRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClearFailover not implemented")
+}
+func (UnimplementedProjectServiceServer) ChangeWitness(context.Context, *ChangeWitnessRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeWitness not implemented")
+}
+func (UnimplementedProjectServiceServer) ConfirmTakeover(context.Context, *ContainerRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmTakeover not implemented")
 }
 func (UnimplementedProjectServiceServer) ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConnectProject not implemented")
@@ -2794,6 +2864,78 @@ func _ProjectService_RedeployElsewhere_Handler(srv interface{}, stream grpc.Serv
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_RedeployElsewhereServer = grpc.ServerStreamingServer[DeployEvent]
 
+func _ProjectService_SetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFailoverApiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetFailover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetFailover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetFailover(ctx, req.(*SetFailoverApiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ClearFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ClearFailover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ClearFailover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ClearFailover(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ChangeWitness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeWitnessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ChangeWitness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ChangeWitness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ChangeWitness(ctx, req.(*ChangeWitnessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ConfirmTakeover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ConfirmTakeover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ConfirmTakeover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ConfirmTakeover(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_ConnectProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConnectProjectRequest)
 	if err := dec(in); err != nil {
@@ -3038,6 +3180,22 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBackupSnapshots",
 			Handler:    _ProjectService_ListBackupSnapshots_Handler,
+		},
+		{
+			MethodName: "SetFailover",
+			Handler:    _ProjectService_SetFailover_Handler,
+		},
+		{
+			MethodName: "ClearFailover",
+			Handler:    _ProjectService_ClearFailover_Handler,
+		},
+		{
+			MethodName: "ChangeWitness",
+			Handler:    _ProjectService_ChangeWitness_Handler,
+		},
+		{
+			MethodName: "ConfirmTakeover",
+			Handler:    _ProjectService_ConfirmTakeover_Handler,
 		},
 		{
 			MethodName: "ConnectProject",

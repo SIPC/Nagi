@@ -109,6 +109,11 @@ func (s *Service) SetBackupNode(ctx context.Context, projectID, name, nodeID str
 	if nodeID == c.BackupNodeID {
 		return s.reload(ctx, projectID)
 	}
+	if nodeID != "" {
+		if err := noFailover(c); err != nil {
+			return nil, invalid("容器 %s 设置了顶替，顶替节点本身就有一份随时更新的副本，不需要备份节点", name)
+		}
+	}
 	old := c.BackupNodeID
 	if nodeID != "" {
 		if nodeID == c.NodeID {
@@ -228,6 +233,9 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if c.BackupNodeID == "" {
 		return invalid("容器 %s 没有设置备份节点", name)
 	}
+	if err := noFailover(c); err != nil {
+		return err
+	}
 	if _, err := s.Nodes.Get(c.NodeID); err == nil {
 		return invalid("容器所在的节点在线，请用"+`"迁移"`+"把容器换到备份节点，不会丢数据")
 	}
@@ -279,6 +287,9 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	}
 	if nodeID == c.NodeID {
 		return invalid("容器已经在这个节点上")
+	}
+	if err := noFailover(c); err != nil {
+		return err
 	}
 	source, err := s.Nodes.Get(c.NodeID)
 	if err != nil {
@@ -390,6 +401,9 @@ func (s *Service) redeployMove(ctx context.Context, projectID, name, nodeID, dir
 	}
 	if nodeID == c.NodeID {
 		return false, opts, invalid("容器已经在这个节点上")
+	}
+	if err := noFailover(c); err != nil {
+		return false, opts, err
 	}
 	if _, err := s.Nodes.Get(c.NodeID); err == nil {
 		return false, opts, invalid("容器所在的节点在线，请用" + `"迁移"` + "，不会丢数据")

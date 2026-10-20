@@ -24,6 +24,7 @@ const (
 type LeaseVoteRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container string                 `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
 	Epoch     uint64                 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
 	// 不为空时是转让：当前的持有者请投票者把票转给这一方（第 epoch 轮），用于切回原节点。
 	// 只有票现在投给的那一方本人能转让，epoch 必须正好是当前轮次加一。
@@ -65,6 +66,13 @@ func (*LeaseVoteRequest) Descriptor() ([]byte, []int) {
 func (x *LeaseVoteRequest) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *LeaseVoteRequest) GetContainer() string {
+	if x != nil {
+		return x.Container
 	}
 	return ""
 }
@@ -710,10 +718,11 @@ var File_nagi_v1_mesh_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"h\n" +
+	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"\x86\x01\n" +
 	"\x10LeaseVoteRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\x12\x14\n" +
 	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\x12\x1f\n" +
 	"\vhandover_to\x18\x03 \x01(\fR\n" +
 	"handoverTo\"[\n" +

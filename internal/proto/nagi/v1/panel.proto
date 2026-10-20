@@ -58,6 +58,8 @@ message ReportRequest {
   MeshInfo mesh = 2;
   // 本节点缓存的每个容器的状态。
   repeated ContainerStatus containers = 3;
+  // 本节点参与的顶替（持有者、热备、见证人）。
+  repeated FailoverStatus failovers = 4;
 }
 
 message ReportResponse {

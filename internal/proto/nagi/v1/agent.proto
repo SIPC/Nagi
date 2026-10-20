@@ -47,6 +47,12 @@ service AgentService {
   // 源节点：迁移失败时撤销，重新启动容器。
   rpc MigrateResume(ContainerRef) returns (stream DeployEvent);
 
+  // ---- 顶替（见 docs/failover.md） ----
+  // 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
+  rpc SetFailover(SetFailoverRequest) returns (FailoverStatus);
+  // 热备：确认顶替有状态容器（接受丢失最后一次同步之后的数据）。
+  rpc ConfirmTakeover(ContainerRef) returns (FailoverStatus);
+
   // 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
   rpc SetLinks(LinkPlan) returns (SetLinksResponse);
 
@@ -77,6 +83,18 @@ service AgentService {
 }
 
 message SetLinksResponse {}
+
+message SetFailoverRequest {
+  FailoverConfig config = 1;
+  // 删除这个容器的顶替设置。
+  bool clear = 2;
+  string project_id = 3;
+  string container = 6;
+  // 更换见证人时，新见证人从当前的持有者和轮次开始投票（不填时初始租约归 A、第 1 轮）。
+  // 已经有设置的参与者忽略这两项，保留自己的持有者和轮次。
+  bytes seed_holder = 4;
+  uint64 seed_epoch = 5;
+}
 
 message AcceptReplicaRequest {
   ContainerSpec spec = 1;

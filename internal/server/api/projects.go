@@ -268,6 +268,26 @@ func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Req
 	})
 }
 
+func (s *projectService) SetFailover(ctx context.Context, req *connect.Request[nagiv1.SetFailoverApiRequest]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SetFailover(ctx, projects.SetFailoverRequest{
+		ProjectID: m.GetProjectId(), Container: m.GetContainer(), StandbyNodeID: m.GetStandbyNodeId(), StandbyDir: m.GetStandbyDir(),
+		WitnessNodeID: m.GetWitnessNodeId(), LeaseSeconds: m.GetLeaseSeconds(), AutoStateful: m.GetAutoStateful(), AutoFailback: m.GetAutoFailback(),
+	}))
+}
+
+func (s *projectService) ClearFailover(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.ClearFailover(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer()))
+}
+
+func (s *projectService) ChangeWitness(ctx context.Context, req *connect.Request[nagiv1.ChangeWitnessRequest]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.ChangeWitness(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer(), req.Msg.GetWitnessNodeId()))
+}
+
+func (s *projectService) ConfirmTakeover(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.ConfirmTakeover(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer()))
+}
+
 func (s *projectService) ConnectProject(ctx context.Context, req *connect.Request[nagiv1.ConnectProjectRequest]) (*connect.Response[nagiv1.Project], error) {
 	return reply(s.Projects.Connect(ctx, req.Msg.GetProjectId(), req.Msg.GetOtherProjectId()))
 }

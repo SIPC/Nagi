@@ -92,6 +92,11 @@ message Container {
   string backup_node_id = 19;
   // 同步到备份节点的状态（容器所在节点上报的）。
   BackupStatus backup = 20;
+  // 顶替设置（见 docs/failover.md），为空表示没有设置。
+  FailoverConfig failover = 21;
+  // 持有租约的节点和热备上报的顶替状态（节点不在线时为空）。
+  FailoverStatus failover_holder = 22;
+  FailoverStatus failover_standby = 23;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -520,15 +525,16 @@ message FailoverParticipant {
   // 节点 ID；面板为空。
   string node_id = 2;
   string name = 3;
-  // 项目在这个节点上的目录（只有 A、B 有）。
+  // 容器在这个节点上的目录（只有 A、B 有）。
   string dir = 4;
 }
 
-// FailoverConfig 是项目的顶替设置，A、B 和见证人各存一份，内容相同。
+// FailoverConfig 是一个容器的顶替设置，A、B 和见证人各存一份，内容相同。
 message FailoverConfig {
   string project_id = 1;
   string project_name = 2;
-  // 能运行项目的两个节点。设置时 A 是项目所在的节点，B 是顶替节点；之后谁运行由租约决定。
+  string container = 10;
+  // 能运行容器的两个节点。设置时 A 是容器所在的节点（原节点），B 是顶替节点；之后谁运行由租约决定。
   FailoverParticipant a = 3;
   FailoverParticipant b = 4;
   // 见证人：一个面板或另一台节点，只投票。
@@ -565,6 +571,9 @@ message FailoverStatus {
   int64 failback_in_ms = 11;
   // 持有者上：正在切回原节点。
   bool failing_back = 12;
+  // 热备上：面板登记副本时给的配置的修订号（容器的、项目的），面板据此补推最新的配置。
+  int64 spec_revision = 13;
+  int64 spec_project_revision = 14;
 }
 
 // LinkPlan 是面板告诉一个节点的代理计划（见 docs/agent.md#项目内网）：本节点要在哪些项目内网里放哪些代理，
