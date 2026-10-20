@@ -126,28 +126,40 @@ type panelMesh struct {
 	r *Registry
 }
 
-func (p *panelMesh) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteRequest) (*nagiv1.LeaseVoteResponse, error) {
+func (p *panelMesh) LeaseVotes(ctx context.Context, req *nagiv1.LeaseVotesRequest) (*nagiv1.LeaseVotesResponse, error) {
 	caller, ok := mesh.Caller(ctx, p.M)
 	if !ok {
 		return nil, status.Error(codes.PermissionDenied, "无法确认调用方")
 	}
-	w := p.r.witness
+	if len(req.GetVotes()) > 1024 {
+		return nil, status.Error(codes.InvalidArgument, "一次投票请求太多")
+	}
+	out := &nagiv1.LeaseVotesResponse{}
+	for _, v := range req.GetVotes() {
+		out.Votes = append(out.Votes, p.r.witnessVote(caller, v))
+	}
+	return out, nil
+}
+
+// witnessVote 处理一个容器的投票请求。面板不是这个容器的见证人时不同意。
+func (r *Registry) witnessVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) *nagiv1.LeaseVoteResponse {
+	w := r.witness
 	if w == nil {
-		return nil, status.Error(codes.NotFound, "面板不是这个容器的见证人")
+		return &nagiv1.LeaseVoteResponse{}
 	}
 	id := witnessID(req.GetProjectId(), req.GetContainer())
 	w.mu.Lock()
 	cfg := w.cfgs[id]
 	w.mu.Unlock()
 	if cfg == nil {
-		return nil, status.Error(codes.NotFound, "面板不是这个容器的见证人")
+		return &nagiv1.LeaseVoteResponse{}
 	}
 	parties := [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
 	if to := req.GetHandoverTo(); len(to) > 0 {
 		// 持有者把租约转让给另一方（自动切回原节点）。
 		granted, holder, epoch := w.voter.Handover(id, parties, caller[:], to, req.GetEpoch(), leaseDuration(cfg))
-		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}
 	}
 	granted, holder, epoch := w.voter.Vote(id, parties, caller[:], req.GetEpoch(), leaseDuration(cfg))
-	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}
 }

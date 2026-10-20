@@ -144,6 +144,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.status
 	a.failovers = newFailovers(cfg.DataDir)
+	a.votes = &voteBatcher{a: a}
 	projects.ManagedRestart = a.managed
 	projects.FastSnapshot = a.managed
 
@@ -242,6 +243,7 @@ type agent struct {
 	replicas  *replicas
 	backups   *backupStates
 	failovers *failovers
+	votes     *voteBatcher
 	ctx       context.Context
 	startedAt time.Time
 

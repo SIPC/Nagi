@@ -15,8 +15,9 @@ service MeshService {
   rpc ReplicaManifest(ReplicaManifestRequest) returns (ReplicaManifestResponse);
   rpc ReplicaPut(stream ReplicaChunk) returns (ReplicaPutResponse);
   rpc ReplicaCommit(ReplicaCommitRequest) returns (ReplicaCommitResponse);
-  // 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
-  rpc LeaseVote(LeaseVoteRequest) returns (LeaseVoteResponse);
+  // 顶替的租约投票：调用方请求（或续约）各个容器第 epoch 轮的租约。只接受顶替设置里的 A、B。
+  // 同一对成员之间多个容器的投票合并成一次请求，结果按请求的顺序返回。
+  rpc LeaseVotes(LeaseVotesRequest) returns (LeaseVotesResponse);
 }
 
 message LeaseVoteRequest {
@@ -26,6 +27,14 @@ message LeaseVoteRequest {
   // 不为空时是转让：当前的持有者请投票者把票转给这一方（第 epoch 轮），用于切回原节点。
   // 只有票现在投给的那一方本人能转让，epoch 必须正好是当前轮次加一。
   bytes handover_to = 3;
+}
+
+message LeaseVotesRequest {
+  repeated LeaseVoteRequest votes = 1;
+}
+
+message LeaseVotesResponse {
+  repeated LeaseVoteResponse votes = 1;
 }
 
 message LeaseVoteResponse {

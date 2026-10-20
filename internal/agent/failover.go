@@ -197,49 +197,143 @@ func participantName(cfg *nagiv1.FailoverConfig, key []byte) string {
 
 // ---- 投票（MeshService） ----
 
-func (s *meshService) LeaseVote(ctx context.Context, req *nagiv1.LeaseVoteRequest) (*nagiv1.LeaseVoteResponse, error) {
+// maxBatchVotes 是一次请求里最多的投票数。
+const maxBatchVotes = 1024
+
+func (s *meshService) LeaseVotes(ctx context.Context, req *nagiv1.LeaseVotesRequest) (*nagiv1.LeaseVotesResponse, error) {
 	caller, ok := mesh.Caller(ctx, s.M)
 	if !ok {
 		return nil, status.Error(codes.PermissionDenied, "无法确认调用方")
 	}
+	if len(req.GetVotes()) > maxBatchVotes {
+		return nil, status.Error(codes.InvalidArgument, "一次投票请求太多")
+	}
+	out := &nagiv1.LeaseVotesResponse{}
+	for _, v := range req.GetVotes() {
+		out.Votes = append(out.Votes, s.a.leaseVote(caller, v))
+	}
+	return out, nil
+}
+
+// leaseVote 处理一个容器的投票请求。本节点没有这个容器的顶替设置时不同意。
+func (a *agent) leaseVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) *nagiv1.LeaseVoteResponse {
 	id, err := replicaID(req.GetProjectId(), req.GetContainer())
 	if err != nil {
-		return nil, err
+		return &nagiv1.LeaseVoteResponse{}
 	}
-	f := s.a.failovers
+	f := a.failovers
 	st := f.get(id)
 	if st == nil {
-		return nil, status.Error(codes.NotFound, "本节点没有这个容器的顶替设置")
+		return &nagiv1.LeaseVoteResponse{}
 	}
 	f.mu.Lock()
 	cfg := st.cfg
 	f.mu.Unlock()
 	if to := req.GetHandoverTo(); len(to) > 0 {
 		granted, holder, epoch := f.voter.Handover(id, participants(cfg), caller[:], to, req.GetEpoch(), leaseOf(cfg))
-		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+		return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}
 	}
 	granted, holder, epoch := f.voter.Vote(id, participants(cfg), caller[:], req.GetEpoch(), leaseOf(cfg))
-	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}, nil
+	return &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}
 }
 
 // requestVote 向另一个参与者要票；handoverTo 不为空时是请它把票转让给这一方。
+// 发给同一个成员的投票由 a.votes 合并成一次请求。
 func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, cfg *nagiv1.FailoverConfig, epoch uint64, handoverTo ...[]byte) (*nagiv1.LeaseVoteResponse, error) {
 	k, err := mesh.ParseKey(m.GetKey())
 	if err != nil {
 		return nil, err
 	}
-	cc, err := mesh.Client(a.mesh.m, k)
-	if err != nil {
-		return nil, err
-	}
-	defer cc.Close()
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
 	req := &nagiv1.LeaseVoteRequest{ProjectId: cfg.GetProjectId(), Container: cfg.GetContainer(), Epoch: epoch}
 	if len(handoverTo) > 0 {
 		req.HandoverTo = handoverTo[0]
 	}
-	return nagiv1.NewMeshServiceClient(cc).LeaseVote(ctx, req)
+	return a.votes.vote(ctx, k, req)
+}
+
+// voteBatcher 把短时间内发给同一个成员的投票合并成一次 LeaseVotes 请求。
+// 同样租约时长的容器在同一秒续约（见 nextRenewAt），所以平时一对节点之间每次续约只有一次请求。
+type voteBatcher struct {
+	a *agent
+	// send 发出一次合并的请求；为空时经 mesh 发给成员 k。
+	send    func(ctx context.Context, k mesh.Key, reqs []*nagiv1.LeaseVoteRequest) ([]*nagiv1.LeaseVoteResponse, error)
+	mu      sync.Mutex
+	pending map[mesh.Key]*voteBatch
+}
+
+type voteBatch struct {
+	reqs  []*nagiv1.LeaseVoteRequest
+	resps []*nagiv1.LeaseVoteResponse
+	err   error
+	done  chan struct{}
+}
+
+// batchWindow 是等其他投票一起发出的时间。
+const batchWindow = 30 * time.Millisecond
+
+func (b *voteBatcher) vote(ctx context.Context, k mesh.Key, req *nagiv1.LeaseVoteRequest) (*nagiv1.LeaseVoteResponse, error) {
+	b.mu.Lock()
+	if b.pending == nil {
+		b.pending = map[mesh.Key]*voteBatch{}
+	}
+	bt := b.pending[k]
+	if bt == nil || len(bt.reqs) >= maxBatchVotes {
+		bt = &voteBatch{done: make(chan struct{})}
+		b.pending[k] = bt
+		time.AfterFunc(batchWindow, func() { b.flush(k, bt) })
+	}
+	i := len(bt.reqs)
+	bt.reqs = append(bt.reqs, req)
+	b.mu.Unlock()
+	select {
+	case <-bt.done:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if bt.err != nil {
+		return nil, bt.err
+	}
+	if i >= len(bt.resps) {
+		return nil, errors.New("投票结果不完整")
+	}
+	return bt.resps[i], nil
+}
+
+func (b *voteBatcher) flush(k mesh.Key, bt *voteBatch) {
+	b.mu.Lock()
+	if b.pending[k] == bt {
+		delete(b.pending, k)
+	}
+	reqs := bt.reqs
+	b.mu.Unlock()
+	defer close(bt.done)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	send := b.send
+	if send == nil {
+		send = b.sendMesh
+	}
+	bt.resps, bt.err = send(ctx, k, reqs)
+}
+
+func (b *voteBatcher) sendMesh(ctx context.Context, k mesh.Key, reqs []*nagiv1.LeaseVoteRequest) ([]*nagiv1.LeaseVoteResponse, error) {
+	cc, err := mesh.Client(b.a.mesh.m, k)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+	resp, err := nagiv1.NewMeshServiceClient(cc).LeaseVotes(ctx, &nagiv1.LeaseVotesRequest{Votes: reqs})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetVotes(), nil
+}
+
+// nextRenewAt 返回下一次续约的时间：对齐到 1/3 租约时长的整数倍（按 Unix 时间），
+// 同样租约时长的容器在同一秒续约，发给同一个成员的投票就能合并。
+func nextRenewAt(now time.Time, L time.Duration) time.Time {
+	step := L / 3
+	return now.Truncate(step).Add(step)
 }
 
 type voteResult struct {
@@ -294,14 +388,13 @@ func (a *agent) startFailover(ctx context.Context, id string) {
 	st.cancelLoop = cancel
 	f.mu.Unlock()
 	go func() {
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
 		for {
 			a.failoverTick(lctx, id)
+			// 各个容器的循环都在整秒运行，同一秒到期的续约才能合并成一次请求。
 			select {
 			case <-lctx.Done():
 				return
-			case <-t.C:
+			case <-time.After(time.Until(time.Now().Truncate(time.Second).Add(time.Second))):
 			}
 		}
 	}()
@@ -345,7 +438,7 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		}
 		f.mu.Lock()
 		st.renewed = true
-		st.nextRenew = now.Add(L / 3)
+		st.nextRenew = nextRenewAt(now, L)
 		ok := votes >= 2
 		if ok {
 			st.leaseEnd = sent.Add(L)
@@ -540,7 +633,7 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	f.mu.Lock()
 	st.holder, st.epoch = me.GetKey(), newEpoch
 	st.leaseEnd = sent.Add(L)
-	st.nextRenew = time.Now().Add(L / 3)
+	st.nextRenew = nextRenewAt(time.Now(), L)
 	st.renewed = true
 	st.everOK = true
 	st.restoring = true

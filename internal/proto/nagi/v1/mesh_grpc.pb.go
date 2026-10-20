@@ -24,7 +24,7 @@ const (
 	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
 	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
 	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
-	MeshService_LeaseVote_FullMethodName       = "/nagi.v1.MeshService/LeaseVote"
+	MeshService_LeaseVotes_FullMethodName      = "/nagi.v1.MeshService/LeaseVotes"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -42,8 +42,9 @@ type MeshServiceClient interface {
 	ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error)
 	ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error)
 	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
-	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
-	LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error)
+	// 顶替的租约投票：调用方请求（或续约）各个容器第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	// 同一对成员之间多个容器的投票合并成一次请求，结果按请求的顺序返回。
+	LeaseVotes(ctx context.Context, in *LeaseVotesRequest, opts ...grpc.CallOption) (*LeaseVotesResponse, error)
 }
 
 type meshServiceClient struct {
@@ -110,10 +111,10 @@ func (c *meshServiceClient) ReplicaCommit(ctx context.Context, in *ReplicaCommit
 	return out, nil
 }
 
-func (c *meshServiceClient) LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error) {
+func (c *meshServiceClient) LeaseVotes(ctx context.Context, in *LeaseVotesRequest, opts ...grpc.CallOption) (*LeaseVotesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LeaseVoteResponse)
-	err := c.cc.Invoke(ctx, MeshService_LeaseVote_FullMethodName, in, out, cOpts...)
+	out := new(LeaseVotesResponse)
+	err := c.cc.Invoke(ctx, MeshService_LeaseVotes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +136,9 @@ type MeshServiceServer interface {
 	ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error)
 	ReplicaPut(grpc.ClientStreamingServer[ReplicaChunk, ReplicaPutResponse]) error
 	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
-	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
-	LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error)
+	// 顶替的租约投票：调用方请求（或续约）各个容器第 epoch 轮的租约。只接受顶替设置里的 A、B。
+	// 同一对成员之间多个容器的投票合并成一次请求，结果按请求的顺序返回。
+	LeaseVotes(context.Context, *LeaseVotesRequest) (*LeaseVotesResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }
 
@@ -162,8 +164,8 @@ func (UnimplementedMeshServiceServer) ReplicaPut(grpc.ClientStreamingServer[Repl
 func (UnimplementedMeshServiceServer) ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReplicaCommit not implemented")
 }
-func (UnimplementedMeshServiceServer) LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method LeaseVote not implemented")
+func (UnimplementedMeshServiceServer) LeaseVotes(context.Context, *LeaseVotesRequest) (*LeaseVotesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LeaseVotes not implemented")
 }
 func (UnimplementedMeshServiceServer) mustEmbedUnimplementedMeshServiceServer() {}
 func (UnimplementedMeshServiceServer) testEmbeddedByValue()                     {}
@@ -254,20 +256,20 @@ func _MeshService_ReplicaCommit_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MeshService_LeaseVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LeaseVoteRequest)
+func _MeshService_LeaseVotes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaseVotesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MeshServiceServer).LeaseVote(ctx, in)
+		return srv.(MeshServiceServer).LeaseVotes(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: MeshService_LeaseVote_FullMethodName,
+		FullMethod: MeshService_LeaseVotes_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MeshServiceServer).LeaseVote(ctx, req.(*LeaseVoteRequest))
+		return srv.(MeshServiceServer).LeaseVotes(ctx, req.(*LeaseVotesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -292,8 +294,8 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MeshService_ReplicaCommit_Handler,
 		},
 		{
-			MethodName: "LeaseVote",
-			Handler:    _MeshService_LeaseVote_Handler,
+			MethodName: "LeaseVotes",
+			Handler:    _MeshService_LeaseVotes_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
