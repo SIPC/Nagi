@@ -1131,6 +1131,7 @@ const (
 	SettingsService_CreateStandbyCode_FullMethodName = "/nagi.v1.SettingsService/CreateStandbyCode"
 	SettingsService_GetStandbys_FullMethodName       = "/nagi.v1.SettingsService/GetStandbys"
 	SettingsService_RemoveStandby_FullMethodName     = "/nagi.v1.SettingsService/RemoveStandby"
+	SettingsService_PromoteStandby_FullMethodName    = "/nagi.v1.SettingsService/PromoteStandby"
 	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
 	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
 	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
@@ -1160,6 +1161,8 @@ type SettingsServiceClient interface {
 	CreateStandbyCode(ctx context.Context, in *CreateStandbyCodeRequest, opts ...grpc.CallOption) (*CreateStandbyCodeResponse, error)
 	GetStandbys(ctx context.Context, in *GetStandbysRequest, opts ...grpc.CallOption) (*GetStandbysResponse, error)
 	RemoveStandby(ctx context.Context, in *RemoveStandbyRequest, opts ...grpc.CallOption) (*RemoveStandbyResponse, error)
+	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
+	PromoteStandby(ctx context.Context, in *PromoteStandbyRequest, opts ...grpc.CallOption) (*PromoteStandbyResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1299,6 +1302,16 @@ func (c *settingsServiceClient) RemoveStandby(ctx context.Context, in *RemoveSta
 	return out, nil
 }
 
+func (c *settingsServiceClient) PromoteStandby(ctx context.Context, in *PromoteStandbyRequest, opts ...grpc.CallOption) (*PromoteStandbyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromoteStandbyResponse)
+	err := c.cc.Invoke(ctx, SettingsService_PromoteStandby_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Security)
@@ -1371,6 +1384,8 @@ type SettingsServiceServer interface {
 	CreateStandbyCode(context.Context, *CreateStandbyCodeRequest) (*CreateStandbyCodeResponse, error)
 	GetStandbys(context.Context, *GetStandbysRequest) (*GetStandbysResponse, error)
 	RemoveStandby(context.Context, *RemoveStandbyRequest) (*RemoveStandbyResponse, error)
+	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
+	PromoteStandby(context.Context, *PromoteStandbyRequest) (*PromoteStandbyResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *GetSecurityRequest) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1425,6 +1440,9 @@ func (UnimplementedSettingsServiceServer) GetStandbys(context.Context, *GetStand
 }
 func (UnimplementedSettingsServiceServer) RemoveStandby(context.Context, *RemoveStandbyRequest) (*RemoveStandbyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveStandby not implemented")
+}
+func (UnimplementedSettingsServiceServer) PromoteStandby(context.Context, *PromoteStandbyRequest) (*PromoteStandbyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PromoteStandby not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetSecurity(context.Context, *GetSecurityRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecurity not implemented")
@@ -1678,6 +1696,24 @@ func _SettingsService_RemoveStandby_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_PromoteStandby_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromoteStandbyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).PromoteStandby(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_PromoteStandby_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).PromoteStandby(ctx, req.(*PromoteStandbyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SettingsService_GetSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSecurityRequest)
 	if err := dec(in); err != nil {
@@ -1822,6 +1858,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveStandby",
 			Handler:    _SettingsService_RemoveStandby_Handler,
+		},
+		{
+			MethodName: "PromoteStandby",
+			Handler:    _SettingsService_PromoteStandby_Handler,
 		},
 		{
 			MethodName: "GetSecurity",

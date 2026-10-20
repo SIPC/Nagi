@@ -5,7 +5,7 @@ import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
 import { authClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { Button, ReadOnlyContext, Waves } from "@/components/ui";
-import { useStandbys } from "@/pages/standby";
+import { PromoteButton, useStandbys } from "@/pages/standby";
 
 function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -86,6 +86,7 @@ export function AppLayout() {
                 <span className="text-warning">未连接主面板{standby.lastSync && `，最近同步 ${timeAgo(toDate(standby.lastSync))}`}</span>
               )}
             </span>
+            <PromoteButton size="xs" />
           </div>
         </div>
       )}

@@ -2,9 +2,13 @@ package standby
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
 )
 
@@ -50,4 +54,38 @@ func Cluster(ctx context.Context, q *store.Queries, primaryAddress string) *nagi
 		c.Panels = append(c.Panels, &nagiv1.ClusterPanel{Address: r.Address, Fingerprint: r.ServerFp})
 	}
 	return c
+}
+
+// Promote 把备用面板提升为主面板（见 docs/standby.md#提升）：任期加一、记下自己是主面板；
+// 把原主面板登记为备用面板（它回来后发现任期落后，自动降为备用、从本面板同步）；删掉 standby.json。
+// 调用前要先停止同步，免得之后再收到的快照把这些改动覆盖掉。
+func Promote(ctx context.Context, q *store.Queries, dataDir, self string, info *Info) (uint64, error) {
+	term, _ := Term(ctx, q)
+	term++
+	if err := q.SetSetting(ctx, store.SetSettingParams{Key: SettingTerm, Value: strconv.FormatUint(term, 10)}); err != nil {
+		return 0, err
+	}
+	if err := q.SetSetting(ctx, store.SetSettingParams{Key: SettingPrimary, Value: self}); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteStandbyPanelByServerFP(ctx, self); err != nil {
+		return 0, err
+	}
+	if info.PrimaryFingerprint != "" {
+		if _, err := q.GetStandbyPanelByServerFP(ctx, info.PrimaryFingerprint); err != nil {
+			id, err := auth.RandomToken()
+			if err != nil {
+				return 0, err
+			}
+			if err := q.InsertStandbyPanel(ctx, store.InsertStandbyPanelParams{
+				ID: strings.ToLower(id[:12]), Name: "原主面板", Address: info.PrimaryAddress, ServerFp: info.PrimaryFingerprint, CreatedAt: time.Now().Unix(),
+			}); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if err := os.Remove(infoPath(dataDir)); err != nil && !os.IsNotExist(err) {
+		return 0, err
+	}
+	return term, nil
 }

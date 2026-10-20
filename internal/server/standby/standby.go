@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
@@ -36,7 +35,6 @@ const ALPN = "nagi-standby/1"
 const (
 	codePrefix = "nagi-standby:"
 	tokenTTL   = time.Hour
-	certPrefix = "standby:"
 	// checkEvery：主面板多久看一次数据库有没有变化。
 	checkEvery = 2 * time.Second
 	// heartbeat：没有变化时也定时发一个空帧，备用面板据此知道连接还在。
@@ -107,7 +105,6 @@ func (p *Primary) NewCode(ctx context.Context, address, fingerprint string) (str
 
 type pairRequest struct {
 	Token   string `json:"token"`
-	CSR     []byte `json:"csr"`
 	Name    string `json:"name"`
 	Address string `json:"address"`
 	// ServerFP 是备用面板服务端公钥的指纹：节点连备用面板时钉住它。
@@ -115,14 +112,12 @@ type pairRequest struct {
 }
 
 type pairResponse struct {
-	ID        string `json:"id"`
-	Cert      []byte `json:"cert"`
 	CACert    []byte `json:"ca_cert"`
 	CAKey     []byte `json:"ca_key"`
 	MasterKey []byte `json:"master_key"`
 }
 
-// HandlePair 处理配对请求（POST /api/standby/pair）：校验并作废令牌，登记备用面板，签发它的客户端证书，
+// HandlePair 处理配对请求（POST /api/standby/pair）：校验并作废令牌，登记备用面板（地址和服务端公钥指纹），
 // 把面板 CA 和主密钥交给它（主备面板共用 CA 和主密钥）。连接由备用面板钉住主面板的公钥指纹。
 func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -150,17 +145,12 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id = strings.ToLower(id[:12])
-	cert, err := p.CA.SignCSR(req.CSR, certPrefix+id, 10*365*24*time.Hour)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = req.Address
 	}
 	if err := p.Q.InsertStandbyPanel(ctx, store.InsertStandbyPanelParams{
-		ID: id, Name: name, Address: req.Address, KeyFp: tlsutil.Fingerprint(cert), ServerFp: req.ServerFP, CreatedAt: time.Now().Unix(),
+		ID: id, Name: name, Address: req.Address, ServerFp: req.ServerFP, CreatedAt: time.Now().Unix(),
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -175,10 +165,7 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := pairResponse{
-		ID: id, Cert: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}),
-		CACert: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.CA.Cert.Raw}), CAKey: caKey, MasterKey: master,
-	}
+	resp := pairResponse{CACert: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.CA.Cert.Raw}), CAKey: caKey, MasterKey: master}
 	p.Log.Info("备用面板已配对", "standby", id, "name", name, "address", req.Address)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
@@ -213,16 +200,14 @@ func (p *Primary) Serve(ctx context.Context, conn *tls.Conn) {
 	if len(state.VerifiedChains) == 0 || len(state.PeerCertificates) == 0 {
 		return
 	}
-	cert := state.PeerCertificates[0]
-	id, ok := strings.CutPrefix(cert.Subject.CommonName, certPrefix)
-	if !ok {
+	// 客户端证书用的是备用面板的服务端密钥，按它的指纹认出是哪个备用面板。
+	fp := tlsutil.Fingerprint(state.PeerCertificates[0])
+	sp, err := p.Q.GetStandbyPanelByServerFP(ctx, fp)
+	if err != nil {
+		p.Log.Warn("拒绝未登记或已移除的备用面板", "fingerprint", fp, "remote", conn.RemoteAddr())
 		return
 	}
-	sp, err := p.Q.GetStandbyPanel(ctx, id)
-	if err != nil || sp.KeyFp != tlsutil.Fingerprint(cert) {
-		p.Log.Warn("拒绝未登记或已移除的备用面板", "standby", id, "remote", conn.RemoteAddr())
-		return
-	}
+	id := sp.ID
 	// 另开一个连接看数据库有没有变化：data_version 只在别的连接提交时才变。
 	watch, err := db.Open(filepath.Join(p.DataDir, "panel.db"))
 	if err != nil {
@@ -311,9 +296,8 @@ func readFrame(r io.Reader) ([]byte, error) {
 
 // ---- 备用面板 ----
 
-// Info 是备用面板的配对信息，存在 <数据目录>/standby.json。有这个文件就是备用面板。
+// Info 是备用面板跟随的主面板，存在 <数据目录>/standby.json。有这个文件就是备用面板。
 type Info struct {
-	ID                 string `json:"id"`
 	PrimaryAddress     string `json:"primary_address"`
 	PrimaryFingerprint string `json:"primary_fingerprint"`
 }
@@ -356,14 +340,6 @@ func Pair(ctx context.Context, dataDir, codeText, name, address string) error {
 	if err := os.MkdirAll(pki, 0o700); err != nil {
 		return err
 	}
-	key, err := tlsutil.GenerateKey()
-	if err != nil {
-		return err
-	}
-	csr, err := tlsutil.CreateCSR(key, "standby")
-	if err != nil {
-		return err
-	}
 	// 服务端私钥现在就生成（面板启动时沿用），把它的指纹告诉主面板：节点连本面板时钉住它。
 	serverKey, err := tlsutil.GenerateKey()
 	if err != nil {
@@ -373,7 +349,7 @@ func Pair(ctx context.Context, dataDir, codeText, name, address string) error {
 	if err != nil {
 		return err
 	}
-	body, _ := json.Marshal(pairRequest{Token: c.Token, CSR: csr, Name: name, Address: address, ServerFP: serverFP})
+	body, _ := json.Marshal(pairRequest{Token: c.Token, Name: name, Address: address, ServerFP: serverFP})
 	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{TLSClientConfig: tlsutil.PinnedConfig(c.Fingerprint)}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+c.Address+"/api/standby/pair", bytes.NewReader(body))
 	if err != nil {
@@ -393,31 +369,38 @@ func Pair(ctx context.Context, dataDir, codeText, name, address string) error {
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return err
 	}
-	certBlock, _ := pem.Decode(resp.Cert)
-	if certBlock == nil {
-		return errors.New("主面板返回的证书无效")
-	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return err
-	}
 	files := map[string][]byte{"ca.pem": resp.CACert, "ca.key": resp.CAKey, "master.key": resp.MasterKey}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(pki, name), data, 0o600); err != nil {
 			return err
 		}
 	}
-	if err := tlsutil.WriteCert(filepath.Join(pki, "standby.pem"), cert); err != nil {
-		return err
-	}
-	if err := tlsutil.WriteKey(filepath.Join(pki, "standby.key"), key); err != nil {
-		return err
-	}
 	if err := tlsutil.WriteKey(filepath.Join(pki, "server.key"), serverKey); err != nil {
 		return err
 	}
-	info, _ := json.MarshalIndent(Info{ID: resp.ID, PrimaryAddress: c.Address, PrimaryFingerprint: c.Fingerprint}, "", "  ")
-	return os.WriteFile(infoPath(dataDir), info, 0o600)
+	if err := os.WriteFile(filepath.Join(dataDir, pairedMarker), nil, 0o600); err != nil {
+		return err
+	}
+	return Follow(dataDir, c.Address, c.Fingerprint)
+}
+
+// pairedMarker 表示数据目录是配对来的（不是第一个主面板）：这样的面板不带内嵌节点，提升以后也不带。
+const pairedMarker = "paired"
+
+// Paired 判断数据目录是不是配对来的。
+func Paired(dataDir string) bool {
+	_, err := os.Stat(filepath.Join(dataDir, pairedMarker))
+	return err == nil
+}
+
+// Follow 让本面板作为备用面板跟随（同步）某个主面板：写 standby.json。
+func Follow(dataDir, address, fingerprint string) error {
+	b, _ := json.MarshalIndent(Info{PrimaryAddress: address, PrimaryFingerprint: fingerprint}, "", "  ")
+	tmp := infoPath(dataDir) + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, infoPath(dataDir))
 }
 
 // Client 是备用面板这一侧：连着主面板，收到快照就应用。
@@ -431,6 +414,8 @@ type Client struct {
 	connected bool
 	lastSync  time.Time
 	lastError string
+	stop      context.CancelFunc
+	done      chan struct{}
 }
 
 // ClientStatus 是备用面板看到的同步状态。
@@ -446,8 +431,14 @@ func (c *Client) Status() ClientStatus {
 	return ClientStatus{Connected: c.connected, LastSync: c.lastSync, LastError: c.lastError}
 }
 
-// Run 一直连着主面板同步，断了就重连。
+// Run 一直连着主面板同步，断了就重连，直到 ctx 取消或 Stop。
 func (c *Client) Run(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	c.stop, c.done = cancel, make(chan struct{})
+	done := c.done
+	c.mu.Unlock()
+	defer close(done)
 	backoff := time.Second
 	for ctx.Err() == nil {
 		err := c.syncOnce(ctx)
@@ -469,9 +460,45 @@ func (c *Client) Run(ctx context.Context) {
 	}
 }
 
+// Stop 停止同步并等它退出（提升为主面板前调用：之后不会再有快照覆盖本地数据）。
+func (c *Client) Stop() {
+	c.mu.Lock()
+	stop, done := c.stop, c.done
+	c.mu.Unlock()
+	if stop != nil {
+		stop()
+		<-done
+	}
+}
+
+// clientCert 用本面板的服务端密钥签一张客户端证书（各面板都有 CA），主面板据公钥指纹认出本面板。
+func clientCert(dataDir string) (tls.Certificate, error) {
+	pki := filepath.Join(dataDir, "pki")
+	caCert, err := tlsutil.ReadCert(filepath.Join(pki, "ca.pem"))
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	caKey, err := tlsutil.ReadKey(filepath.Join(pki, "ca.key"))
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	key, err := tlsutil.ReadKey(filepath.Join(pki, "server.key"))
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	csr, err := tlsutil.CreateCSR(key, "standby")
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	cert, err := (&tlsutil.CA{Cert: caCert, Key: caKey}).SignCSR(csr, "standby", 24*time.Hour)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{Certificate: [][]byte{cert.Raw}, PrivateKey: key}, nil
+}
+
 func (c *Client) syncOnce(ctx context.Context) error {
-	pki := filepath.Join(c.DataDir, "pki")
-	cert, err := tls.LoadX509KeyPair(filepath.Join(pki, "standby.pem"), filepath.Join(pki, "standby.key"))
+	cert, err := clientCert(c.DataDir)
 	if err != nil {
 		return err
 	}

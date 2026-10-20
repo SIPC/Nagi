@@ -15,11 +15,12 @@ import (
 // readOnlyPrefixes 是备用面板上放行的接口：方法名以这些开头的都是查询。
 var readOnlyPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}
 
-// readOnlyAllowed 是另外放行的接口（登录、退出只改本面板自己的会话）。
+// readOnlyAllowed 是另外放行的接口：登录、退出只改本面板自己的会话；提升为主面板。
 var readOnlyAllowed = map[string]bool{
-	nagiv1connect.AuthServiceLoginProcedure:  true,
-	nagiv1connect.AuthServiceLogoutProcedure: true,
-	nagiv1connect.AuthServiceMeProcedure:     true,
+	nagiv1connect.AuthServiceLoginProcedure:              true,
+	nagiv1connect.AuthServiceLogoutProcedure:             true,
+	nagiv1connect.AuthServiceMeProcedure:                 true,
+	nagiv1connect.SettingsServicePromoteStandbyProcedure: true,
 }
 
 func readOnlyProcedure(procedure string) bool {

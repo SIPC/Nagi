@@ -224,6 +224,8 @@ service SettingsService {
   rpc CreateStandbyCode(CreateStandbyCodeRequest) returns (CreateStandbyCodeResponse);
   rpc GetStandbys(GetStandbysRequest) returns (GetStandbysResponse);
   rpc RemoveStandby(RemoveStandbyRequest) returns (RemoveStandbyResponse);
+  // 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
+  rpc PromoteStandby(PromoteStandbyRequest) returns (PromoteStandbyResponse);
   // 账号安全：两步验证和安全入口。
   rpc GetSecurity(GetSecurityRequest) returns (Security);
   // 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -525,6 +527,12 @@ message RemoveStandbyRequest {
 }
 
 message RemoveStandbyResponse {}
+
+message PromoteStandbyRequest {}
+
+message PromoteStandbyResponse {
+  uint64 term = 1;
+}
 
 message ConnectProjectRequest {
   string project_id = 1;

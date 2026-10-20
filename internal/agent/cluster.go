@@ -145,34 +145,41 @@ func (id *identity) pruneClusters() (bool, error) {
 	return err == nil, err
 }
 
-// applyCluster 处理面板 p 在上报回复里带的主备信息。
-func (a *agent) applyCluster(p trustedPanel, c *nagiv1.PanelCluster) {
+// applyCluster 处理面板 p 在上报回复里带的主备信息。返回 true 表示节点认的主面板变了
+// （这时马上再上报一次，让新的主面板知道节点已经认它了）。
+func (a *agent) applyCluster(p trustedPanel, c *nagiv1.PanelCluster) bool {
 	cid := p.clusterID()
 	if c == nil || c.GetTerm() == 0 || c.GetPrimary() == "" || cid == "" {
-		return
+		return false
 	}
 	// 主面板必须是节点信任的面板（自己就是主面板，或者是同一组里已经信任的面板）。
 	if c.GetPrimary() != p.Fingerprint && !a.id.trusts(c.GetPrimary()) {
-		return
+		return false
 	}
+	before := a.id.cluster(cid)
 	st, err := a.id.observe(cid, c.GetTerm(), c.GetPrimary())
 	if err != nil {
 		a.log.Warn("保存主备面板信息失败", "err", err)
-		return
+		return false
+	}
+	switched := st != before
+	if switched && before.Primary != "" {
+		a.log.Warn("主面板已更换", "term", st.Term, "panel", p.Address)
 	}
 	// 成员列表只听当前主面板的。
 	if st.Primary != p.Fingerprint || st.Term != c.GetTerm() {
-		return
+		return switched
 	}
 	changed, err := a.id.syncCluster(cid, p, c.GetPanels())
 	if err != nil {
 		a.log.Warn("更新备用面板失败", "err", err)
-		return
+		return switched
 	}
 	if changed {
 		a.log.Info("主面板更新了备用面板列表", "panel", p.Address, "members", len(c.GetPanels()))
 		a.reloadPanels()
 	}
+	return switched
 }
 
 // role 返回面板在主备面板里的角色："primary"、"standby"，不在主备面板里时为空。

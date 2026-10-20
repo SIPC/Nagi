@@ -355,6 +355,15 @@ func (q *Queries) DeleteStandbyPanel(ctx context.Context, id string) (int64, err
 	return result.RowsAffected()
 }
 
+const deleteStandbyPanelByServerFP = `-- name: DeleteStandbyPanelByServerFP :exec
+DELETE FROM standby_panels WHERE server_fp = ?
+`
+
+func (q *Queries) DeleteStandbyPanelByServerFP(ctx context.Context, serverFp string) error {
+	_, err := q.db.ExecContext(ctx, deleteStandbyPanelByServerFP, serverFp)
+	return err
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = ?
 `
@@ -511,7 +520,7 @@ func (q *Queries) GetSetting(ctx context.Context, key string) (string, error) {
 }
 
 const getStandbyPanel = `-- name: GetStandbyPanel :one
-SELECT id, name, address, key_fp, server_fp, created_at FROM standby_panels WHERE id = ?
+SELECT id, name, address, server_fp, created_at FROM standby_panels WHERE id = ?
 `
 
 func (q *Queries) GetStandbyPanel(ctx context.Context, id string) (StandbyPanel, error) {
@@ -521,7 +530,23 @@ func (q *Queries) GetStandbyPanel(ctx context.Context, id string) (StandbyPanel,
 		&i.ID,
 		&i.Name,
 		&i.Address,
-		&i.KeyFp,
+		&i.ServerFp,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getStandbyPanelByServerFP = `-- name: GetStandbyPanelByServerFP :one
+SELECT id, name, address, server_fp, created_at FROM standby_panels WHERE server_fp = ?
+`
+
+func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string) (StandbyPanel, error) {
+	row := q.db.QueryRowContext(ctx, getStandbyPanelByServerFP, serverFp)
+	var i StandbyPanel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Address,
 		&i.ServerFp,
 		&i.CreatedAt,
 	)
@@ -697,14 +722,13 @@ func (q *Queries) InsertProjectLink(ctx context.Context, arg InsertProjectLinkPa
 }
 
 const insertStandbyPanel = `-- name: InsertStandbyPanel :exec
-INSERT INTO standby_panels (id, name, address, key_fp, server_fp, created_at) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO standby_panels (id, name, address, server_fp, created_at) VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertStandbyPanelParams struct {
 	ID        string
 	Name      string
 	Address   string
-	KeyFp     string
 	ServerFp  string
 	CreatedAt int64
 }
@@ -714,7 +738,6 @@ func (q *Queries) InsertStandbyPanel(ctx context.Context, arg InsertStandbyPanel
 		arg.ID,
 		arg.Name,
 		arg.Address,
-		arg.KeyFp,
 		arg.ServerFp,
 		arg.CreatedAt,
 	)
@@ -1183,7 +1206,7 @@ func (q *Queries) ListRoutes(ctx context.Context, projectID string) ([]Route, er
 }
 
 const listStandbyPanels = `-- name: ListStandbyPanels :many
-SELECT id, name, address, key_fp, server_fp, created_at FROM standby_panels ORDER BY created_at
+SELECT id, name, address, server_fp, created_at FROM standby_panels ORDER BY created_at
 `
 
 func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error) {
@@ -1199,7 +1222,6 @@ func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error)
 			&i.ID,
 			&i.Name,
 			&i.Address,
-			&i.KeyFp,
 			&i.ServerFp,
 			&i.CreatedAt,
 		); err != nil {

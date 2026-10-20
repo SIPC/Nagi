@@ -10,6 +10,37 @@ export function useStandbys() {
   return useQuery({ queryKey: ["standbys"], queryFn: () => settingsClient.getStandbys({}), refetchInterval: 5000 });
 }
 
+// PromoteButton：把本面板（备用面板）提升为主面板。提升后面板按主面板重新启动，页面几秒后刷新。
+export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
+  const [busy, setBusy] = useState(false);
+  const promote = async () => {
+    if (
+      !confirm(
+        "将本面板提升为主面板？\n\n" +
+          "· 主面板仍在运行时不要提升，否则可能出现两份不一致的修改。\n" +
+          "· 提升后节点只接受本面板的修改，其他备用面板改为从本面板同步。\n" +
+          "· 原主面板恢复后会自动降为备用面板，它最后几秒内未同步的修改将丢失。",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await settingsClient.promoteStandby({});
+      alert(`已提升为主面板（任期 ${res.term}），面板正在重新启动，页面将自动刷新。`);
+      setTimeout(() => window.location.reload(), 3000);
+    } catch (err) {
+      alert(errorMessage(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Button readOnlyOk size={size} variant="outline" onClick={promote} disabled={busy}>
+      {busy && <Spinner />}
+      提升为主面板
+    </Button>
+  );
+}
+
 export function StandbyCard() {
   const queryClient = useQueryClient();
   const q = useStandbys();
@@ -23,7 +54,7 @@ export function StandbyCard() {
 
   if (d.isStandby) {
     return (
-      <Section title="备用面板" description="本面板是备用面板，实时同步主面板的数据。">
+      <Section title="备用面板" description="本面板是备用面板，实时同步主面板的数据。" actions={<PromoteButton />}>
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
           <dt className="text-muted-foreground">主面板</dt>
           <dd className="font-mono">{d.primaryAddress}</dd>

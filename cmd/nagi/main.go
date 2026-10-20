@@ -42,12 +42,12 @@ func signalContext() (context.Context, context.CancelFunc) {
 
 func serverCmd() *cobra.Command {
 	var (
-		dataDir string
-		port    int
-		noAgent bool
-		noProxy bool
-		newKey  bool
-		standby string
+		dataDir     string
+		port        int
+		noAgent     bool
+		noProxy     bool
+		newKey      bool
+		standbyCode string
 	)
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -57,36 +57,50 @@ func serverCmd() *cobra.Command {
 			defer cancel()
 			log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-			srv, err := server.New(ctx, server.Config{
-				DataDir:      filepath.Join(dataDir, "panel"),
-				Port:         port,
-				Logger:       log.With("component", "panel"),
-				Version:      version,
-				SelfTLS:      noAgent || noProxy || srvIsStandby(dataDir, standby),
-				NewMasterKey: newKey,
-				StandbyCode:  standby,
-			})
-			if err != nil {
+			panelDir := filepath.Join(dataDir, "panel")
+			// 内嵌节点：配对来的面板（备用面板，以后提升了也一样）不带；第一个主面板带着，降为备用面板后也照常运行。
+			runAgent := !noAgent && standbyCode == "" && !standby.Paired(panelDir)
+			if standbyCode != "" && !standby.Paired(panelDir) {
+				if _, err := os.Stat(filepath.Join(panelDir, "pki", "ca.pem")); err == nil {
+					return errors.New("这个数据目录已经是一个面板了，备用面板要用一个空的数据目录")
+				}
+			}
+			errc := make(chan error, 1)
+			agentStarted := false
+			for {
+				srv, err := server.New(ctx, server.Config{
+					DataDir:      panelDir,
+					Port:         port,
+					Logger:       log.With("component", "panel"),
+					Version:      version,
+					SelfTLS:      !runAgent || noProxy,
+					NewMasterKey: newKey,
+					StandbyCode:  standbyCode,
+				})
+				if err != nil {
+					return err
+				}
+				if runAgent && !agentStarted {
+					agentStarted = true
+					go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, noProxy, log) }()
+				}
+				runc := make(chan error, 1)
+				go func() { runc <- srv.Run(ctx) }()
+				select {
+				case err = <-runc:
+				case err = <-errc:
+				}
+				// 主备角色变了（提升为主面板、降为备用面板）：按新角色重新启动面板，内嵌节点不受影响。
+				if errors.Is(err, server.ErrRoleChanged) && ctx.Err() == nil {
+					log.Info("面板角色已变化，重新启动面板")
+					continue
+				}
+				cancel()
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
 				return err
 			}
-			// 备用面板不带内嵌节点（见 docs/standby.md）。
-			if srv.IsStandby() {
-				noAgent = true
-			}
-
-			errc := make(chan error, 2)
-			go func() { errc <- srv.Run(ctx) }()
-
-			if !noAgent {
-				go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, noProxy, log) }()
-			}
-
-			err = <-errc
-			cancel()
-			if errors.Is(err, context.Canceled) {
-				return nil
-			}
-			return err
 		},
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录")
@@ -94,17 +108,8 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "只运行面板，不启动内嵌节点")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
 	cmd.Flags().BoolVar(&newKey, "new-master-key", false, "面板主密钥确实丢了时使用：生成新的主密钥，清掉用旧密钥加密的数据")
-	cmd.Flags().StringVar(&standby, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空）")
+	cmd.Flags().StringVar(&standbyCode, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空）")
 	return cmd
-}
-
-// srvIsStandby 判断这次启动的是不是备用面板（带了配对码，或者数据目录里已经配过对）。
-func srvIsStandby(dataDir, code string) bool {
-	if code != "" {
-		return true
-	}
-	info, _ := standby.Load(filepath.Join(dataDir, "panel"))
-	return info != nil
 }
 
 // runEmbeddedAgent 启动面板自带的节点。它和远程节点走完全相同的加入流程和控制连接。

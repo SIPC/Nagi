@@ -66,6 +66,8 @@ message ReportRequest {
   // 旧主面板据此发现自己已被取代（见 docs/standby.md）。
   uint64 term = 6;
   string primary = 7;
+  // 那个主面板的地址（节点信任列表里的），落后的面板据此改为跟随它。
+  string primary_address = 8;
 }
 
 message ReportResponse {

@@ -270,7 +270,7 @@ INSERT INTO standby_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?)
 DELETE FROM standby_tokens WHERE token_hash = ? AND expires_at > ?;
 
 -- name: InsertStandbyPanel :exec
-INSERT INTO standby_panels (id, name, address, key_fp, server_fp, created_at) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO standby_panels (id, name, address, server_fp, created_at) VALUES (?, ?, ?, ?, ?);
 
 -- name: ListStandbyPanels :many
 SELECT * FROM standby_panels ORDER BY created_at;
@@ -280,4 +280,10 @@ SELECT * FROM standby_panels WHERE id = ?;
 
 -- name: DeleteStandbyPanel :execrows
 DELETE FROM standby_panels WHERE id = ?;
+
+-- name: GetStandbyPanelByServerFP :one
+SELECT * FROM standby_panels WHERE server_fp = ?;
+
+-- name: DeleteStandbyPanelByServerFP :exec
+DELETE FROM standby_panels WHERE server_fp = ?;
 

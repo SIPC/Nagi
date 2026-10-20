@@ -137,6 +137,9 @@ const (
 	// SettingsServiceRemoveStandbyProcedure is the fully-qualified name of the SettingsService's
 	// RemoveStandby RPC.
 	SettingsServiceRemoveStandbyProcedure = "/nagi.v1.SettingsService/RemoveStandby"
+	// SettingsServicePromoteStandbyProcedure is the fully-qualified name of the SettingsService's
+	// PromoteStandby RPC.
+	SettingsServicePromoteStandbyProcedure = "/nagi.v1.SettingsService/PromoteStandby"
 	// SettingsServiceGetSecurityProcedure is the fully-qualified name of the SettingsService's
 	// GetSecurity RPC.
 	SettingsServiceGetSecurityProcedure = "/nagi.v1.SettingsService/GetSecurity"
@@ -1053,6 +1056,8 @@ type SettingsServiceClient interface {
 	CreateStandbyCode(context.Context, *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error)
 	GetStandbys(context.Context, *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error)
 	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
+	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
+	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1147,6 +1152,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RemoveStandby")),
 			connect.WithClientOptions(opts...),
 		),
+		promoteStandby: connect.NewClient[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse](
+			httpClient,
+			baseURL+SettingsServicePromoteStandbyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("PromoteStandby")),
+			connect.WithClientOptions(opts...),
+		),
 		getSecurity: connect.NewClient[v1.GetSecurityRequest, v1.Security](
 			httpClient,
 			baseURL+SettingsServiceGetSecurityProcedure,
@@ -1194,6 +1205,7 @@ type settingsServiceClient struct {
 	createStandbyCode *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
 	getStandbys       *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
 	removeStandby     *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
+	promoteStandby    *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
 	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
 	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
 	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
@@ -1261,6 +1273,11 @@ func (c *settingsServiceClient) RemoveStandby(ctx context.Context, req *connect.
 	return c.removeStandby.CallUnary(ctx, req)
 }
 
+// PromoteStandby calls nagi.v1.SettingsService.PromoteStandby.
+func (c *settingsServiceClient) PromoteStandby(ctx context.Context, req *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error) {
+	return c.promoteStandby.CallUnary(ctx, req)
+}
+
 // GetSecurity calls nagi.v1.SettingsService.GetSecurity.
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, req *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
 	return c.getSecurity.CallUnary(ctx, req)
@@ -1306,6 +1323,8 @@ type SettingsServiceHandler interface {
 	CreateStandbyCode(context.Context, *connect.Request[v1.CreateStandbyCodeRequest]) (*connect.Response[v1.CreateStandbyCodeResponse], error)
 	GetStandbys(context.Context, *connect.Request[v1.GetStandbysRequest]) (*connect.Response[v1.GetStandbysResponse], error)
 	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
+	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
+	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1396,6 +1415,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RemoveStandby")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServicePromoteStandbyHandler := connect.NewUnaryHandler(
+		SettingsServicePromoteStandbyProcedure,
+		svc.PromoteStandby,
+		connect.WithSchema(settingsServiceMethods.ByName("PromoteStandby")),
+		connect.WithHandlerOptions(opts...),
+	)
 	settingsServiceGetSecurityHandler := connect.NewUnaryHandler(
 		SettingsServiceGetSecurityProcedure,
 		svc.GetSecurity,
@@ -1452,6 +1477,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceGetStandbysHandler.ServeHTTP(w, r)
 		case SettingsServiceRemoveStandbyProcedure:
 			settingsServiceRemoveStandbyHandler.ServeHTTP(w, r)
+		case SettingsServicePromoteStandbyProcedure:
+			settingsServicePromoteStandbyHandler.ServeHTTP(w, r)
 		case SettingsServiceGetSecurityProcedure:
 			settingsServiceGetSecurityHandler.ServeHTTP(w, r)
 		case SettingsServiceBeginTOTPProcedure:
@@ -1517,6 +1544,10 @@ func (UnimplementedSettingsServiceHandler) GetStandbys(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RemoveStandby is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.PromoteStandby is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {

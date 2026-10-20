@@ -39,6 +39,8 @@ type PanelInfo struct {
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 Primary 不为空，是备用面板时 Standby 不为空。
 	Primary *standby.Primary
 	Standby *standby.Client
+	// Promote 把本面板（备用面板）提升为主面板。
+	Promote func(ctx context.Context) (uint64, error)
 }
 
 // PublicAddress 返回面板对外地址（不含端口）。
@@ -280,6 +282,17 @@ func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[na
 		out.Standbys = append(out.Standbys, sp)
 	}
 	return connect.NewResponse(out), nil
+}
+
+func (s *settingsService) PromoteStandby(ctx context.Context, _ *connect.Request[nagiv1.PromoteStandbyRequest]) (*connect.Response[nagiv1.PromoteStandbyResponse], error) {
+	if s.Panel.Standby == nil || s.Panel.Promote == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("本面板已经是主面板"))
+	}
+	term, err := s.Panel.Promote(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&nagiv1.PromoteStandbyResponse{Term: term}), nil
 }
 
 func (s *settingsService) RemoveStandby(ctx context.Context, req *connect.Request[nagiv1.RemoveStandbyRequest]) (*connect.Response[nagiv1.RemoveStandbyResponse], error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/proto"
 )
@@ -38,11 +39,20 @@ func (s *Service) staleProjects(ctx context.Context, report []*nagiv1.ContainerS
 	if s.Fingerprint == nil {
 		return nil
 	}
-	self := s.Fingerprint()
+	// 同一组主备面板写的都算自己写的（数据库是同一份，见 docs/standby.md）。
+	self := map[string]bool{s.Fingerprint(): true}
+	if rows, err := s.Q.ListStandbyPanels(ctx); err == nil {
+		for _, r := range rows {
+			self[r.ServerFp] = true
+		}
+	}
+	if v, err := s.Q.GetSetting(ctx, standby.SettingPrimary); err == nil {
+		self[v] = true
+	}
 	seen := map[string]bool{}
 	var out []string
 	for _, cs := range report {
-		if cs.GetPanel() == "" || cs.GetPanel() == self || seen[cs.GetProjectId()] {
+		if cs.GetPanel() == "" || self[cs.GetPanel()] || seen[cs.GetProjectId()] {
 			continue
 		}
 		// 面板上没有这个容器：按拼回处理（例如项目刚从另一个节点以节点为准重建过，这个节点上的容器还没加回来）。

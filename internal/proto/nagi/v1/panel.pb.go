@@ -384,10 +384,12 @@ type ReportRequest struct {
 	Usage *NodeUsage `protobuf:"bytes,5,opt,name=usage,proto3" json:"usage,omitempty"`
 	// 节点见过的最大任期和那个任期的主面板（公钥指纹），按面板 CA 分开记；这里是这个面板所在的那组。
 	// 旧主面板据此发现自己已被取代（见 docs/standby.md）。
-	Term          uint64 `protobuf:"varint,6,opt,name=term,proto3" json:"term,omitempty"`
-	Primary       string `protobuf:"bytes,7,opt,name=primary,proto3" json:"primary,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Term    uint64 `protobuf:"varint,6,opt,name=term,proto3" json:"term,omitempty"`
+	Primary string `protobuf:"bytes,7,opt,name=primary,proto3" json:"primary,omitempty"`
+	// 那个主面板的地址（节点信任列表里的），落后的面板据此改为跟随它。
+	PrimaryAddress string `protobuf:"bytes,8,opt,name=primary_address,json=primaryAddress,proto3" json:"primary_address,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ReportRequest) Reset() {
@@ -465,6 +467,13 @@ func (x *ReportRequest) GetTerm() uint64 {
 func (x *ReportRequest) GetPrimary() string {
 	if x != nil {
 		return x.Primary
+	}
+	return ""
+}
+
+func (x *ReportRequest) GetPrimaryAddress() string {
+	if x != nil {
+		return x.PrimaryAddress
 	}
 	return ""
 }
@@ -663,7 +672,7 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x17RenewCertificateRequest\x12\x10\n" +
 	"\x03csr\x18\x01 \x01(\fR\x03csr\"<\n" +
 	"\x18RenewCertificateResponse\x12 \n" +
-	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xa6\x02\n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xcf\x02\n" +
 	"\rReportRequest\x12%\n" +
 	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x12%\n" +
 	"\x04mesh\x18\x02 \x01(\v2\x11.nagi.v1.MeshInfoR\x04mesh\x128\n" +
@@ -673,7 +682,8 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\tfailovers\x18\x04 \x03(\v2\x17.nagi.v1.FailoverStatusR\tfailovers\x12(\n" +
 	"\x05usage\x18\x05 \x01(\v2\x12.nagi.v1.NodeUsageR\x05usage\x12\x12\n" +
 	"\x04term\x18\x06 \x01(\x04R\x04term\x12\x18\n" +
-	"\aprimary\x18\a \x01(\tR\aprimary\"j\n" +
+	"\aprimary\x18\a \x01(\tR\aprimary\x12'\n" +
+	"\x0fprimary_address\x18\b \x01(\tR\x0eprimaryAddress\"j\n" +
 	"\x0eReportResponse\x12'\n" +
 	"\x04mesh\x18\x01 \x01(\v2\x13.nagi.v1.MeshConfigR\x04mesh\x12/\n" +
 	"\acluster\x18\x02 \x01(\v2\x15.nagi.v1.PanelClusterR\acluster\"k\n" +

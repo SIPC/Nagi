@@ -504,10 +504,13 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 		if err != nil {
 			return err
 		}
-		a.applyCluster(p, resp.GetCluster())
+		switched := a.applyCluster(p, resp.GetCluster())
 		if key, ok := a.mesh.update(p.Fingerprint, p.Address, resp.GetMesh()); ok && !relaying {
 			relaying = true
 			go a.mesh.relayLoop(sctx, panel, key)
+		}
+		if switched {
+			continue // 马上告诉面板节点已经认它是主面板
 		}
 		select {
 		case <-ctx.Done():
@@ -536,8 +539,12 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 	latest := a.metrics.Latest()
 	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
 	st := a.clusterOf(p)
+	var primaryAddr string
+	if pp, ok := a.id.panel(st.Primary); ok {
+		primaryAddr = pp.Address
+	}
 	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
-		Term: st.Term, Primary: st.Primary})
+		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

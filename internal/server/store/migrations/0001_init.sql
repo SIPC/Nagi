@@ -150,16 +150,15 @@ CREATE TABLE project_links (
     PRIMARY KEY (a, b)
 );
 
--- 备用面板（见 docs/standby.md）：配对时登记，同步连接出示的客户端证书公钥必须对得上。
+-- 备用面板（见 docs/standby.md）：配对时登记；提升备用面板时，原主面板也登记在这里（它回来后降为备用）。
 CREATE TABLE standby_panels (
     id         TEXT    PRIMARY KEY,
     name       TEXT    NOT NULL,
     -- 备用面板自己的对外地址（host:port），配对时提交
     address    TEXT    NOT NULL,
-    -- 客户端证书公钥的指纹（sha256//...）
-    key_fp     TEXT    NOT NULL UNIQUE,
-    -- 备用面板服务端证书公钥的指纹：节点连它时钉住这个指纹
-    server_fp  TEXT    NOT NULL,
+    -- 备用面板服务端公钥的指纹（sha256//...）：节点连它时钉住这个指纹；
+    -- 它同步时出示的客户端证书也用这把密钥（面板 CA 签发），据此认出是哪个备用面板
+    server_fp  TEXT    NOT NULL UNIQUE,
     created_at INTEGER NOT NULL
 );
 

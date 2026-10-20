@@ -53,8 +53,12 @@ type Registry struct {
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)
 	// Cluster 返回主备面板的信息，随上报的回复告诉节点（见 docs/standby.md）。
 	Cluster func(ctx context.Context) *nagiv1.PanelCluster
+	// Self 是本面板的公钥指纹。
+	Self string
 	// ReadOnly：本面板是备用面板，不给节点下发任何东西（告警配置、面板域名），只查询。
 	ReadOnly bool
+	// Behind 检查节点上报里的任期：返回 true 表示本面板已经落后（有了新的主面板），不再处理这次上报。
+	Behind func(ctx context.Context, req *nagiv1.ReportRequest) bool
 }
 
 // Conns 返回所有在线节点的连接。
@@ -86,6 +90,8 @@ type Conn struct {
 	pending bool
 
 	domainSent bool
+	// accepted：节点最近一次上报认本面板是主面板（见 docs/standby.md）。之前下发的修改会被节点拒绝。
+	accepted bool
 }
 
 // Pending 返回节点是否在等管理员批准。
@@ -226,9 +232,6 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	r.conns[nodeID] = c
 	r.mu.Unlock()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
-	if !c.pending {
-		go r.pushAlertConfig(ctx, c, nil)
-	}
 
 	select {
 	case <-sess.CloseChan():
@@ -241,7 +244,9 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	}
 	r.mu.Unlock()
 	r.updateMesh()
-	r.touch(context.Background(), nodeID, c.LastReport())
+	if ctx.Err() == nil {
+		r.touch(context.Background(), nodeID, c.LastReport())
+	}
 	r.log.Info("节点已断开", "node", nodeID)
 }
 
@@ -278,9 +283,17 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 			p.r.log.Warn("节点上报的 WireGuard 公钥和加入时的不一致，不采用", "node", p.conn.NodeID)
 		}
 	}
-	pushDomain := req.GetNode().GetEmbedded() && !p.conn.domainSent
+	// 节点认的主面板不是本面板时（例如刚提升，节点还没收到新的任期），下发的东西都会被拒绝：
+	// 等节点认了本面板再下发告警配置、面板域名、补推配置。节点收到新的主面板后会马上再上报一次。
+	accepts := req.GetPrimary() == "" || req.GetPrimary() == p.r.Self
+	pushAlerts := accepts && !p.conn.accepted && !pending
+	p.conn.accepted = accepts
+	pushDomain := accepts && req.GetNode().GetEmbedded() && !p.conn.domainSent
 	p.conn.domainSent = p.conn.domainSent || pushDomain
 	p.conn.mu.Unlock()
+	if pushAlerts {
+		go p.r.pushAlertConfig(context.Background(), p.conn, nil)
+	}
 	if pushDomain {
 		// 面板自带的节点连上后，把面板域名告诉它（可能在节点离线时改过）。
 		go p.r.pushDomain(p.conn)
@@ -288,7 +301,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
-	if !pending && p.r.OnReport != nil {
+	if !pending && p.r.Behind != nil && p.r.Behind(ctx, req) {
+		return &nagiv1.ReportResponse{}, nil
+	}
+	if !pending && accepts && p.r.OnReport != nil {
 		go p.r.OnReport(p.conn, req)
 	}
 	if pending {

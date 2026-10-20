@@ -79,6 +79,7 @@ type Server struct {
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
 	primary *standby.Primary
 	standby *standby.Client
+	role    role
 }
 
 // IsStandby 判断本面板是不是备用面板。
@@ -128,7 +129,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("打开面板数据库: %w", err)
 	}
-	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d), domainCh: make(chan string, 1)}
+	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d), domainCh: make(chan string, 1), role: role{ch: make(chan struct{})}}
 
 	s.publicAddress, err = s.setting(ctx, api.SettingPublicAddress, detectAddress)
 	if err != nil {
@@ -144,7 +145,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
-	if info == nil && cfg.StandbyCode != "" {
+	// 配过对的数据目录（之后可能提升成了主面板）不再配对。
+	if info == nil && cfg.StandbyCode != "" && !standby.Paired(cfg.DataDir) {
 		host, _ := os.Hostname()
 		if err := standby.Pair(ctx, cfg.DataDir, cfg.StandbyCode, host, net.JoinHostPort(s.publicAddress, strconv.Itoa(s.port))); err != nil {
 			d.Close()
@@ -194,6 +196,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		}
 		return standby.Cluster(ctx, s.q, addr)
 	}
+	s.nodes.Behind = s.behind
+	s.nodes.Self = s.fingerprint
 	if s.standby != nil {
 		// 备用面板只查询：不给节点补推配置、不下发告警配置，不进 mesh（见 docs/standby.md）。
 		s.nodes.ReadOnly = true
@@ -282,6 +286,8 @@ func (s *Server) CreateEnrollToken(ctx context.Context) (string, error) {
 // Run 提供服务，直到 ctx 取消。
 func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if s.standby != nil {
 		go s.standby.Run(ctx)
 	} else if err := s.printSetupLink(ctx); err != nil {
@@ -308,6 +314,7 @@ func (s *Server) Run(ctx context.Context) error {
 		},
 		Primary: s.primary,
 		Standby: s.standby,
+		Promote: s.Promote,
 	}}
 	a.Mount(mux)
 	if s.primary != nil {
@@ -347,6 +354,13 @@ func (s *Server) Run(ctx context.Context) error {
 		defer cancel()
 		s.listener.Close()
 		return srv.Shutdown(shutdownCtx)
+	case <-s.role.ch:
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelShutdown()
+		s.listener.Close()
+		_ = srv.Shutdown(shutdownCtx)
+		cancel()
+		return ErrRoleChanged
 	case err := <-errc:
 		return err
 	}
