@@ -75,6 +75,9 @@ service NodeService {
   rpc HandoverNodes(HandoverNodesRequest) returns (HandoverNodesResponse);
   // 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
   rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
+  // 节点上保存的副本（作为备份节点或热备）。in_use 为 false 的是已经没有容器使用的副本，可以删除。
+  rpc ListNodeReplicas(NodeRef) returns (ListNodeReplicasResponse);
+  rpc DeleteNodeReplica(DeleteNodeReplicaRequest) returns (DeleteNodeReplicaResponse);
   // 节点的 mesh 状态。
   rpc GetNodeMesh(GetNodeMeshRequest) returns (MeshStatus);
   // 让节点经 mesh 连一下某个成员。
@@ -155,6 +158,24 @@ message ListNodePanelsRequest {
 message ListNodePanelsResponse {
   repeated TrustedPanel panels = 1;
 }
+
+message ListNodeReplicasResponse {
+  repeated NodeReplica replicas = 1;
+}
+
+message NodeReplica {
+  Replica replica = 1;
+  // 面板上还有容器以这个节点为备份节点或热备。
+  bool in_use = 2;
+}
+
+message DeleteNodeReplicaRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string container = 3;
+}
+
+message DeleteNodeReplicaResponse {}
 
 message HandoverNodesRequest {
   repeated string node_ids = 1;

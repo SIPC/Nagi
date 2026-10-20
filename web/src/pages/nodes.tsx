@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
-import { NodeMetrics } from "@/components/metrics";
+import { NodeMetrics, fmtBytes } from "@/components/metrics";
 import { HandOverCard, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
 import {
@@ -25,11 +25,12 @@ import {
   Th,
 } from "@/components/ui";
 
-type NodeTab = "metrics" | "panels" | "mesh" | "settings";
+type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
 const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: "监控" },
   { value: "settings", label: "设置" },
+  { value: "replicas", label: "副本" },
   { value: "panels", label: "受信面板" },
   { value: "mesh", label: "Mesh" },
 ];
@@ -154,6 +155,8 @@ export function NodesPage() {
                                   <NodeMetrics nodeId={n.id} />
                                 ) : open.tab === "mesh" ? (
                                   <NodeMesh nodeId={n.id} />
+                                ) : open.tab === "replicas" ? (
+                                  <NodeReplicas nodeId={n.id} />
                                 ) : open.tab === "settings" ? (
                                   <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
                                 ) : (
@@ -295,3 +298,53 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
     </form>
   );
 }
+
+// NodeReplicas：节点作为备份节点或热备保存的副本。已经没有容器使用的副本可以删除。
+function NodeReplicas({ nodeId }: { nodeId: string }) {
+  const queryClient = useQueryClient();
+  const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
+  const [error, setError] = useState("");
+  if (q.isPending) return <Loading />;
+  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  const remove = async (projectId: string, container: string, label: string) => {
+    if (!confirm(`删除副本 ${label}？副本里的快照将被删除，无法恢复。`)) return;
+    setError("");
+    try {
+      await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
+      queryClient.invalidateQueries({ queryKey: ["node-replicas", nodeId] });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <div className="grid gap-3">
+      <p className="text-[13px] text-muted-foreground">本节点作为备份节点或热备保存的容器副本。</p>
+      {error && <Alert>{error}</Alert>}
+      <div className="divide-y rounded-md border">
+        {q.data.replicas.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">暂无副本</p>}
+        {q.data.replicas.map(({ replica: r, inUse }) => {
+          const label = `${r?.projectName || r?.projectId}/${r?.container}`;
+          return (
+            <div key={`${r?.projectId}-${r?.container}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="font-medium">{label}</span>
+                  {!inUse && <Badge tone="warning">未使用</Badge>}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  来自 {r?.sourceName || "—"} · {fmtBytes(Number(r?.bytes ?? 0))} · 最近同步 {r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—"}
+                </div>
+              </div>
+              {!inUse && (
+                <Button size="xs" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
+                  删除
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

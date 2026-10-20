@@ -66,6 +66,12 @@ const (
 	// NodeServiceRemoveNodePanelProcedure is the fully-qualified name of the NodeService's
 	// RemoveNodePanel RPC.
 	NodeServiceRemoveNodePanelProcedure = "/nagi.v1.NodeService/RemoveNodePanel"
+	// NodeServiceListNodeReplicasProcedure is the fully-qualified name of the NodeService's
+	// ListNodeReplicas RPC.
+	NodeServiceListNodeReplicasProcedure = "/nagi.v1.NodeService/ListNodeReplicas"
+	// NodeServiceDeleteNodeReplicaProcedure is the fully-qualified name of the NodeService's
+	// DeleteNodeReplica RPC.
+	NodeServiceDeleteNodeReplicaProcedure = "/nagi.v1.NodeService/DeleteNodeReplica"
 	// NodeServiceGetNodeMeshProcedure is the fully-qualified name of the NodeService's GetNodeMesh RPC.
 	NodeServiceGetNodeMeshProcedure = "/nagi.v1.NodeService/GetNodeMesh"
 	// NodeServicePingNodeMeshProcedure is the fully-qualified name of the NodeService's PingNodeMesh
@@ -512,6 +518,9 @@ type NodeServiceClient interface {
 	HandoverNodes(context.Context, *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
+	// 节点上保存的副本（作为备份节点或热备）。in_use 为 false 的是已经没有容器使用的副本，可以删除。
+	ListNodeReplicas(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.ListNodeReplicasResponse], error)
+	DeleteNodeReplica(context.Context, *connect.Request[v1.DeleteNodeReplicaRequest]) (*connect.Response[v1.DeleteNodeReplicaResponse], error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 让节点经 mesh 连一下某个成员。
@@ -568,6 +577,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+NodeServiceRemoveNodePanelProcedure,
 			connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeReplicas: connect.NewClient[v1.NodeRef, v1.ListNodeReplicasResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeReplicasProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicas")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeReplica: connect.NewClient[v1.DeleteNodeReplicaRequest, v1.DeleteNodeReplicaResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeReplicaProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
 			connect.WithClientOptions(opts...),
 		),
 		getNodeMesh: connect.NewClient[v1.GetNodeMeshRequest, v1.MeshStatus](
@@ -645,6 +666,8 @@ type nodeServiceClient struct {
 	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
 	handoverNodes       *connect.Client[v1.HandoverNodesRequest, v1.HandoverNodesResponse]
 	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
+	listNodeReplicas    *connect.Client[v1.NodeRef, v1.ListNodeReplicasResponse]
+	deleteNodeReplica   *connect.Client[v1.DeleteNodeReplicaRequest, v1.DeleteNodeReplicaResponse]
 	getNodeMesh         *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
 	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
 	getPanelMesh        *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
@@ -676,6 +699,16 @@ func (c *nodeServiceClient) HandoverNodes(ctx context.Context, req *connect.Requ
 // RemoveNodePanel calls nagi.v1.NodeService.RemoveNodePanel.
 func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, req *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
 	return c.removeNodePanel.CallUnary(ctx, req)
+}
+
+// ListNodeReplicas calls nagi.v1.NodeService.ListNodeReplicas.
+func (c *nodeServiceClient) ListNodeReplicas(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.ListNodeReplicasResponse], error) {
+	return c.listNodeReplicas.CallUnary(ctx, req)
+}
+
+// DeleteNodeReplica calls nagi.v1.NodeService.DeleteNodeReplica.
+func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, req *connect.Request[v1.DeleteNodeReplicaRequest]) (*connect.Response[v1.DeleteNodeReplicaResponse], error) {
+	return c.deleteNodeReplica.CallUnary(ctx, req)
 }
 
 // GetNodeMesh calls nagi.v1.NodeService.GetNodeMesh.
@@ -743,6 +776,9 @@ type NodeServiceHandler interface {
 	HandoverNodes(context.Context, *connect.Request[v1.HandoverNodesRequest]) (*connect.Response[v1.HandoverNodesResponse], error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error)
+	// 节点上保存的副本（作为备份节点或热备）。in_use 为 false 的是已经没有容器使用的副本，可以删除。
+	ListNodeReplicas(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.ListNodeReplicasResponse], error)
+	DeleteNodeReplica(context.Context, *connect.Request[v1.DeleteNodeReplicaRequest]) (*connect.Response[v1.DeleteNodeReplicaResponse], error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 让节点经 mesh 连一下某个成员。
@@ -795,6 +831,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		NodeServiceRemoveNodePanelProcedure,
 		svc.RemoveNodePanel,
 		connect.WithSchema(nodeServiceMethods.ByName("RemoveNodePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodeReplicasHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeReplicasProcedure,
+		svc.ListNodeReplicas,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeReplicas")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeReplicaHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeReplicaProcedure,
+		svc.DeleteNodeReplica,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeReplica")),
 		connect.WithHandlerOptions(opts...),
 	)
 	nodeServiceGetNodeMeshHandler := connect.NewUnaryHandler(
@@ -873,6 +921,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceHandoverNodesHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodePanelProcedure:
 			nodeServiceRemoveNodePanelHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeReplicasProcedure:
+			nodeServiceListNodeReplicasHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeReplicaProcedure:
+			nodeServiceDeleteNodeReplicaHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMeshProcedure:
 			nodeServiceGetNodeMeshHandler.ServeHTTP(w, r)
 		case NodeServicePingNodeMeshProcedure:
@@ -918,6 +970,14 @@ func (UnimplementedNodeServiceHandler) HandoverNodes(context.Context, *connect.R
 
 func (UnimplementedNodeServiceHandler) RemoveNodePanel(context.Context, *connect.Request[v1.RemoveNodePanelRequest]) (*connect.Response[v1.RemoveNodePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RemoveNodePanel is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeReplicas(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.ListNodeReplicasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeReplicas is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNodeReplica(context.Context, *connect.Request[v1.DeleteNodeReplicaRequest]) (*connect.Response[v1.DeleteNodeReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeReplica is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error) {

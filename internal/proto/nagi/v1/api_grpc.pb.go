@@ -383,6 +383,8 @@ const (
 	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
 	NodeService_HandoverNodes_FullMethodName       = "/nagi.v1.NodeService/HandoverNodes"
 	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
+	NodeService_ListNodeReplicas_FullMethodName    = "/nagi.v1.NodeService/ListNodeReplicas"
+	NodeService_DeleteNodeReplica_FullMethodName   = "/nagi.v1.NodeService/DeleteNodeReplica"
 	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
 	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
 	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
@@ -408,6 +410,9 @@ type NodeServiceClient interface {
 	HandoverNodes(ctx context.Context, in *HandoverNodesRequest, opts ...grpc.CallOption) (*HandoverNodesResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
+	// 节点上保存的副本（作为备份节点或热备）。in_use 为 false 的是已经没有容器使用的副本，可以删除。
+	ListNodeReplicas(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*ListNodeReplicasResponse, error)
+	DeleteNodeReplica(ctx context.Context, in *DeleteNodeReplicaRequest, opts ...grpc.CallOption) (*DeleteNodeReplicaResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 让节点经 mesh 连一下某个成员。
@@ -473,6 +478,26 @@ func (c *nodeServiceClient) RemoveNodePanel(ctx context.Context, in *RemoveNodeP
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveNodePanelResponse)
 	err := c.cc.Invoke(ctx, NodeService_RemoveNodePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListNodeReplicas(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*ListNodeReplicasResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeReplicasResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeReplicas_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, in *DeleteNodeReplicaRequest, opts ...grpc.CallOption) (*DeleteNodeReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNodeReplicaResponse)
+	err := c.cc.Invoke(ctx, NodeService_DeleteNodeReplica_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -601,6 +626,9 @@ type NodeServiceServer interface {
 	HandoverNodes(context.Context, *HandoverNodesRequest) (*HandoverNodesResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
+	// 节点上保存的副本（作为备份节点或热备）。in_use 为 false 的是已经没有容器使用的副本，可以删除。
+	ListNodeReplicas(context.Context, *NodeRef) (*ListNodeReplicasResponse, error)
+	DeleteNodeReplica(context.Context, *DeleteNodeReplicaRequest) (*DeleteNodeReplicaResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error)
 	// 让节点经 mesh 连一下某个成员。
@@ -643,6 +671,12 @@ func (UnimplementedNodeServiceServer) HandoverNodes(context.Context, *HandoverNo
 }
 func (UnimplementedNodeServiceServer) RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNodePanel not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeReplicas(context.Context, *NodeRef) (*ListNodeReplicasResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeReplicas not implemented")
+}
+func (UnimplementedNodeServiceServer) DeleteNodeReplica(context.Context, *DeleteNodeReplicaRequest) (*DeleteNodeReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeReplica not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMesh not implemented")
@@ -766,6 +800,42 @@ func _NodeService_RemoveNodePanel_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServiceServer).RemoveNodePanel(ctx, req.(*RemoveNodePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListNodeReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeReplicas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeReplicas_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeReplicas(ctx, req.(*NodeRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_DeleteNodeReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeReplicaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_DeleteNodeReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, req.(*DeleteNodeReplicaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -990,6 +1060,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveNodePanel",
 			Handler:    _NodeService_RemoveNodePanel_Handler,
+		},
+		{
+			MethodName: "ListNodeReplicas",
+			Handler:    _NodeService_ListNodeReplicas_Handler,
+		},
+		{
+			MethodName: "DeleteNodeReplica",
+			Handler:    _NodeService_DeleteNodeReplica_Handler,
 		},
 		{
 			MethodName: "GetNodeMesh",

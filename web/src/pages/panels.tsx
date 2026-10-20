@@ -1,11 +1,23 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { errorMessage, nodeClient } from "@/lib/api";
+import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import type { Project } from "@/gen/nagi/v1/common_pb";
 import { Alert, Badge, Button, Check, Field, Loading, Section, Spinner, Status, Textarea } from "@/components/ui";
 
 // ---- 移交给其他面板 ----
 
 type HandOverResult = { name: string; ok: boolean; error: string };
+
+// relatedNodes 返回和项目有关的节点：容器所在、备份节点、顶替的两方和作为见证人的节点。移交按整个项目，这些节点要一起选。
+function relatedNodes(p: Project) {
+  const out = new Set<string>();
+  for (const c of p.containers) {
+    out.add(c.nodeId);
+    if (c.backupNodeId) out.add(c.backupNodeId);
+    for (const n of [c.failover?.a?.nodeId, c.failover?.b?.nodeId, c.failover?.witness?.nodeId]) if (n) out.add(n);
+  }
+  return [...out];
+}
 
 // HandOverCard：把勾选的节点移交给另一个面板。一个节点同一时间只归一个面板管理。
 export function HandOverCard({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
@@ -14,6 +26,14 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<HandOverResult[]>([]);
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  const projectList = (projects.data?.projects ?? []).map((p) => p.project!).filter((p) => p && p.containers.length > 0);
+  // 项目的相关节点都选中了，就算选中了这个项目。
+  const projectSelected = (p: Project) => relatedNodes(p).every((n) => selected.includes(n));
+  const toggleProject = (p: Project, on: boolean) => {
+    const nodes = relatedNodes(p);
+    setSelected(on ? [...new Set([...selected, ...nodes])] : selected.filter((n) => !nodes.includes(n)));
+  };
 
   const run = async () => {
     if (!confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点和只在这些节点上的项目，新面板从节点上的缓存恢复这些项目。`)) return;
@@ -53,6 +73,17 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
             onChange={(e) => setCode(e.target.value)}
           />
         </Field>
+        {projectList.length > 0 && (
+          <Field label="按项目选择" help="选中项目会同时选中它的容器所在节点、备份节点、顶替节点和作为见证人的节点。">
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {projectList.map((p) => (
+                <Check key={p.id} checked={projectSelected(p)} onChange={(v) => toggleProject(p, v)}>
+                  {p.name}
+                </Check>
+              ))}
+            </div>
+          </Field>
+        )}
         <Field label="节点">
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             {nodes.map((n) => (

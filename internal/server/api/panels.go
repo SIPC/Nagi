@@ -317,3 +317,37 @@ func (s *nodeService) SetNodeProjectsRoot(ctx context.Context, req *connect.Requ
 	}
 	return connect.NewResponse(resp), nil
 }
+
+// ---- 副本 ----
+
+func (s *nodeService) ListNodeReplicas(ctx context.Context, req *connect.Request[nagiv1.NodeRef]) (*connect.Response[nagiv1.ListNodeReplicasResponse], error) {
+	nodeID := req.Msg.GetNodeId()
+	agent, err := s.agent(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.ListReplicas(ctx, &nagiv1.ListReplicasRequest{})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	out := &nagiv1.ListNodeReplicasResponse{}
+	for _, r := range resp.GetReplicas() {
+		out.Replicas = append(out.Replicas, &nagiv1.NodeReplica{Replica: r, InUse: s.Projects.ReplicaInUse(ctx, nodeID, r.GetProjectId(), r.GetContainer())})
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *nodeService) DeleteNodeReplica(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeReplicaRequest]) (*connect.Response[nagiv1.DeleteNodeReplicaResponse], error) {
+	m := req.Msg
+	if s.Projects.ReplicaInUse(ctx, m.GetNodeId(), m.GetProjectId(), m.GetContainer()) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这个副本还在使用：先在容器上取消备份节点或顶替"))
+	}
+	agent, err := s.agent(m.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if _, err := agent.DeleteReplica(ctx, &nagiv1.ContainerRef{ProjectId: m.GetProjectId(), Container: m.GetContainer()}); err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(&nagiv1.DeleteNodeReplicaResponse{}), nil
+}

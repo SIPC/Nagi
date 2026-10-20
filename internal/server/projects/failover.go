@@ -506,3 +506,16 @@ func (s *Service) ForgetHandedOver(ctx context.Context, projectID string) {
 		}
 	}
 }
+
+// ReplicaInUse 判断节点上的副本还有没有用：容器以这个节点为备份节点，或者这个节点是它的热备。
+func (s *Service) ReplicaInUse(ctx context.Context, nodeID, projectID, name string) bool {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return false
+	}
+	if c.BackupNodeID == nodeID {
+		return true
+	}
+	cfg := failoverOf(c)
+	return cfg != nil && c.NodeID != nodeID && isParticipant(cfg, nodeID)
+}
