@@ -5,7 +5,8 @@ import { FolderKanban, Plus } from "lucide-react";
 import { authClient, errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { slugName } from "@/lib/utils";
-import { ProjectState } from "@/components/status";
+import { ProjectState, stateOf } from "@/components/status";
+import { cn } from "@/lib/utils";
 import { useContainerForm } from "@/components/container-form";
 import {
   Alert,
@@ -20,9 +21,6 @@ import {
   Section,
   Select,
   Spinner,
-  Table,
-  Td,
-  Th,
 } from "@/components/ui";
 
 // Reminders：首页提醒开启两步验证、单独备份面板主密钥。可以"不再提醒"（只记在这个浏览器里）。
@@ -101,6 +99,13 @@ function formatDate(d: Date | undefined) {
   return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+const dot = {
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-destructive",
+  neutral: "bg-muted-foreground/50",
+};
+
 export function ProjectsPage() {
   const projects = useQuery({
     queryKey: ["projects"],
@@ -134,63 +139,62 @@ export function ProjectsPage() {
             新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。
           </Empty>
         ) : (
-          <Section flush>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>名称</Th>
-                  <Th>节点</Th>
-                  <Th>状态</Th>
-                  <Th>容器</Th>
-                  <Th>创建时间</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {projects.data.projects.map((summary) => {
-                  const p = summary.project;
-                  if (!p) return null;
-                  const services = summary.status?.services ?? [];
-                  const deployed = p.containers.filter((m) => m.deployedVersion > 0n).length;
-                  const total = p.containers.length;
-                  const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
-                  return (
-                    <tr key={p.id} className="transition-colors hover:bg-subtle">
-                      <Td>
-                        <div className="grid gap-0.5">
-                          <Link to="/projects/$projectId" params={{ projectId: p.id }} className="font-medium hover:underline">
-                            {p.name}
-                          </Link>
-                          <span className="truncate font-mono text-xs text-muted-foreground">{p.networkName}</span>
-                        </div>
-                      </Td>
-                      <Td className="text-muted-foreground">
-                        {nodeIds.length === 0 ? (
-                          "—"
-                        ) : (
-                          <div className="flex flex-wrap gap-x-3 gap-y-1">
-                            {nodeIds.map((id) => (
-                              <span key={id} className="inline-flex items-center gap-1.5">
-                                {nodeName(id)}
-                                {offline(id) && <Badge tone="warning">离线</Badge>}
-                              </span>
-                            ))}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {projects.data.projects.map((summary) => {
+              const p = summary.project;
+              if (!p) return null;
+              const services = summary.status?.services ?? [];
+              const deployed = p.containers.some((m) => m.deployedVersion > 0n);
+              return (
+                <Link
+                  key={p.id}
+                  to="/projects/$projectId"
+                  params={{ projectId: p.id }}
+                  className="group flex flex-col rounded-lg border bg-card transition-colors hover:border-foreground/25"
+                >
+                  <div className="flex items-start justify-between gap-2 px-3.5 pt-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-medium group-hover:underline">{p.name}</div>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <span className="truncate font-mono text-xs text-muted-foreground">{p.networkName}</span>
+                        {p.stateful && <Badge>有状态</Badge>}
+                      </div>
+                    </div>
+                    <ProjectState services={services} deployed={deployed} />
+                  </div>
+                  <div className="grid flex-1 content-start gap-1 px-3.5 py-2.5">
+                    {p.containers.length === 0 ? (
+                      <span className="text-[13px] text-muted-foreground">暂无容器</span>
+                    ) : (
+                      p.containers.map((c) => {
+                        const st = offline(c.nodeId)
+                          ? { tone: "warning" as const, label: "节点离线" }
+                          : stateOf(
+                              services.filter((x) => x.container === c.name),
+                              c.deployedVersion > 0n,
+                            );
+                        const tookOver = c.failover && c.failover.a?.nodeId !== c.nodeId;
+                        return (
+                          <div key={c.name} className="flex items-center gap-2 text-[13px]" title={st.label}>
+                            <span className={cn("size-2 shrink-0 rounded-full", dot[st.tone])} />
+                            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                            {c.failover && <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? "已顶替" : "顶替"}</Badge>}
+                            <span className="shrink-0 text-xs text-muted-foreground">{nodeName(c.nodeId)}</span>
                           </div>
-                        )}
-                      </Td>
-                      <Td>
-                        <ProjectState services={services} deployed={deployed > 0} />
-                      </Td>
-                      <Td className="tabular-nums">
-                        {total}
-                        {deployed > 0 && deployed < total && <span className="ml-1.5 text-xs text-muted-foreground">已部署 {deployed}</span>}
-                      </Td>
-                      <Td className="text-muted-foreground tabular-nums">{formatDate(toDate(p.createdAt))}</Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </Section>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
+                    <span>
+                      {p.containers.length} 个容器{p.routes.length > 0 && ` · ${p.routes.length} 个端口映射`}
+                    </span>
+                    <span className="tabular-nums">创建于 {formatDate(toDate(p.createdAt))}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         )}
       </div>
     </>

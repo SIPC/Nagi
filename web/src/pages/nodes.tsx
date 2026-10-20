@@ -1,33 +1,19 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Plus, Server } from "lucide-react";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
-import { PageHeader } from "@/pages/layout";
+import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeMetrics, fmtBytes } from "@/components/metrics";
-import { HandOverCard, NodePanels } from "@/pages/panels";
+import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import {
-  Alert,
-  Badge,
-  Button,
-  CodeBlock,
-  EmptyRow,
-  Field,
-  Input,
-  Loading,
-  Notice,
-  Section,
-  Status,
-  Table,
-  Tabs,
-  Td,
-  Th,
-} from "@/components/ui";
+import { Alert, Badge, Button, CodeBlock, Dialog, Empty, Field, Input, Loading, Menu, Meter, Notice, Status, Tabs } from "@/components/ui";
+import type { Node } from "@/gen/nagi/v1/api_pb";
 
-type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
+export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
-const nodeTabs: { value: NodeTab; label: string }[] = [
+export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: "监控" },
   { value: "settings", label: "设置" },
   { value: "replicas", label: "副本" },
@@ -35,148 +21,207 @@ const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "mesh", label: "Mesh" },
 ];
 
+function useNodeList() {
+  return useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 5000 });
+}
+
+function NodeStatus({ n }: { n: Node }) {
+  if (n.pending) return <Status tone="warning">待批准</Status>;
+  if (n.online) return <Status tone="success">在线</Status>;
+  return <Status>离线</Status>;
+}
+
+// approve 批准用接入码加入的节点。
+async function approve(n: Node) {
+  if (!confirm(`批准节点 ${n.name}（${n.address || n.id}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`)) return false;
+  await nodeClient.approveNode({ nodeId: n.id });
+  return true;
+}
+
 export function NodesPage() {
-  const nodes = useQuery({
-    queryKey: ["nodes"],
-    queryFn: () => nodeClient.listNodes({}),
-    refetchInterval: 5000,
-  });
-  const [open, setOpen] = useState<{ id: string; tab: NodeTab } | null>(null);
-  const expand = (id: string) => setOpen(open?.id === id ? null : { id, tab: "metrics" });
+  const nodes = useNodeList();
+  const [dialog, setDialog] = useState<"add" | "handover" | null>(null);
+  const list = nodes.data?.nodes ?? [];
 
   return (
     <>
-      <PageHeader title="节点" description="运行容器的机器。节点主动连接面板，面板不可用时节点上的容器照常运行。" />
-      <div className="grid gap-6">
-        <Section title="全部节点" flush>
-          {nodes.isPending ? (
-            <Loading />
-          ) : nodes.error ? (
-            <div className="px-5 pb-4">
-              <Alert>{errorMessage(nodes.error)}</Alert>
-            </div>
-          ) : nodes.data.nodes.length === 0 ? (
-            <EmptyRow>暂无节点，可通过下方的安装命令添加。</EmptyRow>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>名称</Th>
-                  <Th>状态</Th>
-                  <Th>系统</Th>
-                  <Th>Docker / Compose</Th>
-                  <Th>Nagi</Th>
-                  <Th />
-                </tr>
-              </thead>
-              <tbody>
-                {nodes.data.nodes.map((n) => {
-                  const expanded = open?.id === n.id;
-                  return (
-                    <Fragment key={n.id}>
-                      <tr>
-                        <Td>
-                          <div className="flex items-center gap-2 font-medium">
-                            {n.name}
-                            {n.info?.embedded && <Badge>面板内置</Badge>}
-                            {n.pending && <Badge tone="warning">待批准</Badge>}
-                          </div>
-                          <div className="font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
-                        </Td>
-                        <Td>
-                          {n.online ? (
-                            <Status tone="success">在线</Status>
-                          ) : (
-                            <div className="flex flex-col">
-                              <Status>离线</Status>
-                              <span className="text-xs text-muted-foreground">{timeAgo(toDate(n.lastSeen))}</span>
-                            </div>
-                          )}
-                        </Td>
-                        <Td className="text-[13px] text-muted-foreground">{n.info ? `${n.info.os}/${n.info.arch}` : "—"}</Td>
-                        <Td className="font-mono text-xs text-muted-foreground">
-                          {n.info ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}` : "—"}
-                        </Td>
-                        <Td className="font-mono text-xs text-muted-foreground">{n.info?.version || "—"}</Td>
-                        <Td className="text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1">
-                            {n.pending && (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                title="该节点通过接入码加入。批准前不加入 mesh、不接收告警配置，也无法操作。"
-                                onClick={async () => {
-                                  if (
-                                    !confirm(
-                                      `批准节点 ${n.name}（${n.address || n.id}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`,
-                                    )
-                                  )
-                                    return;
-                                  await nodeClient.approveNode({ nodeId: n.id });
-                                  nodes.refetch();
-                                }}
-                              >
-                                批准
-                              </Button>
-                            )}
-                            <Button size="xs" variant="ghost" aria-expanded={expanded} onClick={() => expand(n.id)}>
-                              详情
-                              {expanded ? <ChevronDown /> : <ChevronRight />}
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              onClick={async () => {
-                                if (!confirm(`移除节点 ${n.name}？面板将不再管理该节点并拒绝其重新连接，节点上的项目照常运行。`)) return;
-                                await nodeClient.removeNode({ nodeId: n.id });
-                                nodes.refetch();
-                              }}
-                            >
-                              移除
-                            </Button>
-                          </div>
-                        </Td>
-                      </tr>
-                      {expanded && (
-                        <tr>
-                          <Td colSpan={6} className="h-auto py-0">
-                            {n.pending ? (
-                              <div className="py-4">
-                                <Notice tone="warning" title="尚未批准">
-                                  该节点通过接入码加入，尚未批准。确认是自有机器后批准，批准后才能查看和操作。
-                                </Notice>
-                              </div>
-                            ) : !n.online ? (
-                              <p className="py-6 text-center text-[13px] text-muted-foreground">节点离线，无法查询</p>
-                            ) : (
-                              <div className="pb-5">
-                                <Tabs value={open.tab} onChange={(tab) => setOpen({ id: n.id, tab })} items={nodeTabs} className="mb-4" />
-                                {open.tab === "metrics" ? (
-                                  <NodeMetrics nodeId={n.id} />
-                                ) : open.tab === "mesh" ? (
-                                  <NodeMesh nodeId={n.id} />
-                                ) : open.tab === "replicas" ? (
-                                  <NodeReplicas nodeId={n.id} />
-                                ) : open.tab === "settings" ? (
-                                  <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
-                                ) : (
-                                  <NodePanels nodeId={n.id} />
-                                )}
-                              </div>
-                            )}
-                          </Td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </Table>
-          )}
-        </Section>
+      <PageHeader
+        title="节点"
+        description="运行容器的机器。节点主动连接面板，面板不可用时节点上的容器照常运行。"
+        actions={
+          <>
+            <Button onClick={() => setDialog("add")}>
+              <Plus />
+              添加节点
+            </Button>
+            {list.length > 0 && <Menu items={[{ label: "移交给其他面板", onSelect: () => setDialog("handover") }]} />}
+          </>
+        }
+      />
+      {nodes.isPending ? (
+        <Loading />
+      ) : nodes.error ? (
+        <Alert>{errorMessage(nodes.error)}</Alert>
+      ) : list.length === 0 ? (
+        <Empty title="暂无节点" icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>添加节点</Button>}>
+          生成安装命令，在新机器上执行后即接入本面板。
+        </Empty>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {list.map((n) => (
+            <NodeCard key={n.id} n={n} onApproved={() => nodes.refetch()} />
+          ))}
+        </div>
+      )}
+      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title="添加节点" description="生成安装命令，在新机器上执行后即接入本面板。">
         <AddNode />
-        {nodes.data && nodes.data.nodes.length > 0 && <HandOverCard nodes={nodes.data.nodes} />}
+      </Dialog>
+      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title="移交给其他面板" description="使用其他面板生成的接入码，将节点移交给该面板。">
+        <HandOver nodes={list} />
+      </Dialog>
+    </>
+  );
+}
+
+function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
+  const u = n.online && !n.pending ? n.usage : undefined;
+  return (
+    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className="group flex flex-col rounded-lg border bg-card transition-colors hover:border-foreground/25">
+      <div className="flex items-start justify-between gap-2 px-3.5 pt-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[13px] font-medium group-hover:underline">{n.name}</span>
+            {n.info?.embedded && <Badge>面板内置</Badge>}
+          </div>
+          <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
+        </div>
+        <NodeStatus n={n} />
       </div>
+      <div className="grid flex-1 content-start gap-1.5 px-3.5 py-2.5">
+        {n.pending ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[13px] text-muted-foreground">通过接入码加入，批准后才能使用。</span>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (await approve(n)) onApproved();
+              }}
+            >
+              批准
+            </Button>
+          </div>
+        ) : n.online ? (
+          <>
+            <Meter label="CPU" value={u?.cpu} />
+            <Meter label="内存" value={u?.memory} />
+            <Meter label="磁盘" value={u?.disk} />
+          </>
+        ) : (
+          <span className="text-[13px] text-muted-foreground">最后在线 {timeAgo(toDate(n.lastSeen))}</span>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
+        <span>{n.containers} 个容器</span>
+        <span className="truncate font-mono">
+          {n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// NodePage：节点详情页。
+export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab; onTab: (t: NodeTab) => void }) {
+  const nodes = useNodeList();
+  const navigate = useNavigate();
+  if (nodes.isPending) return <Loading />;
+  if (nodes.error) return <Alert>{errorMessage(nodes.error)}</Alert>;
+  const n = nodes.data.nodes.find((x) => x.id === nodeId);
+  if (!n) {
+    return (
+      <>
+        <Breadcrumb items={[{ label: "节点", to: "/nodes" }]} />
+        <Alert>节点不存在</Alert>
+      </>
+    );
+  }
+  const remove = async () => {
+    if (!confirm(`移除节点 ${n.name}？面板将不再管理该节点并拒绝其重新连接，节点上的容器照常运行。`)) return;
+    try {
+      await nodeClient.removeNode({ nodeId: n.id });
+      navigate({ to: "/nodes" });
+    } catch (err) {
+      alert(errorMessage(err));
+    }
+  };
+  return (
+    <>
+      <Breadcrumb items={[{ label: "节点", to: "/nodes" }, { label: n.name }]} />
+      <PageHeader
+        title={
+          <>
+            {n.name}
+            <NodeStatus n={n} />
+            {n.info?.embedded && <Badge>面板内置</Badge>}
+          </>
+        }
+        meta={
+          <>
+            <span className="font-mono">{n.address || n.id}</span>
+            {n.info && (
+              <>
+                <span>
+                  {n.info.os}/{n.info.arch}
+                </span>
+                <span className="font-mono">
+                  Docker {n.info.dockerVersion || "?"} / Compose {n.info.composeVersion || "?"}
+                </span>
+                <span className="font-mono">Nagi {n.info.version || "?"}</span>
+              </>
+            )}
+            <span>{n.containers} 个容器</span>
+            {!n.online && <span>最后在线 {timeAgo(toDate(n.lastSeen))}</span>}
+          </>
+        }
+        actions={
+          <>
+            {n.pending && (
+              <Button
+                onClick={async () => {
+                  if (await approve(n)) nodes.refetch();
+                }}
+              >
+                批准
+              </Button>
+            )}
+            <Menu items={[{ label: "移除节点", onSelect: remove, danger: true }]} />
+          </>
+        }
+      />
+      {n.pending ? (
+        <Notice tone="warning" title="尚未批准">
+          该节点通过接入码加入，尚未批准。确认是自有机器后批准，批准后才能查看和操作。
+        </Notice>
+      ) : (
+        <>
+          <Tabs value={tab} onChange={onTab} items={nodeTabs} className="mb-6" />
+          {!n.online ? (
+            <Notice title="节点离线">节点离线时无法查询监控、副本和 mesh 状态。</Notice>
+          ) : tab === "metrics" ? (
+            <NodeMetrics nodeId={n.id} />
+          ) : tab === "mesh" ? (
+            <NodeMesh nodeId={n.id} />
+          ) : tab === "replicas" ? (
+            <NodeReplicas nodeId={n.id} />
+          ) : tab === "settings" ? (
+            <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
+          ) : (
+            <NodePanels nodeId={n.id} />
+          )}
+        </>
+      )}
     </>
   );
 }
@@ -214,40 +259,30 @@ function AddNode() {
 
   const s = settings.data?.settings;
   return (
-    <Section
-      title="添加节点"
-      description="生成安装命令，在新机器上执行后即接入本面板。"
-      actions={
-        <Button size="sm" onClick={create}>
-          生成安装命令
-        </Button>
-      }
-    >
-      <div className="grid gap-4">
-        {error && <Alert>{error}</Alert>}
-        <Field label="面板对外地址" help="节点通过该地址连接面板，必须能从节点访问。" htmlFor="public-address">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              id="public-address"
-              className="w-56 font-mono"
-              value={address ?? s?.publicAddress ?? ""}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-            <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
-            {address !== null && (
-              <Button size="sm" variant="outline" onClick={saveAddress}>
-                保存
-              </Button>
-            )}
-          </div>
+    <div className="grid gap-4">
+      {error && <Alert>{error}</Alert>}
+      <Field label="面板对外地址" help="节点通过该地址连接面板，必须能从节点访问。" htmlFor="public-address">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input id="public-address" className="w-56 font-mono" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
+          <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
+          {address !== null && (
+            <Button size="sm" variant="outline" onClick={saveAddress}>
+              保存
+            </Button>
+          )}
+        </div>
+      </Field>
+      {command && (
+        <Field label="安装命令" hint="以 root 身份在新机器上执行" help="令牌仅可使用一次：每台机器一条命令，有效期 1 小时。">
+          <CodeBlock copy>{command}</CodeBlock>
         </Field>
-        {command && (
-          <Field label="安装命令" hint="以 root 身份在新机器上执行" help="令牌仅可使用一次：每台机器一条命令，有效期 1 小时。">
-            <CodeBlock copy>{command}</CodeBlock>
-          </Field>
-        )}
+      )}
+      <div className="flex justify-end border-t pt-4">
+        <Button size="sm" onClick={create}>
+          {command ? "重新生成" : "生成安装命令"}
+        </Button>
       </div>
-    </Section>
+    </div>
   );
 }
 

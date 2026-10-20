@@ -60,6 +60,8 @@ message ReportRequest {
   repeated ContainerStatus containers = 3;
   // 本节点参与的顶替（持有者、热备、见证人）。
   repeated FailoverStatus failovers = 4;
+  // 当前的资源占用。
+  NodeUsage usage = 5;
 }
 
 message ReportResponse {

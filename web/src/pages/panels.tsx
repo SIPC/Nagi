@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { Project } from "@/gen/nagi/v1/common_pb";
-import { Alert, Badge, Button, Check, Field, Loading, Section, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Check, Field, Loading, Spinner, Status, Textarea } from "@/components/ui";
 
 // ---- 移交给其他面板 ----
 
@@ -19,8 +19,8 @@ function relatedNodes(p: Project) {
   return [...out];
 }
 
-// HandOverCard：把勾选的节点移交给另一个面板。一个节点同一时间只归一个面板管理。
-export function HandOverCard({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
+// HandOver：把勾选的节点移交给另一个面板（放在对话框里）。一个节点同一时间只归一个面板管理。
+export function HandOver({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -51,18 +51,10 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
   };
 
   return (
-    <Section
-      title="移交给其他面板"
-      description="使用其他面板生成的接入码，将节点移交给该面板。"
-      help="接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行：项目相关的节点（容器所在、顶替、备份、见证）须一并选中，否则拒绝并列出缺少的节点。离线节点无法选择。"
-      actions={
-        <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
-          {busy && <Spinner className="size-3.5" />}
-          {busy ? "处理中…" : "移交节点"}
-        </Button>
-      }
-    >
-      <div className="grid gap-4">
+    <div className="grid gap-4">
+      <p className="text-[13px] text-muted-foreground">
+        接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行，项目相关的节点（容器所在、顶替、备份、见证）须一并选中。
+      </p>
         <Field label="接入码" hint="格式：nagi-invite:…" htmlFor="handover-code">
           <Textarea
             id="handover-code"
@@ -109,8 +101,13 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
             ))}
           </div>
         )}
+      <div className="flex justify-end border-t pt-4">
+        <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
+          {busy && <Spinner className="size-3.5" />}
+          {busy ? "处理中…" : "移交节点"}
+        </Button>
       </div>
-    </Section>
+    </div>
   );
 }
 

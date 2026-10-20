@@ -1,8 +1,8 @@
 // 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as React from "react";
-import { Check as CheckIcon, CircleHelp, Copy, Inbox } from "lucide-react";
+import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---- 按钮与输入 ----
@@ -459,3 +459,98 @@ export function Waves({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// ---- 对话框、菜单、占用条 ----
+
+// Dialog：居中的对话框。点遮罩或按 Esc 关闭。
+export function Dialog({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  className,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 px-4 py-16" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal className={cn("w-full max-w-lg rounded-lg border bg-card shadow-xl", className)}>
+        <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">{title}</h2>
+            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
+          </div>
+          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label="关闭">
+            <X />
+          </Button>
+        </div>
+        <div className="px-5 pb-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Menu：「更多」按钮和下拉菜单。
+export function Menu({ items, label = "更多操作" }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean }[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <Button variant="outline" size="icon" aria-label={label} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Ellipsis />
+      </Button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-40 mt-1 min-w-40 rounded-md border bg-card py-1 shadow-lg">
+          {items.map((it, i) => (
+            <button
+              key={i}
+              role="menuitem"
+              className={cn("block w-full px-3 py-1.5 text-left text-[13px] hover:bg-accent", it.danger && "text-destructive")}
+              onClick={() => {
+                setOpen(false);
+                it.onSelect();
+              }}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Meter：资源占用条。超过 90% 红色，超过 75% 琥珀色。
+export function Meter({ label, value }: { label: string; value?: number }) {
+  const v = value === undefined ? undefined : Math.max(0, Math.min(100, value));
+  const tone = v === undefined ? "bg-muted-foreground/30" : v >= 90 ? "bg-destructive" : v >= 75 ? "bg-warning" : "bg-success";
+  return (
+    <div className="grid grid-cols-[2.5rem_1fr_2.75rem] items-center gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className={cn("h-full rounded-full transition-[width]", tone)} style={{ width: `${v ?? 0}%` }} />
+      </div>
+      <span className="text-right font-mono tabular-nums text-muted-foreground">{v === undefined ? "—" : `${v.toFixed(0)}%`}</span>
+    </div>
+  );
+}
+

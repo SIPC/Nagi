@@ -352,6 +352,10 @@ message Node {
   string address = 6;
   // 用接入码加入、还没有批准的节点：不进 mesh、不下发告警配置、不能操作，在节点页批准后才可用。
   bool pending = 7;
+  // 当前的资源占用（节点在线时）。
+  NodeUsage usage = 8;
+  // 面板上运行在这个节点上的容器数。
+  int32 containers = 9;
 }
 
 message ListNodesRequest {}

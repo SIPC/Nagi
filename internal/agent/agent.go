@@ -526,7 +526,9 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*n
 	}
 	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
 	info.ProjectsRoot = a.projectsRoot()
-	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx)})
+	latest := a.metrics.Latest()
+	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

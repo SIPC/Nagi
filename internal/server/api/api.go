@@ -180,8 +180,12 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		if row.LastSeen > 0 {
 			n.LastSeen = timestamppb.New(time.Unix(row.LastSeen, 0))
 		}
+		if c, err := s.Q.CountNodeContainers(ctx, row.ID); err == nil {
+			n.Containers = int32(c)
+		}
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
+			n.Usage = conn.LastReport().GetUsage()
 			if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !n.Info.GetEmbedded() {
 				n.Address = ip.String()
 			} else {

@@ -349,6 +349,14 @@ message ContainerStatus {
   string panel = 10;
 }
 
+// NodeUsage 是节点当前的资源占用（百分比，0~100）。
+message NodeUsage {
+  double cpu = 1;
+  double memory = 2;
+  // 数据目录所在的磁盘。
+  double disk = 3;
+}
+
 message NodeInfo {
   string hostname = 1;
   string os = 2;

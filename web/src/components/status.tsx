@@ -26,6 +26,17 @@ export function ServiceState({ service }: { service: ServiceStatus }) {
   return <Status tone={tone}>{stateLabels[service.state] ?? service.state}</Status>;
 }
 
+// stateOf 是项目（或一个容器组）的整体状态：颜色和文字。
+export function stateOf(services: ServiceStatus[], deployed: boolean): { tone: "success" | "warning" | "danger" | "neutral"; label: string } {
+  if (!deployed) return { tone: "neutral", label: "未部署" };
+  const total = services.length;
+  const running = services.filter((s) => s.state === "running").length;
+  if (services.some((s) => s.health === "unhealthy" || s.state === "restarting")) return { tone: "danger", label: "异常" };
+  if (total > 0 && running === total) return { tone: "success", label: "运行中" };
+  if (running > 0) return { tone: "warning", label: `部分运行 ${running}/${total}` };
+  return { tone: "neutral", label: "已停止" };
+}
+
 // 项目（或一个容器组）的整体状态：全部运行、部分运行、全部停止或未部署。
 export function ProjectState({ services, deployed }: { services: ServiceStatus[]; deployed: boolean }) {
   if (!deployed) return <Status>未部署</Status>;

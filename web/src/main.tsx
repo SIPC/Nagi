@@ -14,7 +14,7 @@ import { LoginPage, SetupPage } from "@/pages/auth";
 import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, projectTabs, type ProjectTab } from "@/pages/project";
-import { NodesPage } from "@/pages/nodes";
+import { NodePage, NodesPage, nodeTabs, type NodeTab } from "@/pages/nodes";
 import { SettingsPage } from "@/pages/settings";
 import "./index.css";
 
@@ -104,12 +104,33 @@ const projectRoute = createRoute({
 
 const nodesRoute = createRoute({ getParentRoute: () => appRoute, path: "/nodes", component: NodesPage });
 
+const nodeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/nodes/$nodeId",
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab } => ({
+    tab: nodeTabs.some((t) => t.value === search.tab) ? (search.tab as NodeTab) : undefined,
+  }),
+  component: function Node() {
+    const { nodeId } = nodeRoute.useParams();
+    const { tab } = nodeRoute.useSearch();
+    const navigate = nodeRoute.useNavigate();
+    return (
+      <NodePage
+        key={nodeId}
+        nodeId={nodeId}
+        tab={tab ?? "metrics"}
+        onTab={(t) => navigate({ search: { tab: t === "metrics" ? undefined : t }, replace: true })}
+      />
+    );
+  },
+});
+
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsPage });
 
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
-  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, nodesRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, nodesRoute, nodeRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });
