@@ -2,39 +2,41 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
-import { slugName } from "@/lib/utils";
-import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Notice, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
-// 「网络」标签页：端口映射与域名、项目内网、共享网络。
+// 「网络」标签页：端口映射与域名、项目内网。项目之间的连接见 docs/agent.md#项目连接。
 
-export function NetworkTab({ nodeId, project, services }: { nodeId: string; project: Project; services: ServiceStatus[] }) {
+export function NetworkTab({ project, services }: { project: Project; services: ServiceStatus[] }) {
   return (
     <div className="grid gap-6">
-      <RoutesSection nodeId={nodeId} project={project} services={services} />
-      <NetworkSettings nodeId={nodeId} project={project} services={services} />
+      <RoutesSection project={project} services={services} />
+      <Intranet project={project} services={services} />
     </div>
   );
 }
 
 // ---- 端口映射 ----
 
-function RoutesSection({ nodeId, project, services }: { nodeId: string; project: Project; services: ServiceStatus[] }) {
+function RoutesSection({ project, services }: { project: Project; services: ServiceStatus[] }) {
   const queryClient = useQueryClient();
   const empty = { name: "", container: "", service: "", target: "", protocol: "http", published: "", domains: "", httpOnly: false };
   const [form, setForm] = useState(empty);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", project.id] });
   const container = form.container || project.containers[0]?.name || "";
   const containerServices = [...new Set(services.filter((s) => s.container === container).map((s) => s.name))];
   const isGroup = project.containers.find((c) => c.name === container)?.kind === "group";
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const address = nodes.data?.nodes.find((n) => n.id === nodeId)?.address ?? "";
+  // 映射开在容器所在的节点上，访问地址用那个节点的地址。
+  const nodeOf = (r: (typeof project.routes)[number]) => project.containers.find((c) => c.name === r.container)?.nodeId ?? "";
+  const addressOf = (r: (typeof project.routes)[number]) => nodes.data?.nodes.find((n) => n.id === nodeOf(r))?.address ?? "";
   // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
   const accessURL = (r: (typeof project.routes)[number]) => {
     if (r.domains.length) return `${r.httpOnly ? "http" : "https"}://${r.domains[0]}`;
+    const address = addressOf(r);
     if (!address || !r.published) return "";
     return r.protocol === "http" ? `http://${address}:${r.published}` : "";
   };
@@ -43,8 +45,7 @@ function RoutesSection({ nodeId, project, services }: { nodeId: string; project:
     setError("");
     setBusy(true);
     try {
-      await projectClient.saveNodeProjectRoute({
-        nodeId,
+      await projectClient.saveRoute({
         projectId: project.id,
         route: {
           name: form.name,
@@ -71,7 +72,7 @@ function RoutesSection({ nodeId, project, services }: { nodeId: string; project:
     if (!confirm(`删除端口映射 ${name}？对应的端口和域名将立即停止对外提供访问。`)) return;
     setError("");
     try {
-      await projectClient.deleteNodeProjectRoute({ nodeId, projectId: project.id, name });
+      await projectClient.deleteRoute({ projectId: project.id, name });
       refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -83,7 +84,7 @@ function RoutesSection({ nodeId, project, services }: { nodeId: string; project:
       flush
       title="端口映射"
       description="经 Caddy 对外开放容器端口或绑定域名，保存后立即生效。"
-      help={`无需重新部署。配置文件位于 ${project.dir}/config/routes/，也可在节点上直接修改。compose 中新增的 ports 会在部署时自动导入。`}
+      help="无需重新部署。映射开在容器所在的节点上，容器迁移或顶替到其他节点时跟着过去。compose 中新增的 ports 会在部署时自动导入。"
       actions={
         !open && (
           <Button
@@ -142,9 +143,9 @@ function RoutesSection({ nodeId, project, services }: { nodeId: string; project:
                             {url.replace(/^https?:\/\//, "")}
                             <ExternalLink className="size-3 text-muted-foreground" />
                           </a>
-                        ) : address && r.published > 0 ? (
+                        ) : addressOf(r) && r.published > 0 ? (
                           <span className="text-muted-foreground">
-                            {address}:{r.published}
+                            {addressOf(r)}:{r.published}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -246,64 +247,48 @@ function RoutesSection({ nodeId, project, services }: { nodeId: string; project:
   );
 }
 
-// ---- 项目内网与共享网络 ----
+// ---- 项目内网 ----
 
-// defaultNetworkName 由项目名生成加入共享网络用的网络名（小写字母、数字和 -，不超过 32 个字符）。
-// 项目名里没有能用的字符（例如全是中文）时返回空，让用户自己起一个：别人要用它访问本项目，ID 前缀不好记。
-function defaultNetworkName(name: string) {
-  return slugName(name, "");
-}
-
-// sharedAddresses 列出本项目的容器在共享网络里的地址：单个容器是"容器.网络名"，容器组里的是"容器.容器组.网络名"。
-function sharedAddresses(project: Project, services: ServiceStatus[], networkName: string) {
+// intranetAddresses 列出项目里每个容器在项目内网里的名字：单个容器是"容器名"，容器组里的是"容器.容器组"。
+function intranetAddresses(project: Project, services: ServiceStatus[]) {
   return project.containers.flatMap((c) => {
-    if (c.kind !== "group") return [`${c.name}.${networkName}`];
+    if (c.kind !== "group") return [{ name: c.name, node: c.nodeId }];
     const names = [...new Set(services.filter((s) => s.container === c.name).map((s) => s.name))];
-    return names.length ? names.map((s) => `${s}.${c.name}.${networkName}`) : [`<容器>.${c.name}.${networkName}`];
+    return (names.length ? names : ["<容器>"]).map((s) => ({ name: `${s}.${c.name}`, node: c.nodeId }));
   });
 }
 
-// NetworkSettings 只修改网络相关的设置；名称和快照间隔照原样提交（接口每次提交完整的设置）。
-function NetworkSettings({ nodeId, project, services }: { nodeId: string; project: Project; services: ServiceStatus[] }) {
+// Intranet 显示项目内网里的名字，修改内部端口（只改这一项，其余设置照原样提交）。
+function Intranet({ project, services }: { project: Project; services: ServiceStatus[] }) {
   const queryClient = useQueryClient();
-  const s = project.settings;
-  const networks = useQuery({ queryKey: ["shared-networks", nodeId], queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }) });
-  const [intranet, setIntranet] = useState(!s?.intranetDisabled);
-  const [networkName, setNetworkName] = useState(s?.networkName ?? "");
-  const [joined, setJoined] = useState<string[]>(s?.sharedNetworks ?? []);
-  const [linkPorts, setLinkPorts] = useState((s?.linkPorts ?? []).join("\n"));
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const [ports, setPorts] = useState((project.settings?.internalPorts ?? []).join("\n"));
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const addresses = intranetAddresses(project, services);
 
-  const effectiveName = networkName || defaultNetworkName(project.name);
   const save = async () => {
-    setSaved(false);
-    if (joined.length > 0 && !effectiveName) {
-      setError("加入共享网络需要设置网络名（小写字母、数字和 -）。");
-      return;
-    }
     setBusy(true);
     setError("");
+    setSaved(false);
     try {
-      await projectClient.updateNodeProjectSettings({
-        nodeId,
+      await projectClient.updateProjectSettings({
         projectId: project.id,
         baseRevision: project.revision,
         name: project.name,
+        networkName: project.networkName,
         settings: {
-          intranetDisabled: !intranet,
-          networkName: joined.length > 0 ? effectiveName : networkName,
-          sharedNetworks: joined,
-          linkPorts: linkPorts
+          snapshotIntervalMinutes: project.settings?.snapshotIntervalMinutes ?? 0,
+          internalPorts: ports
             .split(/[\n,]/)
             .map((x) => x.trim())
             .filter(Boolean),
-          snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
         },
       });
       setSaved(true);
-      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -312,87 +297,42 @@ function NetworkSettings({ nodeId, project, services }: { nodeId: string; projec
   };
 
   return (
-    <Section title="网络" description="项目内网与共享网络设置，保存后立即生效。" help="修改不计入容器版本。开启或关闭项目内网时，单个容器会被重建（短暂重启）。">
-      <div className="grid gap-6">
-        <div className="grid gap-1.5">
-          <Check checked={intranet} onChange={setIntranet}>
-            启用项目内网
-          </Check>
-          <p className="pl-6 text-xs text-muted-foreground">项目内的容器以「容器名」或「容器.容器组」互相访问。</p>
-        </div>
-
-        <div className="grid gap-4 border-t pt-5">
-          <div>
-            <h3 className="flex items-center gap-1.5 text-[13px] font-semibold">共享网络</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">与加入同一网络的其他项目互通；网络与其他节点相连时可跨节点访问。</p>
-          </div>
-          <Field label="网络名" htmlFor="net-name" hint="小写字母、数字和 -" help="本项目的容器在共享网络中的地址为「容器.网络名」。">
-            <Input
-              id="net-name"
-              value={networkName}
-              onChange={(e) => setNetworkName(e.target.value)}
-              placeholder={defaultNetworkName(project.name) || "shop"}
-              className="max-w-60 font-mono"
-            />
-          </Field>
-          {s?.networkName && networkName !== s.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
-            <Notice tone="warning">
-              修改网络名后，其他项目中通过「容器.{s.networkName}」访问本项目的地址需改为「容器.{effectiveName}」。
-            </Notice>
-          )}
-          <div className="grid gap-1.5">
-            <span className="text-[13px] font-medium">加入的网络</span>
-            {networks.isPending ? (
-              <Spinner className="text-muted-foreground" />
-            ) : networks.data?.networks.length ? (
-              <div className="divide-y rounded-md border">
-                {networks.data.networks.map((n) => (
-                  <label key={n.name} className="flex cursor-pointer items-start gap-3 px-3.5 py-2.5 hover:bg-subtle">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={joined.includes(n.name)}
-                      onChange={(e) => {
-                        if (e.target.checked && !networkName) setNetworkName(defaultNetworkName(project.name));
-                        setJoined(e.target.checked ? [...joined, n.name] : joined.filter((x) => x !== n.name));
-                      }}
-                    />
-                    <span className="grid gap-0.5">
-                      <span className="font-mono text-[13px]">{n.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "暂无项目"}
-                        {n.peers.length > 0 && ` · 已连接 ${n.peers.map((p) => p.name).join("、")}`}
-                      </span>
-                    </span>
-                  </label>
+    <Section
+      title="项目内网"
+      description="项目里的容器不论在哪个节点上，都按名称互相访问。"
+      help="单个容器用「容器名」，容器组里的容器用「容器.容器组」。容器组内部照常用 compose 里的服务名。跨节点的访问只转发 TCP，经节点之间的加密通道。"
+    >
+      <div className="grid gap-5">
+        {addresses.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">暂无容器</p>
+        ) : (
+          <div className="overflow-hidden rounded-md border">
+            <Table>
+              <thead>
+                <tr>
+                  <Th>名称</Th>
+                  <Th>节点</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {addresses.map((a) => (
+                  <tr key={a.name}>
+                    <Td className="font-mono text-xs">{a.name}</Td>
+                    <Td className="text-[13px] text-muted-foreground">{nodeName(a.node)}</Td>
+                  </tr>
                 ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-muted-foreground">此节点暂无共享网络，可在节点页创建。</p>
-            )}
+              </tbody>
+            </Table>
           </div>
-          {s?.networkName && (s.sharedNetworks.length ?? 0) > 0 && (
-            <div className="grid gap-1.5">
-              <span className="text-[13px] font-medium">本项目的访问地址</span>
-              <div className="flex flex-wrap gap-1.5">
-                {sharedAddresses(project, services, s.networkName).map((a) => (
-                  <code key={a} className="rounded-sm border bg-subtle px-1.5 py-0.5 font-mono text-xs">
-                    {a}
-                  </code>
-                ))}
-              </div>
-            </div>
-          )}
-          <Field
-            label="跨节点端口"
-            htmlFor="net-linkports"
-            hint="每行一个，如 pg:5432；容器组内写 容器.容器组:端口"
-            help="相连节点经代理访问本项目时，需额外开放的容器未声明的端口。"
-          >
-            <Textarea id="net-linkports" value={linkPorts} onChange={(e) => setLinkPorts(e.target.value)} spellCheck={false} className="min-h-16 max-w-md font-mono text-[13px]" />
-          </Field>
-        </div>
-
+        )}
+        <Field
+          label="内部端口"
+          htmlFor="net-internal-ports"
+          hint="每行一个，如 pg:5432；容器组内写 容器.容器组:端口"
+          help="容器声明的端口（镜像的 EXPOSE、compose 的 ports、expose）会自动开放给其他节点上的容器；没有声明的端口在这里补充。"
+        >
+          <Textarea id="net-internal-ports" value={ports} onChange={(e) => setPorts(e.target.value)} spellCheck={false} className="min-h-16 max-w-md font-mono text-[13px]" />
+        </Field>
         {error && <Alert>{error}</Alert>}
         <div className="flex items-center justify-end gap-3 border-t pt-4">
           {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存</span>}

@@ -4,6 +4,17 @@
 
 package nodestore
 
+type Container struct {
+	ProjectID       string
+	Name            string
+	Dir             string
+	Spec            []byte
+	FilesRoot       string
+	LastSnapshot    int64
+	LastMaintenance int64
+	CreatedAt       int64
+}
+
 type MetricsM5 struct {
 	Series string
 	Ts     int64
@@ -14,24 +25,6 @@ type MetricsRaw struct {
 	Series string
 	Ts     int64
 	Value  float64
-}
-
-type Project struct {
-	ID        string
-	Dir       string
-	CreatedAt int64
-}
-
-type SharedNetwork struct {
-	Name      string
-	CreatedAt int64
-}
-
-type SharedNetworkLink struct {
-	Network  string
-	PeerKey  []byte
-	PeerName string
-	PeerNode string
 }
 
 type Subnet struct {

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TerminalHandler 处理 GET /ws/exec?node=&project=&service=&cols=&rows=：
+// TerminalHandler 处理 GET /ws/exec?project=&container=&service=&cols=&rows=：
 // 浏览器通过 WebSocket 打开容器终端，面板桥接到节点的 AgentService.Exec。
 //
 // 消息格式：二进制帧是终端的输入输出；文本帧是控制消息（JSON），
@@ -47,9 +47,14 @@ func (a *API) TerminalHandler() http.Handler {
 			ws.Close(websocket.StatusNormalClosure, "")
 		}
 
-		conn, err := a.Nodes.Get(q.Get("node"))
+		nodeID, err := a.Projects.Locate(ctx, q.Get("project"), q.Get("container"))
 		if err != nil {
-			fail("节点不在线")
+			fail(err.Error())
+			return
+		}
+		conn, err := a.Nodes.Get(nodeID)
+		if err != nil {
+			fail("容器所在的节点不在线")
 			return
 		}
 		stream, err := conn.Agent.Exec(ctx)

@@ -2,21 +2,16 @@ package project
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
-	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -30,55 +25,14 @@ func (p containerPaths) knownHosts() string   { return filepath.Join(p.sshDir(),
 func (p containerPaths) checkoutDir() string  { return filepath.Join(p.root, ".checkout") }
 func (p containerPaths) deployKeyPub() string { return p.deployKey() + ".pub" }
 
-// ensureDeployKey 返回容器的 deploy key 公钥（authorized_keys 格式），不存在时生成一对 ed25519 密钥。
-func ensureDeployKey(p containerPaths) (string, error) {
-	if pub, err := os.ReadFile(p.deployKeyPub()); err == nil {
-		return strings.TrimSpace(string(pub)), nil
-	}
-	if err := os.MkdirAll(p.sshDir(), 0o700); err != nil {
-		return "", err
-	}
-	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", err
-	}
-	block, err := ssh.MarshalPrivateKey(privKey, "nagi deploy key")
-	if err != nil {
-		return "", err
-	}
-	if err := writeFileAtomic(p.deployKey(), pem.EncodeToMemory(block), 0o600); err != nil {
-		return "", err
-	}
-	sshPub, err := ssh.NewPublicKey(pubKey)
-	if err != nil {
-		return "", err
-	}
-	pub := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub))) + " nagi"
-	if err := writeFileAtomic(p.deployKeyPub(), []byte(pub+"\n"), 0o644); err != nil {
-		return "", err
-	}
-	return pub, nil
-}
-
-// scpURLRe 是 scp 风格的 SSH 地址：用户@主机:路径。主机里不能有 /，避免把 /srv/repo@x 这样的本地路径当成 SSH 地址
-// （go-git 会把本地路径当作本地仓库，拉取节点上的任意仓库）。
-var scpURLRe = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s]+$`)
-
-func isSSHURL(url string) bool {
-	return strings.HasPrefix(url, "ssh://") || scpURLRe.MatchString(url)
-}
-
-// gitAuth 返回访问仓库用的认证：SSH 地址用容器的 deploy key，HTTPS 地址不认证（公开仓库）。
+// gitAuth 返回访问仓库用的认证：SSH 地址用容器的 deploy key（面板生成，部署时写进容器目录），HTTPS 地址不认证（公开仓库）。
 func gitAuth(p containerPaths, url string) (*gitssh.PublicKeys, error) {
-	if !isSSHURL(url) {
+	if !spec.IsSSHURL(url) {
 		return nil, nil
-	}
-	if _, err := ensureDeployKey(p); err != nil {
-		return nil, err
 	}
 	key, err := os.ReadFile(p.deployKey())
 	if err != nil {
-		return nil, err
+		return nil, errors.New("容器还没有 deploy key")
 	}
 	auth, err := gitssh.NewPublicKeys("git", key, "")
 	if err != nil {
@@ -174,7 +128,7 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 		repo, err = clone(plumbing.NewTagReferenceName(ref))
 	}
 	if err != nil {
-		if isSSHURL(url) {
+		if spec.IsSSHURL(url) {
 			return "", fmt.Errorf("拉取失败：%w（请确认已把容器的 deploy key 加到仓库）", err)
 		}
 		return "", fmt.Errorf("拉取失败：%w", err)
@@ -215,22 +169,6 @@ func containsPreserved(rel string, preserve []string) bool {
 	return false
 }
 
-// normalizePreserve 把保留路径规范成相对 data/ 的 "a/b" 形式，去掉不合法的。
-func normalizePreserve(list []string) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, p := range list {
-		p = path.Clean(strings.TrimSpace(strings.ReplaceAll(p, "\\", "/")))
-		p = strings.TrimPrefix(strings.TrimPrefix(p, "./"), "/")
-		if p == "" || p == "." || p == ".." || strings.HasPrefix(p, "../") || seen[p] {
-			continue
-		}
-		seen[p] = true
-		out = append(out, p)
-	}
-	return out
-}
-
 // copyFile 复制一个文件。只用于容器碰不到的目录；写进 data/、volumes/ 要用 safefs.go 里的函数。
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
@@ -247,42 +185,4 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	return out.Close()
-}
-
-// bindMountPaths 返回 compose 里挂载进容器的、位于 data/ 下的路径（相对 data/）。
-// 这些路径自动保留，防止更新文件时把数据库目录之类的运行数据冲掉。
-func bindMountPaths(proj *types.Project, dataDir string) []string {
-	var out []string
-	for _, svc := range proj.Services {
-		for _, v := range svc.Volumes {
-			if v.Type != types.VolumeTypeBind {
-				continue
-			}
-			rel, err := filepath.Rel(dataDir, v.Source)
-			if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-				continue
-			}
-			out = append(out, filepath.ToSlash(rel))
-		}
-	}
-	return out
-}
-
-// dataServices 返回挂载了 data/ 里文件的服务。文件更新后要重建这些服务的容器，
-// 因为 compose 在配置没变时不会重建容器。
-func dataServices(proj *types.Project, dataDir string) []string {
-	var out []string
-	for _, name := range proj.ServiceNames() {
-		for _, v := range proj.Services[name].Volumes {
-			if v.Type != types.VolumeTypeBind {
-				continue
-			}
-			rel, err := filepath.Rel(dataDir, v.Source)
-			if err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
-				out = append(out, name)
-				break
-			}
-		}
-	}
-	return out
 }

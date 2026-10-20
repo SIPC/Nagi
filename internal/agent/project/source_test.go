@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/SIPC/nagi/internal/pkg/spec"
 )
 
 func write(t *testing.T, root, rel, content string) {
@@ -41,7 +43,7 @@ func TestSyncDirPreserves(t *testing.T) {
 	write(t, src, "uploads/placeholder", "from repo")
 
 	var logs []string
-	preserve := normalizePreserve([]string{"uploads/", "./var/db", "../evil", "/abs"})
+	preserve := spec.NormalizePreserve([]string{"uploads/", "./var/db", "../evil", "/abs"})
 	if err := syncDir(src, dst, preserve, func(l string) { logs = append(logs, l) }); err != nil {
 		t.Fatal(err)
 	}

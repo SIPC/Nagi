@@ -47,35 +47,26 @@ func (q *Queries) AverageRaw(ctx context.Context, arg AverageRawParams) ([]Avera
 	return items, nil
 }
 
+const deleteContainer = `-- name: DeleteContainer :exec
+DELETE FROM containers WHERE project_id = ? AND name = ?
+`
+
+type DeleteContainerParams struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) DeleteContainer(ctx context.Context, arg DeleteContainerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteContainer, arg.ProjectID, arg.Name)
+	return err
+}
+
 const deleteM5Before = `-- name: DeleteM5Before :exec
 DELETE FROM metrics_m5 WHERE ts < ?
 `
 
 func (q *Queries) DeleteM5Before(ctx context.Context, ts int64) error {
 	_, err := q.db.ExecContext(ctx, deleteM5Before, ts)
-	return err
-}
-
-const deleteProject = `-- name: DeleteProject :exec
-DELETE FROM projects WHERE id = ?
-`
-
-func (q *Queries) DeleteProject(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteProject, id)
-	return err
-}
-
-const deleteProjectSubnets = `-- name: DeleteProjectSubnets :exec
-DELETE FROM subnets WHERE owner = ?1 OR owner LIKE ?2
-`
-
-type DeleteProjectSubnetsParams struct {
-	ProjectOwner string
-	GroupPrefix  string
-}
-
-func (q *Queries) DeleteProjectSubnets(ctx context.Context, arg DeleteProjectSubnetsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectSubnets, arg.ProjectOwner, arg.GroupPrefix)
 	return err
 }
 
@@ -88,24 +79,6 @@ func (q *Queries) DeleteRawBefore(ctx context.Context, ts int64) error {
 	return err
 }
 
-const deleteSharedNetwork = `-- name: DeleteSharedNetwork :exec
-DELETE FROM shared_networks WHERE name = ?
-`
-
-func (q *Queries) DeleteSharedNetwork(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, deleteSharedNetwork, name)
-	return err
-}
-
-const deleteSharedNetworkLinks = `-- name: DeleteSharedNetworkLinks :exec
-DELETE FROM shared_network_links WHERE network = ?
-`
-
-func (q *Queries) DeleteSharedNetworkLinks(ctx context.Context, network string) error {
-	_, err := q.db.ExecContext(ctx, deleteSharedNetworkLinks, network)
-	return err
-}
-
 const deleteSubnet = `-- name: DeleteSubnet :exec
 DELETE FROM subnets WHERE owner = ?
 `
@@ -115,14 +88,28 @@ func (q *Queries) DeleteSubnet(ctx context.Context, owner string) error {
 	return err
 }
 
-const getProject = `-- name: GetProject :one
-SELECT id, dir, created_at FROM projects WHERE id = ?
+const getContainer = `-- name: GetContainer :one
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers WHERE project_id = ? AND name = ?
 `
 
-func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
-	row := q.db.QueryRowContext(ctx, getProject, id)
-	var i Project
-	err := row.Scan(&i.ID, &i.Dir, &i.CreatedAt)
+type GetContainerParams struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Container, error) {
+	row := q.db.QueryRowContext(ctx, getContainer, arg.ProjectID, arg.Name)
+	var i Container
+	err := row.Scan(
+		&i.ProjectID,
+		&i.Name,
+		&i.Dir,
+		&i.Spec,
+		&i.FilesRoot,
+		&i.LastSnapshot,
+		&i.LastMaintenance,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
@@ -167,56 +154,6 @@ func (q *Queries) InsertMetric(ctx context.Context, arg InsertMetricParams) erro
 	return err
 }
 
-const insertProject = `-- name: InsertProject :exec
-INSERT INTO projects (id, dir, created_at) VALUES (?, ?, ?)
-`
-
-type InsertProjectParams struct {
-	ID        string
-	Dir       string
-	CreatedAt int64
-}
-
-func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) error {
-	_, err := q.db.ExecContext(ctx, insertProject, arg.ID, arg.Dir, arg.CreatedAt)
-	return err
-}
-
-const insertSharedNetwork = `-- name: InsertSharedNetwork :exec
-INSERT INTO shared_networks (name, created_at) VALUES (?, ?)
-`
-
-type InsertSharedNetworkParams struct {
-	Name      string
-	CreatedAt int64
-}
-
-func (q *Queries) InsertSharedNetwork(ctx context.Context, arg InsertSharedNetworkParams) error {
-	_, err := q.db.ExecContext(ctx, insertSharedNetwork, arg.Name, arg.CreatedAt)
-	return err
-}
-
-const insertSharedNetworkLink = `-- name: InsertSharedNetworkLink :exec
-INSERT INTO shared_network_links (network, peer_key, peer_name, peer_node) VALUES (?, ?, ?, ?)
-`
-
-type InsertSharedNetworkLinkParams struct {
-	Network  string
-	PeerKey  []byte
-	PeerName string
-	PeerNode string
-}
-
-func (q *Queries) InsertSharedNetworkLink(ctx context.Context, arg InsertSharedNetworkLinkParams) error {
-	_, err := q.db.ExecContext(ctx, insertSharedNetworkLink,
-		arg.Network,
-		arg.PeerKey,
-		arg.PeerName,
-		arg.PeerNode,
-	)
-	return err
-}
-
 const insertSubnet = `-- name: InsertSubnet :exec
 INSERT INTO subnets (subnet, owner) VALUES (?, ?)
 `
@@ -231,51 +168,28 @@ func (q *Queries) InsertSubnet(ctx context.Context, arg InsertSubnetParams) erro
 	return err
 }
 
-const listProjects = `-- name: ListProjects :many
-SELECT id, dir, created_at FROM projects ORDER BY created_at
+const listContainers = `-- name: ListContainers :many
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers ORDER BY created_at, project_id, name
 `
 
-func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := q.db.QueryContext(ctx, listProjects)
+func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listContainers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Project{}
+	items := []Container{}
 	for rows.Next() {
-		var i Project
-		if err := rows.Scan(&i.ID, &i.Dir, &i.CreatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSharedNetworkLinks = `-- name: ListSharedNetworkLinks :many
-SELECT network, peer_key, peer_name, peer_node FROM shared_network_links ORDER BY network, peer_name
-`
-
-func (q *Queries) ListSharedNetworkLinks(ctx context.Context) ([]SharedNetworkLink, error) {
-	rows, err := q.db.QueryContext(ctx, listSharedNetworkLinks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SharedNetworkLink{}
-	for rows.Next() {
-		var i SharedNetworkLink
+		var i Container
 		if err := rows.Scan(
-			&i.Network,
-			&i.PeerKey,
-			&i.PeerName,
-			&i.PeerNode,
+			&i.ProjectID,
+			&i.Name,
+			&i.Dir,
+			&i.Spec,
+			&i.FilesRoot,
+			&i.LastSnapshot,
+			&i.LastMaintenance,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -290,20 +204,29 @@ func (q *Queries) ListSharedNetworkLinks(ctx context.Context) ([]SharedNetworkLi
 	return items, nil
 }
 
-const listSharedNetworks = `-- name: ListSharedNetworks :many
-SELECT name, created_at FROM shared_networks ORDER BY name
+const listProjectContainers = `-- name: ListProjectContainers :many
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers WHERE project_id = ? ORDER BY created_at, name
 `
 
-func (q *Queries) ListSharedNetworks(ctx context.Context) ([]SharedNetwork, error) {
-	rows, err := q.db.QueryContext(ctx, listSharedNetworks)
+func (q *Queries) ListProjectContainers(ctx context.Context, projectID string) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectContainers, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SharedNetwork{}
+	items := []Container{}
 	for rows.Next() {
-		var i SharedNetwork
-		if err := rows.Scan(&i.Name, &i.CreatedAt); err != nil {
+		var i Container
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Name,
+			&i.Dir,
+			&i.Spec,
+			&i.FilesRoot,
+			&i.LastSnapshot,
+			&i.LastMaintenance,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -410,4 +333,73 @@ func (q *Queries) QueryRaw(ctx context.Context, arg QueryRawParams) ([]MetricsRa
 		return nil, err
 	}
 	return items, nil
+}
+
+const setContainerFilesRoot = `-- name: SetContainerFilesRoot :exec
+UPDATE containers SET files_root = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerFilesRootParams struct {
+	FilesRoot string
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) SetContainerFilesRoot(ctx context.Context, arg SetContainerFilesRootParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerFilesRoot, arg.FilesRoot, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerMaintenanceTime = `-- name: SetContainerMaintenanceTime :exec
+UPDATE containers SET last_maintenance = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerMaintenanceTimeParams struct {
+	LastMaintenance int64
+	ProjectID       string
+	Name            string
+}
+
+func (q *Queries) SetContainerMaintenanceTime(ctx context.Context, arg SetContainerMaintenanceTimeParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerMaintenanceTime, arg.LastMaintenance, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerSnapshotTime = `-- name: SetContainerSnapshotTime :exec
+UPDATE containers SET last_snapshot = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerSnapshotTimeParams struct {
+	LastSnapshot int64
+	ProjectID    string
+	Name         string
+}
+
+func (q *Queries) SetContainerSnapshotTime(ctx context.Context, arg SetContainerSnapshotTimeParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerSnapshotTime, arg.LastSnapshot, arg.ProjectID, arg.Name)
+	return err
+}
+
+const upsertContainer = `-- name: UpsertContainer :exec
+INSERT INTO containers (project_id, name, dir, spec, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (project_id, name) DO UPDATE SET dir = excluded.dir, spec = excluded.spec
+`
+
+type UpsertContainerParams struct {
+	ProjectID string
+	Name      string
+	Dir       string
+	Spec      []byte
+	CreatedAt int64
+}
+
+func (q *Queries) UpsertContainer(ctx context.Context, arg UpsertContainerParams) error {
+	_, err := q.db.ExecContext(ctx, upsertContainer,
+		arg.ProjectID,
+		arg.Name,
+		arg.Dir,
+		arg.Spec,
+		arg.CreatedAt,
+	)
+	return err
 }

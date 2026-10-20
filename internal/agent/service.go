@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sort"
@@ -62,233 +61,91 @@ func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetric
 	return out, nil
 }
 
-func (s *agentService) ListProjects(ctx context.Context, _ *nagiv1.ListProjectsRequest) (*nagiv1.ListProjectsResponse, error) {
-	list, err := s.projects.List(ctx)
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	for _, p := range list {
-		explainSummary(p)
-	}
-	return &nagiv1.ListProjectsResponse{Projects: list}, nil
-}
-
-func (s *agentService) CreateProject(ctx context.Context, req *nagiv1.CreateProjectRequest) (*nagiv1.CreateProjectResponse, error) {
-	p, err := s.projects.Create(ctx, req.GetName(), req.GetDir(), req.GetSettings(), req.GetContainerName(), req.GetContainer())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.CreateProjectResponse{Project: p}, nil
-}
-
-func (s *agentService) GetProject(ctx context.Context, req *nagiv1.GetProjectRequest) (*nagiv1.GetProjectResponse, error) {
-	p, err := s.projects.Get(ctx, req.GetId())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	explainSummary(p)
-	return &nagiv1.GetProjectResponse{Project: p}, nil
-}
-
-func (s *agentService) AddContainer(ctx context.Context, req *nagiv1.AddContainerRequest) (*nagiv1.AddContainerResponse, error) {
-	p, err := s.projects.AddContainer(ctx, req.GetProjectId(), req.GetName(), req.GetConfig())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.AddContainerResponse{Project: p}, nil
-}
-
-func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteContainerRequest) (*nagiv1.DeleteContainerResponse, error) {
-	p, err := s.projects.DeleteContainer(ctx, req.GetProjectId(), req.GetContainer(), req.GetBaseRevision(), req.GetDeleteDir(), func(string) {})
-	s.changed()
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.DeleteContainerResponse{Project: p}, nil
-}
-
-func (s *agentService) SaveDraft(ctx context.Context, req *nagiv1.SaveDraftRequest) (*nagiv1.SaveDraftResponse, error) {
-	p, err := s.projects.SaveDraft(ctx, req.GetId(), req.GetContainer(), req.GetBaseRevision(), req.GetConfig())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.SaveDraftResponse{Project: p}, nil
-}
-
-func (s *agentService) DiscardDraft(ctx context.Context, req *nagiv1.DiscardDraftRequest) (*nagiv1.DiscardDraftResponse, error) {
-	p, err := s.projects.DiscardDraft(ctx, req.GetId(), req.GetContainer(), req.GetBaseRevision())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.DiscardDraftResponse{Project: p}, nil
-}
-
-func (s *agentService) UpdateProjectSettings(ctx context.Context, req *nagiv1.UpdateProjectSettingsRequest) (*nagiv1.UpdateProjectSettingsResponse, error) {
-	p, err := s.projects.UpdateSettings(ctx, req.GetProjectId(), req.GetBaseRevision(), req.GetName(), req.GetSettings(), func(l string) {
-		s.node.log.Info(l, "project", req.GetProjectId())
-	})
-	s.changed()
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.UpdateProjectSettingsResponse{Project: p}, nil
-}
-
-func (s *agentService) SaveSharedEnv(ctx context.Context, req *nagiv1.SaveSharedEnvRequest) (*nagiv1.SaveSharedEnvResponse, error) {
-	p, affected, err := s.projects.SaveSharedEnv(ctx, req.GetProjectId(), req.GetBaseRevision(), req.GetVars())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.SaveSharedEnvResponse{Project: p, Affected: affected}, nil
-}
-
-func (s *agentService) DiscardSharedEnv(ctx context.Context, req *nagiv1.DiscardSharedEnvRequest) (*nagiv1.DiscardSharedEnvResponse, error) {
-	p, err := s.projects.DiscardSharedEnv(ctx, req.GetProjectId(), req.GetBaseRevision())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.DiscardSharedEnvResponse{Project: p}, nil
-}
-
-func (s *agentService) ListDeployments(ctx context.Context, req *nagiv1.ListDeploymentsRequest) (*nagiv1.ListDeploymentsResponse, error) {
-	list, err := s.projects.Deployments(ctx, req.GetId())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	// 记录里存的是原始错误。磁盘满的说明要看出错时的剩余空间，这里只补拉取镜像的说明。
-	for _, d := range list {
-		if h := dockerHint(d.GetError()); h != "" {
-			d.Error = h + "（原始错误：" + d.GetError() + "）"
+func (s *agentService) SetProjectsRoot(_ context.Context, req *nagiv1.SetProjectsRootRequest) (*nagiv1.SetProjectsRootResponse, error) {
+	if err := s.node.setProjectsRoot(req.GetRoot()); err != nil {
+		if errors.Is(err, project.ErrInvalidArgument) {
+			return nil, status.Error(codes.InvalidArgument, "项目根目录必须是绝对路径，且不能是 /")
 		}
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &nagiv1.ListDeploymentsResponse{Deployments: list}, nil
+	s.changed()
+	return &nagiv1.SetProjectsRootResponse{}, nil
 }
 
-func (s *agentService) RestoreDeployment(req *nagiv1.RestoreDeploymentRequest, stream nagiv1.AgentService_RestoreDeploymentServer) error {
+// ---- 容器 ----
+
+func (s *agentService) PutContainer(ctx context.Context, req *nagiv1.PutContainerRequest) (*nagiv1.PutContainerResponse, error) {
+	if err := s.projects.Put(ctx, req.GetSpec()); err != nil {
+		return nil, toStatus(err)
+	}
+	s.changed()
+	return &nagiv1.PutContainerResponse{}, nil
+}
+
+func (s *agentService) DeployContainer(req *nagiv1.DeployContainerRequest, stream nagiv1.AgentService_DeployContainerServer) error {
 	defer s.changed()
-	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		return s.projects.RestoreDeployment(stream.Context(), req.GetId(), req.GetDeploymentId(), onLine)
-	})
-}
-
-func (s *agentService) ListSharedNetworks(ctx context.Context, _ *nagiv1.ListSharedNetworksRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	return s.sharedNetworks(ctx)
-}
-
-func (s *agentService) sharedNetworks(ctx context.Context) (*nagiv1.ListSharedNetworksResponse, error) {
-	list, err := s.projects.SharedNetworks(ctx)
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.node.links.decorate(list)
-	return &nagiv1.ListSharedNetworksResponse{Networks: list}, nil
-}
-
-func (s *agentService) SetSharedNetworkPeers(ctx context.Context, req *nagiv1.SetSharedNetworkPeersRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	var self []byte
-	if s.node.mesh != nil {
-		k := s.node.mesh.m.PublicKey()
-		self = k[:]
-	}
-	var peers []project.LinkPeer
-	for _, p := range req.GetPeers() {
-		if len(p.GetPublicKey()) != 32 || bytes.Equal(p.GetPublicKey(), self) {
-			continue
-		}
-		peers = append(peers, project.LinkPeer{Key: p.GetPublicKey(), Name: p.GetName(), NodeID: p.GetNodeId()})
-	}
-	if err := s.projects.SetSharedNetworkPeers(ctx, req.GetName(), peers); err != nil {
-		return nil, toStatus(err)
-	}
-	s.node.links.sync(ctx)
-	return s.sharedNetworks(ctx)
-}
-
-func (s *agentService) CreateSharedNetwork(ctx context.Context, req *nagiv1.CreateSharedNetworkRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	if _, err := s.projects.CreateSharedNetwork(ctx, req.GetName()); err != nil {
-		return nil, toStatus(err)
-	}
-	return s.sharedNetworks(ctx)
-}
-
-func (s *agentService) DeleteSharedNetwork(ctx context.Context, req *nagiv1.DeleteSharedNetworkRequest) (*nagiv1.ListSharedNetworksResponse, error) {
-	if _, err := s.projects.DeleteSharedNetwork(ctx, req.GetName()); err != nil {
-		return nil, toStatus(err)
-	}
-	return s.sharedNetworks(ctx)
-}
-
-func (s *agentService) SaveRoute(ctx context.Context, req *nagiv1.SaveRouteRequest) (*nagiv1.SaveRouteResponse, error) {
-	p, err := s.projects.SaveRoute(ctx, req.GetProjectId(), req.GetRoute())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.SaveRouteResponse{Project: p}, nil
-}
-
-func (s *agentService) DeleteRoute(ctx context.Context, req *nagiv1.DeleteRouteRequest) (*nagiv1.DeleteRouteResponse, error) {
-	p, err := s.projects.DeleteRoute(ctx, req.GetProjectId(), req.GetName())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	s.changed()
-	return &nagiv1.DeleteRouteResponse{Project: p}, nil
-}
-
-func (s *agentService) DeleteProject(ctx context.Context, req *nagiv1.DeleteProjectRequest) (*nagiv1.DeleteProjectResponse, error) {
-	err := s.projects.Delete(ctx, req.GetId(), req.GetBaseRevision(), req.GetDeleteDir(), req.GetConfirmName(), func(string) {})
-	s.changed()
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.DeleteProjectResponse{}, nil
-}
-
-func (s *agentService) DeployProject(req *nagiv1.DeployProjectRequest, stream nagiv1.AgentService_DeployProjectServer) error {
-	defer s.changed()
-	targets := make([]project.Target, 0, len(req.GetTargets()))
-	for _, t := range req.GetTargets() {
-		targets = append(targets, project.Target{Container: t.GetContainer(), BaseRevision: t.GetBaseRevision()})
-	}
 	opts := project.DeployOptions{
 		Pull: req.GetPull(), Upload: req.GetUseUpload(), PullImages: req.GetPullImages(),
-		ApplySharedEnv: req.GetApplySharedEnv(), SettingsRevision: req.GetSettingsRevision(), Source: req.GetSource(),
+		FilesFrom: req.GetFilesFrom(), RestoreDataFrom: req.GetRestoreDataFrom(), Previous: req.GetPreviousVersion(),
 	}
-	if opts.Source == "" && opts.ApplySharedEnv {
-		opts.Source = "shared_env"
-	} else if opts.Source == "" && opts.PullImages {
-		opts.Source = "image"
-	}
-	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		return s.projects.Deploy(stream.Context(), req.GetId(), targets, opts, onLine)
-	})
-}
-
-// RebuildProject 用面板的配置备份在本节点上重建项目。项目建好以后部署失败时，结果里仍带新项目的 ID。
-func (s *agentService) RebuildProject(req *nagiv1.RebuildProjectRequest, stream nagiv1.AgentService_RebuildProjectServer) error {
-	defer s.changed()
-	id, err := s.projects.Rebuild(stream.Context(), req.GetProject(), req.GetDir(), func(line string) {
+	send := func(line string) {
 		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
-	})
-	if id == "" && err != nil {
+	}
+	res, err := s.projects.Deploy(stream.Context(), req.GetSpec(), opts, send)
+	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)
 	}
-	result := &nagiv1.DeployResult{Success: err == nil, ProjectId: id}
+	result := &nagiv1.DeployResult{
+		Success: err == nil, Version: req.GetSpec().GetVersion(),
+		Images: res.Images, Commit: res.Commit, HasFiles: res.HasFiles,
+	}
 	if err != nil {
-		result.Error = err.Error()
+		result.Error = explain(err.Error())
 	}
 	return stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: result}})
 }
 
+func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteContainerRequest) (*nagiv1.DeleteContainerResponse, error) {
+	err := s.projects.Delete(ctx, req.GetProjectId(), req.GetContainer(), req.GetDeleteDir(), func(string) {})
+	s.changed()
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.DeleteContainerResponse{}, nil
+}
+
+func (s *agentService) ListSnapshots(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListSnapshotsResponse, error) {
+	list, err := s.projects.Snapshots(ctx, req.GetProjectId(), req.GetContainer())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.ListSnapshotsResponse{Snapshots: list}, nil
+}
+
+func (s *agentService) CreateSnapshot(req *nagiv1.ContainerRef, stream nagiv1.AgentService_CreateSnapshotServer) error {
+	return runStream(stream.Send, func(onLine func(string)) error {
+		_, err := s.projects.TakeSnapshot(stream.Context(), req.GetProjectId(), req.GetContainer(), snapshot.Manual, onLine)
+		return err
+	})
+}
+
+func (s *agentService) RestoreSnapshot(req *nagiv1.RestoreSnapshotRequest, stream nagiv1.AgentService_RestoreSnapshotServer) error {
+	defer s.changed()
+	return runStream(stream.Send, func(onLine func(string)) error {
+		return s.projects.RestoreSnapshot(stream.Context(), req.GetProjectId(), req.GetContainer(), req.GetSnapshotId(), onLine)
+	})
+}
+
+func (s *agentService) LoginRegistry(ctx context.Context, req *nagiv1.LoginRegistryRequest) (*nagiv1.LoginRegistryResponse, error) {
+	cfg, err := s.projects.Login(ctx, req.GetRegistry(), req.GetUsername(), req.GetPassword())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.LoginRegistryResponse{DockerConfig: cfg}, nil
+}
+
 func (s *agentService) StreamLogs(req *nagiv1.StreamLogsRequest, stream nagiv1.AgentService_StreamLogsServer) error {
-	err := s.projects.Logs(stream.Context(), req.GetId(), req.GetContainer(), req.GetService(), int(req.GetTail()), req.GetFollow(), func(l docker.LogLine) {
+	err := s.projects.Logs(stream.Context(), req.GetProjectId(), req.GetContainer(), req.GetService(), int(req.GetTail()), req.GetFollow(), func(l docker.LogLine) {
 		_ = stream.Send(&nagiv1.LogLine{
 			Container: l.Container, Service: l.Service, Stream: l.Stream, Text: l.Text, Time: timestamppb.New(l.Time),
 		})
@@ -349,56 +206,19 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
 }
 
-func (s *agentService) ListVersions(ctx context.Context, req *nagiv1.ListVersionsRequest) (*nagiv1.ListVersionsResponse, error) {
-	list, err := s.projects.Versions(ctx, req.GetId(), req.GetContainer())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.ListVersionsResponse{Versions: list}, nil
-}
-
-func (s *agentService) ListSnapshots(ctx context.Context, req *nagiv1.ListSnapshotsRequest) (*nagiv1.ListSnapshotsResponse, error) {
-	list, err := s.projects.Snapshots(ctx, req.GetId())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.ListSnapshotsResponse{Snapshots: list}, nil
-}
-
 // runStream 执行一个会输出过程的操作，把输出和结果发给面板。
-func runStream(send func(*nagiv1.DeployEvent) error, op func(onLine func(string)) (int64, error)) error {
-	version, err := op(func(line string) {
+func runStream(send func(*nagiv1.DeployEvent) error, op func(onLine func(string)) error) error {
+	err := op(func(line string) {
 		_ = send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	})
-	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrConflict) || errors.Is(err, project.ErrInvalidArgument) {
+	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)
 	}
-	result := &nagiv1.DeployResult{Success: err == nil, Version: version}
+	result := &nagiv1.DeployResult{Success: err == nil}
 	if err != nil {
 		result.Error = explain(err.Error())
 	}
 	return send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: result}})
-}
-
-func (s *agentService) Rollback(req *nagiv1.RollbackRequest, stream nagiv1.AgentService_RollbackServer) error {
-	defer s.changed()
-	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		return s.projects.Rollback(stream.Context(), req.GetId(), req.GetContainer(), req.GetVersion(), req.GetRestoreData(), onLine)
-	})
-}
-
-func (s *agentService) CreateSnapshot(req *nagiv1.CreateSnapshotRequest, stream nagiv1.AgentService_CreateSnapshotServer) error {
-	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		_, err := s.projects.TakeSnapshot(stream.Context(), req.GetId(), snapshot.Manual, onLine)
-		return 0, err
-	})
-}
-
-func (s *agentService) RestoreSnapshot(req *nagiv1.RestoreSnapshotRequest, stream nagiv1.AgentService_RestoreSnapshotServer) error {
-	defer s.changed()
-	return runStream(stream.Send, func(onLine func(string)) (int64, error) {
-		return 0, s.projects.RestoreSnapshot(stream.Context(), req.GetId(), req.GetSnapshotId(), req.GetContainer(), onLine)
-	})
 }
 
 func toStatus(err error) error {
@@ -409,36 +229,8 @@ func toStatus(err error) error {
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, project.ErrInvalidArgument):
 		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, project.ErrConflict):
-		return status.Error(codes.Aborted, err.Error())
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, err.Error())
 	}
 	return status.Error(codes.Internal, err.Error())
-}
-
-// ---- 私有仓库认证 ----
-
-func (s *agentService) ListRegistries(ctx context.Context, req *nagiv1.ReplicaRef) (*nagiv1.RegistriesResponse, error) {
-	list, err := s.projects.Registries(ctx, req.GetProjectId())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.RegistriesResponse{Registries: list}, nil
-}
-
-func (s *agentService) LoginRegistry(ctx context.Context, req *nagiv1.LoginRegistryRequest) (*nagiv1.RegistriesResponse, error) {
-	list, err := s.projects.Login(ctx, req.GetProjectId(), req.GetRegistry(), req.GetUsername(), req.GetPassword())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.RegistriesResponse{Registries: list}, nil
-}
-
-func (s *agentService) LogoutRegistry(ctx context.Context, req *nagiv1.LogoutRegistryRequest) (*nagiv1.RegistriesResponse, error) {
-	list, err := s.projects.Logout(ctx, req.GetProjectId(), req.GetRegistry())
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return &nagiv1.RegistriesResponse{Registries: list}, nil
 }

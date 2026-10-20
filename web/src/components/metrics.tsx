@@ -77,16 +77,18 @@ const projectMetricFormat: Record<string, [string, (v: number) => string]> = {
   lat: ["平均耗时", (v) => `${v.toFixed(0)} ms`],
 };
 
-// 项目的容器和端口映射（http）的监控，按容器、映射分组。
-export function ProjectMetrics({ nodeId, projectId }: { nodeId: string; projectId: string }) {
+// 项目的容器和端口映射（http）的监控，按容器、映射分组。监控数据存在容器所在的节点上，逐个节点查询。
+export function ProjectMetrics({ nodeIds, projectId }: { nodeIds: string[]; projectId: string }) {
   const q = useQuery({
-    queryKey: ["project-metrics", nodeId, projectId],
+    queryKey: ["project-metrics", projectId, nodeIds.join(",")],
     queryFn: async () => {
-      const [c, r] = await Promise.all([
-        nodeClient.queryNodeMetrics({ nodeId, prefix: `c:${projectId}/`, from: lastHour() }),
-        nodeClient.queryNodeMetrics({ nodeId, prefix: `r:${projectId}/`, from: lastHour() }),
-      ]);
-      return [...c.series, ...r.series];
+      const parts = await Promise.all(
+        nodeIds.flatMap((nodeId) => [
+          nodeClient.queryNodeMetrics({ nodeId, prefix: `c:${projectId}/`, from: lastHour() }).catch(() => null),
+          nodeClient.queryNodeMetrics({ nodeId, prefix: `r:${projectId}/`, from: lastHour() }).catch(() => null),
+        ]),
+      );
+      return parts.flatMap((p) => p?.series ?? []);
     },
     refetchInterval: 10_000,
   });

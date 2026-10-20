@@ -21,172 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type SharedNetworkInfoRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SharedNetworkInfoRequest) Reset() {
-	*x = SharedNetworkInfoRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SharedNetworkInfoRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SharedNetworkInfoRequest) ProtoMessage() {}
-
-func (x *SharedNetworkInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SharedNetworkInfoRequest.ProtoReflect.Descriptor instead.
-func (*SharedNetworkInfoRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *SharedNetworkInfoRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-type SharedNetworkInfoResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 正在运行、接入了这个网络的容器。
-	Endpoints []*LinkEndpoint `protobuf:"bytes,1,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
-	// 加入了这个网络的项目（不管是否在运行），用来检查网络名是否重复。
-	Projects      []*SharedNetworkProject `protobuf:"bytes,2,rep,name=projects,proto3" json:"projects,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SharedNetworkInfoResponse) Reset() {
-	*x = SharedNetworkInfoResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SharedNetworkInfoResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SharedNetworkInfoResponse) ProtoMessage() {}
-
-func (x *SharedNetworkInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SharedNetworkInfoResponse.ProtoReflect.Descriptor instead.
-func (*SharedNetworkInfoResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *SharedNetworkInfoResponse) GetEndpoints() []*LinkEndpoint {
-	if x != nil {
-		return x.Endpoints
-	}
-	return nil
-}
-
-func (x *SharedNetworkInfoResponse) GetProjects() []*SharedNetworkProject {
-	if x != nil {
-		return x.Projects
-	}
-	return nil
-}
-
-type LinkEndpoint struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Alias         string                 `protobuf:"bytes,1,opt,name=alias,proto3" json:"alias,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	ProjectName   string                 `protobuf:"bytes,3,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	Ports         []uint32               `protobuf:"varint,4,rep,packed,name=ports,proto3" json:"ports,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LinkEndpoint) Reset() {
-	*x = LinkEndpoint{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LinkEndpoint) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LinkEndpoint) ProtoMessage() {}
-
-func (x *LinkEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LinkEndpoint.ProtoReflect.Descriptor instead.
-func (*LinkEndpoint) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *LinkEndpoint) GetAlias() string {
-	if x != nil {
-		return x.Alias
-	}
-	return ""
-}
-
-func (x *LinkEndpoint) GetProjectId() string {
-	if x != nil {
-		return x.ProjectId
-	}
-	return ""
-}
-
-func (x *LinkEndpoint) GetProjectName() string {
-	if x != nil {
-		return x.ProjectName
-	}
-	return ""
-}
-
-func (x *LinkEndpoint) GetPorts() []uint32 {
-	if x != nil {
-		return x.Ports
-	}
-	return nil
-}
-
 type LeaseVoteRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
@@ -200,7 +34,7 @@ type LeaseVoteRequest struct {
 
 func (x *LeaseVoteRequest) Reset() {
 	*x = LeaseVoteRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -212,7 +46,7 @@ func (x *LeaseVoteRequest) String() string {
 func (*LeaseVoteRequest) ProtoMessage() {}
 
 func (x *LeaseVoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -225,7 +59,7 @@ func (x *LeaseVoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseVoteRequest.ProtoReflect.Descriptor instead.
 func (*LeaseVoteRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{3}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *LeaseVoteRequest) GetProjectId() string {
@@ -261,7 +95,7 @@ type LeaseVoteResponse struct {
 
 func (x *LeaseVoteResponse) Reset() {
 	*x = LeaseVoteResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[4]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -273,7 +107,7 @@ func (x *LeaseVoteResponse) String() string {
 func (*LeaseVoteResponse) ProtoMessage() {}
 
 func (x *LeaseVoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[4]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -286,7 +120,7 @@ func (x *LeaseVoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseVoteResponse.ProtoReflect.Descriptor instead.
 func (*LeaseVoteResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *LeaseVoteResponse) GetGranted() bool {
@@ -319,7 +153,7 @@ type ReplicaManifestRequest struct {
 
 func (x *ReplicaManifestRequest) Reset() {
 	*x = ReplicaManifestRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[5]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -331,7 +165,7 @@ func (x *ReplicaManifestRequest) String() string {
 func (*ReplicaManifestRequest) ProtoMessage() {}
 
 func (x *ReplicaManifestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[5]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +178,7 @@ func (x *ReplicaManifestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaManifestRequest.ProtoReflect.Descriptor instead.
 func (*ReplicaManifestRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{5}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReplicaManifestRequest) GetProjectId() string {
@@ -364,7 +198,7 @@ type ReplicaFile struct {
 
 func (x *ReplicaFile) Reset() {
 	*x = ReplicaFile{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[6]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +210,7 @@ func (x *ReplicaFile) String() string {
 func (*ReplicaFile) ProtoMessage() {}
 
 func (x *ReplicaFile) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[6]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +223,7 @@ func (x *ReplicaFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaFile.ProtoReflect.Descriptor instead.
 func (*ReplicaFile) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{6}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ReplicaFile) GetPath() string {
@@ -415,7 +249,7 @@ type ReplicaManifestResponse struct {
 
 func (x *ReplicaManifestResponse) Reset() {
 	*x = ReplicaManifestResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[7]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -427,7 +261,7 @@ func (x *ReplicaManifestResponse) String() string {
 func (*ReplicaManifestResponse) ProtoMessage() {}
 
 func (x *ReplicaManifestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[7]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -440,7 +274,7 @@ func (x *ReplicaManifestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaManifestResponse.ProtoReflect.Descriptor instead.
 func (*ReplicaManifestResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{7}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ReplicaManifestResponse) GetFiles() []*ReplicaFile {
@@ -462,7 +296,7 @@ type ReplicaChunk struct {
 
 func (x *ReplicaChunk) Reset() {
 	*x = ReplicaChunk{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[8]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -474,7 +308,7 @@ func (x *ReplicaChunk) String() string {
 func (*ReplicaChunk) ProtoMessage() {}
 
 func (x *ReplicaChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[8]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -487,7 +321,7 @@ func (x *ReplicaChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaChunk.ProtoReflect.Descriptor instead.
 func (*ReplicaChunk) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{8}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ReplicaChunk) GetProjectId() string {
@@ -520,7 +354,7 @@ type ReplicaPutResponse struct {
 
 func (x *ReplicaPutResponse) Reset() {
 	*x = ReplicaPutResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[9]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -532,7 +366,7 @@ func (x *ReplicaPutResponse) String() string {
 func (*ReplicaPutResponse) ProtoMessage() {}
 
 func (x *ReplicaPutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[9]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -545,7 +379,7 @@ func (x *ReplicaPutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaPutResponse.ProtoReflect.Descriptor instead.
 func (*ReplicaPutResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{9}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ReplicaPutResponse) GetFiles() uint32 {
@@ -567,7 +401,7 @@ type ReplicaCommitRequest struct {
 
 func (x *ReplicaCommitRequest) Reset() {
 	*x = ReplicaCommitRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[10]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -579,7 +413,7 @@ func (x *ReplicaCommitRequest) String() string {
 func (*ReplicaCommitRequest) ProtoMessage() {}
 
 func (x *ReplicaCommitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[10]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -592,7 +426,7 @@ func (x *ReplicaCommitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaCommitRequest.ProtoReflect.Descriptor instead.
 func (*ReplicaCommitRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{10}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ReplicaCommitRequest) GetProjectId() string {
@@ -624,7 +458,7 @@ type ReplicaCommitResponse struct {
 
 func (x *ReplicaCommitResponse) Reset() {
 	*x = ReplicaCommitResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[11]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -636,7 +470,7 @@ func (x *ReplicaCommitResponse) String() string {
 func (*ReplicaCommitResponse) ProtoMessage() {}
 
 func (x *ReplicaCommitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[11]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -649,7 +483,7 @@ func (x *ReplicaCommitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaCommitResponse.ProtoReflect.Descriptor instead.
 func (*ReplicaCommitResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{11}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{8}
 }
 
 type UploadChunk struct {
@@ -664,7 +498,7 @@ type UploadChunk struct {
 
 func (x *UploadChunk) Reset() {
 	*x = UploadChunk{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[12]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +510,7 @@ func (x *UploadChunk) String() string {
 func (*UploadChunk) ProtoMessage() {}
 
 func (x *UploadChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[12]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +523,7 @@ func (x *UploadChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadChunk.ProtoReflect.Descriptor instead.
 func (*UploadChunk) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{12}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UploadChunk) GetProjectId() string {
@@ -725,7 +559,7 @@ type UploadResponse struct {
 
 func (x *UploadResponse) Reset() {
 	*x = UploadResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[13]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -737,7 +571,7 @@ func (x *UploadResponse) String() string {
 func (*UploadResponse) ProtoMessage() {}
 
 func (x *UploadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[13]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -750,7 +584,7 @@ func (x *UploadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadResponse.ProtoReflect.Descriptor instead.
 func (*UploadResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{13}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UploadResponse) GetBytes() uint64 {
@@ -782,7 +616,7 @@ type PingRequest struct {
 
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[14]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +628,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[14]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +641,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{14}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{11}
 }
 
 type PingResponse struct {
@@ -820,7 +654,7 @@ type PingResponse struct {
 
 func (x *PingResponse) Reset() {
 	*x = PingResponse{}
-	mi := &file_nagi_v1_mesh_proto_msgTypes[15]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -832,7 +666,7 @@ func (x *PingResponse) String() string {
 func (*PingResponse) ProtoMessage() {}
 
 func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_mesh_proto_msgTypes[15]
+	mi := &file_nagi_v1_mesh_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -845,7 +679,7 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{15}
+	return file_nagi_v1_mesh_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PingResponse) GetCaller() []byte {
@@ -859,18 +693,7 @@ var File_nagi_v1_mesh_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/mesh.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\".\n" +
-	"\x18SharedNetworkInfoRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\x8b\x01\n" +
-	"\x19SharedNetworkInfoResponse\x123\n" +
-	"\tendpoints\x18\x01 \x03(\v2\x15.nagi.v1.LinkEndpointR\tendpoints\x129\n" +
-	"\bprojects\x18\x02 \x03(\v2\x1d.nagi.v1.SharedNetworkProjectR\bprojects\"|\n" +
-	"\fLinkEndpoint\x12\x14\n" +
-	"\x05alias\x18\x01 \x01(\tR\x05alias\x12\x1d\n" +
-	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12!\n" +
-	"\fproject_name\x18\x03 \x01(\tR\vprojectName\x12\x14\n" +
-	"\x05ports\x18\x04 \x03(\rR\x05ports\"h\n" +
+	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"h\n" +
 	"\x10LeaseVoteRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
@@ -913,7 +736,7 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\bstripped\x18\x03 \x01(\tR\bstripped\"\r\n" +
 	"\vPingRequest\"&\n" +
 	"\fPingResponse\x12\x16\n" +
-	"\x06caller\x18\x01 \x01(\fR\x06caller2\x87\x04\n" +
+	"\x06caller\x18\x01 \x01(\fR\x06caller2\xab\x03\n" +
 	"\vMeshService\x123\n" +
 	"\x04Ping\x12\x14.nagi.v1.PingRequest\x1a\x15.nagi.v1.PingResponse\x129\n" +
 	"\x06Upload\x12\x14.nagi.v1.UploadChunk\x1a\x17.nagi.v1.UploadResponse(\x01\x12T\n" +
@@ -921,8 +744,7 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
 	"ReplicaPut\x12\x15.nagi.v1.ReplicaChunk\x1a\x1b.nagi.v1.ReplicaPutResponse(\x01\x12N\n" +
 	"\rReplicaCommit\x12\x1d.nagi.v1.ReplicaCommitRequest\x1a\x1e.nagi.v1.ReplicaCommitResponse\x12B\n" +
-	"\tLeaseVote\x12\x19.nagi.v1.LeaseVoteRequest\x1a\x1a.nagi.v1.LeaseVoteResponse\x12Z\n" +
-	"\x11SharedNetworkInfo\x12!.nagi.v1.SharedNetworkInfoRequest\x1a\".nagi.v1.SharedNetworkInfoResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\tLeaseVote\x12\x19.nagi.v1.LeaseVoteRequest\x1a\x1a.nagi.v1.LeaseVoteResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_mesh_proto_rawDescOnce sync.Once
@@ -936,49 +758,41 @@ func file_nagi_v1_mesh_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_mesh_proto_rawDescData
 }
 
-var file_nagi_v1_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_nagi_v1_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_nagi_v1_mesh_proto_goTypes = []any{
-	(*SharedNetworkInfoRequest)(nil),  // 0: nagi.v1.SharedNetworkInfoRequest
-	(*SharedNetworkInfoResponse)(nil), // 1: nagi.v1.SharedNetworkInfoResponse
-	(*LinkEndpoint)(nil),              // 2: nagi.v1.LinkEndpoint
-	(*LeaseVoteRequest)(nil),          // 3: nagi.v1.LeaseVoteRequest
-	(*LeaseVoteResponse)(nil),         // 4: nagi.v1.LeaseVoteResponse
-	(*ReplicaManifestRequest)(nil),    // 5: nagi.v1.ReplicaManifestRequest
-	(*ReplicaFile)(nil),               // 6: nagi.v1.ReplicaFile
-	(*ReplicaManifestResponse)(nil),   // 7: nagi.v1.ReplicaManifestResponse
-	(*ReplicaChunk)(nil),              // 8: nagi.v1.ReplicaChunk
-	(*ReplicaPutResponse)(nil),        // 9: nagi.v1.ReplicaPutResponse
-	(*ReplicaCommitRequest)(nil),      // 10: nagi.v1.ReplicaCommitRequest
-	(*ReplicaCommitResponse)(nil),     // 11: nagi.v1.ReplicaCommitResponse
-	(*UploadChunk)(nil),               // 12: nagi.v1.UploadChunk
-	(*UploadResponse)(nil),            // 13: nagi.v1.UploadResponse
-	(*PingRequest)(nil),               // 14: nagi.v1.PingRequest
-	(*PingResponse)(nil),              // 15: nagi.v1.PingResponse
-	(*SharedNetworkProject)(nil),      // 16: nagi.v1.SharedNetworkProject
+	(*LeaseVoteRequest)(nil),        // 0: nagi.v1.LeaseVoteRequest
+	(*LeaseVoteResponse)(nil),       // 1: nagi.v1.LeaseVoteResponse
+	(*ReplicaManifestRequest)(nil),  // 2: nagi.v1.ReplicaManifestRequest
+	(*ReplicaFile)(nil),             // 3: nagi.v1.ReplicaFile
+	(*ReplicaManifestResponse)(nil), // 4: nagi.v1.ReplicaManifestResponse
+	(*ReplicaChunk)(nil),            // 5: nagi.v1.ReplicaChunk
+	(*ReplicaPutResponse)(nil),      // 6: nagi.v1.ReplicaPutResponse
+	(*ReplicaCommitRequest)(nil),    // 7: nagi.v1.ReplicaCommitRequest
+	(*ReplicaCommitResponse)(nil),   // 8: nagi.v1.ReplicaCommitResponse
+	(*UploadChunk)(nil),             // 9: nagi.v1.UploadChunk
+	(*UploadResponse)(nil),          // 10: nagi.v1.UploadResponse
+	(*PingRequest)(nil),             // 11: nagi.v1.PingRequest
+	(*PingResponse)(nil),            // 12: nagi.v1.PingResponse
 }
 var file_nagi_v1_mesh_proto_depIdxs = []int32{
-	2,  // 0: nagi.v1.SharedNetworkInfoResponse.endpoints:type_name -> nagi.v1.LinkEndpoint
-	16, // 1: nagi.v1.SharedNetworkInfoResponse.projects:type_name -> nagi.v1.SharedNetworkProject
-	6,  // 2: nagi.v1.ReplicaManifestResponse.files:type_name -> nagi.v1.ReplicaFile
-	14, // 3: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
-	12, // 4: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
-	5,  // 5: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
-	8,  // 6: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
-	10, // 7: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
-	3,  // 8: nagi.v1.MeshService.LeaseVote:input_type -> nagi.v1.LeaseVoteRequest
-	0,  // 9: nagi.v1.MeshService.SharedNetworkInfo:input_type -> nagi.v1.SharedNetworkInfoRequest
-	15, // 10: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
-	13, // 11: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
-	7,  // 12: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
-	9,  // 13: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
-	11, // 14: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
-	4,  // 15: nagi.v1.MeshService.LeaseVote:output_type -> nagi.v1.LeaseVoteResponse
-	1,  // 16: nagi.v1.MeshService.SharedNetworkInfo:output_type -> nagi.v1.SharedNetworkInfoResponse
-	10, // [10:17] is the sub-list for method output_type
-	3,  // [3:10] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	3,  // 0: nagi.v1.ReplicaManifestResponse.files:type_name -> nagi.v1.ReplicaFile
+	11, // 1: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
+	9,  // 2: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
+	2,  // 3: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
+	5,  // 4: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
+	7,  // 5: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
+	0,  // 6: nagi.v1.MeshService.LeaseVote:input_type -> nagi.v1.LeaseVoteRequest
+	12, // 7: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
+	10, // 8: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
+	4,  // 9: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
+	6,  // 10: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
+	8,  // 11: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
+	1,  // 12: nagi.v1.MeshService.LeaseVote:output_type -> nagi.v1.LeaseVoteResponse
+	7,  // [7:13] is the sub-list for method output_type
+	1,  // [1:7] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_mesh_proto_init() }
@@ -986,14 +800,13 @@ func file_nagi_v1_mesh_proto_init() {
 	if File_nagi_v1_mesh_proto != nil {
 		return
 	}
-	file_nagi_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_mesh_proto_rawDesc), len(file_nagi_v1_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

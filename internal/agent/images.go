@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// imageCheckLoop 每天检查一次所有项目的镜像有没有新版本（启动 5 分钟后第一次）。
+// imageCheckLoop 每天检查一次所有容器的镜像有没有新版本（启动 5 分钟后第一次）。
 func (a *agent) imageCheckLoop(ctx context.Context) {
 	wait := 5 * time.Minute
 	for {
@@ -31,8 +31,8 @@ func (a *agent) imageCheckLoop(ctx context.Context) {
 	}
 }
 
-func (s *agentService) CheckImages(ctx context.Context, req *nagiv1.ReplicaRef) (*nagiv1.CheckImagesResponse, error) {
-	list, err := s.projects.CheckImages(ctx, req.GetProjectId())
+func (s *agentService) CheckImages(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.CheckImagesResponse, error) {
+	list, err := s.projects.CheckImages(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return nil, toStatus(err)
 	}

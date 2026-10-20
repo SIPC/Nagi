@@ -22,6 +22,20 @@ func (q *Queries) ApproveNode(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const bumpContainer = `-- name: BumpContainer :exec
+UPDATE containers SET revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type BumpContainerParams struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) BumpContainer(ctx context.Context, arg BumpContainerParams) error {
+	_, err := q.db.ExecContext(ctx, bumpContainer, arg.ProjectID, arg.Name)
+	return err
+}
+
 const clearTOTPSecrets = `-- name: ClearTOTPSecrets :exec
 UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != ''
 `
@@ -29,6 +43,57 @@ UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != ''
 func (q *Queries) ClearTOTPSecrets(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, clearTOTPSecrets)
 	return err
+}
+
+const clearVersionFiles = `-- name: ClearVersionFiles :exec
+UPDATE versions SET has_files = 0 WHERE project_id = ? AND container = ?
+`
+
+type ClearVersionFilesParams struct {
+	ProjectID string
+	Container string
+}
+
+func (q *Queries) ClearVersionFiles(ctx context.Context, arg ClearVersionFilesParams) error {
+	_, err := q.db.ExecContext(ctx, clearVersionFiles, arg.ProjectID, arg.Container)
+	return err
+}
+
+const containerByWebhook = `-- name: ContainerByWebhook :one
+SELECT project_id, name FROM containers WHERE webhook_hash = ?
+`
+
+type ContainerByWebhookRow struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) ContainerByWebhook(ctx context.Context, webhookHash string) (ContainerByWebhookRow, error) {
+	row := q.db.QueryRowContext(ctx, containerByWebhook, webhookHash)
+	var i ContainerByWebhookRow
+	err := row.Scan(&i.ProjectID, &i.Name)
+	return i, err
+}
+
+const containerDirOwner = `-- name: ContainerDirOwner :one
+SELECT project_id, name FROM containers WHERE node_id = ? AND dir = ?
+`
+
+type ContainerDirOwnerParams struct {
+	NodeID string
+	Dir    string
+}
+
+type ContainerDirOwnerRow struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) ContainerDirOwner(ctx context.Context, arg ContainerDirOwnerParams) (ContainerDirOwnerRow, error) {
+	row := q.db.QueryRowContext(ctx, containerDirOwner, arg.NodeID, arg.Dir)
+	var i ContainerDirOwnerRow
+	err := row.Scan(&i.ProjectID, &i.Name)
+	return i, err
 }
 
 const countActiveEnrollTokens = `-- name: CountActiveEnrollTokens :one
@@ -42,10 +107,21 @@ func (q *Queries) CountActiveEnrollTokens(ctx context.Context, expiresAt int64) 
 	return count, err
 }
 
+const countNodeContainers = `-- name: CountNodeContainers :one
+SELECT count(*) FROM containers WHERE node_id = ?
+`
+
+func (q *Queries) CountNodeContainers(ctx context.Context, nodeID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countNodeContainers, nodeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSealedData = `-- name: CountSealedData :one
 SELECT (SELECT count(*) FROM users WHERE totp_secret != '')
      + (SELECT count(*) FROM settings WHERE key = 'alert_config')
-     + (SELECT count(*) FROM project_backups) AS n
+     + (SELECT count(*) FROM projects) AS n
 `
 
 func (q *Queries) CountSealedData(ctx context.Context) (int64, error) {
@@ -158,12 +234,31 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, 
 	return id, err
 }
 
-const deleteAllProjectBackups = `-- name: DeleteAllProjectBackups :exec
-DELETE FROM project_backups
+const deleteContainer = `-- name: DeleteContainer :exec
+DELETE FROM containers WHERE project_id = ? AND name = ?
 `
 
-func (q *Queries) DeleteAllProjectBackups(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteAllProjectBackups)
+type DeleteContainerParams struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) DeleteContainer(ctx context.Context, arg DeleteContainerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteContainer, arg.ProjectID, arg.Name)
+	return err
+}
+
+const deleteDeploymentsBefore = `-- name: DeleteDeploymentsBefore :exec
+DELETE FROM deployments WHERE project_id = ? AND id < ?
+`
+
+type DeleteDeploymentsBeforeParams struct {
+	ProjectID string
+	ID        int64
+}
+
+func (q *Queries) DeleteDeploymentsBefore(ctx context.Context, arg DeleteDeploymentsBeforeParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDeploymentsBefore, arg.ProjectID, arg.ID)
 	return err
 }
 
@@ -173,24 +268,6 @@ DELETE FROM sessions WHERE expires_at < ?
 
 func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredSessions, expiresAt)
-	return err
-}
-
-const deleteNodeData = `-- name: DeleteNodeData :exec
-DELETE FROM project_backups WHERE node_id = ?
-`
-
-func (q *Queries) DeleteNodeData(ctx context.Context, nodeID string) error {
-	_, err := q.db.ExecContext(ctx, deleteNodeData, nodeID)
-	return err
-}
-
-const deleteNodeWebhooks = `-- name: DeleteNodeWebhooks :exec
-DELETE FROM webhooks WHERE node_id = ?
-`
-
-func (q *Queries) DeleteNodeWebhooks(ctx context.Context, nodeID string) error {
-	_, err := q.db.ExecContext(ctx, deleteNodeWebhooks, nodeID)
 	return err
 }
 
@@ -208,31 +285,26 @@ func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessio
 	return err
 }
 
-const deleteProjectBackup = `-- name: DeleteProjectBackup :exec
-DELETE FROM project_backups WHERE node_id = ? AND project_id = ?
+const deleteProject = `-- name: DeleteProject :exec
+DELETE FROM projects WHERE id = ?
 `
 
-type DeleteProjectBackupParams struct {
-	NodeID    string
-	ProjectID string
-}
-
-func (q *Queries) DeleteProjectBackup(ctx context.Context, arg DeleteProjectBackupParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectBackup, arg.NodeID, arg.ProjectID)
+func (q *Queries) DeleteProject(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteProject, id)
 	return err
 }
 
-const deleteProjectWebhooks = `-- name: DeleteProjectWebhooks :exec
-DELETE FROM webhooks WHERE node_id = ? AND project_id = ?
+const deleteRoute = `-- name: DeleteRoute :exec
+DELETE FROM routes WHERE project_id = ? AND name = ?
 `
 
-type DeleteProjectWebhooksParams struct {
-	NodeID    string
+type DeleteRouteParams struct {
 	ProjectID string
+	Name      string
 }
 
-func (q *Queries) DeleteProjectWebhooks(ctx context.Context, arg DeleteProjectWebhooksParams) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectWebhooks, arg.NodeID, arg.ProjectID)
+func (q *Queries) DeleteRoute(ctx context.Context, arg DeleteRouteParams) error {
+	_, err := q.db.ExecContext(ctx, deleteRoute, arg.ProjectID, arg.Name)
 	return err
 }
 
@@ -263,13 +335,76 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID int64) error {
 	return err
 }
 
-const deleteWebhook = `-- name: DeleteWebhook :exec
-DELETE FROM webhooks WHERE token_hash = ?
+const deleteVersionsBefore = `-- name: DeleteVersionsBefore :exec
+DELETE FROM versions WHERE project_id = ? AND container = ? AND version < ?
 `
 
-func (q *Queries) DeleteWebhook(ctx context.Context, tokenHash string) error {
-	_, err := q.db.ExecContext(ctx, deleteWebhook, tokenHash)
+type DeleteVersionsBeforeParams struct {
+	ProjectID string
+	Container string
+	Version   int64
+}
+
+func (q *Queries) DeleteVersionsBefore(ctx context.Context, arg DeleteVersionsBeforeParams) error {
+	_, err := q.db.ExecContext(ctx, deleteVersionsBefore, arg.ProjectID, arg.Container, arg.Version)
 	return err
+}
+
+const getContainer = `-- name: GetContainer :one
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE project_id = ? AND name = ?
+`
+
+type GetContainerParams struct {
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Container, error) {
+	row := q.db.QueryRowContext(ctx, getContainer, arg.ProjectID, arg.Name)
+	var i Container
+	err := row.Scan(
+		&i.ProjectID,
+		&i.Name,
+		&i.Position,
+		&i.NodeID,
+		&i.Dir,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.DeployedVersion,
+		&i.Draft,
+		&i.WebhookHash,
+		&i.Secrets,
+		&i.DeployKeyPub,
+		&i.ImportedPorts,
+		&i.LastCommit,
+	)
+	return i, err
+}
+
+const getDeployment = `-- name: GetDeployment :one
+SELECT id, project_id, created_at, source, containers, versions, success, error, restore_of FROM deployments WHERE project_id = ? AND id = ?
+`
+
+type GetDeploymentParams struct {
+	ProjectID string
+	ID        int64
+}
+
+func (q *Queries) GetDeployment(ctx context.Context, arg GetDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRowContext(ctx, getDeployment, arg.ProjectID, arg.ID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.CreatedAt,
+		&i.Source,
+		&i.Containers,
+		&i.Versions,
+		&i.Success,
+		&i.Error,
+		&i.RestoreOf,
+	)
+	return i, err
 }
 
 const getNode = `-- name: GetNode :one
@@ -292,20 +427,24 @@ func (q *Queries) GetNode(ctx context.Context, id string) (Node, error) {
 	return i, err
 }
 
-const getProjectBackupKey = `-- name: GetProjectBackupKey :one
-SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?
+const getProject = `-- name: GetProject :one
+SELECT id, name, network_name, revision, created_at, settings, shared_env_draft, docker_config FROM projects WHERE id = ?
 `
 
-type GetProjectBackupKeyParams struct {
-	NodeID    string
-	ProjectID string
-}
-
-func (q *Queries) GetProjectBackupKey(ctx context.Context, arg GetProjectBackupKeyParams) ([]byte, error) {
-	row := q.db.QueryRowContext(ctx, getProjectBackupKey, arg.NodeID, arg.ProjectID)
-	var backup_key []byte
-	err := row.Scan(&backup_key)
-	return backup_key, err
+func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
+	row := q.db.QueryRowContext(ctx, getProject, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NetworkName,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.Settings,
+		&i.SharedEnvDraft,
+		&i.DockerConfig,
+	)
+	return i, err
 }
 
 const getSession = `-- name: GetSession :one
@@ -375,20 +514,340 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
-const getWebhook = `-- name: GetWebhook :one
-SELECT token_hash, node_id, project_id, container FROM webhooks WHERE token_hash = ?
+const getVersion = `-- name: GetVersion :one
+SELECT project_id, container, version, config, shared_env, created_at, deployed_at, images, git_commit, rollback_of, has_files FROM versions WHERE project_id = ? AND container = ? AND version = ?
 `
 
-func (q *Queries) GetWebhook(ctx context.Context, tokenHash string) (Webhook, error) {
-	row := q.db.QueryRowContext(ctx, getWebhook, tokenHash)
-	var i Webhook
+type GetVersionParams struct {
+	ProjectID string
+	Container string
+	Version   int64
+}
+
+func (q *Queries) GetVersion(ctx context.Context, arg GetVersionParams) (Version, error) {
+	row := q.db.QueryRowContext(ctx, getVersion, arg.ProjectID, arg.Container, arg.Version)
+	var i Version
 	err := row.Scan(
-		&i.TokenHash,
-		&i.NodeID,
 		&i.ProjectID,
 		&i.Container,
+		&i.Version,
+		&i.Config,
+		&i.SharedEnv,
+		&i.CreatedAt,
+		&i.DeployedAt,
+		&i.Images,
+		&i.GitCommit,
+		&i.RollbackOf,
+		&i.HasFiles,
 	)
 	return i, err
+}
+
+const insertContainer = `-- name: InsertContainer :exec
+INSERT INTO containers (project_id, name, position, node_id, dir, revision, created_at, webhook_hash, secrets, deploy_key_pub)
+VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+`
+
+type InsertContainerParams struct {
+	ProjectID    string
+	Name         string
+	Position     int64
+	NodeID       string
+	Dir          string
+	CreatedAt    int64
+	WebhookHash  string
+	Secrets      []byte
+	DeployKeyPub string
+}
+
+func (q *Queries) InsertContainer(ctx context.Context, arg InsertContainerParams) error {
+	_, err := q.db.ExecContext(ctx, insertContainer,
+		arg.ProjectID,
+		arg.Name,
+		arg.Position,
+		arg.NodeID,
+		arg.Dir,
+		arg.CreatedAt,
+		arg.WebhookHash,
+		arg.Secrets,
+		arg.DeployKeyPub,
+	)
+	return err
+}
+
+const insertDeployment = `-- name: InsertDeployment :one
+INSERT INTO deployments (project_id, created_at, source, containers, versions, success, error, restore_of)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id
+`
+
+type InsertDeploymentParams struct {
+	ProjectID  string
+	CreatedAt  int64
+	Source     string
+	Containers string
+	Versions   string
+	Success    int64
+	Error      string
+	RestoreOf  int64
+}
+
+func (q *Queries) InsertDeployment(ctx context.Context, arg InsertDeploymentParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertDeployment,
+		arg.ProjectID,
+		arg.CreatedAt,
+		arg.Source,
+		arg.Containers,
+		arg.Versions,
+		arg.Success,
+		arg.Error,
+		arg.RestoreOf,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertProject = `-- name: InsertProject :exec
+INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES (?, ?, ?, 1, ?, ?)
+`
+
+type InsertProjectParams struct {
+	ID          string
+	Name        string
+	NetworkName string
+	CreatedAt   int64
+	Settings    []byte
+}
+
+func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) error {
+	_, err := q.db.ExecContext(ctx, insertProject,
+		arg.ID,
+		arg.Name,
+		arg.NetworkName,
+		arg.CreatedAt,
+		arg.Settings,
+	)
+	return err
+}
+
+const insertVersion = `-- name: InsertVersion :exec
+INSERT INTO versions (project_id, container, version, config, shared_env, created_at, rollback_of)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertVersionParams struct {
+	ProjectID  string
+	Container  string
+	Version    int64
+	Config     []byte
+	SharedEnv  []byte
+	CreatedAt  int64
+	RollbackOf int64
+}
+
+func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) error {
+	_, err := q.db.ExecContext(ctx, insertVersion,
+		arg.ProjectID,
+		arg.Container,
+		arg.Version,
+		arg.Config,
+		arg.SharedEnv,
+		arg.CreatedAt,
+		arg.RollbackOf,
+	)
+	return err
+}
+
+const latestVersion = `-- name: LatestVersion :one
+SELECT project_id, container, version, config, shared_env, created_at, deployed_at, images, git_commit, rollback_of, has_files FROM versions WHERE project_id = ? AND container = ? ORDER BY version DESC LIMIT 1
+`
+
+type LatestVersionParams struct {
+	ProjectID string
+	Container string
+}
+
+func (q *Queries) LatestVersion(ctx context.Context, arg LatestVersionParams) (Version, error) {
+	row := q.db.QueryRowContext(ctx, latestVersion, arg.ProjectID, arg.Container)
+	var i Version
+	err := row.Scan(
+		&i.ProjectID,
+		&i.Container,
+		&i.Version,
+		&i.Config,
+		&i.SharedEnv,
+		&i.CreatedAt,
+		&i.DeployedAt,
+		&i.Images,
+		&i.GitCommit,
+		&i.RollbackOf,
+		&i.HasFiles,
+	)
+	return i, err
+}
+
+const listAllContainers = `-- name: ListAllContainers :many
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers ORDER BY project_id, position
+`
+
+func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listAllContainers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Container{}
+	for rows.Next() {
+		var i Container
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Name,
+			&i.Position,
+			&i.NodeID,
+			&i.Dir,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.DeployedVersion,
+			&i.Draft,
+			&i.WebhookHash,
+			&i.Secrets,
+			&i.DeployKeyPub,
+			&i.ImportedPorts,
+			&i.LastCommit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllRoutes = `-- name: ListAllRoutes :many
+SELECT project_id, name, container, service, target, protocol, published, domains, http_only FROM routes ORDER BY project_id, name
+`
+
+func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
+	rows, err := q.db.QueryContext(ctx, listAllRoutes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Route{}
+	for rows.Next() {
+		var i Route
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Name,
+			&i.Container,
+			&i.Service,
+			&i.Target,
+			&i.Protocol,
+			&i.Published,
+			&i.Domains,
+			&i.HttpOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContainers = `-- name: ListContainers :many
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE project_id = ? ORDER BY position
+`
+
+func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listContainers, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Container{}
+	for rows.Next() {
+		var i Container
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Name,
+			&i.Position,
+			&i.NodeID,
+			&i.Dir,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.DeployedVersion,
+			&i.Draft,
+			&i.WebhookHash,
+			&i.Secrets,
+			&i.DeployKeyPub,
+			&i.ImportedPorts,
+			&i.LastCommit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeployments = `-- name: ListDeployments :many
+SELECT id, project_id, created_at, source, containers, versions, success, error, restore_of FROM deployments WHERE project_id = ? ORDER BY id DESC LIMIT ?
+`
+
+type ListDeploymentsParams struct {
+	ProjectID string
+	Limit     int64
+}
+
+func (q *Queries) ListDeployments(ctx context.Context, arg ListDeploymentsParams) ([]Deployment, error) {
+	rows, err := q.db.QueryContext(ctx, listDeployments, arg.ProjectID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Deployment{}
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.CreatedAt,
+			&i.Source,
+			&i.Containers,
+			&i.Versions,
+			&i.Success,
+			&i.Error,
+			&i.RestoreOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInvites = `-- name: ListInvites :many
@@ -431,24 +890,34 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 	return items, nil
 }
 
-const listNodeWebhooks = `-- name: ListNodeWebhooks :many
-SELECT token_hash, node_id, project_id, container FROM webhooks WHERE node_id = ?
+const listNodeContainers = `-- name: ListNodeContainers :many
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE node_id = ? ORDER BY project_id, position
 `
 
-func (q *Queries) ListNodeWebhooks(ctx context.Context, nodeID string) ([]Webhook, error) {
-	rows, err := q.db.QueryContext(ctx, listNodeWebhooks, nodeID)
+func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Container, error) {
+	rows, err := q.db.QueryContext(ctx, listNodeContainers, nodeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Webhook{}
+	items := []Container{}
 	for rows.Next() {
-		var i Webhook
+		var i Container
 		if err := rows.Scan(
-			&i.TokenHash,
-			&i.NodeID,
 			&i.ProjectID,
-			&i.Container,
+			&i.Name,
+			&i.Position,
+			&i.NodeID,
+			&i.Dir,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.DeployedVersion,
+			&i.Draft,
+			&i.WebhookHash,
+			&i.Secrets,
+			&i.DeployKeyPub,
+			&i.ImportedPorts,
+			&i.LastCommit,
 		); err != nil {
 			return nil, err
 		}
@@ -499,26 +968,65 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 	return items, nil
 }
 
-const listProjectBackups = `-- name: ListProjectBackups :many
-SELECT node_id, project_id, revision, data, updated_at, backup_key FROM project_backups WHERE node_id = ? ORDER BY project_id
+const listProjects = `-- name: ListProjects :many
+SELECT id, name, network_name, revision, created_at, settings, shared_env_draft, docker_config FROM projects ORDER BY created_at
 `
 
-func (q *Queries) ListProjectBackups(ctx context.Context, nodeID string) ([]ProjectBackup, error) {
-	rows, err := q.db.QueryContext(ctx, listProjectBackups, nodeID)
+func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
+	rows, err := q.db.QueryContext(ctx, listProjects)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ProjectBackup{}
+	items := []Project{}
 	for rows.Next() {
-		var i ProjectBackup
+		var i Project
 		if err := rows.Scan(
-			&i.NodeID,
-			&i.ProjectID,
+			&i.ID,
+			&i.Name,
+			&i.NetworkName,
 			&i.Revision,
-			&i.Data,
-			&i.UpdatedAt,
-			&i.BackupKey,
+			&i.CreatedAt,
+			&i.Settings,
+			&i.SharedEnvDraft,
+			&i.DockerConfig,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoutes = `-- name: ListRoutes :many
+SELECT project_id, name, container, service, target, protocol, published, domains, http_only FROM routes WHERE project_id = ? ORDER BY name
+`
+
+func (q *Queries) ListRoutes(ctx context.Context, projectID string) ([]Route, error) {
+	rows, err := q.db.QueryContext(ctx, listRoutes, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Route{}
+	for rows.Next() {
+		var i Route
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Name,
+			&i.Container,
+			&i.Service,
+			&i.Target,
+			&i.Protocol,
+			&i.Published,
+			&i.Domains,
+			&i.HttpOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -567,6 +1075,50 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listVersions = `-- name: ListVersions :many
+SELECT project_id, container, version, config, shared_env, created_at, deployed_at, images, git_commit, rollback_of, has_files FROM versions WHERE project_id = ? AND container = ? ORDER BY version DESC
+`
+
+type ListVersionsParams struct {
+	ProjectID string
+	Container string
+}
+
+func (q *Queries) ListVersions(ctx context.Context, arg ListVersionsParams) ([]Version, error) {
+	rows, err := q.db.QueryContext(ctx, listVersions, arg.ProjectID, arg.Container)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Version{}
+	for rows.Next() {
+		var i Version
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Container,
+			&i.Version,
+			&i.Config,
+			&i.SharedEnv,
+			&i.CreatedAt,
+			&i.DeployedAt,
+			&i.Images,
+			&i.GitCommit,
+			&i.RollbackOf,
+			&i.HasFiles,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const meshKeyOwner = `-- name: MeshKeyOwner :one
 SELECT id FROM nodes WHERE mesh_key = ? AND id != ? AND revoked = 0
 `
@@ -581,6 +1133,45 @@ func (q *Queries) MeshKeyOwner(ctx context.Context, arg MeshKeyOwnerParams) (str
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const projectByNetworkName = `-- name: ProjectByNetworkName :one
+SELECT id FROM projects WHERE network_name = ?
+`
+
+func (q *Queries) ProjectByNetworkName(ctx context.Context, networkName string) (string, error) {
+	row := q.db.QueryRowContext(ctx, projectByNetworkName, networkName)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const replaceUndeployedVersion = `-- name: ReplaceUndeployedVersion :exec
+UPDATE versions SET config = ?, shared_env = ?, created_at = ?, rollback_of = ?, images = '{}', git_commit = '', has_files = 0
+WHERE project_id = ? AND container = ? AND version = ? AND deployed_at IS NULL
+`
+
+type ReplaceUndeployedVersionParams struct {
+	Config     []byte
+	SharedEnv  []byte
+	CreatedAt  int64
+	RollbackOf int64
+	ProjectID  string
+	Container  string
+	Version    int64
+}
+
+func (q *Queries) ReplaceUndeployedVersion(ctx context.Context, arg ReplaceUndeployedVersionParams) error {
+	_, err := q.db.ExecContext(ctx, replaceUndeployedVersion,
+		arg.Config,
+		arg.SharedEnv,
+		arg.CreatedAt,
+		arg.RollbackOf,
+		arg.ProjectID,
+		arg.Container,
+		arg.Version,
+	)
+	return err
 }
 
 const revokeInvite = `-- name: RevokeInvite :execrows
@@ -604,6 +1195,66 @@ func (q *Queries) RevokeNode(ctx context.Context, id string) error {
 	return err
 }
 
+const setContainerCommit = `-- name: SetContainerCommit :exec
+UPDATE containers SET last_commit = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerCommitParams struct {
+	LastCommit string
+	ProjectID  string
+	Name       string
+}
+
+func (q *Queries) SetContainerCommit(ctx context.Context, arg SetContainerCommitParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerCommit, arg.LastCommit, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerDeployed = `-- name: SetContainerDeployed :exec
+UPDATE containers SET deployed_version = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerDeployedParams struct {
+	DeployedVersion int64
+	ProjectID       string
+	Name            string
+}
+
+func (q *Queries) SetContainerDeployed(ctx context.Context, arg SetContainerDeployedParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerDeployed, arg.DeployedVersion, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerDraft = `-- name: SetContainerDraft :exec
+UPDATE containers SET draft = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerDraftParams struct {
+	Draft     []byte
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) SetContainerDraft(ctx context.Context, arg SetContainerDraftParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerDraft, arg.Draft, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerImportedPorts = `-- name: SetContainerImportedPorts :exec
+UPDATE containers SET imported_ports = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerImportedPortsParams struct {
+	ImportedPorts string
+	ProjectID     string
+	Name          string
+}
+
+func (q *Queries) SetContainerImportedPorts(ctx context.Context, arg SetContainerImportedPortsParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerImportedPorts, arg.ImportedPorts, arg.ProjectID, arg.Name)
+	return err
+}
+
 const setNodeEnrollment = `-- name: SetNodeEnrollment :exec
 UPDATE nodes SET revoked = 0, mesh_key = ?, pending = ? WHERE id = ?
 `
@@ -616,6 +1267,34 @@ type SetNodeEnrollmentParams struct {
 
 func (q *Queries) SetNodeEnrollment(ctx context.Context, arg SetNodeEnrollmentParams) error {
 	_, err := q.db.ExecContext(ctx, setNodeEnrollment, arg.MeshKey, arg.Pending, arg.ID)
+	return err
+}
+
+const setProjectDockerConfig = `-- name: SetProjectDockerConfig :exec
+UPDATE projects SET docker_config = ?, revision = revision + 1 WHERE id = ?
+`
+
+type SetProjectDockerConfigParams struct {
+	DockerConfig []byte
+	ID           string
+}
+
+func (q *Queries) SetProjectDockerConfig(ctx context.Context, arg SetProjectDockerConfigParams) error {
+	_, err := q.db.ExecContext(ctx, setProjectDockerConfig, arg.DockerConfig, arg.ID)
+	return err
+}
+
+const setProjectSettings = `-- name: SetProjectSettings :exec
+UPDATE projects SET settings = ?, revision = revision + 1 WHERE id = ?
+`
+
+type SetProjectSettingsParams struct {
+	Settings []byte
+	ID       string
+}
+
+func (q *Queries) SetProjectSettings(ctx context.Context, arg SetProjectSettingsParams) error {
+	_, err := q.db.ExecContext(ctx, setProjectSettings, arg.Settings, arg.ID)
 	return err
 }
 
@@ -634,6 +1313,20 @@ func (q *Queries) SetSetting(ctx context.Context, arg SetSettingParams) error {
 	return err
 }
 
+const setSharedEnvDraft = `-- name: SetSharedEnvDraft :exec
+UPDATE projects SET shared_env_draft = ?, revision = revision + 1 WHERE id = ?
+`
+
+type SetSharedEnvDraftParams struct {
+	SharedEnvDraft []byte
+	ID             string
+}
+
+func (q *Queries) SetSharedEnvDraft(ctx context.Context, arg SetSharedEnvDraftParams) error {
+	_, err := q.db.ExecContext(ctx, setSharedEnvDraft, arg.SharedEnvDraft, arg.ID)
+	return err
+}
+
 const setTOTP = `-- name: SetTOTP :exec
 UPDATE users SET totp_secret = ?, totp_last_step = 0 WHERE id = ?
 `
@@ -645,6 +1338,55 @@ type SetTOTPParams struct {
 
 func (q *Queries) SetTOTP(ctx context.Context, arg SetTOTPParams) error {
 	_, err := q.db.ExecContext(ctx, setTOTP, arg.TotpSecret, arg.ID)
+	return err
+}
+
+const setVersionDeployed = `-- name: SetVersionDeployed :exec
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ?, has_files = ?
+WHERE project_id = ? AND container = ? AND version = ?
+`
+
+type SetVersionDeployedParams struct {
+	DeployedAt sql.NullInt64
+	Images     string
+	GitCommit  string
+	HasFiles   int64
+	ProjectID  string
+	Container  string
+	Version    int64
+}
+
+func (q *Queries) SetVersionDeployed(ctx context.Context, arg SetVersionDeployedParams) error {
+	_, err := q.db.ExecContext(ctx, setVersionDeployed,
+		arg.DeployedAt,
+		arg.Images,
+		arg.GitCommit,
+		arg.HasFiles,
+		arg.ProjectID,
+		arg.Container,
+		arg.Version,
+	)
+	return err
+}
+
+const setVersionFiles = `-- name: SetVersionFiles :exec
+UPDATE versions SET has_files = ? WHERE project_id = ? AND container = ? AND version = ?
+`
+
+type SetVersionFilesParams struct {
+	HasFiles  int64
+	ProjectID string
+	Container string
+	Version   int64
+}
+
+func (q *Queries) SetVersionFiles(ctx context.Context, arg SetVersionFilesParams) error {
+	_, err := q.db.ExecContext(ctx, setVersionFiles,
+		arg.HasFiles,
+		arg.ProjectID,
+		arg.Container,
+		arg.Version,
+	)
 	return err
 }
 
@@ -677,53 +1419,58 @@ func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) 
 	return err
 }
 
-const upsertProjectBackup = `-- name: UpsertProjectBackup :exec
-INSERT INTO project_backups (node_id, project_id, revision, data, updated_at, backup_key) VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (node_id, project_id) DO UPDATE SET
-    revision = excluded.revision,
-    data = excluded.data,
-    updated_at = excluded.updated_at,
-    backup_key = coalesce(excluded.backup_key, project_backups.backup_key)
+const updateProject = `-- name: UpdateProject :exec
+UPDATE projects SET name = ?, network_name = ?, settings = ?, revision = revision + 1 WHERE id = ?
 `
 
-type UpsertProjectBackupParams struct {
-	NodeID    string
-	ProjectID string
-	Revision  int64
-	Data      []byte
-	UpdatedAt int64
-	BackupKey []byte
+type UpdateProjectParams struct {
+	Name        string
+	NetworkName string
+	Settings    []byte
+	ID          string
 }
 
-func (q *Queries) UpsertProjectBackup(ctx context.Context, arg UpsertProjectBackupParams) error {
-	_, err := q.db.ExecContext(ctx, upsertProjectBackup,
-		arg.NodeID,
-		arg.ProjectID,
-		arg.Revision,
-		arg.Data,
-		arg.UpdatedAt,
-		arg.BackupKey,
+func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) error {
+	_, err := q.db.ExecContext(ctx, updateProject,
+		arg.Name,
+		arg.NetworkName,
+		arg.Settings,
+		arg.ID,
 	)
 	return err
 }
 
-const upsertWebhook = `-- name: UpsertWebhook :exec
-INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, container) VALUES (?, ?, ?, ?)
+const upsertRoute = `-- name: UpsertRoute :exec
+INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (project_id, name) DO UPDATE SET
+    container = excluded.container, service = excluded.service, target = excluded.target, protocol = excluded.protocol,
+    published = excluded.published, domains = excluded.domains, http_only = excluded.http_only
 `
 
-type UpsertWebhookParams struct {
-	TokenHash string
-	NodeID    string
+type UpsertRouteParams struct {
 	ProjectID string
+	Name      string
 	Container string
+	Service   string
+	Target    int64
+	Protocol  string
+	Published int64
+	Domains   string
+	HttpOnly  int64
 }
 
-func (q *Queries) UpsertWebhook(ctx context.Context, arg UpsertWebhookParams) error {
-	_, err := q.db.ExecContext(ctx, upsertWebhook,
-		arg.TokenHash,
-		arg.NodeID,
+func (q *Queries) UpsertRoute(ctx context.Context, arg UpsertRouteParams) error {
+	_, err := q.db.ExecContext(ctx, upsertRoute,
 		arg.ProjectID,
+		arg.Name,
 		arg.Container,
+		arg.Service,
+		arg.Target,
+		arg.Protocol,
+		arg.Published,
+		arg.Domains,
+		arg.HttpOnly,
 	)
 	return err
 }

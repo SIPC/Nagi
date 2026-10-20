@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -53,4 +54,22 @@ func linkProxyConn(c net.Conn, alias string, port uint64) {
 		return
 	}
 	splice(c, c, u, u)
+}
+
+// splice 在两个连接之间双向转发，一边写完后关闭对方的写方向，两边都结束才返回。
+func splice(a net.Conn, ar io.Reader, b net.Conn, br io.Reader) {
+	done := make(chan struct{}, 2)
+	pipe := func(dst net.Conn, src io.Reader) {
+		_, _ = io.Copy(dst, src)
+		if cw, ok := dst.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		} else {
+			_ = dst.Close()
+		}
+		done <- struct{}{}
+	}
+	go pipe(b, ar)
+	go pipe(a, br)
+	<-done
+	<-done
 }

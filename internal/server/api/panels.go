@@ -67,6 +67,38 @@ func (s *settingsService) RevokeInvite(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&nagiv1.RevokeInviteResponse{}), nil
 }
 
+// handoverProjects 返回节点上的容器所属的项目；有项目还有容器在别的节点上时返回错误。
+func (s *nodeService) handoverProjects(ctx context.Context, nodeID string) ([]string, error) {
+	rows, err := s.Q.ListNodeContainers(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range rows {
+		if seen[c.ProjectID] {
+			continue
+		}
+		seen[c.ProjectID] = true
+		all, err := s.Q.ListContainers(ctx, c.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range all {
+			if o.NodeID != nodeID {
+				name := c.ProjectID
+				if p, err := s.Q.GetProject(ctx, c.ProjectID); err == nil {
+					name = p.Name
+				}
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+					"项目 %s 还有容器在别的节点上，移交要按整个项目进行：先把它的容器迁移到同一个节点，或者把相关节点一起移交", name))
+			}
+		}
+		out = append(out, c.ProjectID)
+	}
+	return out, nil
+}
+
 func (s *nodeService) agent(nodeID string) (nagiv1.AgentServiceClient, error) {
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {
@@ -103,11 +135,10 @@ func (s *nodeService) AddNodePanel(ctx context.Context, req *connect.Request[nag
 	if err != nil {
 		return nil, err
 	}
-	// 移交会把本面板从节点上移除：先检查见证人，免得已经加入了新面板才发现移除不了。
-	if req.Msg.GetRemoveSelf() {
-		if err := s.checkWitness(ctx, nodeID); err != nil {
-			return nil, err
-		}
+	// 移交按整个项目：项目还有容器在别的节点上时拒绝，免得项目被拆到两个面板上。
+	moving, err := s.handoverProjects(ctx, nodeID)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := agent.AddPanel(ctx, &nagiv1.AddPanelRequest{
 		Address: inv.Address, Fingerprint: inv.Fingerprint, Token: inv.Token,
@@ -115,15 +146,17 @@ func (s *nodeService) AddNodePanel(ctx context.Context, req *connect.Request[nag
 		return nil, fromGRPC(err)
 	}
 	s.Log.Info("节点已加入另一个面板", "node", nodeID, "panel", inv.Address)
-	if req.Msg.GetRemoveSelf() {
-		if _, err := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("已加入新面板，但移除本面板失败：%w", fromGRPC(err)))
-		}
-		if err := s.forgetNode(ctx, nodeID); err != nil {
-			return nil, err
-		}
-		s.Log.Info("节点已移交给另一个面板", "node", nodeID, "panel", inv.Address)
+	if _, err := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("已加入新面板，但移除本面板失败：%w", fromGRPC(err)))
 	}
+	// 新面板从节点上缓存的配置拼回这些项目，本面板忘记它们。
+	for _, id := range moving {
+		_ = s.Q.DeleteProject(ctx, id)
+	}
+	if err := s.forgetNode(ctx, nodeID); err != nil {
+		return nil, err
+	}
+	s.Log.Info("节点已移交给另一个面板", "node", nodeID, "panel", inv.Address, "projects", len(moving))
 	return connect.NewResponse(&nagiv1.AddNodePanelResponse{}), nil
 }
 
@@ -208,5 +241,43 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 		return nil, fromGRPC(err)
 	}
 	s.Log.Info("节点正在升级", "node", req.Msg.GetNodeId(), "from", info.GetVersion(), "to", resp.GetVersion())
+	return connect.NewResponse(resp), nil
+}
+
+// ---- 镜像加速、项目根目录 ----
+
+func (s *nodeService) GetNodeMirrors(ctx context.Context, req *connect.Request[nagiv1.NodeRef]) (*connect.Response[nagiv1.Mirrors], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.GetMirrors(ctx, &nagiv1.GetMirrorsRequest{})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) SetNodeMirrors(ctx context.Context, req *connect.Request[nagiv1.SetNodeMirrorsRequest]) (*connect.Response[nagiv1.Mirrors], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.SetMirrors(ctx, &nagiv1.Mirrors{Mirrors: req.Msg.GetMirrors()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) SetNodeProjectsRoot(ctx context.Context, req *connect.Request[nagiv1.SetNodeProjectsRootRequest]) (*connect.Response[nagiv1.SetProjectsRootResponse], error) {
+	a, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.SetProjectsRoot(ctx, &nagiv1.SetProjectsRootRequest{Root: req.Msg.GetRoot()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
 	return connect.NewResponse(resp), nil
 }

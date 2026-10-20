@@ -1,4 +1,4 @@
-// Package agent 是节点：保存自己项目的数据，主动连接信任的面板，接受面板的反向调用。
+// Package agent 是节点：按面板下发的配置运行容器并缓存配置，主动连接信任的面板，接受面板的反向调用。
 package agent
 
 import (
@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // Config 是节点的配置。
@@ -126,31 +128,19 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	a := &agent{
-		cfg:       cfg,
-		log:       log,
-		id:        id,
-		docker:    dc,
-		projects:  projects,
-		hostname:  hostname,
-		reload:    make(chan struct{}, 1),
-		replicas:  &replicas{dir: filepath.Join(cfg.DataDir, "replicas")},
-		failovers: newFailovers(cfg.DataDir),
-		ctx:       ctx,
+		cfg:      cfg,
+		log:      log,
+		id:       id,
+		docker:   dc,
+		projects: projects,
+		hostname: hostname,
+		reload:   make(chan struct{}, 1),
+		ctx:      ctx,
 	}
-	a.failovers.loadAll()
-	projects.FastSnapshot = func(id string) bool { return a.failovers.get(id) != nil }
-	projects.ManagedRestart = func(id string) bool { return a.failovers.get(id) != nil }
-	projects.ReservedDomain = func(d string) bool { return d != "" && d == a.panelDomain() }
-	a.trusted = newTrustedProjects(filepath.Join(cfg.DataDir, "identity"))
-	projects.TrustedProject = func(id string) bool {
-		return a.trusted.trusted(id, func(panel string) bool { _, ok := a.id.panel(panel); return ok })
-	}
-	a.links = newLinks(a)
-	projects.RemoteProjects = a.links.remoteProjects
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 
-	// 容器有变化时上报状态；容器重建后要重新接入项目内网和共享网络（见 project/network.go）。
+	// 容器有变化时上报状态；容器重建后要重新接入项目内网（见 project/network.go）。
 	netSync := make(chan struct{}, 1)
 	go dc.WatchProjects(ctx, project.LabelProject, func() {
 		a.changed()
@@ -168,7 +158,6 @@ func Run(ctx context.Context, cfg Config) error {
 			case <-netSync:
 				time.Sleep(time.Second) // 一次部署会连续产生很多事件，攒一下再处理
 				projects.SyncAllNetworks(ctx)
-				a.links.trigger()
 			}
 		}
 	}()
@@ -182,7 +171,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.metrics.Run(ctx)
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
-		func(id string) string { return projects.Name(context.Background(), id) }, a.relayAlert)
+		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
 	a.alerts.Domains = func() map[string]bool {
 		routes, err := projects.Routes(context.Background())
 		if err != nil {
@@ -199,12 +188,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.alerts.Run(ctx)
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
-	} else {
-		for id := range a.failovers.m {
-			a.startFailover(ctx, id)
-		}
 	}
-	go a.links.run(ctx)
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
@@ -234,7 +218,6 @@ type agent struct {
 	id       *identity
 	docker   *docker.Client
 	projects *project.Manager
-	trusted  *trustedProjects
 	hostname string
 	info     *nagiv1.NodeInfo
 
@@ -243,9 +226,6 @@ type agent struct {
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
 	mesh      *meshNode
-	replicas  *replicas
-	failovers *failovers
-	links     *links
 	ctx       context.Context
 	startedAt time.Time
 
@@ -253,7 +233,6 @@ type agent struct {
 	subs     []chan struct{}
 	panels   map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
 	sessions map[string]context.CancelFunc        // 面板指纹 → 停止连接
-	syncing  map[string]bool                      // 正在同步到备份节点的项目
 	reload   chan struct{}
 }
 
@@ -354,7 +333,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 	}
 }
 
-// changed 通知所有面板连接：项目状态有变化，需要重新上报。
+// changed 通知所有面板连接：容器状态有变化，需要重新上报。
 func (a *agent) changed() {
 	if a.proxyKick != nil {
 		select {
@@ -391,11 +370,12 @@ func (a *agent) subscribe() (chan struct{}, func()) {
 
 func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 	info := &nagiv1.NodeInfo{
-		Hostname: a.hostname,
-		Os:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		Version:  a.cfg.Version,
-		Embedded: a.cfg.Embedded,
+		Hostname:     a.hostname,
+		Os:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+		Version:      a.cfg.Version,
+		Embedded:     a.cfg.Embedded,
+		ProjectsRoot: a.projectsRoot(),
 	}
 	if v, err := a.docker.Version(ctx); err == nil {
 		info.DockerVersion = v
@@ -457,7 +437,8 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 	defer sess.Close()
 
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, detachStream))
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, detachStream),
+		grpc.MaxRecvMsgSize(64<<20))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
 	})
@@ -519,15 +500,15 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*nagiv1.ReportResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	projects, err := a.projects.List(ctx)
-	for _, p := range projects {
-		explainSummary(p)
+	containers := a.projects.Statuses(ctx)
+	for _, c := range containers {
+		if c.Error != "" {
+			c.Error = explain(c.Error)
+		}
 	}
-	if err != nil {
-		a.log.Warn("读取项目列表失败", "err", err)
-	}
-	return panel.Report(ctx, &nagiv1.ReportRequest{Node: a.info, Projects: projects, Mesh: a.mesh.info(),
-		BackupKeys: a.projects.BackupKeys(ctx)})
+	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
+	info.ProjectsRoot = a.projectsRoot()
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info()})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。
@@ -594,7 +575,7 @@ func routeMetrics() metrics.Source {
 	}
 }
 
-// snapshotLoop 每分钟检查一次，给到时间的项目做定时快照。
+// snapshotLoop 每分钟检查一次，给到时间的容器做定时快照。
 func (a *agent) snapshotLoop(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
@@ -604,18 +585,34 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		a.projects.SnapshotDue(ctx, func(id string, err error) {
+		a.projects.SnapshotDue(ctx, func(projectID, container string, err error) {
+			key := "snapshot:" + projectID + "/" + container
 			if err == nil {
-				a.alerts.Resolve(ctx, "snapshot:"+id)
-				// 定时快照成功后同步到备份节点和热备（没设置时什么都不做）。
-				go a.runBackupSync(ctx, id)
-				if st := a.failovers.get(id); st != nil {
-					go a.syncStandby(ctx, id)
-				}
+				a.alerts.Resolve(ctx, key)
 				return
 			}
-			a.log.Warn("定时快照失败", "project", id, "err", err)
-			a.alerts.Fire(ctx, "snapshot:"+id, "定时快照失败", err.Error(), id)
+			a.log.Warn("定时快照失败", "project", projectID, "container", container, "err", err)
+			a.alerts.Fire(ctx, key, "容器 "+container+" 定时快照失败", err.Error(), projectID)
 		})
 	}
+}
+
+// projectsRoot 返回项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。保存在 identity/projects-root，默认 /srv/nagi。
+func (a *agent) projectsRoot() string {
+	b, err := os.ReadFile(filepath.Join(a.cfg.DataDir, "identity", "projects-root"))
+	if err != nil {
+		return project.DefaultProjectsRoot
+	}
+	if r := strings.TrimSpace(string(b)); r != "" {
+		return r
+	}
+	return project.DefaultProjectsRoot
+}
+
+func (a *agent) setProjectsRoot(root string) error {
+	root = strings.TrimSpace(root)
+	if root == "" || !strings.HasPrefix(root, "/") || filepath.Clean(root) == "/" {
+		return project.ErrInvalidArgument
+	}
+	return os.WriteFile(filepath.Join(a.cfg.DataDir, "identity", "projects-root"), []byte(filepath.Clean(root)+"\n"), 0o644)
 }

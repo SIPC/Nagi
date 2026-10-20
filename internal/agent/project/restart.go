@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-// 节点代管重启：设置了顶替的项目，容器的重启策略一律是 no，Docker 开机时不会自己把它们拉起来，
+// 节点代管重启：设置了顶替的容器，重启策略一律是 no，Docker 开机时不会自己把它们拉起来，
 // 免得机器重启后和备用节点同时运行。持有租约的节点按用户原来的重启策略代为重启退出的容器（带退避）。
 
 // restartPolicy 是用户在 compose 里写的（或默认的）重启策略。
@@ -44,59 +45,39 @@ func policyOf(svc types.ServiceConfig) restartPolicy {
 	return restartPolicy{mode: "unless-stopped"}
 }
 
-// policies 返回项目每个服务的重启策略，键是"容器/服务"。按各容器部署的版本（没部署过时用最新版本）读。
-func (m *Manager) policies(ctx context.Context, id string) (map[string]restartPolicy, error) {
-	row, err := m.projectRow(ctx, id)
+// policies 返回一个容器每个服务的重启策略，按缓存里部署的版本读。
+func (m *Manager) policies(ctx context.Context, projectID, container string) (map[string]restartPolicy, error) {
+	c, err := m.Get(ctx, projectID, container)
 	if err != nil {
 		return nil, err
 	}
-	pdb, err := openProject(ctx, row.Dir)
+	s := c.Spec
+	cp, err := spec.Load(ctx, s.GetConfig(), s.GetName(), s.GetSharedEnv(), containerPaths{root: s.GetDir()}.dataDir(), spec.ComposeProjectName(projectID, container))
 	if err != nil {
 		return nil, err
 	}
-	defer pdb.Close()
-	containers, err := pdb.q.ListContainers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	current := pdb.settings(ctx).GetSharedEnv()
-	p := paths{root: row.Dir}
 	out := map[string]restartPolicy{}
-	for _, mem := range containers {
-		cfg, err := pdb.current(ctx, mem)
-		if err != nil {
-			continue
-		}
-		shared := current
-		if v, err := pdb.deployed(ctx, mem); err == nil && v != nil {
-			shared = unmarshalEnv(v.SharedEnv)
-		}
-		cp, err := loadContainer(ctx, cfg, mem.Name, shared, p.container(mem.Name).dataDir(), composeProjectName(id, mem.Name))
-		if err != nil {
-			continue
-		}
-		for name, svc := range cp.Services {
-			out[mem.Name+"/"+name] = policyOf(svc)
-		}
+	for name, svc := range cp.Services {
+		out[name] = policyOf(svc)
 	}
 	return out, nil
 }
 
 // SetManagedRestart 修改正在运行的容器的重启策略（不重启容器）：managed 时改成 no，否则改回用户原来的策略。
 // 以后部署时由 ManagedRestart 决定写进叠加配置的策略。
-func (m *Manager) SetManagedRestart(ctx context.Context, id string, managed bool) error {
-	pol, err := m.policies(ctx, id)
+func (m *Manager) SetManagedRestart(ctx context.Context, projectID, container string, managed bool) error {
+	pol, err := m.policies(ctx, projectID, container)
 	if err != nil {
 		return err
 	}
-	containers, err := m.docker.Instances(ctx, projectLabel(id))
+	instances, err := m.docker.Instances(ctx, containerLabel(projectID, container))
 	if err != nil {
 		return err
 	}
-	for _, c := range containers {
+	for _, c := range instances {
 		p := restartPolicy{mode: "no"}
 		if !managed {
-			p = pol[c.Container+"/"+c.Service]
+			p = pol[c.Service]
 		}
 		if err := m.docker.SetRestartPolicy(ctx, c.ID, p.mode, p.maxRetries); err != nil {
 			return err
@@ -125,15 +106,15 @@ func (m *Manager) ManagedRestartCount(containerID string) int {
 	return m.restarts.total[containerID]
 }
 
-// Supervise 按用户原来的重启策略重启项目里退出的容器。由持有租约的节点定期调用。
-// 项目正在部署等操作时跳过这一轮。
-func (m *Manager) Supervise(ctx context.Context, id string) {
-	l := m.lock(id)
+// Supervise 按用户原来的重启策略重启容器里退出的 Docker 容器。由持有租约的节点定期调用。
+// 容器正在部署等操作时跳过这一轮。
+func (m *Manager) Supervise(ctx context.Context, projectID, container string) {
+	l := m.lock(projectID, container)
 	if !l.TryLock() {
 		return
 	}
 	defer l.Unlock()
-	containers, err := m.docker.Instances(ctx, projectLabel(id))
+	containers, err := m.docker.Instances(ctx, containerLabel(projectID, container))
 	if err != nil {
 		return
 	}
@@ -153,11 +134,11 @@ func (m *Manager) Supervise(ctx context.Context, id string) {
 			continue // created（从未启动）、dead 等不处理
 		}
 		if pol == nil {
-			if pol, err = m.policies(ctx, id); err != nil {
+			if pol, err = m.policies(ctx, projectID, container); err != nil {
 				return
 			}
 		}
-		p := pol[c.Container+"/"+c.Service]
+		p := pol[c.Service]
 		code, _, err := m.docker.ExitInfo(ctx, c.ID)
 		if err != nil {
 			continue

@@ -12,8 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// UploadHandler 接收浏览器上传的项目文件压缩包，经 mesh 转给节点：POST /api/upload?node=&project=，
-// 请求体就是压缩包。节点解压后暂存，随后用 DeployNodeProject(use_upload) 部署。
+// UploadHandler 接收浏览器上传的容器文件压缩包，经 mesh 转给容器所在的节点：POST /api/upload?project=&container=，
+// 请求体就是压缩包。节点解压后暂存，随后用 Deploy(use_upload) 部署。
 // 要求带 X-Nagi-Upload 请求头，跨站页面发不出这样的请求。
 func (a *API) UploadHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,12 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusServiceUnavailable, errors.New("面板的 mesh 没有启动，无法上传"))
 			return
 		}
-		key, err := a.Nodes.NodeMeshKey(q.Get("node"))
+		nodeID, err := a.Projects.Locate(r.Context(), q.Get("project"), q.Get("container"))
+		if err != nil {
+			fail(http.StatusNotFound, err)
+			return
+		}
+		key, err := a.Nodes.NodeMeshKey(nodeID)
 		if err != nil {
 			fail(http.StatusServiceUnavailable, err)
 			return

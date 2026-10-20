@@ -6,7 +6,7 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { AlertConfig, BackupStatusSchema, ContainerConfig, DeployEventSchema, Deployment, EnvVar, Exposure, FailoverConfig, FailoverStatus, FailoverStatusSchema, ImageUpdate, LogLineSchema, MeshPingRequestSchema, MeshPingResponseSchema, MeshStatusSchema, MetricSeries, Project, ProjectSettings, ProjectSummary, Replica, SharedNetwork, SharedNetworkPeer, Snapshot, TrustedPanel, Version } from "./common_pb";
+import type { AlertConfig, ContainerSpec, DeployEventSchema, ImageUpdate, LogLineSchema, MeshPingRequestSchema, MeshPingResponseSchema, MeshStatusSchema, MetricSeries, Snapshot, TrustedPanel } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -14,7 +14,340 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/agent.proto.
  */
 export const file_nagi_v1_agent: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIicKFVNldFBhbmVsRG9tYWluUmVxdWVzdBIOCgZkb21haW4YASABKAkiGAoWU2V0UGFuZWxEb21haW5SZXNwb25zZSIgCg5VcGdyYWRlUmVxdWVzdBIOCgZzaGEyNTYYASABKAkiIgoPVXBncmFkZVJlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkiPAoTQ2hlY2tJbWFnZXNSZXNwb25zZRIlCgd1cGRhdGVzGAEgAygLMhQubmFnaS52MS5JbWFnZVVwZGF0ZSITChFHZXRNaXJyb3JzUmVxdWVzdCIqCgdNaXJyb3JzEg8KB21pcnJvcnMYASADKAkSDgoGYWN0aXZlGAIgAygJImAKFExvZ2luUmVnaXN0cnlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEAoIcmVnaXN0cnkYAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSEAoIcGFzc3dvcmQYBCABKAkiPQoVTG9nb3V0UmVnaXN0cnlSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEAoIcmVnaXN0cnkYAiABKAkiKAoSUmVnaXN0cmllc1Jlc3BvbnNlEhIKCnJlZ2lzdHJpZXMYASADKAkiiQEKElNldEZhaWxvdmVyUmVxdWVzdBInCgZjb25maWcYASABKAsyFy5uYWdpLnYxLkZhaWxvdmVyQ29uZmlnEg0KBWNsZWFyGAIgASgIEhIKCnByb2plY3RfaWQYAyABKAkSEwoLc2VlZF9ob2xkZXIYBCABKAwSEgoKc2VlZF9lcG9jaBgFIAEoBCIWChRMaXN0RmFpbG92ZXJzUmVxdWVzdCJDChVMaXN0RmFpbG92ZXJzUmVzcG9uc2USKgoJZmFpbG92ZXJzGAEgAygLMhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cyJZChNDaGVja1Jlc3RvcmVSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSCwoDZGlyGAIgASgJEiEKBnJvdXRlcxgDIAMoCzIRLm5hZ2kudjEuRXhwb3N1cmUiFgoUQ2hlY2tSZXN0b3JlUmVzcG9uc2UiaAoRTWlncmF0ZU91dFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRISCgp0YXJnZXRfa2V5GAIgASgMEhYKDnRhcmdldF9ub2RlX2lkGAMgASgJEhMKC3RhcmdldF9uYW1lGAQgASgJIiQKFU1pZ3JhdGVGaW5pc2hSZXNwb25zZRILCgNkaXIYASABKAkibQoWU2V0QmFja3VwVGFyZ2V0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhIKCnRhcmdldF9rZXkYAiABKAwSFgoOdGFyZ2V0X25vZGVfaWQYAyABKAkSEwoLdGFyZ2V0X25hbWUYBCABKAkiLAoWR2V0QmFja3VwU3RhdHVzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIoEBChRBY2NlcHRSZXBsaWNhUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhQKDHByb2plY3RfbmFtZRgCIAEoCRISCgpzb3VyY2Vfa2V5GAMgASgMEhYKDnNvdXJjZV9ub2RlX2lkGAQgASgJEhMKC3NvdXJjZV9uYW1lGAUgASgJIhcKFUFjY2VwdFJlcGxpY2FSZXNwb25zZSIVChNMaXN0UmVwbGljYXNSZXF1ZXN0IjoKFExpc3RSZXBsaWNhc1Jlc3BvbnNlEiIKCHJlcGxpY2FzGAEgAygLMhAubmFnaS52MS5SZXBsaWNhIiAKClJlcGxpY2FSZWYSEgoKcHJvamVjdF9pZBgBIAEoCSJNChVSZXN0b3JlUmVwbGljYVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRILCgNkaXIYAiABKAkSEwoLc25hcHNob3RfaWQYAyABKAkiFwoVRGVsZXRlUmVwbGljYVJlc3BvbnNlIhMKEU1lc2hTdGF0dXNSZXF1ZXN0IhMKEUxpc3RQYW5lbHNSZXF1ZXN0IjsKEkxpc3RQYW5lbHNSZXNwb25zZRIlCgZwYW5lbHMYASADKAsyFS5uYWdpLnYxLlRydXN0ZWRQYW5lbCJGCg9BZGRQYW5lbFJlcXVlc3QSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCRINCgV0b2tlbhgDIAEoCSISChBBZGRQYW5lbFJlc3BvbnNlIikKElJlbW92ZVBhbmVsUmVxdWVzdBITCgtmaW5nZXJwcmludBgBIAEoCSIVChNSZW1vdmVQYW5lbFJlc3BvbnNlInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0InkKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSEQoJY29udGFpbmVyGAUgASgJEg8KB2NvbW1hbmQYAyADKAkSIwoEc2l6ZRgEIAEoCzIVLm5hZ2kudjEuVGVybWluYWxTaXplIioKDFRlcm1pbmFsU2l6ZRIMCgRjb2xzGAEgASgNEgwKBHJvd3MYAiABKA0iPQoKRXhlY091dHB1dBIQCgZzdGRvdXQYASABKAxIABITCglleGl0X2NvZGUYAiABKAVIAEIICgZvdXRwdXQiFQoTTGlzdFByb2plY3RzUmVxdWVzdCJBChRMaXN0UHJvamVjdHNSZXNwb25zZRIpCghwcm9qZWN0cxgBIAMoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkirgEKFENyZWF0ZVByb2plY3RSZXF1ZXN0EgwKBG5hbWUYASABKAkSCwoDZGlyGAIgASgJEioKCHNldHRpbmdzGAUgASgLMhgubmFnaS52MS5Qcm9qZWN0U2V0dGluZ3MSFgoOY29udGFpbmVyX25hbWUYBiABKAkSKwoJY29udGFpbmVyGAcgASgLMhgubmFnaS52MS5Db250YWluZXJDb25maWdKBAgDEARKBAgEEAUiYQoTQWRkQ29udGFpbmVyUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSKAoGY29uZmlnGAMgASgLMhgubmFnaS52MS5Db250YWluZXJDb25maWciOQoUQWRkQ29udGFpbmVyUmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCJqChZEZWxldGVDb250YWluZXJSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEhUKDWJhc2VfcmV2aXNpb24YAyABKAMSEgoKZGVsZXRlX2RpchgEIAEoCCI8ChdEZWxldGVDb250YWluZXJSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0InIKEFNhdmVEcmFmdFJlcXVlc3QSCgoCaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAxIoCgZjb25maWcYAyABKAsyGC5uYWdpLnYxLkNvbnRhaW5lckNvbmZpZxIRCgljb250YWluZXIYBCABKAkiNgoRU2F2ZURyYWZ0UmVzcG9uc2USIQoHcHJvamVjdBgBIAEoCzIQLm5hZ2kudjEuUHJvamVjdCJLChNEaXNjYXJkRHJhZnRSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWJhc2VfcmV2aXNpb24YAiABKAMSEQoJY29udGFpbmVyGAMgASgJIjkKFERpc2NhcmREcmFmdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QigwEKHFVwZGF0ZVByb2plY3RTZXR0aW5nc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDEgwKBG5hbWUYAyABKAkSKgoIc2V0dGluZ3MYBCABKAsyGC5uYWdpLnYxLlByb2plY3RTZXR0aW5ncyJCCh1VcGRhdGVQcm9qZWN0U2V0dGluZ3NSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0ImAKFFNhdmVTaGFyZWRFbnZSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAxIdCgR2YXJzGAMgAygLMg8ubmFnaS52MS5FbnZWYXIiTAoVU2F2ZVNoYXJlZEVudlJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QSEAoIYWZmZWN0ZWQYAiADKAkiRAoXRGlzY2FyZFNoYXJlZEVudlJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIVCg1iYXNlX3JldmlzaW9uGAIgASgDIj0KGERpc2NhcmRTaGFyZWRFbnZSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IiQKFkxpc3REZXBsb3ltZW50c1JlcXVlc3QSCgoCaWQYASABKAkiQwoXTGlzdERlcGxveW1lbnRzUmVzcG9uc2USKAoLZGVwbG95bWVudHMYASADKAsyEy5uYWdpLnYxLkRlcGxveW1lbnQiPQoYUmVzdG9yZURlcGxveW1lbnRSZXF1ZXN0EgoKAmlkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAMiGwoZTGlzdFNoYXJlZE5ldHdvcmtzUmVxdWVzdCJGChpMaXN0U2hhcmVkTmV0d29ya3NSZXNwb25zZRIoCghuZXR3b3JrcxgBIAMoCzIWLm5hZ2kudjEuU2hhcmVkTmV0d29yayIqChpDcmVhdGVTaGFyZWROZXR3b3JrUmVxdWVzdBIMCgRuYW1lGAEgASgJIioKGkRlbGV0ZVNoYXJlZE5ldHdvcmtSZXF1ZXN0EgwKBG5hbWUYASABKAkiRwoVUmVidWlsZFByb2plY3RSZXF1ZXN0EiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QSCwoDZGlyGAIgASgJIlcKHFNldFNoYXJlZE5ldHdvcmtQZWVyc1JlcXVlc3QSDAoEbmFtZRgBIAEoCRIpCgVwZWVycxgCIAMoCzIaLm5hZ2kudjEuU2hhcmVkTmV0d29ya1BlZXIiSAoQU2F2ZVJvdXRlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEiAKBXJvdXRlGAIgASgLMhEubmFnaS52MS5FeHBvc3VyZSI2ChFTYXZlUm91dGVSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjYKEkRlbGV0ZVJvdXRlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkiOAoTRGVsZXRlUm91dGVSZXNwb25zZRIhCgdwcm9qZWN0GAEgASgLMhAubmFnaS52MS5Qcm9qZWN0IjQKE0xpc3RWZXJzaW9uc1JlcXVlc3QSCgoCaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJIjoKFExpc3RWZXJzaW9uc1Jlc3BvbnNlEiIKCHZlcnNpb25zGAEgAygLMhAubmFnaS52MS5WZXJzaW9uIlcKD1JvbGxiYWNrUmVxdWVzdBIKCgJpZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgDEhQKDHJlc3RvcmVfZGF0YRgDIAEoCBIRCgljb250YWluZXIYBCABKAkiIgoUTGlzdFNuYXBzaG90c1JlcXVlc3QSCgoCaWQYASABKAkiPQoVTGlzdFNuYXBzaG90c1Jlc3BvbnNlEiQKCXNuYXBzaG90cxgBIAMoCzIRLm5hZ2kudjEuU25hcHNob3QiIwoVQ3JlYXRlU25hcHNob3RSZXF1ZXN0EgoKAmlkGAEgASgJIkwKFlJlc3RvcmVTbmFwc2hvdFJlcXVlc3QSCgoCaWQYASABKAkSEwoLc25hcHNob3RfaWQYAiABKAkSEQoJY29udGFpbmVyGAMgASgJIj0KFVNldEFsZXJ0Q29uZmlnUmVxdWVzdBIkCgZjb25maWcYASABKAsyFC5uYWdpLnYxLkFsZXJ0Q29uZmlnIhgKFlNldEFsZXJ0Q29uZmlnUmVzcG9uc2UiMAoZU2V0VHJ1c3RlZFByb2plY3RzUmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSIcChpTZXRUcnVzdGVkUHJvamVjdHNSZXNwb25zZSJ3ChNRdWVyeU1ldHJpY3NSZXF1ZXN0Eg4KBnByZWZpeBgBIAEoCRIoCgRmcm9tGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBImCgJ0bxgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiPQoUUXVlcnlNZXRyaWNzUmVzcG9uc2USJQoGc2VyaWVzGAEgAygLMhUubmFnaS52MS5NZXRyaWNTZXJpZXMiYwoURGVsZXRlUHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAxISCgpkZWxldGVfZGlyGAMgASgIEhQKDGNvbmZpcm1fbmFtZRgEIAEoCSIXChVEZWxldGVQcm9qZWN0UmVzcG9uc2UiOgoVQ3JlYXRlUHJvamVjdFJlc3BvbnNlEiEKB3Byb2plY3QYASABKAsyEC5uYWdpLnYxLlByb2plY3QiHwoRR2V0UHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkiPgoSR2V0UHJvamVjdFJlc3BvbnNlEigKB3Byb2plY3QYASABKAsyFy5uYWdpLnYxLlByb2plY3RTdW1tYXJ5IjgKDERlcGxveVRhcmdldBIRCgljb250YWluZXIYASABKAkSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyLMAQoURGVwbG95UHJvamVjdFJlcXVlc3QSCgoCaWQYASABKAkSDAoEcHVsbBgDIAEoCBISCgp1c2VfdXBsb2FkGAQgASgIEhMKC3B1bGxfaW1hZ2VzGAUgASgIEiYKB3RhcmdldHMYBiADKAsyFS5uYWdpLnYxLkRlcGxveVRhcmdldBIYChBhcHBseV9zaGFyZWRfZW52GAcgASgIEhkKEXNldHRpbmdzX3JldmlzaW9uGAggASgDEg4KBnNvdXJjZRgJIAEoCUoECAIQAyJhChFTdHJlYW1Mb2dzUmVxdWVzdBIKCgJpZBgBIAEoCRIRCgljb250YWluZXIYBSABKAkSDwoHc2VydmljZRgCIAEoCRIMCgR0YWlsGAMgASgFEg4KBmZvbGxvdxgEIAEoCDL3IwoMQWdlbnRTZXJ2aWNlEksKDExpc3RQcm9qZWN0cxIcLm5hZ2kudjEuTGlzdFByb2plY3RzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFByb2plY3RzUmVzcG9uc2USTgoNQ3JlYXRlUHJvamVjdBIdLm5hZ2kudjEuQ3JlYXRlUHJvamVjdFJlcXVlc3QaHi5uYWdpLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZRJFCgpHZXRQcm9qZWN0EhoubmFnaS52MS5HZXRQcm9qZWN0UmVxdWVzdBobLm5hZ2kudjEuR2V0UHJvamVjdFJlc3BvbnNlEksKDEFkZENvbnRhaW5lchIcLm5hZ2kudjEuQWRkQ29udGFpbmVyUmVxdWVzdBodLm5hZ2kudjEuQWRkQ29udGFpbmVyUmVzcG9uc2USVAoPRGVsZXRlQ29udGFpbmVyEh8ubmFnaS52MS5EZWxldGVDb250YWluZXJSZXF1ZXN0GiAubmFnaS52MS5EZWxldGVDb250YWluZXJSZXNwb25zZRJCCglTYXZlRHJhZnQSGS5uYWdpLnYxLlNhdmVEcmFmdFJlcXVlc3QaGi5uYWdpLnYxLlNhdmVEcmFmdFJlc3BvbnNlEksKDERpc2NhcmREcmFmdBIcLm5hZ2kudjEuRGlzY2FyZERyYWZ0UmVxdWVzdBodLm5hZ2kudjEuRGlzY2FyZERyYWZ0UmVzcG9uc2USZgoVVXBkYXRlUHJvamVjdFNldHRpbmdzEiUubmFnaS52MS5VcGRhdGVQcm9qZWN0U2V0dGluZ3NSZXF1ZXN0GiYubmFnaS52MS5VcGRhdGVQcm9qZWN0U2V0dGluZ3NSZXNwb25zZRJOCg1TYXZlU2hhcmVkRW52Eh0ubmFnaS52MS5TYXZlU2hhcmVkRW52UmVxdWVzdBoeLm5hZ2kudjEuU2F2ZVNoYXJlZEVudlJlc3BvbnNlElcKEERpc2NhcmRTaGFyZWRFbnYSIC5uYWdpLnYxLkRpc2NhcmRTaGFyZWRFbnZSZXF1ZXN0GiEubmFnaS52MS5EaXNjYXJkU2hhcmVkRW52UmVzcG9uc2USVAoPTGlzdERlcGxveW1lbnRzEh8ubmFnaS52MS5MaXN0RGVwbG95bWVudHNSZXF1ZXN0GiAubmFnaS52MS5MaXN0RGVwbG95bWVudHNSZXNwb25zZRJOChFSZXN0b3JlRGVwbG95bWVudBIhLm5hZ2kudjEuUmVzdG9yZURlcGxveW1lbnRSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEl0KEkxpc3RTaGFyZWROZXR3b3JrcxIiLm5hZ2kudjEuTGlzdFNoYXJlZE5ldHdvcmtzUmVxdWVzdBojLm5hZ2kudjEuTGlzdFNoYXJlZE5ldHdvcmtzUmVzcG9uc2USXwoTQ3JlYXRlU2hhcmVkTmV0d29yaxIjLm5hZ2kudjEuQ3JlYXRlU2hhcmVkTmV0d29ya1JlcXVlc3QaIy5uYWdpLnYxLkxpc3RTaGFyZWROZXR3b3Jrc1Jlc3BvbnNlEl8KE0RlbGV0ZVNoYXJlZE5ldHdvcmsSIy5uYWdpLnYxLkRlbGV0ZVNoYXJlZE5ldHdvcmtSZXF1ZXN0GiMubmFnaS52MS5MaXN0U2hhcmVkTmV0d29ya3NSZXNwb25zZRJjChVTZXRTaGFyZWROZXR3b3JrUGVlcnMSJS5uYWdpLnYxLlNldFNoYXJlZE5ldHdvcmtQZWVyc1JlcXVlc3QaIy5uYWdpLnYxLkxpc3RTaGFyZWROZXR3b3Jrc1Jlc3BvbnNlEkIKCVNhdmVSb3V0ZRIZLm5hZ2kudjEuU2F2ZVJvdXRlUmVxdWVzdBoaLm5hZ2kudjEuU2F2ZVJvdXRlUmVzcG9uc2USSAoLRGVsZXRlUm91dGUSGy5uYWdpLnYxLkRlbGV0ZVJvdXRlUmVxdWVzdBocLm5hZ2kudjEuRGVsZXRlUm91dGVSZXNwb25zZRJLCgxMaXN0VmVyc2lvbnMSHC5uYWdpLnYxLkxpc3RWZXJzaW9uc1JlcXVlc3QaHS5uYWdpLnYxLkxpc3RWZXJzaW9uc1Jlc3BvbnNlEjwKCFJvbGxiYWNrEhgubmFnaS52MS5Sb2xsYmFja1JlcXVlc3QaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESTgoNTGlzdFNuYXBzaG90cxIdLm5hZ2kudjEuTGlzdFNuYXBzaG90c1JlcXVlc3QaHi5uYWdpLnYxLkxpc3RTbmFwc2hvdHNSZXNwb25zZRJICg5DcmVhdGVTbmFwc2hvdBIeLm5hZ2kudjEuQ3JlYXRlU25hcHNob3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEkoKD1Jlc3RvcmVTbmFwc2hvdBIfLm5hZ2kudjEuUmVzdG9yZVNuYXBzaG90UmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJRCg5TZXRBbGVydENvbmZpZxIeLm5hZ2kudjEuU2V0QWxlcnRDb25maWdSZXF1ZXN0Gh8ubmFnaS52MS5TZXRBbGVydENvbmZpZ1Jlc3BvbnNlEl0KElNldFRydXN0ZWRQcm9qZWN0cxIiLm5hZ2kudjEuU2V0VHJ1c3RlZFByb2plY3RzUmVxdWVzdBojLm5hZ2kudjEuU2V0VHJ1c3RlZFByb2plY3RzUmVzcG9uc2USSwoMUXVlcnlNZXRyaWNzEhwubmFnaS52MS5RdWVyeU1ldHJpY3NSZXF1ZXN0Gh0ubmFnaS52MS5RdWVyeU1ldHJpY3NSZXNwb25zZRJOCg1EZWxldGVQcm9qZWN0Eh0ubmFnaS52MS5EZWxldGVQcm9qZWN0UmVxdWVzdBoeLm5hZ2kudjEuRGVsZXRlUHJvamVjdFJlc3BvbnNlEkYKDURlcGxveVByb2plY3QSHS5uYWdpLnYxLkRlcGxveVByb2plY3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEkgKDlJlYnVpbGRQcm9qZWN0Eh4ubmFnaS52MS5SZWJ1aWxkUHJvamVjdFJlcXVlc3QaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESPAoKU3RyZWFtTG9ncxIaLm5hZ2kudjEuU3RyZWFtTG9nc1JlcXVlc3QaEC5uYWdpLnYxLkxvZ0xpbmUwARIzCgRFeGVjEhIubmFnaS52MS5FeGVjSW5wdXQaEy5uYWdpLnYxLkV4ZWNPdXRwdXQoATABEkUKCkxpc3RQYW5lbHMSGi5uYWdpLnYxLkxpc3RQYW5lbHNSZXF1ZXN0GhsubmFnaS52MS5MaXN0UGFuZWxzUmVzcG9uc2USPwoIQWRkUGFuZWwSGC5uYWdpLnYxLkFkZFBhbmVsUmVxdWVzdBoZLm5hZ2kudjEuQWRkUGFuZWxSZXNwb25zZRJICgtSZW1vdmVQYW5lbBIbLm5hZ2kudjEuUmVtb3ZlUGFuZWxSZXF1ZXN0GhwubmFnaS52MS5SZW1vdmVQYW5lbFJlc3BvbnNlEk0KEENoZWNrUmVtb3ZlUGFuZWwSGy5uYWdpLnYxLlJlbW92ZVBhbmVsUmVxdWVzdBocLm5hZ2kudjEuUmVtb3ZlUGFuZWxSZXNwb25zZRJACg1HZXRNZXNoU3RhdHVzEhoubmFnaS52MS5NZXNoU3RhdHVzUmVxdWVzdBoTLm5hZ2kudjEuTWVzaFN0YXR1cxI/CghNZXNoUGluZxIYLm5hZ2kudjEuTWVzaFBpbmdSZXF1ZXN0GhkubmFnaS52MS5NZXNoUGluZ1Jlc3BvbnNlEkkKD1NldEJhY2t1cFRhcmdldBIfLm5hZ2kudjEuU2V0QmFja3VwVGFyZ2V0UmVxdWVzdBoVLm5hZ2kudjEuQmFja3VwU3RhdHVzEkkKD0dldEJhY2t1cFN0YXR1cxIfLm5hZ2kudjEuR2V0QmFja3VwU3RhdHVzUmVxdWVzdBoVLm5hZ2kudjEuQmFja3VwU3RhdHVzEkQKClN5bmNCYWNrdXASHy5uYWdpLnYxLkdldEJhY2t1cFN0YXR1c1JlcXVlc3QaFS5uYWdpLnYxLkJhY2t1cFN0YXR1cxJOCg1BY2NlcHRSZXBsaWNhEh0ubmFnaS52MS5BY2NlcHRSZXBsaWNhUmVxdWVzdBoeLm5hZ2kudjEuQWNjZXB0UmVwbGljYVJlc3BvbnNlEksKDExpc3RSZXBsaWNhcxIcLm5hZ2kudjEuTGlzdFJlcGxpY2FzUmVxdWVzdBodLm5hZ2kudjEuTGlzdFJlcGxpY2FzUmVzcG9uc2USSwoUTGlzdFJlcGxpY2FTbmFwc2hvdHMSEy5uYWdpLnYxLlJlcGxpY2FSZWYaHi5uYWdpLnYxLkxpc3RTbmFwc2hvdHNSZXNwb25zZRJICg5SZXN0b3JlUmVwbGljYRIeLm5hZ2kudjEuUmVzdG9yZVJlcGxpY2FSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEkQKDURlbGV0ZVJlcGxpY2ESEy5uYWdpLnYxLlJlcGxpY2FSZWYaHi5uYWdpLnYxLkRlbGV0ZVJlcGxpY2FSZXNwb25zZRJLCgxDaGVja1Jlc3RvcmUSHC5uYWdpLnYxLkNoZWNrUmVzdG9yZVJlcXVlc3QaHS5uYWdpLnYxLkNoZWNrUmVzdG9yZVJlc3BvbnNlEkAKCk1pZ3JhdGVPdXQSGi5uYWdpLnYxLk1pZ3JhdGVPdXRSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKDU1pZ3JhdGVSZXN1bWUSEy5uYWdpLnYxLlJlcGxpY2FSZWYaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESRAoNTWlncmF0ZUZpbmlzaBITLm5hZ2kudjEuUmVwbGljYVJlZhoeLm5hZ2kudjEuTWlncmF0ZUZpbmlzaFJlc3BvbnNlEkAKC0NoZWNrSW1hZ2VzEhMubmFnaS52MS5SZXBsaWNhUmVmGhwubmFnaS52MS5DaGVja0ltYWdlc1Jlc3BvbnNlEjoKCkdldE1pcnJvcnMSGi5uYWdpLnYxLkdldE1pcnJvcnNSZXF1ZXN0GhAubmFnaS52MS5NaXJyb3JzEjAKClNldE1pcnJvcnMSEC5uYWdpLnYxLk1pcnJvcnMaEC5uYWdpLnYxLk1pcnJvcnMSUQoOU2V0UGFuZWxEb21haW4SHi5uYWdpLnYxLlNldFBhbmVsRG9tYWluUmVxdWVzdBofLm5hZ2kudjEuU2V0UGFuZWxEb21haW5SZXNwb25zZRI8CgdVcGdyYWRlEhcubmFnaS52MS5VcGdyYWRlUmVxdWVzdBoYLm5hZ2kudjEuVXBncmFkZVJlc3BvbnNlEkIKDkxpc3RSZWdpc3RyaWVzEhMubmFnaS52MS5SZXBsaWNhUmVmGhsubmFnaS52MS5SZWdpc3RyaWVzUmVzcG9uc2USSwoNTG9naW5SZWdpc3RyeRIdLm5hZ2kudjEuTG9naW5SZWdpc3RyeVJlcXVlc3QaGy5uYWdpLnYxLlJlZ2lzdHJpZXNSZXNwb25zZRJNCg5Mb2dvdXRSZWdpc3RyeRIeLm5hZ2kudjEuTG9nb3V0UmVnaXN0cnlSZXF1ZXN0GhsubmFnaS52MS5SZWdpc3RyaWVzUmVzcG9uc2USQwoLU2V0RmFpbG92ZXISGy5uYWdpLnYxLlNldEZhaWxvdmVyUmVxdWVzdBoXLm5hZ2kudjEuRmFpbG92ZXJTdGF0dXMSOwoLR2V0RmFpbG92ZXISEy5uYWdpLnYxLlJlcGxpY2FSZWYaFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEk4KDUxpc3RGYWlsb3ZlcnMSHS5uYWdpLnYxLkxpc3RGYWlsb3ZlcnNSZXF1ZXN0Gh4ubmFnaS52MS5MaXN0RmFpbG92ZXJzUmVzcG9uc2USPwoPQ29uZmlybVRha2VvdmVyEhMubmFnaS52MS5SZXBsaWNhUmVmGhcubmFnaS52MS5GYWlsb3ZlclN0YXR1c0I0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIjUKDENvbnRhaW5lclJlZhISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgCIAEoCSI7ChNQdXRDb250YWluZXJSZXF1ZXN0EiQKBHNwZWMYASABKAsyFi5uYWdpLnYxLkNvbnRhaW5lclNwZWMiFgoUUHV0Q29udGFpbmVyUmVzcG9uc2UivgEKFkRlcGxveUNvbnRhaW5lclJlcXVlc3QSJAoEc3BlYxgBIAEoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYxIMCgRwdWxsGAIgASgIEhIKCnVzZV91cGxvYWQYAyABKAgSEwoLcHVsbF9pbWFnZXMYBCABKAgSEgoKZmlsZXNfZnJvbRgFIAEoAxIZChFyZXN0b3JlX2RhdGFfZnJvbRgGIAEoAxIYChBwcmV2aW91c192ZXJzaW9uGAcgASgDIlMKFkRlbGV0ZUNvbnRhaW5lclJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkSEgoKZGVsZXRlX2RpchgDIAEoCCIZChdEZWxldGVDb250YWluZXJSZXNwb25zZSJUChZSZXN0b3JlU25hcHNob3RSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEhMKC3NuYXBzaG90X2lkGAMgASgJIj0KFUxpc3RTbmFwc2hvdHNSZXNwb25zZRIkCglzbmFwc2hvdHMYASADKAsyES5uYWdpLnYxLlNuYXBzaG90ImkKEVN0cmVhbUxvZ3NSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSDAoEdGFpbBgEIAEoBRIOCgZmb2xsb3cYBSABKAgiPAoTQ2hlY2tJbWFnZXNSZXNwb25zZRIlCgd1cGRhdGVzGAEgAygLMhQubmFnaS52MS5JbWFnZVVwZGF0ZSJMChRMb2dpblJlZ2lzdHJ5UmVxdWVzdBIQCghyZWdpc3RyeRgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIQCghwYXNzd29yZBgDIAEoCSIuChVMb2dpblJlZ2lzdHJ5UmVzcG9uc2USFQoNZG9ja2VyX2NvbmZpZxgBIAEoDCImChZTZXRQcm9qZWN0c1Jvb3RSZXF1ZXN0EgwKBHJvb3QYASABKAkiGQoXU2V0UHJvamVjdHNSb290UmVzcG9uc2UiJwoVU2V0UGFuZWxEb21haW5SZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCSIYChZTZXRQYW5lbERvbWFpblJlc3BvbnNlIiAKDlVwZ3JhZGVSZXF1ZXN0Eg4KBnNoYTI1NhgBIAEoCSIiCg9VcGdyYWRlUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCSITChFHZXRNaXJyb3JzUmVxdWVzdCIqCgdNaXJyb3JzEg8KB21pcnJvcnMYASADKAkSDgoGYWN0aXZlGAIgAygJIhMKEU1lc2hTdGF0dXNSZXF1ZXN0IhMKEUxpc3RQYW5lbHNSZXF1ZXN0IjsKEkxpc3RQYW5lbHNSZXNwb25zZRIlCgZwYW5lbHMYASADKAsyFS5uYWdpLnYxLlRydXN0ZWRQYW5lbCJGCg9BZGRQYW5lbFJlcXVlc3QSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCRINCgV0b2tlbhgDIAEoCSISChBBZGRQYW5lbFJlc3BvbnNlIikKElJlbW92ZVBhbmVsUmVxdWVzdBITCgtmaW5nZXJwcmludBgBIAEoCSIVChNSZW1vdmVQYW5lbFJlc3BvbnNlInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0InkKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSEQoJY29udGFpbmVyGAUgASgJEg8KB2NvbW1hbmQYAyADKAkSIwoEc2l6ZRgEIAEoCzIVLm5hZ2kudjEuVGVybWluYWxTaXplIioKDFRlcm1pbmFsU2l6ZRIMCgRjb2xzGAEgASgNEgwKBHJvd3MYAiABKA0iPQoKRXhlY091dHB1dBIQCgZzdGRvdXQYASABKAxIABITCglleGl0X2NvZGUYAiABKAVIAEIICgZvdXRwdXQiPQoVU2V0QWxlcnRDb25maWdSZXF1ZXN0EiQKBmNvbmZpZxgBIAEoCzIULm5hZ2kudjEuQWxlcnRDb25maWciGAoWU2V0QWxlcnRDb25maWdSZXNwb25zZSJ3ChNRdWVyeU1ldHJpY3NSZXF1ZXN0Eg4KBnByZWZpeBgBIAEoCRIoCgRmcm9tGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBImCgJ0bxgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiPQoUUXVlcnlNZXRyaWNzUmVzcG9uc2USJQoGc2VyaWVzGAEgAygLMhUubmFnaS52MS5NZXRyaWNTZXJpZXMyowwKDEFnZW50U2VydmljZRJLCgxQdXRDb250YWluZXISHC5uYWdpLnYxLlB1dENvbnRhaW5lclJlcXVlc3QaHS5uYWdpLnYxLlB1dENvbnRhaW5lclJlc3BvbnNlEkoKD0RlcGxveUNvbnRhaW5lchIfLm5hZ2kudjEuRGVwbG95Q29udGFpbmVyUmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJUCg9EZWxldGVDb250YWluZXISHy5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlcXVlc3QaIC5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlc3BvbnNlEkYKDUxpc3RTbmFwc2hvdHMSFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoeLm5hZ2kudjEuTGlzdFNuYXBzaG90c1Jlc3BvbnNlEj8KDkNyZWF0ZVNuYXBzaG90EhUubmFnaS52MS5Db250YWluZXJSZWYaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESSgoPUmVzdG9yZVNuYXBzaG90Eh8ubmFnaS52MS5SZXN0b3JlU25hcHNob3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAESMwoERXhlYxISLm5hZ2kudjEuRXhlY0lucHV0GhMubmFnaS52MS5FeGVjT3V0cHV0KAEwARJCCgtDaGVja0ltYWdlcxIVLm5hZ2kudjEuQ29udGFpbmVyUmVmGhwubmFnaS52MS5DaGVja0ltYWdlc1Jlc3BvbnNlEk4KDUxvZ2luUmVnaXN0cnkSHS5uYWdpLnYxLkxvZ2luUmVnaXN0cnlSZXF1ZXN0Gh4ubmFnaS52MS5Mb2dpblJlZ2lzdHJ5UmVzcG9uc2USUQoOU2V0QWxlcnRDb25maWcSHi5uYWdpLnYxLlNldEFsZXJ0Q29uZmlnUmVxdWVzdBofLm5hZ2kudjEuU2V0QWxlcnRDb25maWdSZXNwb25zZRJLCgxRdWVyeU1ldHJpY3MSHC5uYWdpLnYxLlF1ZXJ5TWV0cmljc1JlcXVlc3QaHS5uYWdpLnYxLlF1ZXJ5TWV0cmljc1Jlc3BvbnNlElQKD1NldFByb2plY3RzUm9vdBIfLm5hZ2kudjEuU2V0UHJvamVjdHNSb290UmVxdWVzdBogLm5hZ2kudjEuU2V0UHJvamVjdHNSb290UmVzcG9uc2USRQoKTGlzdFBhbmVscxIaLm5hZ2kudjEuTGlzdFBhbmVsc1JlcXVlc3QaGy5uYWdpLnYxLkxpc3RQYW5lbHNSZXNwb25zZRI/CghBZGRQYW5lbBIYLm5hZ2kudjEuQWRkUGFuZWxSZXF1ZXN0GhkubmFnaS52MS5BZGRQYW5lbFJlc3BvbnNlEkgKC1JlbW92ZVBhbmVsEhsubmFnaS52MS5SZW1vdmVQYW5lbFJlcXVlc3QaHC5uYWdpLnYxLlJlbW92ZVBhbmVsUmVzcG9uc2USQAoNR2V0TWVzaFN0YXR1cxIaLm5hZ2kudjEuTWVzaFN0YXR1c1JlcXVlc3QaEy5uYWdpLnYxLk1lc2hTdGF0dXMSPwoITWVzaFBpbmcSGC5uYWdpLnYxLk1lc2hQaW5nUmVxdWVzdBoZLm5hZ2kudjEuTWVzaFBpbmdSZXNwb25zZRI6CgpHZXRNaXJyb3JzEhoubmFnaS52MS5HZXRNaXJyb3JzUmVxdWVzdBoQLm5hZ2kudjEuTWlycm9ycxIwCgpTZXRNaXJyb3JzEhAubmFnaS52MS5NaXJyb3JzGhAubmFnaS52MS5NaXJyb3JzElEKDlNldFBhbmVsRG9tYWluEh4ubmFnaS52MS5TZXRQYW5lbERvbWFpblJlcXVlc3QaHy5uYWdpLnYxLlNldFBhbmVsRG9tYWluUmVzcG9uc2USPAoHVXBncmFkZRIXLm5hZ2kudjEuVXBncmFkZVJlcXVlc3QaGC5uYWdpLnYxLlVwZ3JhZGVSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+
+/**
+ * @generated from message nagi.v1.ContainerRef
+ */
+export type ContainerRef = Message<"nagi.v1.ContainerRef"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 2;
+   */
+  container: string;
+};
+
+/**
+ * Describes the message nagi.v1.ContainerRef.
+ * Use `create(ContainerRefSchema)` to create a new message.
+ */
+export const ContainerRefSchema: GenMessage<ContainerRef> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 0);
+
+/**
+ * @generated from message nagi.v1.PutContainerRequest
+ */
+export type PutContainerRequest = Message<"nagi.v1.PutContainerRequest"> & {
+  /**
+   * @generated from field: nagi.v1.ContainerSpec spec = 1;
+   */
+  spec?: ContainerSpec | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.PutContainerRequest.
+ * Use `create(PutContainerRequestSchema)` to create a new message.
+ */
+export const PutContainerRequestSchema: GenMessage<PutContainerRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 1);
+
+/**
+ * @generated from message nagi.v1.PutContainerResponse
+ */
+export type PutContainerResponse = Message<"nagi.v1.PutContainerResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.PutContainerResponse.
+ * Use `create(PutContainerResponseSchema)` to create a new message.
+ */
+export const PutContainerResponseSchema: GenMessage<PutContainerResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 2);
+
+/**
+ * @generated from message nagi.v1.DeployContainerRequest
+ */
+export type DeployContainerRequest = Message<"nagi.v1.DeployContainerRequest"> & {
+  /**
+   * spec.version 是这次部署生成的版本号。
+   *
+   * @generated from field: nagi.v1.ContainerSpec spec = 1;
+   */
+  spec?: ContainerSpec | undefined;
+
+  /**
+   * 部署前先从 git 拉取文件。
+   *
+   * @generated from field: bool pull = 2;
+   */
+  pull: boolean;
+
+  /**
+   * 用面板刚上传的文件替换 data/（见 MeshService.Upload）。
+   *
+   * @generated from field: bool use_upload = 3;
+   */
+  useUpload: boolean;
+
+  /**
+   * 先拉取最新的镜像（更新镜像）。
+   *
+   * @generated from field: bool pull_images = 4;
+   */
+  pullImages: boolean;
+
+  /**
+   * 回滚：用这个版本保存的文件替换 data/。
+   *
+   * @generated from field: int64 files_from = 5;
+   */
+  filesFrom: bigint;
+
+  /**
+   * 回滚并恢复数据：把运行数据恢复到这个版本被替换之前（找部署前快照）。
+   *
+   * @generated from field: int64 restore_data_from = 6;
+   */
+  restoreDataFrom: bigint;
+
+  /**
+   * 容器之前部署过的版本（0 表示第一次部署），用于部署前快照和失败提示。
+   *
+   * @generated from field: int64 previous_version = 7;
+   */
+  previousVersion: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.DeployContainerRequest.
+ * Use `create(DeployContainerRequestSchema)` to create a new message.
+ */
+export const DeployContainerRequestSchema: GenMessage<DeployContainerRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 3);
+
+/**
+ * @generated from message nagi.v1.DeleteContainerRequest
+ */
+export type DeleteContainerRequest = Message<"nagi.v1.DeleteContainerRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 2;
+   */
+  container: string;
+
+  /**
+   * 同时删除容器目录（数据会删掉）。
+   *
+   * @generated from field: bool delete_dir = 3;
+   */
+  deleteDir: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.DeleteContainerRequest.
+ * Use `create(DeleteContainerRequestSchema)` to create a new message.
+ */
+export const DeleteContainerRequestSchema: GenMessage<DeleteContainerRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 4);
+
+/**
+ * @generated from message nagi.v1.DeleteContainerResponse
+ */
+export type DeleteContainerResponse = Message<"nagi.v1.DeleteContainerResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.DeleteContainerResponse.
+ * Use `create(DeleteContainerResponseSchema)` to create a new message.
+ */
+export const DeleteContainerResponseSchema: GenMessage<DeleteContainerResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 5);
+
+/**
+ * @generated from message nagi.v1.RestoreSnapshotRequest
+ */
+export type RestoreSnapshotRequest = Message<"nagi.v1.RestoreSnapshotRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 2;
+   */
+  container: string;
+
+  /**
+   * @generated from field: string snapshot_id = 3;
+   */
+  snapshotId: string;
+};
+
+/**
+ * Describes the message nagi.v1.RestoreSnapshotRequest.
+ * Use `create(RestoreSnapshotRequestSchema)` to create a new message.
+ */
+export const RestoreSnapshotRequestSchema: GenMessage<RestoreSnapshotRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 6);
+
+/**
+ * @generated from message nagi.v1.ListSnapshotsResponse
+ */
+export type ListSnapshotsResponse = Message<"nagi.v1.ListSnapshotsResponse"> & {
+  /**
+   * @generated from field: repeated nagi.v1.Snapshot snapshots = 1;
+   */
+  snapshots: Snapshot[];
+};
+
+/**
+ * Describes the message nagi.v1.ListSnapshotsResponse.
+ * Use `create(ListSnapshotsResponseSchema)` to create a new message.
+ */
+export const ListSnapshotsResponseSchema: GenMessage<ListSnapshotsResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 7);
+
+/**
+ * @generated from message nagi.v1.StreamLogsRequest
+ */
+export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 2;
+   */
+  container: string;
+
+  /**
+   * 为空时返回容器组里所有容器的日志。
+   *
+   * @generated from field: string service = 3;
+   */
+  service: string;
+
+  /**
+   * 先返回最近多少行。
+   *
+   * @generated from field: int32 tail = 4;
+   */
+  tail: number;
+
+  /**
+   * @generated from field: bool follow = 5;
+   */
+  follow: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.StreamLogsRequest.
+ * Use `create(StreamLogsRequestSchema)` to create a new message.
+ */
+export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 8);
+
+/**
+ * @generated from message nagi.v1.CheckImagesResponse
+ */
+export type CheckImagesResponse = Message<"nagi.v1.CheckImagesResponse"> & {
+  /**
+   * @generated from field: repeated nagi.v1.ImageUpdate updates = 1;
+   */
+  updates: ImageUpdate[];
+};
+
+/**
+ * Describes the message nagi.v1.CheckImagesResponse.
+ * Use `create(CheckImagesResponseSchema)` to create a new message.
+ */
+export const CheckImagesResponseSchema: GenMessage<CheckImagesResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 9);
+
+/**
+ * @generated from message nagi.v1.LoginRegistryRequest
+ */
+export type LoginRegistryRequest = Message<"nagi.v1.LoginRegistryRequest"> & {
+  /**
+   * @generated from field: string registry = 1;
+   */
+  registry: string;
+
+  /**
+   * @generated from field: string username = 2;
+   */
+  username: string;
+
+  /**
+   * @generated from field: string password = 3;
+   */
+  password: string;
+};
+
+/**
+ * Describes the message nagi.v1.LoginRegistryRequest.
+ * Use `create(LoginRegistryRequestSchema)` to create a new message.
+ */
+export const LoginRegistryRequestSchema: GenMessage<LoginRegistryRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 10);
+
+/**
+ * @generated from message nagi.v1.LoginRegistryResponse
+ */
+export type LoginRegistryResponse = Message<"nagi.v1.LoginRegistryResponse"> & {
+  /**
+   * 只有这个仓库的 docker 配置（config.json），面板合并进项目的配置里。
+   *
+   * @generated from field: bytes docker_config = 1;
+   */
+  dockerConfig: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.LoginRegistryResponse.
+ * Use `create(LoginRegistryResponseSchema)` to create a new message.
+ */
+export const LoginRegistryResponseSchema: GenMessage<LoginRegistryResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 11);
+
+/**
+ * @generated from message nagi.v1.SetProjectsRootRequest
+ */
+export type SetProjectsRootRequest = Message<"nagi.v1.SetProjectsRootRequest"> & {
+  /**
+   * @generated from field: string root = 1;
+   */
+  root: string;
+};
+
+/**
+ * Describes the message nagi.v1.SetProjectsRootRequest.
+ * Use `create(SetProjectsRootRequestSchema)` to create a new message.
+ */
+export const SetProjectsRootRequestSchema: GenMessage<SetProjectsRootRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 12);
+
+/**
+ * @generated from message nagi.v1.SetProjectsRootResponse
+ */
+export type SetProjectsRootResponse = Message<"nagi.v1.SetProjectsRootResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.SetProjectsRootResponse.
+ * Use `create(SetProjectsRootResponseSchema)` to create a new message.
+ */
+export const SetProjectsRootResponseSchema: GenMessage<SetProjectsRootResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 13);
 
 /**
  * @generated from message nagi.v1.SetPanelDomainRequest
@@ -31,7 +364,7 @@ export type SetPanelDomainRequest = Message<"nagi.v1.SetPanelDomainRequest"> & {
  * Use `create(SetPanelDomainRequestSchema)` to create a new message.
  */
 export const SetPanelDomainRequestSchema: GenMessage<SetPanelDomainRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 0);
+  messageDesc(file_nagi_v1_agent, 14);
 
 /**
  * @generated from message nagi.v1.SetPanelDomainResponse
@@ -44,7 +377,7 @@ export type SetPanelDomainResponse = Message<"nagi.v1.SetPanelDomainResponse"> &
  * Use `create(SetPanelDomainResponseSchema)` to create a new message.
  */
 export const SetPanelDomainResponseSchema: GenMessage<SetPanelDomainResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 1);
+  messageDesc(file_nagi_v1_agent, 15);
 
 /**
  * @generated from message nagi.v1.UpgradeRequest
@@ -63,7 +396,7 @@ export type UpgradeRequest = Message<"nagi.v1.UpgradeRequest"> & {
  * Use `create(UpgradeRequestSchema)` to create a new message.
  */
 export const UpgradeRequestSchema: GenMessage<UpgradeRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 2);
+  messageDesc(file_nagi_v1_agent, 16);
 
 /**
  * @generated from message nagi.v1.UpgradeResponse
@@ -82,24 +415,7 @@ export type UpgradeResponse = Message<"nagi.v1.UpgradeResponse"> & {
  * Use `create(UpgradeResponseSchema)` to create a new message.
  */
 export const UpgradeResponseSchema: GenMessage<UpgradeResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 3);
-
-/**
- * @generated from message nagi.v1.CheckImagesResponse
- */
-export type CheckImagesResponse = Message<"nagi.v1.CheckImagesResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.ImageUpdate updates = 1;
-   */
-  updates: ImageUpdate[];
-};
-
-/**
- * Describes the message nagi.v1.CheckImagesResponse.
- * Use `create(CheckImagesResponseSchema)` to create a new message.
- */
-export const CheckImagesResponseSchema: GenMessage<CheckImagesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 4);
+  messageDesc(file_nagi_v1_agent, 17);
 
 /**
  * @generated from message nagi.v1.GetMirrorsRequest
@@ -112,7 +428,7 @@ export type GetMirrorsRequest = Message<"nagi.v1.GetMirrorsRequest"> & {
  * Use `create(GetMirrorsRequestSchema)` to create a new message.
  */
 export const GetMirrorsRequestSchema: GenMessage<GetMirrorsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 5);
+  messageDesc(file_nagi_v1_agent, 18);
 
 /**
  * @generated from message nagi.v1.Mirrors
@@ -138,435 +454,7 @@ export type Mirrors = Message<"nagi.v1.Mirrors"> & {
  * Use `create(MirrorsSchema)` to create a new message.
  */
 export const MirrorsSchema: GenMessage<Mirrors> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 6);
-
-/**
- * @generated from message nagi.v1.LoginRegistryRequest
- */
-export type LoginRegistryRequest = Message<"nagi.v1.LoginRegistryRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string registry = 2;
-   */
-  registry: string;
-
-  /**
-   * @generated from field: string username = 3;
-   */
-  username: string;
-
-  /**
-   * @generated from field: string password = 4;
-   */
-  password: string;
-};
-
-/**
- * Describes the message nagi.v1.LoginRegistryRequest.
- * Use `create(LoginRegistryRequestSchema)` to create a new message.
- */
-export const LoginRegistryRequestSchema: GenMessage<LoginRegistryRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 7);
-
-/**
- * @generated from message nagi.v1.LogoutRegistryRequest
- */
-export type LogoutRegistryRequest = Message<"nagi.v1.LogoutRegistryRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string registry = 2;
-   */
-  registry: string;
-};
-
-/**
- * Describes the message nagi.v1.LogoutRegistryRequest.
- * Use `create(LogoutRegistryRequestSchema)` to create a new message.
- */
-export const LogoutRegistryRequestSchema: GenMessage<LogoutRegistryRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 8);
-
-/**
- * @generated from message nagi.v1.RegistriesResponse
- */
-export type RegistriesResponse = Message<"nagi.v1.RegistriesResponse"> & {
-  /**
-   * 登录过的仓库地址（不返回密码）。
-   *
-   * @generated from field: repeated string registries = 1;
-   */
-  registries: string[];
-};
-
-/**
- * Describes the message nagi.v1.RegistriesResponse.
- * Use `create(RegistriesResponseSchema)` to create a new message.
- */
-export const RegistriesResponseSchema: GenMessage<RegistriesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 9);
-
-/**
- * @generated from message nagi.v1.SetFailoverRequest
- */
-export type SetFailoverRequest = Message<"nagi.v1.SetFailoverRequest"> & {
-  /**
-   * @generated from field: nagi.v1.FailoverConfig config = 1;
-   */
-  config?: FailoverConfig | undefined;
-
-  /**
-   * 删除这个项目的顶替设置。
-   *
-   * @generated from field: bool clear = 2;
-   */
-  clear: boolean;
-
-  /**
-   * @generated from field: string project_id = 3;
-   */
-  projectId: string;
-
-  /**
-   * 更换见证人时，新见证人从当前的持有者和轮次开始投票（不填时初始租约归 A、第 1 轮）。
-   * 已经有设置的参与者忽略这两项，保留自己的持有者和轮次。
-   *
-   * @generated from field: bytes seed_holder = 4;
-   */
-  seedHolder: Uint8Array;
-
-  /**
-   * @generated from field: uint64 seed_epoch = 5;
-   */
-  seedEpoch: bigint;
-};
-
-/**
- * Describes the message nagi.v1.SetFailoverRequest.
- * Use `create(SetFailoverRequestSchema)` to create a new message.
- */
-export const SetFailoverRequestSchema: GenMessage<SetFailoverRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 10);
-
-/**
- * @generated from message nagi.v1.ListFailoversRequest
- */
-export type ListFailoversRequest = Message<"nagi.v1.ListFailoversRequest"> & {
-};
-
-/**
- * Describes the message nagi.v1.ListFailoversRequest.
- * Use `create(ListFailoversRequestSchema)` to create a new message.
- */
-export const ListFailoversRequestSchema: GenMessage<ListFailoversRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 11);
-
-/**
- * @generated from message nagi.v1.ListFailoversResponse
- */
-export type ListFailoversResponse = Message<"nagi.v1.ListFailoversResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.FailoverStatus failovers = 1;
-   */
-  failovers: FailoverStatus[];
-};
-
-/**
- * Describes the message nagi.v1.ListFailoversResponse.
- * Use `create(ListFailoversResponseSchema)` to create a new message.
- */
-export const ListFailoversResponseSchema: GenMessage<ListFailoversResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 12);
-
-/**
- * @generated from message nagi.v1.CheckRestoreRequest
- */
-export type CheckRestoreRequest = Message<"nagi.v1.CheckRestoreRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string dir = 2;
-   */
-  dir: string;
-
-  /**
-   * 项目的对外映射：检查在本节点上有没有和其他项目或程序冲突的端口、域名。
-   *
-   * @generated from field: repeated nagi.v1.Exposure routes = 3;
-   */
-  routes: Exposure[];
-};
-
-/**
- * Describes the message nagi.v1.CheckRestoreRequest.
- * Use `create(CheckRestoreRequestSchema)` to create a new message.
- */
-export const CheckRestoreRequestSchema: GenMessage<CheckRestoreRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 13);
-
-/**
- * @generated from message nagi.v1.CheckRestoreResponse
- */
-export type CheckRestoreResponse = Message<"nagi.v1.CheckRestoreResponse"> & {
-};
-
-/**
- * Describes the message nagi.v1.CheckRestoreResponse.
- * Use `create(CheckRestoreResponseSchema)` to create a new message.
- */
-export const CheckRestoreResponseSchema: GenMessage<CheckRestoreResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 14);
-
-/**
- * @generated from message nagi.v1.MigrateOutRequest
- */
-export type MigrateOutRequest = Message<"nagi.v1.MigrateOutRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: bytes target_key = 2;
-   */
-  targetKey: Uint8Array;
-
-  /**
-   * @generated from field: string target_node_id = 3;
-   */
-  targetNodeId: string;
-
-  /**
-   * @generated from field: string target_name = 4;
-   */
-  targetName: string;
-};
-
-/**
- * Describes the message nagi.v1.MigrateOutRequest.
- * Use `create(MigrateOutRequestSchema)` to create a new message.
- */
-export const MigrateOutRequestSchema: GenMessage<MigrateOutRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 15);
-
-/**
- * @generated from message nagi.v1.MigrateFinishResponse
- */
-export type MigrateFinishResponse = Message<"nagi.v1.MigrateFinishResponse"> & {
-  /**
-   * 保留在磁盘上的原项目目录。
-   *
-   * @generated from field: string dir = 1;
-   */
-  dir: string;
-};
-
-/**
- * Describes the message nagi.v1.MigrateFinishResponse.
- * Use `create(MigrateFinishResponseSchema)` to create a new message.
- */
-export const MigrateFinishResponseSchema: GenMessage<MigrateFinishResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 16);
-
-/**
- * @generated from message nagi.v1.SetBackupTargetRequest
- */
-export type SetBackupTargetRequest = Message<"nagi.v1.SetBackupTargetRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: bytes target_key = 2;
-   */
-  targetKey: Uint8Array;
-
-  /**
-   * @generated from field: string target_node_id = 3;
-   */
-  targetNodeId: string;
-
-  /**
-   * @generated from field: string target_name = 4;
-   */
-  targetName: string;
-};
-
-/**
- * Describes the message nagi.v1.SetBackupTargetRequest.
- * Use `create(SetBackupTargetRequestSchema)` to create a new message.
- */
-export const SetBackupTargetRequestSchema: GenMessage<SetBackupTargetRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 17);
-
-/**
- * @generated from message nagi.v1.GetBackupStatusRequest
- */
-export type GetBackupStatusRequest = Message<"nagi.v1.GetBackupStatusRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-};
-
-/**
- * Describes the message nagi.v1.GetBackupStatusRequest.
- * Use `create(GetBackupStatusRequestSchema)` to create a new message.
- */
-export const GetBackupStatusRequestSchema: GenMessage<GetBackupStatusRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 18);
-
-/**
- * @generated from message nagi.v1.AcceptReplicaRequest
- */
-export type AcceptReplicaRequest = Message<"nagi.v1.AcceptReplicaRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string project_name = 2;
-   */
-  projectName: string;
-
-  /**
-   * @generated from field: bytes source_key = 3;
-   */
-  sourceKey: Uint8Array;
-
-  /**
-   * @generated from field: string source_node_id = 4;
-   */
-  sourceNodeId: string;
-
-  /**
-   * @generated from field: string source_name = 5;
-   */
-  sourceName: string;
-};
-
-/**
- * Describes the message nagi.v1.AcceptReplicaRequest.
- * Use `create(AcceptReplicaRequestSchema)` to create a new message.
- */
-export const AcceptReplicaRequestSchema: GenMessage<AcceptReplicaRequest> = /*@__PURE__*/
   messageDesc(file_nagi_v1_agent, 19);
-
-/**
- * @generated from message nagi.v1.AcceptReplicaResponse
- */
-export type AcceptReplicaResponse = Message<"nagi.v1.AcceptReplicaResponse"> & {
-};
-
-/**
- * Describes the message nagi.v1.AcceptReplicaResponse.
- * Use `create(AcceptReplicaResponseSchema)` to create a new message.
- */
-export const AcceptReplicaResponseSchema: GenMessage<AcceptReplicaResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 20);
-
-/**
- * @generated from message nagi.v1.ListReplicasRequest
- */
-export type ListReplicasRequest = Message<"nagi.v1.ListReplicasRequest"> & {
-};
-
-/**
- * Describes the message nagi.v1.ListReplicasRequest.
- * Use `create(ListReplicasRequestSchema)` to create a new message.
- */
-export const ListReplicasRequestSchema: GenMessage<ListReplicasRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 21);
-
-/**
- * @generated from message nagi.v1.ListReplicasResponse
- */
-export type ListReplicasResponse = Message<"nagi.v1.ListReplicasResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.Replica replicas = 1;
-   */
-  replicas: Replica[];
-};
-
-/**
- * Describes the message nagi.v1.ListReplicasResponse.
- * Use `create(ListReplicasResponseSchema)` to create a new message.
- */
-export const ListReplicasResponseSchema: GenMessage<ListReplicasResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 22);
-
-/**
- * @generated from message nagi.v1.ReplicaRef
- */
-export type ReplicaRef = Message<"nagi.v1.ReplicaRef"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-};
-
-/**
- * Describes the message nagi.v1.ReplicaRef.
- * Use `create(ReplicaRefSchema)` to create a new message.
- */
-export const ReplicaRefSchema: GenMessage<ReplicaRef> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 23);
-
-/**
- * @generated from message nagi.v1.RestoreReplicaRequest
- */
-export type RestoreReplicaRequest = Message<"nagi.v1.RestoreReplicaRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * 恢复到的项目目录，规则和新建项目一样。
-   *
-   * @generated from field: string dir = 2;
-   */
-  dir: string;
-
-  /**
-   * 为空时用最新的含数据的快照。
-   *
-   * @generated from field: string snapshot_id = 3;
-   */
-  snapshotId: string;
-};
-
-/**
- * Describes the message nagi.v1.RestoreReplicaRequest.
- * Use `create(RestoreReplicaRequestSchema)` to create a new message.
- */
-export const RestoreReplicaRequestSchema: GenMessage<RestoreReplicaRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 24);
-
-/**
- * @generated from message nagi.v1.DeleteReplicaResponse
- */
-export type DeleteReplicaResponse = Message<"nagi.v1.DeleteReplicaResponse"> & {
-};
-
-/**
- * Describes the message nagi.v1.DeleteReplicaResponse.
- * Use `create(DeleteReplicaResponseSchema)` to create a new message.
- */
-export const DeleteReplicaResponseSchema: GenMessage<DeleteReplicaResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 25);
 
 /**
  * @generated from message nagi.v1.MeshStatusRequest
@@ -579,7 +467,7 @@ export type MeshStatusRequest = Message<"nagi.v1.MeshStatusRequest"> & {
  * Use `create(MeshStatusRequestSchema)` to create a new message.
  */
 export const MeshStatusRequestSchema: GenMessage<MeshStatusRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 26);
+  messageDesc(file_nagi_v1_agent, 20);
 
 /**
  * @generated from message nagi.v1.ListPanelsRequest
@@ -592,7 +480,7 @@ export type ListPanelsRequest = Message<"nagi.v1.ListPanelsRequest"> & {
  * Use `create(ListPanelsRequestSchema)` to create a new message.
  */
 export const ListPanelsRequestSchema: GenMessage<ListPanelsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 27);
+  messageDesc(file_nagi_v1_agent, 21);
 
 /**
  * @generated from message nagi.v1.ListPanelsResponse
@@ -609,7 +497,7 @@ export type ListPanelsResponse = Message<"nagi.v1.ListPanelsResponse"> & {
  * Use `create(ListPanelsResponseSchema)` to create a new message.
  */
 export const ListPanelsResponseSchema: GenMessage<ListPanelsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 28);
+  messageDesc(file_nagi_v1_agent, 22);
 
 /**
  * @generated from message nagi.v1.AddPanelRequest
@@ -636,7 +524,7 @@ export type AddPanelRequest = Message<"nagi.v1.AddPanelRequest"> & {
  * Use `create(AddPanelRequestSchema)` to create a new message.
  */
 export const AddPanelRequestSchema: GenMessage<AddPanelRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 29);
+  messageDesc(file_nagi_v1_agent, 23);
 
 /**
  * @generated from message nagi.v1.AddPanelResponse
@@ -649,7 +537,7 @@ export type AddPanelResponse = Message<"nagi.v1.AddPanelResponse"> & {
  * Use `create(AddPanelResponseSchema)` to create a new message.
  */
 export const AddPanelResponseSchema: GenMessage<AddPanelResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 30);
+  messageDesc(file_nagi_v1_agent, 24);
 
 /**
  * @generated from message nagi.v1.RemovePanelRequest
@@ -666,7 +554,7 @@ export type RemovePanelRequest = Message<"nagi.v1.RemovePanelRequest"> & {
  * Use `create(RemovePanelRequestSchema)` to create a new message.
  */
 export const RemovePanelRequestSchema: GenMessage<RemovePanelRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 31);
+  messageDesc(file_nagi_v1_agent, 25);
 
 /**
  * @generated from message nagi.v1.RemovePanelResponse
@@ -679,7 +567,7 @@ export type RemovePanelResponse = Message<"nagi.v1.RemovePanelResponse"> & {
  * Use `create(RemovePanelResponseSchema)` to create a new message.
  */
 export const RemovePanelResponseSchema: GenMessage<RemovePanelResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 32);
+  messageDesc(file_nagi_v1_agent, 26);
 
 /**
  * @generated from message nagi.v1.ExecInput
@@ -714,7 +602,7 @@ export type ExecInput = Message<"nagi.v1.ExecInput"> & {
  * Use `create(ExecInputSchema)` to create a new message.
  */
 export const ExecInputSchema: GenMessage<ExecInput> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 33);
+  messageDesc(file_nagi_v1_agent, 27);
 
 /**
  * @generated from message nagi.v1.ExecStart
@@ -753,7 +641,7 @@ export type ExecStart = Message<"nagi.v1.ExecStart"> & {
  * Use `create(ExecStartSchema)` to create a new message.
  */
 export const ExecStartSchema: GenMessage<ExecStart> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 34);
+  messageDesc(file_nagi_v1_agent, 28);
 
 /**
  * @generated from message nagi.v1.TerminalSize
@@ -775,7 +663,7 @@ export type TerminalSize = Message<"nagi.v1.TerminalSize"> & {
  * Use `create(TerminalSizeSchema)` to create a new message.
  */
 export const TerminalSizeSchema: GenMessage<TerminalSize> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 35);
+  messageDesc(file_nagi_v1_agent, 29);
 
 /**
  * @generated from message nagi.v1.ExecOutput
@@ -806,812 +694,7 @@ export type ExecOutput = Message<"nagi.v1.ExecOutput"> & {
  * Use `create(ExecOutputSchema)` to create a new message.
  */
 export const ExecOutputSchema: GenMessage<ExecOutput> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 36);
-
-/**
- * @generated from message nagi.v1.ListProjectsRequest
- */
-export type ListProjectsRequest = Message<"nagi.v1.ListProjectsRequest"> & {
-};
-
-/**
- * Describes the message nagi.v1.ListProjectsRequest.
- * Use `create(ListProjectsRequestSchema)` to create a new message.
- */
-export const ListProjectsRequestSchema: GenMessage<ListProjectsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 37);
-
-/**
- * @generated from message nagi.v1.ListProjectsResponse
- */
-export type ListProjectsResponse = Message<"nagi.v1.ListProjectsResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.ProjectSummary projects = 1;
-   */
-  projects: ProjectSummary[];
-};
-
-/**
- * Describes the message nagi.v1.ListProjectsResponse.
- * Use `create(ListProjectsResponseSchema)` to create a new message.
- */
-export const ListProjectsResponseSchema: GenMessage<ListProjectsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 38);
-
-/**
- * @generated from message nagi.v1.CreateProjectRequest
- */
-export type CreateProjectRequest = Message<"nagi.v1.CreateProjectRequest"> & {
-  /**
-   * @generated from field: string name = 1;
-   */
-  name: string;
-
-  /**
-   * @generated from field: string dir = 2;
-   */
-  dir: string;
-
-  /**
-   * @generated from field: nagi.v1.ProjectSettings settings = 5;
-   */
-  settings?: ProjectSettings | undefined;
-
-  /**
-   * 可选：创建时就带上第一个容器。
-   *
-   * @generated from field: string container_name = 6;
-   */
-  containerName: string;
-
-  /**
-   * @generated from field: nagi.v1.ContainerConfig container = 7;
-   */
-  container?: ContainerConfig | undefined;
-};
-
-/**
- * Describes the message nagi.v1.CreateProjectRequest.
- * Use `create(CreateProjectRequestSchema)` to create a new message.
- */
-export const CreateProjectRequestSchema: GenMessage<CreateProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 39);
-
-/**
- * @generated from message nagi.v1.AddContainerRequest
- */
-export type AddContainerRequest = Message<"nagi.v1.AddContainerRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string name = 2;
-   */
-  name: string;
-
-  /**
-   * @generated from field: nagi.v1.ContainerConfig config = 3;
-   */
-  config?: ContainerConfig | undefined;
-};
-
-/**
- * Describes the message nagi.v1.AddContainerRequest.
- * Use `create(AddContainerRequestSchema)` to create a new message.
- */
-export const AddContainerRequestSchema: GenMessage<AddContainerRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 40);
-
-/**
- * @generated from message nagi.v1.AddContainerResponse
- */
-export type AddContainerResponse = Message<"nagi.v1.AddContainerResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.AddContainerResponse.
- * Use `create(AddContainerResponseSchema)` to create a new message.
- */
-export const AddContainerResponseSchema: GenMessage<AddContainerResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 41);
-
-/**
- * @generated from message nagi.v1.DeleteContainerRequest
- */
-export type DeleteContainerRequest = Message<"nagi.v1.DeleteContainerRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string container = 2;
-   */
-  container: string;
-
-  /**
-   * @generated from field: int64 base_revision = 3;
-   */
-  baseRevision: bigint;
-
-  /**
-   * 同时删除容器目录（数据会删掉）。
-   *
-   * @generated from field: bool delete_dir = 4;
-   */
-  deleteDir: boolean;
-};
-
-/**
- * Describes the message nagi.v1.DeleteContainerRequest.
- * Use `create(DeleteContainerRequestSchema)` to create a new message.
- */
-export const DeleteContainerRequestSchema: GenMessage<DeleteContainerRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 42);
-
-/**
- * @generated from message nagi.v1.DeleteContainerResponse
- */
-export type DeleteContainerResponse = Message<"nagi.v1.DeleteContainerResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.DeleteContainerResponse.
- * Use `create(DeleteContainerResponseSchema)` to create a new message.
- */
-export const DeleteContainerResponseSchema: GenMessage<DeleteContainerResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 43);
-
-/**
- * @generated from message nagi.v1.SaveDraftRequest
- */
-export type SaveDraftRequest = Message<"nagi.v1.SaveDraftRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * 容器的修订号。
-   *
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-
-  /**
-   * @generated from field: nagi.v1.ContainerConfig config = 3;
-   */
-  config?: ContainerConfig | undefined;
-
-  /**
-   * @generated from field: string container = 4;
-   */
-  container: string;
-};
-
-/**
- * Describes the message nagi.v1.SaveDraftRequest.
- * Use `create(SaveDraftRequestSchema)` to create a new message.
- */
-export const SaveDraftRequestSchema: GenMessage<SaveDraftRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 44);
-
-/**
- * @generated from message nagi.v1.SaveDraftResponse
- */
-export type SaveDraftResponse = Message<"nagi.v1.SaveDraftResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.SaveDraftResponse.
- * Use `create(SaveDraftResponseSchema)` to create a new message.
- */
-export const SaveDraftResponseSchema: GenMessage<SaveDraftResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 45);
-
-/**
- * @generated from message nagi.v1.DiscardDraftRequest
- */
-export type DiscardDraftRequest = Message<"nagi.v1.DiscardDraftRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-
-  /**
-   * @generated from field: string container = 3;
-   */
-  container: string;
-};
-
-/**
- * Describes the message nagi.v1.DiscardDraftRequest.
- * Use `create(DiscardDraftRequestSchema)` to create a new message.
- */
-export const DiscardDraftRequestSchema: GenMessage<DiscardDraftRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 46);
-
-/**
- * @generated from message nagi.v1.DiscardDraftResponse
- */
-export type DiscardDraftResponse = Message<"nagi.v1.DiscardDraftResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.DiscardDraftResponse.
- * Use `create(DiscardDraftResponseSchema)` to create a new message.
- */
-export const DiscardDraftResponseSchema: GenMessage<DiscardDraftResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 47);
-
-/**
- * @generated from message nagi.v1.UpdateProjectSettingsRequest
- */
-export type UpdateProjectSettingsRequest = Message<"nagi.v1.UpdateProjectSettingsRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * 项目设置的修订号。
-   *
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-
-  /**
-   * @generated from field: string name = 3;
-   */
-  name: string;
-
-  /**
-   * shared_env 在这里不生效（共享变量走草稿）。
-   *
-   * @generated from field: nagi.v1.ProjectSettings settings = 4;
-   */
-  settings?: ProjectSettings | undefined;
-};
-
-/**
- * Describes the message nagi.v1.UpdateProjectSettingsRequest.
- * Use `create(UpdateProjectSettingsRequestSchema)` to create a new message.
- */
-export const UpdateProjectSettingsRequestSchema: GenMessage<UpdateProjectSettingsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 48);
-
-/**
- * @generated from message nagi.v1.UpdateProjectSettingsResponse
- */
-export type UpdateProjectSettingsResponse = Message<"nagi.v1.UpdateProjectSettingsResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.UpdateProjectSettingsResponse.
- * Use `create(UpdateProjectSettingsResponseSchema)` to create a new message.
- */
-export const UpdateProjectSettingsResponseSchema: GenMessage<UpdateProjectSettingsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 49);
-
-/**
- * @generated from message nagi.v1.SaveSharedEnvRequest
- */
-export type SaveSharedEnvRequest = Message<"nagi.v1.SaveSharedEnvRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-
-  /**
-   * @generated from field: repeated nagi.v1.EnvVar vars = 3;
-   */
-  vars: EnvVar[];
-};
-
-/**
- * Describes the message nagi.v1.SaveSharedEnvRequest.
- * Use `create(SaveSharedEnvRequestSchema)` to create a new message.
- */
-export const SaveSharedEnvRequestSchema: GenMessage<SaveSharedEnvRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 50);
-
-/**
- * @generated from message nagi.v1.SaveSharedEnvResponse
- */
-export type SaveSharedEnvResponse = Message<"nagi.v1.SaveSharedEnvResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-
-  /**
-   * 引用了改动变量的容器（部署共享变量时默认一起部署）。
-   *
-   * @generated from field: repeated string affected = 2;
-   */
-  affected: string[];
-};
-
-/**
- * Describes the message nagi.v1.SaveSharedEnvResponse.
- * Use `create(SaveSharedEnvResponseSchema)` to create a new message.
- */
-export const SaveSharedEnvResponseSchema: GenMessage<SaveSharedEnvResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 51);
-
-/**
- * @generated from message nagi.v1.DiscardSharedEnvRequest
- */
-export type DiscardSharedEnvRequest = Message<"nagi.v1.DiscardSharedEnvRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-};
-
-/**
- * Describes the message nagi.v1.DiscardSharedEnvRequest.
- * Use `create(DiscardSharedEnvRequestSchema)` to create a new message.
- */
-export const DiscardSharedEnvRequestSchema: GenMessage<DiscardSharedEnvRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 52);
-
-/**
- * @generated from message nagi.v1.DiscardSharedEnvResponse
- */
-export type DiscardSharedEnvResponse = Message<"nagi.v1.DiscardSharedEnvResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.DiscardSharedEnvResponse.
- * Use `create(DiscardSharedEnvResponseSchema)` to create a new message.
- */
-export const DiscardSharedEnvResponseSchema: GenMessage<DiscardSharedEnvResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 53);
-
-/**
- * @generated from message nagi.v1.ListDeploymentsRequest
- */
-export type ListDeploymentsRequest = Message<"nagi.v1.ListDeploymentsRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-};
-
-/**
- * Describes the message nagi.v1.ListDeploymentsRequest.
- * Use `create(ListDeploymentsRequestSchema)` to create a new message.
- */
-export const ListDeploymentsRequestSchema: GenMessage<ListDeploymentsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 54);
-
-/**
- * @generated from message nagi.v1.ListDeploymentsResponse
- */
-export type ListDeploymentsResponse = Message<"nagi.v1.ListDeploymentsResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.Deployment deployments = 1;
-   */
-  deployments: Deployment[];
-};
-
-/**
- * Describes the message nagi.v1.ListDeploymentsResponse.
- * Use `create(ListDeploymentsResponseSchema)` to create a new message.
- */
-export const ListDeploymentsResponseSchema: GenMessage<ListDeploymentsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 55);
-
-/**
- * @generated from message nagi.v1.RestoreDeploymentRequest
- */
-export type RestoreDeploymentRequest = Message<"nagi.v1.RestoreDeploymentRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: int64 deployment_id = 2;
-   */
-  deploymentId: bigint;
-};
-
-/**
- * Describes the message nagi.v1.RestoreDeploymentRequest.
- * Use `create(RestoreDeploymentRequestSchema)` to create a new message.
- */
-export const RestoreDeploymentRequestSchema: GenMessage<RestoreDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 56);
-
-/**
- * @generated from message nagi.v1.ListSharedNetworksRequest
- */
-export type ListSharedNetworksRequest = Message<"nagi.v1.ListSharedNetworksRequest"> & {
-};
-
-/**
- * Describes the message nagi.v1.ListSharedNetworksRequest.
- * Use `create(ListSharedNetworksRequestSchema)` to create a new message.
- */
-export const ListSharedNetworksRequestSchema: GenMessage<ListSharedNetworksRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 57);
-
-/**
- * @generated from message nagi.v1.ListSharedNetworksResponse
- */
-export type ListSharedNetworksResponse = Message<"nagi.v1.ListSharedNetworksResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.SharedNetwork networks = 1;
-   */
-  networks: SharedNetwork[];
-};
-
-/**
- * Describes the message nagi.v1.ListSharedNetworksResponse.
- * Use `create(ListSharedNetworksResponseSchema)` to create a new message.
- */
-export const ListSharedNetworksResponseSchema: GenMessage<ListSharedNetworksResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 58);
-
-/**
- * @generated from message nagi.v1.CreateSharedNetworkRequest
- */
-export type CreateSharedNetworkRequest = Message<"nagi.v1.CreateSharedNetworkRequest"> & {
-  /**
-   * @generated from field: string name = 1;
-   */
-  name: string;
-};
-
-/**
- * Describes the message nagi.v1.CreateSharedNetworkRequest.
- * Use `create(CreateSharedNetworkRequestSchema)` to create a new message.
- */
-export const CreateSharedNetworkRequestSchema: GenMessage<CreateSharedNetworkRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 59);
-
-/**
- * @generated from message nagi.v1.DeleteSharedNetworkRequest
- */
-export type DeleteSharedNetworkRequest = Message<"nagi.v1.DeleteSharedNetworkRequest"> & {
-  /**
-   * @generated from field: string name = 1;
-   */
-  name: string;
-};
-
-/**
- * Describes the message nagi.v1.DeleteSharedNetworkRequest.
- * Use `create(DeleteSharedNetworkRequestSchema)` to create a new message.
- */
-export const DeleteSharedNetworkRequestSchema: GenMessage<DeleteSharedNetworkRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 60);
-
-/**
- * @generated from message nagi.v1.RebuildProjectRequest
- */
-export type RebuildProjectRequest = Message<"nagi.v1.RebuildProjectRequest"> & {
-  /**
-   * 配置备份里的项目。
-   *
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-
-  /**
-   * 本节点上的项目目录。
-   *
-   * @generated from field: string dir = 2;
-   */
-  dir: string;
-};
-
-/**
- * Describes the message nagi.v1.RebuildProjectRequest.
- * Use `create(RebuildProjectRequestSchema)` to create a new message.
- */
-export const RebuildProjectRequestSchema: GenMessage<RebuildProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 61);
-
-/**
- * @generated from message nagi.v1.SetSharedNetworkPeersRequest
- */
-export type SetSharedNetworkPeersRequest = Message<"nagi.v1.SetSharedNetworkPeersRequest"> & {
-  /**
-   * @generated from field: string name = 1;
-   */
-  name: string;
-
-  /**
-   * 只用 public_key、name、node_id。
-   *
-   * @generated from field: repeated nagi.v1.SharedNetworkPeer peers = 2;
-   */
-  peers: SharedNetworkPeer[];
-};
-
-/**
- * Describes the message nagi.v1.SetSharedNetworkPeersRequest.
- * Use `create(SetSharedNetworkPeersRequestSchema)` to create a new message.
- */
-export const SetSharedNetworkPeersRequestSchema: GenMessage<SetSharedNetworkPeersRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 62);
-
-/**
- * @generated from message nagi.v1.SaveRouteRequest
- */
-export type SaveRouteRequest = Message<"nagi.v1.SaveRouteRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * name 为空表示新建。
-   *
-   * @generated from field: nagi.v1.Exposure route = 2;
-   */
-  route?: Exposure | undefined;
-};
-
-/**
- * Describes the message nagi.v1.SaveRouteRequest.
- * Use `create(SaveRouteRequestSchema)` to create a new message.
- */
-export const SaveRouteRequestSchema: GenMessage<SaveRouteRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 63);
-
-/**
- * @generated from message nagi.v1.SaveRouteResponse
- */
-export type SaveRouteResponse = Message<"nagi.v1.SaveRouteResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.SaveRouteResponse.
- * Use `create(SaveRouteResponseSchema)` to create a new message.
- */
-export const SaveRouteResponseSchema: GenMessage<SaveRouteResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 64);
-
-/**
- * @generated from message nagi.v1.DeleteRouteRequest
- */
-export type DeleteRouteRequest = Message<"nagi.v1.DeleteRouteRequest"> & {
-  /**
-   * @generated from field: string project_id = 1;
-   */
-  projectId: string;
-
-  /**
-   * @generated from field: string name = 2;
-   */
-  name: string;
-};
-
-/**
- * Describes the message nagi.v1.DeleteRouteRequest.
- * Use `create(DeleteRouteRequestSchema)` to create a new message.
- */
-export const DeleteRouteRequestSchema: GenMessage<DeleteRouteRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 65);
-
-/**
- * @generated from message nagi.v1.DeleteRouteResponse
- */
-export type DeleteRouteResponse = Message<"nagi.v1.DeleteRouteResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.DeleteRouteResponse.
- * Use `create(DeleteRouteResponseSchema)` to create a new message.
- */
-export const DeleteRouteResponseSchema: GenMessage<DeleteRouteResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 66);
-
-/**
- * @generated from message nagi.v1.ListVersionsRequest
- */
-export type ListVersionsRequest = Message<"nagi.v1.ListVersionsRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: string container = 2;
-   */
-  container: string;
-};
-
-/**
- * Describes the message nagi.v1.ListVersionsRequest.
- * Use `create(ListVersionsRequestSchema)` to create a new message.
- */
-export const ListVersionsRequestSchema: GenMessage<ListVersionsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 67);
-
-/**
- * @generated from message nagi.v1.ListVersionsResponse
- */
-export type ListVersionsResponse = Message<"nagi.v1.ListVersionsResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.Version versions = 1;
-   */
-  versions: Version[];
-};
-
-/**
- * Describes the message nagi.v1.ListVersionsResponse.
- * Use `create(ListVersionsResponseSchema)` to create a new message.
- */
-export const ListVersionsResponseSchema: GenMessage<ListVersionsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 68);
-
-/**
- * @generated from message nagi.v1.RollbackRequest
- */
-export type RollbackRequest = Message<"nagi.v1.RollbackRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: int64 version = 2;
-   */
-  version: bigint;
-
-  /**
-   * 同时把数据（volumes/ 和保留路径）恢复到这个版本被替换之前。
-   *
-   * @generated from field: bool restore_data = 3;
-   */
-  restoreData: boolean;
-
-  /**
-   * @generated from field: string container = 4;
-   */
-  container: string;
-};
-
-/**
- * Describes the message nagi.v1.RollbackRequest.
- * Use `create(RollbackRequestSchema)` to create a new message.
- */
-export const RollbackRequestSchema: GenMessage<RollbackRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 69);
-
-/**
- * @generated from message nagi.v1.ListSnapshotsRequest
- */
-export type ListSnapshotsRequest = Message<"nagi.v1.ListSnapshotsRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-};
-
-/**
- * Describes the message nagi.v1.ListSnapshotsRequest.
- * Use `create(ListSnapshotsRequestSchema)` to create a new message.
- */
-export const ListSnapshotsRequestSchema: GenMessage<ListSnapshotsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 70);
-
-/**
- * @generated from message nagi.v1.ListSnapshotsResponse
- */
-export type ListSnapshotsResponse = Message<"nagi.v1.ListSnapshotsResponse"> & {
-  /**
-   * @generated from field: repeated nagi.v1.Snapshot snapshots = 1;
-   */
-  snapshots: Snapshot[];
-};
-
-/**
- * Describes the message nagi.v1.ListSnapshotsResponse.
- * Use `create(ListSnapshotsResponseSchema)` to create a new message.
- */
-export const ListSnapshotsResponseSchema: GenMessage<ListSnapshotsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 71);
-
-/**
- * @generated from message nagi.v1.CreateSnapshotRequest
- */
-export type CreateSnapshotRequest = Message<"nagi.v1.CreateSnapshotRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-};
-
-/**
- * Describes the message nagi.v1.CreateSnapshotRequest.
- * Use `create(CreateSnapshotRequestSchema)` to create a new message.
- */
-export const CreateSnapshotRequestSchema: GenMessage<CreateSnapshotRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 72);
-
-/**
- * @generated from message nagi.v1.RestoreSnapshotRequest
- */
-export type RestoreSnapshotRequest = Message<"nagi.v1.RestoreSnapshotRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: string snapshot_id = 2;
-   */
-  snapshotId: string;
-
-  /**
-   * 只恢复这个容器；为空时恢复整个项目。
-   *
-   * @generated from field: string container = 3;
-   */
-  container: string;
-};
-
-/**
- * Describes the message nagi.v1.RestoreSnapshotRequest.
- * Use `create(RestoreSnapshotRequestSchema)` to create a new message.
- */
-export const RestoreSnapshotRequestSchema: GenMessage<RestoreSnapshotRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 73);
+  messageDesc(file_nagi_v1_agent, 30);
 
 /**
  * @generated from message nagi.v1.SetAlertConfigRequest
@@ -1628,7 +711,7 @@ export type SetAlertConfigRequest = Message<"nagi.v1.SetAlertConfigRequest"> & {
  * Use `create(SetAlertConfigRequestSchema)` to create a new message.
  */
 export const SetAlertConfigRequestSchema: GenMessage<SetAlertConfigRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 74);
+  messageDesc(file_nagi_v1_agent, 31);
 
 /**
  * @generated from message nagi.v1.SetAlertConfigResponse
@@ -1641,37 +724,7 @@ export type SetAlertConfigResponse = Message<"nagi.v1.SetAlertConfigResponse"> &
  * Use `create(SetAlertConfigResponseSchema)` to create a new message.
  */
 export const SetAlertConfigResponseSchema: GenMessage<SetAlertConfigResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 75);
-
-/**
- * @generated from message nagi.v1.SetTrustedProjectsRequest
- */
-export type SetTrustedProjectsRequest = Message<"nagi.v1.SetTrustedProjectsRequest"> & {
-  /**
-   * @generated from field: repeated string project_ids = 1;
-   */
-  projectIds: string[];
-};
-
-/**
- * Describes the message nagi.v1.SetTrustedProjectsRequest.
- * Use `create(SetTrustedProjectsRequestSchema)` to create a new message.
- */
-export const SetTrustedProjectsRequestSchema: GenMessage<SetTrustedProjectsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 76);
-
-/**
- * @generated from message nagi.v1.SetTrustedProjectsResponse
- */
-export type SetTrustedProjectsResponse = Message<"nagi.v1.SetTrustedProjectsResponse"> & {
-};
-
-/**
- * Describes the message nagi.v1.SetTrustedProjectsResponse.
- * Use `create(SetTrustedProjectsResponseSchema)` to create a new message.
- */
-export const SetTrustedProjectsResponseSchema: GenMessage<SetTrustedProjectsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 77);
+  messageDesc(file_nagi_v1_agent, 32);
 
 /**
  * @generated from message nagi.v1.QueryMetricsRequest
@@ -1700,7 +753,7 @@ export type QueryMetricsRequest = Message<"nagi.v1.QueryMetricsRequest"> & {
  * Use `create(QueryMetricsRequestSchema)` to create a new message.
  */
 export const QueryMetricsRequestSchema: GenMessage<QueryMetricsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 78);
+  messageDesc(file_nagi_v1_agent, 33);
 
 /**
  * @generated from message nagi.v1.QueryMetricsResponse
@@ -1717,286 +770,38 @@ export type QueryMetricsResponse = Message<"nagi.v1.QueryMetricsResponse"> & {
  * Use `create(QueryMetricsResponseSchema)` to create a new message.
  */
 export const QueryMetricsResponseSchema: GenMessage<QueryMetricsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 79);
-
-/**
- * @generated from message nagi.v1.DeleteProjectRequest
- */
-export type DeleteProjectRequest = Message<"nagi.v1.DeleteProjectRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * 项目设置的修订号。
-   *
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-
-  /**
-   * 同时删除项目目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
-   *
-   * @generated from field: bool delete_dir = 3;
-   */
-  deleteDir: boolean;
-
-  /**
-   * @generated from field: string confirm_name = 4;
-   */
-  confirmName: string;
-};
-
-/**
- * Describes the message nagi.v1.DeleteProjectRequest.
- * Use `create(DeleteProjectRequestSchema)` to create a new message.
- */
-export const DeleteProjectRequestSchema: GenMessage<DeleteProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 80);
-
-/**
- * @generated from message nagi.v1.DeleteProjectResponse
- */
-export type DeleteProjectResponse = Message<"nagi.v1.DeleteProjectResponse"> & {
-};
-
-/**
- * Describes the message nagi.v1.DeleteProjectResponse.
- * Use `create(DeleteProjectResponseSchema)` to create a new message.
- */
-export const DeleteProjectResponseSchema: GenMessage<DeleteProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 81);
-
-/**
- * @generated from message nagi.v1.CreateProjectResponse
- */
-export type CreateProjectResponse = Message<"nagi.v1.CreateProjectResponse"> & {
-  /**
-   * @generated from field: nagi.v1.Project project = 1;
-   */
-  project?: Project | undefined;
-};
-
-/**
- * Describes the message nagi.v1.CreateProjectResponse.
- * Use `create(CreateProjectResponseSchema)` to create a new message.
- */
-export const CreateProjectResponseSchema: GenMessage<CreateProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 82);
-
-/**
- * @generated from message nagi.v1.GetProjectRequest
- */
-export type GetProjectRequest = Message<"nagi.v1.GetProjectRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-};
-
-/**
- * Describes the message nagi.v1.GetProjectRequest.
- * Use `create(GetProjectRequestSchema)` to create a new message.
- */
-export const GetProjectRequestSchema: GenMessage<GetProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 83);
-
-/**
- * @generated from message nagi.v1.GetProjectResponse
- */
-export type GetProjectResponse = Message<"nagi.v1.GetProjectResponse"> & {
-  /**
-   * @generated from field: nagi.v1.ProjectSummary project = 1;
-   */
-  project?: ProjectSummary | undefined;
-};
-
-/**
- * Describes the message nagi.v1.GetProjectResponse.
- * Use `create(GetProjectResponseSchema)` to create a new message.
- */
-export const GetProjectResponseSchema: GenMessage<GetProjectResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 84);
-
-/**
- * DeployTarget 是一起部署里的一个容器。
- *
- * @generated from message nagi.v1.DeployTarget
- */
-export type DeployTarget = Message<"nagi.v1.DeployTarget"> & {
-  /**
-   * @generated from field: string container = 1;
-   */
-  container: string;
-
-  /**
-   * 面板基于的容器修订号；节点上已经不是这个修订号时拒绝。0 表示不检查。
-   *
-   * @generated from field: int64 base_revision = 2;
-   */
-  baseRevision: bigint;
-};
-
-/**
- * Describes the message nagi.v1.DeployTarget.
- * Use `create(DeployTargetSchema)` to create a new message.
- */
-export const DeployTargetSchema: GenMessage<DeployTarget> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 85);
-
-/**
- * 部署一个或多个容器：有草稿的容器先把草稿记为新版本再部署，没有草稿的重新部署最新版本。
- * 多个容器按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
- *
- * @generated from message nagi.v1.DeployProjectRequest
- */
-export type DeployProjectRequest = Message<"nagi.v1.DeployProjectRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * 部署前先从 git 拉取文件。
-   *
-   * @generated from field: bool pull = 3;
-   */
-  pull: boolean;
-
-  /**
-   * 用面板刚上传的文件替换 data/（见 MeshService.Upload，只能部署一个容器）。
-   *
-   * @generated from field: bool use_upload = 4;
-   */
-  useUpload: boolean;
-
-  /**
-   * 先拉取最新的镜像（更新镜像）。
-   *
-   * @generated from field: bool pull_images = 5;
-   */
-  pullImages: boolean;
-
-  /**
-   * @generated from field: repeated nagi.v1.DeployTarget targets = 6;
-   */
-  targets: DeployTarget[];
-
-  /**
-   * 先把共享变量的草稿生效，再部署 targets。
-   *
-   * @generated from field: bool apply_shared_env = 7;
-   */
-  applySharedEnv: boolean;
-
-  /**
-   * apply_shared_env 时项目设置的修订号。
-   *
-   * @generated from field: int64 settings_revision = 8;
-   */
-  settingsRevision: bigint;
-
-  /**
-   * 部署记录里的来源，为空表示 manual。
-   *
-   * @generated from field: string source = 9;
-   */
-  source: string;
-};
-
-/**
- * Describes the message nagi.v1.DeployProjectRequest.
- * Use `create(DeployProjectRequestSchema)` to create a new message.
- */
-export const DeployProjectRequestSchema: GenMessage<DeployProjectRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 86);
-
-/**
- * @generated from message nagi.v1.StreamLogsRequest
- */
-export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * 为空时返回所有容器的日志。
-   *
-   * @generated from field: string container = 5;
-   */
-  container: string;
-
-  /**
-   * 为空时返回所有服务的日志。
-   *
-   * @generated from field: string service = 2;
-   */
-  service: string;
-
-  /**
-   * 先返回最近多少行。
-   *
-   * @generated from field: int32 tail = 3;
-   */
-  tail: number;
-
-  /**
-   * @generated from field: bool follow = 4;
-   */
-  follow: boolean;
-};
-
-/**
- * Describes the message nagi.v1.StreamLogsRequest.
- * Use `create(StreamLogsRequestSchema)` to create a new message.
- */
-export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 87);
+  messageDesc(file_nagi_v1_agent, 34);
 
 /**
  * AgentService：面板调用节点（反向 gRPC），走控制连接。
+ * 容器的配置以面板为准：面板把完整配置（ContainerSpec）下发给容器所在的节点，节点照着运行并缓存在本地。
  *
  * @generated from service nagi.v1.AgentService
  */
 export const AgentService: GenService<{
   /**
-   * @generated from rpc nagi.v1.AgentService.ListProjects
-   */
-  listProjects: {
-    methodKind: "unary";
-    input: typeof ListProjectsRequestSchema;
-    output: typeof ListProjectsResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.CreateProject
-   */
-  createProject: {
-    methodKind: "unary";
-    input: typeof CreateProjectRequestSchema;
-    output: typeof CreateProjectResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.GetProject
-   */
-  getProject: {
-    methodKind: "unary";
-    input: typeof GetProjectRequestSchema;
-    output: typeof GetProjectResponseSchema;
-  },
-  /**
-   * 往项目里加一个容器（只保存，不部署）。
+   * ---- 容器 ----
+   * 更新节点上缓存的容器配置（端口映射、快照间隔等改了立即生效），不部署。容器第一次放到本节点时检查目录。
    *
-   * @generated from rpc nagi.v1.AgentService.AddContainer
+   * @generated from rpc nagi.v1.AgentService.PutContainer
    */
-  addContainer: {
+  putContainer: {
     methodKind: "unary";
-    input: typeof AddContainerRequestSchema;
-    output: typeof AddContainerResponseSchema;
+    input: typeof PutContainerRequestSchema;
+    output: typeof PutContainerResponseSchema;
   },
   /**
-   * 删除容器：停止并删除它的容器，目录默认保留。
+   * 部署一个容器：写好容器目录里的文件、执行 compose、观察 10 秒，成功后缓存这份配置。
+   *
+   * @generated from rpc nagi.v1.AgentService.DeployContainer
+   */
+  deployContainer: {
+    methodKind: "server_streaming";
+    input: typeof DeployContainerRequestSchema;
+    output: typeof DeployEventSchema;
+  },
+  /**
+   * 删除容器：停止并删除它的容器，删除缓存；目录默认保留。
    *
    * @generated from rpc nagi.v1.AgentService.DeleteContainer
    */
@@ -2006,151 +811,11 @@ export const AgentService: GenService<{
     output: typeof DeleteContainerResponseSchema;
   },
   /**
-   * 保存容器的草稿。
-   *
-   * @generated from rpc nagi.v1.AgentService.SaveDraft
-   */
-  saveDraft: {
-    methodKind: "unary";
-    input: typeof SaveDraftRequestSchema;
-    output: typeof SaveDraftResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.DiscardDraft
-   */
-  discardDraft: {
-    methodKind: "unary";
-    input: typeof DiscardDraftRequestSchema;
-    output: typeof DiscardDraftResponseSchema;
-  },
-  /**
-   * 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
-   *
-   * @generated from rpc nagi.v1.AgentService.UpdateProjectSettings
-   */
-  updateProjectSettings: {
-    methodKind: "unary";
-    input: typeof UpdateProjectSettingsRequestSchema;
-    output: typeof UpdateProjectSettingsResponseSchema;
-  },
-  /**
-   * 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
-   *
-   * @generated from rpc nagi.v1.AgentService.SaveSharedEnv
-   */
-  saveSharedEnv: {
-    methodKind: "unary";
-    input: typeof SaveSharedEnvRequestSchema;
-    output: typeof SaveSharedEnvResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.DiscardSharedEnv
-   */
-  discardSharedEnv: {
-    methodKind: "unary";
-    input: typeof DiscardSharedEnvRequestSchema;
-    output: typeof DiscardSharedEnvResponseSchema;
-  },
-  /**
-   * 项目的部署记录，最新的在前。
-   *
-   * @generated from rpc nagi.v1.AgentService.ListDeployments
-   */
-  listDeployments: {
-    methodKind: "unary";
-    input: typeof ListDeploymentsRequestSchema;
-    output: typeof ListDeploymentsResponseSchema;
-  },
-  /**
-   * 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
-   *
-   * @generated from rpc nagi.v1.AgentService.RestoreDeployment
-   */
-  restoreDeployment: {
-    methodKind: "server_streaming";
-    input: typeof RestoreDeploymentRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * 本节点的共享网络。
-   *
-   * @generated from rpc nagi.v1.AgentService.ListSharedNetworks
-   */
-  listSharedNetworks: {
-    methodKind: "unary";
-    input: typeof ListSharedNetworksRequestSchema;
-    output: typeof ListSharedNetworksResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.CreateSharedNetwork
-   */
-  createSharedNetwork: {
-    methodKind: "unary";
-    input: typeof CreateSharedNetworkRequestSchema;
-    output: typeof ListSharedNetworksResponseSchema;
-  },
-  /**
-   * 删除共享网络：还有项目加入时拒绝。
-   *
-   * @generated from rpc nagi.v1.AgentService.DeleteSharedNetwork
-   */
-  deleteSharedNetwork: {
-    methodKind: "unary";
-    input: typeof DeleteSharedNetworkRequestSchema;
-    output: typeof ListSharedNetworksResponseSchema;
-  },
-  /**
-   * 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
-   *
-   * @generated from rpc nagi.v1.AgentService.SetSharedNetworkPeers
-   */
-  setSharedNetworkPeers: {
-    methodKind: "unary";
-    input: typeof SetSharedNetworkPeersRequestSchema;
-    output: typeof ListSharedNetworksResponseSchema;
-  },
-  /**
-   * 新建或修改一条端口映射，立即生效。
-   *
-   * @generated from rpc nagi.v1.AgentService.SaveRoute
-   */
-  saveRoute: {
-    methodKind: "unary";
-    input: typeof SaveRouteRequestSchema;
-    output: typeof SaveRouteResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.DeleteRoute
-   */
-  deleteRoute: {
-    methodKind: "unary";
-    input: typeof DeleteRouteRequestSchema;
-    output: typeof DeleteRouteResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.ListVersions
-   */
-  listVersions: {
-    methodKind: "unary";
-    input: typeof ListVersionsRequestSchema;
-    output: typeof ListVersionsResponseSchema;
-  },
-  /**
-   * 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
-   *
-   * @generated from rpc nagi.v1.AgentService.Rollback
-   */
-  rollback: {
-    methodKind: "server_streaming";
-    input: typeof RollbackRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
    * @generated from rpc nagi.v1.AgentService.ListSnapshots
    */
   listSnapshots: {
     methodKind: "unary";
-    input: typeof ListSnapshotsRequestSchema;
+    input: typeof ContainerRefSchema;
     output: typeof ListSnapshotsResponseSchema;
   },
   /**
@@ -2158,77 +823,17 @@ export const AgentService: GenService<{
    */
   createSnapshot: {
     methodKind: "server_streaming";
-    input: typeof CreateSnapshotRequestSchema;
+    input: typeof ContainerRefSchema;
     output: typeof DeployEventSchema;
   },
   /**
-   * 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
+   * 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
    *
    * @generated from rpc nagi.v1.AgentService.RestoreSnapshot
    */
   restoreSnapshot: {
     methodKind: "server_streaming";
     input: typeof RestoreSnapshotRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
-   *
-   * @generated from rpc nagi.v1.AgentService.SetAlertConfig
-   */
-  setAlertConfig: {
-    methodKind: "unary";
-    input: typeof SetAlertConfigRequestSchema;
-    output: typeof SetAlertConfigResponseSchema;
-  },
-  /**
-   * 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
-   * （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
-   * 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
-   *
-   * @generated from rpc nagi.v1.AgentService.SetTrustedProjects
-   */
-  setTrustedProjects: {
-    methodKind: "unary";
-    input: typeof SetTrustedProjectsRequestSchema;
-    output: typeof SetTrustedProjectsResponseSchema;
-  },
-  /**
-   * 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
-   *
-   * @generated from rpc nagi.v1.AgentService.QueryMetrics
-   */
-  queryMetrics: {
-    methodKind: "unary";
-    input: typeof QueryMetricsRequestSchema;
-    output: typeof QueryMetricsResponseSchema;
-  },
-  /**
-   * 删除项目：停止并删除容器。项目目录默认保留。
-   *
-   * @generated from rpc nagi.v1.AgentService.DeleteProject
-   */
-  deleteProject: {
-    methodKind: "unary";
-    input: typeof DeleteProjectRequestSchema;
-    output: typeof DeleteProjectResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.DeployProject
-   */
-  deployProject: {
-    methodKind: "server_streaming";
-    input: typeof DeployProjectRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
-   *
-   * @generated from rpc nagi.v1.AgentService.RebuildProject
-   */
-  rebuildProject: {
-    methodKind: "server_streaming";
-    input: typeof RebuildProjectRequestSchema;
     output: typeof DeployEventSchema;
   },
   /**
@@ -2248,6 +853,57 @@ export const AgentService: GenService<{
     methodKind: "bidi_streaming";
     input: typeof ExecInputSchema;
     output: typeof ExecOutputSchema;
+  },
+  /**
+   * 立即检查容器的镜像有没有新版本。
+   *
+   * @generated from rpc nagi.v1.AgentService.CheckImages
+   */
+  checkImages: {
+    methodKind: "unary";
+    input: typeof ContainerRefSchema;
+    output: typeof CheckImagesResponseSchema;
+  },
+  /**
+   * 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
+   *
+   * @generated from rpc nagi.v1.AgentService.LoginRegistry
+   */
+  loginRegistry: {
+    methodKind: "unary";
+    input: typeof LoginRegistryRequestSchema;
+    output: typeof LoginRegistryResponseSchema;
+  },
+  /**
+   * ---- 节点 ----
+   * 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
+   *
+   * @generated from rpc nagi.v1.AgentService.SetAlertConfig
+   */
+  setAlertConfig: {
+    methodKind: "unary";
+    input: typeof SetAlertConfigRequestSchema;
+    output: typeof SetAlertConfigResponseSchema;
+  },
+  /**
+   * 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
+   *
+   * @generated from rpc nagi.v1.AgentService.QueryMetrics
+   */
+  queryMetrics: {
+    methodKind: "unary";
+    input: typeof QueryMetricsRequestSchema;
+    output: typeof QueryMetricsResponseSchema;
+  },
+  /**
+   * 修改项目根目录（之后新放到本节点的容器默认用它）。
+   *
+   * @generated from rpc nagi.v1.AgentService.SetProjectsRoot
+   */
+  setProjectsRoot: {
+    methodKind: "unary";
+    input: typeof SetProjectsRootRequestSchema;
+    output: typeof SetProjectsRootResponseSchema;
   },
   /**
    * 信任的面板列表。
@@ -2280,17 +936,7 @@ export const AgentService: GenService<{
     output: typeof RemovePanelResponseSchema;
   },
   /**
-   * 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
-   *
-   * @generated from rpc nagi.v1.AgentService.CheckRemovePanel
-   */
-  checkRemovePanel: {
-    methodKind: "unary";
-    input: typeof RemovePanelRequestSchema;
-    output: typeof RemovePanelResponseSchema;
-  },
-  /**
-   * mesh 状态：到每个容器走哪条路径。
+   * mesh 状态：到每个成员走哪条路径。
    *
    * @generated from rpc nagi.v1.AgentService.GetMeshStatus
    */
@@ -2300,7 +946,7 @@ export const AgentService: GenService<{
     output: typeof MeshStatusSchema;
   },
   /**
-   * 经 mesh 连一下某个容器，测往返时间。
+   * 经 mesh 连一下某个成员，测往返时间。
    *
    * @generated from rpc nagi.v1.AgentService.MeshPing
    */
@@ -2308,131 +954,6 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof MeshPingRequestSchema;
     output: typeof MeshPingResponseSchema;
-  },
-  /**
-   * ---- 备份节点：源节点一侧 ----
-   * 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
-   *
-   * @generated from rpc nagi.v1.AgentService.SetBackupTarget
-   */
-  setBackupTarget: {
-    methodKind: "unary";
-    input: typeof SetBackupTargetRequestSchema;
-    output: typeof BackupStatusSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.GetBackupStatus
-   */
-  getBackupStatus: {
-    methodKind: "unary";
-    input: typeof GetBackupStatusRequestSchema;
-    output: typeof BackupStatusSchema;
-  },
-  /**
-   * 立即同步一次，完成后返回。
-   *
-   * @generated from rpc nagi.v1.AgentService.SyncBackup
-   */
-  syncBackup: {
-    methodKind: "unary";
-    input: typeof GetBackupStatusRequestSchema;
-    output: typeof BackupStatusSchema;
-  },
-  /**
-   * ---- 备份节点：备份节点一侧 ----
-   * 同意接收某个项目的副本，只接受来自 source_key 的同步。
-   *
-   * @generated from rpc nagi.v1.AgentService.AcceptReplica
-   */
-  acceptReplica: {
-    methodKind: "unary";
-    input: typeof AcceptReplicaRequestSchema;
-    output: typeof AcceptReplicaResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.ListReplicas
-   */
-  listReplicas: {
-    methodKind: "unary";
-    input: typeof ListReplicasRequestSchema;
-    output: typeof ListReplicasResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.ListReplicaSnapshots
-   */
-  listReplicaSnapshots: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof ListSnapshotsResponseSchema;
-  },
-  /**
-   * 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
-   *
-   * @generated from rpc nagi.v1.AgentService.RestoreReplica
-   */
-  restoreReplica: {
-    methodKind: "server_streaming";
-    input: typeof RestoreReplicaRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.DeleteReplica
-   */
-  deleteReplica: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof DeleteReplicaResponseSchema;
-  },
-  /**
-   * 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
-   *
-   * @generated from rpc nagi.v1.AgentService.CheckRestore
-   */
-  checkRestore: {
-    methodKind: "unary";
-    input: typeof CheckRestoreRequestSchema;
-    output: typeof CheckRestoreResponseSchema;
-  },
-  /**
-   * ---- 手动迁移：源节点一侧 ----
-   * 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
-   *
-   * @generated from rpc nagi.v1.AgentService.MigrateOut
-   */
-  migrateOut: {
-    methodKind: "server_streaming";
-    input: typeof MigrateOutRequestSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * 迁移失败时取消迁移，在本节点上重新启动项目。
-   *
-   * @generated from rpc nagi.v1.AgentService.MigrateResume
-   */
-  migrateResume: {
-    methodKind: "server_streaming";
-    input: typeof ReplicaRefSchema;
-    output: typeof DeployEventSchema;
-  },
-  /**
-   * 迁移成功后把项目移出本节点（目录保留）。
-   *
-   * @generated from rpc nagi.v1.AgentService.MigrateFinish
-   */
-  migrateFinish: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof MigrateFinishResponseSchema;
-  },
-  /**
-   * 立即检查项目的镜像有没有新版本。
-   *
-   * @generated from rpc nagi.v1.AgentService.CheckImages
-   */
-  checkImages: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof CheckImagesResponseSchema;
   },
   /**
    * 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
@@ -2463,7 +984,7 @@ export const AgentService: GenService<{
     output: typeof SetPanelDomainResponseSchema;
   },
   /**
-   * 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+   * 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
    *
    * @generated from rpc nagi.v1.AgentService.Upgrade
    */
@@ -2471,73 +992,6 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof UpgradeRequestSchema;
     output: typeof UpgradeResponseSchema;
-  },
-  /**
-   * ---- 私有仓库认证（项目自己的 docker 配置） ----
-   *
-   * @generated from rpc nagi.v1.AgentService.ListRegistries
-   */
-  listRegistries: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof RegistriesResponseSchema;
-  },
-  /**
-   * 登录私有仓库，会向仓库验证账号。
-   *
-   * @generated from rpc nagi.v1.AgentService.LoginRegistry
-   */
-  loginRegistry: {
-    methodKind: "unary";
-    input: typeof LoginRegistryRequestSchema;
-    output: typeof RegistriesResponseSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.LogoutRegistry
-   */
-  logoutRegistry: {
-    methodKind: "unary";
-    input: typeof LogoutRegistryRequestSchema;
-    output: typeof RegistriesResponseSchema;
-  },
-  /**
-   * ---- 顶替 ----
-   * 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
-   *
-   * @generated from rpc nagi.v1.AgentService.SetFailover
-   */
-  setFailover: {
-    methodKind: "unary";
-    input: typeof SetFailoverRequestSchema;
-    output: typeof FailoverStatusSchema;
-  },
-  /**
-   * @generated from rpc nagi.v1.AgentService.GetFailover
-   */
-  getFailover: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof FailoverStatusSchema;
-  },
-  /**
-   * 本节点参与的所有顶替设置。
-   *
-   * @generated from rpc nagi.v1.AgentService.ListFailovers
-   */
-  listFailovers: {
-    methodKind: "unary";
-    input: typeof ListFailoversRequestSchema;
-    output: typeof ListFailoversResponseSchema;
-  },
-  /**
-   * 热备：用户确认顶替（有状态项目默认要确认）。
-   *
-   * @generated from rpc nagi.v1.AgentService.ConfirmTakeover
-   */
-  confirmTakeover: {
-    methodKind: "unary";
-    input: typeof ReplicaRefSchema;
-    output: typeof FailoverStatusSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_agent, 0);

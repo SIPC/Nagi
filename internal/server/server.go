@@ -26,6 +26,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/SIPC/nagi/web"
@@ -67,6 +68,7 @@ type Server struct {
 
 	auth     *auth.Service
 	nodes    *nodes.Registry
+	projects *projects.Service
 	sealer   *sealer.Sealer
 	domainCh chan string
 }
@@ -83,9 +85,9 @@ func (s *Server) checkMasterKey(ctx context.Context, path string) error {
 		return err
 	}
 	if !s.cfg.NewMasterKey {
-		return fmt.Errorf("找不到面板主密钥 %s，但数据库里有用它加密的数据（两步验证、告警配置、项目配置备份）。"+
+		return fmt.Errorf("找不到面板主密钥 %s，但数据库里有用它加密的数据（两步验证、告警配置、项目数据）。"+
 			"请把备份的主密钥文件放回这个位置再启动。确实丢了的话，加 --new-master-key 启动：生成新的主密钥，"+
-			"关闭两步验证，清掉告警配置（要重新填写，在那之前节点继续按原来的配置发告警）和项目配置备份（在线节点会重新上报）", path)
+			"关闭两步验证，清掉告警配置（要重新填写，在那之前节点继续按原来的配置发告警）和项目数据（从节点上缓存的配置恢复）", path)
 	}
 	if err := s.q.ClearTOTPSecrets(ctx); err != nil {
 		return err
@@ -93,10 +95,15 @@ func (s *Server) checkMasterKey(ctx context.Context, path string) error {
 	if err := nodes.MarkAlertConfigLost(ctx, s.q); err != nil {
 		return err
 	}
-	if err := s.q.DeleteAllProjectBackups(ctx); err != nil {
-		return err
+	// 项目数据用旧密钥加密，解不开了；新面板从节点上缓存的配置把项目拼回来（见 docs/panel.md#项目数据）。
+	if list, err := s.q.ListProjects(ctx); err == nil {
+		for _, p := range list {
+			if err := s.q.DeleteProject(ctx, p.ID); err != nil {
+				return err
+			}
+		}
 	}
-	s.log.Warn("主密钥丢失：已生成新的主密钥，关闭了两步验证，清掉了告警配置和项目配置备份", "path", path)
+	s.log.Warn("主密钥丢失：已生成新的主密钥，关闭了两步验证，清掉了告警配置和项目数据", "path", path)
 	return nil
 }
 
@@ -137,6 +144,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	s.auth = auth.New(s.q, s.sealer)
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
+	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log,
+		ReservedDomain: func(d string) bool {
+			v, err := s.q.GetSetting(context.Background(), api.SettingDomain)
+			return err == nil && v != "" && v == d
+		}}
+	s.nodes.OnReport = s.projects.Sync
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	} else {
@@ -221,7 +234,7 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.auth.CleanupLoop(ctx)
 
 	mux := http.NewServeMux()
-	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, CA: s.ca, Sealer: s.sealer, Log: s.log, Panel: &api.PanelInfo{
+	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, Panel: &api.PanelInfo{
 		Q:           s.q,
 		DataDir:     s.cfg.DataDir,
 		Port:        s.port,

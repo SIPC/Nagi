@@ -11,22 +11,23 @@ import type { Project } from "@/gen/nagi/v1/common_pb";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
-export function SettingsTab({ nodeId, project }: { nodeId: string; project: Project }) {
+export function SettingsTab({ project }: { project: Project }) {
   return (
     <div className="grid gap-6">
-      <GeneralSettings nodeId={nodeId} project={project} />
-      <SharedEnv nodeId={nodeId} project={project} />
-      <Deployments nodeId={nodeId} project={project} />
-      <DeleteProject nodeId={nodeId} project={project} />
+      <GeneralSettings project={project} />
+      <SharedEnv project={project} />
+      <Deployments project={project} />
+      <DeleteProject project={project} />
     </div>
   );
 }
 
-// GeneralSettings 只修改名称和快照间隔；网络设置照原样提交（接口每次提交完整的设置）。
-function GeneralSettings({ nodeId, project }: { nodeId: string; project: Project }) {
+// GeneralSettings 修改名称、网络名和快照间隔；内部端口照原样提交（接口每次提交完整的设置）。
+function GeneralSettings({ project }: { project: Project }) {
   const queryClient = useQueryClient();
   const s = project.settings;
   const [name, setName] = useState(project.name);
+  const [network, setNetwork] = useState(project.networkName);
   const [interval, setInterval] = useState(s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -37,21 +38,18 @@ function GeneralSettings({ nodeId, project }: { nodeId: string; project: Project
     setError("");
     setSaved(false);
     try {
-      await projectClient.updateNodeProjectSettings({
-        nodeId,
+      await projectClient.updateProjectSettings({
         projectId: project.id,
         baseRevision: project.revision,
         name,
+        networkName: network,
         settings: {
-          intranetDisabled: s?.intranetDisabled,
-          networkName: s?.networkName,
-          sharedNetworks: s?.sharedNetworks,
-          linkPorts: s?.linkPorts,
+          internalPorts: s?.internalPorts,
           snapshotIntervalMinutes: Number(interval) || 0,
         },
       });
       setSaved(true);
-      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (err) {
       setError(errorMessage(err));
@@ -73,6 +71,14 @@ function GeneralSettings({ nodeId, project }: { nodeId: string; project: Project
           <Field label="项目名称" htmlFor="p-name">
             <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </Field>
+          <Field
+            label="网络名"
+            htmlFor="p-network"
+            hint="小写字母、数字和 -，在面板上唯一"
+            help="连接本项目的项目通过「容器.网络名」访问本项目的容器，修改后它们那边用到的地址要跟着改。已有容器的目录不变。"
+          >
+            <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required className="font-mono" />
+          </Field>
           <Field label="定时快照间隔（分钟）" htmlFor="p-interval" hint="留空则为 60 分钟">
             <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" className="font-mono" />
           </Field>
@@ -92,20 +98,20 @@ function GeneralSettings({ nodeId, project }: { nodeId: string; project: Project
 
 // ---- 共享变量 ----
 
-function SharedEnv({ nodeId, project }: { nodeId: string; project: Project }) {
+function SharedEnv({ project }: { project: Project }) {
   const queryClient = useQueryClient();
   const [sharedEnv, setSharedEnv] = useState(envToText(project.hasSharedEnvDraft ? project.sharedEnvDraft : project.settings?.sharedEnv));
   const [affected, setAffected] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const { run, busy: running, output } = useRun(nodeId, project.id);
+  const { run, busy: running, output } = useRun(project.id);
 
   const call = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
       await fn();
-      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -115,15 +121,13 @@ function SharedEnv({ nodeId, project }: { nodeId: string; project: Project }) {
 
   const save = () =>
     call(async () => {
-      const res = await projectClient.saveNodeProjectSharedEnv({ nodeId, projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) });
+      const res = await projectClient.saveSharedEnv({ projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) });
       setAffected(Object.fromEntries(res.affected.map((m) => [m, true])));
     });
 
   const deploy = () =>
     run(() =>
-      projectClient.deployNodeProject({
-        nodeId,
-        projectId: project.id,
+      projectClient.deploy({ projectId: project.id,
         applySharedEnv: true,
         settingsRevision: project.revision,
         targets: project.containers.filter((m) => affected[m.name]).map((m) => ({ container: m.name, baseRevision: m.revision })),
@@ -163,7 +167,7 @@ function SharedEnv({ nodeId, project }: { nodeId: string; project: Project }) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => call(() => projectClient.discardNodeProjectSharedEnv({ nodeId, projectId: project.id, baseRevision: project.revision }))}
+              onClick={() => call(() => projectClient.discardSharedEnv({ projectId: project.id, baseRevision: project.revision }))}
               disabled={busy}
             >
               放弃草稿
@@ -196,11 +200,11 @@ const sourceLabel: Record<string, string> = {
   restore: "恢复部署",
 };
 
-function Deployments({ nodeId, project }: { nodeId: string; project: Project }) {
-  const { run, busy, output } = useRun(nodeId, project.id);
+function Deployments({ project }: { project: Project }) {
+  const { run, busy, output } = useRun(project.id);
   const list = useQuery({
-    queryKey: ["deployments", nodeId, project.id],
-    queryFn: () => projectClient.listNodeProjectDeployments({ nodeId, projectId: project.id }),
+    queryKey: ["deployments", project.id],
+    queryFn: () => projectClient.listDeployments({ projectId: project.id }),
   });
 
   return (
@@ -254,7 +258,7 @@ function Deployments({ nodeId, project }: { nodeId: string; project: Project }) 
                       disabled={busy}
                       onClick={() =>
                         confirm(`将项目恢复到部署 #${d.id} 时的状态？版本不同的容器将被回滚。`) &&
-                        run(() => projectClient.restoreNodeProjectDeployment({ nodeId, projectId: project.id, deploymentId: d.id }))
+                        run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))
                       }
                     >
                       恢复
@@ -272,7 +276,7 @@ function Deployments({ nodeId, project }: { nodeId: string; project: Project }) 
 
 // ---- 删除项目 ----
 
-function DeleteProject({ nodeId, project }: { nodeId: string; project: Project }) {
+function DeleteProject({ project }: { project: Project }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteDir, setDeleteDir] = useState(false);
@@ -283,7 +287,7 @@ function DeleteProject({ nodeId, project }: { nodeId: string; project: Project }
     if (!deleteDir && !confirm(`删除项目 ${project.name}？项目内的所有容器和容器组将被删除，项目目录保留。`)) return;
     setError("");
     try {
-      await projectClient.deleteNodeProject({ nodeId, projectId: project.id, baseRevision: project.revision, deleteDir, confirmName });
+      await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       navigate({ to: "/projects" });
     } catch (err) {
@@ -292,10 +296,10 @@ function DeleteProject({ nodeId, project }: { nodeId: string; project: Project }
   };
 
   return (
-    <Section tone="danger" title="删除项目" description="停止并删除项目内的所有容器、容器组和项目网络。" help={`项目目录（包括数据和快照）默认保留在 ${project.dir}。`}>
+    <Section tone="danger" title="删除项目" description="停止并删除项目内的所有容器和容器组。" help="各容器的目录（包括数据和快照）默认保留在所在节点上。容器所在的节点须在线。">
       <div className="grid gap-4">
         <Check checked={deleteDir} onChange={setDeleteDir}>
-          同时删除项目目录（数据和快照将无法恢复）
+          同时删除容器目录（数据和快照将无法恢复）
         </Check>
         {deleteDir && (
           <Field label={`输入项目名称 ${project.name} 以确认`} htmlFor="confirm-name">

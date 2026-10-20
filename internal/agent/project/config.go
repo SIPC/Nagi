@@ -1,301 +1,22 @@
 package project
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"github.com/compose-spec/compose-go/v2/loader"
-	"github.com/compose-spec/compose-go/v2/types"
-	"gopkg.in/yaml.v3"
 )
 
-var (
-	envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	// varRefRe 匹配 compose 里引用变量的写法：$VAR、${VAR}、${VAR:-默认值} 等。
-	varRefRe = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
-)
+// 容器目录里由节点按面板下发的配置生成的文件：compose.yml、.env、shared.env、env/<服务>.env、
+// docker/config.json、ssh/deploy_key。每次部署时重写，手动修改会被覆盖。
 
-// isSingle 判断容器是不是单个容器（用镜像表单创建）。
-func isSingle(cfg *nagiv1.ContainerConfig) bool { return cfg.GetForm() != nil }
-
-// composeText 返回容器配置对应的 compose 原文：单个容器由表单生成，服务名就是容器名。
-func composeText(cfg *nagiv1.ContainerConfig, container string) (string, error) {
-	if cfg.GetForm() != nil {
-		return formCompose(cfg.GetForm(), container)
-	}
-	return cfg.GetCompose(), nil
-}
-
-// serviceEnv 返回每个服务的环境变量。镜像表单的环境变量属于唯一的服务（服务名就是容器名）。
-func serviceEnv(cfg *nagiv1.ContainerConfig, container string) map[string][]*nagiv1.EnvVar {
-	out := map[string][]*nagiv1.EnvVar{}
-	for name, list := range cfg.GetServiceEnv() {
-		if len(list.GetVars()) > 0 {
-			out[name] = list.GetVars()
-		}
-	}
-	if f := cfg.GetForm(); f != nil && len(f.GetEnv()) > 0 {
-		out[container] = append(out[container], f.GetEnv()...)
-	}
-	return out
-}
-
-// formCompose 把镜像表单转换成 compose。环境变量不写进 compose，而是放在服务级环境变量文件里，
-// 这样导出的 compose 里不会带着密钥。
-// escapeDollar 把命令里的 $ 写成 $$：表单里填的命令是给容器里的 shell 执行的（例如 echo $HOME），
-// 不转义的话 compose 会先把 $HOME 当成自己的变量替换掉（通常变成空的）。
-func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$") }
-
-func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
-	image := strings.TrimSpace(f.GetImage())
-	if image == "" {
-		return "", invalid("镜像不能为空")
-	}
-	svc := map[string]any{"image": image}
-	if cmd := strings.TrimSpace(f.GetCommand()); cmd != "" {
-		svc["command"] = escapeDollar(cmd)
-	}
-	var ports []string
-	for _, p := range f.GetPorts() {
-		if p.GetPublished() == 0 || p.GetTarget() == 0 || p.GetPublished() > 65535 || p.GetTarget() > 65535 {
-			return "", invalid("端口必须在 1 到 65535 之间")
-		}
-		proto := strings.ToLower(p.GetProtocol())
-		if proto == "" {
-			proto = "tcp"
-		}
-		if proto != "tcp" && proto != "udp" {
-			return "", invalid("端口协议只能是 tcp 或 udp")
-		}
-		ports = append(ports, fmt.Sprintf("%d:%d/%s", p.GetPublished(), p.GetTarget(), proto))
-	}
-	if len(ports) > 0 {
-		svc["ports"] = ports
-	}
-
-	var mounts []string
-	volumes := map[string]any{}
-	used := map[string]bool{}
-	for _, target := range f.GetVolumes() {
-		target = strings.TrimSpace(target)
-		if !strings.HasPrefix(target, "/") {
-			return "", invalid("持久化目录必须是容器内的绝对路径：%s", target)
-		}
-		name := volumeName(target, used)
-		volumes[name] = map[string]any{}
-		mounts = append(mounts, name+":"+target)
-	}
-	if wd := strings.TrimSpace(f.GetWorkdir()); wd != "" {
-		if !strings.HasPrefix(wd, "/") {
-			return "", invalid("工作目录必须是容器内的绝对路径")
-		}
-		// compose 的相对路径以容器的 data/ 为准，所以 "./" 就是 data/。
-		mounts = append(mounts, "./:"+wd)
-		svc["working_dir"] = wd
-	}
-	if len(mounts) > 0 {
-		svc["volumes"] = mounts
-	}
-	if mb := f.GetMemoryMb(); mb > 0 {
-		svc["mem_limit"] = fmt.Sprintf("%dm", mb)
-	}
-	if c := f.GetCpus(); c < 0 || c > 1024 {
-		return "", invalid("CPU 上限不对")
-	} else if c > 0 {
-		svc["cpus"] = c
-	}
-	if hc := strings.TrimSpace(f.GetHealthCommand()); hc != "" {
-		interval := f.GetHealthIntervalSeconds()
-		if interval == 0 {
-			interval = 30
-		}
-		svc["healthcheck"] = map[string]any{
-			"test":         []string{"CMD-SHELL", escapeDollar(hc)},
-			"interval":     fmt.Sprintf("%ds", interval),
-			"timeout":      fmt.Sprintf("%ds", min(interval, 10)),
-			"retries":      3,
-			"start_period": fmt.Sprintf("%ds", interval),
-		}
-	}
-
-	doc := map[string]any{"services": map[string]any{service: svc}}
-	if len(volumes) > 0 {
-		doc["volumes"] = volumes
-	}
-	out, err := yaml.Marshal(doc)
-	if err != nil {
-		return "", err
-	}
-	return "# 由镜像表单生成\n" + string(out), nil
-}
-
-// volumeName 根据容器路径生成命名 volume 的名字，例如 /var/lib/redis → var_lib_redis。
-func volumeName(target string, used map[string]bool) string {
-	var b strings.Builder
-	for _, r := range strings.Trim(target, "/") {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		} else if b.Len() > 0 && !strings.HasSuffix(b.String(), "_") {
-			b.WriteByte('_')
-		}
-	}
-	name := strings.ToLower(strings.Trim(b.String(), "_"))
-	if name == "" {
-		name = "data"
-	}
-	base, n := name, 2
-	for used[name] {
-		name = fmt.Sprintf("%s_%d", base, n)
-		n++
-	}
-	used[name] = true
-	return name
-}
-
-// validate 校验容器配置：compose 能解析、变量名合法、服务级变量对应的服务存在、git 地址有效、依赖的容器名合法。
-// shared 是项目的共享变量，用来替换 compose 里的 ${变量}（同名时以容器自己的为准）。会规范 cfg 里的部分字段。
-func validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string, shared []*nagiv1.EnvVar, workDir, composeProject string) (*types.Project, error) {
-	text, err := composeText(cfg, container)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(text) == "" {
-		return nil, invalid("compose 不能为空")
-	}
-	if err := checkEnv(cfg.GetEnv()); err != nil {
-		return nil, err
-	}
-	for _, vars := range serviceEnv(cfg, container) {
-		if err := checkEnv(vars); err != nil {
-			return nil, err
-		}
-	}
-	proj, err := loadCompose(ctx, text, mergeEnv(shared, cfg.GetEnv()), workDir, composeProject)
-	if err != nil {
-		return nil, invalid("compose 无法解析：%v", err)
-	}
-	for name := range serviceEnv(cfg, container) {
-		if _, ok := proj.Services[name]; !ok {
-			return nil, invalid("环境变量里的容器 %q 不在这个容器组的 compose 中", name)
-		}
-	}
-	if url := strings.TrimSpace(cfg.GetSource().GetGitUrl()); url != "" {
-		if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") && !isSSHURL(url) {
-			return nil, invalid("git 仓库地址只支持 SSH（git@host:repo.git、ssh://）和 HTTPS")
-		}
-		cfg.Source.GitUrl = url
-		cfg.Source.GitRef = strings.TrimSpace(cfg.Source.GetGitRef())
-	} else {
-		cfg.Source = nil
-	}
-	cfg.Preserve = normalizePreserve(cfg.GetPreserve())
-	var deps []string
-	seen := map[string]bool{}
-	for _, d := range cfg.GetDependsOn() {
-		d = strings.TrimSpace(d)
-		if d == "" || seen[d] {
-			continue
-		}
-		if d == container || !nameRe.MatchString(d) {
-			return nil, invalid("依赖的容器 %q 不对", d)
-		}
-		seen[d] = true
-		deps = append(deps, d)
-	}
-	cfg.DependsOn = deps
-	return proj, nil
-}
-
-// loadContainer 只解析容器的 compose（不做 validate 里的其他检查），读取状态时用。
-func loadContainer(ctx context.Context, cfg *nagiv1.ContainerConfig, container string, shared []*nagiv1.EnvVar, workDir, composeProject string) (*types.Project, error) {
-	text, err := composeText(cfg, container)
-	if err != nil {
-		return nil, err
-	}
-	return loadCompose(ctx, text, mergeEnv(shared, cfg.GetEnv()), workDir, composeProject)
-}
-
-// mergeEnv 合并共享变量和容器变量，同名时以容器的为准（和 compose 按顺序读两个 --env-file 一样）。
-func mergeEnv(shared, own []*nagiv1.EnvVar) []*nagiv1.EnvVar {
-	out := append([]*nagiv1.EnvVar(nil), shared...)
-	return append(out, own...)
-}
-
-// referencedVars 返回容器 compose 里引用的变量名。
-func referencedVars(cfg *nagiv1.ContainerConfig, container string) map[string]bool {
-	text, _ := composeText(cfg, container)
-	out := map[string]bool{}
-	for _, m := range varRefRe.FindAllStringSubmatch(text, -1) {
-		out[m[1]] = true
-	}
-	return out
-}
-
-// sharedEnvChanged 判断容器引用的、而且没有被容器自己的变量覆盖的共享变量，在 before 和 after 里的值是否不同。
-func sharedEnvChanged(cfg *nagiv1.ContainerConfig, container string, before, after []*nagiv1.EnvVar) bool {
-	refs := referencedVars(cfg, container)
-	for _, v := range cfg.GetEnv() {
-		delete(refs, v.GetKey())
-	}
-	a, b := envMap(before), envMap(after)
-	for k := range refs {
-		va, oka := a[k]
-		vb, okb := b[k]
-		if oka != okb || va != vb {
-			return true
-		}
-	}
-	return false
-}
-
-func envMap(vars []*nagiv1.EnvVar) map[string]string {
-	out := map[string]string{}
-	for _, v := range vars {
-		out[v.GetKey()] = v.GetValue()
-	}
-	return out
-}
-
-func checkEnv(vars []*nagiv1.EnvVar) error {
-	seen := map[string]bool{}
-	for _, v := range vars {
-		if !envKeyRe.MatchString(v.GetKey()) {
-			return invalid("变量名 %q 不合法：只能包含字母、数字和下划线，且不能以数字开头", v.GetKey())
-		}
-		if seen[v.GetKey()] {
-			return invalid("变量 %s 重复", v.GetKey())
-		}
-		seen[v.GetKey()] = true
-	}
-	return nil
-}
-
-// loadCompose 用 compose 官方的解析库在内存中解析 compose，不需要写文件。
-func loadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, workDir, composeProject string) (*types.Project, error) {
-	mapping := types.Mapping{}
-	for _, v := range env {
-		mapping[v.GetKey()] = v.GetValue()
-	}
-	return loader.LoadWithContext(ctx, types.ConfigDetails{
-		WorkingDir:  workDir,
-		ConfigFiles: []types.ConfigFile{{Filename: "compose.yml", Content: []byte(text)}},
-		Environment: mapping,
-	}, func(o *loader.Options) {
-		o.SetProjectName(composeProject, true)
-		o.ResolvePaths = true
-	})
-}
-
-// writeConfigFiles 把容器一个版本的配置写成 compose 需要的文件：compose.yml、.env、shared.env、env/<服务>.env。
-// shared 是这个版本用的共享变量。
+// writeConfigFiles 把容器一个版本的配置写成 compose 需要的文件。shared 是这个版本用的共享变量。
 func writeConfigFiles(p containerPaths, cfg *nagiv1.ContainerConfig, container string, shared []*nagiv1.EnvVar) error {
-	text, err := composeText(cfg, container)
+	text, err := spec.ComposeText(cfg, container)
 	if err != nil {
 		return err
 	}
@@ -315,7 +36,7 @@ func writeConfigFiles(p containerPaths, cfg *nagiv1.ContainerConfig, container s
 	if err := os.RemoveAll(p.serviceEnvDir()); err != nil {
 		return err
 	}
-	senv := serviceEnv(cfg, container)
+	senv := spec.ServiceEnv(cfg, container)
 	if len(senv) == 0 {
 		return nil
 	}
@@ -324,6 +45,32 @@ func writeConfigFiles(p containerPaths, cfg *nagiv1.ContainerConfig, container s
 	}
 	for name, vars := range senv {
 		if err := writeFileAtomic(p.serviceEnvFile(name), envFile(vars), 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeSecrets 写入私有仓库认证和 git 的 deploy key。
+func writeSecrets(p containerPaths, s *nagiv1.ContainerSpec) error {
+	if cfg := s.GetDockerConfig(); len(cfg) > 0 {
+		if err := os.MkdirAll(p.dockerConfigDir(), 0o700); err != nil {
+			return err
+		}
+		if err := writeFileAtomic(filepath.Join(p.dockerConfigDir(), "config.json"), cfg, 0o600); err != nil {
+			return err
+		}
+	} else if err := os.RemoveAll(p.dockerConfigDir()); err != nil {
+		return err
+	}
+	if key := s.GetDeployKey(); len(key) > 0 {
+		if err := os.MkdirAll(p.sshDir(), 0o700); err != nil {
+			return err
+		}
+		if err := writeFileAtomic(p.deployKey(), key, 0o600); err != nil {
+			return err
+		}
+		if err := writeFileAtomic(p.deployKeyPub(), []byte(s.GetDeployKeyPub()+"\n"), 0o644); err != nil {
 			return err
 		}
 	}
@@ -356,4 +103,8 @@ func quoteEnv(v string) string {
 func (p containerPaths) serviceEnvDir() string { return filepath.Join(p.root, "env") }
 func (p containerPaths) serviceEnvFile(service string) string {
 	return filepath.Join(p.serviceEnvDir(), service+".env")
+}
+
+func setFilesRoot(s *nagiv1.ContainerSpec, root string) nodestore.SetContainerFilesRootParams {
+	return nodestore.SetContainerFilesRootParams{FilesRoot: root, ProjectID: s.GetProjectId(), Name: s.GetName()}
 }

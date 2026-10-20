@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
 import { authClient, errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
+import { slugName } from "@/lib/utils";
 import { ProjectState } from "@/components/status";
 import { useContainerForm } from "@/components/container-form";
-import { SharedNetworkWarning } from "@/components/shared-network-warning";
 import {
   Alert,
   Badge,
@@ -16,7 +16,6 @@ import {
   Field,
   Input,
   Loading,
-  LogBox,
   Notice,
   Section,
   Select,
@@ -105,17 +104,12 @@ function formatDate(d: Date | undefined) {
 export function ProjectsPage() {
   const projects = useQuery({
     queryKey: ["projects"],
-    queryFn: () => projectClient.listAllProjects({}),
+    queryFn: () => projectClient.listProjects({}),
     refetchInterval: 5000,
   });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
-  // 在线节点上正在运行的项目：项目被顶替以后，原节点离线时面板上还有它的配置备份，同一个项目会出现两次。
-  const runningElsewhere = new Set(
-    (projects.data?.projects ?? []).filter(({ nodeId }) => !offline(nodeId)).map(({ project }) => project?.project?.id),
-  );
-  const [rebuild, setRebuild] = useState<{ nodeId: string; projectId: string; name: string; dir: string; sharedNetworks: string[] } | null>(null);
 
   const newButton = (
     <Link to="/projects/new">
@@ -128,17 +122,16 @@ export function ProjectsPage() {
 
   return (
     <>
-      <PageHeader title="项目" description="项目是一组协同工作的容器，整体运行在同一个节点上。" actions={newButton} />
+      <PageHeader title="项目" description="项目是一组协同工作的容器，容器可以分布在不同节点上，互相按名称访问。" actions={newButton} />
       <div className="grid gap-6">
         <Reminders />
-        {rebuild && <RebuildCard {...rebuild} onClose={() => setRebuild(null)} />}
         {projects.isPending ? (
           <Loading />
         ) : projects.error ? (
           <Alert>{errorMessage(projects.error)}</Alert>
         ) : projects.data.projects.length === 0 ? (
           <Empty title="暂无项目" icon={<FolderKanban className="size-5" />}>
-            新建项目后，可添加容器或容器组（一份 compose）并部署到节点。
+            新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。
           </Empty>
         ) : (
           <Section flush>
@@ -150,86 +143,40 @@ export function ProjectsPage() {
                   <Th>状态</Th>
                   <Th>容器</Th>
                   <Th>创建时间</Th>
-                  <Th className="w-px" />
                 </tr>
               </thead>
               <tbody>
-                {projects.data.projects.map(({ nodeId, project: summary }) => {
-                  const p = summary?.project;
+                {projects.data.projects.map((summary) => {
+                  const p = summary.project;
                   if (!p) return null;
-                  // 已经在别的节点上运行（被顶替或者迁移走了）的，不再显示离线节点上的那份配置备份。
-                  if (offline(nodeId) && runningElsewhere.has(p.id)) return null;
-                  const key = `${nodeId}/${p.id}`;
-                  const link = (children: React.ReactNode) => (
-                    <Link to="/projects/$nodeId/$projectId" params={{ nodeId, projectId: p.id }} className="font-medium hover:underline">
-                      {children}
-                    </Link>
-                  );
-
-                  if (summary.error) {
-                    // 节点在线，但读不了这个项目（例如磁盘满了）：说明原因，不要显示成"未部署"。
-                    return (
-                      <tr key={key}>
-                        <Td>
-                          <div className="grid gap-0.5">
-                            {link(<span className="font-mono text-[13px]">{p.dir}</span>)}
-                            <span className="text-xs text-destructive">{summary.error}</span>
-                          </div>
-                        </Td>
-                        <Td className="text-muted-foreground">{nodeName(nodeId)}</Td>
-                        <Td>
-                          <Badge tone="danger">读取失败</Badge>
-                        </Td>
-                        <Td className="text-muted-foreground">—</Td>
-                        <Td className="text-muted-foreground">—</Td>
-                        <Td />
-                      </tr>
-                    );
-                  }
-
                   const services = summary.status?.services ?? [];
                   const deployed = p.containers.filter((m) => m.deployedVersion > 0n).length;
                   const total = p.containers.length;
-
-                  if (offline(nodeId)) {
-                    // 节点离线：显示的是面板上的配置备份，项目页打不开；可以用备份在别的节点上重建。
-                    return (
-                      <tr key={key}>
-                        <Td>
-                          <div className="grid gap-0.5">
-                            <span className="font-medium">{p.name}</span>
-                            <span className="text-xs text-muted-foreground">面板上的配置备份</span>
-                          </div>
-                        </Td>
-                        <Td className="text-muted-foreground">{nodeName(nodeId)}</Td>
-                        <Td>
-                          <Badge tone="warning">节点离线</Badge>
-                        </Td>
-                        <Td className="tabular-nums">{total}</Td>
-                        <Td className="text-muted-foreground tabular-nums">{formatDate(toDate(p.createdAt))}</Td>
-                        <Td className="text-right">
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => setRebuild({ nodeId, projectId: p.id, name: p.name, dir: p.dir, sharedNetworks: p.settings?.sharedNetworks ?? [] })}
-                          >
-                            重建
-                          </Button>
-                        </Td>
-                      </tr>
-                    );
-                  }
-
+                  const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
                   return (
-                    <tr key={key} className="transition-colors hover:bg-subtle">
+                    <tr key={p.id} className="transition-colors hover:bg-subtle">
                       <Td>
                         <div className="grid gap-0.5">
-                          {link(p.name)}
-                          <span className="truncate font-mono text-xs text-muted-foreground">{p.dir}</span>
-                          {summary.readOnlyReason && <span className="text-xs text-destructive">只读：{summary.readOnlyReason}</span>}
+                          <Link to="/projects/$projectId" params={{ projectId: p.id }} className="font-medium hover:underline">
+                            {p.name}
+                          </Link>
+                          <span className="truncate font-mono text-xs text-muted-foreground">{p.networkName}</span>
                         </div>
                       </Td>
-                      <Td className="text-muted-foreground">{nodeName(nodeId)}</Td>
+                      <Td className="text-muted-foreground">
+                        {nodeIds.length === 0 ? (
+                          "—"
+                        ) : (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {nodeIds.map((id) => (
+                              <span key={id} className="inline-flex items-center gap-1.5">
+                                {nodeName(id)}
+                                {offline(id) && <Badge tone="warning">离线</Badge>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Td>
                       <Td>
                         <ProjectState services={services} deployed={deployed > 0} />
                       </Td>
@@ -238,7 +185,6 @@ export function ProjectsPage() {
                         {deployed > 0 && deployed < total && <span className="ml-1.5 text-xs text-muted-foreground">已部署 {deployed}</span>}
                       </Td>
                       <Td className="text-muted-foreground tabular-nums">{formatDate(toDate(p.createdAt))}</Td>
-                      <Td />
                     </tr>
                   );
                 })}
@@ -251,137 +197,53 @@ export function ProjectsPage() {
   );
 }
 
-// RebuildCard：用面板上的配置备份，把离线节点上的项目重建到另一个节点（新项目 ID）。
-function RebuildCard({
-  nodeId,
-  projectId,
-  name,
-  dir: defaultDir,
-  sharedNetworks,
-  onClose,
-}: {
-  nodeId: string;
-  projectId: string;
-  name: string;
-  dir: string;
-  sharedNetworks: string[];
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
+// useNodeChoice：选择容器运行的节点和容器目录（留空时显示默认值）。新建项目和添加容器共用。
+export function useNodeChoice(networkName: string, containerName: string) {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const navigate = useNavigate();
-  const [target, setTarget] = useState("");
-  const [dir, setDir] = useState(defaultDir);
-  const [lines, setLines] = useState<string[]>([]);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const [created, setCreated] = useState<{ nodeId: string; projectId: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const run = async () => {
-    setBusy(true);
-    setLines([]);
-    setResult(null);
-    setCreated(null);
-    try {
-      for await (const ev of projectClient.rebuildNodeProject({ nodeId, projectId, targetNodeId: target, dir })) {
-        if (ev.event.case === "output") {
-          const l = ev.event.value;
-          setLines((x) => [...x, l]);
-        } else if (ev.event.case === "result") {
-          const r = ev.event.value;
-          if (r.projectId) setCreated({ nodeId: target, projectId: r.projectId });
-          setResult(r.success ? { ok: true, text: "重建完成" } : { ok: false, text: r.error });
-        }
-      }
-    } catch (err) {
-      setResult({ ok: false, text: errorMessage(err) });
-    } finally {
-      setBusy(false);
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-    }
-  };
-
-  const others = nodes.data?.nodes.filter((n) => n.id !== nodeId && n.online) ?? [];
-  const openButton = created && (
-    <Button size="sm" variant="outline" onClick={() => navigate({ to: "/projects/$nodeId/$projectId", params: created })}>
-      打开新项目
-    </Button>
-  );
-  return (
-    <Section
-      title={`使用配置备份重建 ${name}`}
-      description="在另一个节点上创建新项目（新的项目 ID），恢复各容器的配置、草稿、项目设置和端口映射。"
-      help={
-        <>
-          项目文件、运行数据和历史版本不包含在备份中；deploy key 和 webhook 地址将重新生成。从 git 拉取文件且不使用 data/ 文件的容器会自动部署，其余容器需先上传文件。原节点恢复后，两个项目互不影响。
-        </>
-      }
-      actions={
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onClose}>
-          关闭
-        </Button>
-      }
-    >
-      <div className="grid gap-4">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:items-end">
-          <Field label="目标节点" htmlFor="rebuild-target">
-            <Select id="rebuild-target" value={target} onChange={(e) => setTarget(e.target.value)} disabled={busy}>
-              <option value="">选择节点</option>
-              {others.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="项目目录" htmlFor="rebuild-dir">
-            <Input id="rebuild-dir" className="font-mono" value={dir} onChange={(e) => setDir(e.target.value)} disabled={busy} />
-          </Field>
-          <Button size="sm" className="h-9" disabled={busy || !target} onClick={run}>
-            {busy && <Spinner />}
-            开始重建
-          </Button>
-        </div>
-        <SharedNetworkWarning fromNodeId={nodeId} targetNodeId={target} networks={sharedNetworks} />
-        {result &&
-          (result.ok ? (
-            <Notice tone="success" actions={openButton}>
-              {result.text}
-            </Notice>
-          ) : (
-            <Notice tone="danger" actions={openButton}>
-              {result.text}
-            </Notice>
+  const onlineNodes = nodes.data?.nodes.filter((n) => n.online && !n.pending) ?? [];
+  const [nodeId, setNodeId] = useState("");
+  const [dir, setDir] = useState("");
+  const selected = nodeId || onlineNodes[0]?.id || "";
+  const root = onlineNodes.find((n) => n.id === selected)?.info?.projectsRoot || "/srv/nagi";
+  const defaultDir = `${root}/${networkName || "<网络名>"}/${containerName || "<容器名>"}`;
+  const fields = (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="节点" htmlFor="container-node" help="容器运行在这个节点上，之后可以迁移到其他节点。">
+        <Select id="container-node" value={selected} onChange={(e) => setNodeId(e.target.value)} required>
+          {onlineNodes.length === 0 && <option value="">无在线节点</option>}
+          {onlineNodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.name}
+            </option>
           ))}
-        {!result && created && <div>{openButton}</div>}
-        {lines.length > 0 && <LogBox className="max-h-60">{lines.join("\n")}</LogBox>}
-      </div>
-    </Section>
+        </Select>
+      </Field>
+      <Field label="容器目录" htmlFor="container-dir" hint="留空则使用默认目录" help="容器的运行文件、数据和快照都在这个目录里。目录须不存在或为空。">
+        <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} className="font-mono" />
+      </Field>
+    </div>
   );
+  return { fields, nodeId: selected, dir: dir.trim() };
 }
 
 export function NewProjectPage() {
   const navigate = useNavigate();
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const onlineNodes = nodes.data?.nodes.filter((n) => n.online) ?? [];
-  const [nodeId, setNodeId] = useState("");
   const [name, setName] = useState("");
-  const [dir, setDir] = useState("");
+  const [network, setNetwork] = useState("");
   const [withContainer, setWithContainer] = useState(true);
   const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
-  const selectedNode = nodeId || onlineNodes[0]?.id || "";
+  const node = useNodeChoice(network || slugName(name, ""), containerName);
 
   const create = useMutation({
     mutationFn: () =>
-      projectClient.createNodeProject({
-        nodeId: selectedNode,
+      projectClient.createProject({
         name,
-        dir,
-        ...(withContainer ? { containerName, container: container.build() } : {}),
+        networkName: network,
+        ...(withContainer ? { containerName, container: container.build(), nodeId: node.nodeId, dir: node.dir } : {}),
       }),
-    onSuccess: (res) => {
-      navigate({ to: "/projects/$nodeId/$projectId", params: { nodeId: selectedNode, projectId: res.project!.id } });
+    onSuccess: (p) => {
+      navigate({ to: "/projects/$projectId", params: { projectId: p.id } });
     },
   });
 
@@ -397,29 +259,17 @@ export function NewProjectPage() {
         }}
       >
         <Section title="基本信息">
-          <div className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="名称" htmlFor="name">
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="我的应用" required maxLength={64} />
-              </Field>
-              <Field label="节点" htmlFor="node">
-                <Select id="node" value={selectedNode} onChange={(e) => setNodeId(e.target.value)} required>
-                  {onlineNodes.length === 0 && <option value="">无在线节点</option>}
-                  {onlineNodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="名称" htmlFor="name">
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="我的应用" required maxLength={64} />
+            </Field>
             <Field
-              label="项目目录"
-              htmlFor="dir"
-              hint="节点上的绝对路径，目录须不存在或为空"
-              help="每个容器位于项目目录的 containers/<容器名>/ 下，compose 中的相对路径以容器的 data/ 目录为基准。"
+              label="网络名"
+              htmlFor="network"
+              hint="小写字母、数字和 -；留空则由名称生成"
+              help="在面板上唯一。连接本项目的项目通过「容器.网络名」访问本项目的容器；容器目录默认也按它命名。名称中没有英文字母或数字时须填写。"
             >
-              <Input id="dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/srv/myapp" required className="font-mono" />
+              <Input id="network" value={network} onChange={(e) => setNetwork(e.target.value)} placeholder={slugName(name, "shop")} className="font-mono" />
             </Field>
           </div>
         </Section>
@@ -443,6 +293,7 @@ export function NewProjectPage() {
               >
                 <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" placeholder="web" />
               </Field>
+              {node.fields}
               {container.fields}
             </div>
           )}
@@ -455,7 +306,7 @@ export function NewProjectPage() {
               取消
             </Button>
           </Link>
-          <Button type="submit" disabled={create.isPending || !selectedNode}>
+          <Button type="submit" disabled={create.isPending || (withContainer && !node.nodeId)}>
             {create.isPending && <Spinner />}
             创建项目
           </Button>

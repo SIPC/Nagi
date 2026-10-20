@@ -8,6 +8,35 @@ import (
 	"database/sql"
 )
 
+type Container struct {
+	ProjectID       string
+	Name            string
+	Position        int64
+	NodeID          string
+	Dir             string
+	Revision        int64
+	CreatedAt       int64
+	DeployedVersion int64
+	Draft           []byte
+	WebhookHash     string
+	Secrets         []byte
+	DeployKeyPub    string
+	ImportedPorts   string
+	LastCommit      string
+}
+
+type Deployment struct {
+	ID         int64
+	ProjectID  string
+	CreatedAt  int64
+	Source     string
+	Containers string
+	Versions   string
+	Success    int64
+	Error      string
+	RestoreOf  int64
+}
+
 type EnrollToken struct {
 	TokenHash string
 	CreatedAt int64
@@ -28,13 +57,27 @@ type Node struct {
 	Pending   int64
 }
 
-type ProjectBackup struct {
-	NodeID    string
+type Project struct {
+	ID             string
+	Name           string
+	NetworkName    string
+	Revision       int64
+	CreatedAt      int64
+	Settings       []byte
+	SharedEnvDraft []byte
+	DockerConfig   []byte
+}
+
+type Route struct {
 	ProjectID string
-	Revision  int64
-	Data      []byte
-	UpdatedAt int64
-	BackupKey []byte
+	Name      string
+	Container string
+	Service   string
+	Target    int64
+	Protocol  string
+	Published int64
+	Domains   string
+	HttpOnly  int64
 }
 
 type Session struct {
@@ -58,9 +101,16 @@ type User struct {
 	TotpLastStep int64
 }
 
-type Webhook struct {
-	TokenHash string
-	NodeID    string
-	ProjectID string
-	Container string
+type Version struct {
+	ProjectID  string
+	Container  string
+	Version    int64
+	Config     []byte
+	SharedEnv  []byte
+	CreatedAt  int64
+	DeployedAt sql.NullInt64
+	Images     string
+	GitCommit  string
+	RollbackOf int64
+	HasFiles   int64
 }

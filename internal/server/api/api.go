@@ -8,10 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +21,7 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
@@ -42,13 +41,14 @@ const SettingSetupToken = "setup_token"
 
 // API 汇总所有 Connect 接口的实现。
 type API struct {
-	Q      *store.Queries
-	Auth   *auth.Service
-	Nodes  *nodes.Registry
-	CA     *tlsutil.CA
-	Sealer *sealer.Sealer
-	Panel  *PanelInfo
-	Log    *slog.Logger
+	Q        *store.Queries
+	Auth     *auth.Service
+	Nodes    *nodes.Registry
+	Projects *projects.Service
+	CA       *tlsutil.CA
+	Sealer   *sealer.Sealer
+	Panel    *PanelInfo
+	Log      *slog.Logger
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -221,8 +221,8 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 	return connect.NewResponse(resp), nil
 }
 
-// RemoveNode 移除节点：标记为已移除（之后拒绝它连接），删掉它的配置备份和 webhook，断开当前连接。
-// 节点上的项目照常运行。以后用新的加入令牌重新加入时会恢复。
+// RemoveNode 移除节点：标记为已移除（之后拒绝它连接），断开当前连接。节点上还有容器时拒绝。
+// 以后用新的加入令牌重新加入时会恢复。
 func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv1.RemoveNodeRequest]) (*connect.Response[nagiv1.RemoveNodeResponse], error) {
 	id := req.Msg.GetNodeId()
 	if _, err := s.Q.GetNode(ctx, id); errors.Is(err, sql.ErrNoRows) {
@@ -230,8 +230,10 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 	} else if err != nil {
 		return nil, err
 	}
-	if err := s.checkWitness(ctx, id); err != nil {
+	if n, err := s.Q.CountNodeContainers(ctx, id); err != nil {
 		return nil, err
+	} else if n > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("节点上还有 %d 个容器，请先把它们迁移到其他节点或者删除", n))
 	}
 	if err := s.forgetNode(ctx, id); err != nil {
 		return nil, err
@@ -239,457 +241,14 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
 }
 
-// checkWitness 面板和节点断开（移交、忘记节点）之前检查顶替：
-//   - 本面板担任见证人、而且这个节点是 A 或 B 的项目：断开后面板连不上节点，三票只剩两票；
-//   - 节点在线时再问节点：断开后它和其他顶替参与方之间还能不能经别的面板连上（见 agent/witnessguard.go）。
-func (s *nodeService) checkWitness(ctx context.Context, nodeID string) error {
-	if names := s.Nodes.WitnessProjects(nodeID); len(names) > 0 {
-		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
-			"本面板是这些项目的顶替见证人：%s。断开后它们在所在节点挂掉时没法顶替，请先在项目的顶替设置里更换见证人，或者取消顶替",
-			strings.Join(names, "、")))
-	}
-	if conn, err := s.Nodes.Get(nodeID); err == nil {
-		if _, err := conn.Agent.CheckRemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); err != nil {
-			return fromGRPC(err)
-		}
-	}
-	return nil
-}
-
-// forgetNode 让面板忘记节点：拒绝它再连接，删除它的配置备份和 webhook。节点上的项目照常运行。
+// forgetNode 让面板忘记节点：拒绝它再连接。
 func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 	if err := s.Q.RevokeNode(ctx, id); err != nil {
 		return err
 	}
-	_ = s.Q.DeleteNodeData(ctx, id)
-	_ = s.Q.DeleteNodeWebhooks(ctx, id)
 	s.Nodes.Disconnect(id)
 	s.Log.Info("节点已移除", "node", id)
 	return nil
-}
-
-// ---- 项目：转发给节点 ----
-
-type projectService struct{ *API }
-
-func (s *projectService) agent(nodeID string) (nagiv1.AgentServiceClient, error) {
-	conn, err := s.Nodes.Get(nodeID)
-	if err != nil {
-		// 一个操作常常要同时用到几个节点（迁移、顶替、更换见证人），说清楚是哪一个不在线。
-		if errors.Is(err, nodes.ErrPending) {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-		}
-		if errors.Is(err, nodes.ErrOffline) {
-			if name := s.nodeName(context.Background(), nodeID); name != nodeID {
-				err = fmt.Errorf("节点 %s 不在线", name)
-			}
-		}
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	return conn.Agent, nil
-}
-
-func (s *projectService) SetProjectReplicaTrust(ctx context.Context, req *connect.Request[nagiv1.SetProjectReplicaTrustRequest]) (*connect.Response[nagiv1.SetProjectReplicaTrustResponse], error) {
-	if req.Msg.GetProjectId() == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("缺少项目 ID"))
-	}
-	if err := s.Nodes.SetProjectTrusted(ctx, req.Msg.GetProjectId(), req.Msg.GetTrusted()); err != nil {
-		return nil, err
-	}
-	return connect.NewResponse(&nagiv1.SetProjectReplicaTrustResponse{}), nil
-}
-
-func (s *projectService) ListAllProjects(ctx context.Context, _ *connect.Request[nagiv1.ListAllProjectsRequest]) (*connect.Response[nagiv1.ListAllProjectsResponse], error) {
-	rows, err := s.Q.ListNodes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := &nagiv1.ListAllProjectsResponse{}
-	for _, row := range rows {
-		// 在线节点用最近一次上报；离线节点用面板上的配置备份（没有运行状态）。
-		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
-			for _, p := range conn.LastReport().GetProjects() {
-				out.Projects = append(out.Projects, &nagiv1.NodeProject{NodeId: row.ID, Project: p})
-			}
-			continue
-		}
-		backups, err := s.Q.ListProjectBackups(ctx, row.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range backups {
-			plain, err := s.Sealer.Open(b.Data, nodes.BackupContext(b.NodeID, b.ProjectID))
-			if err != nil {
-				s.Log.Warn("无法解密项目配置备份", "node", b.NodeID, "project", b.ProjectID, "err", err)
-				continue
-			}
-			p := &nagiv1.Project{}
-			if proto.Unmarshal(plain, p) == nil {
-				out.Projects = append(out.Projects, &nagiv1.NodeProject{NodeId: row.ID, Project: &nagiv1.ProjectSummary{Project: p}})
-			}
-		}
-	}
-	return connect.NewResponse(out), nil
-}
-
-func (s *projectService) CreateNodeProject(ctx context.Context, req *connect.Request[nagiv1.CreateNodeProjectRequest]) (*connect.Response[nagiv1.CreateNodeProjectResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.CreateProject(ctx, &nagiv1.CreateProjectRequest{
-		Name: req.Msg.GetName(), Dir: req.Msg.GetDir(), Settings: req.Msg.GetSettings(),
-		ContainerName: req.Msg.GetContainerName(), Container: req.Msg.GetContainer(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.CreateNodeProjectResponse{Project: resp.GetProject()}), nil
-}
-
-func (s *projectService) GetNodeProject(ctx context.Context, req *connect.Request[nagiv1.GetNodeProjectRequest]) (*connect.Response[nagiv1.GetNodeProjectResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.GetProject(ctx, &nagiv1.GetProjectRequest{Id: req.Msg.GetProjectId()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.GetNodeProjectResponse{
-		Project:        resp.GetProject(),
-		ReplicaTrusted: slices.Contains(s.Nodes.TrustedProjects(ctx), req.Msg.GetProjectId()),
-	}), nil
-}
-
-func (s *projectService) SaveNodeProjectDraft(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectDraftRequest]) (*connect.Response[nagiv1.SaveNodeProjectDraftResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.SaveDraft(ctx, &nagiv1.SaveDraftRequest{
-		Id: req.Msg.GetProjectId(), Container: req.Msg.GetContainer(), BaseRevision: req.Msg.GetBaseRevision(), Config: req.Msg.GetConfig(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.SaveNodeProjectDraftResponse{Project: resp.GetProject()}), nil
-}
-
-func (s *projectService) DiscardNodeProjectDraft(ctx context.Context, req *connect.Request[nagiv1.DiscardNodeProjectDraftRequest]) (*connect.Response[nagiv1.DiscardNodeProjectDraftResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.DiscardDraft(ctx, &nagiv1.DiscardDraftRequest{
-		Id: req.Msg.GetProjectId(), Container: req.Msg.GetContainer(), BaseRevision: req.Msg.GetBaseRevision(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.DiscardNodeProjectDraftResponse{Project: resp.GetProject()}), nil
-}
-
-func (s *projectService) SaveNodeProjectRoute(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectRouteRequest]) (*connect.Response[nagiv1.SaveNodeProjectRouteResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.SaveRoute(ctx, &nagiv1.SaveRouteRequest{ProjectId: req.Msg.GetProjectId(), Route: req.Msg.GetRoute()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.SaveNodeProjectRouteResponse{Project: resp.GetProject()}), nil
-}
-
-func (s *projectService) DeleteNodeProjectRoute(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRouteRequest]) (*connect.Response[nagiv1.DeleteNodeProjectRouteResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.DeleteRoute(ctx, &nagiv1.DeleteRouteRequest{ProjectId: req.Msg.GetProjectId(), Name: req.Msg.GetName()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(&nagiv1.DeleteNodeProjectRouteResponse{Project: resp.GetProject()}), nil
-}
-
-func (s *projectService) ListNodeProjectVersions(ctx context.Context, req *connect.Request[nagiv1.NodeContainerRef]) (*connect.Response[nagiv1.ListVersionsResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.ListVersions(ctx, &nagiv1.ListVersionsRequest{Id: req.Msg.GetProjectId(), Container: req.Msg.GetContainer()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) ListNodeProjectSnapshots(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.ListSnapshots(ctx, &nagiv1.ListSnapshotsRequest{Id: req.Msg.GetProjectId()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-// forwardEvents 把节点返回的事件流转发给浏览器。
-func forwardEvents(ctx context.Context, recv func() (*nagiv1.DeployEvent, error), out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	for {
-		ev, err := recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) || ctx.Err() != nil {
-				return nil
-			}
-			return fromStream(err)
-		}
-		if err := out.Send(ev); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *projectService) RollbackNodeProject(ctx context.Context, req *connect.Request[nagiv1.RollbackNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.Rollback(ctx, &nagiv1.RollbackRequest{
-		Id: req.Msg.GetProjectId(), Container: req.Msg.GetContainer(), Version: req.Msg.GetVersion(), RestoreData: req.Msg.GetRestoreData(),
-	})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	return forwardEvents(ctx, stream.Recv, out)
-}
-
-func (s *projectService) CreateNodeProjectSnapshot(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.CreateSnapshot(ctx, &nagiv1.CreateSnapshotRequest{Id: req.Msg.GetProjectId()})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	return forwardEvents(ctx, stream.Recv, out)
-}
-
-func (s *projectService) RestoreNodeProjectSnapshot(ctx context.Context, req *connect.Request[nagiv1.RestoreNodeProjectSnapshotRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.RestoreSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{
-		Id: req.Msg.GetProjectId(), SnapshotId: req.Msg.GetSnapshotId(), Container: req.Msg.GetContainer(),
-	})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	return forwardEvents(ctx, stream.Recv, out)
-}
-
-func (s *projectService) DeleteNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectRequest]) (*connect.Response[nagiv1.DeleteNodeProjectResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	if _, err := agent.DeleteProject(ctx, &nagiv1.DeleteProjectRequest{
-		Id: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(),
-		DeleteDir: req.Msg.GetDeleteDir(), ConfirmName: req.Msg.GetConfirmName(),
-	}); err != nil {
-		return nil, fromGRPC(err)
-	}
-	_ = s.Q.DeleteProjectBackup(ctx, store.DeleteProjectBackupParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
-	_ = s.Q.DeleteProjectWebhooks(ctx, store.DeleteProjectWebhooksParams{NodeID: req.Msg.GetNodeId(), ProjectID: req.Msg.GetProjectId()})
-	s.Log.Info("项目已删除", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "delete_dir", req.Msg.GetDeleteDir())
-	return connect.NewResponse(&nagiv1.DeleteNodeProjectResponse{}), nil
-}
-
-func (s *projectService) DeployNodeProject(ctx context.Context, req *connect.Request[nagiv1.DeployNodeProjectRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.DeployProject(ctx, &nagiv1.DeployProjectRequest{
-		Id: req.Msg.GetProjectId(), Targets: req.Msg.GetTargets(), Pull: req.Msg.GetPull(),
-		UseUpload: req.Msg.GetUseUpload(), PullImages: req.Msg.GetPullImages(),
-		ApplySharedEnv: req.Msg.GetApplySharedEnv(), SettingsRevision: req.Msg.GetSettingsRevision(),
-	})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	for {
-		ev, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) || ctx.Err() != nil {
-				return nil
-			}
-			return fromStream(err)
-		}
-		if err := out.Send(ev); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *projectService) StreamNodeProjectLogs(ctx context.Context, req *connect.Request[nagiv1.StreamNodeProjectLogsRequest], out *connect.ServerStream[nagiv1.LogLine]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.StreamLogs(ctx, &nagiv1.StreamLogsRequest{
-		Id: req.Msg.GetProjectId(), Container: req.Msg.GetContainer(), Service: req.Msg.GetService(), Tail: req.Msg.GetTail(), Follow: req.Msg.GetFollow(),
-	})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	for {
-		line, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) || ctx.Err() != nil {
-				return nil
-			}
-			return fromGRPC(err)
-		}
-		if err := out.Send(line); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *projectService) AddNodeProjectContainer(ctx context.Context, req *connect.Request[nagiv1.AddNodeProjectContainerRequest]) (*connect.Response[nagiv1.AddContainerResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.AddContainer(ctx, &nagiv1.AddContainerRequest{ProjectId: req.Msg.GetProjectId(), Name: req.Msg.GetName(), Config: req.Msg.GetConfig()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) DeleteNodeProjectContainer(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeProjectContainerRequest]) (*connect.Response[nagiv1.DeleteContainerResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{
-		ProjectId: req.Msg.GetProjectId(), Container: req.Msg.GetContainer(), BaseRevision: req.Msg.GetBaseRevision(), DeleteDir: req.Msg.GetDeleteDir(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	s.Log.Info("容器已删除", "node", req.Msg.GetNodeId(), "project", req.Msg.GetProjectId(), "container", req.Msg.GetContainer(), "delete_dir", req.Msg.GetDeleteDir())
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) UpdateNodeProjectSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateNodeProjectSettingsRequest]) (*connect.Response[nagiv1.UpdateProjectSettingsResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.UpdateProjectSettings(ctx, &nagiv1.UpdateProjectSettingsRequest{
-		ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Name: req.Msg.GetName(), Settings: req.Msg.GetSettings(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) SaveNodeProjectSharedEnv(ctx context.Context, req *connect.Request[nagiv1.SaveNodeProjectSharedEnvRequest]) (*connect.Response[nagiv1.SaveSharedEnvResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.SaveSharedEnv(ctx, &nagiv1.SaveSharedEnvRequest{
-		ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision(), Vars: req.Msg.GetVars(),
-	})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) DiscardNodeProjectSharedEnv(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRevisionRef]) (*connect.Response[nagiv1.DiscardSharedEnvResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.DiscardSharedEnv(ctx, &nagiv1.DiscardSharedEnvRequest{ProjectId: req.Msg.GetProjectId(), BaseRevision: req.Msg.GetBaseRevision()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) ListNodeProjectDeployments(ctx context.Context, req *connect.Request[nagiv1.NodeProjectRef]) (*connect.Response[nagiv1.ListDeploymentsResponse], error) {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	resp, err := agent.ListDeployments(ctx, &nagiv1.ListDeploymentsRequest{Id: req.Msg.GetProjectId()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *projectService) RestoreNodeProjectDeployment(ctx context.Context, req *connect.Request[nagiv1.RestoreNodeProjectDeploymentRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	agent, err := s.agent(req.Msg.GetNodeId())
-	if err != nil {
-		return err
-	}
-	stream, err := agent.RestoreDeployment(ctx, &nagiv1.RestoreDeploymentRequest{Id: req.Msg.GetProjectId(), DeploymentId: req.Msg.GetDeploymentId()})
-	if err != nil {
-		return fromGRPC(err)
-	}
-	return forwardEvents(ctx, stream.Recv, out)
-}
-
-// ---- 共享网络 ----
-
-func (s *nodeService) ListNodeSharedNetworks(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	resp, err := conn.Agent.ListSharedNetworks(ctx, &nagiv1.ListSharedNetworksRequest{})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *nodeService) CreateNodeSharedNetwork(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	resp, err := conn.Agent.CreateSharedNetwork(ctx, &nagiv1.CreateSharedNetworkRequest{Name: req.Msg.GetName()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
-}
-
-func (s *nodeService) DeleteNodeSharedNetwork(ctx context.Context, req *connect.Request[nagiv1.NodeSharedNetworkRequest]) (*connect.Response[nagiv1.ListSharedNetworksResponse], error) {
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	resp, err := conn.Agent.DeleteSharedNetwork(ctx, &nagiv1.DeleteSharedNetworkRequest{Name: req.Msg.GetName()})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	return connect.NewResponse(resp), nil
 }
 
 // ---- 节点加入 ----

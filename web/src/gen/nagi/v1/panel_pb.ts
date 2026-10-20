@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Alert, MeshPeer, NodeInfo, ProjectSummary } from "./common_pb";
+import type { Alert, ContainerStatus, MeshPeer, NodeInfo } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCLsAQoNUmVwb3J0UmVxdWVzdBIfCgRub2RlGAEgASgLMhEubmFnaS52MS5Ob2RlSW5mbxIpCghwcm9qZWN0cxgCIAMoCzIXLm5hZ2kudjEuUHJvamVjdFN1bW1hcnkSHwoEbWVzaBgDIAEoCzIRLm5hZ2kudjEuTWVzaEluZm8SOwoLYmFja3VwX2tleXMYBCADKAsyJi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QuQmFja3VwS2V5c0VudHJ5GjEKD0JhY2t1cEtleXNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIjMKDlJlcG9ydFJlc3BvbnNlEiEKBG1lc2gYASABKAsyEy5uYWdpLnYxLk1lc2hDb25maWcypAIKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USRQoKUmVsYXlBbGVydBIaLm5hZ2kudjEuUmVsYXlBbGVydFJlcXVlc3QaGy5uYWdpLnYxLlJlbGF5QWxlcnRSZXNwb25zZRI5CglNZXNoUmVsYXkSEy5uYWdpLnYxLk1lc2hQYWNrZXQaEy5uYWdpLnYxLk1lc2hQYWNrZXQoATABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCJ/Cg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEh8KBG1lc2gYAiABKAsyES5uYWdpLnYxLk1lc2hJbmZvEiwKCmNvbnRhaW5lcnMYAyADKAsyGC5uYWdpLnYxLkNvbnRhaW5lclN0YXR1cyIzCg5SZXBvcnRSZXNwb25zZRIhCgRtZXNoGAEgASgLMhMubmFnaS52MS5NZXNoQ29uZmlnMqQCCgxQYW5lbFNlcnZpY2USOQoGUmVwb3J0EhYubmFnaS52MS5SZXBvcnRSZXF1ZXN0GhcubmFnaS52MS5SZXBvcnRSZXNwb25zZRJXChBSZW5ld0NlcnRpZmljYXRlEiAubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBohLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEkUKClJlbGF5QWxlcnQSGi5uYWdpLnYxLlJlbGF5QWxlcnRSZXF1ZXN0GhsubmFnaS52MS5SZWxheUFsZXJ0UmVzcG9uc2USOQoJTWVzaFJlbGF5EhMubmFnaS52MS5NZXNoUGFja2V0GhMubmFnaS52MS5NZXNoUGFja2V0KAEwAUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.MeshPacket
@@ -175,21 +175,16 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
   node?: NodeInfo | undefined;
 
   /**
-   * @generated from field: repeated nagi.v1.ProjectSummary projects = 2;
-   */
-  projects: ProjectSummary[];
-
-  /**
-   * @generated from field: nagi.v1.MeshInfo mesh = 3;
+   * @generated from field: nagi.v1.MeshInfo mesh = 2;
    */
   mesh?: MeshInfo | undefined;
 
   /**
-   * 每个项目快照仓库的密码（项目 ID → config/backup.key 的内容）。单独放，不进 Project，不会返回给浏览器。
+   * 本节点缓存的每个容器的状态。
    *
-   * @generated from field: map<string, string> backup_keys = 4;
+   * @generated from field: repeated nagi.v1.ContainerStatus containers = 3;
    */
-  backupKeys: { [key: string]: string };
+  containers: ContainerStatus[];
 };
 
 /**
@@ -223,7 +218,7 @@ export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
  */
 export const PanelService: GenService<{
   /**
-   * 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+   * 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
    *
    * @generated from rpc nagi.v1.PanelService.Report
    */

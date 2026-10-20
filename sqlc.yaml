@@ -16,11 +16,3 @@ sql:
         package: nodestore
         out: internal/agent/store/nodestore
         emit_empty_slices: true
-  - engine: sqlite
-    schema: internal/agent/store/projectstore/migrations
-    queries: internal/agent/store/projectstore/queries.sql
-    gen:
-      go:
-        package: projectstore
-        out: internal/agent/store/projectstore
-        emit_empty_slices: true

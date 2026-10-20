@@ -24,8 +24,8 @@ type agentSrv struct {
 	nagiv1.UnimplementedAgentServiceServer
 }
 
-func (agentSrv) ListProjects(context.Context, *nagiv1.ListProjectsRequest) (*nagiv1.ListProjectsResponse, error) {
-	return &nagiv1.ListProjectsResponse{Projects: []*nagiv1.ProjectSummary{{Project: &nagiv1.Project{Id: "p1"}}}}, nil
+func (agentSrv) GetMirrors(context.Context, *nagiv1.GetMirrorsRequest) (*nagiv1.Mirrors, error) {
+	return &nagiv1.Mirrors{Mirrors: []string{"p1"}}, nil
 }
 
 // 两端在同一条连接上互相调用。
@@ -73,11 +73,11 @@ func TestBidirectionalGRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pc.Close()
-	resp, err := nagiv1.NewAgentServiceClient(pc).ListProjects(ctx, &nagiv1.ListProjectsRequest{})
+	resp, err := nagiv1.NewAgentServiceClient(pc).GetMirrors(ctx, &nagiv1.GetMirrorsRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resp.Projects) != 1 || resp.Projects[0].Project.Id != "p1" {
+	if len(resp.Mirrors) != 1 || resp.Mirrors[0] != "p1" {
 		t.Fatalf("unexpected response: %v", resp)
 	}
 }

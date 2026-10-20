@@ -379,31 +379,21 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeService_ListNodes_FullMethodName                = "/nagi.v1.NodeService/ListNodes"
-	NodeService_ListNodePanels_FullMethodName           = "/nagi.v1.NodeService/ListNodePanels"
-	NodeService_AddNodePanel_FullMethodName             = "/nagi.v1.NodeService/AddNodePanel"
-	NodeService_RemoveNodePanel_FullMethodName          = "/nagi.v1.NodeService/RemoveNodePanel"
-	NodeService_GetNodeMesh_FullMethodName              = "/nagi.v1.NodeService/GetNodeMesh"
-	NodeService_PingNodeMesh_FullMethodName             = "/nagi.v1.NodeService/PingNodeMesh"
-	NodeService_GetPanelMesh_FullMethodName             = "/nagi.v1.NodeService/GetPanelMesh"
-	NodeService_ListNodeReplicas_FullMethodName         = "/nagi.v1.NodeService/ListNodeReplicas"
-	NodeService_ListNodeReplicaSnapshots_FullMethodName = "/nagi.v1.NodeService/ListNodeReplicaSnapshots"
-	NodeService_RestoreNodeReplica_FullMethodName       = "/nagi.v1.NodeService/RestoreNodeReplica"
-	NodeService_DeleteNodeReplica_FullMethodName        = "/nagi.v1.NodeService/DeleteNodeReplica"
-	NodeService_ListNodeFailovers_FullMethodName        = "/nagi.v1.NodeService/ListNodeFailovers"
-	NodeService_ConfirmNodeTakeover_FullMethodName      = "/nagi.v1.NodeService/ConfirmNodeTakeover"
-	NodeService_UpgradeNode_FullMethodName              = "/nagi.v1.NodeService/UpgradeNode"
-	NodeService_GetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/GetNodeMirrors"
-	NodeService_SetNodeMirrors_FullMethodName           = "/nagi.v1.NodeService/SetNodeMirrors"
-	NodeService_ListNodeSharedNetworks_FullMethodName   = "/nagi.v1.NodeService/ListNodeSharedNetworks"
-	NodeService_CreateNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/CreateNodeSharedNetwork"
-	NodeService_DeleteNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/DeleteNodeSharedNetwork"
-	NodeService_LinkNodeSharedNetwork_FullMethodName    = "/nagi.v1.NodeService/LinkNodeSharedNetwork"
-	NodeService_UnlinkNodeSharedNetwork_FullMethodName  = "/nagi.v1.NodeService/UnlinkNodeSharedNetwork"
-	NodeService_CreateEnrollCommand_FullMethodName      = "/nagi.v1.NodeService/CreateEnrollCommand"
-	NodeService_QueryNodeMetrics_FullMethodName         = "/nagi.v1.NodeService/QueryNodeMetrics"
-	NodeService_RemoveNode_FullMethodName               = "/nagi.v1.NodeService/RemoveNode"
-	NodeService_ApproveNode_FullMethodName              = "/nagi.v1.NodeService/ApproveNode"
+	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
+	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
+	NodeService_AddNodePanel_FullMethodName        = "/nagi.v1.NodeService/AddNodePanel"
+	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
+	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
+	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
+	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
+	NodeService_UpgradeNode_FullMethodName         = "/nagi.v1.NodeService/UpgradeNode"
+	NodeService_GetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/GetNodeMirrors"
+	NodeService_SetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/SetNodeMirrors"
+	NodeService_SetNodeProjectsRoot_FullMethodName = "/nagi.v1.NodeService/SetNodeProjectsRoot"
+	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
+	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
+	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
+	NodeService_ApproveNode_FullMethodName         = "/nagi.v1.NodeService/ApproveNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -413,43 +403,27 @@ type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error)
-	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
 	AddNodePanel(ctx context.Context, in *AddNodePanelRequest, opts ...grpc.CallOption) (*AddNodePanelResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(ctx context.Context, in *RemoveNodePanelRequest, opts ...grpc.CallOption) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
-	// 让节点经 mesh 连一下某个容器。
+	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
-	// 节点作为备份节点保存的项目副本。
-	ListNodeReplicas(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error)
-	ListNodeReplicaSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
-	// 把副本恢复成这个节点上的项目。
-	RestoreNodeReplica(ctx context.Context, in *RestoreNodeReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	DeleteNodeReplica(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error)
-	// 节点参与的顶替设置（运行、热备或见证）。
-	ListNodeFailovers(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error)
-	// 在热备节点上确认顶替。
-	ConfirmNodeTakeover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
 	UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 	// 节点的镜像加速地址。
-	GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error)
+	GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
-	// 节点上的共享网络。
-	ListNodeSharedNetworks(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
-	CreateNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
-	DeleteNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
-	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
-	LinkNodeSharedNetwork(ctx context.Context, in *LinkNodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
-	// 断开节点上的共享网络和其他节点的连接。
-	UnlinkNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error)
+	// 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+	SetNodeProjectsRoot(ctx context.Context, in *SetNodeProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
-	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
@@ -534,75 +508,6 @@ func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, in *GetPanelMeshRe
 	return out, nil
 }
 
-func (c *nodeServiceClient) ListNodeReplicas(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListReplicasResponse)
-	err := c.cc.Invoke(ctx, NodeService_ListNodeReplicas_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) ListNodeReplicaSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSnapshotsResponse)
-	err := c.cc.Invoke(ctx, NodeService_ListNodeReplicaSnapshots_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) RestoreNodeReplica(ctx context.Context, in *RestoreNodeReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_RestoreNodeReplica_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[RestoreNodeReplicaRequest, DeployEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeService_RestoreNodeReplicaClient = grpc.ServerStreamingClient[DeployEvent]
-
-func (c *nodeServiceClient) DeleteNodeReplica(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteReplicaResponse)
-	err := c.cc.Invoke(ctx, NodeService_DeleteNodeReplica_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) ListNodeFailovers(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*ListFailoversResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListFailoversResponse)
-	err := c.cc.Invoke(ctx, NodeService_ListNodeFailovers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) ConfirmNodeTakeover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailoverStatus)
-	err := c.cc.Invoke(ctx, NodeService_ConfirmNodeTakeover_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *nodeServiceClient) UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpgradeResponse)
@@ -613,7 +518,7 @@ func (c *nodeServiceClient) UpgradeNode(ctx context.Context, in *UpgradeNodeRequ
 	return out, nil
 }
 
-func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *ListNodeReplicasRequest, opts ...grpc.CallOption) (*Mirrors, error) {
+func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
 	err := c.cc.Invoke(ctx, NodeService_GetNodeMirrors_FullMethodName, in, out, cOpts...)
@@ -633,50 +538,10 @@ func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, in *SetNodeMirro
 	return out, nil
 }
 
-func (c *nodeServiceClient) ListNodeSharedNetworks(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
+func (c *nodeServiceClient) SetNodeProjectsRoot(ctx context.Context, in *SetNodeProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSharedNetworksResponse)
-	err := c.cc.Invoke(ctx, NodeService_ListNodeSharedNetworks_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) CreateNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSharedNetworksResponse)
-	err := c.cc.Invoke(ctx, NodeService_CreateNodeSharedNetwork_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) DeleteNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSharedNetworksResponse)
-	err := c.cc.Invoke(ctx, NodeService_DeleteNodeSharedNetwork_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) LinkNodeSharedNetwork(ctx context.Context, in *LinkNodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSharedNetworksResponse)
-	err := c.cc.Invoke(ctx, NodeService_LinkNodeSharedNetwork_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) UnlinkNodeSharedNetwork(ctx context.Context, in *NodeSharedNetworkRequest, opts ...grpc.CallOption) (*ListSharedNetworksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSharedNetworksResponse)
-	err := c.cc.Invoke(ctx, NodeService_UnlinkNodeSharedNetwork_FullMethodName, in, out, cOpts...)
+	out := new(SetProjectsRootResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeProjectsRoot_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -730,43 +595,27 @@ type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error)
-	// 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+	// 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
 	AddNodePanel(context.Context, *AddNodePanelRequest) (*AddNodePanelResponse, error)
 	// 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
 	RemoveNodePanel(context.Context, *RemoveNodePanelRequest) (*RemoveNodePanelResponse, error)
 	// 节点的 mesh 状态。
 	GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error)
-	// 让节点经 mesh 连一下某个容器。
+	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
-	// 节点作为备份节点保存的项目副本。
-	ListNodeReplicas(context.Context, *ListNodeReplicasRequest) (*ListReplicasResponse, error)
-	ListNodeReplicaSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error)
-	// 把副本恢复成这个节点上的项目。
-	RestoreNodeReplica(*RestoreNodeReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	DeleteNodeReplica(context.Context, *NodeProjectRef) (*DeleteReplicaResponse, error)
-	// 节点参与的顶替设置（运行、热备或见证）。
-	ListNodeFailovers(context.Context, *ListNodeReplicasRequest) (*ListFailoversResponse, error)
-	// 在热备节点上确认顶替。
-	ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
 	UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error)
 	// 节点的镜像加速地址。
-	GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error)
+	GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
-	// 节点上的共享网络。
-	ListNodeSharedNetworks(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
-	CreateNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
-	DeleteNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
-	// 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
-	LinkNodeSharedNetwork(context.Context, *LinkNodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
-	// 断开节点上的共享网络和其他节点的连接。
-	UnlinkNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error)
+	// 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+	SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
-	// 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
@@ -802,47 +651,17 @@ func (UnimplementedNodeServiceServer) PingNodeMesh(context.Context, *PingNodeMes
 func (UnimplementedNodeServiceServer) GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPanelMesh not implemented")
 }
-func (UnimplementedNodeServiceServer) ListNodeReplicas(context.Context, *ListNodeReplicasRequest) (*ListReplicasResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeReplicas not implemented")
-}
-func (UnimplementedNodeServiceServer) ListNodeReplicaSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeReplicaSnapshots not implemented")
-}
-func (UnimplementedNodeServiceServer) RestoreNodeReplica(*RestoreNodeReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method RestoreNodeReplica not implemented")
-}
-func (UnimplementedNodeServiceServer) DeleteNodeReplica(context.Context, *NodeProjectRef) (*DeleteReplicaResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeReplica not implemented")
-}
-func (UnimplementedNodeServiceServer) ListNodeFailovers(context.Context, *ListNodeReplicasRequest) (*ListFailoversResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeFailovers not implemented")
-}
-func (UnimplementedNodeServiceServer) ConfirmNodeTakeover(context.Context, *NodeProjectRef) (*FailoverStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method ConfirmNodeTakeover not implemented")
-}
 func (UnimplementedNodeServiceServer) UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpgradeNode not implemented")
 }
-func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *ListNodeReplicasRequest) (*Mirrors, error) {
+func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
 }
 func (UnimplementedNodeServiceServer) SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeMirrors not implemented")
 }
-func (UnimplementedNodeServiceServer) ListNodeSharedNetworks(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeSharedNetworks not implemented")
-}
-func (UnimplementedNodeServiceServer) CreateNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateNodeSharedNetwork not implemented")
-}
-func (UnimplementedNodeServiceServer) DeleteNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeSharedNetwork not implemented")
-}
-func (UnimplementedNodeServiceServer) LinkNodeSharedNetwork(context.Context, *LinkNodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method LinkNodeSharedNetwork not implemented")
-}
-func (UnimplementedNodeServiceServer) UnlinkNodeSharedNetwork(context.Context, *NodeSharedNetworkRequest) (*ListSharedNetworksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UnlinkNodeSharedNetwork not implemented")
+func (UnimplementedNodeServiceServer) SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectsRoot not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -1003,107 +822,6 @@ func _NodeService_GetPanelMesh_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NodeService_ListNodeReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListNodeReplicasRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ListNodeReplicas(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ListNodeReplicas_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ListNodeReplicas(ctx, req.(*ListNodeReplicasRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_ListNodeReplicaSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ListNodeReplicaSnapshots(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ListNodeReplicaSnapshots_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ListNodeReplicaSnapshots(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_RestoreNodeReplica_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RestoreNodeReplicaRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(NodeServiceServer).RestoreNodeReplica(m, &grpc.GenericServerStream[RestoreNodeReplicaRequest, DeployEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeService_RestoreNodeReplicaServer = grpc.ServerStreamingServer[DeployEvent]
-
-func _NodeService_DeleteNodeReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_DeleteNodeReplica_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).DeleteNodeReplica(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_ListNodeFailovers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListNodeReplicasRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ListNodeFailovers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ListNodeFailovers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ListNodeFailovers(ctx, req.(*ListNodeReplicasRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_ConfirmNodeTakeover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ConfirmNodeTakeover(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ConfirmNodeTakeover_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ConfirmNodeTakeover(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NodeService_UpgradeNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpgradeNodeRequest)
 	if err := dec(in); err != nil {
@@ -1123,7 +841,7 @@ func _NodeService_UpgradeNode_Handler(srv interface{}, ctx context.Context, dec 
 }
 
 func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListNodeReplicasRequest)
+	in := new(NodeRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1135,7 +853,7 @@ func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: NodeService_GetNodeMirrors_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetNodeMirrors(ctx, req.(*ListNodeReplicasRequest))
+		return srv.(NodeServiceServer).GetNodeMirrors(ctx, req.(*NodeRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1158,92 +876,20 @@ func _NodeService_SetNodeMirrors_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NodeService_ListNodeSharedNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeSharedNetworkRequest)
+func _NodeService_SetNodeProjectsRoot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeProjectsRootRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeServiceServer).ListNodeSharedNetworks(ctx, in)
+		return srv.(NodeServiceServer).SetNodeProjectsRoot(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: NodeService_ListNodeSharedNetworks_FullMethodName,
+		FullMethod: NodeService_SetNodeProjectsRoot_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ListNodeSharedNetworks(ctx, req.(*NodeSharedNetworkRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_CreateNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeSharedNetworkRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).CreateNodeSharedNetwork(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_CreateNodeSharedNetwork_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).CreateNodeSharedNetwork(ctx, req.(*NodeSharedNetworkRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_DeleteNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeSharedNetworkRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).DeleteNodeSharedNetwork(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_DeleteNodeSharedNetwork_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).DeleteNodeSharedNetwork(ctx, req.(*NodeSharedNetworkRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_LinkNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LinkNodeSharedNetworkRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).LinkNodeSharedNetwork(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_LinkNodeSharedNetwork_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).LinkNodeSharedNetwork(ctx, req.(*LinkNodeSharedNetworkRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_UnlinkNodeSharedNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeSharedNetworkRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).UnlinkNodeSharedNetwork(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_UnlinkNodeSharedNetwork_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).UnlinkNodeSharedNetwork(ctx, req.(*NodeSharedNetworkRequest))
+		return srv.(NodeServiceServer).SetNodeProjectsRoot(ctx, req.(*SetNodeProjectsRootRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1356,26 +1002,6 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_GetPanelMesh_Handler,
 		},
 		{
-			MethodName: "ListNodeReplicas",
-			Handler:    _NodeService_ListNodeReplicas_Handler,
-		},
-		{
-			MethodName: "ListNodeReplicaSnapshots",
-			Handler:    _NodeService_ListNodeReplicaSnapshots_Handler,
-		},
-		{
-			MethodName: "DeleteNodeReplica",
-			Handler:    _NodeService_DeleteNodeReplica_Handler,
-		},
-		{
-			MethodName: "ListNodeFailovers",
-			Handler:    _NodeService_ListNodeFailovers_Handler,
-		},
-		{
-			MethodName: "ConfirmNodeTakeover",
-			Handler:    _NodeService_ConfirmNodeTakeover_Handler,
-		},
-		{
 			MethodName: "UpgradeNode",
 			Handler:    _NodeService_UpgradeNode_Handler,
 		},
@@ -1388,24 +1014,8 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_SetNodeMirrors_Handler,
 		},
 		{
-			MethodName: "ListNodeSharedNetworks",
-			Handler:    _NodeService_ListNodeSharedNetworks_Handler,
-		},
-		{
-			MethodName: "CreateNodeSharedNetwork",
-			Handler:    _NodeService_CreateNodeSharedNetwork_Handler,
-		},
-		{
-			MethodName: "DeleteNodeSharedNetwork",
-			Handler:    _NodeService_DeleteNodeSharedNetwork_Handler,
-		},
-		{
-			MethodName: "LinkNodeSharedNetwork",
-			Handler:    _NodeService_LinkNodeSharedNetwork_Handler,
-		},
-		{
-			MethodName: "UnlinkNodeSharedNetwork",
-			Handler:    _NodeService_UnlinkNodeSharedNetwork_Handler,
+			MethodName: "SetNodeProjectsRoot",
+			Handler:    _NodeService_SetNodeProjectsRoot_Handler,
 		},
 		{
 			MethodName: "CreateEnrollCommand",
@@ -1424,13 +1034,7 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_ApproveNode_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "RestoreNodeReplica",
-			Handler:       _NodeService_RestoreNodeReplica_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "nagi/v1/api.proto",
 }
 
@@ -2049,96 +1653,82 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ProjectService_ListAllProjects_FullMethodName              = "/nagi.v1.ProjectService/ListAllProjects"
-	ProjectService_SetProjectReplicaTrust_FullMethodName       = "/nagi.v1.ProjectService/SetProjectReplicaTrust"
-	ProjectService_CreateNodeProject_FullMethodName            = "/nagi.v1.ProjectService/CreateNodeProject"
-	ProjectService_GetNodeProject_FullMethodName               = "/nagi.v1.ProjectService/GetNodeProject"
-	ProjectService_AddNodeProjectContainer_FullMethodName      = "/nagi.v1.ProjectService/AddNodeProjectContainer"
-	ProjectService_DeleteNodeProjectContainer_FullMethodName   = "/nagi.v1.ProjectService/DeleteNodeProjectContainer"
-	ProjectService_SaveNodeProjectDraft_FullMethodName         = "/nagi.v1.ProjectService/SaveNodeProjectDraft"
-	ProjectService_DiscardNodeProjectDraft_FullMethodName      = "/nagi.v1.ProjectService/DiscardNodeProjectDraft"
-	ProjectService_UpdateNodeProjectSettings_FullMethodName    = "/nagi.v1.ProjectService/UpdateNodeProjectSettings"
-	ProjectService_SaveNodeProjectSharedEnv_FullMethodName     = "/nagi.v1.ProjectService/SaveNodeProjectSharedEnv"
-	ProjectService_DiscardNodeProjectSharedEnv_FullMethodName  = "/nagi.v1.ProjectService/DiscardNodeProjectSharedEnv"
-	ProjectService_ListNodeProjectDeployments_FullMethodName   = "/nagi.v1.ProjectService/ListNodeProjectDeployments"
-	ProjectService_RestoreNodeProjectDeployment_FullMethodName = "/nagi.v1.ProjectService/RestoreNodeProjectDeployment"
-	ProjectService_DeleteNodeProject_FullMethodName            = "/nagi.v1.ProjectService/DeleteNodeProject"
-	ProjectService_ListNodeProjectVersions_FullMethodName      = "/nagi.v1.ProjectService/ListNodeProjectVersions"
-	ProjectService_RollbackNodeProject_FullMethodName          = "/nagi.v1.ProjectService/RollbackNodeProject"
-	ProjectService_ListNodeProjectSnapshots_FullMethodName     = "/nagi.v1.ProjectService/ListNodeProjectSnapshots"
-	ProjectService_CreateNodeProjectSnapshot_FullMethodName    = "/nagi.v1.ProjectService/CreateNodeProjectSnapshot"
-	ProjectService_RestoreNodeProjectSnapshot_FullMethodName   = "/nagi.v1.ProjectService/RestoreNodeProjectSnapshot"
-	ProjectService_SaveNodeProjectRoute_FullMethodName         = "/nagi.v1.ProjectService/SaveNodeProjectRoute"
-	ProjectService_DeleteNodeProjectRoute_FullMethodName       = "/nagi.v1.ProjectService/DeleteNodeProjectRoute"
-	ProjectService_DeployNodeProject_FullMethodName            = "/nagi.v1.ProjectService/DeployNodeProject"
-	ProjectService_StreamNodeProjectLogs_FullMethodName        = "/nagi.v1.ProjectService/StreamNodeProjectLogs"
-	ProjectService_SetNodeProjectBackup_FullMethodName         = "/nagi.v1.ProjectService/SetNodeProjectBackup"
-	ProjectService_GetNodeProjectBackup_FullMethodName         = "/nagi.v1.ProjectService/GetNodeProjectBackup"
-	ProjectService_SyncNodeProjectBackup_FullMethodName        = "/nagi.v1.ProjectService/SyncNodeProjectBackup"
-	ProjectService_GetNodeProjectBackupKey_FullMethodName      = "/nagi.v1.ProjectService/GetNodeProjectBackupKey"
-	ProjectService_ListNodeProjectRegistries_FullMethodName    = "/nagi.v1.ProjectService/ListNodeProjectRegistries"
-	ProjectService_CheckNodeProjectImages_FullMethodName       = "/nagi.v1.ProjectService/CheckNodeProjectImages"
-	ProjectService_LoginNodeProjectRegistry_FullMethodName     = "/nagi.v1.ProjectService/LoginNodeProjectRegistry"
-	ProjectService_LogoutNodeProjectRegistry_FullMethodName    = "/nagi.v1.ProjectService/LogoutNodeProjectRegistry"
-	ProjectService_MigrateNodeProject_FullMethodName           = "/nagi.v1.ProjectService/MigrateNodeProject"
-	ProjectService_RebuildNodeProject_FullMethodName           = "/nagi.v1.ProjectService/RebuildNodeProject"
-	ProjectService_SetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/SetNodeProjectFailover"
-	ProjectService_GetNodeProjectFailover_FullMethodName       = "/nagi.v1.ProjectService/GetNodeProjectFailover"
-	ProjectService_ChangeNodeProjectWitness_FullMethodName     = "/nagi.v1.ProjectService/ChangeNodeProjectWitness"
+	ProjectService_ListProjects_FullMethodName          = "/nagi.v1.ProjectService/ListProjects"
+	ProjectService_CreateProject_FullMethodName         = "/nagi.v1.ProjectService/CreateProject"
+	ProjectService_GetProject_FullMethodName            = "/nagi.v1.ProjectService/GetProject"
+	ProjectService_UpdateProjectSettings_FullMethodName = "/nagi.v1.ProjectService/UpdateProjectSettings"
+	ProjectService_SaveSharedEnv_FullMethodName         = "/nagi.v1.ProjectService/SaveSharedEnv"
+	ProjectService_DiscardSharedEnv_FullMethodName      = "/nagi.v1.ProjectService/DiscardSharedEnv"
+	ProjectService_DeleteProject_FullMethodName         = "/nagi.v1.ProjectService/DeleteProject"
+	ProjectService_AddContainer_FullMethodName          = "/nagi.v1.ProjectService/AddContainer"
+	ProjectService_DeleteContainer_FullMethodName       = "/nagi.v1.ProjectService/DeleteContainer"
+	ProjectService_SaveDraft_FullMethodName             = "/nagi.v1.ProjectService/SaveDraft"
+	ProjectService_DiscardDraft_FullMethodName          = "/nagi.v1.ProjectService/DiscardDraft"
+	ProjectService_Deploy_FullMethodName                = "/nagi.v1.ProjectService/Deploy"
+	ProjectService_ListVersions_FullMethodName          = "/nagi.v1.ProjectService/ListVersions"
+	ProjectService_Rollback_FullMethodName              = "/nagi.v1.ProjectService/Rollback"
+	ProjectService_ListDeployments_FullMethodName       = "/nagi.v1.ProjectService/ListDeployments"
+	ProjectService_RestoreDeployment_FullMethodName     = "/nagi.v1.ProjectService/RestoreDeployment"
+	ProjectService_StreamLogs_FullMethodName            = "/nagi.v1.ProjectService/StreamLogs"
+	ProjectService_SaveRoute_FullMethodName             = "/nagi.v1.ProjectService/SaveRoute"
+	ProjectService_DeleteRoute_FullMethodName           = "/nagi.v1.ProjectService/DeleteRoute"
+	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
+	ProjectService_CreateSnapshot_FullMethodName        = "/nagi.v1.ProjectService/CreateSnapshot"
+	ProjectService_RestoreSnapshot_FullMethodName       = "/nagi.v1.ProjectService/RestoreSnapshot"
+	ProjectService_GetBackupKey_FullMethodName          = "/nagi.v1.ProjectService/GetBackupKey"
+	ProjectService_ListRegistries_FullMethodName        = "/nagi.v1.ProjectService/ListRegistries"
+	ProjectService_LoginRegistry_FullMethodName         = "/nagi.v1.ProjectService/LoginRegistry"
+	ProjectService_LogoutRegistry_FullMethodName        = "/nagi.v1.ProjectService/LogoutRegistry"
+	ProjectService_CheckImages_FullMethodName           = "/nagi.v1.ProjectService/CheckImages"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProjectServiceClient interface {
-	ListAllProjects(ctx context.Context, in *ListAllProjectsRequest, opts ...grpc.CallOption) (*ListAllProjectsResponse, error)
-	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
-	// 面板直接下发给所有节点。
-	SetProjectReplicaTrust(ctx context.Context, in *SetProjectReplicaTrustRequest, opts ...grpc.CallOption) (*SetProjectReplicaTrustResponse, error)
-	CreateNodeProject(ctx context.Context, in *CreateNodeProjectRequest, opts ...grpc.CallOption) (*CreateNodeProjectResponse, error)
-	GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error)
-	AddNodeProjectContainer(ctx context.Context, in *AddNodeProjectContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error)
-	DeleteNodeProjectContainer(ctx context.Context, in *DeleteNodeProjectContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error)
-	SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error)
-	DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error)
-	UpdateNodeProjectSettings(ctx context.Context, in *UpdateNodeProjectSettingsRequest, opts ...grpc.CallOption) (*UpdateProjectSettingsResponse, error)
-	SaveNodeProjectSharedEnv(ctx context.Context, in *SaveNodeProjectSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error)
-	DiscardNodeProjectSharedEnv(ctx context.Context, in *NodeProjectRevisionRef, opts ...grpc.CallOption) (*DiscardSharedEnvResponse, error)
-	ListNodeProjectDeployments(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
-	// 回到某次部署时的状态。
-	RestoreNodeProjectDeployment(ctx context.Context, in *RestoreNodeProjectDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error)
-	ListNodeProjectVersions(ctx context.Context, in *NodeContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
-	RollbackNodeProject(ctx context.Context, in *RollbackNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	ListNodeProjectSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
-	CreateNodeProjectSnapshot(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	RestoreNodeProjectSnapshot(ctx context.Context, in *RestoreNodeProjectSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error)
-	DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error)
-	DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
-	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
-	SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error)
-	GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
-	SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error)
-	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
-	GetNodeProjectBackupKey(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*GetNodeProjectBackupKeyResponse, error)
+	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
+	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error)
+	GetProject(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ProjectSummary, error)
+	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
+	UpdateProjectSettings(ctx context.Context, in *UpdateProjectSettingsRequest, opts ...grpc.CallOption) (*Project, error)
+	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
+	SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error)
+	DiscardSharedEnv(ctx context.Context, in *ProjectRevisionRef, opts ...grpc.CallOption) (*Project, error)
+	// 删除项目：删除所有容器，容器目录默认保留。
+	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*Project, error)
+	// 删除容器：停止并删除它，目录默认保留。
+	DeleteContainer(ctx context.Context, in *DeleteContainerApiRequest, opts ...grpc.CallOption) (*Project, error)
+	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*Project, error)
+	DiscardDraft(ctx context.Context, in *ContainerRevisionRef, opts ...grpc.CallOption) (*Project, error)
+	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
+	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
+	Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	ListVersions(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
+	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	ListDeployments(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	StreamLogs(ctx context.Context, in *StreamLogsApiRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
+	// 端口映射，立即生效。
+	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*Project, error)
+	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*Project, error)
+	// 快照（按容器）。
+	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
+	CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetBackupKey(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*GetBackupKeyResponse, error)
 	// 私有仓库认证：每个项目自己的登录信息。
-	ListNodeProjectRegistries(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	ListRegistries(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	LoginRegistry(ctx context.Context, in *LoginRegistryApiRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
+	LogoutRegistry(ctx context.Context, in *LogoutRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
 	// 立即检查项目的镜像有没有新版本。
-	CheckNodeProjectImages(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
-	LoginNodeProjectRegistry(ctx context.Context, in *LoginNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
-	LogoutNodeProjectRegistry(ctx context.Context, in *LogoutNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error)
-	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
-	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
-	MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
-	RebuildNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
-	// 设置顶替（standby_node_id 为空表示取消）。
-	SetNodeProjectFailover(ctx context.Context, in *SetNodeProjectFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
-	GetNodeProjectFailover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error)
-	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
-	ChangeNodeProjectWitness(ctx context.Context, in *ChangeNodeProjectWitnessRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
+	CheckImages(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
 }
 
 type projectServiceClient struct {
@@ -2149,133 +1739,123 @@ func NewProjectServiceClient(cc grpc.ClientConnInterface) ProjectServiceClient {
 	return &projectServiceClient{cc}
 }
 
-func (c *projectServiceClient) ListAllProjects(ctx context.Context, in *ListAllProjectsRequest, opts ...grpc.CallOption) (*ListAllProjectsResponse, error) {
+func (c *projectServiceClient) ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListAllProjectsResponse)
-	err := c.cc.Invoke(ctx, ProjectService_ListAllProjects_FullMethodName, in, out, cOpts...)
+	out := new(ListProjectsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListProjects_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) SetProjectReplicaTrust(ctx context.Context, in *SetProjectReplicaTrustRequest, opts ...grpc.CallOption) (*SetProjectReplicaTrustResponse, error) {
+func (c *projectServiceClient) CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetProjectReplicaTrustResponse)
-	err := c.cc.Invoke(ctx, ProjectService_SetProjectReplicaTrust_FullMethodName, in, out, cOpts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_CreateProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) CreateNodeProject(ctx context.Context, in *CreateNodeProjectRequest, opts ...grpc.CallOption) (*CreateNodeProjectResponse, error) {
+func (c *projectServiceClient) GetProject(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ProjectSummary, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateNodeProjectResponse)
-	err := c.cc.Invoke(ctx, ProjectService_CreateNodeProject_FullMethodName, in, out, cOpts...)
+	out := new(ProjectSummary)
+	err := c.cc.Invoke(ctx, ProjectService_GetProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) GetNodeProject(ctx context.Context, in *GetNodeProjectRequest, opts ...grpc.CallOption) (*GetNodeProjectResponse, error) {
+func (c *projectServiceClient) UpdateProjectSettings(ctx context.Context, in *UpdateProjectSettingsRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetNodeProjectResponse)
-	err := c.cc.Invoke(ctx, ProjectService_GetNodeProject_FullMethodName, in, out, cOpts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_UpdateProjectSettings_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) AddNodeProjectContainer(ctx context.Context, in *AddNodeProjectContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddContainerResponse)
-	err := c.cc.Invoke(ctx, ProjectService_AddNodeProjectContainer_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) DeleteNodeProjectContainer(ctx context.Context, in *DeleteNodeProjectContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteContainerResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProjectContainer_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) SaveNodeProjectDraft(ctx context.Context, in *SaveNodeProjectDraftRequest, opts ...grpc.CallOption) (*SaveNodeProjectDraftResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SaveNodeProjectDraftResponse)
-	err := c.cc.Invoke(ctx, ProjectService_SaveNodeProjectDraft_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) DiscardNodeProjectDraft(ctx context.Context, in *DiscardNodeProjectDraftRequest, opts ...grpc.CallOption) (*DiscardNodeProjectDraftResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DiscardNodeProjectDraftResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DiscardNodeProjectDraft_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) UpdateNodeProjectSettings(ctx context.Context, in *UpdateNodeProjectSettingsRequest, opts ...grpc.CallOption) (*UpdateProjectSettingsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateProjectSettingsResponse)
-	err := c.cc.Invoke(ctx, ProjectService_UpdateNodeProjectSettings_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) SaveNodeProjectSharedEnv(ctx context.Context, in *SaveNodeProjectSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error) {
+func (c *projectServiceClient) SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SaveSharedEnvResponse)
-	err := c.cc.Invoke(ctx, ProjectService_SaveNodeProjectSharedEnv_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_SaveSharedEnv_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) DiscardNodeProjectSharedEnv(ctx context.Context, in *NodeProjectRevisionRef, opts ...grpc.CallOption) (*DiscardSharedEnvResponse, error) {
+func (c *projectServiceClient) DiscardSharedEnv(ctx context.Context, in *ProjectRevisionRef, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DiscardSharedEnvResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DiscardNodeProjectSharedEnv_FullMethodName, in, out, cOpts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_DiscardSharedEnv_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) ListNodeProjectDeployments(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error) {
+func (c *projectServiceClient) DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListDeploymentsResponse)
-	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectDeployments_FullMethodName, in, out, cOpts...)
+	out := new(DeleteProjectResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) RestoreNodeProjectDeployment(ctx context.Context, in *RestoreNodeProjectDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+func (c *projectServiceClient) AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_RestoreNodeProjectDeployment_FullMethodName, cOpts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_AddContainer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[RestoreNodeProjectDeploymentRequest, DeployEvent]{ClientStream: stream}
+	return out, nil
+}
+
+func (c *projectServiceClient) DeleteContainer(ctx context.Context, in *DeleteContainerApiRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteContainer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SaveDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DiscardDraft(ctx context.Context, in *ContainerRevisionRef, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_DiscardDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_Deploy_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DeployRequest, DeployEvent]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -2286,35 +1866,25 @@ func (c *projectServiceClient) RestoreNodeProjectDeployment(ctx context.Context,
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RestoreNodeProjectDeploymentClient = grpc.ServerStreamingClient[DeployEvent]
+type ProjectService_DeployClient = grpc.ServerStreamingClient[DeployEvent]
 
-func (c *projectServiceClient) DeleteNodeProject(ctx context.Context, in *DeleteNodeProjectRequest, opts ...grpc.CallOption) (*DeleteNodeProjectResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteNodeProjectResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProject_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) ListNodeProjectVersions(ctx context.Context, in *NodeContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
+func (c *projectServiceClient) ListVersions(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVersionsResponse)
-	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectVersions_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_ListVersions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) RollbackNodeProject(ctx context.Context, in *RollbackNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+func (c *projectServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_RollbackNodeProject_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_Rollback_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[RollbackNodeProjectRequest, DeployEvent]{ClientStream: stream}
+	x := &grpc.GenericClientStream[RollbackRequest, DeployEvent]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -2325,25 +1895,93 @@ func (c *projectServiceClient) RollbackNodeProject(ctx context.Context, in *Roll
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RollbackNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
+type ProjectService_RollbackClient = grpc.ServerStreamingClient[DeployEvent]
 
-func (c *projectServiceClient) ListNodeProjectSnapshots(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+func (c *projectServiceClient) ListDeployments(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDeploymentsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListDeployments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreDeploymentRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RestoreDeploymentClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *projectServiceClient) StreamLogs(ctx context.Context, in *StreamLogsApiRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_StreamLogs_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamLogsApiRequest, LogLine]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
+
+func (c *projectServiceClient) SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SaveRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
-	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectSnapshots_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_ListSnapshots_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) CreateNodeProjectSnapshot(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_CreateNodeProjectSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[NodeProjectRef, DeployEvent]{ClientStream: stream}
+	x := &grpc.GenericClientStream[ContainerRef, DeployEvent]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -2354,15 +1992,15 @@ func (c *projectServiceClient) CreateNodeProjectSnapshot(ctx context.Context, in
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_CreateNodeProjectSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
-func (c *projectServiceClient) RestoreNodeProjectSnapshot(ctx context.Context, in *RestoreNodeProjectSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_RestoreNodeProjectSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[RestoreNodeProjectSnapshotRequest, DeployEvent]{ClientStream: stream}
+	x := &grpc.GenericClientStream[RestoreSnapshotRequest, DeployEvent]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -2373,208 +2011,52 @@ func (c *projectServiceClient) RestoreNodeProjectSnapshot(ctx context.Context, i
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RestoreNodeProjectSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+type ProjectService_RestoreSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
-func (c *projectServiceClient) SaveNodeProjectRoute(ctx context.Context, in *SaveNodeProjectRouteRequest, opts ...grpc.CallOption) (*SaveNodeProjectRouteResponse, error) {
+func (c *projectServiceClient) GetBackupKey(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*GetBackupKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SaveNodeProjectRouteResponse)
-	err := c.cc.Invoke(ctx, ProjectService_SaveNodeProjectRoute_FullMethodName, in, out, cOpts...)
+	out := new(GetBackupKeyResponse)
+	err := c.cc.Invoke(ctx, ProjectService_GetBackupKey_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) DeleteNodeProjectRoute(ctx context.Context, in *DeleteNodeProjectRouteRequest, opts ...grpc.CallOption) (*DeleteNodeProjectRouteResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteNodeProjectRouteResponse)
-	err := c.cc.Invoke(ctx, ProjectService_DeleteNodeProjectRoute_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) DeployNodeProject(ctx context.Context, in *DeployNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_DeployNodeProject_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[DeployNodeProjectRequest, DeployEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_DeployNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
-
-func (c *projectServiceClient) StreamNodeProjectLogs(ctx context.Context, in *StreamNodeProjectLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_StreamNodeProjectLogs_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[StreamNodeProjectLogsRequest, LogLine]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_StreamNodeProjectLogsClient = grpc.ServerStreamingClient[LogLine]
-
-func (c *projectServiceClient) SetNodeProjectBackup(ctx context.Context, in *SetNodeProjectBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BackupStatus)
-	err := c.cc.Invoke(ctx, ProjectService_SetNodeProjectBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) GetNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BackupStatus)
-	err := c.cc.Invoke(ctx, ProjectService_GetNodeProjectBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) SyncNodeProjectBackup(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*BackupStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BackupStatus)
-	err := c.cc.Invoke(ctx, ProjectService_SyncNodeProjectBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) GetNodeProjectBackupKey(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*GetNodeProjectBackupKeyResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetNodeProjectBackupKeyResponse)
-	err := c.cc.Invoke(ctx, ProjectService_GetNodeProjectBackupKey_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) ListNodeProjectRegistries(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+func (c *projectServiceClient) ListRegistries(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*RegistriesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegistriesResponse)
-	err := c.cc.Invoke(ctx, ProjectService_ListNodeProjectRegistries_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_ListRegistries_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *projectServiceClient) CheckNodeProjectImages(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
+func (c *projectServiceClient) LoginRegistry(ctx context.Context, in *LoginRegistryApiRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_LoginRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) LogoutRegistry(ctx context.Context, in *LogoutRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegistriesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_LogoutRegistry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) CheckImages(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckImagesResponse)
-	err := c.cc.Invoke(ctx, ProjectService_CheckNodeProjectImages_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) LoginNodeProjectRegistry(ctx context.Context, in *LoginNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegistriesResponse)
-	err := c.cc.Invoke(ctx, ProjectService_LoginNodeProjectRegistry_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) LogoutNodeProjectRegistry(ctx context.Context, in *LogoutNodeProjectRegistryRequest, opts ...grpc.CallOption) (*RegistriesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegistriesResponse)
-	err := c.cc.Invoke(ctx, ProjectService_LogoutNodeProjectRegistry_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) MigrateNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_MigrateNodeProject_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[MigrateNodeProjectRequest, DeployEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_MigrateNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
-
-func (c *projectServiceClient) RebuildNodeProject(ctx context.Context, in *MigrateNodeProjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RebuildNodeProject_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[MigrateNodeProjectRequest, DeployEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RebuildNodeProjectClient = grpc.ServerStreamingClient[DeployEvent]
-
-func (c *projectServiceClient) SetNodeProjectFailover(ctx context.Context, in *SetNodeProjectFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailoverStatus)
-	err := c.cc.Invoke(ctx, ProjectService_SetNodeProjectFailover_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) GetNodeProjectFailover(ctx context.Context, in *NodeProjectRef, opts ...grpc.CallOption) (*FailoverStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailoverStatus)
-	err := c.cc.Invoke(ctx, ProjectService_GetNodeProjectFailover_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, in *ChangeNodeProjectWitnessRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailoverStatus)
-	err := c.cc.Invoke(ctx, ProjectService_ChangeNodeProjectWitness_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_CheckImages_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2585,54 +2067,49 @@ func (c *projectServiceClient) ChangeNodeProjectWitness(ctx context.Context, in 
 // All implementations must embed UnimplementedProjectServiceServer
 // for forward compatibility.
 type ProjectServiceServer interface {
-	ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error)
-	// 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
-	// 面板直接下发给所有节点。
-	SetProjectReplicaTrust(context.Context, *SetProjectReplicaTrustRequest) (*SetProjectReplicaTrustResponse, error)
-	CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error)
-	GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error)
-	AddNodeProjectContainer(context.Context, *AddNodeProjectContainerRequest) (*AddContainerResponse, error)
-	DeleteNodeProjectContainer(context.Context, *DeleteNodeProjectContainerRequest) (*DeleteContainerResponse, error)
-	SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error)
-	DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error)
-	UpdateNodeProjectSettings(context.Context, *UpdateNodeProjectSettingsRequest) (*UpdateProjectSettingsResponse, error)
-	SaveNodeProjectSharedEnv(context.Context, *SaveNodeProjectSharedEnvRequest) (*SaveSharedEnvResponse, error)
-	DiscardNodeProjectSharedEnv(context.Context, *NodeProjectRevisionRef) (*DiscardSharedEnvResponse, error)
-	ListNodeProjectDeployments(context.Context, *NodeProjectRef) (*ListDeploymentsResponse, error)
-	// 回到某次部署时的状态。
-	RestoreNodeProjectDeployment(*RestoreNodeProjectDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error)
-	ListNodeProjectVersions(context.Context, *NodeContainerRef) (*ListVersionsResponse, error)
-	RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	ListNodeProjectSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error)
-	CreateNodeProjectSnapshot(*NodeProjectRef, grpc.ServerStreamingServer[DeployEvent]) error
-	RestoreNodeProjectSnapshot(*RestoreNodeProjectSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error)
-	DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error)
-	DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error
-	// 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
-	SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error)
-	GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
-	SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error)
-	// 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
-	GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error)
+	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
+	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
+	CreateProject(context.Context, *CreateProjectRequest) (*Project, error)
+	GetProject(context.Context, *ProjectRef) (*ProjectSummary, error)
+	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
+	UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*Project, error)
+	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
+	SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error)
+	DiscardSharedEnv(context.Context, *ProjectRevisionRef) (*Project, error)
+	// 删除项目：删除所有容器，容器目录默认保留。
+	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
+	// 往项目里加一个容器（只保存，不部署）。
+	AddContainer(context.Context, *AddContainerRequest) (*Project, error)
+	// 删除容器：停止并删除它，目录默认保留。
+	DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error)
+	SaveDraft(context.Context, *SaveDraftRequest) (*Project, error)
+	DiscardDraft(context.Context, *ContainerRevisionRef) (*Project, error)
+	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
+	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
+	Deploy(*DeployRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	ListVersions(context.Context, *ContainerRef) (*ListVersionsResponse, error)
+	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
+	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	ListDeployments(context.Context, *ProjectRef) (*ListDeploymentsResponse, error)
+	// 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
+	RestoreDeployment(*RestoreDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	StreamLogs(*StreamLogsApiRequest, grpc.ServerStreamingServer[LogLine]) error
+	// 端口映射，立即生效。
+	SaveRoute(context.Context, *SaveRouteRequest) (*Project, error)
+	DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error)
+	// 快照（按容器）。
+	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
+	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
+	CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
+	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+	GetBackupKey(context.Context, *ContainerRef) (*GetBackupKeyResponse, error)
 	// 私有仓库认证：每个项目自己的登录信息。
-	ListNodeProjectRegistries(context.Context, *NodeProjectRef) (*RegistriesResponse, error)
+	ListRegistries(context.Context, *ProjectRef) (*RegistriesResponse, error)
+	LoginRegistry(context.Context, *LoginRegistryApiRequest) (*RegistriesResponse, error)
+	LogoutRegistry(context.Context, *LogoutRegistryRequest) (*RegistriesResponse, error)
 	// 立即检查项目的镜像有没有新版本。
-	CheckNodeProjectImages(context.Context, *NodeProjectRef) (*CheckImagesResponse, error)
-	LoginNodeProjectRegistry(context.Context, *LoginNodeProjectRegistryRequest) (*RegistriesResponse, error)
-	LogoutNodeProjectRegistry(context.Context, *LogoutNodeProjectRegistryRequest) (*RegistriesResponse, error)
-	// 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
-	// 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
-	MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	// 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
-	RebuildNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error
-	// 设置顶替（standby_node_id 为空表示取消）。
-	SetNodeProjectFailover(context.Context, *SetNodeProjectFailoverRequest) (*FailoverStatus, error)
-	GetNodeProjectFailover(context.Context, *NodeProjectRef) (*FailoverStatus, error)
-	// 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
-	ChangeNodeProjectWitness(context.Context, *ChangeNodeProjectWitnessRequest) (*FailoverStatus, error)
+	CheckImages(context.Context, *ProjectRef) (*CheckImagesResponse, error)
 	mustEmbedUnimplementedProjectServiceServer()
 }
 
@@ -2643,113 +2120,86 @@ type ProjectServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedProjectServiceServer struct{}
 
-func (UnimplementedProjectServiceServer) ListAllProjects(context.Context, *ListAllProjectsRequest) (*ListAllProjectsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListAllProjects not implemented")
+func (UnimplementedProjectServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
 }
-func (UnimplementedProjectServiceServer) SetProjectReplicaTrust(context.Context, *SetProjectReplicaTrustRequest) (*SetProjectReplicaTrustResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetProjectReplicaTrust not implemented")
+func (UnimplementedProjectServiceServer) CreateProject(context.Context, *CreateProjectRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateProject not implemented")
 }
-func (UnimplementedProjectServiceServer) CreateNodeProject(context.Context, *CreateNodeProjectRequest) (*CreateNodeProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateNodeProject not implemented")
+func (UnimplementedProjectServiceServer) GetProject(context.Context, *ProjectRef) (*ProjectSummary, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
 }
-func (UnimplementedProjectServiceServer) GetNodeProject(context.Context, *GetNodeProjectRequest) (*GetNodeProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNodeProject not implemented")
+func (UnimplementedProjectServiceServer) UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateProjectSettings not implemented")
 }
-func (UnimplementedProjectServiceServer) AddNodeProjectContainer(context.Context, *AddNodeProjectContainerRequest) (*AddContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddNodeProjectContainer not implemented")
+func (UnimplementedProjectServiceServer) SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSharedEnv not implemented")
 }
-func (UnimplementedProjectServiceServer) DeleteNodeProjectContainer(context.Context, *DeleteNodeProjectContainerRequest) (*DeleteContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProjectContainer not implemented")
+func (UnimplementedProjectServiceServer) DiscardSharedEnv(context.Context, *ProjectRevisionRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardSharedEnv not implemented")
 }
-func (UnimplementedProjectServiceServer) SaveNodeProjectDraft(context.Context, *SaveNodeProjectDraftRequest) (*SaveNodeProjectDraftResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectDraft not implemented")
+func (UnimplementedProjectServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
 }
-func (UnimplementedProjectServiceServer) DiscardNodeProjectDraft(context.Context, *DiscardNodeProjectDraftRequest) (*DiscardNodeProjectDraftResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DiscardNodeProjectDraft not implemented")
+func (UnimplementedProjectServiceServer) AddContainer(context.Context, *AddContainerRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddContainer not implemented")
 }
-func (UnimplementedProjectServiceServer) UpdateNodeProjectSettings(context.Context, *UpdateNodeProjectSettingsRequest) (*UpdateProjectSettingsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpdateNodeProjectSettings not implemented")
+func (UnimplementedProjectServiceServer) DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteContainer not implemented")
 }
-func (UnimplementedProjectServiceServer) SaveNodeProjectSharedEnv(context.Context, *SaveNodeProjectSharedEnvRequest) (*SaveSharedEnvResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectSharedEnv not implemented")
+func (UnimplementedProjectServiceServer) SaveDraft(context.Context, *SaveDraftRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveDraft not implemented")
 }
-func (UnimplementedProjectServiceServer) DiscardNodeProjectSharedEnv(context.Context, *NodeProjectRevisionRef) (*DiscardSharedEnvResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DiscardNodeProjectSharedEnv not implemented")
+func (UnimplementedProjectServiceServer) DiscardDraft(context.Context, *ContainerRevisionRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardDraft not implemented")
 }
-func (UnimplementedProjectServiceServer) ListNodeProjectDeployments(context.Context, *NodeProjectRef) (*ListDeploymentsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectDeployments not implemented")
+func (UnimplementedProjectServiceServer) Deploy(*DeployRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method Deploy not implemented")
 }
-func (UnimplementedProjectServiceServer) RestoreNodeProjectDeployment(*RestoreNodeProjectDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method RestoreNodeProjectDeployment not implemented")
+func (UnimplementedProjectServiceServer) ListVersions(context.Context, *ContainerRef) (*ListVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVersions not implemented")
 }
-func (UnimplementedProjectServiceServer) DeleteNodeProject(context.Context, *DeleteNodeProjectRequest) (*DeleteNodeProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProject not implemented")
+func (UnimplementedProjectServiceServer) Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method Rollback not implemented")
 }
-func (UnimplementedProjectServiceServer) ListNodeProjectVersions(context.Context, *NodeContainerRef) (*ListVersionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectVersions not implemented")
+func (UnimplementedProjectServiceServer) ListDeployments(context.Context, *ProjectRef) (*ListDeploymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDeployments not implemented")
 }
-func (UnimplementedProjectServiceServer) RollbackNodeProject(*RollbackNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method RollbackNodeProject not implemented")
+func (UnimplementedProjectServiceServer) RestoreDeployment(*RestoreDeploymentRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreDeployment not implemented")
 }
-func (UnimplementedProjectServiceServer) ListNodeProjectSnapshots(context.Context, *NodeProjectRef) (*ListSnapshotsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectSnapshots not implemented")
+func (UnimplementedProjectServiceServer) StreamLogs(*StreamLogsApiRequest, grpc.ServerStreamingServer[LogLine]) error {
+	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
 }
-func (UnimplementedProjectServiceServer) CreateNodeProjectSnapshot(*NodeProjectRef, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method CreateNodeProjectSnapshot not implemented")
+func (UnimplementedProjectServiceServer) SaveRoute(context.Context, *SaveRouteRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRoute not implemented")
 }
-func (UnimplementedProjectServiceServer) RestoreNodeProjectSnapshot(*RestoreNodeProjectSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method RestoreNodeProjectSnapshot not implemented")
+func (UnimplementedProjectServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
 }
-func (UnimplementedProjectServiceServer) SaveNodeProjectRoute(context.Context, *SaveNodeProjectRouteRequest) (*SaveNodeProjectRouteResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SaveNodeProjectRoute not implemented")
+func (UnimplementedProjectServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
 }
-func (UnimplementedProjectServiceServer) DeleteNodeProjectRoute(context.Context, *DeleteNodeProjectRouteRequest) (*DeleteNodeProjectRouteResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNodeProjectRoute not implemented")
+func (UnimplementedProjectServiceServer) CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method CreateSnapshot not implemented")
 }
-func (UnimplementedProjectServiceServer) DeployNodeProject(*DeployNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method DeployNodeProject not implemented")
+func (UnimplementedProjectServiceServer) RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreSnapshot not implemented")
 }
-func (UnimplementedProjectServiceServer) StreamNodeProjectLogs(*StreamNodeProjectLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
-	return status.Error(codes.Unimplemented, "method StreamNodeProjectLogs not implemented")
+func (UnimplementedProjectServiceServer) GetBackupKey(context.Context, *ContainerRef) (*GetBackupKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBackupKey not implemented")
 }
-func (UnimplementedProjectServiceServer) SetNodeProjectBackup(context.Context, *SetNodeProjectBackupRequest) (*BackupStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectBackup not implemented")
+func (UnimplementedProjectServiceServer) ListRegistries(context.Context, *ProjectRef) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRegistries not implemented")
 }
-func (UnimplementedProjectServiceServer) GetNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectBackup not implemented")
+func (UnimplementedProjectServiceServer) LoginRegistry(context.Context, *LoginRegistryApiRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LoginRegistry not implemented")
 }
-func (UnimplementedProjectServiceServer) SyncNodeProjectBackup(context.Context, *NodeProjectRef) (*BackupStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method SyncNodeProjectBackup not implemented")
+func (UnimplementedProjectServiceServer) LogoutRegistry(context.Context, *LogoutRegistryRequest) (*RegistriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogoutRegistry not implemented")
 }
-func (UnimplementedProjectServiceServer) GetNodeProjectBackupKey(context.Context, *NodeProjectRef) (*GetNodeProjectBackupKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectBackupKey not implemented")
-}
-func (UnimplementedProjectServiceServer) ListNodeProjectRegistries(context.Context, *NodeProjectRef) (*RegistriesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodeProjectRegistries not implemented")
-}
-func (UnimplementedProjectServiceServer) CheckNodeProjectImages(context.Context, *NodeProjectRef) (*CheckImagesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckNodeProjectImages not implemented")
-}
-func (UnimplementedProjectServiceServer) LoginNodeProjectRegistry(context.Context, *LoginNodeProjectRegistryRequest) (*RegistriesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method LoginNodeProjectRegistry not implemented")
-}
-func (UnimplementedProjectServiceServer) LogoutNodeProjectRegistry(context.Context, *LogoutNodeProjectRegistryRequest) (*RegistriesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method LogoutNodeProjectRegistry not implemented")
-}
-func (UnimplementedProjectServiceServer) MigrateNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method MigrateNodeProject not implemented")
-}
-func (UnimplementedProjectServiceServer) RebuildNodeProject(*MigrateNodeProjectRequest, grpc.ServerStreamingServer[DeployEvent]) error {
-	return status.Error(codes.Unimplemented, "method RebuildNodeProject not implemented")
-}
-func (UnimplementedProjectServiceServer) SetNodeProjectFailover(context.Context, *SetNodeProjectFailoverRequest) (*FailoverStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectFailover not implemented")
-}
-func (UnimplementedProjectServiceServer) GetNodeProjectFailover(context.Context, *NodeProjectRef) (*FailoverStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNodeProjectFailover not implemented")
-}
-func (UnimplementedProjectServiceServer) ChangeNodeProjectWitness(context.Context, *ChangeNodeProjectWitnessRequest) (*FailoverStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method ChangeNodeProjectWitness not implemented")
+func (UnimplementedProjectServiceServer) CheckImages(context.Context, *ProjectRef) (*CheckImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckImages not implemented")
 }
 func (UnimplementedProjectServiceServer) mustEmbedUnimplementedProjectServiceServer() {}
 func (UnimplementedProjectServiceServer) testEmbeddedByValue()                        {}
@@ -2772,594 +2222,446 @@ func RegisterProjectServiceServer(s grpc.ServiceRegistrar, srv ProjectServiceSer
 	s.RegisterService(&ProjectService_ServiceDesc, srv)
 }
 
-func _ProjectService_ListAllProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAllProjectsRequest)
+func _ProjectService_ListProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProjectsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).ListAllProjects(ctx, in)
+		return srv.(ProjectServiceServer).ListProjects(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_ListAllProjects_FullMethodName,
+		FullMethod: ProjectService_ListProjects_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListAllProjects(ctx, req.(*ListAllProjectsRequest))
+		return srv.(ProjectServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_SetProjectReplicaTrust_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetProjectReplicaTrustRequest)
+func _ProjectService_CreateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SetProjectReplicaTrust(ctx, in)
+		return srv.(ProjectServiceServer).CreateProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SetProjectReplicaTrust_FullMethodName,
+		FullMethod: ProjectService_CreateProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SetProjectReplicaTrust(ctx, req.(*SetProjectReplicaTrustRequest))
+		return srv.(ProjectServiceServer).CreateProject(ctx, req.(*CreateProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_CreateNodeProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateNodeProjectRequest)
+func _ProjectService_GetProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).CreateNodeProject(ctx, in)
+		return srv.(ProjectServiceServer).GetProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_CreateNodeProject_FullMethodName,
+		FullMethod: ProjectService_GetProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).CreateNodeProject(ctx, req.(*CreateNodeProjectRequest))
+		return srv.(ProjectServiceServer).GetProject(ctx, req.(*ProjectRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_GetNodeProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNodeProjectRequest)
+func _ProjectService_UpdateProjectSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateProjectSettingsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).GetNodeProject(ctx, in)
+		return srv.(ProjectServiceServer).UpdateProjectSettings(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_GetNodeProject_FullMethodName,
+		FullMethod: ProjectService_UpdateProjectSettings_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).GetNodeProject(ctx, req.(*GetNodeProjectRequest))
+		return srv.(ProjectServiceServer).UpdateProjectSettings(ctx, req.(*UpdateProjectSettingsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_AddNodeProjectContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddNodeProjectContainerRequest)
+func _ProjectService_SaveSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSharedEnvRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).AddNodeProjectContainer(ctx, in)
+		return srv.(ProjectServiceServer).SaveSharedEnv(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_AddNodeProjectContainer_FullMethodName,
+		FullMethod: ProjectService_SaveSharedEnv_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).AddNodeProjectContainer(ctx, req.(*AddNodeProjectContainerRequest))
+		return srv.(ProjectServiceServer).SaveSharedEnv(ctx, req.(*SaveSharedEnvRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DeleteNodeProjectContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNodeProjectContainerRequest)
+func _ProjectService_DiscardSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectRevisionRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DeleteNodeProjectContainer(ctx, in)
+		return srv.(ProjectServiceServer).DiscardSharedEnv(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DeleteNodeProjectContainer_FullMethodName,
+		FullMethod: ProjectService_DiscardSharedEnv_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DeleteNodeProjectContainer(ctx, req.(*DeleteNodeProjectContainerRequest))
+		return srv.(ProjectServiceServer).DiscardSharedEnv(ctx, req.(*ProjectRevisionRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_SaveNodeProjectDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SaveNodeProjectDraftRequest)
+func _ProjectService_DeleteProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SaveNodeProjectDraft(ctx, in)
+		return srv.(ProjectServiceServer).DeleteProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SaveNodeProjectDraft_FullMethodName,
+		FullMethod: ProjectService_DeleteProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SaveNodeProjectDraft(ctx, req.(*SaveNodeProjectDraftRequest))
+		return srv.(ProjectServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DiscardNodeProjectDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DiscardNodeProjectDraftRequest)
+func _ProjectService_AddContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddContainerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DiscardNodeProjectDraft(ctx, in)
+		return srv.(ProjectServiceServer).AddContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DiscardNodeProjectDraft_FullMethodName,
+		FullMethod: ProjectService_AddContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DiscardNodeProjectDraft(ctx, req.(*DiscardNodeProjectDraftRequest))
+		return srv.(ProjectServiceServer).AddContainer(ctx, req.(*AddContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_UpdateNodeProjectSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateNodeProjectSettingsRequest)
+func _ProjectService_DeleteContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteContainerApiRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).UpdateNodeProjectSettings(ctx, in)
+		return srv.(ProjectServiceServer).DeleteContainer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_UpdateNodeProjectSettings_FullMethodName,
+		FullMethod: ProjectService_DeleteContainer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).UpdateNodeProjectSettings(ctx, req.(*UpdateNodeProjectSettingsRequest))
+		return srv.(ProjectServiceServer).DeleteContainer(ctx, req.(*DeleteContainerApiRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_SaveNodeProjectSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SaveNodeProjectSharedEnvRequest)
+func _ProjectService_SaveDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SaveNodeProjectSharedEnv(ctx, in)
+		return srv.(ProjectServiceServer).SaveDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SaveNodeProjectSharedEnv_FullMethodName,
+		FullMethod: ProjectService_SaveDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SaveNodeProjectSharedEnv(ctx, req.(*SaveNodeProjectSharedEnvRequest))
+		return srv.(ProjectServiceServer).SaveDraft(ctx, req.(*SaveDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DiscardNodeProjectSharedEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRevisionRef)
+func _ProjectService_DiscardDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRevisionRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DiscardNodeProjectSharedEnv(ctx, in)
+		return srv.(ProjectServiceServer).DiscardDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DiscardNodeProjectSharedEnv_FullMethodName,
+		FullMethod: ProjectService_DiscardDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DiscardNodeProjectSharedEnv(ctx, req.(*NodeProjectRevisionRef))
+		return srv.(ProjectServiceServer).DiscardDraft(ctx, req.(*ContainerRevisionRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_ListNodeProjectDeployments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).ListNodeProjectDeployments(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_ListNodeProjectDeployments_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListNodeProjectDeployments(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_RestoreNodeProjectDeployment_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RestoreNodeProjectDeploymentRequest)
+func _ProjectService_Deploy_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DeployRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).RestoreNodeProjectDeployment(m, &grpc.GenericServerStream[RestoreNodeProjectDeploymentRequest, DeployEvent]{ServerStream: stream})
+	return srv.(ProjectServiceServer).Deploy(m, &grpc.GenericServerStream[DeployRequest, DeployEvent]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RestoreNodeProjectDeploymentServer = grpc.ServerStreamingServer[DeployEvent]
+type ProjectService_DeployServer = grpc.ServerStreamingServer[DeployEvent]
 
-func _ProjectService_DeleteNodeProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNodeProjectRequest)
+func _ProjectService_ListVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DeleteNodeProject(ctx, in)
+		return srv.(ProjectServiceServer).ListVersions(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DeleteNodeProject_FullMethodName,
+		FullMethod: ProjectService_ListVersions_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DeleteNodeProject(ctx, req.(*DeleteNodeProjectRequest))
+		return srv.(ProjectServiceServer).ListVersions(ctx, req.(*ContainerRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_ListNodeProjectVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeContainerRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_ListNodeProjectVersions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListNodeProjectVersions(ctx, req.(*NodeContainerRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_RollbackNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RollbackNodeProjectRequest)
+func _ProjectService_Rollback_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RollbackRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).RollbackNodeProject(m, &grpc.GenericServerStream[RollbackNodeProjectRequest, DeployEvent]{ServerStream: stream})
+	return srv.(ProjectServiceServer).Rollback(m, &grpc.GenericServerStream[RollbackRequest, DeployEvent]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RollbackNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
+type ProjectService_RollbackServer = grpc.ServerStreamingServer[DeployEvent]
 
-func _ProjectService_ListNodeProjectSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
+func _ProjectService_ListDeployments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).ListNodeProjectSnapshots(ctx, in)
+		return srv.(ProjectServiceServer).ListDeployments(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_ListNodeProjectSnapshots_FullMethodName,
+		FullMethod: ProjectService_ListDeployments_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListNodeProjectSnapshots(ctx, req.(*NodeProjectRef))
+		return srv.(ProjectServiceServer).ListDeployments(ctx, req.(*ProjectRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_CreateNodeProjectSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(NodeProjectRef)
+func _ProjectService_RestoreDeployment_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreDeploymentRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).CreateNodeProjectSnapshot(m, &grpc.GenericServerStream[NodeProjectRef, DeployEvent]{ServerStream: stream})
+	return srv.(ProjectServiceServer).RestoreDeployment(m, &grpc.GenericServerStream[RestoreDeploymentRequest, DeployEvent]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_CreateNodeProjectSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+type ProjectService_RestoreDeploymentServer = grpc.ServerStreamingServer[DeployEvent]
 
-func _ProjectService_RestoreNodeProjectSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(RestoreNodeProjectSnapshotRequest)
+func _ProjectService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamLogsApiRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).RestoreNodeProjectSnapshot(m, &grpc.GenericServerStream[RestoreNodeProjectSnapshotRequest, DeployEvent]{ServerStream: stream})
+	return srv.(ProjectServiceServer).StreamLogs(m, &grpc.GenericServerStream[StreamLogsApiRequest, LogLine]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RestoreNodeProjectSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+type ProjectService_StreamLogsServer = grpc.ServerStreamingServer[LogLine]
 
-func _ProjectService_SaveNodeProjectRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SaveNodeProjectRouteRequest)
+func _ProjectService_SaveRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRouteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SaveNodeProjectRoute(ctx, in)
+		return srv.(ProjectServiceServer).SaveRoute(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SaveNodeProjectRoute_FullMethodName,
+		FullMethod: ProjectService_SaveRoute_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SaveNodeProjectRoute(ctx, req.(*SaveNodeProjectRouteRequest))
+		return srv.(ProjectServiceServer).SaveRoute(ctx, req.(*SaveRouteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DeleteNodeProjectRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNodeProjectRouteRequest)
+func _ProjectService_DeleteRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRouteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).DeleteNodeProjectRoute(ctx, in)
+		return srv.(ProjectServiceServer).DeleteRoute(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_DeleteNodeProjectRoute_FullMethodName,
+		FullMethod: ProjectService_DeleteRoute_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).DeleteNodeProjectRoute(ctx, req.(*DeleteNodeProjectRouteRequest))
+		return srv.(ProjectServiceServer).DeleteRoute(ctx, req.(*DeleteRouteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_DeployNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(DeployNodeProjectRequest)
+func _ProjectService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListSnapshots(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_CreateSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ContainerRef)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).DeployNodeProject(m, &grpc.GenericServerStream[DeployNodeProjectRequest, DeployEvent]{ServerStream: stream})
+	return srv.(ProjectServiceServer).CreateSnapshot(m, &grpc.GenericServerStream[ContainerRef, DeployEvent]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_DeployNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
+type ProjectService_CreateSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
 
-func _ProjectService_StreamNodeProjectLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamNodeProjectLogsRequest)
+func _ProjectService_RestoreSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreSnapshotRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ProjectServiceServer).StreamNodeProjectLogs(m, &grpc.GenericServerStream[StreamNodeProjectLogsRequest, LogLine]{ServerStream: stream})
+	return srv.(ProjectServiceServer).RestoreSnapshot(m, &grpc.GenericServerStream[RestoreSnapshotRequest, DeployEvent]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_StreamNodeProjectLogsServer = grpc.ServerStreamingServer[LogLine]
+type ProjectService_RestoreSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
 
-func _ProjectService_SetNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetNodeProjectBackupRequest)
+func _ProjectService_GetBackupKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SetNodeProjectBackup(ctx, in)
+		return srv.(ProjectServiceServer).GetBackupKey(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SetNodeProjectBackup_FullMethodName,
+		FullMethod: ProjectService_GetBackupKey_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SetNodeProjectBackup(ctx, req.(*SetNodeProjectBackupRequest))
+		return srv.(ProjectServiceServer).GetBackupKey(ctx, req.(*ContainerRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_GetNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
+func _ProjectService_ListRegistries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).GetNodeProjectBackup(ctx, in)
+		return srv.(ProjectServiceServer).ListRegistries(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_GetNodeProjectBackup_FullMethodName,
+		FullMethod: ProjectService_ListRegistries_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).GetNodeProjectBackup(ctx, req.(*NodeProjectRef))
+		return srv.(ProjectServiceServer).ListRegistries(ctx, req.(*ProjectRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_SyncNodeProjectBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
+func _ProjectService_LoginRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRegistryApiRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SyncNodeProjectBackup(ctx, in)
+		return srv.(ProjectServiceServer).LoginRegistry(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SyncNodeProjectBackup_FullMethodName,
+		FullMethod: ProjectService_LoginRegistry_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SyncNodeProjectBackup(ctx, req.(*NodeProjectRef))
+		return srv.(ProjectServiceServer).LoginRegistry(ctx, req.(*LoginRegistryApiRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_GetNodeProjectBackupKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
+func _ProjectService_LogoutRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogoutRegistryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).GetNodeProjectBackupKey(ctx, in)
+		return srv.(ProjectServiceServer).LogoutRegistry(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_GetNodeProjectBackupKey_FullMethodName,
+		FullMethod: ProjectService_LogoutRegistry_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).GetNodeProjectBackupKey(ctx, req.(*NodeProjectRef))
+		return srv.(ProjectServiceServer).LogoutRegistry(ctx, req.(*LogoutRegistryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_ListNodeProjectRegistries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
+func _ProjectService_CheckImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).ListNodeProjectRegistries(ctx, in)
+		return srv.(ProjectServiceServer).CheckImages(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_ListNodeProjectRegistries_FullMethodName,
+		FullMethod: ProjectService_CheckImages_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListNodeProjectRegistries(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_CheckNodeProjectImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).CheckNodeProjectImages(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_CheckNodeProjectImages_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).CheckNodeProjectImages(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_LoginNodeProjectRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LoginNodeProjectRegistryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).LoginNodeProjectRegistry(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_LoginNodeProjectRegistry_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).LoginNodeProjectRegistry(ctx, req.(*LoginNodeProjectRegistryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_LogoutNodeProjectRegistry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LogoutNodeProjectRegistryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).LogoutNodeProjectRegistry(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_LogoutNodeProjectRegistry_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).LogoutNodeProjectRegistry(ctx, req.(*LogoutNodeProjectRegistryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_MigrateNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(MigrateNodeProjectRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ProjectServiceServer).MigrateNodeProject(m, &grpc.GenericServerStream[MigrateNodeProjectRequest, DeployEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_MigrateNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
-
-func _ProjectService_RebuildNodeProject_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(MigrateNodeProjectRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ProjectServiceServer).RebuildNodeProject(m, &grpc.GenericServerStream[MigrateNodeProjectRequest, DeployEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_RebuildNodeProjectServer = grpc.ServerStreamingServer[DeployEvent]
-
-func _ProjectService_SetNodeProjectFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetNodeProjectFailoverRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).SetNodeProjectFailover(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_SetNodeProjectFailover_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SetNodeProjectFailover(ctx, req.(*SetNodeProjectFailoverRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_GetNodeProjectFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeProjectRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).GetNodeProjectFailover(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_GetNodeProjectFailover_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).GetNodeProjectFailover(ctx, req.(*NodeProjectRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_ChangeNodeProjectWitness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChangeNodeProjectWitnessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).ChangeNodeProjectWitness(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_ChangeNodeProjectWitness_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ChangeNodeProjectWitness(ctx, req.(*ChangeNodeProjectWitnessRequest))
+		return srv.(ProjectServiceServer).CheckImages(ctx, req.(*ProjectRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3372,157 +2674,119 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ProjectServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ListAllProjects",
-			Handler:    _ProjectService_ListAllProjects_Handler,
+			MethodName: "ListProjects",
+			Handler:    _ProjectService_ListProjects_Handler,
 		},
 		{
-			MethodName: "SetProjectReplicaTrust",
-			Handler:    _ProjectService_SetProjectReplicaTrust_Handler,
+			MethodName: "CreateProject",
+			Handler:    _ProjectService_CreateProject_Handler,
 		},
 		{
-			MethodName: "CreateNodeProject",
-			Handler:    _ProjectService_CreateNodeProject_Handler,
+			MethodName: "GetProject",
+			Handler:    _ProjectService_GetProject_Handler,
 		},
 		{
-			MethodName: "GetNodeProject",
-			Handler:    _ProjectService_GetNodeProject_Handler,
+			MethodName: "UpdateProjectSettings",
+			Handler:    _ProjectService_UpdateProjectSettings_Handler,
 		},
 		{
-			MethodName: "AddNodeProjectContainer",
-			Handler:    _ProjectService_AddNodeProjectContainer_Handler,
+			MethodName: "SaveSharedEnv",
+			Handler:    _ProjectService_SaveSharedEnv_Handler,
 		},
 		{
-			MethodName: "DeleteNodeProjectContainer",
-			Handler:    _ProjectService_DeleteNodeProjectContainer_Handler,
+			MethodName: "DiscardSharedEnv",
+			Handler:    _ProjectService_DiscardSharedEnv_Handler,
 		},
 		{
-			MethodName: "SaveNodeProjectDraft",
-			Handler:    _ProjectService_SaveNodeProjectDraft_Handler,
+			MethodName: "DeleteProject",
+			Handler:    _ProjectService_DeleteProject_Handler,
 		},
 		{
-			MethodName: "DiscardNodeProjectDraft",
-			Handler:    _ProjectService_DiscardNodeProjectDraft_Handler,
+			MethodName: "AddContainer",
+			Handler:    _ProjectService_AddContainer_Handler,
 		},
 		{
-			MethodName: "UpdateNodeProjectSettings",
-			Handler:    _ProjectService_UpdateNodeProjectSettings_Handler,
+			MethodName: "DeleteContainer",
+			Handler:    _ProjectService_DeleteContainer_Handler,
 		},
 		{
-			MethodName: "SaveNodeProjectSharedEnv",
-			Handler:    _ProjectService_SaveNodeProjectSharedEnv_Handler,
+			MethodName: "SaveDraft",
+			Handler:    _ProjectService_SaveDraft_Handler,
 		},
 		{
-			MethodName: "DiscardNodeProjectSharedEnv",
-			Handler:    _ProjectService_DiscardNodeProjectSharedEnv_Handler,
+			MethodName: "DiscardDraft",
+			Handler:    _ProjectService_DiscardDraft_Handler,
 		},
 		{
-			MethodName: "ListNodeProjectDeployments",
-			Handler:    _ProjectService_ListNodeProjectDeployments_Handler,
+			MethodName: "ListVersions",
+			Handler:    _ProjectService_ListVersions_Handler,
 		},
 		{
-			MethodName: "DeleteNodeProject",
-			Handler:    _ProjectService_DeleteNodeProject_Handler,
+			MethodName: "ListDeployments",
+			Handler:    _ProjectService_ListDeployments_Handler,
 		},
 		{
-			MethodName: "ListNodeProjectVersions",
-			Handler:    _ProjectService_ListNodeProjectVersions_Handler,
+			MethodName: "SaveRoute",
+			Handler:    _ProjectService_SaveRoute_Handler,
 		},
 		{
-			MethodName: "ListNodeProjectSnapshots",
-			Handler:    _ProjectService_ListNodeProjectSnapshots_Handler,
+			MethodName: "DeleteRoute",
+			Handler:    _ProjectService_DeleteRoute_Handler,
 		},
 		{
-			MethodName: "SaveNodeProjectRoute",
-			Handler:    _ProjectService_SaveNodeProjectRoute_Handler,
+			MethodName: "ListSnapshots",
+			Handler:    _ProjectService_ListSnapshots_Handler,
 		},
 		{
-			MethodName: "DeleteNodeProjectRoute",
-			Handler:    _ProjectService_DeleteNodeProjectRoute_Handler,
+			MethodName: "GetBackupKey",
+			Handler:    _ProjectService_GetBackupKey_Handler,
 		},
 		{
-			MethodName: "SetNodeProjectBackup",
-			Handler:    _ProjectService_SetNodeProjectBackup_Handler,
+			MethodName: "ListRegistries",
+			Handler:    _ProjectService_ListRegistries_Handler,
 		},
 		{
-			MethodName: "GetNodeProjectBackup",
-			Handler:    _ProjectService_GetNodeProjectBackup_Handler,
+			MethodName: "LoginRegistry",
+			Handler:    _ProjectService_LoginRegistry_Handler,
 		},
 		{
-			MethodName: "SyncNodeProjectBackup",
-			Handler:    _ProjectService_SyncNodeProjectBackup_Handler,
+			MethodName: "LogoutRegistry",
+			Handler:    _ProjectService_LogoutRegistry_Handler,
 		},
 		{
-			MethodName: "GetNodeProjectBackupKey",
-			Handler:    _ProjectService_GetNodeProjectBackupKey_Handler,
-		},
-		{
-			MethodName: "ListNodeProjectRegistries",
-			Handler:    _ProjectService_ListNodeProjectRegistries_Handler,
-		},
-		{
-			MethodName: "CheckNodeProjectImages",
-			Handler:    _ProjectService_CheckNodeProjectImages_Handler,
-		},
-		{
-			MethodName: "LoginNodeProjectRegistry",
-			Handler:    _ProjectService_LoginNodeProjectRegistry_Handler,
-		},
-		{
-			MethodName: "LogoutNodeProjectRegistry",
-			Handler:    _ProjectService_LogoutNodeProjectRegistry_Handler,
-		},
-		{
-			MethodName: "SetNodeProjectFailover",
-			Handler:    _ProjectService_SetNodeProjectFailover_Handler,
-		},
-		{
-			MethodName: "GetNodeProjectFailover",
-			Handler:    _ProjectService_GetNodeProjectFailover_Handler,
-		},
-		{
-			MethodName: "ChangeNodeProjectWitness",
-			Handler:    _ProjectService_ChangeNodeProjectWitness_Handler,
+			MethodName: "CheckImages",
+			Handler:    _ProjectService_CheckImages_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "RestoreNodeProjectDeployment",
-			Handler:       _ProjectService_RestoreNodeProjectDeployment_Handler,
+			StreamName:    "Deploy",
+			Handler:       _ProjectService_Deploy_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "RollbackNodeProject",
-			Handler:       _ProjectService_RollbackNodeProject_Handler,
+			StreamName:    "Rollback",
+			Handler:       _ProjectService_Rollback_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "CreateNodeProjectSnapshot",
-			Handler:       _ProjectService_CreateNodeProjectSnapshot_Handler,
+			StreamName:    "RestoreDeployment",
+			Handler:       _ProjectService_RestoreDeployment_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "RestoreNodeProjectSnapshot",
-			Handler:       _ProjectService_RestoreNodeProjectSnapshot_Handler,
+			StreamName:    "StreamLogs",
+			Handler:       _ProjectService_StreamLogs_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "DeployNodeProject",
-			Handler:       _ProjectService_DeployNodeProject_Handler,
+			StreamName:    "CreateSnapshot",
+			Handler:       _ProjectService_CreateSnapshot_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "StreamNodeProjectLogs",
-			Handler:       _ProjectService_StreamNodeProjectLogs_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "MigrateNodeProject",
-			Handler:       _ProjectService_MigrateNodeProject_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "RebuildNodeProject",
-			Handler:       _ProjectService_RebuildNodeProject_Handler,
+			StreamName:    "RestoreSnapshot",
+			Handler:       _ProjectService_RestoreSnapshot_Handler,
 			ServerStreams: true,
 		},
 	},

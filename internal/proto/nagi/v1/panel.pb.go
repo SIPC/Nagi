@@ -373,12 +373,11 @@ func (x *RenewCertificateResponse) GetCertificate() []byte {
 }
 
 type ReportRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Node     *NodeInfo              `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	Projects []*ProjectSummary      `protobuf:"bytes,2,rep,name=projects,proto3" json:"projects,omitempty"`
-	Mesh     *MeshInfo              `protobuf:"bytes,3,opt,name=mesh,proto3" json:"mesh,omitempty"`
-	// 每个项目快照仓库的密码（项目 ID → config/backup.key 的内容）。单独放，不进 Project，不会返回给浏览器。
-	BackupKeys    map[string]string `protobuf:"bytes,4,rep,name=backup_keys,json=backupKeys,proto3" json:"backup_keys,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Node  *NodeInfo              `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Mesh  *MeshInfo              `protobuf:"bytes,2,opt,name=mesh,proto3" json:"mesh,omitempty"`
+	// 本节点缓存的每个容器的状态。
+	Containers    []*ContainerStatus `protobuf:"bytes,3,rep,name=containers,proto3" json:"containers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -420,13 +419,6 @@ func (x *ReportRequest) GetNode() *NodeInfo {
 	return nil
 }
 
-func (x *ReportRequest) GetProjects() []*ProjectSummary {
-	if x != nil {
-		return x.Projects
-	}
-	return nil
-}
-
 func (x *ReportRequest) GetMesh() *MeshInfo {
 	if x != nil {
 		return x.Mesh
@@ -434,9 +426,9 @@ func (x *ReportRequest) GetMesh() *MeshInfo {
 	return nil
 }
 
-func (x *ReportRequest) GetBackupKeys() map[string]string {
+func (x *ReportRequest) GetContainers() []*ContainerStatus {
 	if x != nil {
-		return x.BackupKeys
+		return x.Containers
 	}
 	return nil
 }
@@ -512,16 +504,13 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x17RenewCertificateRequest\x12\x10\n" +
 	"\x03csr\x18\x01 \x01(\fR\x03csr\"<\n" +
 	"\x18RenewCertificateResponse\x12 \n" +
-	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\x9a\x02\n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\x97\x01\n" +
 	"\rReportRequest\x12%\n" +
-	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x123\n" +
-	"\bprojects\x18\x02 \x03(\v2\x17.nagi.v1.ProjectSummaryR\bprojects\x12%\n" +
-	"\x04mesh\x18\x03 \x01(\v2\x11.nagi.v1.MeshInfoR\x04mesh\x12G\n" +
-	"\vbackup_keys\x18\x04 \x03(\v2&.nagi.v1.ReportRequest.BackupKeysEntryR\n" +
-	"backupKeys\x1a=\n" +
-	"\x0fBackupKeysEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"9\n" +
+	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x12%\n" +
+	"\x04mesh\x18\x02 \x01(\v2\x11.nagi.v1.MeshInfoR\x04mesh\x128\n" +
+	"\n" +
+	"containers\x18\x03 \x03(\v2\x18.nagi.v1.ContainerStatusR\n" +
+	"containers\"9\n" +
 	"\x0eReportResponse\x12'\n" +
 	"\x04mesh\x18\x01 \x01(\v2\x13.nagi.v1.MeshConfigR\x04mesh2\xa4\x02\n" +
 	"\fPanelService\x129\n" +
@@ -543,7 +532,7 @@ func file_nagi_v1_panel_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_panel_proto_rawDescData
 }
 
-var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_nagi_v1_panel_proto_goTypes = []any{
 	(*MeshPacket)(nil),               // 0: nagi.v1.MeshPacket
 	(*MeshInfo)(nil),                 // 1: nagi.v1.MeshInfo
@@ -554,33 +543,31 @@ var file_nagi_v1_panel_proto_goTypes = []any{
 	(*RenewCertificateResponse)(nil), // 6: nagi.v1.RenewCertificateResponse
 	(*ReportRequest)(nil),            // 7: nagi.v1.ReportRequest
 	(*ReportResponse)(nil),           // 8: nagi.v1.ReportResponse
-	nil,                              // 9: nagi.v1.ReportRequest.BackupKeysEntry
-	(*MeshPeer)(nil),                 // 10: nagi.v1.MeshPeer
-	(*Alert)(nil),                    // 11: nagi.v1.Alert
-	(*NodeInfo)(nil),                 // 12: nagi.v1.NodeInfo
-	(*ProjectSummary)(nil),           // 13: nagi.v1.ProjectSummary
+	(*MeshPeer)(nil),                 // 9: nagi.v1.MeshPeer
+	(*Alert)(nil),                    // 10: nagi.v1.Alert
+	(*NodeInfo)(nil),                 // 11: nagi.v1.NodeInfo
+	(*ContainerStatus)(nil),          // 12: nagi.v1.ContainerStatus
 }
 var file_nagi_v1_panel_proto_depIdxs = []int32{
-	10, // 0: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
-	11, // 1: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
-	12, // 2: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
-	13, // 3: nagi.v1.ReportRequest.projects:type_name -> nagi.v1.ProjectSummary
-	1,  // 4: nagi.v1.ReportRequest.mesh:type_name -> nagi.v1.MeshInfo
-	9,  // 5: nagi.v1.ReportRequest.backup_keys:type_name -> nagi.v1.ReportRequest.BackupKeysEntry
-	2,  // 6: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
-	7,  // 7: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
-	5,  // 8: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
-	3,  // 9: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
-	0,  // 10: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
-	8,  // 11: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
-	6,  // 12: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
-	4,  // 13: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
-	0,  // 14: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	9,  // 0: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
+	10, // 1: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
+	11, // 2: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
+	1,  // 3: nagi.v1.ReportRequest.mesh:type_name -> nagi.v1.MeshInfo
+	12, // 4: nagi.v1.ReportRequest.containers:type_name -> nagi.v1.ContainerStatus
+	2,  // 5: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
+	7,  // 6: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
+	5,  // 7: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
+	3,  // 8: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
+	0,  // 9: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
+	8,  // 10: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
+	6,  // 11: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
+	4,  // 12: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
+	0,  // 13: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_panel_proto_init() }
@@ -595,7 +582,7 @@ func file_nagi_v1_panel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_panel_proto_rawDesc), len(file_nagi_v1_panel_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

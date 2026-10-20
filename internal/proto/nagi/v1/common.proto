@@ -6,50 +6,45 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
-// Project 是节点上保存的项目：一组一起工作的容器，共用项目目录和内网。项目数据以节点为准。
+// Project 是面板上的项目：一组一起工作的容器。项目不属于哪台机器，每个容器各自指定节点运行。
+// 项目和容器的配置、版本记录、部署记录以面板为准（见 docs/panel.md#项目数据）。
 message Project {
   // 全局唯一的项目 ID。
   string id = 1;
   // 显示名称，可以重名。
   string name = 2;
-  // 项目目录，例如 /mnt/qmt。
-  string dir = 3;
-  // 项目设置的修订号：修改名称、共享变量（草稿）、内网、共享网络时加一，用于多面板冲突检测。
+  // 网络名：面板上唯一，小写字母、数字和 -。连接本项目的项目用"容器.网络名"访问本项目的容器；
+  // 容器目录默认按它命名。
+  string network_name = 3;
+  // 项目设置的修订号：修改名称、网络名、共享变量（草稿）、设置时加一，用于冲突检测。
   // 容器有自己的修订号（Container.revision）。
   int64 revision = 4;
-  reserved 5, 6, 7;
-  google.protobuf.Timestamp created_at = 8;
-  reserved 9, 10, 11, 12, 13, 14;
-  // 端口映射（config/routes/ 下的文件）。
-  repeated Exposure routes = 15;
+  google.protobuf.Timestamp created_at = 5;
+  // 端口映射（所有容器的）。
+  repeated Exposure routes = 6;
   // 项目是否有状态：只要有一个容器有状态就算。
-  bool stateful = 16;
+  bool stateful = 7;
   // 容器，按创建顺序。
-  repeated Container containers = 17;
+  repeated Container containers = 8;
   // 项目设置（共享变量是已经部署过的那份）。
-  ProjectSettings settings = 18;
+  ProjectSettings settings = 9;
   // 共享变量是否有没部署的草稿。
-  bool has_shared_env_draft = 19;
-  repeated EnvVar shared_env_draft = 20;
+  bool has_shared_env_draft = 10;
+  repeated EnvVar shared_env_draft = 11;
 }
 
 // ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进容器的版本。
 message ProjectSettings {
   // 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
   repeated EnvVar shared_env = 1;
-  // 关闭项目内网（默认开启：容器之间用"容器名"或"服务.容器组"互相访问）。
-  bool intranet_disabled = 2;
-  // 加入共享网络时用的网络名（小写字母、数字和 -，本节点唯一）。容器在共享网络里的名字是"容器.网络名"。
-  string network_name = 3;
-  // 加入的共享网络。
-  repeated string shared_networks = 4;
-  // 定时快照间隔（分钟），0 表示默认（60 分钟）。
-  uint32 snapshot_interval_minutes = 5;
-  // 跨节点端口：容器没有声明、但要让相连节点访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
-  repeated string link_ports = 6;
+  // 定时快照间隔（分钟），0 表示默认（60 分钟）。对项目里的所有容器生效。
+  uint32 snapshot_interval_minutes = 2;
+  // 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
+  repeated string internal_ports = 3;
 }
 
 // Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
+// 每个容器指定一个节点运行，各自部署、记版本、回滚、快照。
 message Container {
   // 容器名，项目内唯一，创建后不能改。小写字母、数字和 -。
   string name = 1;
@@ -81,6 +76,10 @@ message Container {
   repeated string host_network_services = 15;
   // single：单个容器（镜像表单）；group：容器组（一份 compose，里面有几个容器）。
   string kind = 16;
+  // 容器所在的节点。
+  string node_id = 17;
+  // 容器在节点上的目录。
+  string dir = 18;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -146,43 +145,7 @@ message Deployment {
   int64 restore_of = 8;
 }
 
-// SharedNetwork 是节点上的一个共享网络，加入的项目之间可以互相访问。
-message SharedNetwork {
-  string name = 1;
-  string subnet = 2;
-  repeated SharedNetworkProject projects = 3;
-  // 跨节点连接：和本节点的这个网络相连的节点。
-  repeated SharedNetworkPeer peers = 4;
-  // 相连节点上的容器，本节点为每个放了一个同名的代理容器。
-  repeated SharedNetworkRemote remotes = 5;
-}
-
-message SharedNetworkPeer {
-  // 节点的 mesh 公钥。
-  bytes public_key = 1;
-  string name = 2;
-  string node_id = 3;
-  // 最近一次向它查询成员列表是否成功。
-  bool reachable = 4;
-  string error = 5;
-}
-
-message SharedNetworkRemote {
-  // 在网络里的名字，例如 pg.base。
-  string alias = 1;
-  string node_name = 2;
-  string project_name = 3;
-  repeated uint32 ports = 4;
-}
-
-message SharedNetworkProject {
-  string project_id = 1;
-  string project_name = 2;
-  // 项目的网络名，容器在共享网络里叫"容器.网络名"。
-  string network_name = 3;
-}
-
-// Snapshot 是项目的一份快照。
+// Snapshot 是容器的一份快照。
 message Snapshot {
   string id = 1;
   // scheduled：定时；manual：手动；predeploy：部署前的数据；version：版本文件。
@@ -191,7 +154,6 @@ message Snapshot {
   int64 size = 4;
   // predeploy：部署前正在运行的版本；version：所属版本。
   int64 version = 5;
-  // predeploy、version：所属容器。
   string container = 6;
 }
 
@@ -202,8 +164,8 @@ message Source {
   string git_ref = 2;
 }
 
-// Exposure 是一条端口映射：一个服务端口的对外开放方式。
-// 每条映射是项目目录 config/routes/<name>.yml 一个文件，改了立即生效，不需要重新部署。
+// Exposure 是一条端口映射：一个服务端口的对外开放方式。映射属于容器，开在容器所在的节点上，
+// 存在面板上，改了立即生效，不需要重新部署。
 message Exposure {
   // 服务名。单个容器可以不填（服务名就是容器名）。
   string service = 1;
@@ -217,9 +179,9 @@ message Exposure {
   repeated string domains = 5;
   // 只开 HTTP，不申请证书、不跳转（例如前面还有 CDN 终结 HTTPS）。
   bool http_only = 6;
-  // 映射文件名（不含 .yml）。新建时为空，由节点生成。
+  // 映射名，项目内唯一。新建时为空，由面板生成。
   string name = 7;
-  // 文件无效时的原因，这条映射不会生效。只读。
+  // 映射无效时的原因（例如容器已经删除），这条映射不会生效。只读。
   string error = 8;
   // 容器名。
   string container = 9;
@@ -299,10 +261,55 @@ message ImageUpdate {
 message ProjectSummary {
   Project project = 1;
   ProjectStatus status = 2;
-  // 读取项目失败（例如磁盘满了、项目数据库坏了）时的原因，这时 project 里只有 ID 和目录。
-  string error = 3;
-  // 项目数据库只能只读打开（多半是磁盘满了）的原因：项目照常显示，但修改、部署这些要写数据库的操作会失败。
-  string read_only_reason = 4;
+}
+
+// ContainerSpec 是面板下发给节点的一个容器的完整配置，节点照着运行，并缓存在本地：
+// 面板不可达时用它重启、恢复、顶替；面板丢失时新面板用它把项目拼回来。
+message ContainerSpec {
+  string project_id = 1;
+  string project_name = 2;
+  string network_name = 3;
+  string name = 4;
+  // 容器在本节点上的目录。
+  string dir = 5;
+  // 容器的修订号和项目的修订号（缓存按修订号取新的）。
+  int64 revision = 6;
+  int64 project_revision = 7;
+  // 要运行的版本：部署时是新版本，其余时候是当前部署的版本。0 表示还没部署过。
+  int64 version = 8;
+  ContainerConfig config = 9;
+  // 这个版本用的共享变量。
+  repeated EnvVar shared_env = 10;
+  // 服务名 → 固定使用的镜像（带摘要）。回滚、恢复时用版本记录的摘要；为空时按 compose 里的镜像。
+  map<string, string> images = 11;
+  // 端口映射（只有这个容器的）。
+  repeated Exposure routes = 12;
+  // git 用的 deploy key 私钥（OpenSSH 格式）和公钥。
+  bytes deploy_key = 13;
+  string deploy_key_pub = 14;
+  // 项目登录过的私有仓库（docker 的 config.json），为空时用机器全局的配置。
+  bytes docker_config = 15;
+  // 快照仓库的密码。
+  string backup_password = 16;
+  // 定时快照间隔（分钟），0 表示默认 60。
+  uint32 snapshot_interval_minutes = 17;
+  // 是否有状态（面板按配置判定）。
+  bool stateful = 18;
+}
+
+// ContainerStatus 是节点上报的一个容器的运行状态。
+message ContainerStatus {
+  string project_id = 1;
+  string name = 2;
+  repeated ServiceStatus services = 3;
+  // 有新版本的镜像（每天检查一次）。
+  repeated ImageUpdate image_updates = 4;
+  google.protobuf.Timestamp images_checked_at = 5;
+  // 节点上缓存的修订号，面板据此判断要不要补推配置。
+  int64 revision = 6;
+  int64 project_revision = 7;
+  // 读取或运行这个容器出错（例如磁盘满了、目录不见了）。
+  string error = 8;
 }
 
 message NodeInfo {
@@ -314,6 +321,8 @@ message NodeInfo {
   string compose_version = 6;
   // 面板自带的节点（面板绑定域名时由它的 Caddy 反代面板）。
   bool embedded = 7;
+  // 项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+  string projects_root = 8;
 }
 
 message LogLine {
@@ -337,8 +346,11 @@ message DeployResult {
   bool success = 1;
   string error = 2;
   int64 version = 3;
-  // 用配置备份重建时新项目的 ID（项目建好了就有，部署失败也有）。
-  string project_id = 4;
+  reserved 4;
+  // 节点部署一个容器后返回：服务名 → 实际使用的镜像（带摘要）、拉取到的 git 提交、是否保存了版本文件。
+  map<string, string> images = 5;
+  string commit = 6;
+  bool has_files = 7;
 }
 
 // MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。

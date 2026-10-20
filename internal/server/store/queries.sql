@@ -72,46 +72,9 @@ SELECT * FROM nodes WHERE revoked = 0 ORDER BY created_at;
 -- name: UpdateNodeSeen :exec
 UPDATE nodes SET last_seen = ?, info = ? WHERE id = ?;
 
--- name: UpsertProjectBackup :exec
-INSERT INTO project_backups (node_id, project_id, revision, data, updated_at, backup_key) VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (node_id, project_id) DO UPDATE SET
-    revision = excluded.revision,
-    data = excluded.data,
-    updated_at = excluded.updated_at,
-    backup_key = coalesce(excluded.backup_key, project_backups.backup_key);
-
--- name: GetProjectBackupKey :one
-SELECT backup_key FROM project_backups WHERE node_id = ? AND project_id = ?;
-
--- name: ListProjectBackups :many
-SELECT * FROM project_backups WHERE node_id = ? ORDER BY project_id;
-
--- name: UpsertWebhook :exec
-INSERT OR REPLACE INTO webhooks (token_hash, node_id, project_id, container) VALUES (?, ?, ?, ?);
-
--- name: GetWebhook :one
-SELECT * FROM webhooks WHERE token_hash = ?;
-
 -- name: RevokeNode :exec
 UPDATE nodes SET revoked = 1 WHERE id = ?;
 
--- name: DeleteNodeData :exec
-DELETE FROM project_backups WHERE node_id = ?;
-
--- name: DeleteNodeWebhooks :exec
-DELETE FROM webhooks WHERE node_id = ?;
-
--- name: DeleteProjectBackup :exec
-DELETE FROM project_backups WHERE node_id = ? AND project_id = ?;
-
--- name: DeleteProjectWebhooks :exec
-DELETE FROM webhooks WHERE node_id = ? AND project_id = ?;
-
--- name: ListNodeWebhooks :many
-SELECT * FROM webhooks WHERE node_id = ?;
-
--- name: DeleteWebhook :exec
-DELETE FROM webhooks WHERE token_hash = ?;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = ?;
 
@@ -136,13 +99,145 @@ DELETE FROM sessions WHERE user_id = ? AND token_hash != ?;
 -- name: CountSealedData :one
 SELECT (SELECT count(*) FROM users WHERE totp_secret != '')
      + (SELECT count(*) FROM settings WHERE key = 'alert_config')
-     + (SELECT count(*) FROM project_backups) AS n;
+     + (SELECT count(*) FROM projects) AS n;
 
 -- name: ClearTOTPSecrets :exec
 UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != '';
 
--- name: DeleteAllProjectBackups :exec
-DELETE FROM project_backups;
-
 -- name: CountActiveEnrollTokens :one
 SELECT count(*) FROM enroll_tokens WHERE expires_at > ? AND (used_at IS NULL OR multi_use = 1);
+
+
+-- name: InsertProject :exec
+INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES (?, ?, ?, 1, ?, ?);
+
+-- name: GetProject :one
+SELECT * FROM projects WHERE id = ?;
+
+-- name: ListProjects :many
+SELECT * FROM projects ORDER BY created_at;
+
+-- name: ProjectByNetworkName :one
+SELECT id FROM projects WHERE network_name = ?;
+
+-- name: UpdateProject :exec
+UPDATE projects SET name = ?, network_name = ?, settings = ?, revision = revision + 1 WHERE id = ?;
+
+-- name: SetProjectSettings :exec
+UPDATE projects SET settings = ?, revision = revision + 1 WHERE id = ?;
+
+-- name: SetSharedEnvDraft :exec
+UPDATE projects SET shared_env_draft = ?, revision = revision + 1 WHERE id = ?;
+
+-- name: SetProjectDockerConfig :exec
+UPDATE projects SET docker_config = ?, revision = revision + 1 WHERE id = ?;
+
+-- name: DeleteProject :exec
+DELETE FROM projects WHERE id = ?;
+
+
+-- name: InsertContainer :exec
+INSERT INTO containers (project_id, name, position, node_id, dir, revision, created_at, webhook_hash, secrets, deploy_key_pub)
+VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?);
+
+-- name: GetContainer :one
+SELECT * FROM containers WHERE project_id = ? AND name = ?;
+
+-- name: ListContainers :many
+SELECT * FROM containers WHERE project_id = ? ORDER BY position;
+
+-- name: ListAllContainers :many
+SELECT * FROM containers ORDER BY project_id, position;
+
+-- name: ListNodeContainers :many
+SELECT * FROM containers WHERE node_id = ? ORDER BY project_id, position;
+
+-- name: CountNodeContainers :one
+SELECT count(*) FROM containers WHERE node_id = ?;
+
+-- name: ContainerByWebhook :one
+SELECT project_id, name FROM containers WHERE webhook_hash = ?;
+
+-- name: ContainerDirOwner :one
+SELECT project_id, name FROM containers WHERE node_id = ? AND dir = ?;
+
+-- name: SetContainerDraft :exec
+UPDATE containers SET draft = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerDeployed :exec
+UPDATE containers SET deployed_version = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: BumpContainer :exec
+UPDATE containers SET revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerCommit :exec
+UPDATE containers SET last_commit = ? WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerImportedPorts :exec
+UPDATE containers SET imported_ports = ? WHERE project_id = ? AND name = ?;
+
+-- name: DeleteContainer :exec
+DELETE FROM containers WHERE project_id = ? AND name = ?;
+
+
+-- name: InsertVersion :exec
+INSERT INTO versions (project_id, container, version, config, shared_env, created_at, rollback_of)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: ReplaceUndeployedVersion :exec
+UPDATE versions SET config = ?, shared_env = ?, created_at = ?, rollback_of = ?, images = '{}', git_commit = '', has_files = 0
+WHERE project_id = ? AND container = ? AND version = ? AND deployed_at IS NULL;
+
+-- name: SetVersionDeployed :exec
+UPDATE versions SET deployed_at = ?, images = ?, git_commit = ?, has_files = ?
+WHERE project_id = ? AND container = ? AND version = ?;
+
+-- name: SetVersionFiles :exec
+UPDATE versions SET has_files = ? WHERE project_id = ? AND container = ? AND version = ?;
+
+-- name: GetVersion :one
+SELECT * FROM versions WHERE project_id = ? AND container = ? AND version = ?;
+
+-- name: LatestVersion :one
+SELECT * FROM versions WHERE project_id = ? AND container = ? ORDER BY version DESC LIMIT 1;
+
+-- name: ListVersions :many
+SELECT * FROM versions WHERE project_id = ? AND container = ? ORDER BY version DESC;
+
+-- name: DeleteVersionsBefore :exec
+DELETE FROM versions WHERE project_id = ? AND container = ? AND version < ?;
+
+-- name: ClearVersionFiles :exec
+UPDATE versions SET has_files = 0 WHERE project_id = ? AND container = ?;
+
+
+-- name: InsertDeployment :one
+INSERT INTO deployments (project_id, created_at, source, containers, versions, success, error, restore_of)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id;
+
+-- name: GetDeployment :one
+SELECT * FROM deployments WHERE project_id = ? AND id = ?;
+
+-- name: ListDeployments :many
+SELECT * FROM deployments WHERE project_id = ? ORDER BY id DESC LIMIT ?;
+
+-- name: DeleteDeploymentsBefore :exec
+DELETE FROM deployments WHERE project_id = ? AND id < ?;
+
+
+-- name: UpsertRoute :exec
+INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (project_id, name) DO UPDATE SET
+    container = excluded.container, service = excluded.service, target = excluded.target, protocol = excluded.protocol,
+    published = excluded.published, domains = excluded.domains, http_only = excluded.http_only;
+
+-- name: ListRoutes :many
+SELECT * FROM routes WHERE project_id = ? ORDER BY name;
+
+-- name: ListAllRoutes :many
+SELECT * FROM routes ORDER BY project_id, name;
+
+-- name: DeleteRoute :exec
+DELETE FROM routes WHERE project_id = ? AND name = ?;

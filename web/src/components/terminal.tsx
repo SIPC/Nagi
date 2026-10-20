@@ -6,7 +6,7 @@ import { SquareTerminal } from "lucide-react";
 import { Button, Notice, Select } from "@/components/ui";
 
 // 容器终端：通过 WebSocket 连到面板，面板转发到节点上的 docker exec。
-export function TerminalView({ nodeId, projectId, container, services }: { nodeId: string; projectId: string; container: string; services: string[] }) {
+export function TerminalView({ projectId, container, services }: { projectId: string; container: string; services: string[] }) {
   const [service, setService] = useState("");
   const [session, setSession] = useState(0);
   const [status, setStatus] = useState("");
@@ -21,7 +21,6 @@ export function TerminalView({ nodeId, projectId, container, services }: { nodeI
     term.open(boxRef.current);
     fit.fit();
     const params = new URLSearchParams({
-      node: nodeId,
       project: projectId,
       container,
       service: selected,
@@ -58,7 +57,7 @@ export function TerminalView({ nodeId, projectId, container, services }: { nodeI
       ws.close();
       term.dispose();
     };
-  }, [session, nodeId, projectId, container, selected]);
+  }, [session, projectId, container, selected]);
 
   return (
     <div className="grid gap-3">

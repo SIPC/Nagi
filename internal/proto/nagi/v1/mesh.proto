@@ -4,13 +4,11 @@ package nagi.v1;
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
-import "nagi/v1/common.proto";
-
 // MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
 service MeshService {
   rpc Ping(PingRequest) returns (PingResponse);
-  // 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
-  // 只接受节点信任的面板。第一条消息带 project_id。
+  // 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+  // 只接受节点信任的面板。第一条消息带项目和容器。
   rpc Upload(stream UploadChunk) returns (UploadResponse);
   // 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
   // 只接受备份节点登记过的源节点。
@@ -19,26 +17,6 @@ service MeshService {
   rpc ReplicaCommit(ReplicaCommitRequest) returns (ReplicaCommitResponse);
   // 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
   rpc LeaseVote(LeaseVoteRequest) returns (LeaseVoteResponse);
-  // 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
-  rpc SharedNetworkInfo(SharedNetworkInfoRequest) returns (SharedNetworkInfoResponse);
-}
-
-message SharedNetworkInfoRequest {
-  string name = 1;
-}
-
-message SharedNetworkInfoResponse {
-  // 正在运行、接入了这个网络的容器。
-  repeated LinkEndpoint endpoints = 1;
-  // 加入了这个网络的项目（不管是否在运行），用来检查网络名是否重复。
-  repeated SharedNetworkProject projects = 2;
-}
-
-message LinkEndpoint {
-  string alias = 1;
-  string project_id = 2;
-  string project_name = 3;
-  repeated uint32 ports = 4;
 }
 
 message LeaseVoteRequest {

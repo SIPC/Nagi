@@ -6,12 +6,11 @@ import (
 	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
-	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
 
-// hintDirs 返回出错时要检查剩余空间的目录：节点目录和所有项目目录。节点启动时设置。
+// hintDirs 返回出错时要检查剩余空间的目录：节点目录和所有容器目录。节点启动时设置。
 var hintDirs = func() []string { return nil }
 
 // diskFullFree 是判断"磁盘满了"的剩余空间：SQLite、kopia 在空间耗尽前就会失败。
@@ -26,16 +25,6 @@ func explain(msg string) string {
 		return hint + "（原始错误：" + msg + "）"
 	}
 	return msg
-}
-
-// explainSummary 改写项目摘要里的读取错误和只读原因。
-func explainSummary(p *nagiv1.ProjectSummary) {
-	if p.GetError() != "" {
-		p.Error = explain(p.GetError())
-	}
-	if p.GetReadOnlyReason() != "" {
-		p.ReadOnlyReason = explain(p.GetReadOnlyReason())
-	}
 }
 
 // explainStatus 改写 gRPC 错误的信息，保留错误码。
@@ -116,4 +105,17 @@ func dockerHint(msg string) string {
 		}
 	}
 	return ""
+}
+
+// humanBytes 把字节数写成 KB、MB、GB。
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%d B", n)
 }

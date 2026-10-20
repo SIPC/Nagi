@@ -1,11 +1,9 @@
-// Package snapshot 用内嵌的 kopia 给项目做快照。每个项目一个 kopia 仓库，放在项目目录的 backups/ 下，
-// 增量、去重、加密。仓库密码随机生成，存在项目的 config/ 里；连接配置和缓存放在节点目录，不随项目走。
+// Package snapshot 用内嵌的 kopia 给容器做快照。每个容器一个 kopia 仓库，放在容器目录的 backups/ 下，
+// 增量、去重、加密。仓库密码由面板生成和保存，随配置下发；连接配置和缓存放在节点目录，不随容器走。
 package snapshot
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -63,20 +61,20 @@ func retention(kind Kind) policy.RetentionPolicy {
 	}
 }
 
-// Repo 是一个项目的快照仓库。
+// Repo 是一个容器的快照仓库。
 type Repo struct {
-	rep       repo.Repository
-	projectID string
+	rep   repo.Repository
+	owner string
 }
 
-// Open 打开项目的快照仓库，不存在时创建。
-//   - storageDir：项目目录的 backups/
-//   - passwordFile：项目目录里存仓库密码的文件，不存在时生成
-//   - stateDir：节点目录下这个项目的连接配置和缓存
-func Open(ctx context.Context, projectID, storageDir, passwordFile, stateDir string) (*Repo, error) {
-	password, err := loadPassword(passwordFile)
-	if err != nil {
-		return nil, err
+// Open 打开容器的快照仓库，不存在时创建。
+//   - owner：快照来源里的用户名，例如 <项目 ID>-<容器名>
+//   - storageDir：容器目录的 backups/
+//   - password：仓库密码
+//   - stateDir：节点目录下这个仓库的连接配置和缓存
+func Open(ctx context.Context, owner, storageDir, password, stateDir string) (*Repo, error) {
+	if password == "" {
+		return nil, errors.New("缺少快照仓库密码")
 	}
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return nil, err
@@ -98,7 +96,7 @@ func Open(ctx context.Context, projectID, storageDir, passwordFile, stateDir str
 			return nil, fmt.Errorf("打开快照仓库: %w", err)
 		}
 	}
-	return &Repo{rep: rep, projectID: projectID}, nil
+	return &Repo{rep: rep, owner: owner}, nil
 }
 
 func connect(ctx context.Context, storageDir, configFile, cacheDir, password string) error {
@@ -118,28 +116,11 @@ func connect(ctx context.Context, storageDir, configFile, cacheDir, password str
 	})
 }
 
-func loadPassword(path string) (string, error) {
-	if b, err := os.ReadFile(path); err == nil {
-		return strings.TrimSpace(string(b)), nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	pw := hex.EncodeToString(b)
-	if err := os.WriteFile(path, []byte(pw+"\n"), 0o600); err != nil {
-		return "", err
-	}
-	return pw, nil
-}
-
 // Close 关闭仓库。
 func (r *Repo) Close(ctx context.Context) error { return r.rep.Close(ctx) }
 
 func (r *Repo) source(kind Kind) snapshot.SourceInfo {
-	return snapshot.SourceInfo{Host: "nagi", UserName: r.projectID, Path: "/" + string(kind)}
+	return snapshot.SourceInfo{Host: "nagi", UserName: r.owner, Path: "/" + string(kind)}
 }
 
 // Dir 是快照里的一个顶层目录：Name 是快照里的名字，Path 是节点上的实际路径。

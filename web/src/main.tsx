@@ -83,18 +83,17 @@ const newProjectRoute = createRoute({ getParentRoute: () => appRoute, path: "/pr
 
 const projectRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: "/projects/$nodeId/$projectId",
+  path: "/projects/$projectId",
   validateSearch: (search: Record<string, unknown>): { tab?: ProjectTab } => ({
     tab: projectTabs.includes(search.tab as ProjectTab) ? (search.tab as ProjectTab) : undefined,
   }),
   component: function Project() {
-    const { nodeId, projectId } = projectRoute.useParams();
+    const { projectId } = projectRoute.useParams();
     const { tab } = projectRoute.useSearch();
     const navigate = projectRoute.useNavigate();
     return (
       <ProjectPage
-        key={`${nodeId}/${projectId}`}
-        nodeId={nodeId}
+        key={projectId}
         projectId={projectId}
         tab={tab ?? "containers"}
         onTab={(t) => navigate({ search: { tab: t === "containers" ? undefined : t }, replace: true })}

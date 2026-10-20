@@ -7,7 +7,6 @@ import { PageHeader } from "@/pages/layout";
 import { NodeMetrics } from "@/components/metrics";
 import { HandOverCard, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import { NodeReplicas } from "@/pages/replicas";
 import {
   Alert,
   Badge,
@@ -15,13 +14,10 @@ import {
   CodeBlock,
   EmptyRow,
   Field,
-  HelpTip,
   Input,
-  KeyValue,
   Loading,
   Notice,
   Section,
-  Select,
   Status,
   Table,
   Tabs,
@@ -29,14 +25,13 @@ import {
   Th,
 } from "@/components/ui";
 
-type NodeTab = "metrics" | "panels" | "mesh" | "replicas" | "networks";
+type NodeTab = "metrics" | "panels" | "mesh" | "settings";
 
 const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: "监控" },
+  { value: "settings", label: "设置" },
   { value: "panels", label: "受信面板" },
   { value: "mesh", label: "Mesh" },
-  { value: "replicas", label: "副本" },
-  { value: "networks", label: "共享网络" },
 ];
 
 export function NodesPage() {
@@ -50,7 +45,7 @@ export function NodesPage() {
 
   return (
     <>
-      <PageHeader title="节点" description="运行项目的机器。节点主动连接面板，面板不可用时节点上的项目照常运行。" />
+      <PageHeader title="节点" description="运行容器的机器。节点主动连接面板，面板不可用时节点上的容器照常运行。" />
       <div className="grid gap-6">
         <Section title="全部节点" flush>
           {nodes.isPending ? (
@@ -159,10 +154,8 @@ export function NodesPage() {
                                   <NodeMetrics nodeId={n.id} />
                                 ) : open.tab === "mesh" ? (
                                   <NodeMesh nodeId={n.id} />
-                                ) : open.tab === "replicas" ? (
-                                  <NodeReplicas nodeId={n.id} />
-                                ) : open.tab === "networks" ? (
-                                  <SharedNetworks nodeId={n.id} nodes={nodes.data.nodes.filter((o) => o.id !== n.id && o.online)} />
+                                ) : open.tab === "settings" ? (
+                                  <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
                                 ) : (
                                   <NodePanels nodeId={n.id} />
                                 )}
@@ -255,133 +248,50 @@ function AddNode() {
   );
 }
 
-// 节点上的共享网络：加入的项目之间可以互相访问（容器在里面叫"容器.网络名"）。
-// 可以和其他节点的同名网络连起来，对方的容器在本节点有一个同名的代理容器。
-function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string; name: string }[] }) {
+// NodeSettings 是节点自己的设置：项目根目录（新放到这个节点的容器，目录默认是 <项目根目录>/<网络名>/<容器名>）。
+function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
   const queryClient = useQueryClient();
-  const list = useQuery({
-    queryKey: ["shared-networks", nodeId],
-    queryFn: () => nodeClient.listNodeSharedNetworks({ nodeId }),
-    refetchInterval: 10000,
-  });
-  const [name, setName] = useState("");
-  const [peer, setPeer] = useState<Record<string, string>>({});
+  const [value, setValue] = useState(root);
   const [error, setError] = useState("");
-  const call = async (fn: () => Promise<unknown>) => {
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
     setError("");
+    setSaved(false);
     try {
-      await fn();
-      queryClient.invalidateQueries({ queryKey: ["shared-networks", nodeId] });
+      await nodeClient.setNodeProjectsRoot({ nodeId, root: value });
+      setSaved(true);
+      queryClient.invalidateQueries({ queryKey: ["nodes"] });
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
   };
   return (
-    <div className="grid gap-3">
-      <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-        加入同一共享网络的项目可以互相访问。
-        <HelpTip>
-          项目之间默认相互隔离。共享网络用于让多个项目互通，例如多个应用共用一个数据库项目：创建后在各项目的「项目设置」中加入，容器在网络内的名称为「容器.网络名」。与其他节点的同名网络连接后，不同节点上的项目也可以这样访问。
-        </HelpTip>
-      </p>
-      {error && <Alert>{error}</Alert>}
-      {list.data?.networks.length === 0 && (
-        <p className="rounded-md border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">本节点暂无共享网络</p>
-      )}
-      {list.data?.networks.map((n) => {
-        const candidates = nodes.filter((o) => !n.peers.some((p) => p.nodeId === o.id));
-        const items: [React.ReactNode, React.ReactNode][] = [
-          [
-            "加入的项目",
-            n.projects.length ? n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") : <span className="text-muted-foreground">暂无</span>,
-          ],
-        ];
-        if (n.peers.length > 0)
-          items.push([
-            "相连节点",
-            <div className="flex flex-wrap items-center gap-2">
-              {n.peers.map((p) => (
-                <Badge key={p.name} tone={p.reachable ? "success" : "danger"} title={p.error}>
-                  {p.name}
-                  {!p.reachable && "（" + (p.error || "无法连接") + "）"}
-                </Badge>
-              ))}
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() =>
-                  confirm(
-                    `断开共享网络 ${n.name} 与 ${n.peers.map((p) => p.name).join("、")} 的连接？断开后本节点上的项目与对方节点上的容器将无法互相访问。`,
-                  ) && call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))
-                }
-              >
-                断开连接
-              </Button>
-            </div>,
-          ]);
-        if (n.remotes.length > 0)
-          items.push([
-            <span className="inline-flex items-center gap-1.5">
-              远端容器
-              <HelpTip>对方节点上的容器，本节点上有同名的代理容器。</HelpTip>
-            </span>,
-            n.remotes.map((r) => `${r.alias}（${r.nodeName}，${r.ports.length ? "端口 " + r.ports.join("、") : "无端口"}）`).join("、"),
-          ]);
-        if (nodes.length > 0)
-          items.push([
-            "连接节点",
-            <div className="flex flex-wrap items-center gap-2">
-              <Select className="h-8 w-48" value={peer[n.name] ?? ""} onChange={(e) => setPeer({ ...peer, [n.name]: e.target.value })}>
-                <option value="">选择节点</option>
-                {candidates.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!peer[n.name]}
-                onClick={() => call(() => nodeClient.linkNodeSharedNetwork({ nodeId, name: n.name, peerNodeId: peer[n.name] }))}
-              >
-                连接同名网络
-              </Button>
-            </div>,
-          ]);
-        return (
-          <div key={n.name} className="grid gap-3 rounded-md border px-4 py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="font-mono text-[13px] font-medium">{n.name}</span>
-              <span className="font-mono text-xs text-muted-foreground">{n.subnet}</span>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="ml-auto"
-                onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}
-              >
-                删除
-              </Button>
-            </div>
-            <KeyValue items={items} className="items-center" />
-          </div>
-        );
-      })}
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          call(async () => {
-            await nodeClient.createNodeSharedNetwork({ nodeId, name });
-            setName("");
-          });
-        }}
+    <form
+      className="grid max-w-xl gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field
+        label="项目根目录"
+        htmlFor={`root-${nodeId}`}
+        hint="绝对路径"
+        help="新放到这个节点的容器，目录默认是 <项目根目录>/<网络名>/<容器名>。已有容器的目录不变。"
       >
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="网络名称，如 db-shared" className="h-8 max-w-60 font-mono" />
-        <Button size="sm" type="submit">
-          创建共享网络
+        <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
+      </Field>
+      {error && <Alert>{error}</Alert>}
+      <div className="flex items-center gap-3">
+        <Button type="submit" size="sm" disabled={busy || !value.trim()}>
+          保存
         </Button>
-      </form>
-    </div>
+        {saved && <span className="text-[13px] text-muted-foreground">已保存</span>}
+      </div>
+    </form>
   );
 }

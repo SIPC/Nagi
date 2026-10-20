@@ -8,7 +8,7 @@ import { Alert, LogBox, Notice } from "@/components/ui";
 type RunResult = { success: boolean; error: string };
 type StreamEvent = { event: { case: string | undefined; value?: unknown } };
 
-export function useRun(nodeId: string, projectId: string) {
+export function useRun(projectId: string) {
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState<RunResult>();
@@ -26,7 +26,7 @@ export function useRun(nodeId: string, projectId: string) {
       setResult({ success: false, error: errorMessage(err) });
     } finally {
       setBusy(false);
-      for (const key of ["project", "deployments", "versions", "snapshots"]) queryClient.invalidateQueries({ queryKey: [key, nodeId, projectId] });
+      for (const key of ["project", "deployments", "versions", "snapshots"]) queryClient.invalidateQueries({ queryKey: [key, projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
   };

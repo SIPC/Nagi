@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,42 +13,36 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// 镜像更新提醒：每天检查一次项目各容器正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
+// 镜像更新提醒：每天检查一次各容器正在用的镜像有没有新版本。只向仓库查询标签当前的摘要（不下载镜像，
 // 也不计入 Docker Hub 的拉取次数），和本地镜像的摘要比较。不自动升级，用户点"更新"时拉取新镜像并部署这个容器，
 // 记为它的一个新版本，可以回滚。
 
 type imageUpdates struct {
 	mu      sync.Mutex
-	updates map[string][]*nagiv1.ImageUpdate // 项目 ID → 有新版本的服务（带容器名）
+	updates map[string][]*nagiv1.ImageUpdate // 容器（uid）→ 有新版本的服务
 	checked map[string]time.Time
 }
 
-func (m *Manager) imageStatus(id string, st *nagiv1.ProjectStatus) {
+func (m *Manager) imageStatus(projectID, container string, st *nagiv1.ContainerStatus) {
 	m.images.mu.Lock()
 	defer m.images.mu.Unlock()
-	st.ImageUpdates = m.images.updates[id]
-	if t, ok := m.images.checked[id]; ok {
+	k := uid(projectID, container)
+	st.ImageUpdates = m.images.updates[k]
+	if t, ok := m.images.checked[k]; ok {
 		st.ImagesCheckedAt = timestamppb.New(t)
 	}
 }
 
-// clearImageUpdates 清掉容器的"有新版本"提醒（拉取了新镜像后）。
-func (m *Manager) clearImageUpdates(id, container string) {
+// clearImageUpdates 清掉容器的"有新版本"提醒（拉取了新镜像后、删除后）。
+func (m *Manager) clearImageUpdates(projectID, container string) {
 	m.images.mu.Lock()
 	defer m.images.mu.Unlock()
-	var keep []*nagiv1.ImageUpdate
-	for _, u := range m.images.updates[id] {
-		if u.GetContainer() != container {
-			keep = append(keep, u)
-		}
-	}
-	m.images.updates[id] = keep
+	delete(m.images.updates, uid(projectID, container))
 }
 
-// registryAuth 从项目自己的 docker 配置里取出某个仓库的登录信息，编码成 Docker 接口要的格式。
-func registryAuth(p paths, domain string) string {
-	b, err := os.ReadFile(filepath.Join(p.dockerConfigDir(), "config.json"))
-	if err != nil {
+// registryAuth 从项目的 docker 配置里取出某个仓库的登录信息，编码成 Docker 接口要的格式。
+func registryAuth(dockerConfig []byte, domain string) string {
+	if len(dockerConfig) == 0 {
 		return ""
 	}
 	var cfg struct {
@@ -58,7 +50,7 @@ func registryAuth(p paths, domain string) string {
 			Auth string `json:"auth"`
 		} `json:"auths"`
 	}
-	if json.Unmarshal(b, &cfg) != nil {
+	if json.Unmarshal(dockerConfig, &cfg) != nil {
 		return ""
 	}
 	keys := []string{domain}
@@ -81,31 +73,29 @@ func registryAuth(p paths, domain string) string {
 	return ""
 }
 
-// CheckImages 检查项目正在用的镜像有没有新版本。回滚时固定了摘要的镜像、本地构建的镜像跳过。
-func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUpdate, error) {
-	row, err := m.projectRow(ctx, id)
+// CheckImages 检查容器正在用的镜像有没有新版本。回滚时固定了摘要的镜像、本地构建的镜像跳过。
+func (m *Manager) CheckImages(ctx context.Context, projectID, container string) ([]*nagiv1.ImageUpdate, error) {
+	c, err := m.Get(ctx, projectID, container)
 	if err != nil {
 		return nil, err
 	}
-	p := paths{root: row.Dir}
-	containers, err := m.docker.Instances(ctx, projectLabel(id))
+	instances, err := m.docker.Instances(ctx, containerLabel(projectID, container))
 	if err != nil {
 		return nil, err
 	}
 	var out []*nagiv1.ImageUpdate
 	seen := map[string]bool{}
-	for _, c := range containers {
-		key := c.Container + "/" + c.Service
-		if seen[key] || strings.Contains(c.Image, "@") || strings.HasPrefix(c.Image, "sha256:") {
+	for _, in := range instances {
+		if seen[in.Service] || strings.Contains(in.Image, "@") || strings.HasPrefix(in.Image, "sha256:") {
 			continue
 		}
-		seen[key] = true
-		named, err := reference.ParseNormalizedNamed(c.Image)
+		seen[in.Service] = true
+		named, err := reference.ParseNormalizedNamed(in.Image)
 		if err != nil {
 			continue
 		}
 		named = reference.TagNameOnly(named)
-		digests, err := m.docker.RepoDigests(ctx, c.ImageID)
+		digests, err := m.docker.RepoDigests(ctx, in.ImageID)
 		if err != nil {
 			continue
 		}
@@ -121,35 +111,36 @@ func (m *Manager) CheckImages(ctx context.Context, id string) ([]*nagiv1.ImageUp
 			continue // 本地构建的镜像，没有仓库摘要
 		}
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		remote, err := m.docker.RemoteDigest(cctx, named.String(), registryAuth(p, reference.Domain(named)))
+		remote, err := m.docker.RemoteDigest(cctx, named.String(), registryAuth(c.Spec.GetDockerConfig(), reference.Domain(named)))
 		cancel()
 		if err != nil || remote == "" || remote == local {
 			continue
 		}
-		out = append(out, &nagiv1.ImageUpdate{Container: c.Container, Service: c.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
+		out = append(out, &nagiv1.ImageUpdate{Container: container, Service: in.Service, Image: reference.FamiliarString(named), CurrentDigest: local, LatestDigest: remote})
 	}
 	m.images.mu.Lock()
 	if m.images.updates == nil {
 		m.images.updates, m.images.checked = map[string][]*nagiv1.ImageUpdate{}, map[string]time.Time{}
 	}
-	m.images.updates[id] = out
-	m.images.checked[id] = time.Now()
+	k := uid(projectID, container)
+	m.images.updates[k] = out
+	m.images.checked[k] = time.Now()
 	m.images.mu.Unlock()
 	return out, nil
 }
 
-// CheckAllImages 检查本节点所有已部署的项目，返回是否有项目的结果变了。
+// CheckAllImages 检查本节点上所有部署过的容器，返回是否有容器的结果变了。
 func (m *Manager) CheckAllImages(ctx context.Context) bool {
-	rows, err := m.nodeQ.ListProjects(ctx)
-	if err != nil {
-		return false
-	}
 	changed := false
-	for _, r := range rows {
+	for _, c := range m.List(ctx) {
+		s := c.Spec
+		if s.GetVersion() == 0 {
+			continue
+		}
 		m.images.mu.Lock()
-		before := len(m.images.updates[r.ID])
+		before := len(m.images.updates[uid(s.GetProjectId(), s.GetName())])
 		m.images.mu.Unlock()
-		list, err := m.CheckImages(ctx, r.ID)
+		list, err := m.CheckImages(ctx, s.GetProjectId(), s.GetName())
 		if err == nil && len(list) != before {
 			changed = true
 		}

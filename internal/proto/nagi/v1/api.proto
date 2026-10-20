@@ -70,47 +70,40 @@ service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
   // 节点信任的面板列表。
   rpc ListNodePanels(ListNodePanelsRequest) returns (ListNodePanelsResponse);
-  // 用另一个面板的接入码，让节点加入那个面板。remove_self 时随后把本面板从节点上移除并忘记节点（移交）。
+  // 用另一个面板的接入码，让节点加入那个面板；随后把本面板从节点上移除并忘记节点（移交）。
   rpc AddNodePanel(AddNodePanelRequest) returns (AddNodePanelResponse);
   // 从节点的信任列表移除一个面板。移除的是本面板时，本面板同时忘记这个节点。
   rpc RemoveNodePanel(RemoveNodePanelRequest) returns (RemoveNodePanelResponse);
   // 节点的 mesh 状态。
   rpc GetNodeMesh(GetNodeMeshRequest) returns (MeshStatus);
-  // 让节点经 mesh 连一下某个容器。
+  // 让节点经 mesh 连一下某个成员。
   rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
   // 面板自己的 mesh 状态。
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
-  // 节点作为备份节点保存的项目副本。
-  rpc ListNodeReplicas(ListNodeReplicasRequest) returns (ListReplicasResponse);
-  rpc ListNodeReplicaSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
-  // 把副本恢复成这个节点上的项目。
-  rpc RestoreNodeReplica(RestoreNodeReplicaRequest) returns (stream DeployEvent);
-  rpc DeleteNodeReplica(NodeProjectRef) returns (DeleteReplicaResponse);
-  // 节点参与的顶替设置（运行、热备或见证）。
-  rpc ListNodeFailovers(ListNodeReplicasRequest) returns (ListFailoversResponse);
-  // 在热备节点上确认顶替。
-  rpc ConfirmNodeTakeover(NodeProjectRef) returns (FailoverStatus);
   // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
   rpc UpgradeNode(UpgradeNodeRequest) returns (UpgradeResponse);
   // 节点的镜像加速地址。
-  rpc GetNodeMirrors(ListNodeReplicasRequest) returns (Mirrors);
+  rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
-  // 节点上的共享网络。
-  rpc ListNodeSharedNetworks(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  rpc CreateNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  rpc DeleteNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  // 把节点上的共享网络和另一个节点的同名网络连起来（两组已连通的节点合并成一组）。返回 node_id 上的网络列表。
-  rpc LinkNodeSharedNetwork(LinkNodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  // 断开节点上的共享网络和其他节点的连接。
-  rpc UnlinkNodeSharedNetwork(NodeSharedNetworkRequest) returns (ListSharedNetworksResponse);
+  // 节点的项目根目录：容器目录默认是 <项目根目录>/<网络名>/<容器名>。
+  rpc SetNodeProjectsRoot(SetNodeProjectsRootRequest) returns (SetProjectsRootResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
-  // 移除节点：面板忘记它并拒绝它再连接。节点上的项目照常运行。
+  // 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
   rpc RemoveNode(RemoveNodeRequest) returns (RemoveNodeResponse);
   // 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
   // 所以这样加入的节点要管理员确认。
   rpc ApproveNode(ApproveNodeRequest) returns (ApproveNodeResponse);
+}
+
+message NodeRef {
+  string node_id = 1;
+}
+
+message SetNodeProjectsRootRequest {
+  string node_id = 1;
+  string root = 2;
 }
 
 message ApproveNodeRequest {
@@ -145,10 +138,6 @@ message PingNodeMeshRequest {
 
 message GetPanelMeshRequest {}
 
-message ListNodeReplicasRequest {
-  string node_id = 1;
-}
-
 message UpgradeNodeRequest {
   string node_id = 1;
 }
@@ -156,13 +145,6 @@ message UpgradeNodeRequest {
 message SetNodeMirrorsRequest {
   string node_id = 1;
   repeated string mirrors = 2;
-}
-
-message RestoreNodeReplicaRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string dir = 3;
-  string snapshot_id = 4;
 }
 
 message ListNodePanelsRequest {
@@ -177,7 +159,6 @@ message AddNodePanelRequest {
   string node_id = 1;
   // 新面板生成的接入码。
   string invite = 2;
-  bool remove_self = 3;
 }
 
 message AddNodePanelResponse {}
@@ -350,310 +331,223 @@ message ListNodesResponse {
 }
 
 service ProjectService {
-  rpc ListAllProjects(ListAllProjectsRequest) returns (ListAllProjectsResponse);
-  // 允许或禁止项目在别的节点上从副本启动时使用特权配置（特权模式、挂载宿主机路径、host 网络等）。
-  // 面板直接下发给所有节点。
-  rpc SetProjectReplicaTrust(SetProjectReplicaTrustRequest) returns (SetProjectReplicaTrustResponse);
-  rpc CreateNodeProject(CreateNodeProjectRequest) returns (CreateNodeProjectResponse);
-  rpc GetNodeProject(GetNodeProjectRequest) returns (GetNodeProjectResponse);
-  rpc AddNodeProjectContainer(AddNodeProjectContainerRequest) returns (AddContainerResponse);
-  rpc DeleteNodeProjectContainer(DeleteNodeProjectContainerRequest) returns (DeleteContainerResponse);
-  rpc SaveNodeProjectDraft(SaveNodeProjectDraftRequest) returns (SaveNodeProjectDraftResponse);
-  rpc DiscardNodeProjectDraft(DiscardNodeProjectDraftRequest) returns (DiscardNodeProjectDraftResponse);
-  rpc UpdateNodeProjectSettings(UpdateNodeProjectSettingsRequest) returns (UpdateProjectSettingsResponse);
-  rpc SaveNodeProjectSharedEnv(SaveNodeProjectSharedEnvRequest) returns (SaveSharedEnvResponse);
-  rpc DiscardNodeProjectSharedEnv(NodeProjectRevisionRef) returns (DiscardSharedEnvResponse);
-  rpc ListNodeProjectDeployments(NodeProjectRef) returns (ListDeploymentsResponse);
-  // 回到某次部署时的状态。
-  rpc RestoreNodeProjectDeployment(RestoreNodeProjectDeploymentRequest) returns (stream DeployEvent);
-  rpc DeleteNodeProject(DeleteNodeProjectRequest) returns (DeleteNodeProjectResponse);
-  rpc ListNodeProjectVersions(NodeContainerRef) returns (ListVersionsResponse);
-  rpc RollbackNodeProject(RollbackNodeProjectRequest) returns (stream DeployEvent);
-  rpc ListNodeProjectSnapshots(NodeProjectRef) returns (ListSnapshotsResponse);
-  rpc CreateNodeProjectSnapshot(NodeProjectRef) returns (stream DeployEvent);
-  rpc RestoreNodeProjectSnapshot(RestoreNodeProjectSnapshotRequest) returns (stream DeployEvent);
-  rpc SaveNodeProjectRoute(SaveNodeProjectRouteRequest) returns (SaveNodeProjectRouteResponse);
-  rpc DeleteNodeProjectRoute(DeleteNodeProjectRouteRequest) returns (DeleteNodeProjectRouteResponse);
-  rpc DeployNodeProject(DeployNodeProjectRequest) returns (stream DeployEvent);
-  rpc StreamNodeProjectLogs(StreamNodeProjectLogsRequest) returns (stream LogLine);
-  // 设置项目的备份节点（backup_node_id 为空表示取消，备份节点上已有的副本保留）。
-  rpc SetNodeProjectBackup(SetNodeProjectBackupRequest) returns (BackupStatus);
-  rpc GetNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
-  rpc SyncNodeProjectBackup(NodeProjectRef) returns (BackupStatus);
-  // 面板保存的项目快照仓库密码（节点离线也能查）。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
-  rpc GetNodeProjectBackupKey(NodeProjectRef) returns (GetNodeProjectBackupKeyResponse);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // 新建项目，可以同时带上第一个容器（只保存，不部署）。
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+  rpc GetProject(ProjectRef) returns (ProjectSummary);
+  // 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
+  rpc UpdateProjectSettings(UpdateProjectSettingsRequest) returns (Project);
+  // 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
+  rpc SaveSharedEnv(SaveSharedEnvRequest) returns (SaveSharedEnvResponse);
+  rpc DiscardSharedEnv(ProjectRevisionRef) returns (Project);
+  // 删除项目：删除所有容器，容器目录默认保留。
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+
+  // 往项目里加一个容器（只保存，不部署）。
+  rpc AddContainer(AddContainerRequest) returns (Project);
+  // 删除容器：停止并删除它，目录默认保留。
+  rpc DeleteContainer(DeleteContainerApiRequest) returns (Project);
+  rpc SaveDraft(SaveDraftRequest) returns (Project);
+  rpc DiscardDraft(ContainerRevisionRef) returns (Project);
+  // 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
+  // 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
+  rpc Deploy(DeployRequest) returns (stream DeployEvent);
+  rpc ListVersions(ContainerRef) returns (ListVersionsResponse);
+  // 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
+  rpc Rollback(RollbackRequest) returns (stream DeployEvent);
+  rpc ListDeployments(ProjectRef) returns (ListDeploymentsResponse);
+  // 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
+  rpc RestoreDeployment(RestoreDeploymentRequest) returns (stream DeployEvent);
+  rpc StreamLogs(StreamLogsApiRequest) returns (stream LogLine);
+
+  // 端口映射，立即生效。
+  rpc SaveRoute(SaveRouteRequest) returns (Project);
+  rpc DeleteRoute(DeleteRouteRequest) returns (Project);
+
+  // 快照（按容器）。
+  rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
+  // 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
+  rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
+  // 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
+  rpc GetBackupKey(ContainerRef) returns (GetBackupKeyResponse);
+
   // 私有仓库认证：每个项目自己的登录信息。
-  rpc ListNodeProjectRegistries(NodeProjectRef) returns (RegistriesResponse);
+  rpc ListRegistries(ProjectRef) returns (RegistriesResponse);
+  rpc LoginRegistry(LoginRegistryApiRequest) returns (RegistriesResponse);
+  rpc LogoutRegistry(LogoutRegistryRequest) returns (RegistriesResponse);
   // 立即检查项目的镜像有没有新版本。
-  rpc CheckNodeProjectImages(NodeProjectRef) returns (CheckImagesResponse);
-  rpc LoginNodeProjectRegistry(LoginNodeProjectRegistryRequest) returns (RegistriesResponse);
-  rpc LogoutNodeProjectRegistry(LogoutNodeProjectRegistryRequest) returns (RegistriesResponse);
-  // 把项目迁移到另一个节点：项目 ID 不变，不丢数据，停机时间是最后一次增量同步加启动的时间。
-  // 成功后原节点上的项目移出（目录保留）；失败时原节点重新启动项目。
-  rpc MigrateNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
-  // 用面板上的配置备份把离线节点上的项目重建到另一个节点（新项目 ID）。
-  rpc RebuildNodeProject(MigrateNodeProjectRequest) returns (stream DeployEvent);
-  // 设置顶替（standby_node_id 为空表示取消）。
-  rpc SetNodeProjectFailover(SetNodeProjectFailoverRequest) returns (FailoverStatus);
-  rpc GetNodeProjectFailover(NodeProjectRef) returns (FailoverStatus);
-  // 更换见证人（顶替照常进行，不用先取消）：新见证人从当前的持有者和轮次开始投票。
-  rpc ChangeNodeProjectWitness(ChangeNodeProjectWitnessRequest) returns (FailoverStatus);
+  rpc CheckImages(ProjectRef) returns (CheckImagesResponse);
 }
 
-message ChangeNodeProjectWitnessRequest {
-  // 项目所在的节点（A 或 B 都行）。
-  string node_id = 1;
-  string project_id = 2;
-  // 新见证人节点；为空表示由本面板担任。
-  string witness_node_id = 3;
+message ProjectRef {
+  string project_id = 1;
 }
 
-message SetNodeProjectFailoverRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string standby_node_id = 3;
-  // 项目在顶替节点上的目录。
-  string standby_dir = 4;
-  // 见证人节点；为空表示由本面板担任。
-  string witness_node_id = 5;
-  bool auto_stateful = 6;
-  // 租约时长（秒），0 表示默认 30。
-  uint32 lease_seconds = 7;
-  // 原节点恢复并稳定 10 分钟后自动切回。
-  bool auto_failback = 8;
+message ProjectRevisionRef {
+  string project_id = 1;
+  int64 base_revision = 2;
 }
 
-message MigrateNodeProjectRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string target_node_id = 3;
-  // 目标节点上的项目目录。
-  string dir = 4;
-}
-
-message LoginNodeProjectRegistryRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string registry = 3;
-  string username = 4;
-  string password = 5;
-}
-
-message LogoutNodeProjectRegistryRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string registry = 3;
-}
-
-message GetNodeProjectBackupKeyResponse {
-  string key = 1;
-}
-
-message SetNodeProjectBackupRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string backup_node_id = 3;
-}
-
-message NodeProject {
-  string node_id = 1;
-  ProjectSummary project = 2;
-}
-
-message ListAllProjectsRequest {}
-
-message ListAllProjectsResponse {
-  repeated NodeProject projects = 1;
-}
-
-message CreateNodeProjectRequest {
-  string node_id = 1;
-  string name = 2;
-  string dir = 3;
-  reserved 4, 5;
-  ProjectSettings settings = 6;
-  // 可选：第一个容器。
-  string container_name = 7;
-  ContainerConfig container = 8;
-}
-
-message AddNodeProjectContainerRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string name = 3;
-  ContainerConfig config = 4;
-}
-
-message DeleteNodeProjectContainerRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string container = 3;
-  int64 base_revision = 4;
-  bool delete_dir = 5;
-}
-
-message UpdateNodeProjectSettingsRequest {
-  string node_id = 1;
-  string project_id = 2;
+message ContainerRevisionRef {
+  string project_id = 1;
+  string container = 2;
   int64 base_revision = 3;
-  string name = 4;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated ProjectSummary projects = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  // 为空时由项目名生成。
+  string network_name = 2;
+  ProjectSettings settings = 3;
+  // 可选：第一个容器。
+  string container_name = 4;
+  ContainerConfig container = 5;
+  string node_id = 6;
+  // 为空时用 <节点的项目根目录>/<网络名>/<容器名>。
+  string dir = 7;
+}
+
+message UpdateProjectSettingsRequest {
+  string project_id = 1;
+  int64 base_revision = 2;
+  string name = 3;
+  string network_name = 4;
+  // shared_env 在这里不生效（共享变量走草稿）。
   ProjectSettings settings = 5;
 }
 
-message SaveNodeProjectSharedEnvRequest {
-  string node_id = 1;
-  string project_id = 2;
-  int64 base_revision = 3;
-  repeated EnvVar vars = 4;
+message SaveSharedEnvRequest {
+  string project_id = 1;
+  int64 base_revision = 2;
+  repeated EnvVar vars = 3;
 }
 
-message NodeProjectRevisionRef {
-  string node_id = 1;
-  string project_id = 2;
-  int64 base_revision = 3;
+message SaveSharedEnvResponse {
+  Project project = 1;
+  // 引用了改动变量的容器（部署共享变量时默认一起部署）。
+  repeated string affected = 2;
 }
 
-message RestoreNodeProjectDeploymentRequest {
-  string node_id = 1;
-  string project_id = 2;
-  int64 deployment_id = 3;
+message DeleteProjectRequest {
+  string project_id = 1;
+  int64 base_revision = 2;
+  // 同时删除容器目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
+  bool delete_dir = 3;
+  string confirm_name = 4;
 }
 
-message NodeContainerRef {
-  string node_id = 1;
-  string project_id = 2;
-  string container = 3;
-}
+message DeleteProjectResponse {}
 
-message NodeSharedNetworkRequest {
-  string node_id = 1;
-  // 创建、删除时的网络名。
+message AddContainerRequest {
+  string project_id = 1;
   string name = 2;
+  ContainerConfig config = 3;
+  string node_id = 4;
+  // 为空时用 <节点的项目根目录>/<网络名>/<容器名>。
+  string dir = 5;
 }
 
-message LinkNodeSharedNetworkRequest {
-  string node_id = 1;
-  string name = 2;
-  string peer_node_id = 3;
+message DeleteContainerApiRequest {
+  string project_id = 1;
+  string container = 2;
+  int64 base_revision = 3;
+  // 同时删除容器目录（数据会删掉）。
+  bool delete_dir = 4;
 }
 
-message SaveNodeProjectDraftRequest {
-  string node_id = 1;
-  string project_id = 2;
+message SaveDraftRequest {
+  string project_id = 1;
+  string container = 2;
+  // 容器的修订号。
   int64 base_revision = 3;
   ContainerConfig config = 4;
-  string container = 5;
 }
 
-message SaveNodeProjectDraftResponse {
-  Project project = 1;
+// DeployTarget 是一起部署里的一个容器。
+message DeployTarget {
+  string container = 1;
+  // 基于的容器修订号；面板上已经不是这个修订号时拒绝。0 表示不检查。
+  int64 base_revision = 2;
 }
 
-message DiscardNodeProjectDraftRequest {
-  string node_id = 1;
-  string project_id = 2;
-  int64 base_revision = 3;
-  string container = 4;
-}
-
-message DiscardNodeProjectDraftResponse {
-  Project project = 1;
-}
-
-message SaveNodeProjectRouteRequest {
-  string node_id = 1;
-  string project_id = 2;
-  Exposure route = 3;
-}
-
-message SaveNodeProjectRouteResponse {
-  Project project = 1;
-}
-
-message DeleteNodeProjectRouteRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string name = 3;
-}
-
-message DeleteNodeProjectRouteResponse {
-  Project project = 1;
-}
-
-message NodeProjectRef {
-  string node_id = 1;
-  string project_id = 2;
-}
-
-message RollbackNodeProjectRequest {
-  string node_id = 1;
-  string project_id = 2;
-  int64 version = 3;
-  bool restore_data = 4;
-  string container = 5;
-}
-
-message RestoreNodeProjectSnapshotRequest {
-  string node_id = 1;
-  string project_id = 2;
-  string snapshot_id = 3;
-  // 只恢复这个容器；为空时恢复整个项目。
-  string container = 4;
-}
-
-message DeleteNodeProjectRequest {
-  string node_id = 1;
-  string project_id = 2;
-  int64 base_revision = 3;
-  bool delete_dir = 4;
-  string confirm_name = 5;
-}
-
-message DeleteNodeProjectResponse {}
-
-message CreateNodeProjectResponse {
-  Project project = 1;
-}
-
-message GetNodeProjectRequest {
-  string node_id = 1;
-  string project_id = 2;
-}
-
-message GetNodeProjectResponse {
-  ProjectSummary project = 1;
-  // 管理员允许这个项目在备份节点、顶替节点、迁移目标上使用特权配置（见 SetProjectReplicaTrust）。
-  bool replica_trusted = 2;
-}
-
-message SetProjectReplicaTrustRequest {
+message DeployRequest {
   string project_id = 1;
-  bool trusted = 2;
-}
-
-message SetProjectReplicaTrustResponse {}
-
-message DeployNodeProjectRequest {
-  string node_id = 1;
-  string project_id = 2;
-  reserved 3;
+  repeated DeployTarget targets = 2;
   // 部署前先从 git 拉取文件。
-  bool pull = 4;
+  bool pull = 3;
   // 用刚上传的压缩包替换容器的 data/（先 POST /api/upload，只能部署一个容器）。
-  bool use_upload = 5;
+  bool use_upload = 4;
   // 先拉取最新的镜像（更新镜像）。
-  bool pull_images = 6;
-  repeated DeployTarget targets = 7;
+  bool pull_images = 5;
   // 先把共享变量的草稿生效。
-  bool apply_shared_env = 8;
-  int64 settings_revision = 9;
+  bool apply_shared_env = 6;
+  int64 settings_revision = 7;
 }
 
-message StreamNodeProjectLogsRequest {
-  string node_id = 1;
-  string project_id = 2;
+message ListVersionsResponse {
+  repeated Version versions = 1;
+}
+
+message RollbackRequest {
+  string project_id = 1;
+  string container = 2;
+  int64 version = 3;
+  // 同时把数据（volumes/ 和保留路径）恢复到这个版本被替换之前。
+  bool restore_data = 4;
+}
+
+message ListDeploymentsResponse {
+  repeated Deployment deployments = 1;
+}
+
+message RestoreDeploymentRequest {
+  string project_id = 1;
+  int64 deployment_id = 2;
+}
+
+message StreamLogsApiRequest {
+  string project_id = 1;
+  string container = 2;
   string service = 3;
   int32 tail = 4;
   bool follow = 5;
-  string container = 6;
+}
+
+message SaveRouteRequest {
+  string project_id = 1;
+  // name 为空表示新建。
+  Exposure route = 2;
+}
+
+message DeleteRouteRequest {
+  string project_id = 1;
+  string name = 2;
+}
+
+message GetBackupKeyResponse {
+  string key = 1;
+}
+
+message RegistriesResponse {
+  // 登录过的仓库地址（不返回密码）。
+  repeated string registries = 1;
+}
+
+message LoginRegistryApiRequest {
+  string project_id = 1;
+  string registry = 2;
+  string username = 3;
+  string password = 4;
+}
+
+message LogoutRegistryRequest {
+  string project_id = 1;
+  string registry = 2;
 }

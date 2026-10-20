@@ -46,7 +46,7 @@ const (
 
 // PanelServiceClient is a client for the nagi.v1.PanelService service.
 type PanelServiceClient interface {
-	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+	// 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
@@ -124,7 +124,7 @@ func (c *panelServiceClient) MeshRelay(ctx context.Context) *connect.BidiStreamF
 
 // PanelServiceHandler is an implementation of the nagi.v1.PanelService service.
 type PanelServiceHandler interface {
-	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+	// 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
 	Report(context.Context, *connect.Request[v1.ReportRequest]) (*connect.Response[v1.ReportResponse], error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)

@@ -8,124 +8,130 @@ import "nagi/v1/common.proto";
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
 // AgentService：面板调用节点（反向 gRPC），走控制连接。
+// 容器的配置以面板为准：面板把完整配置（ContainerSpec）下发给容器所在的节点，节点照着运行并缓存在本地。
 service AgentService {
-  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
-  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
-  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
-  // 往项目里加一个容器（只保存，不部署）。
-  rpc AddContainer(AddContainerRequest) returns (AddContainerResponse);
-  // 删除容器：停止并删除它的容器，目录默认保留。
+  // ---- 容器 ----
+  // 更新节点上缓存的容器配置（端口映射、快照间隔等改了立即生效），不部署。容器第一次放到本节点时检查目录。
+  rpc PutContainer(PutContainerRequest) returns (PutContainerResponse);
+  // 部署一个容器：写好容器目录里的文件、执行 compose、观察 10 秒，成功后缓存这份配置。
+  rpc DeployContainer(DeployContainerRequest) returns (stream DeployEvent);
+  // 删除容器：停止并删除它的容器，删除缓存；目录默认保留。
   rpc DeleteContainer(DeleteContainerRequest) returns (DeleteContainerResponse);
-  // 保存容器的草稿。
-  rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
-  rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
-  // 修改项目设置（名称、内网、共享网络、快照间隔），立即生效。共享变量不在这里改。
-  rpc UpdateProjectSettings(UpdateProjectSettingsRequest) returns (UpdateProjectSettingsResponse);
-  // 保存共享变量的草稿；部署时用 DeployProject 的 apply_shared_env。
-  rpc SaveSharedEnv(SaveSharedEnvRequest) returns (SaveSharedEnvResponse);
-  rpc DiscardSharedEnv(DiscardSharedEnvRequest) returns (DiscardSharedEnvResponse);
-  // 项目的部署记录，最新的在前。
-  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
-  // 回到某次部署时的状态：版本不一样的容器都回滚到那次记录的版本，作为一次一起部署执行。
-  rpc RestoreDeployment(RestoreDeploymentRequest) returns (stream DeployEvent);
-  // 本节点的共享网络。
-  rpc ListSharedNetworks(ListSharedNetworksRequest) returns (ListSharedNetworksResponse);
-  rpc CreateSharedNetwork(CreateSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  // 删除共享网络：还有项目加入时拒绝。
-  rpc DeleteSharedNetwork(DeleteSharedNetworkRequest) returns (ListSharedNetworksResponse);
-  // 设置和这个共享网络相连的节点（整个替换）。本节点没有这个网络时先建。
-  rpc SetSharedNetworkPeers(SetSharedNetworkPeersRequest) returns (ListSharedNetworksResponse);
-  // 新建或修改一条端口映射，立即生效。
-  rpc SaveRoute(SaveRouteRequest) returns (SaveRouteResponse);
-  rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
-  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
-  // 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
-  rpc Rollback(RollbackRequest) returns (stream DeployEvent);
-  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
-  rpc CreateSnapshot(CreateSnapshotRequest) returns (stream DeployEvent);
-  // 从快照恢复 data/ 和 volumes/（整个项目或一个容器）：停止、恢复文件、重新启动。
+  rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
+  rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
+  // 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
-  // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
-  rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
-  // 面板下发允许在备份节点上使用特权配置的项目（管理员在面板上勾选的）。节点从副本启动项目
-  // （恢复副本、顶替、迁移过来、重建）时，配置里有特权设置的项目只有在这个列表里才启动：
-  // 副本来自源节点，源节点被攻破时不能借副本控制本节点。列表由面板直接下发，不经过源节点。
-  rpc SetTrustedProjects(SetTrustedProjectsRequest) returns (SetTrustedProjectsResponse);
-  // 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
-  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
-  // 删除项目：停止并删除容器。项目目录默认保留。
-  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
-  rpc DeployProject(DeployProjectRequest) returns (stream DeployEvent);
-  // 用面板的配置备份在本节点上重建项目：建成一个新项目（新 ID），再部署能直接部署的容器。
-  rpc RebuildProject(RebuildProjectRequest) returns (stream DeployEvent);
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
   rpc Exec(stream ExecInput) returns (stream ExecOutput);
+  // 立即检查容器的镜像有没有新版本。
+  rpc CheckImages(ContainerRef) returns (CheckImagesResponse);
+  // 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
+  rpc LoginRegistry(LoginRegistryRequest) returns (LoginRegistryResponse);
+
+  // ---- 节点 ----
+  // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
+  rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
+  // 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
+  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
+  // 修改项目根目录（之后新放到本节点的容器默认用它）。
+  rpc SetProjectsRoot(SetProjectsRootRequest) returns (SetProjectsRootResponse);
   // 信任的面板列表。
   rpc ListPanels(ListPanelsRequest) returns (ListPanelsResponse);
   // 让节点加入另一个面板（用新面板的令牌），加入后节点同时连接它。
   rpc AddPanel(AddPanelRequest) returns (AddPanelResponse);
   // 从信任列表移除一个面板（可以是调用者自己）。不能移除最后一个面板。
   rpc RemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
-  // 只检查不移除：移除这个面板（或者面板忘记本节点）后，顶替的参与方之间会不会联系不上。会的话返回 failed_precondition。
-  rpc CheckRemovePanel(RemovePanelRequest) returns (RemovePanelResponse);
-  // mesh 状态：到每个容器走哪条路径。
+  // mesh 状态：到每个成员走哪条路径。
   rpc GetMeshStatus(MeshStatusRequest) returns (MeshStatus);
-  // 经 mesh 连一下某个容器，测往返时间。
+  // 经 mesh 连一下某个成员，测往返时间。
   rpc MeshPing(MeshPingRequest) returns (MeshPingResponse);
-
-  // ---- 备份节点：源节点一侧 ----
-  // 设置项目的备份节点（target_key 为空表示取消）。设置后立即开始同步，之后每次定时快照后同步。
-  rpc SetBackupTarget(SetBackupTargetRequest) returns (BackupStatus);
-  rpc GetBackupStatus(GetBackupStatusRequest) returns (BackupStatus);
-  // 立即同步一次，完成后返回。
-  rpc SyncBackup(GetBackupStatusRequest) returns (BackupStatus);
-
-  // ---- 备份节点：备份节点一侧 ----
-  // 同意接收某个项目的副本，只接受来自 source_key 的同步。
-  rpc AcceptReplica(AcceptReplicaRequest) returns (AcceptReplicaResponse);
-  rpc ListReplicas(ListReplicasRequest) returns (ListReplicasResponse);
-  rpc ListReplicaSnapshots(ReplicaRef) returns (ListSnapshotsResponse);
-  // 把副本恢复成本节点上的项目（项目 ID 不变），恢复所选快照的数据并部署。
-  rpc RestoreReplica(RestoreReplicaRequest) returns (stream DeployEvent);
-  rpc DeleteReplica(ReplicaRef) returns (DeleteReplicaResponse);
-  // 检查能不能把某个项目恢复到本节点的某个目录（目录可用、本节点还没有这个项目）。迁移开始前调用，不改动任何东西。
-  rpc CheckRestore(CheckRestoreRequest) returns (CheckRestoreResponse);
-
-  // ---- 手动迁移：源节点一侧 ----
-  // 同步到目标节点、停止项目、保存最后一次快照、再增量同步。目标节点必须已经 AcceptReplica。
-  rpc MigrateOut(MigrateOutRequest) returns (stream DeployEvent);
-  // 迁移失败时取消迁移，在本节点上重新启动项目。
-  rpc MigrateResume(ReplicaRef) returns (stream DeployEvent);
-  // 迁移成功后把项目移出本节点（目录保留）。
-  rpc MigrateFinish(ReplicaRef) returns (MigrateFinishResponse);
-
-  // 立即检查项目的镜像有没有新版本。
-  rpc CheckImages(ReplicaRef) returns (CheckImagesResponse);
   // 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);
-
   // 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
   rpc SetPanelDomain(SetPanelDomainRequest) returns (SetPanelDomainResponse);
-  // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（项目容器不受影响）。
+  // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
-
-  // ---- 私有仓库认证（项目自己的 docker 配置） ----
-  rpc ListRegistries(ReplicaRef) returns (RegistriesResponse);
-  // 登录私有仓库，会向仓库验证账号。
-  rpc LoginRegistry(LoginRegistryRequest) returns (RegistriesResponse);
-  rpc LogoutRegistry(LogoutRegistryRequest) returns (RegistriesResponse);
-
-  // ---- 顶替 ----
-  // 保存顶替设置（clear 时删除）。初始租约归 A，第 1 轮。
-  rpc SetFailover(SetFailoverRequest) returns (FailoverStatus);
-  rpc GetFailover(ReplicaRef) returns (FailoverStatus);
-  // 本节点参与的所有顶替设置。
-  rpc ListFailovers(ListFailoversRequest) returns (ListFailoversResponse);
-  // 热备：用户确认顶替（有状态项目默认要确认）。
-  rpc ConfirmTakeover(ReplicaRef) returns (FailoverStatus);
 }
+
+message ContainerRef {
+  string project_id = 1;
+  string container = 2;
+}
+
+message PutContainerRequest {
+  ContainerSpec spec = 1;
+}
+
+message PutContainerResponse {}
+
+message DeployContainerRequest {
+  // spec.version 是这次部署生成的版本号。
+  ContainerSpec spec = 1;
+  // 部署前先从 git 拉取文件。
+  bool pull = 2;
+  // 用面板刚上传的文件替换 data/（见 MeshService.Upload）。
+  bool use_upload = 3;
+  // 先拉取最新的镜像（更新镜像）。
+  bool pull_images = 4;
+  // 回滚：用这个版本保存的文件替换 data/。
+  int64 files_from = 5;
+  // 回滚并恢复数据：把运行数据恢复到这个版本被替换之前（找部署前快照）。
+  int64 restore_data_from = 6;
+  // 容器之前部署过的版本（0 表示第一次部署），用于部署前快照和失败提示。
+  int64 previous_version = 7;
+}
+
+message DeleteContainerRequest {
+  string project_id = 1;
+  string container = 2;
+  // 同时删除容器目录（数据会删掉）。
+  bool delete_dir = 3;
+}
+
+message DeleteContainerResponse {}
+
+message RestoreSnapshotRequest {
+  string project_id = 1;
+  string container = 2;
+  string snapshot_id = 3;
+}
+
+message ListSnapshotsResponse {
+  repeated Snapshot snapshots = 1;
+}
+
+message StreamLogsRequest {
+  string project_id = 1;
+  string container = 2;
+  // 为空时返回容器组里所有容器的日志。
+  string service = 3;
+  // 先返回最近多少行。
+  int32 tail = 4;
+  bool follow = 5;
+}
+
+message CheckImagesResponse {
+  repeated ImageUpdate updates = 1;
+}
+
+message LoginRegistryRequest {
+  string registry = 1;
+  string username = 2;
+  string password = 3;
+}
+
+message LoginRegistryResponse {
+  // 只有这个仓库的 docker 配置（config.json），面板合并进项目的配置里。
+  bytes docker_config = 1;
+}
+
+message SetProjectsRootRequest {
+  string root = 1;
+}
+
+message SetProjectsRootResponse {}
 
 message SetPanelDomainRequest {
   string domain = 1;
@@ -143,10 +149,6 @@ message UpgradeResponse {
   string version = 1;
 }
 
-message CheckImagesResponse {
-  repeated ImageUpdate updates = 1;
-}
-
 message GetMirrorsRequest {}
 
 message Mirrors {
@@ -155,102 +157,6 @@ message Mirrors {
   // Docker 当前生效的地址（只读）。和 mirrors 不一样说明还没有重启 Docker。
   repeated string active = 2;
 }
-
-message LoginRegistryRequest {
-  string project_id = 1;
-  string registry = 2;
-  string username = 3;
-  string password = 4;
-}
-
-message LogoutRegistryRequest {
-  string project_id = 1;
-  string registry = 2;
-}
-
-message RegistriesResponse {
-  // 登录过的仓库地址（不返回密码）。
-  repeated string registries = 1;
-}
-
-message SetFailoverRequest {
-  FailoverConfig config = 1;
-  // 删除这个项目的顶替设置。
-  bool clear = 2;
-  string project_id = 3;
-  // 更换见证人时，新见证人从当前的持有者和轮次开始投票（不填时初始租约归 A、第 1 轮）。
-  // 已经有设置的参与者忽略这两项，保留自己的持有者和轮次。
-  bytes seed_holder = 4;
-  uint64 seed_epoch = 5;
-}
-
-message ListFailoversRequest {}
-
-message ListFailoversResponse {
-  repeated FailoverStatus failovers = 1;
-}
-
-message CheckRestoreRequest {
-  string project_id = 1;
-  string dir = 2;
-  // 项目的对外映射：检查在本节点上有没有和其他项目或程序冲突的端口、域名。
-  repeated Exposure routes = 3;
-}
-
-message CheckRestoreResponse {}
-
-message MigrateOutRequest {
-  string project_id = 1;
-  bytes target_key = 2;
-  string target_node_id = 3;
-  string target_name = 4;
-}
-
-message MigrateFinishResponse {
-  // 保留在磁盘上的原项目目录。
-  string dir = 1;
-}
-
-message SetBackupTargetRequest {
-  string project_id = 1;
-  bytes target_key = 2;
-  string target_node_id = 3;
-  string target_name = 4;
-}
-
-message GetBackupStatusRequest {
-  string project_id = 1;
-}
-
-message AcceptReplicaRequest {
-  string project_id = 1;
-  string project_name = 2;
-  bytes source_key = 3;
-  string source_node_id = 4;
-  string source_name = 5;
-}
-
-message AcceptReplicaResponse {}
-
-message ListReplicasRequest {}
-
-message ListReplicasResponse {
-  repeated Replica replicas = 1;
-}
-
-message ReplicaRef {
-  string project_id = 1;
-}
-
-message RestoreReplicaRequest {
-  string project_id = 1;
-  // 恢复到的项目目录，规则和新建项目一样。
-  string dir = 2;
-  // 为空时用最新的含数据的快照。
-  string snapshot_id = 3;
-}
-
-message DeleteReplicaResponse {}
 
 message MeshStatusRequest {}
 
@@ -304,206 +210,11 @@ message ExecOutput {
   }
 }
 
-message ListProjectsRequest {}
-
-message ListProjectsResponse {
-  repeated ProjectSummary projects = 1;
-}
-
-message CreateProjectRequest {
-  string name = 1;
-  string dir = 2;
-  reserved 3, 4;
-  ProjectSettings settings = 5;
-  // 可选：创建时就带上第一个容器。
-  string container_name = 6;
-  ContainerConfig container = 7;
-}
-
-message AddContainerRequest {
-  string project_id = 1;
-  string name = 2;
-  ContainerConfig config = 3;
-}
-
-message AddContainerResponse {
-  Project project = 1;
-}
-
-message DeleteContainerRequest {
-  string project_id = 1;
-  string container = 2;
-  int64 base_revision = 3;
-  // 同时删除容器目录（数据会删掉）。
-  bool delete_dir = 4;
-}
-
-message DeleteContainerResponse {
-  Project project = 1;
-}
-
-message SaveDraftRequest {
-  string id = 1;
-  // 容器的修订号。
-  int64 base_revision = 2;
-  ContainerConfig config = 3;
-  string container = 4;
-}
-
-message SaveDraftResponse {
-  Project project = 1;
-}
-
-message DiscardDraftRequest {
-  string id = 1;
-  int64 base_revision = 2;
-  string container = 3;
-}
-
-message DiscardDraftResponse {
-  Project project = 1;
-}
-
-message UpdateProjectSettingsRequest {
-  string project_id = 1;
-  // 项目设置的修订号。
-  int64 base_revision = 2;
-  string name = 3;
-  // shared_env 在这里不生效（共享变量走草稿）。
-  ProjectSettings settings = 4;
-}
-
-message UpdateProjectSettingsResponse {
-  Project project = 1;
-}
-
-message SaveSharedEnvRequest {
-  string project_id = 1;
-  int64 base_revision = 2;
-  repeated EnvVar vars = 3;
-}
-
-message SaveSharedEnvResponse {
-  Project project = 1;
-  // 引用了改动变量的容器（部署共享变量时默认一起部署）。
-  repeated string affected = 2;
-}
-
-message DiscardSharedEnvRequest {
-  string project_id = 1;
-  int64 base_revision = 2;
-}
-
-message DiscardSharedEnvResponse {
-  Project project = 1;
-}
-
-message ListDeploymentsRequest {
-  string id = 1;
-}
-
-message ListDeploymentsResponse {
-  repeated Deployment deployments = 1;
-}
-
-message RestoreDeploymentRequest {
-  string id = 1;
-  int64 deployment_id = 2;
-}
-
-message ListSharedNetworksRequest {}
-
-message ListSharedNetworksResponse {
-  repeated SharedNetwork networks = 1;
-}
-
-message CreateSharedNetworkRequest {
-  string name = 1;
-}
-
-message DeleteSharedNetworkRequest {
-  string name = 1;
-}
-
-message RebuildProjectRequest {
-  // 配置备份里的项目。
-  Project project = 1;
-  // 本节点上的项目目录。
-  string dir = 2;
-}
-
-message SetSharedNetworkPeersRequest {
-  string name = 1;
-  // 只用 public_key、name、node_id。
-  repeated SharedNetworkPeer peers = 2;
-}
-
-message SaveRouteRequest {
-  string project_id = 1;
-  // name 为空表示新建。
-  Exposure route = 2;
-}
-
-message SaveRouteResponse {
-  Project project = 1;
-}
-
-message DeleteRouteRequest {
-  string project_id = 1;
-  string name = 2;
-}
-
-message DeleteRouteResponse {
-  Project project = 1;
-}
-
-message ListVersionsRequest {
-  string id = 1;
-  string container = 2;
-}
-
-message ListVersionsResponse {
-  repeated Version versions = 1;
-}
-
-message RollbackRequest {
-  string id = 1;
-  int64 version = 2;
-  // 同时把数据（volumes/ 和保留路径）恢复到这个版本被替换之前。
-  bool restore_data = 3;
-  string container = 4;
-}
-
-message ListSnapshotsRequest {
-  string id = 1;
-}
-
-message ListSnapshotsResponse {
-  repeated Snapshot snapshots = 1;
-}
-
-message CreateSnapshotRequest {
-  string id = 1;
-}
-
-message RestoreSnapshotRequest {
-  string id = 1;
-  string snapshot_id = 2;
-  // 只恢复这个容器；为空时恢复整个项目。
-  string container = 3;
-}
-
 message SetAlertConfigRequest {
   AlertConfig config = 1;
 }
 
 message SetAlertConfigResponse {}
-
-message SetTrustedProjectsRequest {
-  repeated string project_ids = 1;
-}
-
-message SetTrustedProjectsResponse {}
 
 message QueryMetricsRequest {
   // 序列名前缀，例如 "node:"、"c:<项目 ID>/"。
@@ -514,65 +225,4 @@ message QueryMetricsRequest {
 
 message QueryMetricsResponse {
   repeated MetricSeries series = 1;
-}
-
-message DeleteProjectRequest {
-  string id = 1;
-  // 项目设置的修订号。
-  int64 base_revision = 2;
-  // 同时删除项目目录（数据、快照都会删掉）。为 true 时 confirm_name 必须等于项目名。
-  bool delete_dir = 3;
-  string confirm_name = 4;
-}
-
-message DeleteProjectResponse {}
-
-message CreateProjectResponse {
-  Project project = 1;
-}
-
-message GetProjectRequest {
-  string id = 1;
-}
-
-message GetProjectResponse {
-  ProjectSummary project = 1;
-}
-
-// DeployTarget 是一起部署里的一个容器。
-message DeployTarget {
-  string container = 1;
-  // 面板基于的容器修订号；节点上已经不是这个修订号时拒绝。0 表示不检查。
-  int64 base_revision = 2;
-}
-
-// 部署一个或多个容器：有草稿的容器先把草稿记为新版本再部署，没有草稿的重新部署最新版本。
-// 多个容器按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
-message DeployProjectRequest {
-  string id = 1;
-  reserved 2;
-  // 部署前先从 git 拉取文件。
-  bool pull = 3;
-  // 用面板刚上传的文件替换 data/（见 MeshService.Upload，只能部署一个容器）。
-  bool use_upload = 4;
-  // 先拉取最新的镜像（更新镜像）。
-  bool pull_images = 5;
-  repeated DeployTarget targets = 6;
-  // 先把共享变量的草稿生效，再部署 targets。
-  bool apply_shared_env = 7;
-  // apply_shared_env 时项目设置的修订号。
-  int64 settings_revision = 8;
-  // 部署记录里的来源，为空表示 manual。
-  string source = 9;
-}
-
-message StreamLogsRequest {
-  string id = 1;
-  // 为空时返回所有容器的日志。
-  string container = 5;
-  // 为空时返回所有服务的日志。
-  string service = 2;
-  // 先返回最近多少行。
-  int32 tail = 3;
-  bool follow = 4;
 }

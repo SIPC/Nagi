@@ -1,29 +1,28 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { Alert, Badge, Button, Check, Field, Loading, Section, Segmented, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Check, Field, Loading, Section, Spinner, Status, Textarea } from "@/components/ui";
 
-// ---- 换面板与多面板 ----
+// ---- 移交给其他面板 ----
 
 type HandOverResult = { name: string; ok: boolean; error: string };
 
-// HandOverCard：把勾选的节点交给另一个面板（移交，或共同管理）。
+// HandOverCard：把勾选的节点移交给另一个面板。一个节点同一时间只归一个面板管理。
 export function HandOverCard({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
-  const [move, setMove] = useState(true);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<HandOverResult[]>([]);
 
   const run = async () => {
-    if (move && !confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点。`)) return;
+    if (!confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点和只在这些节点上的项目，新面板从节点上的缓存恢复这些项目。`)) return;
     setBusy(true);
     const out: HandOverResult[] = [];
     for (const id of selected) {
       const name = nodes.find((n) => n.id === id)?.name ?? id;
       try {
-        await nodeClient.addNodePanel({ nodeId: id, invite: code, removeSelf: move });
+        await nodeClient.addNodePanel({ nodeId: id, invite: code });
         out.push({ name, ok: true, error: "" });
       } catch (err) {
         out.push({ name, ok: false, error: errorMessage(err) });
@@ -37,13 +36,13 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
 
   return (
     <Section
-      title="交给其他面板"
-      description="使用其他面板生成的接入码，将节点移交给该面板或与其共同管理。"
-      help="接入码在新面板的「设置」页生成。移交：新面板接管后，本面板从节点上移除自身并不再管理这些节点。共同管理：两个面板同时保留。离线节点无法选择。"
+      title="移交给其他面板"
+      description="使用其他面板生成的接入码，将节点移交给该面板。"
+      help="接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行：项目还有容器在未选中的节点上时拒绝。离线节点无法选择。"
       actions={
         <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
           {busy && <Spinner className="size-3.5" />}
-          {busy ? "处理中…" : move ? "移交节点" : "添加面板"}
+          {busy ? "处理中…" : "移交节点"}
         </Button>
       }
     >
@@ -71,18 +70,6 @@ export function HandOverCard({ nodes }: { nodes: { id: string; name: string; onl
                 {!n.online && <span className="text-muted-foreground">（离线）</span>}
               </Check>
             ))}
-          </div>
-        </Field>
-        <Field label="方式" help="移交：本面板随后从节点上移除自身。共同管理：两个面板都保留对节点的管理。">
-          <div>
-            <Segmented
-              value={move ? "move" : "share"}
-              onChange={(v) => setMove(v === "move")}
-              items={[
-                { value: "move", label: "移交" },
-                { value: "share", label: "共同管理" },
-              ]}
-            />
           </div>
         </Field>
         {results.length > 0 && (

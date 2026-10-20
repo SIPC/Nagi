@@ -19,13 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MeshService_Ping_FullMethodName              = "/nagi.v1.MeshService/Ping"
-	MeshService_Upload_FullMethodName            = "/nagi.v1.MeshService/Upload"
-	MeshService_ReplicaManifest_FullMethodName   = "/nagi.v1.MeshService/ReplicaManifest"
-	MeshService_ReplicaPut_FullMethodName        = "/nagi.v1.MeshService/ReplicaPut"
-	MeshService_ReplicaCommit_FullMethodName     = "/nagi.v1.MeshService/ReplicaCommit"
-	MeshService_LeaseVote_FullMethodName         = "/nagi.v1.MeshService/LeaseVote"
-	MeshService_SharedNetworkInfo_FullMethodName = "/nagi.v1.MeshService/SharedNetworkInfo"
+	MeshService_Ping_FullMethodName            = "/nagi.v1.MeshService/Ping"
+	MeshService_Upload_FullMethodName          = "/nagi.v1.MeshService/Upload"
+	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
+	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
+	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
+	MeshService_LeaseVote_FullMethodName       = "/nagi.v1.MeshService/LeaseVote"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -35,8 +34,8 @@ const (
 // MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
 type MeshServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
-	// 只接受节点信任的面板。第一条消息带 project_id。
+	// 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+	// 只接受节点信任的面板。第一条消息带项目和容器。
 	Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadChunk, UploadResponse], error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
@@ -45,8 +44,6 @@ type MeshServiceClient interface {
 	ReplicaCommit(ctx context.Context, in *ReplicaCommitRequest, opts ...grpc.CallOption) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(ctx context.Context, in *LeaseVoteRequest, opts ...grpc.CallOption) (*LeaseVoteResponse, error)
-	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
-	SharedNetworkInfo(ctx context.Context, in *SharedNetworkInfoRequest, opts ...grpc.CallOption) (*SharedNetworkInfoResponse, error)
 }
 
 type meshServiceClient struct {
@@ -123,16 +120,6 @@ func (c *meshServiceClient) LeaseVote(ctx context.Context, in *LeaseVoteRequest,
 	return out, nil
 }
 
-func (c *meshServiceClient) SharedNetworkInfo(ctx context.Context, in *SharedNetworkInfoRequest, opts ...grpc.CallOption) (*SharedNetworkInfoResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SharedNetworkInfoResponse)
-	err := c.cc.Invoke(ctx, MeshService_SharedNetworkInfo_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // MeshServiceServer is the server API for MeshService service.
 // All implementations must embed UnimplementedMeshServiceServer
 // for forward compatibility.
@@ -140,8 +127,8 @@ func (c *meshServiceClient) SharedNetworkInfo(ctx context.Context, in *SharedNet
 // MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
 type MeshServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	// 面板把项目文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
-	// 只接受节点信任的面板。第一条消息带 project_id。
+	// 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
+	// 只接受节点信任的面板。第一条消息带项目和容器。
 	Upload(grpc.ClientStreamingServer[UploadChunk, UploadResponse]) error
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
@@ -150,8 +137,6 @@ type MeshServiceServer interface {
 	ReplicaCommit(context.Context, *ReplicaCommitRequest) (*ReplicaCommitResponse, error)
 	// 顶替的租约投票：调用方请求（或续约）第 epoch 轮的租约。只接受顶替设置里的 A、B。
 	LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error)
-	// 跨节点连接的共享网络：本节点这个网络里的容器和加入的项目。只接受和这个网络相连的节点。
-	SharedNetworkInfo(context.Context, *SharedNetworkInfoRequest) (*SharedNetworkInfoResponse, error)
 	mustEmbedUnimplementedMeshServiceServer()
 }
 
@@ -179,9 +164,6 @@ func (UnimplementedMeshServiceServer) ReplicaCommit(context.Context, *ReplicaCom
 }
 func (UnimplementedMeshServiceServer) LeaseVote(context.Context, *LeaseVoteRequest) (*LeaseVoteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaseVote not implemented")
-}
-func (UnimplementedMeshServiceServer) SharedNetworkInfo(context.Context, *SharedNetworkInfoRequest) (*SharedNetworkInfoResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SharedNetworkInfo not implemented")
 }
 func (UnimplementedMeshServiceServer) mustEmbedUnimplementedMeshServiceServer() {}
 func (UnimplementedMeshServiceServer) testEmbeddedByValue()                     {}
@@ -290,24 +272,6 @@ func _MeshService_LeaseVote_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MeshService_SharedNetworkInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SharedNetworkInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MeshServiceServer).SharedNetworkInfo(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MeshService_SharedNetworkInfo_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MeshServiceServer).SharedNetworkInfo(ctx, req.(*SharedNetworkInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // MeshService_ServiceDesc is the grpc.ServiceDesc for MeshService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -330,10 +294,6 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LeaseVote",
 			Handler:    _MeshService_LeaseVote_Handler,
-		},
-		{
-			MethodName: "SharedNetworkInfo",
-			Handler:    _MeshService_SharedNetworkInfo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

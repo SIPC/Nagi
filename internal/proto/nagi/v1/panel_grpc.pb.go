@@ -31,7 +31,7 @@ const (
 //
 // PanelService：节点调用面板，走控制连接。
 type PanelServiceClient interface {
-	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+	// 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
 	Report(ctx context.Context, in *ReportRequest, opts ...grpc.CallOption) (*ReportResponse, error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
@@ -98,7 +98,7 @@ type PanelService_MeshRelayClient = grpc.BidiStreamingClient[MeshPacket, MeshPac
 //
 // PanelService：节点调用面板，走控制连接。
 type PanelServiceServer interface {
-	// 上报节点信息和所有项目的最新状态，连上时和状态变化时调用。
+	// 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
 	Report(context.Context, *ReportRequest) (*ReportResponse, error)
 	// 节点证书快到期时续期。私钥不变，节点提交新的证书签名请求。
 	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)

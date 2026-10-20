@@ -48,6 +48,20 @@ type Registry struct {
 
 	relayMu sync.Mutex
 	relayed map[string][]time.Time // 每个节点最近代发告警的时间
+
+	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
+	OnReport func(c *Conn, req *nagiv1.ReportRequest)
+}
+
+// Conns 返回所有在线节点的连接。
+func (r *Registry) Conns() []*Conn {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*Conn, 0, len(r.conns))
+	for _, c := range r.conns {
+		out = append(out, c)
+	}
+	return out
 }
 
 // Conn 是一个在线节点的控制连接。
@@ -85,36 +99,12 @@ func (c *Conn) LastReport() *nagiv1.ReportRequest {
 }
 
 // NewRegistry 创建节点注册表。
-// 项目配置备份里有密钥，用面板主密钥加密后再存。
 func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer, ca *tlsutil.CA) *Registry {
 	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}}
 }
 
 // NodeCertValidity 是节点客户端证书的有效期。节点在到期前 30 天内连上面板时自动续期。
 const NodeCertValidity = 365 * 24 * time.Hour
-
-// BackupContext 是加密项目配置备份时绑定的上下文，防止把一条备份挪到别的项目下使用。
-func BackupContext(nodeID, projectID string) []byte {
-	return []byte(nodeID + "/" + projectID)
-}
-
-// BackupKeyContext 是加密项目快照密码时绑定的上下文。
-func BackupKeyContext(nodeID, projectID string) []byte {
-	return []byte(nodeID + "/" + projectID + "/backup.key")
-}
-
-// BackupKey 返回面板保存的项目快照密码。
-func (r *Registry) BackupKey(ctx context.Context, nodeID, projectID string) (string, error) {
-	sealed, err := r.q.GetProjectBackupKey(ctx, store.GetProjectBackupKeyParams{NodeID: nodeID, ProjectID: projectID})
-	if err != nil || len(sealed) == 0 {
-		return "", errors.New("面板上没有这个项目的快照密码（节点还没有上报过）")
-	}
-	plain, err := r.sealer.Open(sealed, BackupKeyContext(nodeID, projectID))
-	if err != nil {
-		return "", err
-	}
-	return string(plain), nil
-}
 
 // Get 返回在线节点的连接。
 // 还没有批准的节点返回 ErrPending：不能对它做任何操作。
@@ -159,7 +149,9 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 		c.mu.Unlock()
 		r.updateMesh()
 		go r.pushAlertConfig(context.Background(), c, nil)
-		go r.pushTrusted(context.Background(), c)
+		if r.OnReport != nil && c.LastReport() != nil {
+			go r.OnReport(c, c.LastReport())
+		}
 	}
 	r.log.Info("节点已批准", "node", nodeID)
 	return nil
@@ -232,7 +224,6 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
 	if !c.pending {
 		go r.pushAlertConfig(ctx, c, nil)
-		go r.pushTrusted(ctx, c)
 	}
 
 	select {
@@ -293,102 +284,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
+	if !pending && p.r.OnReport != nil {
+		go p.r.OnReport(p.conn, req)
+	}
 	if pending {
-		// 批准之前不登记它的项目备份和 webhook（webhook 令牌可能是从别的节点那里偷来的）。
 		return &nagiv1.ReportResponse{}, nil
 	}
-	// 保存项目配置备份。以节点为准，面板只是备份：节点上已经没有的项目，备份和 webhook 一并删掉。
-	now := time.Now().Unix()
-	reported := map[string]bool{}
-	for _, s := range req.GetProjects() {
-		reported[s.GetProject().GetId()] = true
-	}
-	if backups, err := p.r.q.ListProjectBackups(ctx, p.conn.NodeID); err == nil {
-		for _, b := range backups {
-			if !reported[b.ProjectID] {
-				_ = p.r.q.DeleteProjectBackup(ctx, store.DeleteProjectBackupParams{NodeID: p.conn.NodeID, ProjectID: b.ProjectID})
-			}
-		}
-	}
-	// 每个容器一个 webhook。节点上已经没有的项目或容器，令牌一并删掉。
-	// 读取失败的项目（例如磁盘满了）上报的只有 ID，它的 webhook 和配置备份都保留原样。
-	unreadable := map[string]bool{}
-	for _, s := range req.GetProjects() {
-		if s.GetError() != "" {
-			unreadable[s.GetProject().GetId()] = true
-		}
-	}
-	tokens := map[string]bool{}
-	for _, s := range req.GetProjects() {
-		for _, m := range s.GetProject().GetContainers() {
-			if t := m.GetWebhookToken(); t != "" {
-				tokens[hashToken(t)] = true
-			}
-		}
-	}
-	if hooks, err := p.r.q.ListNodeWebhooks(ctx, p.conn.NodeID); err == nil {
-		for _, h := range hooks {
-			if !tokens[h.TokenHash] && !unreadable[h.ProjectID] {
-				_ = p.r.q.DeleteWebhook(ctx, h.TokenHash)
-			}
-		}
-	}
-	for _, s := range req.GetProjects() {
-		proj := s.GetProject()
-		if proj == nil || proj.GetId() == "" || s.GetError() != "" {
-			continue
-		}
-		plain, err := proto.Marshal(proj)
-		if err != nil {
-			continue
-		}
-		data, err := p.r.sealer.Seal(plain, BackupContext(p.conn.NodeID, proj.GetId()))
-		if err != nil {
-			continue
-		}
-		for _, m := range proj.GetContainers() {
-			t := m.GetWebhookToken()
-			if t == "" {
-				continue
-			}
-			// 令牌跟着项目走（顶替、迁移后不变），所以按令牌登记：项目换了节点，地址照常能用。
-			// 令牌已经登记在别的节点上、而那个节点还在上报这个项目时不改：知道令牌的节点（例如备份节点）
-			// 不能把部署请求抢到自己这里。项目真的搬走以后，原节点不再上报它，下一次上报就会改过来。
-			if h, err := p.r.q.GetWebhook(ctx, hashToken(t)); err == nil && h.NodeID != p.conn.NodeID && p.r.reportsProject(h.NodeID, h.ProjectID) {
-				continue
-			}
-			if err := p.r.q.UpsertWebhook(ctx, store.UpsertWebhookParams{
-				TokenHash: hashToken(t), NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Container: m.GetName(),
-			}); err != nil {
-				p.r.log.Warn("保存 webhook 失败", "node", p.conn.NodeID, "project", proj.GetId(), "container", m.GetName(), "err", err)
-			}
-		}
-		var key []byte
-		if k := req.GetBackupKeys()[proj.GetId()]; k != "" {
-			key, _ = p.r.sealer.Seal([]byte(k), BackupKeyContext(p.conn.NodeID, proj.GetId()))
-		}
-		if err := p.r.q.UpsertProjectBackup(ctx, store.UpsertProjectBackupParams{
-			NodeID: p.conn.NodeID, ProjectID: proj.GetId(), Revision: proj.GetRevision(), Data: data, UpdatedAt: now,
-			BackupKey: key,
-		}); err != nil {
-			p.r.log.Warn("保存项目配置备份失败", "node", p.conn.NodeID, "project", proj.GetId(), "err", err)
-		}
-	}
 	return &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}, nil
-}
-
-// reportsProject 判断节点是否在线并且最近一次上报里有这个项目。
-func (r *Registry) reportsProject(nodeID, projectID string) bool {
-	c, err := r.Peek(nodeID)
-	if err != nil {
-		return false
-	}
-	for _, s := range c.LastReport().GetProjects() {
-		if s.GetProject().GetId() == projectID {
-			return true
-		}
-	}
-	return false
 }
 
 // RenewCertificate 给节点续期证书。证书签名请求里的公钥必须就是这个节点的身份公钥。
@@ -413,12 +315,6 @@ func (p *panelService) RenewCertificate(ctx context.Context, req *nagiv1.RenewCe
 func NodeID(spki []byte) string {
 	sum := sha256.Sum256(spki)
 	return hex.EncodeToString(sum[:8])
-}
-
-// hashToken 与 auth.HashToken 相同；这里单独写一份，避免 nodes 依赖 auth。
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
 }
 
 // settingDomain 和 api.SettingDomain 相同（面板绑定的域名）。

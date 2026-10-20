@@ -1,11 +1,27 @@
--- name: InsertProject :exec
-INSERT INTO projects (id, dir, created_at) VALUES (?, ?, ?);
+-- name: UpsertContainer :exec
+INSERT INTO containers (project_id, name, dir, spec, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (project_id, name) DO UPDATE SET dir = excluded.dir, spec = excluded.spec;
 
--- name: GetProject :one
-SELECT * FROM projects WHERE id = ?;
+-- name: GetContainer :one
+SELECT * FROM containers WHERE project_id = ? AND name = ?;
 
--- name: ListProjects :many
-SELECT * FROM projects ORDER BY created_at;
+-- name: ListContainers :many
+SELECT * FROM containers ORDER BY created_at, project_id, name;
+
+-- name: ListProjectContainers :many
+SELECT * FROM containers WHERE project_id = ? ORDER BY created_at, name;
+
+-- name: DeleteContainer :exec
+DELETE FROM containers WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerFilesRoot :exec
+UPDATE containers SET files_root = ? WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerSnapshotTime :exec
+UPDATE containers SET last_snapshot = ? WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerMaintenanceTime :exec
+UPDATE containers SET last_maintenance = ? WHERE project_id = ? AND name = ?;
 
 -- name: ListSubnets :many
 SELECT subnet FROM subnets;
@@ -18,22 +34,6 @@ INSERT INTO subnets (subnet, owner) VALUES (?, ?);
 
 -- name: DeleteSubnet :exec
 DELETE FROM subnets WHERE owner = ?;
-
--- name: DeleteProjectSubnets :exec
-DELETE FROM subnets WHERE owner = @project_owner OR owner LIKE @group_prefix;
-
--- name: InsertSharedNetwork :exec
-INSERT INTO shared_networks (name, created_at) VALUES (?, ?);
-
--- name: ListSharedNetworks :many
-SELECT * FROM shared_networks ORDER BY name;
-
--- name: DeleteSharedNetwork :exec
-DELETE FROM shared_networks WHERE name = ?;
-
-
--- name: DeleteProject :exec
-DELETE FROM projects WHERE id = ?;
 
 -- name: InsertMetric :exec
 INSERT OR REPLACE INTO metrics_raw (series, ts, value) VALUES (?, ?, ?);
@@ -58,11 +58,3 @@ WHERE instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY se
 -- name: QueryM5 :many
 SELECT series, ts, value FROM metrics_m5
 WHERE instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY series, ts;
--- name: ListSharedNetworkLinks :many
-SELECT * FROM shared_network_links ORDER BY network, peer_name;
-
--- name: InsertSharedNetworkLink :exec
-INSERT INTO shared_network_links (network, peer_key, peer_name, peer_node) VALUES (?, ?, ?, ?);
-
--- name: DeleteSharedNetworkLinks :exec
-DELETE FROM shared_network_links WHERE network = ?;

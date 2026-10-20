@@ -31,7 +31,7 @@ func TestMaintainKeepsStorageBounded(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	storage := filepath.Join(root, "backups")
-	r, err := Open(ctx, "p1", storage, filepath.Join(root, "backup.key"), filepath.Join(root, "state"))
+	r, err := Open(ctx, "p1", storage, "test-password", filepath.Join(root, "state"))
 	if err != nil {
 		t.Fatal(err)
 	}

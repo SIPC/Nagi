@@ -19,7 +19,7 @@ func write(t *testing.T, path, content string) {
 func TestCreateListRestore(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
-	r, err := Open(ctx, "p1", filepath.Join(root, "backups"), filepath.Join(root, "backup.key"), filepath.Join(root, "state"))
+	r, err := Open(ctx, "p1", filepath.Join(root, "backups"), "test-password", filepath.Join(root, "state"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCreateListRestore(t *testing.T) {
 
 	// 重新打开（例如节点重启）仍然能读到。
 	r.Close(ctx)
-	r2, err := Open(ctx, "p1", filepath.Join(root, "backups"), filepath.Join(root, "backup.key"), filepath.Join(root, "state"))
+	r2, err := Open(ctx, "p1", filepath.Join(root, "backups"), "test-password", filepath.Join(root, "state"))
 	if err != nil {
 		t.Fatal(err)
 	}

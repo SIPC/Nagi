@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Rocket } from "lucide-react";
-import { errorMessage, projectClient, toDate } from "@/lib/api";
+import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
@@ -9,6 +9,7 @@ import { ProjectMetrics } from "@/components/metrics";
 import { ProjectState, ServiceState } from "@/components/status";
 import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
+import { useNodeChoice } from "@/pages/projects";
 import {
   Alert,
   Badge,
@@ -19,6 +20,7 @@ import {
   Field,
   Input,
   KeyValue,
+  Status,
   Notice,
   Section,
   Select,
@@ -37,12 +39,10 @@ type ImageUpdate = { container: string; service: string; image: string };
 type DetailView = "overview" | "config" | "versions" | "logs" | "terminal";
 
 export function ContainersTab({
-  nodeId,
   project,
   services,
   imageUpdates,
 }: {
-  nodeId: string;
   project: Project;
   services: ServiceStatus[];
   imageUpdates: ImageUpdate[];
@@ -60,7 +60,6 @@ export function ContainersTab({
         </Notice>
       )}
       <ContainersTable
-        nodeId={nodeId}
         project={project}
         services={services}
         selected={container?.name ?? ""}
@@ -69,8 +68,7 @@ export function ContainersTab({
       />
       {adding && (
         <AddContainer
-          nodeId={nodeId}
-          project={project}
+            project={project}
           onClose={() => setAdding(false)}
           onAdded={(name) => {
             setSelected(name);
@@ -81,8 +79,7 @@ export function ContainersTab({
       {container && (
         <ContainerDetail
           key={container.name}
-          nodeId={nodeId}
-          project={project}
+            project={project}
           container={container}
           services={services.filter((s) => s.container === container.name)}
           hasImageUpdate={imageUpdates.some((u) => u.container === container.name)}
@@ -91,7 +88,7 @@ export function ContainersTab({
         />
       )}
       <Section title="监控" description="最近 1 小时的资源占用和请求情况。">
-        <ProjectMetrics nodeId={nodeId} projectId={project.id} />
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} />
       </Section>
     </div>
   );
@@ -111,30 +108,29 @@ export function containerKind(m: Container) {
 // ---- 容器列表与批量部署 ----
 
 function ContainersTable({
-  nodeId,
   project,
   services,
   selected,
   onSelect,
   onAdd,
 }: {
-  nodeId: string;
   project: Project;
   services: ServiceStatus[];
   selected: string;
   onSelect: (name: string) => void;
   onAdd: () => void;
 }) {
-  const { run, busy, output } = useRun(nodeId, project.id);
+  const { run, busy, output } = useRun(project.id);
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const nodeOffline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const targets = project.containers.filter((m) => checked[m.name]);
   const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
 
   const deploy = (containers: Container[]) =>
     run(() =>
-      projectClient.deployNodeProject({
-        nodeId,
-        projectId: project.id,
+      projectClient.deploy({ projectId: project.id,
         targets: containers.map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
@@ -171,6 +167,7 @@ function ContainersTable({
             <tr>
               <Th className="w-10" />
               <Th>名称</Th>
+              <Th>节点</Th>
               <Th>状态</Th>
               <Th>版本</Th>
               <Th>内网地址</Th>
@@ -201,19 +198,23 @@ function ContainersTable({
                       {m.unmanagedVolumes.length > 0 && <Badge tone="warning">volume 未纳入快照</Badge>}
                     </div>
                   </Td>
+                  <Td className="text-[13px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      {nodeName(m.nodeId)}
+                      {nodeOffline(m.nodeId) && <Badge tone="warning">离线</Badge>}
+                    </span>
+                  </Td>
                   <Td>
-                    <ProjectState services={svc} deployed={m.deployedVersion > 0n} />
+                    {nodeOffline(m.nodeId) ? <Status tone="warning">节点离线</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
                   </Td>
                   <Td className="font-mono text-xs">
                     {m.deployedVersion > 0n ? `v${m.deployedVersion}` : <span className="text-muted-foreground">—</span>}
                     {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground"> / 最新 v{String(m.latestVersion)}</span>}
                   </Td>
                   <Td className="font-mono text-xs text-muted-foreground">
-                    {project.settings?.intranetDisabled
-                      ? "—"
-                      : m.kind !== "group"
-                        ? m.name
-                        : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") || "—"}
+                    {m.kind !== "group"
+                      ? m.name
+                      : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") || "—"}
                   </Td>
                 </tr>
               );
@@ -229,7 +230,6 @@ function ContainersTable({
 // ---- 一个容器 ----
 
 function ContainerDetail({
-  nodeId,
   project,
   container,
   services,
@@ -237,7 +237,6 @@ function ContainerDetail({
   view,
   onView,
 }: {
-  nodeId: string;
   project: Project;
   container: Container;
   services: ServiceStatus[];
@@ -245,7 +244,7 @@ function ContainerDetail({
   view: DetailView;
   onView: (v: DetailView) => void;
 }) {
-  const { run, busy, output, setLines } = useRun(nodeId, project.id);
+  const { run, busy, output, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const cfg = container.draft ?? container.config;
@@ -254,13 +253,13 @@ function ContainerDetail({
   const serviceNames = [...new Set(services.map((s) => s.name))];
 
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) =>
-    run(() => projectClient.deployNodeProject({ nodeId, projectId: project.id, targets: target, ...opts }), keep);
+    run(() => projectClient.deploy({ projectId: project.id, targets: target, ...opts }), keep);
 
   // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换容器的 data/。
   const upload = async (file: File) => {
     onView("overview");
     setLines([`上传 ${file.name}（${(file.size / 1048576).toFixed(1)} MB）`]);
-    const q = new URLSearchParams({ node: nodeId, project: project.id, container: container.name });
+    const q = new URLSearchParams({ project: project.id, container: container.name });
     const res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1" }, body: file });
     const body = await res.json();
     if (!res.ok) {
@@ -277,8 +276,8 @@ function ContainerDetail({
     );
     if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器并保留${kind}目录？`)) return;
     try {
-      await projectClient.deleteNodeProjectContainer({ nodeId, projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
-      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     } catch (err) {
       setLines(["删除失败：" + errorMessage(err)]);
     }
@@ -353,19 +352,18 @@ function ContainerDetail({
         />
         {output}
         {view === "overview" && <Overview container={container} services={services} />}
-        {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} nodeId={nodeId} project={project} container={container} services={serviceNames} />}
-        {view === "versions" && <Versions nodeId={nodeId} project={project} container={container} />}
+        {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} project={project} container={container} services={serviceNames} />}
+        {view === "versions" && <Versions project={project} container={container} />}
         {view === "logs" && (
           <Logs
-            nodeId={nodeId}
-            projectId={project.id}
+                projectId={project.id}
             container={container.name}
             services={serviceNames}
             containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
           />
         )}
         {view === "terminal" && (
-          <TerminalView nodeId={nodeId} projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+          <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         )}
       </div>
     </Section>
@@ -374,8 +372,22 @@ function ContainerDetail({
 
 function Overview({ container, services }: { container: Container; services: ServiceStatus[] }) {
   const cfg = container.draft ?? container.config;
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   return (
     <div className="grid gap-5">
+      <KeyValue
+        items={[
+          [
+            "节点",
+            <span className="inline-flex items-center gap-1.5">
+              {node?.name ?? container.nodeId}
+              {node && !node.online && <Status tone="warning">离线</Status>}
+            </span>,
+          ],
+          ["容器目录", <span className="font-mono">{container.dir}</span>],
+        ]}
+      />
       {container.hostNetworkServices.length > 0 && (
         <Notice tone="warning" title="使用 host 网络">
           容器 {container.hostNetworkServices.join("、")} 不经过 Caddy、不在项目内网中，端口直接对外开放，需自行配置防火墙。
@@ -461,7 +473,7 @@ type Line = { key: number; service: string; stream: string; text: string };
 
 const maxLines = 2000;
 
-function Logs({ nodeId, projectId, container, services, containers }: { nodeId: string; projectId: string; container: string; services: string[]; containers: string }) {
+function Logs({ projectId, container, services, containers }: { projectId: string; container: string; services: string[]; containers: string }) {
   const [service, setService] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
@@ -475,7 +487,7 @@ function Logs({ nodeId, projectId, container, services, containers }: { nodeId: 
     setError("");
     (async () => {
       try {
-        const stream = projectClient.streamNodeProjectLogs({ nodeId, projectId, container, service, tail: 200, follow: true }, { signal: abort.signal });
+        const stream = projectClient.streamLogs({ projectId, container, service, tail: 200, follow: true }, { signal: abort.signal });
         for await (const l of stream) {
           const line = { key: n++, service: l.service, stream: l.stream, text: l.text };
           setLines((prev) => {
@@ -490,7 +502,7 @@ function Logs({ nodeId, projectId, container, services, containers }: { nodeId: 
     })();
     return () => abort.abort();
     // 容器变化（例如部署后容器被重建）时重新订阅。
-  }, [nodeId, projectId, container, service, containers]);
+  }, [projectId, container, service, containers]);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -538,7 +550,7 @@ function Logs({ nodeId, projectId, container, services, containers }: { nodeId: 
 
 // ---- 配置 ----
 
-function ContainerConfig({ nodeId, project, container, services }: { nodeId: string; project: Project; container: Container; services: string[] }) {
+function ContainerConfig({ project, container, services }: { project: Project; container: Container; services: string[] }) {
   const queryClient = useQueryClient();
   const base = container.draft ?? container.config;
   const isForm = !!base?.form;
@@ -555,7 +567,7 @@ function ContainerConfig({ nodeId, project, container, services }: { nodeId: str
   const [busy, setBusy] = useState(false);
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+    queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     queryClient.invalidateQueries({ queryKey: ["projects"] });
   };
 
@@ -584,8 +596,7 @@ function ContainerConfig({ nodeId, project, container, services }: { nodeId: str
     };
     return call(
       () =>
-        projectClient.saveNodeProjectDraft({
-          nodeId,
+        projectClient.saveDraft({
           projectId: project.id,
           container: container.name,
           baseRevision: container.revision,
@@ -605,7 +616,7 @@ function ContainerConfig({ nodeId, project, container, services }: { nodeId: str
     );
   };
 
-  const discard = () => call(() => projectClient.discardNodeProjectDraft({ nodeId, projectId: project.id, container: container.name, baseRevision: container.revision }));
+  const discard = () => call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }));
 
   return (
     <form
@@ -679,12 +690,12 @@ function ContainerConfig({ nodeId, project, container, services }: { nodeId: str
 
 // ---- 版本 ----
 
-function Versions({ nodeId, project, container }: { nodeId: string; project: Project; container: Container }) {
-  const { run, busy, output } = useRun(nodeId, project.id);
-  const ref = { nodeId, projectId: project.id, container: container.name };
+function Versions({ project, container }: { project: Project; container: Container }) {
+  const { run, busy, output } = useRun(project.id);
+  const ref = { projectId: project.id, container: container.name };
   const versions = useQuery({
-    queryKey: ["versions", nodeId, project.id, container.name, String(container.revision)],
-    queryFn: () => projectClient.listNodeProjectVersions(ref),
+    queryKey: ["versions", project.id, container.name, String(container.revision)],
+    queryFn: () => projectClient.listVersions(ref),
   });
   const [restoreData, setRestoreData] = useState(false);
 
@@ -747,7 +758,7 @@ function Versions({ nodeId, project, container }: { nodeId: string; project: Pro
                         disabled={busy}
                         onClick={() =>
                           confirm(`将 ${container.name} 回滚到 v${v.version}？${restoreData ? "数据将同时恢复为该版本部署前的状态。" : "数据保持不变。"}`) &&
-                          run(() => projectClient.rollbackNodeProject({ ...ref, version: v.version, restoreData }))
+                          run(() => projectClient.rollback({ ...ref, version: v.version, restoreData }))
                         }
                       >
                         回滚
@@ -766,19 +777,20 @@ function Versions({ nodeId, project, container }: { nodeId: string; project: Pro
 
 // ---- 添加容器 ----
 
-function AddContainer({ nodeId, project, onAdded, onClose }: { nodeId: string; project: Project; onAdded: (name: string) => void; onClose: () => void }) {
+function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded: (name: string) => void; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContainerForm(project.containers.length === 0);
+  const node = useNodeChoice(project.networkName, name);
 
   const add = async () => {
     setBusy(true);
     setError("");
     try {
-      await projectClient.addNodeProjectContainer({ nodeId, projectId: project.id, name, config: form.build() });
-      queryClient.invalidateQueries({ queryKey: ["project", nodeId, project.id] });
+      await projectClient.addContainer({ projectId: project.id, name, config: form.build(), nodeId: node.nodeId, dir: node.dir });
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       onAdded(name);
       setName("");
     } catch (err) {
@@ -805,6 +817,7 @@ function AddContainer({ nodeId, project, onAdded, onClose }: { nodeId: string; p
         >
           <Input id="new-container" value={name} onChange={(e) => setName(e.target.value)} required className="max-w-80 font-mono" placeholder="api" />
         </Field>
+        {node.fields}
         {form.fields}
         {error && <Alert>{error}</Alert>}
         <div className="flex justify-end gap-2 border-t pt-4">
@@ -813,7 +826,7 @@ function AddContainer({ nodeId, project, onAdded, onClose }: { nodeId: string; p
               取消
             </Button>
           )}
-          <Button type="submit" size="sm" disabled={busy}>
+          <Button type="submit" size="sm" disabled={busy || !node.nodeId}>
             {busy && <Spinner />}
             添加
           </Button>
