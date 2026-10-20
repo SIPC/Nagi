@@ -1672,6 +1672,8 @@ const (
 	ProjectService_StreamLogs_FullMethodName            = "/nagi.v1.ProjectService/StreamLogs"
 	ProjectService_SaveRoute_FullMethodName             = "/nagi.v1.ProjectService/SaveRoute"
 	ProjectService_DeleteRoute_FullMethodName           = "/nagi.v1.ProjectService/DeleteRoute"
+	ProjectService_ConnectProject_FullMethodName        = "/nagi.v1.ProjectService/ConnectProject"
+	ProjectService_DisconnectProject_FullMethodName     = "/nagi.v1.ProjectService/DisconnectProject"
 	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
 	ProjectService_CreateSnapshot_FullMethodName        = "/nagi.v1.ProjectService/CreateSnapshot"
 	ProjectService_RestoreSnapshot_FullMethodName       = "/nagi.v1.ProjectService/RestoreSnapshot"
@@ -1716,6 +1718,9 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*Project, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*Project, error)
+	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
+	ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
+	DisconnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	// 快照（按容器）。
 	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -1965,6 +1970,26 @@ func (c *projectServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteR
 	return out, nil
 }
 
+func (c *projectServiceClient) ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_ConnectProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DisconnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_DisconnectProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
@@ -2097,6 +2122,9 @@ type ProjectServiceServer interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*Project, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error)
+	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
+	ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
+	DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -2176,6 +2204,12 @@ func (UnimplementedProjectServiceServer) SaveRoute(context.Context, *SaveRouteRe
 }
 func (UnimplementedProjectServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
+}
+func (UnimplementedProjectServiceServer) ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConnectProject not implemented")
+}
+func (UnimplementedProjectServiceServer) DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisconnectProject not implemented")
 }
 func (UnimplementedProjectServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
@@ -2536,6 +2570,42 @@ func _ProjectService_DeleteRoute_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_ConnectProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConnectProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ConnectProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ConnectProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ConnectProject(ctx, req.(*ConnectProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_DisconnectProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConnectProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DisconnectProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DisconnectProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DisconnectProject(ctx, req.(*ConnectProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -2732,6 +2802,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRoute",
 			Handler:    _ProjectService_DeleteRoute_Handler,
+		},
+		{
+			MethodName: "ConnectProject",
+			Handler:    _ProjectService_ConnectProject_Handler,
+		},
+		{
+			MethodName: "DisconnectProject",
+			Handler:    _ProjectService_DisconnectProject_Handler,
 		},
 		{
 			MethodName: "ListSnapshots",

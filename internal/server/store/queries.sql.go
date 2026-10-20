@@ -294,6 +294,23 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteProjectLink = `-- name: DeleteProjectLink :execrows
+DELETE FROM project_links WHERE a = ? AND b = ?
+`
+
+type DeleteProjectLinkParams struct {
+	A string
+	B string
+}
+
+func (q *Queries) DeleteProjectLink(ctx context.Context, arg DeleteProjectLinkParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteProjectLink, arg.A, arg.B)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteRoute = `-- name: DeleteRoute :exec
 DELETE FROM routes WHERE project_id = ? AND name = ?
 `
@@ -631,6 +648,21 @@ func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) er
 	return err
 }
 
+const insertProjectLink = `-- name: InsertProjectLink :exec
+INSERT INTO project_links (a, b, created_at) VALUES (?, ?, ?)
+`
+
+type InsertProjectLinkParams struct {
+	A         string
+	B         string
+	CreatedAt int64
+}
+
+func (q *Queries) InsertProjectLink(ctx context.Context, arg InsertProjectLinkParams) error {
+	_, err := q.db.ExecContext(ctx, insertProjectLink, arg.A, arg.B, arg.CreatedAt)
+	return err
+}
+
 const insertVersion = `-- name: InsertVersion :exec
 INSERT INTO versions (project_id, container, version, config, shared_env, created_at, rollback_of)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -955,6 +987,33 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 			&i.MeshKey,
 			&i.Pending,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectLinks = `-- name: ListProjectLinks :many
+SELECT a, b, created_at FROM project_links ORDER BY created_at
+`
+
+func (q *Queries) ListProjectLinks(ctx context.Context) ([]ProjectLink, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProjectLink{}
+	for rows.Next() {
+		var i ProjectLink
+		if err := rows.Scan(&i.A, &i.B, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

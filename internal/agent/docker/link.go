@@ -12,7 +12,7 @@ import (
 	"github.com/moby/moby/client"
 )
 
-// 跨节点共享网络的代理容器（见 docs/agent.md#跨节点连接共享网络）：用节点本地生成的空镜像，
+// 项目内网和项目连接的代理容器（见 docs/agent.md#项目内网）：用节点本地生成的空镜像，
 // 运行挂进去的 nagi 本身（nagi link-proxy），不用拉取任何镜像。
 
 // LinkImage 是代理容器用的空镜像。

@@ -233,6 +233,14 @@ func (s *projectService) DeleteRoute(ctx context.Context, req *connect.Request[n
 	return connect.NewResponse(p), nil
 }
 
+func (s *projectService) ConnectProject(ctx context.Context, req *connect.Request[nagiv1.ConnectProjectRequest]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.Connect(ctx, req.Msg.GetProjectId(), req.Msg.GetOtherProjectId()))
+}
+
+func (s *projectService) DisconnectProject(ctx context.Context, req *connect.Request[nagiv1.ConnectProjectRequest]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.Disconnect(ctx, req.Msg.GetProjectId(), req.Msg.GetOtherProjectId()))
+}
+
 func (s *projectService) ListSnapshots(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
 	list, err := s.Projects.Snapshots(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
 	return reply(&nagiv1.ListSnapshotsResponse{Snapshots: list}, err)

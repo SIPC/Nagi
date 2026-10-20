@@ -278,6 +278,9 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 	for _, r := range routes {
 		proj.Routes = append(proj.Routes, routeProto(r))
 	}
+	if proj.Links, err = s.linkedProjects(ctx, p.ID); err != nil {
+		return nil, err
+	}
 	return proj, nil
 }
 
@@ -444,7 +447,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*nagiv1.Projec
 	}
 	if req.Container != nil {
 		req.Container.ProjectID = id
-		if _, err := s.AddContainer(ctx, *req.Container); err != nil {
+		if err := s.addContainer(ctx, *req.Container); err != nil {
 			_ = s.Q.DeleteProject(ctx, id)
 			return nil, err
 		}
@@ -487,6 +490,11 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 	if err := s.checkNetworkName(ctx, network, id); err != nil {
 		return nil, err
 	}
+	if network != p.NetworkName {
+		if err := s.checkRenameNetwork(ctx, id, network); err != nil {
+			return nil, err
+		}
+	}
 	next, err := cleanSettings(in)
 	if err != nil {
 		return nil, err
@@ -504,6 +512,7 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 		return nil, err
 	}
 	s.pushProject(ctx, id)
+	s.refreshLinks()
 	return s.reload(ctx, id)
 }
 
@@ -624,6 +633,7 @@ func (s *Service) Delete(ctx context.Context, id string, base int64, deleteDir b
 		return err
 	}
 	s.Log.Info("项目已删除", "project", id, "name", p.Name, "delete_dir", deleteDir)
+	s.refreshLinks()
 	return nil
 }
 

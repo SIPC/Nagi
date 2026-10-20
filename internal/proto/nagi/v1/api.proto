@@ -364,6 +364,10 @@ service ProjectService {
   rpc SaveRoute(SaveRouteRequest) returns (Project);
   rpc DeleteRoute(DeleteRouteRequest) returns (Project);
 
+  // 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
+  rpc ConnectProject(ConnectProjectRequest) returns (Project);
+  rpc DisconnectProject(ConnectProjectRequest) returns (Project);
+
   // 快照（按容器）。
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
   // 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -378,6 +382,11 @@ service ProjectService {
   rpc LogoutRegistry(LogoutRegistryRequest) returns (RegistriesResponse);
   // 立即检查项目的镜像有没有新版本。
   rpc CheckImages(ProjectRef) returns (CheckImagesResponse);
+}
+
+message ConnectProjectRequest {
+  string project_id = 1;
+  string other_project_id = 2;
 }
 
 message ProjectRef {

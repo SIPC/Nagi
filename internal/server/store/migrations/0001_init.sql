@@ -135,3 +135,11 @@ CREATE TABLE routes (
     PRIMARY KEY (project_id, name),
     FOREIGN KEY (project_id, container) REFERENCES containers (project_id, name) ON DELETE CASCADE
 );
+
+-- 项目连接（见 docs/agent.md#项目连接）：双向，a < b。
+CREATE TABLE project_links (
+    a          TEXT    NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+    b          TEXT    NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (a, b)
+);

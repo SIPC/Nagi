@@ -31,6 +31,14 @@ message Project {
   // 共享变量是否有没部署的草稿。
   bool has_shared_env_draft = 10;
   repeated EnvVar shared_env_draft = 11;
+  // 已连接的项目（见 docs/agent.md#项目连接）。
+  repeated LinkedProject links = 12;
+}
+
+message LinkedProject {
+  string project_id = 1;
+  string name = 2;
+  string network_name = 3;
 }
 
 // ProjectSettings 是项目级的设置。除了共享变量（走草稿）以外，改了立即生效，不进容器的版本。

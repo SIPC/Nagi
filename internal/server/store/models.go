@@ -68,6 +68,12 @@ type Project struct {
 	DockerConfig   []byte
 }
 
+type ProjectLink struct {
+	A         string
+	B         string
+	CreatedAt int64
+}
+
 type Route struct {
 	ProjectID string
 	Name      string

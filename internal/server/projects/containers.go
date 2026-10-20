@@ -26,13 +26,21 @@ type AddRequest struct {
 	Dir string
 }
 
-// AddContainer 往项目里加一个容器：保存配置作为它的版本 1（还没部署），把配置下发给它所在的节点（检查目录）。
+// AddContainer 往项目里加一个容器，返回加好以后的项目。
 func (s *Service) AddContainer(ctx context.Context, req AddRequest) (*nagiv1.Project, error) {
-	if err := spec.CheckContainerName(req.Name); err != nil {
+	if err := s.addContainer(ctx, req); err != nil {
 		return nil, err
 	}
+	return s.reload(ctx, req.ProjectID)
+}
+
+// addContainer 往项目里加一个容器：保存配置作为它的版本 1（还没部署），把配置下发给它所在的节点（检查目录）。
+func (s *Service) addContainer(ctx context.Context, req AddRequest) error {
+	if err := spec.CheckContainerName(req.Name); err != nil {
+		return err
+	}
 	if req.Config == nil {
-		return nil, invalid("缺少容器配置")
+		return invalid("缺少容器配置")
 	}
 	cfg := proto.Clone(req.Config).(*nagiv1.ContainerConfig)
 	l := s.lock(req.ProjectID)
@@ -40,14 +48,14 @@ func (s *Service) AddContainer(ctx context.Context, req AddRequest) (*nagiv1.Pro
 	defer l.Unlock()
 	p, err := s.project(ctx, req.ProjectID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := s.container(ctx, p.ID, req.Name); err == nil {
-		return nil, invalid("项目里已经有容器 %s", req.Name)
+		return invalid("项目里已经有容器 %s", req.Name)
 	}
 	conn, err := s.Nodes.Get(req.NodeID)
 	if err != nil {
-		return nil, s.nodeErr(ctx, req.NodeID, err)
+		return s.nodeErr(ctx, req.NodeID, err)
 	}
 	dir := strings.TrimSpace(req.Dir)
 	if dir == "" {
@@ -58,44 +66,44 @@ func (s *Service) AddContainer(ctx context.Context, req AddRequest) (*nagiv1.Pro
 		dir = path.Join(root, p.NetworkName, req.Name)
 	}
 	if !strings.HasPrefix(dir, "/") {
-		return nil, invalid("容器目录必须是绝对路径")
+		return invalid("容器目录必须是绝对路径")
 	}
 	dir = path.Clean(dir)
 	if owner, err := s.Q.ContainerDirOwner(ctx, store.ContainerDirOwnerParams{NodeID: req.NodeID, Dir: dir}); err == nil {
-		return nil, invalid("这个节点上的容器 %s 已经在用目录 %s", owner.Name, dir)
+		return invalid("这个节点上的容器 %s 已经在用目录 %s", owner.Name, dir)
 	}
 	settings, err := s.settings(p)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	probe := store.Container{ProjectID: p.ID, Name: req.Name, Dir: dir}
 	cp, err := spec.Validate(ctx, cfg, req.Name, settings.GetSharedEnv(), checkData(probe), spec.ComposeProjectName(p.ID, req.Name))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := s.checkNames(ctx, p.ID, req.Name, cfg, cp.ServiceNames()); err != nil {
-		return nil, err
+		return err
 	}
 	key, pub, err := spec.NewDeployKey()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	token, err := spec.RandomHex(32)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	password, err := spec.RandomHex(32)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	secretJSON, _ := json.Marshal(secrets{WebhookToken: token, DeployKey: key, BackupPassword: password})
 	sealedSecrets, err := s.Sealer.Seal(secretJSON, []byte(secretsCtx(p.ID, req.Name)))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	rows, err := s.Q.ListContainers(ctx, p.ID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	position := int64(1)
 	for _, r := range rows {
@@ -106,7 +114,7 @@ func (s *Service) AddContainer(ctx context.Context, req AddRequest) (*nagiv1.Pro
 		ProjectID: p.ID, Name: req.Name, Position: position, NodeID: req.NodeID, Dir: dir, CreatedAt: now,
 		WebhookHash: HashToken(token), Secrets: sealedSecrets, DeployKeyPub: pub,
 	}); err != nil {
-		return nil, err
+		return err
 	}
 	cleanup := func() { _ = s.Q.DeleteContainer(ctx, store.DeleteContainerParams{ProjectID: p.ID, Name: req.Name}) }
 	sc, se, err := s.sealVersion(p.ID, req.Name, 1, cfg, settings.GetSharedEnv())
@@ -115,20 +123,25 @@ func (s *Service) AddContainer(ctx context.Context, req AddRequest) (*nagiv1.Pro
 	}
 	if err != nil {
 		cleanup()
-		return nil, err
+		return err
 	}
 	// 先下发一份配置：节点检查目录能不能用，并建好目录。
 	if err := s.push(ctx, p.ID, req.Name); err != nil {
 		cleanup()
-		return nil, err
+		return err
 	}
 	s.Log.Info("已添加容器", "project", p.ID, "container", req.Name, "node", req.NodeID, "dir", dir)
-	return s.reload(ctx, p.ID)
+	return nil
 }
 
 // checkNames 检查名字会不会撞：单个容器在项目内网里的名字就是容器名，容器组内部按服务原名互相访问，
 // 所以单个容器的名字不能和项目里任何容器组的服务名相同，否则容器组内部查这个名字时可能查到项目内网里的单个容器。
 func (s *Service) checkNames(ctx context.Context, projectID, container string, cfg *nagiv1.ContainerConfig, services []string) error {
+	if !spec.IsSingle(cfg) {
+		if err := s.checkGroupName(ctx, projectID, container); err != nil {
+			return err
+		}
+	}
 	rows, err := s.Q.ListContainers(ctx, projectID)
 	if err != nil {
 		return err

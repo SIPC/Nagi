@@ -5,13 +5,14 @@ import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
-// 「网络」标签页：端口映射与域名、项目内网。项目之间的连接见 docs/agent.md#项目连接。
+// 「网络」标签页：端口映射与域名、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
 export function NetworkTab({ project, services }: { project: Project; services: ServiceStatus[] }) {
   return (
     <div className="grid gap-6">
       <RoutesSection project={project} services={services} />
       <Intranet project={project} services={services} />
+      <Links project={project} services={services} />
     </div>
   );
 }
@@ -342,6 +343,151 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
           </Button>
         </div>
       </div>
+    </Section>
+  );
+}
+
+// ---- 项目连接 ----
+
+// Links 列出已连接的项目，连接、断开其他项目。连接是双向的，用"容器.网络名"访问对方。
+function Links({ project, services }: { project: Project; services: ServiceStatus[] }) {
+  const queryClient = useQueryClient();
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  const [open, setOpen] = useState(false);
+  const [other, setOther] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const linked = new Set(project.links.map((l) => l.projectId));
+  const candidates = (projects.data?.projects ?? []).map((p) => p.project!).filter((p) => p && p.id !== project.id && !linked.has(p.id));
+  const selected = other || candidates[0]?.id || "";
+  const addresses = intranetAddresses(project, services);
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  };
+
+  const connect = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.connectProject({ projectId: project.id, otherProjectId: selected });
+      setOpen(false);
+      setOther("");
+      refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async (id: string, name: string) => {
+    if (!confirm(`断开与项目 ${name} 的连接？两个项目的容器将立即无法互相访问。`)) return;
+    setError("");
+    try {
+      await projectClient.disconnectProject({ projectId: project.id, otherProjectId: id });
+      refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  return (
+    <Section
+      flush
+      title="项目连接"
+      description="连接后两个项目的容器可以互相访问，地址为「容器.网络名」。"
+      help="连接是双向的，但不传递：A 连接 B、B 连接 C 时，A 与 C 仍然隔离。跨节点的访问只转发 TCP，经节点之间的加密通道。"
+      actions={
+        !open && (
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+            连接项目
+          </Button>
+        )
+      }
+    >
+      {error && !open && <Alert className="mx-5 mb-3">{error}</Alert>}
+      {project.links.length === 0 ? (
+        <EmptyRow>未连接其他项目</EmptyRow>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th>项目</Th>
+              <Th>网络名</Th>
+              <Th>访问示例</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {project.links.map((l) => (
+              <tr key={l.projectId}>
+                <Td className="font-medium">{l.name}</Td>
+                <Td className="font-mono text-xs">{l.networkName}</Td>
+                <Td className="font-mono text-xs text-muted-foreground">容器.{l.networkName}</Td>
+                <Td className="text-right">
+                  <Button size="sm" variant="ghost" onClick={() => disconnect(l.projectId, l.name)}>
+                    断开
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      {addresses.length > 0 && (
+        <div className="border-t px-5 py-4">
+          <p className="mb-2 text-[13px] text-muted-foreground">已连接的项目访问本项目容器时使用的地址：</p>
+          <div className="flex flex-wrap gap-2">
+            {addresses.map((a) => (
+              <Badge key={a.name} className="font-mono">
+                {a.name}.{project.networkName}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {open && (
+        <form
+          className="grid gap-4 border-t px-5 py-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            connect();
+          }}
+        >
+          {candidates.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">没有可以连接的其他项目。</p>
+          ) : (
+            <Field label="项目" htmlFor="link-project">
+              <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)} className="max-w-sm">
+                {candidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}（{p.networkName}）
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {error && <Alert>{error}</Alert>}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setOpen(false);
+                setError("");
+              }}
+            >
+              取消
+            </Button>
+            <Button type="submit" size="sm" disabled={busy || !selected}>
+              {busy && <Spinner />}
+              连接
+            </Button>
+          </div>
+        </form>
+      )}
     </Section>
   );
 }

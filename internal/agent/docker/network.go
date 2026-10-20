@@ -11,8 +11,8 @@ import (
 	"github.com/moby/moby/client"
 )
 
-// 项目内网和共享网络由节点自己创建，容器由节点用 network connect 接入（只带指定的别名）。
-// compose 会把服务原名注册到它加入的每个网络上，所以 容器组不在 compose 里加入这些网络。
+// 项目内网由节点自己创建，容器组的容器由节点用 network connect 接入（只带指定的别名）。
+// compose 会把服务原名注册到它加入的每个网络上，所以容器组不在 compose 里加入项目内网。
 
 // EnsureNetwork 网络不存在时按指定网段创建（bridge）。
 func (d *Client) EnsureNetwork(ctx context.Context, name, subnet string, labels map[string]string) error {

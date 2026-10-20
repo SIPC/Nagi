@@ -76,7 +76,24 @@ func (s *Service) runningConfig(ctx context.Context, c store.Container) (*nagiv1
 	return cfg, err
 }
 
-// plan 算出节点 nodeID 的代理计划。
+// linkedMap 返回每个项目连接了哪些项目。
+func (s *Service) linkedMap(ctx context.Context) (map[string][]string, error) {
+	rows, err := s.Q.ListProjectLinks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for _, l := range rows {
+		out[l.A] = append(out[l.A], l.B)
+		out[l.B] = append(out[l.B], l.A)
+	}
+	return out, nil
+}
+
+// plan 算出节点 nodeID 的代理计划：
+//   - 本节点上有容器的项目，为它在别的节点上的容器放代理（名字是容器名），为已连接项目的每个容器放代理（名字是"容器.网络名"，
+//     对方在本节点上时由本节点直接转发）；
+//   - 本节点上的容器允许哪些节点连进来：同项目的容器、已连接项目的容器所在的节点。
 func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, error) {
 	local, err := s.Q.ListNodeContainers(ctx, nodeID)
 	if err != nil {
@@ -85,6 +102,10 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 	projectIDs := map[string]bool{}
 	for _, c := range local {
 		projectIDs[c.ProjectID] = true
+	}
+	linked, err := s.linkedMap(ctx)
+	if err != nil {
+		return nil, err
 	}
 	// 各节点最近一次上报的容器状态（声明的端口），以及 mesh 公钥。
 	reports := map[string]map[string]*nagiv1.ContainerStatus{}
@@ -104,6 +125,39 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		}
 		reports[n.ID] = m
 	}
+	// 用到的项目的信息只读一次。
+	type info struct {
+		p        store.Project
+		rows     []store.Container
+		settings *nagiv1.ProjectSettings
+		targets  []target
+	}
+	cache := map[string]*info{}
+	load := func(id string) *info {
+		if i, ok := cache[id]; ok {
+			return i
+		}
+		var i *info
+		if p, err := s.Q.GetProject(ctx, id); err == nil {
+			rows, err1 := s.Q.ListContainers(ctx, id)
+			settings, err2 := s.settings(p)
+			if err1 == nil && err2 == nil {
+				i = &info{p: p, rows: rows, settings: settings, targets: s.targets(ctx, p, rows, reports)}
+			}
+		}
+		cache[id] = i
+		return i
+	}
+	proxy := func(projectID, alias string, t target) *nagiv1.LinkProxy {
+		if len(t.ports) == 0 || len(keys[t.nodeID]) == 0 {
+			return nil
+		}
+		return &nagiv1.LinkProxy{
+			ProjectId: projectID, Alias: alias, TargetProject: t.project, TargetName: t.name, Ports: t.ports,
+			Nodes: []*nagiv1.LinkNode{{Key: keys[t.nodeID], Name: names[t.nodeID]}},
+		}
+	}
+
 	plan := &nagiv1.LinkPlan{}
 	ids := make([]string, 0, len(projectIDs))
 	for id := range projectIDs {
@@ -111,39 +165,41 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		p, err := s.Q.GetProject(ctx, id)
-		if err != nil {
+		self := load(id)
+		if self == nil {
 			continue
 		}
-		rows, err := s.Q.ListContainers(ctx, id)
-		if err != nil {
-			continue
+		allow := &nagiv1.LinkAllow{ProjectId: id, InternalPorts: self.settings.GetInternalPorts()}
+		addCallers := func(rows []store.Container) {
+			for _, c := range rows {
+				if c.NodeID != nodeID && len(keys[c.NodeID]) > 0 && !containsKey(allow.Callers, keys[c.NodeID]) {
+					allow.Callers = append(allow.Callers, keys[c.NodeID])
+				}
+			}
 		}
-		settings, err := s.settings(p)
-		if err != nil {
-			continue
+		// 别的节点上的同项目容器。
+		for _, t := range self.targets {
+			if t.nodeID != nodeID {
+				if px := proxy(id, t.name, t); px != nil {
+					plan.Proxies = append(plan.Proxies, px)
+				}
+			}
 		}
-		// 本节点能访问别的节点上的同项目容器：每个名字放一个代理。
-		callers := map[string]bool{}
-		for _, t := range s.targets(ctx, p, rows, reports) {
-			if t.nodeID == nodeID {
+		addCallers(self.rows)
+		// 已连接的项目。
+		others := append([]string(nil), linked[id]...)
+		sort.Strings(others)
+		for _, oid := range others {
+			other := load(oid)
+			if other == nil {
 				continue
 			}
-			callers[t.nodeID] = true
-			if len(t.ports) == 0 || len(keys[t.nodeID]) == 0 {
-				continue
+			for _, t := range other.targets {
+				if px := proxy(id, t.name+"."+other.p.NetworkName, t); px != nil {
+					plan.Proxies = append(plan.Proxies, px)
+				}
 			}
-			plan.Proxies = append(plan.Proxies, &nagiv1.LinkProxy{
-				ProjectId: id, Alias: t.name, TargetProject: id, TargetName: t.name, Ports: t.ports,
-				Nodes: []*nagiv1.LinkNode{{Key: keys[t.nodeID], Name: names[t.nodeID]}},
-			})
-		}
-		// 别的节点上的同项目容器能访问本节点上的容器。
-		allow := &nagiv1.LinkAllow{ProjectId: id, InternalPorts: settings.GetInternalPorts()}
-		for _, c := range rows {
-			if c.NodeID != nodeID && len(keys[c.NodeID]) > 0 && !containsKey(allow.Callers, keys[c.NodeID]) {
-				allow.Callers = append(allow.Callers, keys[c.NodeID])
-			}
+			addCallers(other.rows)
 		}
 		if len(allow.Callers) > 0 {
 			plan.Allows = append(plan.Allows, allow)
@@ -204,4 +260,13 @@ func (s *Service) pushAllLinks(ctx context.Context) {
 			s.pushLinks(ctx, c)
 		}
 	}
+}
+
+// refreshLinks 在后台给所有在线节点重新算代理计划（项目连接、容器增删、网络名改了以后），不等节点下次上报。
+func (s *Service) refreshLinks() {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		s.pushAllLinks(ctx)
+	}()
 }

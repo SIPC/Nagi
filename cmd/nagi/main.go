@@ -151,11 +151,11 @@ func enrollCmd() *cobra.Command {
 	return cmd
 }
 
-// linkProxyCmd 是跨节点共享网络的代理容器里运行的程序，由节点创建，不用手动运行。
+// linkProxyCmd 是项目内网和项目连接的代理容器里运行的程序，由节点创建，不用手动运行。
 func linkProxyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "link-proxy",
-		Short:  "共享网络的代理（在代理容器里运行）",
+		Short:  "项目内网的代理（在代理容器里运行）",
 		Hidden: true,
 		RunE: func(*cobra.Command, []string) error {
 			return agent.RunLinkProxy()

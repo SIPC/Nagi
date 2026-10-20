@@ -241,3 +241,12 @@ SELECT * FROM routes ORDER BY project_id, name;
 
 -- name: DeleteRoute :exec
 DELETE FROM routes WHERE project_id = ? AND name = ?;
+
+-- name: ListProjectLinks :many
+SELECT * FROM project_links ORDER BY created_at;
+
+-- name: InsertProjectLink :exec
+INSERT INTO project_links (a, b, created_at) VALUES (?, ?, ?);
+
+-- name: DeleteProjectLink :execrows
+DELETE FROM project_links WHERE a = ? AND b = ?;

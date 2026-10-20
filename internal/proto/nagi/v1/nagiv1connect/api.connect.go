@@ -192,6 +192,12 @@ const (
 	// ProjectServiceDeleteRouteProcedure is the fully-qualified name of the ProjectService's
 	// DeleteRoute RPC.
 	ProjectServiceDeleteRouteProcedure = "/nagi.v1.ProjectService/DeleteRoute"
+	// ProjectServiceConnectProjectProcedure is the fully-qualified name of the ProjectService's
+	// ConnectProject RPC.
+	ProjectServiceConnectProjectProcedure = "/nagi.v1.ProjectService/ConnectProject"
+	// ProjectServiceDisconnectProjectProcedure is the fully-qualified name of the ProjectService's
+	// DisconnectProject RPC.
+	ProjectServiceDisconnectProjectProcedure = "/nagi.v1.ProjectService/DisconnectProject"
 	// ProjectServiceListSnapshotsProcedure is the fully-qualified name of the ProjectService's
 	// ListSnapshots RPC.
 	ProjectServiceListSnapshotsProcedure = "/nagi.v1.ProjectService/ListSnapshots"
@@ -1384,6 +1390,9 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
+	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
+	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -1524,6 +1533,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
 			connect.WithClientOptions(opts...),
 		),
+		connectProject: connect.NewClient[v1.ConnectProjectRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceConnectProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ConnectProject")),
+			connect.WithClientOptions(opts...),
+		),
+		disconnectProject: connect.NewClient[v1.ConnectProjectRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceDisconnectProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DisconnectProject")),
+			connect.WithClientOptions(opts...),
+		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+ProjectServiceListSnapshotsProcedure,
@@ -1596,6 +1617,8 @@ type projectServiceClient struct {
 	streamLogs            *connect.Client[v1.StreamLogsApiRequest, v1.LogLine]
 	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.Project]
 	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.Project]
+	connectProject        *connect.Client[v1.ConnectProjectRequest, v1.Project]
+	disconnectProject     *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -1701,6 +1724,16 @@ func (c *projectServiceClient) DeleteRoute(ctx context.Context, req *connect.Req
 	return c.deleteRoute.CallUnary(ctx, req)
 }
 
+// ConnectProject calls nagi.v1.ProjectService.ConnectProject.
+func (c *projectServiceClient) ConnectProject(ctx context.Context, req *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
+	return c.connectProject.CallUnary(ctx, req)
+}
+
+// DisconnectProject calls nagi.v1.ProjectService.DisconnectProject.
+func (c *projectServiceClient) DisconnectProject(ctx context.Context, req *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
+	return c.disconnectProject.CallUnary(ctx, req)
+}
+
 // ListSnapshots calls nagi.v1.ProjectService.ListSnapshots.
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return c.listSnapshots.CallUnary(ctx, req)
@@ -1773,6 +1806,9 @@ type ProjectServiceHandler interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
+	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
+	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -1909,6 +1945,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceConnectProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceConnectProjectProcedure,
+		svc.ConnectProject,
+		connect.WithSchema(projectServiceMethods.ByName("ConnectProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDisconnectProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceDisconnectProjectProcedure,
+		svc.DisconnectProject,
+		connect.WithSchema(projectServiceMethods.ByName("DisconnectProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceListSnapshotsHandler := connect.NewUnaryHandler(
 		ProjectServiceListSnapshotsProcedure,
 		svc.ListSnapshots,
@@ -1997,6 +2045,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSaveRouteHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteRouteProcedure:
 			projectServiceDeleteRouteHandler.ServeHTTP(w, r)
+		case ProjectServiceConnectProjectProcedure:
+			projectServiceConnectProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceDisconnectProjectProcedure:
+			projectServiceDisconnectProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceListSnapshotsProcedure:
 			projectServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateSnapshotProcedure:
@@ -2096,6 +2148,14 @@ func (UnimplementedProjectServiceHandler) SaveRoute(context.Context, *connect.Re
 
 func (UnimplementedProjectServiceHandler) DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteRoute is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ConnectProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DisconnectProject is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
