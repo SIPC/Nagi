@@ -61,6 +61,31 @@ const (
 	// AgentServiceLoginRegistryProcedure is the fully-qualified name of the AgentService's
 	// LoginRegistry RPC.
 	AgentServiceLoginRegistryProcedure = "/nagi.v1.AgentService/LoginRegistry"
+	// AgentServiceSyncBackupProcedure is the fully-qualified name of the AgentService's SyncBackup RPC.
+	AgentServiceSyncBackupProcedure = "/nagi.v1.AgentService/SyncBackup"
+	// AgentServiceAcceptReplicaProcedure is the fully-qualified name of the AgentService's
+	// AcceptReplica RPC.
+	AgentServiceAcceptReplicaProcedure = "/nagi.v1.AgentService/AcceptReplica"
+	// AgentServiceListReplicasProcedure is the fully-qualified name of the AgentService's ListReplicas
+	// RPC.
+	AgentServiceListReplicasProcedure = "/nagi.v1.AgentService/ListReplicas"
+	// AgentServiceListReplicaSnapshotsProcedure is the fully-qualified name of the AgentService's
+	// ListReplicaSnapshots RPC.
+	AgentServiceListReplicaSnapshotsProcedure = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	// AgentServiceCheckContainerProcedure is the fully-qualified name of the AgentService's
+	// CheckContainer RPC.
+	AgentServiceCheckContainerProcedure = "/nagi.v1.AgentService/CheckContainer"
+	// AgentServiceRestoreReplicaProcedure is the fully-qualified name of the AgentService's
+	// RestoreReplica RPC.
+	AgentServiceRestoreReplicaProcedure = "/nagi.v1.AgentService/RestoreReplica"
+	// AgentServiceDeleteReplicaProcedure is the fully-qualified name of the AgentService's
+	// DeleteReplica RPC.
+	AgentServiceDeleteReplicaProcedure = "/nagi.v1.AgentService/DeleteReplica"
+	// AgentServiceMigrateOutProcedure is the fully-qualified name of the AgentService's MigrateOut RPC.
+	AgentServiceMigrateOutProcedure = "/nagi.v1.AgentService/MigrateOut"
+	// AgentServiceMigrateResumeProcedure is the fully-qualified name of the AgentService's
+	// MigrateResume RPC.
+	AgentServiceMigrateResumeProcedure = "/nagi.v1.AgentService/MigrateResume"
 	// AgentServiceSetLinksProcedure is the fully-qualified name of the AgentService's SetLinks RPC.
 	AgentServiceSetLinksProcedure = "/nagi.v1.AgentService/SetLinks"
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
@@ -115,6 +140,23 @@ type AgentServiceClient interface {
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
+	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error)
+	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
+	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
+	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListReplicaSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 目标节点：检查容器能不能放到本节点上（目录可用、端口和域名不冲突），不做任何改动。
+	CheckContainer(context.Context, *connect.Request[v1.PutContainerRequest]) (*connect.Response[v1.CheckContainerResponse], error)
+	// 目标节点：把副本恢复成本节点上的容器并启动（按 spec 里部署过的版本，不生成新版本），成功后删除副本。
+	// snapshot_id 为空时用最新的定时或手动快照。
+	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	DeleteReplica(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 源节点：迁移的前半段。容器运行时先同步一次，然后停止并移除容器、保存最后一次快照、再增量同步一次。
+	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 源节点：迁移失败时撤销，重新启动容器。
+	MigrateResume(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
@@ -214,6 +256,60 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
 			connect.WithClientOptions(opts...),
 		),
+		syncBackup: connect.NewClient[v1.ContainerRef, v1.BackupStatus](
+			httpClient,
+			baseURL+AgentServiceSyncBackupProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SyncBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		acceptReplica: connect.NewClient[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse](
+			httpClient,
+			baseURL+AgentServiceAcceptReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("AcceptReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		listReplicas: connect.NewClient[v1.ListReplicasRequest, v1.ListReplicasResponse](
+			httpClient,
+			baseURL+AgentServiceListReplicasProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListReplicas")),
+			connect.WithClientOptions(opts...),
+		),
+		listReplicaSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+AgentServiceListReplicaSnapshotsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListReplicaSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		checkContainer: connect.NewClient[v1.PutContainerRequest, v1.CheckContainerResponse](
+			httpClient,
+			baseURL+AgentServiceCheckContainerProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CheckContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreReplica: connect.NewClient[v1.RestoreReplicaRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceRestoreReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteReplica: connect.NewClient[v1.ContainerRef, v1.DeleteReplicaResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateOut: connect.NewClient[v1.MigrateOutRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceMigrateOutProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MigrateOut")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateResume: connect.NewClient[v1.ContainerRef, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceMigrateResumeProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
+			connect.WithClientOptions(opts...),
+		),
 		setLinks: connect.NewClient[v1.LinkPlan, v1.SetLinksResponse](
 			httpClient,
 			baseURL+AgentServiceSetLinksProcedure,
@@ -297,29 +393,38 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	putContainer    *connect.Client[v1.PutContainerRequest, v1.PutContainerResponse]
-	deployContainer *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
-	deleteContainer *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
-	listSnapshots   *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
-	createSnapshot  *connect.Client[v1.ContainerRef, v1.DeployEvent]
-	restoreSnapshot *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
-	streamLogs      *connect.Client[v1.StreamLogsRequest, v1.LogLine]
-	exec            *connect.Client[v1.ExecInput, v1.ExecOutput]
-	checkImages     *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
-	loginRegistry   *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
-	setLinks        *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
-	setAlertConfig  *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
-	queryMetrics    *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
-	setProjectsRoot *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
-	listPanels      *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
-	addPanel        *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
-	removePanel     *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
-	getMeshStatus   *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
-	meshPing        *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
-	getMirrors      *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
-	setMirrors      *connect.Client[v1.Mirrors, v1.Mirrors]
-	setPanelDomain  *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
-	upgrade         *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
+	putContainer         *connect.Client[v1.PutContainerRequest, v1.PutContainerResponse]
+	deployContainer      *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
+	deleteContainer      *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
+	listSnapshots        *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	createSnapshot       *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	streamLogs           *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec                 *connect.Client[v1.ExecInput, v1.ExecOutput]
+	checkImages          *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
+	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
+	syncBackup           *connect.Client[v1.ContainerRef, v1.BackupStatus]
+	acceptReplica        *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
+	listReplicas         *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
+	listReplicaSnapshots *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	checkContainer       *connect.Client[v1.PutContainerRequest, v1.CheckContainerResponse]
+	restoreReplica       *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
+	deleteReplica        *connect.Client[v1.ContainerRef, v1.DeleteReplicaResponse]
+	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
+	migrateResume        *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	setLinks             *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
+	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	setProjectsRoot      *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
+	listPanels           *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
+	addPanel             *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
+	removePanel          *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	getMeshStatus        *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
+	meshPing             *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
+	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
+	setPanelDomain       *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
+	upgrade              *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -370,6 +475,51 @@ func (c *agentServiceClient) CheckImages(ctx context.Context, req *connect.Reque
 // LoginRegistry calls nagi.v1.AgentService.LoginRegistry.
 func (c *agentServiceClient) LoginRegistry(ctx context.Context, req *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error) {
 	return c.loginRegistry.CallUnary(ctx, req)
+}
+
+// SyncBackup calls nagi.v1.AgentService.SyncBackup.
+func (c *agentServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error) {
+	return c.syncBackup.CallUnary(ctx, req)
+}
+
+// AcceptReplica calls nagi.v1.AgentService.AcceptReplica.
+func (c *agentServiceClient) AcceptReplica(ctx context.Context, req *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error) {
+	return c.acceptReplica.CallUnary(ctx, req)
+}
+
+// ListReplicas calls nagi.v1.AgentService.ListReplicas.
+func (c *agentServiceClient) ListReplicas(ctx context.Context, req *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return c.listReplicas.CallUnary(ctx, req)
+}
+
+// ListReplicaSnapshots calls nagi.v1.AgentService.ListReplicaSnapshots.
+func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listReplicaSnapshots.CallUnary(ctx, req)
+}
+
+// CheckContainer calls nagi.v1.AgentService.CheckContainer.
+func (c *agentServiceClient) CheckContainer(ctx context.Context, req *connect.Request[v1.PutContainerRequest]) (*connect.Response[v1.CheckContainerResponse], error) {
+	return c.checkContainer.CallUnary(ctx, req)
+}
+
+// RestoreReplica calls nagi.v1.AgentService.RestoreReplica.
+func (c *agentServiceClient) RestoreReplica(ctx context.Context, req *connect.Request[v1.RestoreReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreReplica.CallServerStream(ctx, req)
+}
+
+// DeleteReplica calls nagi.v1.AgentService.DeleteReplica.
+func (c *agentServiceClient) DeleteReplica(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return c.deleteReplica.CallUnary(ctx, req)
+}
+
+// MigrateOut calls nagi.v1.AgentService.MigrateOut.
+func (c *agentServiceClient) MigrateOut(ctx context.Context, req *connect.Request[v1.MigrateOutRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateOut.CallServerStream(ctx, req)
+}
+
+// MigrateResume calls nagi.v1.AgentService.MigrateResume.
+func (c *agentServiceClient) MigrateResume(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateResume.CallServerStream(ctx, req)
 }
 
 // SetLinks calls nagi.v1.AgentService.SetLinks.
@@ -457,6 +607,23 @@ type AgentServiceHandler interface {
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
+	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error)
+	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
+	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
+	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
+	ListReplicaSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 目标节点：检查容器能不能放到本节点上（目录可用、端口和域名不冲突），不做任何改动。
+	CheckContainer(context.Context, *connect.Request[v1.PutContainerRequest]) (*connect.Response[v1.CheckContainerResponse], error)
+	// 目标节点：把副本恢复成本节点上的容器并启动（按 spec 里部署过的版本，不生成新版本），成功后删除副本。
+	// snapshot_id 为空时用最新的定时或手动快照。
+	RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
+	DeleteReplica(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.DeleteReplicaResponse], error)
+	// 源节点：迁移的前半段。容器运行时先同步一次，然后停止并移除容器、保存最后一次快照、再增量同步一次。
+	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 源节点：迁移失败时撤销，重新启动容器。
+	MigrateResume(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
@@ -550,6 +717,60 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceLoginRegistryProcedure,
 		svc.LoginRegistry,
 		connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSyncBackupHandler := connect.NewUnaryHandler(
+		AgentServiceSyncBackupProcedure,
+		svc.SyncBackup,
+		connect.WithSchema(agentServiceMethods.ByName("SyncBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceAcceptReplicaHandler := connect.NewUnaryHandler(
+		AgentServiceAcceptReplicaProcedure,
+		svc.AcceptReplica,
+		connect.WithSchema(agentServiceMethods.ByName("AcceptReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListReplicasHandler := connect.NewUnaryHandler(
+		AgentServiceListReplicasProcedure,
+		svc.ListReplicas,
+		connect.WithSchema(agentServiceMethods.ByName("ListReplicas")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListReplicaSnapshotsHandler := connect.NewUnaryHandler(
+		AgentServiceListReplicaSnapshotsProcedure,
+		svc.ListReplicaSnapshots,
+		connect.WithSchema(agentServiceMethods.ByName("ListReplicaSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCheckContainerHandler := connect.NewUnaryHandler(
+		AgentServiceCheckContainerProcedure,
+		svc.CheckContainer,
+		connect.WithSchema(agentServiceMethods.ByName("CheckContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreReplicaHandler := connect.NewServerStreamHandler(
+		AgentServiceRestoreReplicaProcedure,
+		svc.RestoreReplica,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteReplicaHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteReplicaProcedure,
+		svc.DeleteReplica,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMigrateOutHandler := connect.NewServerStreamHandler(
+		AgentServiceMigrateOutProcedure,
+		svc.MigrateOut,
+		connect.WithSchema(agentServiceMethods.ByName("MigrateOut")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMigrateResumeHandler := connect.NewServerStreamHandler(
+		AgentServiceMigrateResumeProcedure,
+		svc.MigrateResume,
+		connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceSetLinksHandler := connect.NewUnaryHandler(
@@ -652,6 +873,24 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCheckImagesHandler.ServeHTTP(w, r)
 		case AgentServiceLoginRegistryProcedure:
 			agentServiceLoginRegistryHandler.ServeHTTP(w, r)
+		case AgentServiceSyncBackupProcedure:
+			agentServiceSyncBackupHandler.ServeHTTP(w, r)
+		case AgentServiceAcceptReplicaProcedure:
+			agentServiceAcceptReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceListReplicasProcedure:
+			agentServiceListReplicasHandler.ServeHTTP(w, r)
+		case AgentServiceListReplicaSnapshotsProcedure:
+			agentServiceListReplicaSnapshotsHandler.ServeHTTP(w, r)
+		case AgentServiceCheckContainerProcedure:
+			agentServiceCheckContainerHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreReplicaProcedure:
+			agentServiceRestoreReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteReplicaProcedure:
+			agentServiceDeleteReplicaHandler.ServeHTTP(w, r)
+		case AgentServiceMigrateOutProcedure:
+			agentServiceMigrateOutHandler.ServeHTTP(w, r)
+		case AgentServiceMigrateResumeProcedure:
+			agentServiceMigrateResumeHandler.ServeHTTP(w, r)
 		case AgentServiceSetLinksProcedure:
 			agentServiceSetLinksHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
@@ -725,6 +964,42 @@ func (UnimplementedAgentServiceHandler) CheckImages(context.Context, *connect.Re
 
 func (UnimplementedAgentServiceHandler) LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.LoginRegistry is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SyncBackup is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.AcceptReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListReplicas is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListReplicaSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListReplicaSnapshots is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CheckContainer(context.Context, *connect.Request[v1.PutContainerRequest]) (*connect.Response[v1.CheckContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckContainer is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreReplica(context.Context, *connect.Request[v1.RestoreReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteReplica(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.DeleteReplicaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteReplica is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateOut is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MigrateResume(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateResume is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {

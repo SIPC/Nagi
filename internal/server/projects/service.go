@@ -301,7 +301,16 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		Name: c.Name, Revision: c.Revision, LatestVersion: v.Version, DeployedVersion: c.DeployedVersion,
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
-		NodeId: c.NodeID, Dir: c.Dir,
+		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID,
+	}
+	if c.BackupNodeID != "" {
+		if conn, err := s.Nodes.Peek(c.NodeID); err == nil {
+			for _, cs := range conn.LastReport().GetContainers() {
+				if cs.GetProjectId() == c.ProjectID && cs.GetName() == c.Name {
+					mem.Backup = cs.GetBackup()
+				}
+			}
+		}
 	}
 	if cp, err := spec.Load(ctx, cfg, c.Name, settings.GetSharedEnv(), checkData(c), spec.ComposeProjectName(c.ProjectID, c.Name)); err == nil {
 		mem.Stateful = spec.IsStateful(cfg, cp, spec.PreservePaths(cfg, cp, checkData(c)))

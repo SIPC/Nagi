@@ -147,6 +147,7 @@ func (x *LeaseVoteResponse) GetEpoch() uint64 {
 type ReplicaManifestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container     string                 `protobuf:"bytes,2,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -184,6 +185,13 @@ func (*ReplicaManifestRequest) Descriptor() ([]byte, []int) {
 func (x *ReplicaManifestRequest) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ReplicaManifestRequest) GetContainer() string {
+	if x != nil {
+		return x.Container
 	}
 	return ""
 }
@@ -286,10 +294,12 @@ func (x *ReplicaManifestResponse) GetFiles() []*ReplicaFile {
 
 // ReplicaChunk：path 变了表示开始一个新文件。
 type ReplicaChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 第一块带上项目和容器。
+	ProjectId     string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Path          string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Container     string `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -345,6 +355,13 @@ func (x *ReplicaChunk) GetData() []byte {
 	return nil
 }
 
+func (x *ReplicaChunk) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
 type ReplicaPutResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Files         uint32                 `protobuf:"varint,1,opt,name=files,proto3" json:"files,omitempty"`
@@ -392,9 +409,9 @@ func (x *ReplicaPutResponse) GetFiles() uint32 {
 type ReplicaCommitRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container string                 `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`
 	// 源节点上现在的完整文件列表，备份节点删除不在列表里的文件。
 	Paths         []string `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`
-	ProjectName   string   `protobuf:"bytes,3,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -436,18 +453,18 @@ func (x *ReplicaCommitRequest) GetProjectId() string {
 	return ""
 }
 
+func (x *ReplicaCommitRequest) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
 func (x *ReplicaCommitRequest) GetPaths() []string {
 	if x != nil {
 		return x.Paths
 	}
 	return nil
-}
-
-func (x *ReplicaCommitRequest) GetProjectName() string {
-	if x != nil {
-		return x.ProjectName
-	}
-	return ""
 }
 
 type ReplicaCommitResponse struct {
@@ -703,27 +720,29 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\x11LeaseVoteResponse\x12\x18\n" +
 	"\agranted\x18\x01 \x01(\bR\agranted\x12\x16\n" +
 	"\x06holder\x18\x02 \x01(\fR\x06holder\x12\x14\n" +
-	"\x05epoch\x18\x03 \x01(\x04R\x05epoch\"7\n" +
+	"\x05epoch\x18\x03 \x01(\x04R\x05epoch\"U\n" +
 	"\x16ReplicaManifestRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\"5\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x02 \x01(\tR\tcontainer\"5\n" +
 	"\vReplicaFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\"E\n" +
 	"\x17ReplicaManifestResponse\x12*\n" +
-	"\x05files\x18\x01 \x03(\v2\x14.nagi.v1.ReplicaFileR\x05files\"U\n" +
+	"\x05files\x18\x01 \x03(\v2\x14.nagi.v1.ReplicaFileR\x05files\"s\n" +
 	"\fReplicaChunk\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data\"*\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\"*\n" +
 	"\x12ReplicaPutResponse\x12\x14\n" +
-	"\x05files\x18\x01 \x01(\rR\x05files\"n\n" +
+	"\x05files\x18\x01 \x01(\rR\x05files\"i\n" +
 	"\x14ReplicaCommitRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
-	"\x05paths\x18\x02 \x03(\tR\x05paths\x12!\n" +
-	"\fproject_name\x18\x03 \x01(\tR\vprojectName\"\x17\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\x12\x14\n" +
+	"\x05paths\x18\x02 \x03(\tR\x05paths\"\x17\n" +
 	"\x15ReplicaCommitResponse\"^\n" +
 	"\vUploadChunk\x12\x1d\n" +
 	"\n" +

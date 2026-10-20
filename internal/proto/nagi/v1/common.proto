@@ -88,6 +88,10 @@ message Container {
   string node_id = 17;
   // 容器在节点上的目录。
   string dir = 18;
+  // 备份节点（见 docs/snapshot.md#异地副本），为空表示没有设置。
+  string backup_node_id = 19;
+  // 同步到备份节点的状态（容器所在节点上报的）。
+  BackupStatus backup = 20;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -305,6 +309,16 @@ message ContainerSpec {
   uint32 snapshot_interval_minutes = 17;
   // 是否有状态（面板按配置判定）。
   bool stateful = 18;
+  // 备份节点：每次定时快照后把快照仓库同步过去。为空表示没有设置。
+  BackupTarget backup = 19;
+}
+
+// BackupTarget 是接收副本的节点。
+message BackupTarget {
+  string node_id = 1;
+  string name = 2;
+  // mesh 公钥。
+  bytes key = 3;
 }
 
 // ContainerStatus 是节点上报的一个容器的运行状态。
@@ -320,6 +334,8 @@ message ContainerStatus {
   int64 project_revision = 7;
   // 读取或运行这个容器出错（例如磁盘满了、目录不见了）。
   string error = 8;
+  // 同步到备份节点的状态，没有设置备份节点时为空。
+  BackupStatus backup = 9;
 }
 
 message NodeInfo {
@@ -361,6 +377,8 @@ message DeployResult {
   map<string, string> images = 5;
   string commit = 6;
   bool has_files = 7;
+  // RestoreReplica：容器已经放到了本节点上（文件恢复好了，启动失败也算）。
+  bool placed = 8;
 }
 
 // MetricSeries 是一条监控序列，times（Unix 秒）和 values 一一对应。
@@ -472,11 +490,11 @@ message MeshPingResponse {
   double rtt_ms = 1;
 }
 
-// BackupStatus 是项目同步到备份节点的状态（在源节点上）。
+// BackupStatus 是容器同步到备份节点的状态（在源节点上）。
 message BackupStatus {
-  // 没有设置备份节点时为空。
   string target_node_id = 1;
   string target_name = 2;
+  // 最近一次同步成功的时间。
   google.protobuf.Timestamp last_sync = 3;
   // 最近一次同步失败的原因，成功时为空。
   string last_error = 4;
@@ -484,9 +502,10 @@ message BackupStatus {
   bool syncing = 5;
 }
 
-// Replica 是备份节点上保存的一个项目副本。
+// Replica 是备份节点上保存的一个容器副本。
 message Replica {
   string project_id = 1;
+  string container = 7;
   string project_name = 2;
   string source_node_id = 3;
   string source_name = 4;

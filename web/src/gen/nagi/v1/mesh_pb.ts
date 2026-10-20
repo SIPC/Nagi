@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/mesh.proto.
  */
 export const file_nagi_v1_mesh: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiSgoQTGVhc2VWb3RlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg0KBWVwb2NoGAIgASgEEhMKC2hhbmRvdmVyX3RvGAMgASgMIkMKEUxlYXNlVm90ZVJlc3BvbnNlEg8KB2dyYW50ZWQYASABKAgSDgoGaG9sZGVyGAIgASgMEg0KBWVwb2NoGAMgASgEIiwKFlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSIpCgtSZXBsaWNhRmlsZRIMCgRwYXRoGAEgASgJEgwKBHNpemUYAiABKAMiPgoXUmVwbGljYU1hbmlmZXN0UmVzcG9uc2USIwoFZmlsZXMYASADKAsyFC5uYWdpLnYxLlJlcGxpY2FGaWxlIj4KDFJlcGxpY2FDaHVuaxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBHBhdGgYAiABKAkSDAoEZGF0YRgDIAEoDCIjChJSZXBsaWNhUHV0UmVzcG9uc2USDQoFZmlsZXMYASABKA0iTwoUUmVwbGljYUNvbW1pdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRINCgVwYXRocxgCIAMoCRIUCgxwcm9qZWN0X25hbWUYAyABKAkiFwoVUmVwbGljYUNvbW1pdFJlc3BvbnNlIkIKC1VwbG9hZENodW5rEhIKCnByb2plY3RfaWQYASABKAkSDAoEZGF0YRgCIAEoDBIRCgljb250YWluZXIYAyABKAkiQAoOVXBsb2FkUmVzcG9uc2USDQoFYnl0ZXMYASABKAQSDQoFZmlsZXMYAiABKA0SEAoIc3RyaXBwZWQYAyABKAkiDQoLUGluZ1JlcXVlc3QiHgoMUGluZ1Jlc3BvbnNlEg4KBmNhbGxlchgBIAEoDDKrAwoLTWVzaFNlcnZpY2USMwoEUGluZxIULm5hZ2kudjEuUGluZ1JlcXVlc3QaFS5uYWdpLnYxLlBpbmdSZXNwb25zZRI5CgZVcGxvYWQSFC5uYWdpLnYxLlVwbG9hZENodW5rGhcubmFnaS52MS5VcGxvYWRSZXNwb25zZSgBElQKD1JlcGxpY2FNYW5pZmVzdBIfLm5hZ2kudjEuUmVwbGljYU1hbmlmZXN0UmVxdWVzdBogLm5hZ2kudjEuUmVwbGljYU1hbmlmZXN0UmVzcG9uc2USQgoKUmVwbGljYVB1dBIVLm5hZ2kudjEuUmVwbGljYUNodW5rGhsubmFnaS52MS5SZXBsaWNhUHV0UmVzcG9uc2UoARJOCg1SZXBsaWNhQ29tbWl0Eh0ubmFnaS52MS5SZXBsaWNhQ29tbWl0UmVxdWVzdBoeLm5hZ2kudjEuUmVwbGljYUNvbW1pdFJlc3BvbnNlEkIKCUxlYXNlVm90ZRIZLm5hZ2kudjEuTGVhc2VWb3RlUmVxdWVzdBoaLm5hZ2kudjEuTGVhc2VWb3RlUmVzcG9uc2VCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw");
+  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiSgoQTGVhc2VWb3RlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg0KBWVwb2NoGAIgASgEEhMKC2hhbmRvdmVyX3RvGAMgASgMIkMKEUxlYXNlVm90ZVJlc3BvbnNlEg8KB2dyYW50ZWQYASABKAgSDgoGaG9sZGVyGAIgASgMEg0KBWVwb2NoGAMgASgEIj8KFlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkiKQoLUmVwbGljYUZpbGUSDAoEcGF0aBgBIAEoCRIMCgRzaXplGAIgASgDIj4KF1JlcGxpY2FNYW5pZmVzdFJlc3BvbnNlEiMKBWZpbGVzGAEgAygLMhQubmFnaS52MS5SZXBsaWNhRmlsZSJRCgxSZXBsaWNhQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRwYXRoGAIgASgJEgwKBGRhdGEYAyABKAwSEQoJY29udGFpbmVyGAQgASgJIiMKElJlcGxpY2FQdXRSZXNwb25zZRINCgVmaWxlcxgBIAEoDSJMChRSZXBsaWNhQ29tbWl0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgDIAEoCRINCgVwYXRocxgCIAMoCSIXChVSZXBsaWNhQ29tbWl0UmVzcG9uc2UiQgoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMEhEKCWNvbnRhaW5lchgDIAEoCSJACg5VcGxvYWRSZXNwb25zZRINCgVieXRlcxgBIAEoBBINCgVmaWxlcxgCIAEoDRIQCghzdHJpcHBlZBgDIAEoCSINCgtQaW5nUmVxdWVzdCIeCgxQaW5nUmVzcG9uc2USDgoGY2FsbGVyGAEgASgMMqsDCgtNZXNoU2VydmljZRIzCgRQaW5nEhQubmFnaS52MS5QaW5nUmVxdWVzdBoVLm5hZ2kudjEuUGluZ1Jlc3BvbnNlEjkKBlVwbG9hZBIULm5hZ2kudjEuVXBsb2FkQ2h1bmsaFy5uYWdpLnYxLlVwbG9hZFJlc3BvbnNlKAESVAoPUmVwbGljYU1hbmlmZXN0Eh8ubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXF1ZXN0GiAubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXNwb25zZRJCCgpSZXBsaWNhUHV0EhUubmFnaS52MS5SZXBsaWNhQ2h1bmsaGy5uYWdpLnYxLlJlcGxpY2FQdXRSZXNwb25zZSgBEk4KDVJlcGxpY2FDb21taXQSHS5uYWdpLnYxLlJlcGxpY2FDb21taXRSZXF1ZXN0Gh4ubmFnaS52MS5SZXBsaWNhQ29tbWl0UmVzcG9uc2USQgoJTGVhc2VWb3RlEhkubmFnaS52MS5MZWFzZVZvdGVSZXF1ZXN0GhoubmFnaS52MS5MZWFzZVZvdGVSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z");
 
 /**
  * @generated from message nagi.v1.LeaseVoteRequest
@@ -79,6 +79,11 @@ export type ReplicaManifestRequest = Message<"nagi.v1.ReplicaManifestRequest"> &
    * @generated from field: string project_id = 1;
    */
   projectId: string;
+
+  /**
+   * @generated from field: string container = 2;
+   */
+  container: string;
 };
 
 /**
@@ -134,6 +139,8 @@ export const ReplicaManifestResponseSchema: GenMessage<ReplicaManifestResponse> 
  */
 export type ReplicaChunk = Message<"nagi.v1.ReplicaChunk"> & {
   /**
+   * 第一块带上项目和容器。
+   *
    * @generated from field: string project_id = 1;
    */
   projectId: string;
@@ -147,6 +154,11 @@ export type ReplicaChunk = Message<"nagi.v1.ReplicaChunk"> & {
    * @generated from field: bytes data = 3;
    */
   data: Uint8Array;
+
+  /**
+   * @generated from field: string container = 4;
+   */
+  container: string;
 };
 
 /**
@@ -183,16 +195,16 @@ export type ReplicaCommitRequest = Message<"nagi.v1.ReplicaCommitRequest"> & {
   projectId: string;
 
   /**
+   * @generated from field: string container = 3;
+   */
+  container: string;
+
+  /**
    * 源节点上现在的完整文件列表，备份节点删除不在列表里的文件。
    *
    * @generated from field: repeated string paths = 2;
    */
   paths: string[];
-
-  /**
-   * @generated from field: string project_name = 3;
-   */
-  projectName: string;
 };
 
 /**

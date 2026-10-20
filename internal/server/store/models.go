@@ -23,6 +23,7 @@ type Container struct {
 	DeployKeyPub    string
 	ImportedPorts   string
 	LastCommit      string
+	BackupNodeID    string
 }
 
 type Deployment struct {

@@ -1672,6 +1672,12 @@ const (
 	ProjectService_StreamLogs_FullMethodName            = "/nagi.v1.ProjectService/StreamLogs"
 	ProjectService_SaveRoute_FullMethodName             = "/nagi.v1.ProjectService/SaveRoute"
 	ProjectService_DeleteRoute_FullMethodName           = "/nagi.v1.ProjectService/DeleteRoute"
+	ProjectService_SetBackupNode_FullMethodName         = "/nagi.v1.ProjectService/SetBackupNode"
+	ProjectService_SyncBackup_FullMethodName            = "/nagi.v1.ProjectService/SyncBackup"
+	ProjectService_ListBackupSnapshots_FullMethodName   = "/nagi.v1.ProjectService/ListBackupSnapshots"
+	ProjectService_RestoreFromBackup_FullMethodName     = "/nagi.v1.ProjectService/RestoreFromBackup"
+	ProjectService_MigrateContainer_FullMethodName      = "/nagi.v1.ProjectService/MigrateContainer"
+	ProjectService_RedeployElsewhere_FullMethodName     = "/nagi.v1.ProjectService/RedeployElsewhere"
 	ProjectService_ConnectProject_FullMethodName        = "/nagi.v1.ProjectService/ConnectProject"
 	ProjectService_DisconnectProject_FullMethodName     = "/nagi.v1.ProjectService/DisconnectProject"
 	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
@@ -1718,6 +1724,19 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*Project, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*Project, error)
+	// 备份节点、迁移（按容器，见 docs/failover.md）。
+	// 设置或取消备份节点（node_id 为空表示取消）。
+	SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error)
+	// 立即同步到备份节点，同步完才返回。
+	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
+	// 备份节点上副本里的快照。
+	ListBackupSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 原节点离线时，在备份节点上把容器恢复出来。
+	RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
+	MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
+	RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	DisconnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
@@ -1970,6 +1989,93 @@ func (c *projectServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteR
 	return out, nil
 }
 
+func (c *projectServiceClient) SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetBackupNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SyncBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListBackupSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreFromBackupRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RestoreFromBackupClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *projectServiceClient) MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_MigrateContainer_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MoveContainerRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MigrateContainerClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MoveContainerRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RedeployElsewhereClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *projectServiceClient) ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -2002,7 +2108,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2021,7 +2127,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2122,6 +2228,19 @@ type ProjectServiceServer interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*Project, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error)
+	// 备份节点、迁移（按容器，见 docs/failover.md）。
+	// 设置或取消备份节点（node_id 为空表示取消）。
+	SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error)
+	// 立即同步到备份节点，同步完才返回。
+	SyncBackup(context.Context, *ContainerRef) (*Project, error)
+	// 备份节点上副本里的快照。
+	ListBackupSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
+	// 原节点离线时，在备份节点上把容器恢复出来。
+	RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
+	MigrateContainer(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
+	RedeployElsewhere(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
 	DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
@@ -2204,6 +2323,24 @@ func (UnimplementedProjectServiceServer) SaveRoute(context.Context, *SaveRouteRe
 }
 func (UnimplementedProjectServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
+}
+func (UnimplementedProjectServiceServer) SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBackupNode not implemented")
+}
+func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *ContainerRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) ListBackupSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBackupSnapshots not implemented")
+}
+func (UnimplementedProjectServiceServer) RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreFromBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) MigrateContainer(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateContainer not implemented")
+}
+func (UnimplementedProjectServiceServer) RedeployElsewhere(*MoveContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RedeployElsewhere not implemented")
 }
 func (UnimplementedProjectServiceServer) ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConnectProject not implemented")
@@ -2570,6 +2707,93 @@ func _ProjectService_DeleteRoute_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_SetBackupNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBackupNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetBackupNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetBackupNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetBackupNode(ctx, req.(*SetBackupNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SyncBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SyncBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SyncBackup(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ListBackupSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListBackupSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListBackupSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListBackupSnapshots(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreFromBackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).RestoreFromBackup(m, &grpc.GenericServerStream[RestoreFromBackupRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RestoreFromBackupServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _ProjectService_MigrateContainer_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MoveContainerRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).MigrateContainer(m, &grpc.GenericServerStream[MoveContainerRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MigrateContainerServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _ProjectService_RedeployElsewhere_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MoveContainerRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).RedeployElsewhere(m, &grpc.GenericServerStream[MoveContainerRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_RedeployElsewhereServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _ProjectService_ConnectProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConnectProjectRequest)
 	if err := dec(in); err != nil {
@@ -2804,6 +3028,18 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_DeleteRoute_Handler,
 		},
 		{
+			MethodName: "SetBackupNode",
+			Handler:    _ProjectService_SetBackupNode_Handler,
+		},
+		{
+			MethodName: "SyncBackup",
+			Handler:    _ProjectService_SyncBackup_Handler,
+		},
+		{
+			MethodName: "ListBackupSnapshots",
+			Handler:    _ProjectService_ListBackupSnapshots_Handler,
+		},
+		{
 			MethodName: "ConnectProject",
 			Handler:    _ProjectService_ConnectProject_Handler,
 		},
@@ -2855,6 +3091,21 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamLogs",
 			Handler:       _ProjectService_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreFromBackup",
+			Handler:       _ProjectService_RestoreFromBackup_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateContainer",
+			Handler:       _ProjectService_MigrateContainer_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RedeployElsewhere",
+			Handler:       _ProjectService_RedeployElsewhere_Handler,
 			ServerStreams: true,
 		},
 		{

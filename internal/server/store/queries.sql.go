@@ -368,7 +368,7 @@ func (q *Queries) DeleteVersionsBefore(ctx context.Context, arg DeleteVersionsBe
 }
 
 const getContainer = `-- name: GetContainer :one
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE project_id = ? AND name = ?
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE project_id = ? AND name = ?
 `
 
 type GetContainerParams struct {
@@ -394,6 +394,7 @@ func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Con
 		&i.DeployKeyPub,
 		&i.ImportedPorts,
 		&i.LastCommit,
+		&i.BackupNodeID,
 	)
 	return i, err
 }
@@ -720,7 +721,7 @@ func (q *Queries) LatestVersion(ctx context.Context, arg LatestVersionParams) (V
 }
 
 const listAllContainers = `-- name: ListAllContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers ORDER BY project_id, position
 `
 
 func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
@@ -747,6 +748,7 @@ func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
 			&i.DeployKeyPub,
 			&i.ImportedPorts,
 			&i.LastCommit,
+			&i.BackupNodeID,
 		); err != nil {
 			return nil, err
 		}
@@ -799,7 +801,7 @@ func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
 }
 
 const listContainers = `-- name: ListContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE project_id = ? ORDER BY position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE project_id = ? ORDER BY position
 `
 
 func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Container, error) {
@@ -826,6 +828,7 @@ func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Conta
 			&i.DeployKeyPub,
 			&i.ImportedPorts,
 			&i.LastCommit,
+			&i.BackupNodeID,
 		); err != nil {
 			return nil, err
 		}
@@ -923,7 +926,7 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 }
 
 const listNodeContainers = `-- name: ListNodeContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit FROM containers WHERE node_id = ? ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id FROM containers WHERE node_id = ? ORDER BY project_id, position
 `
 
 func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Container, error) {
@@ -950,6 +953,7 @@ func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Cont
 			&i.DeployKeyPub,
 			&i.ImportedPorts,
 			&i.LastCommit,
+			&i.BackupNodeID,
 		); err != nil {
 			return nil, err
 		}
@@ -1194,6 +1198,27 @@ func (q *Queries) MeshKeyOwner(ctx context.Context, arg MeshKeyOwnerParams) (str
 	return id, err
 }
 
+const moveContainer = `-- name: MoveContainer :exec
+UPDATE containers SET node_id = ?, dir = ?, backup_node_id = '', revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type MoveContainerParams struct {
+	NodeID    string
+	Dir       string
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) MoveContainer(ctx context.Context, arg MoveContainerParams) error {
+	_, err := q.db.ExecContext(ctx, moveContainer,
+		arg.NodeID,
+		arg.Dir,
+		arg.ProjectID,
+		arg.Name,
+	)
+	return err
+}
+
 const projectByNetworkName = `-- name: ProjectByNetworkName :one
 SELECT id FROM projects WHERE network_name = ?
 `
@@ -1251,6 +1276,21 @@ UPDATE nodes SET revoked = 1 WHERE id = ?
 
 func (q *Queries) RevokeNode(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, revokeNode, id)
+	return err
+}
+
+const setContainerBackupNode = `-- name: SetContainerBackupNode :exec
+UPDATE containers SET backup_node_id = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerBackupNodeParams struct {
+	BackupNodeID string
+	ProjectID    string
+	Name         string
+}
+
+func (q *Queries) SetContainerBackupNode(ctx context.Context, arg SetContainerBackupNodeParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerBackupNode, arg.BackupNodeID, arg.ProjectID, arg.Name)
 	return err
 }
 

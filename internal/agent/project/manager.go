@@ -65,6 +65,8 @@ type Manager struct {
 	ManagedRestart func(projectID, container string) bool
 	// FastSnapshot 返回 true 的容器每 15 分钟做一次定时快照（设置了顶替的容器）。
 	FastSnapshot func(projectID, container string) bool
+	// BackupStatus 返回容器同步到备份节点的状态（上报给面板），没有设置备份节点时返回 nil。
+	BackupStatus func(s *nagiv1.ContainerSpec) *nagiv1.BackupStatus
 
 	restarts managedRestarts
 	images   imageUpdates
@@ -455,6 +457,9 @@ func (m *Manager) Statuses(ctx context.Context) []*nagiv1.ContainerStatus {
 			st.Error = "容器目录读不到：" + err.Error()
 		}
 		m.imageStatus(s.GetProjectId(), s.GetName(), st)
+		if m.BackupStatus != nil {
+			st.Backup = m.BackupStatus(s)
+		}
 		out = append(out, st)
 	}
 	return out

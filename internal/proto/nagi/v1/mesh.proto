@@ -36,6 +36,7 @@ message LeaseVoteResponse {
 
 message ReplicaManifestRequest {
   string project_id = 1;
+  string container = 2;
 }
 
 message ReplicaFile {
@@ -49,9 +50,11 @@ message ReplicaManifestResponse {
 
 // ReplicaChunk：path 变了表示开始一个新文件。
 message ReplicaChunk {
+  // 第一块带上项目和容器。
   string project_id = 1;
   string path = 2;
   bytes data = 3;
+  string container = 4;
 }
 
 message ReplicaPutResponse {
@@ -60,9 +63,9 @@ message ReplicaPutResponse {
 
 message ReplicaCommitRequest {
   string project_id = 1;
+  string container = 3;
   // 源节点上现在的完整文件列表，备份节点删除不在列表里的文件。
   repeated string paths = 2;
-  string project_name = 3;
 }
 
 message ReplicaCommitResponse {}

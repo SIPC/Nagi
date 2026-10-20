@@ -202,6 +202,10 @@ func (m *Manager) Snapshots(ctx context.Context, projectID, container string) ([
 	if err != nil {
 		return nil, err
 	}
+	return snapshotsProto(list, container), nil
+}
+
+func snapshotsProto(list []snapshot.Info, container string) []*nagiv1.Snapshot {
 	out := make([]*nagiv1.Snapshot, 0, len(list))
 	for _, s := range list {
 		snap := &nagiv1.Snapshot{Id: s.ID, Kind: string(s.Kind), Time: timestamppb.New(s.Time), Size: s.Size, Container: container}
@@ -212,7 +216,7 @@ func (m *Manager) Snapshots(ctx context.Context, projectID, container string) ([
 		snap.Version, _ = strconv.ParseInt(v, 10, 64)
 		out = append(out, snap)
 	}
-	return out, nil
+	return out
 }
 
 // restorePreserved 从快照恢复 data/ 里的保留路径（运行数据），其余文件不动。

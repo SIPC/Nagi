@@ -207,8 +207,16 @@ func (s *Service) deleteOnNode(ctx context.Context, c store.Container, deleteDir
 	if err != nil {
 		return err
 	}
-	_, err = agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: c.ProjectID, Container: c.Name, DeleteDir: deleteDir})
-	return err
+	if _, err = agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: c.ProjectID, Container: c.Name, DeleteDir: deleteDir}); err != nil {
+		return err
+	}
+	// 备份节点上的副本一起删掉：保留目录时，目录里的 backups/ 就是完整的快照仓库。
+	if c.BackupNodeID != "" {
+		if b, err := s.agent(ctx, c.BackupNodeID); err == nil {
+			_, _ = b.DeleteReplica(ctx, &nagiv1.ContainerRef{ProjectId: c.ProjectID, Container: c.Name})
+		}
+	}
+	return nil
 }
 
 // SaveDraft 保存容器的草稿。草稿要先通过校验，部署时才会成为新版本。

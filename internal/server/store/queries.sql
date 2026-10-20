@@ -179,6 +179,15 @@ UPDATE containers SET imported_ports = ? WHERE project_id = ? AND name = ?;
 -- name: DeleteContainer :exec
 DELETE FROM containers WHERE project_id = ? AND name = ?;
 
+-- name: SetContainerBackupNode :exec
+UPDATE containers SET backup_node_id = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: MoveContainer :exec
+UPDATE containers SET node_id = ?, dir = ?, backup_node_id = '', revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: ClearVersionFiles :exec
+UPDATE versions SET has_files = 0 WHERE project_id = ? AND container = ?;
+
 
 -- name: InsertVersion :exec
 INSERT INTO versions (project_id, container, version, config, shared_env, created_at, rollback_of)
@@ -206,9 +215,6 @@ SELECT * FROM versions WHERE project_id = ? AND container = ? ORDER BY version D
 
 -- name: DeleteVersionsBefore :exec
 DELETE FROM versions WHERE project_id = ? AND container = ? AND version < ?;
-
--- name: ClearVersionFiles :exec
-UPDATE versions SET has_files = 0 WHERE project_id = ? AND container = ?;
 
 
 -- name: InsertDeployment :one

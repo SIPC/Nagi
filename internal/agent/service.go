@@ -113,7 +113,15 @@ func (s *agentService) DeployContainer(req *nagiv1.DeployContainerRequest, strea
 }
 
 func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteContainerRequest) (*nagiv1.DeleteContainerResponse, error) {
-	err := s.projects.Delete(ctx, req.GetProjectId(), req.GetContainer(), req.GetDeleteDir(), func(string) {})
+	var err error
+	if req.GetRetire() {
+		var dir string
+		if dir, err = s.projects.Retire(ctx, req.GetProjectId(), req.GetContainer(), func(string) {}); err == nil {
+			s.node.log.Info("容器已在其他节点上恢复，停止并保留目录", "project", req.GetProjectId(), "container", req.GetContainer(), "dir", dir)
+		}
+	} else {
+		err = s.projects.Delete(ctx, req.GetProjectId(), req.GetContainer(), req.GetDeleteDir(), func(string) {})
+	}
 	s.changed()
 	if err != nil {
 		return nil, toStatus(err)

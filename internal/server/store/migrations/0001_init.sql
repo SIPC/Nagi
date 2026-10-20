@@ -79,6 +79,8 @@ CREATE TABLE containers (
     -- 从 compose 导入过的端口（服务/容器端口/协议，JSON 数组）：用户改过或删掉的映射不会被覆盖或加回来
     imported_ports   TEXT    NOT NULL DEFAULT '[]',
     last_commit      TEXT    NOT NULL DEFAULT '',
+    -- 备份节点（见 docs/snapshot.md#异地副本），空表示没有设置
+    backup_node_id   TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (project_id, name)
 );
 

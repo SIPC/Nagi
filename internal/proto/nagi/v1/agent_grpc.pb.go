@@ -19,29 +19,38 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_PutContainer_FullMethodName    = "/nagi.v1.AgentService/PutContainer"
-	AgentService_DeployContainer_FullMethodName = "/nagi.v1.AgentService/DeployContainer"
-	AgentService_DeleteContainer_FullMethodName = "/nagi.v1.AgentService/DeleteContainer"
-	AgentService_ListSnapshots_FullMethodName   = "/nagi.v1.AgentService/ListSnapshots"
-	AgentService_CreateSnapshot_FullMethodName  = "/nagi.v1.AgentService/CreateSnapshot"
-	AgentService_RestoreSnapshot_FullMethodName = "/nagi.v1.AgentService/RestoreSnapshot"
-	AgentService_StreamLogs_FullMethodName      = "/nagi.v1.AgentService/StreamLogs"
-	AgentService_Exec_FullMethodName            = "/nagi.v1.AgentService/Exec"
-	AgentService_CheckImages_FullMethodName     = "/nagi.v1.AgentService/CheckImages"
-	AgentService_LoginRegistry_FullMethodName   = "/nagi.v1.AgentService/LoginRegistry"
-	AgentService_SetLinks_FullMethodName        = "/nagi.v1.AgentService/SetLinks"
-	AgentService_SetAlertConfig_FullMethodName  = "/nagi.v1.AgentService/SetAlertConfig"
-	AgentService_QueryMetrics_FullMethodName    = "/nagi.v1.AgentService/QueryMetrics"
-	AgentService_SetProjectsRoot_FullMethodName = "/nagi.v1.AgentService/SetProjectsRoot"
-	AgentService_ListPanels_FullMethodName      = "/nagi.v1.AgentService/ListPanels"
-	AgentService_AddPanel_FullMethodName        = "/nagi.v1.AgentService/AddPanel"
-	AgentService_RemovePanel_FullMethodName     = "/nagi.v1.AgentService/RemovePanel"
-	AgentService_GetMeshStatus_FullMethodName   = "/nagi.v1.AgentService/GetMeshStatus"
-	AgentService_MeshPing_FullMethodName        = "/nagi.v1.AgentService/MeshPing"
-	AgentService_GetMirrors_FullMethodName      = "/nagi.v1.AgentService/GetMirrors"
-	AgentService_SetMirrors_FullMethodName      = "/nagi.v1.AgentService/SetMirrors"
-	AgentService_SetPanelDomain_FullMethodName  = "/nagi.v1.AgentService/SetPanelDomain"
-	AgentService_Upgrade_FullMethodName         = "/nagi.v1.AgentService/Upgrade"
+	AgentService_PutContainer_FullMethodName         = "/nagi.v1.AgentService/PutContainer"
+	AgentService_DeployContainer_FullMethodName      = "/nagi.v1.AgentService/DeployContainer"
+	AgentService_DeleteContainer_FullMethodName      = "/nagi.v1.AgentService/DeleteContainer"
+	AgentService_ListSnapshots_FullMethodName        = "/nagi.v1.AgentService/ListSnapshots"
+	AgentService_CreateSnapshot_FullMethodName       = "/nagi.v1.AgentService/CreateSnapshot"
+	AgentService_RestoreSnapshot_FullMethodName      = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_StreamLogs_FullMethodName           = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName                 = "/nagi.v1.AgentService/Exec"
+	AgentService_CheckImages_FullMethodName          = "/nagi.v1.AgentService/CheckImages"
+	AgentService_LoginRegistry_FullMethodName        = "/nagi.v1.AgentService/LoginRegistry"
+	AgentService_SyncBackup_FullMethodName           = "/nagi.v1.AgentService/SyncBackup"
+	AgentService_AcceptReplica_FullMethodName        = "/nagi.v1.AgentService/AcceptReplica"
+	AgentService_ListReplicas_FullMethodName         = "/nagi.v1.AgentService/ListReplicas"
+	AgentService_ListReplicaSnapshots_FullMethodName = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	AgentService_CheckContainer_FullMethodName       = "/nagi.v1.AgentService/CheckContainer"
+	AgentService_RestoreReplica_FullMethodName       = "/nagi.v1.AgentService/RestoreReplica"
+	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
+	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
+	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
+	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
+	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
+	AgentService_SetProjectsRoot_FullMethodName      = "/nagi.v1.AgentService/SetProjectsRoot"
+	AgentService_ListPanels_FullMethodName           = "/nagi.v1.AgentService/ListPanels"
+	AgentService_AddPanel_FullMethodName             = "/nagi.v1.AgentService/AddPanel"
+	AgentService_RemovePanel_FullMethodName          = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_GetMeshStatus_FullMethodName        = "/nagi.v1.AgentService/GetMeshStatus"
+	AgentService_MeshPing_FullMethodName             = "/nagi.v1.AgentService/MeshPing"
+	AgentService_GetMirrors_FullMethodName           = "/nagi.v1.AgentService/GetMirrors"
+	AgentService_SetMirrors_FullMethodName           = "/nagi.v1.AgentService/SetMirrors"
+	AgentService_SetPanelDomain_FullMethodName       = "/nagi.v1.AgentService/SetPanelDomain"
+	AgentService_Upgrade_FullMethodName              = "/nagi.v1.AgentService/Upgrade"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -69,6 +78,23 @@ type AgentServiceClient interface {
 	CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(ctx context.Context, in *LoginRegistryRequest, opts ...grpc.CallOption) (*LoginRegistryResponse, error)
+	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
+	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*BackupStatus, error)
+	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
+	AcceptReplica(ctx context.Context, in *AcceptReplicaRequest, opts ...grpc.CallOption) (*AcceptReplicaResponse, error)
+	ListReplicas(ctx context.Context, in *ListReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error)
+	ListReplicaSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 目标节点：检查容器能不能放到本节点上（目录可用、端口和域名不冲突），不做任何改动。
+	CheckContainer(ctx context.Context, in *PutContainerRequest, opts ...grpc.CallOption) (*CheckContainerResponse, error)
+	// 目标节点：把副本恢复成本节点上的容器并启动（按 spec 里部署过的版本，不生成新版本），成功后删除副本。
+	// snapshot_id 为空时用最新的定时或手动快照。
+	RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	DeleteReplica(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error)
+	// 源节点：迁移的前半段。容器运行时先同步一次，然后停止并移除容器、保存最后一次快照、再增量同步一次。
+	MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 源节点：迁移失败时撤销，重新启动容器。
+	MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -244,6 +270,123 @@ func (c *agentServiceClient) LoginRegistry(ctx context.Context, in *LoginRegistr
 	return out, nil
 }
 
+func (c *agentServiceClient) SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*BackupStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupStatus)
+	err := c.cc.Invoke(ctx, AgentService_SyncBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) AcceptReplica(ctx context.Context, in *AcceptReplicaRequest, opts ...grpc.CallOption) (*AcceptReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptReplicaResponse)
+	err := c.cc.Invoke(ctx, AgentService_AcceptReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListReplicas(ctx context.Context, in *ListReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReplicasResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListReplicas_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListReplicaSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListReplicaSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) CheckContainer(ctx context.Context, in *PutContainerRequest, opts ...grpc.CallOption) (*CheckContainerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckContainerResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckContainer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreReplicaRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreReplicaClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*DeleteReplicaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteReplicaResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteReplica_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_MigrateOut_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MigrateOutRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_MigrateResume_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ContainerRef, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateResumeClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetLinksResponse)
@@ -399,6 +542,23 @@ type AgentServiceServer interface {
 	CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error)
+	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
+	SyncBackup(context.Context, *ContainerRef) (*BackupStatus, error)
+	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
+	AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error)
+	ListReplicas(context.Context, *ListReplicasRequest) (*ListReplicasResponse, error)
+	ListReplicaSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
+	// 目标节点：检查容器能不能放到本节点上（目录可用、端口和域名不冲突），不做任何改动。
+	CheckContainer(context.Context, *PutContainerRequest) (*CheckContainerResponse, error)
+	// 目标节点：把副本恢复成本节点上的容器并启动（按 spec 里部署过的版本，不生成新版本），成功后删除副本。
+	// snapshot_id 为空时用最新的定时或手动快照。
+	RestoreReplica(*RestoreReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	DeleteReplica(context.Context, *ContainerRef) (*DeleteReplicaResponse, error)
+	// 源节点：迁移的前半段。容器运行时先同步一次，然后停止并移除容器、保存最后一次快照、再增量同步一次。
+	MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 源节点：迁移失败时撤销，重新启动容器。
+	MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
 	// ---- 节点 ----
@@ -464,6 +624,33 @@ func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ContainerRe
 }
 func (UnimplementedAgentServiceServer) LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LoginRegistry not implemented")
+}
+func (UnimplementedAgentServiceServer) SyncBackup(context.Context, *ContainerRef) (*BackupStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
+}
+func (UnimplementedAgentServiceServer) AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) ListReplicas(context.Context, *ListReplicasRequest) (*ListReplicasResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplicas not implemented")
+}
+func (UnimplementedAgentServiceServer) ListReplicaSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplicaSnapshots not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckContainer(context.Context, *PutContainerRequest) (*CheckContainerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckContainer not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreReplica(*RestoreReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method RestoreReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteReplica(context.Context, *ContainerRef) (*DeleteReplicaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteReplica not implemented")
+}
+func (UnimplementedAgentServiceServer) MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateOut not implemented")
+}
+func (UnimplementedAgentServiceServer) MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MigrateResume not implemented")
 }
 func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetLinks not implemented")
@@ -665,6 +852,147 @@ func _AgentService_LoginRegistry_Handler(srv interface{}, ctx context.Context, d
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _AgentService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SyncBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SyncBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SyncBackup(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_AcceptReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptReplicaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).AcceptReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_AcceptReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).AcceptReplica(ctx, req.(*AcceptReplicaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReplicasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListReplicas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListReplicas_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListReplicas(ctx, req.(*ListReplicasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListReplicaSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListReplicaSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListReplicaSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListReplicaSnapshots(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CheckContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckContainer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckContainer(ctx, req.(*PutContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestoreReplica_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RestoreReplicaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).RestoreReplica(m, &grpc.GenericServerStream[RestoreReplicaRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_RestoreReplicaServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_DeleteReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteReplica(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteReplica_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteReplica(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_MigrateOut_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MigrateOutRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).MigrateOut(m, &grpc.GenericServerStream[MigrateOutRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateOutServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_MigrateResume_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ContainerRef)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).MigrateResume(m, &grpc.GenericServerStream[ContainerRef, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MigrateResumeServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _AgentService_SetLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LinkPlan)
@@ -928,6 +1256,30 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_LoginRegistry_Handler,
 		},
 		{
+			MethodName: "SyncBackup",
+			Handler:    _AgentService_SyncBackup_Handler,
+		},
+		{
+			MethodName: "AcceptReplica",
+			Handler:    _AgentService_AcceptReplica_Handler,
+		},
+		{
+			MethodName: "ListReplicas",
+			Handler:    _AgentService_ListReplicas_Handler,
+		},
+		{
+			MethodName: "ListReplicaSnapshots",
+			Handler:    _AgentService_ListReplicaSnapshots_Handler,
+		},
+		{
+			MethodName: "CheckContainer",
+			Handler:    _AgentService_CheckContainer_Handler,
+		},
+		{
+			MethodName: "DeleteReplica",
+			Handler:    _AgentService_DeleteReplica_Handler,
+		},
+		{
 			MethodName: "SetLinks",
 			Handler:    _AgentService_SetLinks_Handler,
 		},
@@ -1006,6 +1358,21 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _AgentService_Exec_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "RestoreReplica",
+			Handler:       _AgentService_RestoreReplica_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateOut",
+			Handler:       _AgentService_MigrateOut_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MigrateResume",
+			Handler:       _AgentService_MigrateResume_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "nagi/v1/agent.proto",

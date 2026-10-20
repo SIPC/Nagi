@@ -82,6 +82,11 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		}
 	}
 	sp.Stateful = s.stateful(ctx, sp.GetConfig(), c, sp.GetSharedEnv())
+	if c.BackupNodeID != "" {
+		if n, err := s.Q.GetNode(ctx, c.BackupNodeID); err == nil && len(n.MeshKey) > 0 {
+			sp.Backup = backupTarget(n)
+		}
+	}
 	return sp, nil
 }
 
@@ -133,6 +138,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	if err != nil {
 		return
 	}
+	s.retireMoved(ctx, c, req.GetContainers(), rows)
 	projects := map[string]store.Project{}
 	for _, r := range rows {
 		p, ok := projects[r.ProjectID]
@@ -160,6 +166,39 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 		}
 	}
 	s.pushAllLinks(ctx)
+}
+
+// retireMoved 处理节点上报、但面板上已经换到别的节点的容器（原节点离线时在备份节点上恢复了，或者重新部署到了其他节点）：
+// 让这个节点停止并删除它，目录改名保留。正在操作的项目跳过（例如迁移进行到一半，面板还没改所在节点）。
+// 面板上没有这个项目的不动：可能是换了面板、项目还没拼回来。
+func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*nagiv1.ContainerStatus, rows []store.Container) {
+	here := map[string]bool{}
+	for _, r := range rows {
+		here[r.ProjectID+"/"+r.Name] = true
+	}
+	for _, cs := range reported {
+		if here[cs.GetProjectId()+"/"+cs.GetName()] {
+			continue
+		}
+		row, err := s.container(ctx, cs.GetProjectId(), cs.GetName())
+		if err != nil || row.NodeID == c.NodeID {
+			continue
+		}
+		l := s.lock(cs.GetProjectId())
+		if !l.TryLock() {
+			continue
+		}
+		// 拿到锁以后再确认一次。
+		if row, err = s.container(ctx, cs.GetProjectId(), cs.GetName()); err == nil && row.NodeID != c.NodeID {
+			_, err = c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true})
+			if err != nil {
+				s.Log.Warn("让原节点停止已换到其他节点的容器失败", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID, "err", err)
+			} else {
+				s.Log.Info("原节点上的容器已停止，目录改名保留", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID)
+			}
+		}
+		l.Unlock()
+	}
 }
 
 // ---- 转换 ----

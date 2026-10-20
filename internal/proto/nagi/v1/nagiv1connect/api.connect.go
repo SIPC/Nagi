@@ -192,6 +192,24 @@ const (
 	// ProjectServiceDeleteRouteProcedure is the fully-qualified name of the ProjectService's
 	// DeleteRoute RPC.
 	ProjectServiceDeleteRouteProcedure = "/nagi.v1.ProjectService/DeleteRoute"
+	// ProjectServiceSetBackupNodeProcedure is the fully-qualified name of the ProjectService's
+	// SetBackupNode RPC.
+	ProjectServiceSetBackupNodeProcedure = "/nagi.v1.ProjectService/SetBackupNode"
+	// ProjectServiceSyncBackupProcedure is the fully-qualified name of the ProjectService's SyncBackup
+	// RPC.
+	ProjectServiceSyncBackupProcedure = "/nagi.v1.ProjectService/SyncBackup"
+	// ProjectServiceListBackupSnapshotsProcedure is the fully-qualified name of the ProjectService's
+	// ListBackupSnapshots RPC.
+	ProjectServiceListBackupSnapshotsProcedure = "/nagi.v1.ProjectService/ListBackupSnapshots"
+	// ProjectServiceRestoreFromBackupProcedure is the fully-qualified name of the ProjectService's
+	// RestoreFromBackup RPC.
+	ProjectServiceRestoreFromBackupProcedure = "/nagi.v1.ProjectService/RestoreFromBackup"
+	// ProjectServiceMigrateContainerProcedure is the fully-qualified name of the ProjectService's
+	// MigrateContainer RPC.
+	ProjectServiceMigrateContainerProcedure = "/nagi.v1.ProjectService/MigrateContainer"
+	// ProjectServiceRedeployElsewhereProcedure is the fully-qualified name of the ProjectService's
+	// RedeployElsewhere RPC.
+	ProjectServiceRedeployElsewhereProcedure = "/nagi.v1.ProjectService/RedeployElsewhere"
 	// ProjectServiceConnectProjectProcedure is the fully-qualified name of the ProjectService's
 	// ConnectProject RPC.
 	ProjectServiceConnectProjectProcedure = "/nagi.v1.ProjectService/ConnectProject"
@@ -1390,6 +1408,19 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 备份节点、迁移（按容器，见 docs/failover.md）。
+	// 设置或取消备份节点（node_id 为空表示取消）。
+	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 立即同步到备份节点，同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
+	// 备份节点上副本里的快照。
+	ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 原节点离线时，在备份节点上把容器恢复出来。
+	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
+	MigrateContainer(context.Context, *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
+	RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
@@ -1533,6 +1564,42 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
 			connect.WithClientOptions(opts...),
 		),
+		setBackupNode: connect.NewClient[v1.SetBackupNodeRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetBackupNodeProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
+			connect.WithClientOptions(opts...),
+		),
+		syncBackup: connect.NewClient[v1.ContainerRef, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSyncBackupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SyncBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		listBackupSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+ProjectServiceListBackupSnapshotsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListBackupSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreFromBackup: connect.NewClient[v1.RestoreFromBackupRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRestoreFromBackupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RestoreFromBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		migrateContainer: connect.NewClient[v1.MoveContainerRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceMigrateContainerProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("MigrateContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		redeployElsewhere: connect.NewClient[v1.MoveContainerRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceRedeployElsewhereProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RedeployElsewhere")),
+			connect.WithClientOptions(opts...),
+		),
 		connectProject: connect.NewClient[v1.ConnectProjectRequest, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceConnectProjectProcedure,
@@ -1617,6 +1684,12 @@ type projectServiceClient struct {
 	streamLogs            *connect.Client[v1.StreamLogsApiRequest, v1.LogLine]
 	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.Project]
 	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.Project]
+	setBackupNode         *connect.Client[v1.SetBackupNodeRequest, v1.Project]
+	syncBackup            *connect.Client[v1.ContainerRef, v1.Project]
+	listBackupSnapshots   *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	restoreFromBackup     *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
+	migrateContainer      *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
+	redeployElsewhere     *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
 	connectProject        *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	disconnectProject     *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
@@ -1724,6 +1797,36 @@ func (c *projectServiceClient) DeleteRoute(ctx context.Context, req *connect.Req
 	return c.deleteRoute.CallUnary(ctx, req)
 }
 
+// SetBackupNode calls nagi.v1.ProjectService.SetBackupNode.
+func (c *projectServiceClient) SetBackupNode(ctx context.Context, req *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
+	return c.setBackupNode.CallUnary(ctx, req)
+}
+
+// SyncBackup calls nagi.v1.ProjectService.SyncBackup.
+func (c *projectServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return c.syncBackup.CallUnary(ctx, req)
+}
+
+// ListBackupSnapshots calls nagi.v1.ProjectService.ListBackupSnapshots.
+func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.listBackupSnapshots.CallUnary(ctx, req)
+}
+
+// RestoreFromBackup calls nagi.v1.ProjectService.RestoreFromBackup.
+func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, req *connect.Request[v1.RestoreFromBackupRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.restoreFromBackup.CallServerStream(ctx, req)
+}
+
+// MigrateContainer calls nagi.v1.ProjectService.MigrateContainer.
+func (c *projectServiceClient) MigrateContainer(ctx context.Context, req *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.migrateContainer.CallServerStream(ctx, req)
+}
+
+// RedeployElsewhere calls nagi.v1.ProjectService.RedeployElsewhere.
+func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, req *connect.Request[v1.MoveContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.redeployElsewhere.CallServerStream(ctx, req)
+}
+
 // ConnectProject calls nagi.v1.ProjectService.ConnectProject.
 func (c *projectServiceClient) ConnectProject(ctx context.Context, req *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
 	return c.connectProject.CallUnary(ctx, req)
@@ -1806,6 +1909,19 @@ type ProjectServiceHandler interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 备份节点、迁移（按容器，见 docs/failover.md）。
+	// 设置或取消备份节点（node_id 为空表示取消）。
+	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 立即同步到备份节点，同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
+	// 备份节点上副本里的快照。
+	ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 原节点离线时，在备份节点上把容器恢复出来。
+	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
+	MigrateContainer(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
+	RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
@@ -1945,6 +2061,42 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetBackupNodeHandler := connect.NewUnaryHandler(
+		ProjectServiceSetBackupNodeProcedure,
+		svc.SetBackupNode,
+		connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSyncBackupHandler := connect.NewUnaryHandler(
+		ProjectServiceSyncBackupProcedure,
+		svc.SyncBackup,
+		connect.WithSchema(projectServiceMethods.ByName("SyncBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListBackupSnapshotsHandler := connect.NewUnaryHandler(
+		ProjectServiceListBackupSnapshotsProcedure,
+		svc.ListBackupSnapshots,
+		connect.WithSchema(projectServiceMethods.ByName("ListBackupSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRestoreFromBackupHandler := connect.NewServerStreamHandler(
+		ProjectServiceRestoreFromBackupProcedure,
+		svc.RestoreFromBackup,
+		connect.WithSchema(projectServiceMethods.ByName("RestoreFromBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceMigrateContainerHandler := connect.NewServerStreamHandler(
+		ProjectServiceMigrateContainerProcedure,
+		svc.MigrateContainer,
+		connect.WithSchema(projectServiceMethods.ByName("MigrateContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRedeployElsewhereHandler := connect.NewServerStreamHandler(
+		ProjectServiceRedeployElsewhereProcedure,
+		svc.RedeployElsewhere,
+		connect.WithSchema(projectServiceMethods.ByName("RedeployElsewhere")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceConnectProjectHandler := connect.NewUnaryHandler(
 		ProjectServiceConnectProjectProcedure,
 		svc.ConnectProject,
@@ -2045,6 +2197,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSaveRouteHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteRouteProcedure:
 			projectServiceDeleteRouteHandler.ServeHTTP(w, r)
+		case ProjectServiceSetBackupNodeProcedure:
+			projectServiceSetBackupNodeHandler.ServeHTTP(w, r)
+		case ProjectServiceSyncBackupProcedure:
+			projectServiceSyncBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceListBackupSnapshotsProcedure:
+			projectServiceListBackupSnapshotsHandler.ServeHTTP(w, r)
+		case ProjectServiceRestoreFromBackupProcedure:
+			projectServiceRestoreFromBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceMigrateContainerProcedure:
+			projectServiceMigrateContainerHandler.ServeHTTP(w, r)
+		case ProjectServiceRedeployElsewhereProcedure:
+			projectServiceRedeployElsewhereHandler.ServeHTTP(w, r)
 		case ProjectServiceConnectProjectProcedure:
 			projectServiceConnectProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceDisconnectProjectProcedure:
@@ -2148,6 +2312,30 @@ func (UnimplementedProjectServiceHandler) SaveRoute(context.Context, *connect.Re
 
 func (UnimplementedProjectServiceHandler) DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteRoute is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetBackupNode is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListBackupSnapshots is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreFromBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) MigrateContainer(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.MigrateContainer is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RedeployElsewhere(context.Context, *connect.Request[v1.MoveContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RedeployElsewhere is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {

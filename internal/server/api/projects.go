@@ -233,6 +233,41 @@ func (s *projectService) DeleteRoute(ctx context.Context, req *connect.Request[n
 	return connect.NewResponse(p), nil
 }
 
+func (s *projectService) SetBackupNode(ctx context.Context, req *connect.Request[nagiv1.SetBackupNodeRequest]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SetBackupNode(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDeleteReplica()))
+}
+
+func (s *projectService) SyncBackup(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.Project], error) {
+	return reply(s.Projects.SyncBackup(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer()))
+}
+
+func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
+	list, err := s.Projects.BackupSnapshots(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
+	return reply(&nagiv1.ListSnapshotsResponse{Snapshots: list}, err)
+}
+
+func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Request[nagiv1.RestoreFromBackupRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	m := req.Msg
+	return streamOp(out, func(o projects.Output) (int64, error) {
+		return 0, s.Projects.RestoreFromBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId(), m.GetDir(), o)
+	})
+}
+
+func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	m := req.Msg
+	return streamOp(out, func(o projects.Output) (int64, error) {
+		return 0, s.Projects.Migrate(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
+	})
+}
+
+func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	m := req.Msg
+	return streamOp(out, func(o projects.Output) (int64, error) {
+		return 0, s.Projects.RedeployElsewhere(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
+	})
+}
+
 func (s *projectService) ConnectProject(ctx context.Context, req *connect.Request[nagiv1.ConnectProjectRequest]) (*connect.Response[nagiv1.Project], error) {
 	return reply(s.Projects.Connect(ctx, req.Msg.GetProjectId(), req.Msg.GetOtherProjectId()))
 }

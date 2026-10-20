@@ -29,6 +29,24 @@ service AgentService {
   // 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
   rpc LoginRegistry(LoginRegistryRequest) returns (LoginRegistryResponse);
 
+  // ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
+  // 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
+  rpc SyncBackup(ContainerRef) returns (BackupStatus);
+  // 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
+  rpc AcceptReplica(AcceptReplicaRequest) returns (AcceptReplicaResponse);
+  rpc ListReplicas(ListReplicasRequest) returns (ListReplicasResponse);
+  rpc ListReplicaSnapshots(ContainerRef) returns (ListSnapshotsResponse);
+  // 目标节点：检查容器能不能放到本节点上（目录可用、端口和域名不冲突），不做任何改动。
+  rpc CheckContainer(PutContainerRequest) returns (CheckContainerResponse);
+  // 目标节点：把副本恢复成本节点上的容器并启动（按 spec 里部署过的版本，不生成新版本），成功后删除副本。
+  // snapshot_id 为空时用最新的定时或手动快照。
+  rpc RestoreReplica(RestoreReplicaRequest) returns (stream DeployEvent);
+  rpc DeleteReplica(ContainerRef) returns (DeleteReplicaResponse);
+  // 源节点：迁移的前半段。容器运行时先同步一次，然后停止并移除容器、保存最后一次快照、再增量同步一次。
+  rpc MigrateOut(MigrateOutRequest) returns (stream DeployEvent);
+  // 源节点：迁移失败时撤销，重新启动容器。
+  rpc MigrateResume(ContainerRef) returns (stream DeployEvent);
+
   // 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
   rpc SetLinks(LinkPlan) returns (SetLinksResponse);
 
@@ -59,6 +77,36 @@ service AgentService {
 }
 
 message SetLinksResponse {}
+
+message AcceptReplicaRequest {
+  ContainerSpec spec = 1;
+  bytes source_key = 2;
+  string source_node_id = 3;
+  string source_name = 4;
+}
+
+message AcceptReplicaResponse {}
+
+message ListReplicasRequest {}
+
+message ListReplicasResponse {
+  repeated Replica replicas = 1;
+}
+
+message CheckContainerResponse {}
+
+message RestoreReplicaRequest {
+  ContainerSpec spec = 1;
+  string snapshot_id = 2;
+}
+
+message DeleteReplicaResponse {}
+
+message MigrateOutRequest {
+  string project_id = 1;
+  string container = 2;
+  BackupTarget target = 3;
+}
 
 message ContainerRef {
   string project_id = 1;
@@ -93,6 +141,8 @@ message DeleteContainerRequest {
   string container = 2;
   // 同时删除容器目录（数据会删掉）。
   bool delete_dir = 3;
+  // 容器已经在别的节点上恢复（原节点离线时）：目录改名为 <目录>.replaced-<时间> 保留。
+  bool retire = 4;
 }
 
 message DeleteContainerResponse {}

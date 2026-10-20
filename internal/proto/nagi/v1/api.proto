@@ -364,6 +364,20 @@ service ProjectService {
   rpc SaveRoute(SaveRouteRequest) returns (Project);
   rpc DeleteRoute(DeleteRouteRequest) returns (Project);
 
+  // 备份节点、迁移（按容器，见 docs/failover.md）。
+  // 设置或取消备份节点（node_id 为空表示取消）。
+  rpc SetBackupNode(SetBackupNodeRequest) returns (Project);
+  // 立即同步到备份节点，同步完才返回。
+  rpc SyncBackup(ContainerRef) returns (Project);
+  // 备份节点上副本里的快照。
+  rpc ListBackupSnapshots(ContainerRef) returns (ListSnapshotsResponse);
+  // 原节点离线时，在备份节点上把容器恢复出来。
+  rpc RestoreFromBackup(RestoreFromBackupRequest) returns (stream DeployEvent);
+  // 把容器迁移到另一个节点（两个节点都在线），不丢数据。
+  rpc MigrateContainer(MoveContainerRequest) returns (stream DeployEvent);
+  // 原节点离线又没有副本时，把容器换到另一个节点重新部署（数据和旧版本的文件都没有）。
+  rpc RedeployElsewhere(MoveContainerRequest) returns (stream DeployEvent);
+
   // 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
   rpc ConnectProject(ConnectProjectRequest) returns (Project);
   rpc DisconnectProject(ConnectProjectRequest) returns (Project);
@@ -382,6 +396,31 @@ service ProjectService {
   rpc LogoutRegistry(LogoutRegistryRequest) returns (RegistriesResponse);
   // 立即检查项目的镜像有没有新版本。
   rpc CheckImages(ProjectRef) returns (CheckImagesResponse);
+}
+
+message SetBackupNodeRequest {
+  string project_id = 1;
+  string container = 2;
+  string node_id = 3;
+  // 取消时同时删除备份节点上的副本。
+  bool delete_replica = 4;
+}
+
+message RestoreFromBackupRequest {
+  string project_id = 1;
+  string container = 2;
+  // 为空时用最新的定时或手动快照。
+  string snapshot_id = 3;
+  // 容器在备份节点上的目录，为空时按备份节点的项目根目录生成。
+  string dir = 4;
+}
+
+message MoveContainerRequest {
+  string project_id = 1;
+  string container = 2;
+  string node_id = 3;
+  // 容器在目标节点上的目录，为空时按目标节点的项目根目录生成。
+  string dir = 4;
 }
 
 message ConnectProjectRequest {

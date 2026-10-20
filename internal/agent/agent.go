@@ -140,6 +140,9 @@ func Run(ctx context.Context, cfg Config) error {
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
+	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
+	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
+	projects.BackupStatus = a.backups.status
 
 	// 容器有变化时上报状态；容器重建后要重新接入项目内网（见 project/network.go）。
 	netSync := make(chan struct{}, 1)
@@ -230,6 +233,8 @@ type agent struct {
 	alerts    *alerts.Engine
 	mesh      *meshNode
 	intranet  *intranet
+	replicas  *replicas
+	backups   *backupStates
 	ctx       context.Context
 	startedAt time.Time
 
@@ -593,6 +598,8 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			key := "snapshot:" + projectID + "/" + container
 			if err == nil {
 				a.alerts.Resolve(ctx, key)
+				// 每次定时快照成功后同步到备份节点（没有设置时什么都不做）。
+				go a.runBackupSync(ctx, projectID, container)
 				return
 			}
 			a.log.Warn("定时快照失败", "project", projectID, "container", container, "err", err)
