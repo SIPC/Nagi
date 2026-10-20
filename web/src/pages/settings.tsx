@@ -8,11 +8,13 @@ import { InviteCard } from "@/pages/invite";
 export function SettingsPage() {
   return (
     <>
-      <PageHeader title="设置" description="面板自己的设置。节点相关的操作在节点页。" />
-      <SecurityCard />
-      <AlertSettings />
-      <InviteCard />
-      <PanelMeshCard />
+      <PageHeader title="设置" description="面板自身的账号安全、告警和接入设置；节点相关操作见节点页。" />
+      <div className="grid max-w-4xl gap-6">
+        <SecurityCard />
+        <AlertSettings />
+        <InviteCard />
+        <PanelMeshCard />
+      </div>
     </>
   );
 }

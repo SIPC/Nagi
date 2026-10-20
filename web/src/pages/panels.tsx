@@ -1,48 +1,32 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient } from "@/lib/api";
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Spinner,
-  Textarea,
-} from "@/components/ui";
+import { Alert, Badge, Button, Check, Field, Loading, Section, Segmented, Spinner, Status, Textarea } from "@/components/ui";
 
-// ---- 换面板与多面板（临时测试界面）----
+// ---- 换面板与多面板 ----
+
+type HandOverResult = { name: string; ok: boolean; error: string };
 
 // HandOverCard：把勾选的节点交给另一个面板（移交，或共同管理）。
-export function HandOverCard({
-  nodes,
-}: {
-  nodes: { id: string; name: string; online: boolean }[];
-}) {
+export function HandOverCard({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [move, setMove] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<string[]>([]);
+  const [results, setResults] = useState<HandOverResult[]>([]);
 
   const run = async () => {
-    if (move && !confirm("移交后本面板会忘记这些节点。确定？")) return;
+    if (move && !confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点。`)) return;
     setBusy(true);
-    const out: string[] = [];
+    const out: HandOverResult[] = [];
     for (const id of selected) {
       const name = nodes.find((n) => n.id === id)?.name ?? id;
       try {
-        await nodeClient.addNodePanel({
-          nodeId: id,
-          invite: code,
-          removeSelf: move,
-        });
-        out.push(`✅ ${name}`);
+        await nodeClient.addNodePanel({ nodeId: id, invite: code, removeSelf: move });
+        out.push({ name, ok: true, error: "" });
       } catch (err) {
-        out.push(`❌ ${name}：${errorMessage(err)}`);
+        out.push({ name, ok: false, error: errorMessage(err) });
       }
       setResults([...out]);
     }
@@ -52,76 +36,67 @@ export function HandOverCard({
   };
 
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>交给另一个面板</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
-        <Textarea
-          className="font-mono text-xs"
-          rows={2}
-          placeholder="粘贴新面板生成的接入码 nagi-invite:..."
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-        />
-        <div className="flex flex-wrap gap-3">
-          {nodes.map((n) => (
-            <label
-              key={n.id}
-              className={n.online ? "" : "text-muted-foreground"}
-            >
-              <input
-                type="checkbox"
-                className="mr-1"
+    <Section
+      title="交给其他面板"
+      description="使用其他面板生成的接入码，将节点移交给该面板或与其共同管理。"
+      help="接入码在新面板的「设置」页生成。移交：新面板接管后，本面板从节点上移除自身并不再管理这些节点。共同管理：两个面板同时保留。离线节点无法选择。"
+      actions={
+        <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
+          {busy && <Spinner className="size-3.5" />}
+          {busy ? "处理中…" : move ? "移交节点" : "添加面板"}
+        </Button>
+      }
+    >
+      <div className="grid gap-4">
+        <Field label="接入码" hint="格式：nagi-invite:…" htmlFor="handover-code">
+          <Textarea
+            id="handover-code"
+            className="font-mono text-xs"
+            rows={2}
+            placeholder="粘贴其他面板生成的接入码"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </Field>
+        <Field label="节点">
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {nodes.map((n) => (
+              <Check
+                key={n.id}
                 disabled={!n.online}
                 checked={selected.includes(n.id)}
-                onChange={(e) =>
-                  setSelected(
-                    e.target.checked
-                      ? [...selected, n.id]
-                      : selected.filter((x) => x !== n.id),
-                  )
-                }
-              />
-              {n.name}
-              {!n.online && "（离线）"}
-            </label>
-          ))}
-        </div>
-        <div className="flex gap-4">
-          <label>
-            <input
-              type="radio"
-              className="mr-1"
-              checked={move}
-              onChange={() => setMove(true)}
+                onChange={(v) => setSelected(v ? [...selected, n.id] : selected.filter((x) => x !== n.id))}
+              >
+                {n.name}
+                {!n.online && <span className="text-muted-foreground">（离线）</span>}
+              </Check>
+            ))}
+          </div>
+        </Field>
+        <Field label="方式" help="移交：本面板随后从节点上移除自身。共同管理：两个面板都保留对节点的管理。">
+          <div>
+            <Segmented
+              value={move ? "move" : "share"}
+              onChange={(v) => setMove(v === "move")}
+              items={[
+                { value: "move", label: "移交" },
+                { value: "share", label: "共同管理" },
+              ]}
             />
-            移交（本面板随后移除自己、忘记这些节点）
-          </label>
-          <label>
-            <input
-              type="radio"
-              className="mr-1"
-              checked={!move}
-              onChange={() => setMove(false)}
-            />
-            共同管理（两个面板都保留）
-          </label>
-        </div>
-        <div>
-          <Button
-            size="sm"
-            disabled={busy || !code || selected.length === 0}
-            onClick={run}
-          >
-            {busy ? "处理中…" : "开始"}
-          </Button>
-        </div>
+          </div>
+        </Field>
         {results.length > 0 && (
-          <pre className="text-xs">{results.join("\n")}</pre>
+          <div className="grid gap-1.5 rounded-md border bg-subtle px-3.5 py-2.5">
+            {results.map((r, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Status tone={r.ok ? "success" : "danger"}>{r.name}</Status>
+                <span className={r.ok ? "text-[13px] text-muted-foreground" : "text-[13px] text-destructive"}>{r.ok ? "已完成" : r.error}</span>
+              </div>
+            ))}
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -133,49 +108,48 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
     queryFn: () => nodeClient.listNodePanels({ nodeId }),
   });
   const [error, setError] = useState("");
-  if (q.isPending) return <Spinner />;
+  if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   return (
-    <div className="grid gap-1 py-2 text-xs">
+    <div className="grid gap-3">
+      <p className="text-[13px] text-muted-foreground">节点接受这些面板的连接和操作。</p>
       {error && <Alert>{error}</Alert>}
-      {q.data.panels.map((p) => (
-        <div key={p.fingerprint} className="flex items-center gap-3">
-          <span className="w-44 font-mono">{p.address}</span>
-          <span className="w-56 truncate font-mono text-muted-foreground">
-            {p.fingerprint}
-          </span>
-          {p.isSelf && <Badge>本面板</Badge>}
-          {p.connected ? (
-            <Badge tone="success">已连接</Badge>
-          ) : (
-            <Badge>未连接</Badge>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={async () => {
-              const msg = p.isSelf
-                ? "从节点上移除本面板？本面板会忘记这个节点，节点由其他面板继续管理。"
-                : `从节点上移除面板 ${p.address}？`;
-              if (!confirm(msg)) return;
-              setError("");
-              try {
-                await nodeClient.removeNodePanel({
-                  nodeId,
-                  fingerprint: p.fingerprint,
-                });
-                queryClient.invalidateQueries({
-                  queryKey: p.isSelf ? ["nodes"] : ["node-panels", nodeId],
-                });
-              } catch (err) {
-                setError(errorMessage(err));
-              }
-            }}
-          >
-            移除
-          </Button>
-        </div>
-      ))}
+      <div className="divide-y rounded-md border">
+        {q.data.panels.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">暂无面板</p>}
+        {q.data.panels.map((p) => (
+          <div key={p.fingerprint} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[13px]">{p.address}</span>
+                {p.isSelf && <Badge>本面板</Badge>}
+              </div>
+              <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
+                {p.fingerprint}
+              </div>
+            </div>
+            {p.connected ? <Status tone="success">已连接</Status> : <Status>未连接</Status>}
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={async () => {
+                const msg = p.isSelf
+                  ? "从节点上移除本面板？本面板将不再管理该节点，节点由其他面板继续管理。"
+                  : `从节点上移除面板 ${p.address}？该面板将无法再连接和操作此节点。`;
+                if (!confirm(msg)) return;
+                setError("");
+                try {
+                  await nodeClient.removeNodePanel({ nodeId, fingerprint: p.fingerprint });
+                  queryClient.invalidateQueries({ queryKey: p.isSelf ? ["nodes"] : ["node-panels", nodeId] });
+                } catch (err) {
+                  setError(errorMessage(err));
+                }
+              }}
+            >
+              移除
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

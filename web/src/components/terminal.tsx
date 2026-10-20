@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
+import { SquareTerminal } from "lucide-react";
+import { Button, Notice, Select } from "@/components/ui";
 
 // 容器终端：通过 WebSocket 连到面板，面板转发到节点上的 docker exec。
-export function TerminalCard({ nodeId, projectId, container, services }: { nodeId: string; projectId: string; container: string; services: string[] }) {
+export function TerminalView({ nodeId, projectId, container, services }: { nodeId: string; projectId: string; container: string; services: string[] }) {
   const [service, setService] = useState("");
   const [session, setSession] = useState(0);
   const [status, setStatus] = useState("");
@@ -30,7 +31,7 @@ export function TerminalCard({ nodeId, projectId, container, services }: { nodeI
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/exec?${params}`);
     ws.binaryType = "arraybuffer";
     const enc = new TextEncoder();
-    setStatus("连接中…");
+    setStatus("正在连接…");
     ws.onopen = () => {
       setStatus("");
       term.focus();
@@ -60,28 +61,31 @@ export function TerminalCard({ nodeId, projectId, container, services }: { nodeI
   }, [session, nodeId, projectId, container, selected]);
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-4">
-        <CardTitle>终端</CardTitle>
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] text-muted-foreground">{services.length ? "在容器内打开 shell。" : "没有运行中的容器。"}</span>
         <div className="flex gap-2">
-          <Select value={selected} onChange={(e) => setService(e.target.value)} className="w-40">
-            {services.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-          <Button size="sm" onClick={() => setSession((n) => n + 1)} disabled={!selected}>
-            {session ? "重新连接" : "打开终端"}
+          {services.length > 1 && (
+            <Select value={selected} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]">
+              {services.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setSession((n) => n + 1)} disabled={!selected}>
+            <SquareTerminal />
+            {session ? "重新连接" : "连接"}
           </Button>
         </div>
-      </CardHeader>
+      </div>
       {session > 0 && (
-        <CardContent className="grid gap-2">
-          {status && <Alert className="border-border bg-muted text-muted-foreground">{status}</Alert>}
+        <>
+          {status && <Notice>{status}</Notice>}
           <div ref={boxRef} className="h-96 overflow-hidden rounded-md bg-black p-2" />
-        </CardContent>
+        </>
       )}
-    </Card>
+    </div>
   );
 }

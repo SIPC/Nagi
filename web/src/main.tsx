@@ -13,7 +13,7 @@ import { authClient, isUnauthenticated, setupClient } from "@/lib/api";
 import { LoginPage, SetupPage } from "@/pages/auth";
 import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
-import { ProjectPage } from "@/pages/project";
+import { ProjectPage, projectTabs, type ProjectTab } from "@/pages/project";
 import { NodesPage } from "@/pages/nodes";
 import { SettingsPage } from "@/pages/settings";
 import "./index.css";
@@ -84,9 +84,22 @@ const newProjectRoute = createRoute({ getParentRoute: () => appRoute, path: "/pr
 const projectRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/projects/$nodeId/$projectId",
+  validateSearch: (search: Record<string, unknown>): { tab?: ProjectTab } => ({
+    tab: projectTabs.includes(search.tab as ProjectTab) ? (search.tab as ProjectTab) : undefined,
+  }),
   component: function Project() {
     const { nodeId, projectId } = projectRoute.useParams();
-    return <ProjectPage key={`${nodeId}/${projectId}`} nodeId={nodeId} projectId={projectId} />;
+    const { tab } = projectRoute.useSearch();
+    const navigate = projectRoute.useNavigate();
+    return (
+      <ProjectPage
+        key={`${nodeId}/${projectId}`}
+        nodeId={nodeId}
+        projectId={projectId}
+        tab={tab ?? "containers"}
+        onTab={(t) => navigate({ search: { tab: t === "containers" ? undefined : t }, replace: true })}
+      />
+    );
   },
 });
 

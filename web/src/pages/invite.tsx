@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
+import { Alert, Button, CodeBlock, EmptyRow, Section, Table, Td, Th } from "@/components/ui";
 
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
 export function InviteCard() {
@@ -23,55 +23,72 @@ export function InviteCard() {
     }
   };
 
+  const list = invites.data?.invites ?? [];
+
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>接入码（把其他面板的节点接过来）</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
-        {error && <Alert>{error}</Alert>}
-        <div>
-          <Button size="sm" onClick={create}>
-            生成接入码
-          </Button>
+    <Section
+      title="接入码"
+      description="供其他面板将节点移交至本面板。"
+      help="接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点需在节点页批准后才能使用，以防接入码泄露后被他人利用。"
+      actions={
+        <Button size="sm" onClick={create}>
+          生成接入码
+        </Button>
+      }
+      flush
+    >
+      {(error || code) && (
+        <div className="grid gap-3 px-5 pb-4">
+          {error && <Alert>{error}</Alert>}
+          {code && (
+            <>
+              <p className="text-[13px] text-muted-foreground">
+                在原面板移交节点时粘贴此接入码，或在节点上执行 <span className="font-mono">nagi panel add &lt;接入码&gt;</span>。
+              </p>
+              <CodeBlock copy>{code}</CodeBlock>
+            </>
+          )}
         </div>
-        {code && (
-          <div className="grid gap-1">
-            <span className="text-muted-foreground">
-              复制到旧面板的「交给另一个面板」，或在节点上执行 nagi panel add
-              &lt;接入码&gt;。1 小时内可以给多个节点用。用它加入的节点要在节点页「批准」后才能使用（接入码泄露的话别人也能加入）：
-            </span>
-            <code className="break-all rounded bg-muted p-3 font-mono text-xs">
-              {code}
-            </code>
-          </div>
-        )}
-        {invites.data && invites.data.invites.length > 0 && (
-          <div className="grid gap-1">
-            <span className="text-muted-foreground">有效的接入码：</span>
-            {invites.data.invites.map((i) => (
-              <div key={i.id} className="flex items-center gap-3 text-xs">
-                <span className="font-mono">{i.id}</span>
-                <span>已用 {i.uses} 次</span>
-                <span className="text-muted-foreground">
-                  到期 {toDate(i.expiresAt)?.toLocaleTimeString()}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    await settingsClient.revokeInvite({ id: i.id });
-                    invites.refetch();
-                  }}
-                >
-                  作废
-                </Button>
-              </div>
+      )}
+      {list.length > 0 ? (
+        <Table>
+          <thead>
+            <tr>
+              <Th>接入码 ID</Th>
+              <Th>使用次数</Th>
+              <Th>到期时间</Th>
+              <Th className="w-px" />
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((i) => (
+              <tr key={i.id}>
+                <Td className="font-mono text-xs">{i.id}</Td>
+                <Td className="text-[13px]">{i.uses} 次</Td>
+                <Td className="text-[13px] text-muted-foreground">{toDate(i.expiresAt)?.toLocaleTimeString()}</Td>
+                <Td>
+                  <div className="flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={async () => {
+                        await settingsClient.revokeInvite({ id: i.id });
+                        invites.refetch();
+                      }}
+                    >
+                      作废
+                    </Button>
+                  </div>
+                </Td>
+              </tr>
             ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </tbody>
+        </Table>
+      ) : (
+        <div className="border-t">
+          <EmptyRow>暂无有效的接入码</EmptyRow>
+        </div>
+      )}
+    </Section>
   );
 }
-

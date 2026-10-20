@@ -408,7 +408,7 @@ export function Tabs<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="tablist" className={cn("flex gap-5 overflow-x-auto border-b", className)}>
+    <div role="tablist" className={cn("flex gap-5 overflow-x-auto border-b [scrollbar-width:none]", className)}>
       {items.map((it) => (
         <button
           key={it.value}
@@ -417,8 +417,8 @@ export function Tabs<T extends string>({
           aria-selected={value === it.value}
           onClick={() => onChange(it.value)}
           className={cn(
-            "-mb-px inline-flex h-10 cursor-pointer items-center gap-1.5 border-b-2 border-transparent text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-            value === it.value && "border-foreground font-medium text-foreground",
+            "inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
+            value === it.value && "font-medium text-foreground shadow-[inset_0_-2px_0_var(--foreground)]",
           )}
         >
           {it.label}

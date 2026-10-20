@@ -9,19 +9,9 @@ import {
   type AlertChannel,
   type AlertRules,
 } from "@/gen/nagi/v1/common_pb";
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Select,
-  Spinner,
-} from "@/components/ui";
+import { Alert, Button, EmptyRow, Field, HelpTip, Input, Loading, Notice, Section, Select, Table, Td, Th } from "@/components/ui";
 
-// ---- 告警设置（临时测试界面）----
+// ---- 告警设置：通知渠道和触发规则，一起保存 ----
 
 export function AlertSettings() {
   const cfg = useQuery({
@@ -41,11 +31,7 @@ export function AlertSettings() {
   }, [cfg.data]);
 
   const update = (i: number, patch: Partial<AlertChannel>) =>
-    setChannels(
-      channels.map((c, j) =>
-        j === i ? create(AlertChannelSchema, { ...c, ...patch }) : c,
-      ),
-    );
+    setChannels(channels.map((c, j) => (j === i ? create(AlertChannelSchema, { ...c, ...patch }) : c)));
 
   const save = async () => {
     setError("");
@@ -55,7 +41,7 @@ export function AlertSettings() {
         config: create(AlertConfigSchema, { channels, rules }),
       });
       setChannels(res.config?.channels ?? []);
-      setMsg("已保存，并下发给在线节点");
+      setMsg("已保存并下发至在线节点");
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -66,22 +52,17 @@ export function AlertSettings() {
     setMsg("");
     try {
       await settingsClient.testAlertChannel({ channel: c });
-      setMsg(`已发送测试消息到 ${c.name || c.type}`);
+      setMsg(`已发送测试消息至 ${c.name || c.type}`);
     } catch (err) {
       setError(errorMessage(err));
     }
   };
 
-  const ruleField = (
-    label: string,
-    key: keyof AlertRules,
-    placeholder: number,
-  ) => (
-    <label className="grid gap-1 text-xs text-muted-foreground">
-      {label}
+  const ruleField = (label: string, key: keyof AlertRules, placeholder: number) => (
+    <Field label={label} htmlFor={`rule-${key}`}>
       <Input
+        id={`rule-${key}`}
         type="number"
-        className="w-28"
         placeholder={String(placeholder)}
         value={(rules[key] as number) || ""}
         onChange={(e) =>
@@ -93,120 +74,132 @@ export function AlertSettings() {
           )
         }
       />
-    </label>
+    </Field>
   );
 
-  if (cfg.isPending) return <Spinner />;
+  if (cfg.isPending)
+    return (
+      <Section title="告警">
+        <Loading />
+      </Section>
+    );
+
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>告警</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 text-sm">
-        {error && <Alert>{error}</Alert>}
-        {cfg.data?.lost && (
-          <Alert>
-            面板主密钥重新生成过，原来的告警配置解不开了，请重新填写并保存。在那之前各节点继续按原来的配置发告警，面板自己的"节点失联"告警发不出去。
-          </Alert>
-        )}
-        {msg && <div className="text-muted-foreground">{msg}</div>}
-        <div className="grid gap-2">
-          <div className="font-medium">渠道</div>
-          {channels.length === 0 && (
-            <div className="text-muted-foreground">
-              还没有渠道，告警不会发送。
-            </div>
+    <Section title="告警" description="通过 Webhook 或 Telegram 发送节点和容器的异常通知。" flush>
+      {(error || cfg.data?.lost) && (
+        <div className="grid gap-3 px-5 pb-4">
+          {error && <Alert>{error}</Alert>}
+          {cfg.data?.lost && (
+            <Notice tone="warning" title="告警配置无法解密">
+              面板主密钥已重新生成，原告警配置无法解密，请重新填写并保存。保存前各节点继续按原配置发送告警，但面板自身的节点失联告警无法发送。
+            </Notice>
           )}
-          {channels.map((c, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2">
-              <Input
-                className="w-28"
-                placeholder="名称"
-                value={c.name}
-                onChange={(e) => update(i, { name: e.target.value })}
-              />
-              <Select
-                className="w-28"
-                value={c.type}
-                onChange={(e) => update(i, { type: e.target.value })}
-              >
-                <option value="webhook">webhook</option>
-                <option value="telegram">telegram</option>
-              </Select>
-              {c.type === "telegram" ? (
-                <>
-                  <Input
-                    className="w-64 font-mono"
-                    placeholder="机器人令牌"
-                    value={c.telegramToken}
-                    onChange={(e) =>
-                      update(i, { telegramToken: e.target.value })
-                    }
-                  />
-                  <Input
-                    className="w-36 font-mono"
-                    placeholder="聊天 ID"
-                    value={c.telegramChatId}
-                    onChange={(e) =>
-                      update(i, { telegramChatId: e.target.value })
-                    }
-                  />
-                </>
-              ) : (
-                <Input
-                  className="w-96 font-mono"
-                  placeholder="https://..."
-                  value={c.url}
-                  onChange={(e) => update(i, { url: e.target.value })}
-                />
-              )}
-              <Button size="sm" variant="outline" onClick={() => test(c)}>
-                测试
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setChannels(channels.filter((_, j) => j !== i))}
-              >
-                删除
-              </Button>
-            </div>
-          ))}
-          <div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setChannels([
-                  ...channels,
-                  create(AlertChannelSchema, { type: "webhook" }),
-                ])
-              }
-            >
-              添加渠道
-            </Button>
-          </div>
         </div>
-        <div className="grid gap-2">
-          <div className="font-medium">规则（留空用默认值）</div>
-          <div className="flex flex-wrap gap-3">
-            {ruleField("磁盘 %", "diskPercent", 90)}
-            {ruleField("内存 %", "memPercent", 90)}
-            {ruleField("内存持续分钟", "memMinutes", 5)}
-            {ruleField("重启次数", "restartCount", 3)}
-            {ruleField("重启窗口分钟", "restartMinutes", 10)}
-            {ruleField("证书剩余天数", "certDays", 7)}
-            {ruleField("失联秒数", "offlineSeconds", 60)}
-            {ruleField("5xx 比例 %", "errorPercent", 5)}
-          </div>
+      )}
+
+      <div className="flex items-center justify-between gap-4 border-t px-5 py-3">
+        <h3 className="text-[13px] font-medium">通知渠道</h3>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setChannels([...channels, create(AlertChannelSchema, { type: "webhook" })])}
+        >
+          添加渠道
+        </Button>
+      </div>
+      {channels.length === 0 ? (
+        <div className="border-t">
+          <EmptyRow>未配置渠道，告警不会发送。</EmptyRow>
         </div>
-        <div>
-          <Button size="sm" onClick={save}>
-            保存
-          </Button>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th className="w-40">名称</Th>
+              <Th className="w-36">类型</Th>
+              <Th>目标</Th>
+              <Th className="w-px" />
+            </tr>
+          </thead>
+          <tbody>
+            {channels.map((c, i) => (
+              <tr key={i}>
+                <Td>
+                  <Input className="h-8" placeholder="名称" aria-label="名称" value={c.name} onChange={(e) => update(i, { name: e.target.value })} />
+                </Td>
+                <Td>
+                  <Select className="h-8" aria-label="类型" value={c.type} onChange={(e) => update(i, { type: e.target.value })}>
+                    <option value="webhook">Webhook</option>
+                    <option value="telegram">Telegram</option>
+                  </Select>
+                </Td>
+                <Td>
+                  {c.type === "telegram" ? (
+                    <div className="flex gap-2">
+                      <Input
+                        className="h-8 min-w-48 flex-[2] font-mono"
+                        placeholder="机器人令牌"
+                        aria-label="机器人令牌"
+                        value={c.telegramToken}
+                        onChange={(e) => update(i, { telegramToken: e.target.value })}
+                      />
+                      <Input
+                        className="h-8 min-w-28 flex-1 font-mono"
+                        placeholder="聊天 ID"
+                        aria-label="聊天 ID"
+                        value={c.telegramChatId}
+                        onChange={(e) => update(i, { telegramChatId: e.target.value })}
+                      />
+                    </div>
+                  ) : (
+                    <Input
+                      className="h-8 min-w-64 font-mono"
+                      placeholder="https://..."
+                      aria-label="Webhook 地址"
+                      value={c.url}
+                      onChange={(e) => update(i, { url: e.target.value })}
+                    />
+                  )}
+                </Td>
+                <Td>
+                  <div className="flex justify-end gap-1">
+                    <Button size="xs" variant="ghost" onClick={() => test(c)}>
+                      测试
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setChannels(channels.filter((_, j) => j !== i))}>
+                      删除
+                    </Button>
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+
+      <div className="border-t px-5 pt-3 pb-5">
+        <h3 className="mb-3 flex items-center gap-1.5 text-[13px] font-medium">
+          触发规则
+          <HelpTip>留空时使用默认值，即输入框中的灰色数字。</HelpTip>
+        </h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {ruleField("磁盘使用率（%）", "diskPercent", 90)}
+          {ruleField("内存使用率（%）", "memPercent", 90)}
+          {ruleField("内存持续时间（分钟）", "memMinutes", 5)}
+          {ruleField("重启次数", "restartCount", 3)}
+          {ruleField("重启统计窗口（分钟）", "restartMinutes", 10)}
+          {ruleField("证书剩余天数", "certDays", 7)}
+          {ruleField("节点失联时间（秒）", "offlineSeconds", 60)}
+          {ruleField("5xx 错误率（%）", "errorPercent", 5)}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="flex items-center justify-end gap-4 border-t px-5 py-3">
+        {msg && <span className="text-[13px] text-success">{msg}</span>}
+        <Button size="sm" onClick={save}>
+          保存
+        </Button>
+      </div>
+    </Section>
   );
 }
-

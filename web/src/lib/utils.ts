@@ -12,10 +12,11 @@ export function timeAgo(date: Date | undefined): string {
   if (!date) return "从未";
   const seconds = Math.round((date.getTime() - Date.now()) / 1000);
   const abs = Math.abs(seconds);
-  if (abs < 60) return rtf.format(seconds, "second");
-  if (abs < 3600) return rtf.format(Math.round(seconds / 60), "minute");
-  if (abs < 86400) return rtf.format(Math.round(seconds / 3600), "hour");
-  return rtf.format(Math.round(seconds / 86400), "day");
+  const fmt = (v: number, unit: Intl.RelativeTimeFormatUnit) => rtf.format(v, unit).replace(/(\d)\s*([^\d\s])/, "$1 $2");
+  if (abs < 60) return seconds > -10 ? "刚刚" : fmt(seconds, "second");
+  if (abs < 3600) return fmt(Math.round(seconds / 60), "minute");
+  if (abs < 86400) return fmt(Math.round(seconds / 3600), "hour");
+  return fmt(Math.round(seconds / 86400), "day");
 }
 
 // slugName 由名字生成小写字母、数字和 - 组成的标识（不超过 32 个字符）；

@@ -3,45 +3,26 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Field,
-  Input,
-  Spinner,
-  Waves,
-} from "@/components/ui";
+import { Alert, Button, Field, Input, Notice, Spinner, Waves } from "@/components/ui";
 
-function AuthShell({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
+// AuthShell：登录、初始化页面的外框。居中的窄卡片，上方是品牌标识。
+function AuthShell({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <Waves className="h-6 w-14 text-wave" />
-          <span className="text-lg font-semibold tracking-wide">
-            凪 <span className="text-muted-foreground">Nagi</span>
+        <div className="mb-6 flex flex-col items-center gap-2.5">
+          <Waves className="h-5 w-12 text-wave" />
+          <span className="text-base font-semibold tracking-tight">
+            凪 <span className="font-normal text-muted-foreground">Nagi</span>
           </span>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </CardHeader>
-          <CardContent>{children}</CardContent>
-        </Card>
+        <div className="rounded-lg border bg-card px-6 pt-6 pb-6 shadow-xs">
+          <div className="mb-5">
+            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>
+          </div>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -71,14 +52,11 @@ export function SetupPage({ token }: { token: string }) {
   if (state.data?.initialized) return <Navigate to="/projects" />;
 
   return (
-    <AuthShell
-      title="初始化面板"
-      description="设置管理员账号。之后用它登录面板。"
-    >
+    <AuthShell title="初始化面板" description="设置管理员账号，用于登录面板。">
       {!token ? (
-        <Alert>
-          缺少初始化令牌。请使用面板启动日志里打印的初始化链接打开本页。
-        </Alert>
+        <Notice tone="danger" title="缺少初始化令牌">
+          请使用面板启动日志中输出的初始化链接打开本页。
+        </Notice>
       ) : (
         <form
           className="grid gap-4"
@@ -98,7 +76,8 @@ export function SetupPage({ token }: { token: string }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              placeholder="例如 admin"
+              placeholder="admin"
+              autoFocus
               required
             />
           </Field>
@@ -123,10 +102,8 @@ export function SetupPage({ token }: { token: string }) {
               required
             />
           </Field>
-          {(localError || setup.error) && (
-            <Alert>{localError || errorMessage(setup.error)}</Alert>
-          )}
-          <Button type="submit" disabled={setup.isPending}>
+          {(localError || setup.error) && <Alert>{localError || errorMessage(setup.error)}</Alert>}
+          <Button type="submit" className="mt-1 w-full" disabled={setup.isPending}>
             {setup.isPending && <Spinner />}
             完成初始化
           </Button>
@@ -149,8 +126,7 @@ export function LoginPage() {
     mutationFn: () => authClient.login({ username, password, totpCode }),
     onError: (err) => {
       // 密码正确但开启了两步验证：显示验证码输入框。
-      if (err instanceof ConnectError && err.code === Code.FailedPrecondition)
-        setNeedCode(true);
+      if (err instanceof ConnectError && err.code === Code.FailedPrecondition) setNeedCode(true);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries();
@@ -159,60 +135,63 @@ export function LoginPage() {
   });
 
   return (
-    <AuthShell title="登录" description="登录到 Nagi 面板。">
+    <AuthShell
+      title={needCode ? "两步验证" : "登录"}
+      description={needCode ? "输入身份验证器应用中的 6 位验证码。" : "使用管理员账号登录面板。"}
+    >
       {setupState.data && !setupState.data.initialized ? (
-        <Alert>
-          面板还没有初始化，没有可以登录的账号。请打开面板启动日志里打印的初始化链接（形如 https://地址:端口/setup?token=…），设置管理员账号。
-        </Alert>
+        <Notice tone="warning" title="面板尚未初始化">
+          暂无可登录的账号。请打开面板启动日志中输出的初始化链接（<span className="font-mono">https://地址:端口/setup?token=…</span>）设置管理员账号。
+        </Notice>
       ) : (
-      <form
-        className="grid gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          login.mutate();
-        }}
-      >
-        <Field label="用户名" htmlFor="username">
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            autoFocus
-            required
-          />
-        </Field>
-        <Field label="密码" htmlFor="password">
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </Field>
-        {needCode && (
-          <Field label="两步验证码" htmlFor="totp">
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            login.mutate();
+          }}
+        >
+          <Field label="用户名" htmlFor="username">
             <Input
-              id="totp"
-              inputMode="numeric"
-              maxLength={6}
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value)}
-              autoComplete="one-time-code"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
               autoFocus
+              required
             />
           </Field>
-        )}
-        {login.error && !(needCode && !totpCode) && (
-          <Alert>{errorMessage(login.error)}</Alert>
-        )}
-        <Button type="submit" disabled={login.isPending}>
-          {login.isPending && <Spinner />}
-          登录
-        </Button>
-      </form>
+          <Field label="密码" htmlFor="password">
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </Field>
+          {needCode && (
+            <Field label="验证码" htmlFor="totp">
+              <Input
+                id="totp"
+                inputMode="numeric"
+                maxLength={6}
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                autoComplete="one-time-code"
+                className="font-mono tracking-widest"
+                placeholder="000000"
+                autoFocus
+              />
+            </Field>
+          )}
+          {login.error && !(needCode && !totpCode) && <Alert>{errorMessage(login.error)}</Alert>}
+          <Button type="submit" className="mt-1 w-full" disabled={login.isPending}>
+            {login.isPending && <Spinner />}
+            {needCode ? "验证并登录" : "登录"}
+          </Button>
+        </form>
       )}
     </AuthShell>
   );

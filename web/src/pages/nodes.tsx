@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader } from "@/pages/layout";
@@ -11,15 +12,32 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Empty,
+  CodeBlock,
+  EmptyRow,
+  Field,
+  HelpTip,
   Input,
+  KeyValue,
+  Loading,
+  Notice,
+  Section,
   Select,
-  Spinner,
+  Status,
+  Table,
+  Tabs,
+  Td,
+  Th,
 } from "@/components/ui";
+
+type NodeTab = "metrics" | "panels" | "mesh" | "replicas" | "networks";
+
+const nodeTabs: { value: NodeTab; label: string }[] = [
+  { value: "metrics", label: "监控" },
+  { value: "panels", label: "受信面板" },
+  { value: "mesh", label: "Mesh" },
+  { value: "replicas", label: "副本" },
+  { value: "networks", label: "共享网络" },
+];
 
 export function NodesPage() {
   const nodes = useQuery({
@@ -27,189 +45,142 @@ export function NodesPage() {
     queryFn: () => nodeClient.listNodes({}),
     refetchInterval: 5000,
   });
-  const [open, setOpen] = useState<{
-    id: string;
-    tab: "metrics" | "panels" | "mesh" | "replicas" | "networks";
-  } | null>(null);
-  const toggle = (
-    id: string,
-    tab: "metrics" | "panels" | "mesh" | "replicas" | "networks",
-  ) => setOpen(open?.id === id && open.tab === tab ? null : { id, tab });
+  const [open, setOpen] = useState<{ id: string; tab: NodeTab } | null>(null);
+  const expand = (id: string) => setOpen(open?.id === id ? null : { id, tab: "metrics" });
 
   return (
     <>
-      <PageHeader
-        title="节点"
-        description="运行项目的机器。节点主动连接面板，面板挂了也不影响节点上的项目。"
-      />
-      <AddNode />
-      {nodes.isPending ? (
-        <Spinner />
-      ) : nodes.error ? (
-        <Alert>{errorMessage(nodes.error)}</Alert>
-      ) : nodes.data.nodes.length === 0 ? (
-        <Empty title="还没有节点" />
-      ) : (
-        <Card>
-          <CardContent className="overflow-x-auto pt-2">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr className="border-b">
-                  <th className="py-2 pr-4 font-medium">名称</th>
-                  <th className="py-2 pr-4 font-medium">状态</th>
-                  <th className="py-2 pr-4 font-medium">系统</th>
-                  <th className="py-2 pr-4 font-medium">Docker / Compose</th>
-                  <th className="py-2 pr-4 font-medium">Nagi</th>
-                  <th className="py-2 font-medium" />
+      <PageHeader title="节点" description="运行项目的机器。节点主动连接面板，面板不可用时节点上的项目照常运行。" />
+      <div className="grid gap-6">
+        <Section title="全部节点" flush>
+          {nodes.isPending ? (
+            <Loading />
+          ) : nodes.error ? (
+            <div className="px-5 pb-4">
+              <Alert>{errorMessage(nodes.error)}</Alert>
+            </div>
+          ) : nodes.data.nodes.length === 0 ? (
+            <EmptyRow>暂无节点，可通过下方的安装命令添加。</EmptyRow>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <Th>名称</Th>
+                  <Th>状态</Th>
+                  <Th>系统</Th>
+                  <Th>Docker / Compose</Th>
+                  <Th>Nagi</Th>
+                  <Th />
                 </tr>
               </thead>
               <tbody>
-                {nodes.data.nodes.map((n) => (
-                  <Fragment key={n.id}>
-                    <tr className="border-b last:border-0">
-                      <td className="py-3 pr-4">
-                        <div className="font-medium">
-                          {n.name}
-                          {n.info?.embedded && (
-                            <Badge className="ml-2">面板自带</Badge>
-                          )}
-                          {n.pending && (
-                            <Badge tone="warning" className="ml-2">
-                              待批准
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {n.address || n.id}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        {n.online ? (
-                          <Badge tone="success" dot>
-                            在线
-                          </Badge>
-                        ) : (
-                          <Badge dot>
-                            离线 · {timeAgo(toDate(n.lastSeen))}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {n.info ? `${n.info.os}/${n.info.arch}` : "—"}
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {n.info
-                          ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}`
-                          : "—"}
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {n.info?.version || "—"}
-                      </td>
-                      <td className="py-3 text-right">
-                        {n.pending && (
-                          <Button
-                            size="sm"
-                            title="这个节点是用接入码加入的。确认是自己的节点再批准：批准前它不进 mesh、拿不到告警配置，也不能操作"
-                            onClick={async () => {
-                              if (
-                                !confirm(
-                                  `批准节点 ${n.name}（${n.address || n.id}）？它是用接入码加入的，接入码泄露的话别人也能加入。确认是自己的机器再批准。`,
-                                )
-                              )
-                                return;
-                              await nodeClient.approveNode({ nodeId: n.id });
-                              nodes.refetch();
-                            }}
-                          >
-                            批准
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggle(n.id, "metrics")}
-                        >
-                          监控
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggle(n.id, "panels")}
-                        >
-                          信任的面板
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggle(n.id, "mesh")}
-                        >
-                          mesh
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggle(n.id, "replicas")}
-                        >
-                          收到的副本
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggle(n.id, "networks")}
-                        >
-                          共享网络
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            if (
-                              !confirm(
-                                `移除节点 ${n.name}？面板会忘记它并拒绝它再连接，节点上的项目照常运行。`,
-                              )
-                            )
-                              return;
-                            await nodeClient.removeNode({ nodeId: n.id });
-                            nodes.refetch();
-                          }}
-                        >
-                          移除
-                        </Button>
-                      </td>
-                    </tr>
-                    {open?.id === n.id && (
-                      <tr className="border-b">
-                        <td colSpan={6}>
-                          {n.pending ? (
-                            <p className="py-4 text-sm text-muted-foreground">
-                              这个节点是用接入码加入的，还没有批准。确认是自己的机器后点「批准」，之后才能查看和操作它。
-                            </p>
-                          ) : n.online ? (
-                            open.tab === "metrics" ? (
-                              <NodeMetrics nodeId={n.id} />
-                            ) : open.tab === "mesh" ? (
-                              <NodeMesh nodeId={n.id} />
-                            ) : open.tab === "replicas" ? (
-                              <NodeReplicas nodeId={n.id} />
-                            ) : open.tab === "networks" ? (
-                              <SharedNetworks nodeId={n.id} nodes={nodes.data.nodes.filter((o) => o.id !== n.id && o.online)} />
-                            ) : (
-                              <NodePanels nodeId={n.id} />
-                            )
+                {nodes.data.nodes.map((n) => {
+                  const expanded = open?.id === n.id;
+                  return (
+                    <Fragment key={n.id}>
+                      <tr>
+                        <Td>
+                          <div className="flex items-center gap-2 font-medium">
+                            {n.name}
+                            {n.info?.embedded && <Badge>面板内置</Badge>}
+                            {n.pending && <Badge tone="warning">待批准</Badge>}
+                          </div>
+                          <div className="font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
+                        </Td>
+                        <Td>
+                          {n.online ? (
+                            <Status tone="success">在线</Status>
                           ) : (
-                            "节点离线，无法查询"
+                            <div className="flex flex-col">
+                              <Status>离线</Status>
+                              <span className="text-xs text-muted-foreground">{timeAgo(toDate(n.lastSeen))}</span>
+                            </div>
                           )}
-                        </td>
+                        </Td>
+                        <Td className="text-[13px] text-muted-foreground">{n.info ? `${n.info.os}/${n.info.arch}` : "—"}</Td>
+                        <Td className="font-mono text-xs text-muted-foreground">
+                          {n.info ? `${n.info.dockerVersion || "?"} / ${n.info.composeVersion || "?"}` : "—"}
+                        </Td>
+                        <Td className="font-mono text-xs text-muted-foreground">{n.info?.version || "—"}</Td>
+                        <Td className="text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1">
+                            {n.pending && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                title="该节点通过接入码加入。批准前不加入 mesh、不接收告警配置，也无法操作。"
+                                onClick={async () => {
+                                  if (
+                                    !confirm(
+                                      `批准节点 ${n.name}（${n.address || n.id}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`,
+                                    )
+                                  )
+                                    return;
+                                  await nodeClient.approveNode({ nodeId: n.id });
+                                  nodes.refetch();
+                                }}
+                              >
+                                批准
+                              </Button>
+                            )}
+                            <Button size="xs" variant="ghost" aria-expanded={expanded} onClick={() => expand(n.id)}>
+                              详情
+                              {expanded ? <ChevronDown /> : <ChevronRight />}
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={async () => {
+                                if (!confirm(`移除节点 ${n.name}？面板将不再管理该节点并拒绝其重新连接，节点上的项目照常运行。`)) return;
+                                await nodeClient.removeNode({ nodeId: n.id });
+                                nodes.refetch();
+                              }}
+                            >
+                              移除
+                            </Button>
+                          </div>
+                        </Td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
+                      {expanded && (
+                        <tr>
+                          <Td colSpan={6} className="h-auto py-0">
+                            {n.pending ? (
+                              <div className="py-4">
+                                <Notice tone="warning" title="尚未批准">
+                                  该节点通过接入码加入，尚未批准。确认是自有机器后批准，批准后才能查看和操作。
+                                </Notice>
+                              </div>
+                            ) : !n.online ? (
+                              <p className="py-6 text-center text-[13px] text-muted-foreground">节点离线，无法查询</p>
+                            ) : (
+                              <div className="pb-5">
+                                <Tabs value={open.tab} onChange={(tab) => setOpen({ id: n.id, tab })} items={nodeTabs} className="mb-4" />
+                                {open.tab === "metrics" ? (
+                                  <NodeMetrics nodeId={n.id} />
+                                ) : open.tab === "mesh" ? (
+                                  <NodeMesh nodeId={n.id} />
+                                ) : open.tab === "replicas" ? (
+                                  <NodeReplicas nodeId={n.id} />
+                                ) : open.tab === "networks" ? (
+                                  <SharedNetworks nodeId={n.id} nodes={nodes.data.nodes.filter((o) => o.id !== n.id && o.online)} />
+                                ) : (
+                                  <NodePanels nodeId={n.id} />
+                                )}
+                              </div>
+                            )}
+                          </Td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
-      {nodes.data && nodes.data.nodes.length > 0 && <HandOverCard nodes={nodes.data.nodes} />}
+            </Table>
+          )}
+        </Section>
+        <AddNode />
+        {nodes.data && nodes.data.nodes.length > 0 && <HandOverCard nodes={nodes.data.nodes} />}
+      </div>
     </>
   );
 }
@@ -247,44 +218,40 @@ function AddNode() {
 
   const s = settings.data?.settings;
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>添加节点</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
+    <Section
+      title="添加节点"
+      description="生成安装命令，在新机器上执行后即接入本面板。"
+      actions={
+        <Button size="sm" onClick={create}>
+          生成安装命令
+        </Button>
+      }
+    >
+      <div className="grid gap-4">
         {error && <Alert>{error}</Alert>}
-        <div className="flex flex-wrap items-center gap-2">
-          <span>面板对外地址（节点必须能访问到）：</span>
-          <Input
-            className="w-56 font-mono"
-            value={address ?? s?.publicAddress ?? ""}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-          <span className="font-mono text-muted-foreground">:{s?.port}</span>
-          {address !== null && (
-            <Button size="sm" variant="outline" onClick={saveAddress}>
-              保存
-            </Button>
-          )}
-        </div>
-        <div>
-          <Button size="sm" onClick={create}>
-            生成安装命令
-          </Button>
-        </div>
-        {command && (
-          <div className="grid gap-1">
-            <span className="flex items-center gap-2 text-muted-foreground">
-              在新机器上用 root 执行（令牌一次性：一台机器一条，1 小时内有效）：
-              <CopyButton text={command} />
-            </span>
-            <code className="break-all rounded bg-muted p-3 font-mono text-xs">
-              {command}
-            </code>
+        <Field label="面板对外地址" help="节点通过该地址连接面板，必须能从节点访问。" htmlFor="public-address">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              id="public-address"
+              className="w-56 font-mono"
+              value={address ?? s?.publicAddress ?? ""}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
+            {address !== null && (
+              <Button size="sm" variant="outline" onClick={saveAddress}>
+                保存
+              </Button>
+            )}
           </div>
+        </Field>
+        {command && (
+          <Field label="安装命令" hint="以 root 身份在新机器上执行" help="令牌仅可使用一次：每台机器一条命令，有效期 1 小时。">
+            <CodeBlock copy>{command}</CodeBlock>
+          </Field>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -310,79 +277,98 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
     }
   };
   return (
-    <div className="grid gap-3 py-3 text-sm">
-      <p className="text-muted-foreground">
-        项目之间默认互相访问不了。共享网络让几个项目互通，例如几个应用共用一个数据库项目：建好以后在各项目的"项目设置"里加入，容器在里面叫"容器.网络名"。
-        和其他节点的同名网络连起来，不同节点上的项目也能这样访问。
+    <div className="grid gap-3">
+      <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+        加入同一共享网络的项目可以互相访问。
+        <HelpTip>
+          项目之间默认相互隔离。共享网络用于让多个项目互通，例如多个应用共用一个数据库项目：创建后在各项目的「项目设置」中加入，容器在网络内的名称为「容器.网络名」。与其他节点的同名网络连接后，不同节点上的项目也可以这样访问。
+        </HelpTip>
       </p>
       {error && <Alert>{error}</Alert>}
-      {list.data?.networks.length === 0 && <span className="text-muted-foreground">这个节点上还没有共享网络。</span>}
-      {list.data?.networks.map((n) => (
-        <div key={n.name} className="grid gap-1 rounded-md border p-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono">{n.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {n.subnet} · {n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") || "还没有项目加入"}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}>
-              删除
-            </Button>
-          </div>
-          {n.peers.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted-foreground">相连的节点：</span>
+      {list.data?.networks.length === 0 && (
+        <p className="rounded-md border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">本节点暂无共享网络</p>
+      )}
+      {list.data?.networks.map((n) => {
+        const candidates = nodes.filter((o) => !n.peers.some((p) => p.nodeId === o.id));
+        const items: [React.ReactNode, React.ReactNode][] = [
+          [
+            "加入的项目",
+            n.projects.length ? n.projects.map((p) => `${p.projectName}（${p.networkName}）`).join("、") : <span className="text-muted-foreground">暂无</span>,
+          ],
+        ];
+        if (n.peers.length > 0)
+          items.push([
+            "相连节点",
+            <div className="flex flex-wrap items-center gap-2">
               {n.peers.map((p) => (
                 <Badge key={p.name} tone={p.reachable ? "success" : "danger"} title={p.error}>
                   {p.name}
-                  {!p.reachable && "（" + (p.error || "联系不上") + "）"}
+                  {!p.reachable && "（" + (p.error || "无法连接") + "）"}
                 </Badge>
               ))}
               <Button
                 variant="ghost"
-                size="sm"
+                size="xs"
                 onClick={() =>
-                  confirm(`断开共享网络 ${n.name} 和 ${n.peers.map((p) => p.name).join("、")} 的连接？本节点上的项目会访问不到对方节点上的容器，对方也访问不到这边。`) &&
-                  call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))
+                  confirm(
+                    `断开共享网络 ${n.name} 与 ${n.peers.map((p) => p.name).join("、")} 的连接？断开后本节点上的项目与对方节点上的容器将无法互相访问。`,
+                  ) && call(() => nodeClient.unlinkNodeSharedNetwork({ nodeId, name: n.name }))
                 }
               >
                 断开连接
               </Button>
-            </div>
-          )}
-          {n.remotes.length > 0 && (
-            <div className="text-xs text-muted-foreground">
-              对方的容器（本节点有同名的代理）：
-              {n.remotes.map((r) => `${r.alias}（${r.nodeName}，${r.ports.length ? "端口 " + r.ports.join("、") : "没有端口"}）`).join("、")}
-            </div>
-          )}
-          {nodes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Select className="w-48" value={peer[n.name] ?? ""} onChange={(e) => setPeer({ ...peer, [n.name]: e.target.value })}>
+            </div>,
+          ]);
+        if (n.remotes.length > 0)
+          items.push([
+            <span className="inline-flex items-center gap-1.5">
+              远端容器
+              <HelpTip>对方节点上的容器，本节点上有同名的代理容器。</HelpTip>
+            </span>,
+            n.remotes.map((r) => `${r.alias}（${r.nodeName}，${r.ports.length ? "端口 " + r.ports.join("、") : "无端口"}）`).join("、"),
+          ]);
+        if (nodes.length > 0)
+          items.push([
+            "连接节点",
+            <div className="flex flex-wrap items-center gap-2">
+              <Select className="h-8 w-48" value={peer[n.name] ?? ""} onChange={(e) => setPeer({ ...peer, [n.name]: e.target.value })}>
                 <option value="">选择节点</option>
-                {nodes
-                  .filter((o) => !n.peers.some((p) => p.nodeId === o.id))
-                  .map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
+                {candidates.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
               </Select>
               <Button
                 size="sm"
                 variant="outline"
                 disabled={!peer[n.name]}
-                onClick={() =>
-                  call(() => nodeClient.linkNodeSharedNetwork({ nodeId, name: n.name, peerNodeId: peer[n.name] }))
-                }
+                onClick={() => call(() => nodeClient.linkNodeSharedNetwork({ nodeId, name: n.name, peerNodeId: peer[n.name] }))}
               >
-                连接到这个节点的同名网络
+                连接同名网络
+              </Button>
+            </div>,
+          ]);
+        return (
+          <div key={n.name} className="grid gap-3 rounded-md border px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-mono text-[13px] font-medium">{n.name}</span>
+              <span className="font-mono text-xs text-muted-foreground">{n.subnet}</span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="ml-auto"
+                onClick={() => call(() => nodeClient.deleteNodeSharedNetwork({ nodeId, name: n.name }))}
+              >
+                删除
               </Button>
             </div>
-          )}
-        </div>
-      ))}
+            <KeyValue items={items} className="items-center" />
+          </div>
+        );
+      })}
       <form
-        className="flex gap-2"
+        className="flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           call(async () => {
@@ -391,33 +377,11 @@ function SharedNetworks({ nodeId, nodes }: { nodeId: string; nodes: { id: string
           });
         }}
       >
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="网络名，例如 db-shared" className="max-w-60 font-mono" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="网络名称，如 db-shared" className="h-8 max-w-60 font-mono" />
         <Button size="sm" type="submit">
           创建共享网络
         </Button>
       </form>
     </div>
-  );
-}
-
-// CopyButton 把文字复制到剪贴板。
-function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setDone(true);
-          setTimeout(() => setDone(false), 2000);
-        } catch {
-          // 非 HTTPS 等情况下浏览器不让写剪贴板，只能手动选中复制。
-        }
-      }}
-    >
-      {done ? "已复制" : "复制"}
-    </Button>
   );
 }
