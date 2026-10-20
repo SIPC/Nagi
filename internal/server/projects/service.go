@@ -49,6 +49,8 @@ type Service struct {
 	Sealer *sealer.Sealer
 	Nodes  *nodes.Registry
 	Log    *slog.Logger
+	// Fingerprint 返回本面板的公钥指纹，写在下发的配置里（ContainerSpec.panel）。
+	Fingerprint func() string
 	// ReservedDomain 返回 true 的域名已经绑定给面板，项目不能再用。
 	ReservedDomain func(domain string) bool
 
@@ -61,6 +63,11 @@ type Service struct {
 	rebuildMu sync.Mutex
 	// 上次尝试把某个容器的见证人换成本面板的时间。
 	adoptTried map[string]time.Time
+	// 以节点为准重建项目时，保留本面板原来的 webhook 令牌（项目 ID/容器名 → 令牌）。
+	keepTokens map[string]string
+	adoptedAt  map[string]time.Time
+	// 第一次上报已经处理完的连接（之后才给它推代理计划）。
+	synced map[*nodes.Conn]bool
 }
 
 // lock 返回项目的互斥锁：同一个项目的修改和部署串行执行。

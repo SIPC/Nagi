@@ -38,7 +38,13 @@ type meshNode struct {
 	// trusted 是现在信任的面板。移除的面板告诉我们的成员先留着，直到某个信任的面板给了成员列表：
 	// 移交时新面板批准本节点之前不给成员列表，这期间节点之间照常经 mesh 联系（顶替续约、项目内网）。
 	trusted []string
+	// removedAt 记下面板被移除的时间：新面板给了成员列表以后，旧面板的成员再留 meshGrace，
+	// 新面板刚接管时给的列表可能还不全（其他节点还没上报地址）。
+	removedAt      map[string]time.Time
+	pruneScheduled bool
 }
+
+const meshGrace = 2 * time.Minute
 
 type savedPanel struct {
 	Key     []byte            `json:"key"`
@@ -173,16 +179,43 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 	return pk, true
 }
 
-// prune 删除已经不信任的面板告诉我们的成员。调用方持有 n.mu。
+// prune 删除已经不信任的面板告诉我们的成员（移除超过 meshGrace 的）。调用方持有 n.mu。
 func (n *meshNode) prune() bool {
-	changed := false
+	if n.removedAt == nil {
+		n.removedAt = map[string]time.Time{}
+	}
+	changed, later := false, false
 	for fp := range n.panelPeers {
 		if !slices.Contains(n.trusted, fp) {
+			at, ok := n.removedAt[fp]
+			if !ok {
+				n.removedAt[fp], at = time.Now(), time.Now()
+			}
+			if time.Since(at) < meshGrace {
+				later = true
+				continue
+			}
+			delete(n.removedAt, fp)
 			delete(n.panelPeers, fp)
 			delete(n.panelKeys, fp)
 			delete(n.panelAddr, fp)
 			changed = true
 		}
+	}
+	if later && !n.pruneScheduled {
+		n.pruneScheduled = true
+		time.AfterFunc(meshGrace, func() {
+			n.mu.Lock()
+			n.pruneScheduled = false
+			ch := n.prune()
+			if ch {
+				n.save()
+			}
+			n.mu.Unlock()
+			if ch {
+				n.apply()
+			}
+		})
 	}
 	return changed
 }

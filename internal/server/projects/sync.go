@@ -55,7 +55,7 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		ProjectId: p.ID, ProjectName: p.Name, NetworkName: p.NetworkName, Name: c.Name, Dir: c.Dir,
 		Revision: c.Revision, ProjectRevision: p.Revision, Version: version,
 		DeployKey: sec.DeployKey, DeployKeyPub: c.DeployKeyPub, DockerConfig: docker, BackupPassword: sec.BackupPassword,
-		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(),
+		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(), InternalPorts: settings.GetInternalPorts(),
 	}
 	var v store.Version
 	if version > 0 {
@@ -82,6 +82,9 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		}
 	}
 	sp.Stateful = s.stateful(ctx, sp.GetConfig(), c, sp.GetSharedEnv())
+	if s.Fingerprint != nil {
+		sp.Panel = s.Fingerprint()
+	}
 	if c.BackupNodeID != "" {
 		if n, err := s.Q.GetNode(ctx, c.BackupNodeID); err == nil && len(n.MeshKey) > 0 {
 			sp.Backup = backupTarget(n)
@@ -137,14 +140,34 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 		have[cs.GetProjectId()+"/"+cs.GetName()] = cs
 	}
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
-	if !c.Pending() && s.needsRebuild(ctx, req.GetContainers()) {
-		s.rebuildFrom(ctx, c)
+	if !c.Pending() {
+		// 节点上的配置是别的面板写的（本面板离开期间节点归别的面板管过）：本面板的记录旧了，以节点的为准。
+		if stale := s.staleProjects(ctx, req.GetContainers()); len(stale) > 0 {
+			s.adoptFrom(ctx, c, stale)
+		} else if s.needsRebuild(ctx, req.GetContainers()) {
+			s.rebuildFrom(ctx, c, false)
+		}
 	}
 	rows, err := s.Q.ListNodeContainers(ctx, c.NodeID)
 	if err != nil {
 		return
 	}
 	s.syncFailovers(ctx, c, req.GetFailovers())
+	s.mu.Lock()
+	if s.synced == nil {
+		s.synced = map[*nodes.Conn]bool{}
+	}
+	s.synced[c] = true
+	live := map[*nodes.Conn]bool{}
+	for _, x := range s.Nodes.Conns() {
+		live[x] = true
+	}
+	for x := range s.synced {
+		if !live[x] && x != c {
+			delete(s.synced, x)
+		}
+	}
+	s.mu.Unlock()
 	if rows, err = s.Q.ListNodeContainers(ctx, c.NodeID); err != nil {
 		return
 	}

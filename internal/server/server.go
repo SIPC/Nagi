@@ -144,7 +144,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	s.auth = auth.New(s.q, s.sealer)
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
-	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log,
+	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log, Fingerprint: s.Fingerprint,
 		ReservedDomain: func(d string) bool {
 			v, err := s.q.GetSetting(context.Background(), api.SettingDomain)
 			return err == nil && v != "" && v == d

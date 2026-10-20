@@ -433,7 +433,7 @@ func (m *Manager) Statuses(ctx context.Context) []*nagiv1.ContainerStatus {
 	out := make([]*nagiv1.ContainerStatus, 0, len(cached))
 	for _, c := range cached {
 		s := c.Spec
-		st := &nagiv1.ContainerStatus{ProjectId: s.GetProjectId(), Name: s.GetName(), Revision: s.GetRevision(), ProjectRevision: s.GetProjectRevision()}
+		st := &nagiv1.ContainerStatus{ProjectId: s.GetProjectId(), Name: s.GetName(), Revision: s.GetRevision(), ProjectRevision: s.GetProjectRevision(), Panel: s.GetPanel()}
 		seen := map[string]bool{}
 		for _, in := range byContainer[uid(s.GetProjectId(), s.GetName())] {
 			seen[in.Service] = true

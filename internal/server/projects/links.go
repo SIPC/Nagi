@@ -266,7 +266,11 @@ func (s *Service) pushLinks(ctx context.Context, conn *nodes.Conn) {
 // 节点每次上报后调用（上报里有容器声明的端口，会影响别的节点的计划），容器增删、项目设置改了以后也调用。
 func (s *Service) pushAllLinks(ctx context.Context) {
 	for _, c := range s.Nodes.Conns() {
-		if !c.Pending() {
+		// 节点刚连上、第一次上报还没处理完时不推：面板上的记录可能是旧的（换过面板），要先以节点为准拼回。
+		s.mu.Lock()
+		ready := s.synced[c]
+		s.mu.Unlock()
+		if !c.Pending() && ready {
 			s.pushLinks(ctx, c)
 		}
 	}

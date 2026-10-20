@@ -316,6 +316,10 @@ message ContainerSpec {
   bool stateful = 18;
   // 备份节点：每次定时快照后把快照仓库同步过去。为空表示没有设置。
   BackupTarget backup = 19;
+  // 下发这份配置的面板（公钥指纹）。面板看到节点上的配置是别的面板写的，就知道自己的旧了，以节点的为准。
+  string panel = 20;
+  // 项目设置里的内部端口（换面板时据此拼回项目设置）。
+  repeated string internal_ports = 21;
 }
 
 // BackupTarget 是接收副本的节点。
@@ -341,6 +345,8 @@ message ContainerStatus {
   string error = 8;
   // 同步到备份节点的状态，没有设置备份节点时为空。
   BackupStatus backup = 9;
+  // 缓存的配置是哪个面板下发的（ContainerSpec.panel）。
+  string panel = 10;
 }
 
 message NodeInfo {

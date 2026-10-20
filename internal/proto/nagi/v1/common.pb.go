@@ -1786,7 +1786,11 @@ type ContainerSpec struct {
 	// 是否有状态（面板按配置判定）。
 	Stateful bool `protobuf:"varint,18,opt,name=stateful,proto3" json:"stateful,omitempty"`
 	// 备份节点：每次定时快照后把快照仓库同步过去。为空表示没有设置。
-	Backup        *BackupTarget `protobuf:"bytes,19,opt,name=backup,proto3" json:"backup,omitempty"`
+	Backup *BackupTarget `protobuf:"bytes,19,opt,name=backup,proto3" json:"backup,omitempty"`
+	// 下发这份配置的面板（公钥指纹）。面板看到节点上的配置是别的面板写的，就知道自己的旧了，以节点的为准。
+	Panel string `protobuf:"bytes,20,opt,name=panel,proto3" json:"panel,omitempty"`
+	// 项目设置里的内部端口（换面板时据此拼回项目设置）。
+	InternalPorts []string `protobuf:"bytes,21,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1954,6 +1958,20 @@ func (x *ContainerSpec) GetBackup() *BackupTarget {
 	return nil
 }
 
+func (x *ContainerSpec) GetPanel() string {
+	if x != nil {
+		return x.Panel
+	}
+	return ""
+}
+
+func (x *ContainerSpec) GetInternalPorts() []string {
+	if x != nil {
+		return x.InternalPorts
+	}
+	return nil
+}
+
 // BackupTarget 是接收副本的节点。
 type BackupTarget struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -2031,7 +2049,9 @@ type ContainerStatus struct {
 	// 读取或运行这个容器出错（例如磁盘满了、目录不见了）。
 	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
 	// 同步到备份节点的状态，没有设置备份节点时为空。
-	Backup        *BackupStatus `protobuf:"bytes,9,opt,name=backup,proto3" json:"backup,omitempty"`
+	Backup *BackupStatus `protobuf:"bytes,9,opt,name=backup,proto3" json:"backup,omitempty"`
+	// 缓存的配置是哪个面板下发的（ContainerSpec.panel）。
+	Panel         string `protobuf:"bytes,10,opt,name=panel,proto3" json:"panel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2127,6 +2147,13 @@ func (x *ContainerStatus) GetBackup() *BackupStatus {
 		return x.Backup
 	}
 	return nil
+}
+
+func (x *ContainerStatus) GetPanel() string {
+	if x != nil {
+		return x.Panel
+	}
+	return ""
 }
 
 type NodeInfo struct {
@@ -4274,7 +4301,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\x99\x06\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd6\x06\n" +
 	"\rContainerSpec\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -4298,14 +4325,16 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0fbackup_password\x18\x10 \x01(\tR\x0ebackupPassword\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x11 \x01(\rR\x17snapshotIntervalMinutes\x12\x1a\n" +
 	"\bstateful\x18\x12 \x01(\bR\bstateful\x12-\n" +
-	"\x06backup\x18\x13 \x01(\v2\x15.nagi.v1.BackupTargetR\x06backup\x1a9\n" +
+	"\x06backup\x18\x13 \x01(\v2\x15.nagi.v1.BackupTargetR\x06backup\x12\x14\n" +
+	"\x05panel\x18\x14 \x01(\tR\x05panel\x12%\n" +
+	"\x0einternal_ports\x18\x15 \x03(\tR\rinternalPorts\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
 	"\fBackupTarget\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
-	"\x03key\x18\x03 \x01(\fR\x03key\"\x87\x03\n" +
+	"\x03key\x18\x03 \x01(\fR\x03key\"\x9d\x03\n" +
 	"\x0fContainerStatus\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -4316,7 +4345,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\brevision\x18\x06 \x01(\x03R\brevision\x12)\n" +
 	"\x10project_revision\x18\a \x01(\x03R\x0fprojectRevision\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12-\n" +
-	"\x06backup\x18\t \x01(\v2\x15.nagi.v1.BackupStatusR\x06backup\"\xf5\x01\n" +
+	"\x06backup\x18\t \x01(\v2\x15.nagi.v1.BackupStatusR\x06backup\x12\x14\n" +
+	"\x05panel\x18\n" +
+	" \x01(\tR\x05panel\"\xf5\x01\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +

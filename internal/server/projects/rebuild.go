@@ -33,13 +33,82 @@ func (s *Service) needsRebuild(ctx context.Context, report []*nagiv1.ContainerSt
 	return false
 }
 
-// rebuildFrom 向节点要全部缓存，把面板上没有的项目和容器拼回来。每条连接只做一次。
-func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn) {
+// staleProjects 返回节点上报的、配置由别的面板写的容器所属的项目（面板上有这个项目时）。
+func (s *Service) staleProjects(ctx context.Context, report []*nagiv1.ContainerStatus) []string {
+	if s.Fingerprint == nil {
+		return nil
+	}
+	self := s.Fingerprint()
+	seen := map[string]bool{}
+	var out []string
+	for _, cs := range report {
+		if cs.GetPanel() == "" || cs.GetPanel() == self || seen[cs.GetProjectId()] {
+			continue
+		}
+		// 面板上没有这个容器：按拼回处理（例如项目刚从另一个节点以节点为准重建过，这个节点上的容器还没加回来）。
+		if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: cs.GetProjectId(), Name: cs.GetName()}); err != nil {
+			continue
+		}
+		s.mu.Lock()
+		recent := time.Since(s.adoptedAt[cs.GetProjectId()]) < 2*time.Minute
+		s.mu.Unlock()
+		if recent {
+			continue // 刚重建过，等配置推下去
+		}
+		seen[cs.GetProjectId()] = true
+		out = append(out, cs.GetProjectId())
+	}
+	return out
+}
+
+// adoptFrom 以节点为准：删掉本面板上这些项目的旧记录（保留 webhook 令牌），再从节点的缓存拼回来。
+// 项目在别的节点上的容器，等那些节点上报时同样拼回来。
+func (s *Service) adoptFrom(ctx context.Context, conn *nodes.Conn, projectIDs []string) {
+	for _, id := range projectIDs {
+		l := s.lock(id)
+		if !l.TryLock() {
+			continue
+		}
+		rows, _ := s.Q.ListContainers(ctx, id)
+		s.mu.Lock()
+		if s.keepTokens == nil {
+			s.keepTokens = map[string]string{}
+		}
+		for _, c := range rows {
+			if sec, err := s.secrets(c); err == nil {
+				s.keepTokens[id+"/"+c.Name] = sec.WebhookToken
+			}
+		}
+		s.mu.Unlock()
+		for _, c := range rows {
+			if cfg := failoverOf(c); cfg != nil && cfg.GetWitnessIsPanel() {
+				s.Nodes.ClearWitness(c.ProjectID, c.Name)
+			}
+		}
+		err := s.Q.DeleteProject(ctx, id)
+		s.mu.Lock()
+		if s.adoptedAt == nil {
+			s.adoptedAt = map[string]time.Time{}
+		}
+		s.adoptedAt[id] = time.Now()
+		s.mu.Unlock()
+		l.Unlock()
+		if err != nil {
+			s.Log.Warn("以节点为准时删除旧的项目记录失败", "project", id, "err", err)
+			continue
+		}
+		s.Log.Warn("节点上的配置由别的面板写过，以节点为准重建项目", "project", id, "node", conn.NodeID)
+	}
+	s.rebuildFrom(ctx, conn, true)
+}
+
+// rebuildFrom 向节点要全部缓存，把面板上没有的项目和容器拼回来。每条连接只做一次（force 时总是做）。
+func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool) {
 	s.mu.Lock()
 	if s.rebuilt == nil {
 		s.rebuilt = map[*nodes.Conn]bool{}
 	}
-	if s.rebuilt[conn] {
+	if s.rebuilt[conn] && !force {
 		s.mu.Unlock()
 		return
 	}
@@ -180,6 +249,9 @@ func (s *Service) rebuildProject(ctx context.Context, specs []*nagiv1.ContainerS
 	if other, err := s.Q.ProjectByNetworkName(ctx, network); err == nil && other != id {
 		network = strings.TrimSuffix(network[:min(len(network), 27)], "-") + "-" + id[:4]
 	}
+	if len(newest.GetInternalPorts()) > 0 {
+		internalPorts = newest.GetInternalPorts()
+	}
 	settings := &nagiv1.ProjectSettings{
 		SharedEnv: newest.GetSharedEnv(), SnapshotIntervalMinutes: newest.GetSnapshotIntervalMinutes(), InternalPorts: internalPorts,
 	}
@@ -209,9 +281,15 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 	for _, r := range rows {
 		position = max(position, r.Position+1)
 	}
-	token, err := spec.RandomHex(32)
-	if err != nil {
-		return err
+	s.mu.Lock()
+	token, kept := s.keepTokens[pid+"/"+name]
+	delete(s.keepTokens, pid+"/"+name)
+	s.mu.Unlock()
+	if !kept {
+		var err error
+		if token, err = spec.RandomHex(32); err != nil {
+			return err
+		}
 	}
 	secretJSON, _ := json.Marshal(secrets{WebhookToken: token, DeployKey: sp.GetDeployKey(), BackupPassword: sp.GetBackupPassword()})
 	sealedSecrets, err := s.Sealer.Seal(secretJSON, []byte(secretsCtx(pid, name)))
