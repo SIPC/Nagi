@@ -27,7 +27,7 @@ func (s *agentService) ListPanels(context.Context, *nagiv1.ListPanelsRequest) (*
 	out := &nagiv1.ListPanelsResponse{}
 	for _, p := range a.id.Panels() {
 		out.Panels = append(out.Panels, &nagiv1.TrustedPanel{
-			Address: p.Address, Fingerprint: p.Fingerprint, Connected: connected[p.Fingerprint],
+			Address: p.Address, Fingerprint: p.Fingerprint, Connected: connected[p.Fingerprint], Role: a.role(p),
 		})
 	}
 	return out, nil

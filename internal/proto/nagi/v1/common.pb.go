@@ -2984,7 +2984,9 @@ type TrustedPanel struct {
 	// 节点当前是否连着这个面板。
 	Connected bool `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
 	// 是不是当前操作的这个面板（只由面板接口填写）。
-	IsSelf        bool `protobuf:"varint,4,opt,name=is_self,json=isSelf,proto3" json:"is_self,omitempty"`
+	IsSelf bool `protobuf:"varint,4,opt,name=is_self,json=isSelf,proto3" json:"is_self,omitempty"`
+	// 主备面板里的角色："primary"、"standby"；不在主备面板里时为空（见 docs/standby.md）。
+	Role          string `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3045,6 +3047,13 @@ func (x *TrustedPanel) GetIsSelf() bool {
 		return x.IsSelf
 	}
 	return false
+}
+
+func (x *TrustedPanel) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
 }
 
 // MeshPeer 是面板告诉节点的一个 mesh 成员。
@@ -4476,12 +4485,13 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x12\n" +
 	"\x04node\x18\x05 \x01(\tR\x04node\x12\x18\n" +
 	"\aproject\x18\x06 \x01(\tR\aproject\x12.\n" +
-	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\x81\x01\n" +
+	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\x95\x01\n" +
 	"\fTrustedPanel\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x1c\n" +
 	"\tconnected\x18\x03 \x01(\bR\tconnected\x12\x17\n" +
-	"\ais_self\x18\x04 \x01(\bR\x06isSelf\"\x8f\x01\n" +
+	"\ais_self\x18\x04 \x01(\bR\x06isSelf\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\"\x8f\x01\n" +
 	"\bMeshPeer\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +

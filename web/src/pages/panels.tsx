@@ -133,6 +133,8 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[13px]">{p.address}</span>
                 {p.isSelf && <Badge>本面板</Badge>}
+                {p.role === "primary" && <Badge>主面板</Badge>}
+                {p.role === "standby" && <Badge>备用面板</Badge>}
               </div>
               <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
                 {p.fingerprint}

@@ -90,6 +90,9 @@ func (r *Registry) SetAlertConfig(ctx context.Context, cfg *nagiv1.AlertConfig) 
 
 // pushAlertConfig 把告警配置下发给一个节点。cfg 为 nil 时读取当前配置。
 func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.AlertConfig) {
+	if r.ReadOnly {
+		return
+	}
 	if cfg == nil {
 		if r.AlertConfigLost(ctx) {
 			return

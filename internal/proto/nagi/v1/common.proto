@@ -461,6 +461,8 @@ message TrustedPanel {
   bool connected = 3;
   // 是不是当前操作的这个面板（只由面板接口填写）。
   bool is_self = 4;
+  // 主备面板里的角色："primary"、"standby"；不在主备面板里时为空（见 docs/standby.md）。
+  string role = 5;
 }
 
 // MeshPeer 是面板告诉节点的一个 mesh 成员。

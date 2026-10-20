@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
-import { authClient } from "@/lib/api";
-import { Button, Waves } from "@/components/ui";
+import { authClient, toDate } from "@/lib/api";
+import { timeAgo } from "@/lib/utils";
+import { Button, ReadOnlyContext, Waves } from "@/components/ui";
+import { useStandbys } from "@/pages/standby";
 
 function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -28,6 +30,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
+  const standby = useStandbys().data;
+  const readOnly = standby?.isStandby ?? false;
 
   const logout = async () => {
     await authClient.logout({});
@@ -56,17 +60,39 @@ export function AppLayout() {
           </nav>
           <div className="ml-auto flex items-center gap-1">
             {me.data?.username && <span className="mr-2 hidden text-[13px] text-muted-foreground sm:inline">{me.data.username}</span>}
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label={dark ? "切换为浅色" : "切换为深色"} title={dark ? "浅色" : "深色"}>
+            <Button readOnlyOk variant="ghost" size="icon" onClick={toggle} aria-label={dark ? "切换为浅色" : "切换为深色"} title={dark ? "浅色" : "深色"}>
               {dark ? <Sun /> : <Moon />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={logout} aria-label="退出登录" title="退出登录">
+            <Button readOnlyOk variant="ghost" size="icon" onClick={logout} aria-label="退出登录" title="退出登录">
               <LogOut />
             </Button>
           </div>
         </div>
       </header>
+      {standby?.isStandby && (
+        <div className="border-b bg-muted/60">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-2 text-[13px]">
+            <span className="font-medium">备用面板</span>
+            <span className="text-muted-foreground">
+              只能查看，修改请到主面板{" "}
+              <a className="font-mono text-foreground underline-offset-2 hover:underline" href={`https://${standby.primaryAddress}`} target="_blank" rel="noreferrer">
+                {standby.primaryAddress}
+              </a>
+            </span>
+            <span className="ml-auto text-muted-foreground">
+              {standby.connected ? (
+                <>已同步{standby.lastSync && `（${timeAgo(toDate(standby.lastSync))}）`}</>
+              ) : (
+                <span className="text-warning">未连接主面板{standby.lastSync && `，最近同步 ${timeAgo(toDate(standby.lastSync))}`}</span>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
       <main className="mx-auto max-w-6xl px-6 pt-8 pb-16">
-        <Outlet />
+        <ReadOnlyContext.Provider value={readOnly}>
+          <Outlet />
+        </ReadOnlyContext.Provider>
       </main>
     </div>
   );

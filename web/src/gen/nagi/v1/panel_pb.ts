@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCLOAQoNUmVwb3J0UmVxdWVzdBIfCgRub2RlGAEgASgLMhEubmFnaS52MS5Ob2RlSW5mbxIfCgRtZXNoGAIgASgLMhEubmFnaS52MS5NZXNoSW5mbxIsCgpjb250YWluZXJzGAMgAygLMhgubmFnaS52MS5Db250YWluZXJTdGF0dXMSKgoJZmFpbG92ZXJzGAQgAygLMhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cxIhCgV1c2FnZRgFIAEoCzISLm5hZ2kudjEuTm9kZVVzYWdlIjMKDlJlcG9ydFJlc3BvbnNlEiEKBG1lc2gYASABKAsyEy5uYWdpLnYxLk1lc2hDb25maWcypAIKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USRQoKUmVsYXlBbGVydBIaLm5hZ2kudjEuUmVsYXlBbGVydFJlcXVlc3QaGy5uYWdpLnYxLlJlbGF5QWxlcnRSZXNwb25zZRI5CglNZXNoUmVsYXkSEy5uYWdpLnYxLk1lc2hQYWNrZXQaEy5uYWdpLnYxLk1lc2hQYWNrZXQoATABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCLtAQoNUmVwb3J0UmVxdWVzdBIfCgRub2RlGAEgASgLMhEubmFnaS52MS5Ob2RlSW5mbxIfCgRtZXNoGAIgASgLMhEubmFnaS52MS5NZXNoSW5mbxIsCgpjb250YWluZXJzGAMgAygLMhgubmFnaS52MS5Db250YWluZXJTdGF0dXMSKgoJZmFpbG92ZXJzGAQgAygLMhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cxIhCgV1c2FnZRgFIAEoCzISLm5hZ2kudjEuTm9kZVVzYWdlEgwKBHRlcm0YBiABKAQSDwoHcHJpbWFyeRgHIAEoCSJbCg5SZXBvcnRSZXNwb25zZRIhCgRtZXNoGAEgASgLMhMubmFnaS52MS5NZXNoQ29uZmlnEiYKB2NsdXN0ZXIYAiABKAsyFS5uYWdpLnYxLlBhbmVsQ2x1c3RlciJUCgxQYW5lbENsdXN0ZXISDAoEdGVybRgBIAEoBBIPCgdwcmltYXJ5GAIgASgJEiUKBnBhbmVscxgDIAMoCzIVLm5hZ2kudjEuQ2x1c3RlclBhbmVsIjQKDENsdXN0ZXJQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJMqQCCgxQYW5lbFNlcnZpY2USOQoGUmVwb3J0EhYubmFnaS52MS5SZXBvcnRSZXF1ZXN0GhcubmFnaS52MS5SZXBvcnRSZXNwb25zZRJXChBSZW5ld0NlcnRpZmljYXRlEiAubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBohLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEkUKClJlbGF5QWxlcnQSGi5uYWdpLnYxLlJlbGF5QWxlcnRSZXF1ZXN0GhsubmFnaS52MS5SZWxheUFsZXJ0UmVzcG9uc2USOQoJTWVzaFJlbGF5EhMubmFnaS52MS5NZXNoUGFja2V0GhMubmFnaS52MS5NZXNoUGFja2V0KAEwAUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.MeshPacket
@@ -199,6 +199,19 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
    * @generated from field: nagi.v1.NodeUsage usage = 5;
    */
   usage?: NodeUsage | undefined;
+
+  /**
+   * 节点见过的最大任期和那个任期的主面板（公钥指纹），按面板 CA 分开记；这里是这个面板所在的那组。
+   * 旧主面板据此发现自己已被取代（见 docs/standby.md）。
+   *
+   * @generated from field: uint64 term = 6;
+   */
+  term: bigint;
+
+  /**
+   * @generated from field: string primary = 7;
+   */
+  primary: string;
 };
 
 /**
@@ -216,6 +229,13 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
    * @generated from field: nagi.v1.MeshConfig mesh = 1;
    */
   mesh?: MeshConfig | undefined;
+
+  /**
+   * 主备面板的信息（见 docs/standby.md）。
+   *
+   * @generated from field: nagi.v1.PanelCluster cluster = 2;
+   */
+  cluster?: PanelCluster | undefined;
 };
 
 /**
@@ -224,6 +244,59 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
   messageDesc(file_nagi_v1_panel, 8);
+
+/**
+ * PanelCluster：任期、主面板，以及主面板和所有备用面板。节点只执行主面板的修改，自动连接备用面板。
+ *
+ * @generated from message nagi.v1.PanelCluster
+ */
+export type PanelCluster = Message<"nagi.v1.PanelCluster"> & {
+  /**
+   * @generated from field: uint64 term = 1;
+   */
+  term: bigint;
+
+  /**
+   * 主面板的公钥指纹。
+   *
+   * @generated from field: string primary = 2;
+   */
+  primary: string;
+
+  /**
+   * @generated from field: repeated nagi.v1.ClusterPanel panels = 3;
+   */
+  panels: ClusterPanel[];
+};
+
+/**
+ * Describes the message nagi.v1.PanelCluster.
+ * Use `create(PanelClusterSchema)` to create a new message.
+ */
+export const PanelClusterSchema: GenMessage<PanelCluster> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 9);
+
+/**
+ * @generated from message nagi.v1.ClusterPanel
+ */
+export type ClusterPanel = Message<"nagi.v1.ClusterPanel"> & {
+  /**
+   * @generated from field: string address = 1;
+   */
+  address: string;
+
+  /**
+   * @generated from field: string fingerprint = 2;
+   */
+  fingerprint: string;
+};
+
+/**
+ * Describes the message nagi.v1.ClusterPanel.
+ * Use `create(ClusterPanelSchema)` to create a new message.
+ */
+export const ClusterPanelSchema: GenMessage<ClusterPanel> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 10);
 
 /**
  * PanelService：节点调用面板，走控制连接。

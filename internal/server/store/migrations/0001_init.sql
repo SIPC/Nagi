@@ -158,6 +158,8 @@ CREATE TABLE standby_panels (
     address    TEXT    NOT NULL,
     -- 客户端证书公钥的指纹（sha256//...）
     key_fp     TEXT    NOT NULL UNIQUE,
+    -- 备用面板服务端证书公钥的指纹：节点连它时钉住这个指纹
+    server_fp  TEXT    NOT NULL,
     created_at INTEGER NOT NULL
 );
 

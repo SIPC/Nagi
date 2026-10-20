@@ -106,6 +106,7 @@ type StandbyPanel struct {
 	Name      string
 	Address   string
 	KeyFp     string
+	ServerFp  string
 	CreatedAt int64
 }
 

@@ -273,6 +273,11 @@ func (a *agent) superviseLoop(ctx context.Context) {
 }
 
 func (a *agent) reconcile(ctx context.Context) {
+	if pruned, err := a.id.pruneClusters(); err != nil {
+		a.log.Warn("清理备用面板失败", "err", err)
+	} else if pruned {
+		a.log.Info("主面板已不在信任列表里，移除了它的备用面板")
+	}
 	want := map[string]trustedPanel{}
 	for _, p := range a.id.Panels() {
 		want[p.Fingerprint] = p
@@ -455,7 +460,8 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 	defer sess.Close()
 
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, detachStream),
+	guardUnary, guardStream := a.primaryGuard(p.Fingerprint)
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, guardUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, guardStream, detachStream),
 		grpc.MaxRecvMsgSize(64<<20))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,
@@ -494,10 +500,11 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
-		resp, err := a.report(ctx, panel)
+		resp, err := a.report(ctx, panel, p)
 		if err != nil {
 			return err
 		}
+		a.applyCluster(p, resp.GetCluster())
 		if key, ok := a.mesh.update(p.Fingerprint, p.Address, resp.GetMesh()); ok && !relaying {
 			relaying = true
 			go a.mesh.relayLoop(sctx, panel, key)
@@ -515,7 +522,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 }
 
-func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*nagiv1.ReportResponse, error) {
+func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p trustedPanel) (*nagiv1.ReportResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	containers := a.projects.Statuses(ctx)
@@ -528,7 +535,9 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient) (*n
 	info.ProjectsRoot = a.projectsRoot()
 	latest := a.metrics.Latest()
 	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
-	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage})
+	st := a.clusterOf(p)
+	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
+		Term: st.Term, Primary: st.Primary})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

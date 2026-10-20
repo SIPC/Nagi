@@ -42,6 +42,9 @@ type trustedPanel struct {
 	NodeID      string `json:"node_id"`
 	CertPEM     string `json:"cert"`
 	CAPEM       string `json:"ca"`
+	// Cluster 不为空时，这是主面板告诉节点的备用面板（见 docs/standby.md），值是那组面板的 CA 标识：
+	// 主面板的列表里没有它了就自动移除。
+	Cluster string `json:"cluster,omitempty"`
 }
 
 func (id *identity) keyPath() string    { return filepath.Join(id.dir, "key.pem") }

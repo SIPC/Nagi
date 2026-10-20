@@ -53,14 +53,18 @@ type API struct {
 
 // Mount 把所有接口挂到 mux 上。
 func (a *API) Mount(mux *http.ServeMux) {
+	chain := []connect.Interceptor{a.Auth.Interceptor(
+		nagiv1connect.SetupServiceGetSetupStateProcedure,
+		nagiv1connect.SetupServiceSetupProcedure,
+		nagiv1connect.AuthServiceLoginProcedure,
+		nagiv1connect.AuthServiceLogoutProcedure,
+		nagiv1connect.EnrollServiceEnrollProcedure,
+	)}
+	if a.Panel.Standby != nil {
+		chain = append(chain, readOnly{a})
+	}
 	interceptors := connect.WithHandlerOptions(
-		connect.WithInterceptors(a.Auth.Interceptor(
-			nagiv1connect.SetupServiceGetSetupStateProcedure,
-			nagiv1connect.SetupServiceSetupProcedure,
-			nagiv1connect.AuthServiceLoginProcedure,
-			nagiv1connect.AuthServiceLogoutProcedure,
-			nagiv1connect.EnrollServiceEnrollProcedure,
-		)),
+		connect.WithInterceptors(chain...),
 		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。
 		// 文件上传走 /api/upload，不经过这里。
 		connect.WithReadMaxBytes(maxRequestBytes),
@@ -71,9 +75,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
-	mux.Handle("/hooks/", a.WebhookHandler())
-	mux.Handle("/ws/exec", a.TerminalHandler())
-	mux.Handle("POST /api/upload", a.UploadHandler())
+	mux.Handle("/hooks/", a.standbyBlock(a.WebhookHandler()))
+	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
+	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
 	mux.Handle("GET /install.sh", a.InstallHandler())
 	mux.Handle("GET /download/", a.DownloadHandler())
 }

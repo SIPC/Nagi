@@ -77,6 +77,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
                 <Td className="text-right whitespace-nowrap">
                   {ping[key] && <span className="mr-2 font-mono text-xs text-muted-foreground">{ping[key]}</span>}
                   <Button
+                    readOnlyOk
                     size="xs"
                     variant="ghost"
                     onClick={async () => {

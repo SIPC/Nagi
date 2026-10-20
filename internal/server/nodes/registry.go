@@ -51,6 +51,10 @@ type Registry struct {
 
 	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)
+	// Cluster 返回主备面板的信息，随上报的回复告诉节点（见 docs/standby.md）。
+	Cluster func(ctx context.Context) *nagiv1.PanelCluster
+	// ReadOnly：本面板是备用面板，不给节点下发任何东西（告警配置、面板域名），只查询。
+	ReadOnly bool
 }
 
 // Conns 返回所有在线节点的连接。
@@ -290,7 +294,11 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	if pending {
 		return &nagiv1.ReportResponse{}, nil
 	}
-	return &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}, nil
+	resp := &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}
+	if p.r.Cluster != nil {
+		resp.Cluster = p.r.Cluster(ctx)
+	}
+	return resp, nil
 }
 
 // RenewCertificate 给节点续期证书。证书签名请求里的公钥必须就是这个节点的身份公钥。
@@ -321,6 +329,9 @@ func NodeID(spki []byte) string {
 const settingDomain = "panel_domain"
 
 func (r *Registry) pushDomain(c *Conn) {
+	if r.ReadOnly {
+		return
+	}
 	d, _ := r.q.GetSetting(context.Background(), settingDomain)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -132,6 +132,16 @@ func Fingerprint(cert *x509.Certificate) string {
 	return fingerprintPrefix + base64.StdEncoding.EncodeToString(sum[:])
 }
 
+// KeyFingerprint 返回公钥的指纹，和用这个公钥签发的证书的 Fingerprint 一样。
+func KeyFingerprint(pub crypto.PublicKey) (string, error) {
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(der)
+	return fingerprintPrefix + base64.StdEncoding.EncodeToString(sum[:]), nil
+}
+
 // PinnedConfig 返回一个只信任指定公钥指纹的 TLS 客户端配置。
 // 面板使用自签证书，所以跳过常规的 CA 校验，改为核对指纹。
 func PinnedConfig(fingerprint string) *tls.Config {

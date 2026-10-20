@@ -1,6 +1,6 @@
 // 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type * as React from "react";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,14 +29,29 @@ const buttonVariants = cva(
   },
 );
 
+// ReadOnlyContext：备用面板上为 true，按钮默认置灰（只读的按钮加 readOnlyOk）。见 docs/standby.md。
+export const ReadOnlyContext = createContext(false);
+
 export function Button({
   className,
   variant,
   size,
   type = "button",
+  readOnlyOk,
+  disabled,
+  title,
   ...props
-}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
-  return <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { readOnlyOk?: boolean }) {
+  const readOnly = useContext(ReadOnlyContext) && !readOnlyOk;
+  return (
+    <button
+      type={type}
+      className={cn(buttonVariants({ variant, size }), className)}
+      disabled={disabled || readOnly}
+      title={readOnly ? "备用面板只能查看，修改请到主面板" : title}
+      {...props}
+    />
+  );
 }
 
 const control =
@@ -359,6 +374,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
   const [done, setDone] = useState(false);
   return (
     <Button
+      readOnlyOk
       size="icon"
       variant="ghost"
       className={cn("size-7", className)}
@@ -493,7 +509,7 @@ export function Dialog({
             <h2 className="text-sm font-semibold">{title}</h2>
             {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
           </div>
-          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label="关闭">
+          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label="关闭" readOnlyOk>
             <X />
           </Button>
         </div>

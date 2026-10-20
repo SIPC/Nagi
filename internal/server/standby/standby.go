@@ -110,6 +110,8 @@ type pairRequest struct {
 	CSR     []byte `json:"csr"`
 	Name    string `json:"name"`
 	Address string `json:"address"`
+	// ServerFP 是备用面板服务端公钥的指纹：节点连备用面板时钉住它。
+	ServerFP string `json:"server_fp"`
 }
 
 type pairResponse struct {
@@ -130,6 +132,10 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 	var req pairRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "请求格式不对", http.StatusBadRequest)
+		return
+	}
+	if req.ServerFP == "" || req.Address == "" {
+		http.Error(w, "缺少备用面板的地址或公钥指纹", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -154,7 +160,7 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 		name = req.Address
 	}
 	if err := p.Q.InsertStandbyPanel(ctx, store.InsertStandbyPanelParams{
-		ID: id, Name: name, Address: req.Address, KeyFp: tlsutil.Fingerprint(cert), CreatedAt: time.Now().Unix(),
+		ID: id, Name: name, Address: req.Address, KeyFp: tlsutil.Fingerprint(cert), ServerFp: req.ServerFP, CreatedAt: time.Now().Unix(),
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -312,6 +318,14 @@ type Info struct {
 	PrimaryFingerprint string `json:"primary_fingerprint"`
 }
 
+// GetPrimaryAddress 返回主面板的地址；info 为 nil（不是备用面板）时为空。
+func (i *Info) GetPrimaryAddress() string {
+	if i == nil {
+		return ""
+	}
+	return i.PrimaryAddress
+}
+
 func infoPath(dataDir string) string { return filepath.Join(dataDir, "standby.json") }
 
 // Load 读取备用面板的配对信息；不是备用面板时返回 nil。
@@ -350,7 +364,16 @@ func Pair(ctx context.Context, dataDir, codeText, name, address string) error {
 	if err != nil {
 		return err
 	}
-	body, _ := json.Marshal(pairRequest{Token: c.Token, CSR: csr, Name: name, Address: address})
+	// 服务端私钥现在就生成（面板启动时沿用），把它的指纹告诉主面板：节点连本面板时钉住它。
+	serverKey, err := tlsutil.GenerateKey()
+	if err != nil {
+		return err
+	}
+	serverFP, err := tlsutil.KeyFingerprint(serverKey.Public())
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(pairRequest{Token: c.Token, CSR: csr, Name: name, Address: address, ServerFP: serverFP})
 	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{TLSClientConfig: tlsutil.PinnedConfig(c.Fingerprint)}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+c.Address+"/api/standby/pair", bytes.NewReader(body))
 	if err != nil {
@@ -388,6 +411,9 @@ func Pair(ctx context.Context, dataDir, codeText, name, address string) error {
 		return err
 	}
 	if err := tlsutil.WriteKey(filepath.Join(pki, "standby.key"), key); err != nil {
+		return err
+	}
+	if err := tlsutil.WriteKey(filepath.Join(pki, "server.key"), serverKey); err != nil {
 		return err
 	}
 	info, _ := json.MarshalIndent(Info{ID: resp.ID, PrimaryAddress: c.Address, PrimaryFingerprint: c.Fingerprint}, "", "  ")

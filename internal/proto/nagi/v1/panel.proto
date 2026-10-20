@@ -62,8 +62,27 @@ message ReportRequest {
   repeated FailoverStatus failovers = 4;
   // 当前的资源占用。
   NodeUsage usage = 5;
+  // 节点见过的最大任期和那个任期的主面板（公钥指纹），按面板 CA 分开记；这里是这个面板所在的那组。
+  // 旧主面板据此发现自己已被取代（见 docs/standby.md）。
+  uint64 term = 6;
+  string primary = 7;
 }
 
 message ReportResponse {
   MeshConfig mesh = 1;
+  // 主备面板的信息（见 docs/standby.md）。
+  PanelCluster cluster = 2;
+}
+
+// PanelCluster：任期、主面板，以及主面板和所有备用面板。节点只执行主面板的修改，自动连接备用面板。
+message PanelCluster {
+  uint64 term = 1;
+  // 主面板的公钥指纹。
+  string primary = 2;
+  repeated ClusterPanel panels = 3;
+}
+
+message ClusterPanel {
+  string address = 1;
+  string fingerprint = 2;
 }

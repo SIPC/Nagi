@@ -23,6 +23,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -182,6 +183,26 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 			v, err := s.q.GetSetting(context.Background(), api.SettingDomain)
 			return err == nil && v != "" && v == d
 		}}
+	s.nodes.Cluster = func(ctx context.Context) *nagiv1.PanelCluster {
+		addr := info.GetPrimaryAddress()
+		if s.standby == nil {
+			addr = s.publicAddress
+			if v, err := s.q.GetSetting(ctx, api.SettingPublicAddress); err == nil && v != "" {
+				addr = v
+			}
+			addr = net.JoinHostPort(addr, strconv.Itoa(s.port))
+		}
+		return standby.Cluster(ctx, s.q, addr)
+	}
+	if s.standby != nil {
+		// 备用面板只查询：不给节点补推配置、不下发告警配置，不进 mesh（见 docs/standby.md）。
+		s.nodes.ReadOnly = true
+		return s, nil
+	}
+	if err := standby.Init(ctx, s.q, s.fingerprint); err != nil {
+		d.Close()
+		return nil, err
+	}
 	s.nodes.OnReport = s.projects.Sync
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
