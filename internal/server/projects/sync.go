@@ -159,6 +159,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 			s.Log.Info("已补推容器配置", "project", r.ProjectID, "container", r.Name, "node", c.NodeID)
 		}
 	}
+	s.pushAllLinks(ctx)
 }
 
 // ---- 转换 ----

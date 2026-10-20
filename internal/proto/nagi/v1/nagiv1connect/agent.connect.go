@@ -61,6 +61,8 @@ const (
 	// AgentServiceLoginRegistryProcedure is the fully-qualified name of the AgentService's
 	// LoginRegistry RPC.
 	AgentServiceLoginRegistryProcedure = "/nagi.v1.AgentService/LoginRegistry"
+	// AgentServiceSetLinksProcedure is the fully-qualified name of the AgentService's SetLinks RPC.
+	AgentServiceSetLinksProcedure = "/nagi.v1.AgentService/SetLinks"
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
 	// SetAlertConfig RPC.
 	AgentServiceSetAlertConfigProcedure = "/nagi.v1.AgentService/SetAlertConfig"
@@ -113,6 +115,8 @@ type AgentServiceClient interface {
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
+	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
+	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -210,6 +214,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
 			connect.WithClientOptions(opts...),
 		),
+		setLinks: connect.NewClient[v1.LinkPlan, v1.SetLinksResponse](
+			httpClient,
+			baseURL+AgentServiceSetLinksProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetLinks")),
+			connect.WithClientOptions(opts...),
+		),
 		setAlertConfig: connect.NewClient[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse](
 			httpClient,
 			baseURL+AgentServiceSetAlertConfigProcedure,
@@ -297,6 +307,7 @@ type agentServiceClient struct {
 	exec            *connect.Client[v1.ExecInput, v1.ExecOutput]
 	checkImages     *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
 	loginRegistry   *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
+	setLinks        *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
 	setAlertConfig  *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
 	queryMetrics    *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	setProjectsRoot *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
@@ -359,6 +370,11 @@ func (c *agentServiceClient) CheckImages(ctx context.Context, req *connect.Reque
 // LoginRegistry calls nagi.v1.AgentService.LoginRegistry.
 func (c *agentServiceClient) LoginRegistry(ctx context.Context, req *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error) {
 	return c.loginRegistry.CallUnary(ctx, req)
+}
+
+// SetLinks calls nagi.v1.AgentService.SetLinks.
+func (c *agentServiceClient) SetLinks(ctx context.Context, req *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {
+	return c.setLinks.CallUnary(ctx, req)
 }
 
 // SetAlertConfig calls nagi.v1.AgentService.SetAlertConfig.
@@ -441,6 +457,8 @@ type AgentServiceHandler interface {
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
+	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
+	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -532,6 +550,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceLoginRegistryProcedure,
 		svc.LoginRegistry,
 		connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetLinksHandler := connect.NewUnaryHandler(
+		AgentServiceSetLinksProcedure,
+		svc.SetLinks,
+		connect.WithSchema(agentServiceMethods.ByName("SetLinks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceSetAlertConfigHandler := connect.NewUnaryHandler(
@@ -628,6 +652,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCheckImagesHandler.ServeHTTP(w, r)
 		case AgentServiceLoginRegistryProcedure:
 			agentServiceLoginRegistryHandler.ServeHTTP(w, r)
+		case AgentServiceSetLinksProcedure:
+			agentServiceSetLinksHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
 			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
 		case AgentServiceQueryMetricsProcedure:
@@ -699,6 +725,10 @@ func (UnimplementedAgentServiceHandler) CheckImages(context.Context, *connect.Re
 
 func (UnimplementedAgentServiceHandler) LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.LoginRegistry is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetLinks is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {

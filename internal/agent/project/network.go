@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"slices"
 	"sync"
 )
@@ -21,6 +22,12 @@ func netLock(id string) *sync.Mutex {
 	l, _ := netLocks.LoadOrStore(id, &sync.Mutex{})
 	return l.(*sync.Mutex)
 }
+
+// ProjectNetwork 返回项目内网的 Docker 网络名。
+func ProjectNetwork(id string) string { return projectNetwork(id) }
+
+// EnsureProjectNetwork 建好项目内网（不存在时）。放代理容器前调用。
+func (m *Manager) EnsureProjectNetwork(ctx context.Context, id string) error { return m.ensureProjectNetwork(ctx, id) }
 
 // ensureProjectNetwork 建好项目内网（不存在时）。
 func (m *Manager) ensureProjectNetwork(ctx context.Context, id string) error {
@@ -74,6 +81,45 @@ func (m *Manager) SyncNetworks(ctx context.Context, id string) error {
 		}
 	}
 	return firstErr
+}
+
+// Endpoint 是本节点上项目内网里一个正在运行的容器：名字、地址、声明的端口。
+type Endpoint struct {
+	IP    netip.Addr
+	Ports []uint32
+}
+
+// FindEndpoint 找本节点上项目 projectID 里名字是 name 的正在运行的容器（单个容器是"容器名"，容器组里的是"服务.容器组"）。
+func (m *Manager) FindEndpoint(ctx context.Context, projectID, name string) (Endpoint, bool) {
+	instances, err := m.docker.Instances(ctx, projectLabel(projectID))
+	if err != nil {
+		return Endpoint{}, false
+	}
+	for _, c := range instances {
+		alias := c.Container
+		if !c.Single {
+			alias = c.Service + "." + c.Container
+		}
+		if alias != name || c.State != "running" {
+			continue
+		}
+		ip, ok := c.IPs[projectNetwork(projectID)]
+		if !ok {
+			for _, a := range c.IPs {
+				ip, ok = a, true
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		e := Endpoint{IP: ip}
+		for _, p := range c.Ports {
+			e.Ports = append(e.Ports, uint32(p))
+		}
+		return e, true
+	}
+	return Endpoint{}, false
 }
 
 // SyncAllNetworks 对本节点上的所有项目执行 SyncNetworks。节点在容器有变化（例如重建）时调用。

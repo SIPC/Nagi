@@ -29,6 +29,9 @@ service AgentService {
   // 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
   rpc LoginRegistry(LoginRegistryRequest) returns (LoginRegistryResponse);
 
+  // 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
+  rpc SetLinks(LinkPlan) returns (SetLinksResponse);
+
   // ---- 节点 ----
   // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
   rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
@@ -54,6 +57,8 @@ service AgentService {
   // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
 }
+
+message SetLinksResponse {}
 
 message ContainerRef {
   string project_id = 1;

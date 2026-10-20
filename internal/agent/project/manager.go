@@ -435,9 +435,13 @@ func (m *Manager) Statuses(ctx context.Context) []*nagiv1.ContainerStatus {
 		seen := map[string]bool{}
 		for _, in := range byContainer[uid(s.GetProjectId(), s.GetName())] {
 			seen[in.Service] = true
+			var ports []uint32
+			for _, p := range in.Ports {
+				ports = append(ports, uint32(p))
+			}
 			st.Services = append(st.Services, &nagiv1.ServiceStatus{
 				Container: s.GetName(), Name: in.Service, ContainerId: in.ID, Image: in.Image,
-				State: in.State, Status: in.Status, Health: in.Health,
+				State: in.State, Status: in.Status, Health: in.Health, Ports: ports,
 			})
 		}
 		if cp, err := spec.Load(ctx, s.GetConfig(), s.GetName(), s.GetSharedEnv(), containerPaths{root: s.GetDir()}.dataDir(), spec.ComposeProjectName(s.GetProjectId(), s.GetName())); err == nil {

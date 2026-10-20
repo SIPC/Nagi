@@ -72,6 +72,13 @@ func (s *agentService) SetProjectsRoot(_ context.Context, req *nagiv1.SetProject
 	return &nagiv1.SetProjectsRootResponse{}, nil
 }
 
+func (s *agentService) SetLinks(_ context.Context, req *nagiv1.LinkPlan) (*nagiv1.SetLinksResponse, error) {
+	if err := s.node.intranet.set(req); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &nagiv1.SetLinksResponse{}, nil
+}
+
 // ---- 容器 ----
 
 func (s *agentService) PutContainer(ctx context.Context, req *nagiv1.PutContainerRequest) (*nagiv1.PutContainerResponse, error) {

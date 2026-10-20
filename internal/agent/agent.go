@@ -139,6 +139,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
+	a.intranet = newIntranet(a)
 
 	// 容器有变化时上报状态；容器重建后要重新接入项目内网（见 project/network.go）。
 	netSync := make(chan struct{}, 1)
@@ -158,6 +159,7 @@ func Run(ctx context.Context, cfg Config) error {
 			case <-netSync:
 				time.Sleep(time.Second) // 一次部署会连续产生很多事件，攒一下再处理
 				projects.SyncAllNetworks(ctx)
+				a.intranet.trigger()
 			}
 		}
 	}()
@@ -189,6 +191,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
+	go a.intranet.run(ctx)
 	proxy.OnCertEvent(func(domain string, err error) {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
@@ -226,6 +229,7 @@ type agent struct {
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
 	mesh      *meshNode
+	intranet  *intranet
 	ctx       context.Context
 	startedAt time.Time
 

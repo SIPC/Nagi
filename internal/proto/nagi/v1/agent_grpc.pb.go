@@ -29,6 +29,7 @@ const (
 	AgentService_Exec_FullMethodName            = "/nagi.v1.AgentService/Exec"
 	AgentService_CheckImages_FullMethodName     = "/nagi.v1.AgentService/CheckImages"
 	AgentService_LoginRegistry_FullMethodName   = "/nagi.v1.AgentService/LoginRegistry"
+	AgentService_SetLinks_FullMethodName        = "/nagi.v1.AgentService/SetLinks"
 	AgentService_SetAlertConfig_FullMethodName  = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName    = "/nagi.v1.AgentService/QueryMetrics"
 	AgentService_SetProjectsRoot_FullMethodName = "/nagi.v1.AgentService/SetProjectsRoot"
@@ -68,6 +69,8 @@ type AgentServiceClient interface {
 	CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(ctx context.Context, in *LoginRegistryRequest, opts ...grpc.CallOption) (*LoginRegistryResponse, error)
+	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
+	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
@@ -241,6 +244,16 @@ func (c *agentServiceClient) LoginRegistry(ctx context.Context, in *LoginRegistr
 	return out, nil
 }
 
+func (c *agentServiceClient) SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetLinksResponse)
+	err := c.cc.Invoke(ctx, AgentService_SetLinks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAlertConfigResponse)
@@ -386,6 +399,8 @@ type AgentServiceServer interface {
 	CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error)
+	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
+	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
@@ -449,6 +464,9 @@ func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ContainerRe
 }
 func (UnimplementedAgentServiceServer) LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LoginRegistry not implemented")
+}
+func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetLinks not implemented")
 }
 func (UnimplementedAgentServiceServer) SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAlertConfig not implemented")
@@ -644,6 +662,24 @@ func _AgentService_LoginRegistry_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).LoginRegistry(ctx, req.(*LoginRegistryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SetLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkPlan)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetLinks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetLinks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetLinks(ctx, req.(*LinkPlan))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -890,6 +926,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LoginRegistry",
 			Handler:    _AgentService_LoginRegistry_Handler,
+		},
+		{
+			MethodName: "SetLinks",
+			Handler:    _AgentService_SetLinks_Handler,
 		},
 		{
 			MethodName: "SetAlertConfig",

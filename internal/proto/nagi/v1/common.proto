@@ -240,6 +240,8 @@ message ServiceStatus {
   // 健康检查状态：healthy、unhealthy、starting，没有健康检查时为空。
   string health = 6;
   string container = 7;
+  // 容器声明的 TCP 端口（镜像的 EXPOSE、compose 的 ports、expose），别的节点上的容器经代理访问时用。
+  repeated uint32 ports = 8;
 }
 
 message ProjectStatus {
@@ -536,4 +538,36 @@ message FailoverStatus {
   int64 failback_in_ms = 11;
   // 持有者上：正在切回原节点。
   bool failing_back = 12;
+}
+
+// LinkPlan 是面板告诉一个节点的代理计划（见 docs/agent.md#项目内网）：本节点要在哪些项目内网里放哪些代理，
+// 以及哪些节点可以经 mesh 连进来访问本节点上的容器。节点缓存在本地，面板不在时照旧。
+message LinkPlan {
+  repeated LinkProxy proxies = 1;
+  repeated LinkAllow allows = 2;
+}
+
+// LinkProxy 是一个代理：放在 project_id 的项目内网里，名字是 alias，代表 target_project 的容器 target_name。
+// 连接时按 nodes 的顺序找：先找所在节点，对方说"不在这里"（例如已经被顶替）再找下一个。
+message LinkProxy {
+  string project_id = 1;
+  string alias = 2;
+  string target_project = 3;
+  // 目标在它自己的项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
+  string target_name = 4;
+  repeated uint32 ports = 5;
+  repeated LinkNode nodes = 6;
+}
+
+message LinkNode {
+  // 节点的 mesh 公钥。
+  bytes key = 1;
+  string name = 2;
+}
+
+// LinkAllow：哪些节点可以访问本节点上 project_id 的容器，以及项目设置里补的内部端口。
+message LinkAllow {
+  string project_id = 1;
+  repeated bytes callers = 2;
+  repeated string internal_ports = 3;
 }

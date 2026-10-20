@@ -54,6 +54,8 @@ type Service struct {
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+	// 每个节点上次下发的代理计划（连接 + 摘要），连接换了或计划变了才重新下发。
+	linkSent map[string]linkSent
 }
 
 // lock 返回项目的互斥锁：同一个项目的修改和部署串行执行。
