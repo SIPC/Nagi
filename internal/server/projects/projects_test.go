@@ -32,8 +32,9 @@ func TestOrderJobs(t *testing.T) {
 func TestDefaultNetworkName(t *testing.T) {
 	cases := map[string]string{
 		"Echo Server":           "echo-server",
-		"商城 Shop 2":             "shop-2",
-		"全中文":                   "",
+		"商城 Shop 2":             "shang-cheng-shop-2",
+		"全中文":                   "quan-zhong-wen",
+		"!!!":                   "",
 		"--a__b--":              "a-b",
 		strings.Repeat("x", 40): strings.Repeat("x", 32),
 	}
