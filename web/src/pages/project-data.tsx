@@ -563,7 +563,7 @@ function Failover({ project, container }: { project: Project; container: Contain
             <div className="flex flex-wrap items-end gap-3">
               <Field label="见证人" htmlFor="fo-witness" help="只投票，不运行容器。默认是面板；担心面板和某个节点同时故障时，可以选另一台节点。">
                 <Select id="fo-witness" value={form.witness} onChange={(e) => setForm({ ...form, witness: e.target.value })} className="min-w-44">
-                  <option value="">面板</option>
+                  <option value="">本面板</option>
                   {witnesses.map((n) => (
                     <option key={n.id} value={n.id}>
                       {n.name}
@@ -673,7 +673,17 @@ function Failover({ project, container }: { project: Project; container: Contain
             {standbyNode && !nodes.online(standbyNode.nodeId) && <Badge className="ml-2">离线</Badge>}
           </dd>
           <dt className="text-muted-foreground">见证人</dt>
-          <dd>{cfg.witnessIsPanel ? "面板" : cfg.witness?.name}</dd>
+          <dd>
+            {!cfg.witnessIsPanel ? (
+              cfg.witness?.name
+            ) : container.failoverWitnessSelf ? (
+              "本面板"
+            ) : (
+              <span className="text-warning" title="见证人还是换面板以前的旧面板；节点上报后本面板会自动换成自己，之前容器所在节点和顶替节点两票照常构成多数。">
+                旧面板（正在换成本面板）
+              </span>
+            )}
+          </dd>
           <dt className="text-muted-foreground">最近同步</dt>
           <dd title={toDate(lastSync)?.toLocaleString()}>{lastSync ? timeAgo(toDate(lastSync)) : "尚未同步"}</dd>
           <dt className="text-muted-foreground">租约</dt>
@@ -715,7 +725,7 @@ function Failover({ project, container }: { project: Project; container: Contain
               <option value="-" disabled>
                 请选择
               </option>
-              {!cfg.witnessIsPanel && <option value="">面板</option>}
+              {!(cfg.witnessIsPanel && container.failoverWitnessSelf) && <option value="">本面板</option>}
               {witnessOptions.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.name}

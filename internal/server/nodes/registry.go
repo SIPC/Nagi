@@ -294,7 +294,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	accepts := req.GetPrimary() == "" || req.GetPrimary() == p.r.Self
 	pushAlerts := accepts && !p.conn.accepted && !pending
 	p.conn.accepted = accepts
-	pushDomain := accepts && req.GetNode().GetEmbedded() && !p.conn.domainSent
+	pushDomain := accepts && p.conn.ownEmbedded(req) && !p.conn.domainSent
 	p.conn.domainSent = p.conn.domainSent || pushDomain
 	p.conn.mu.Unlock()
 	if pushAlerts {
@@ -373,8 +373,34 @@ func (r *Registry) PushPanelDomain(string) {
 	}
 	r.mu.RUnlock()
 	for _, c := range conns {
-		if c.LastReport().GetNode().GetEmbedded() {
+		if c.ownEmbedded(c.LastReport()) {
 			go r.pushDomain(c)
 		}
+	}
+}
+
+// ownEmbedded 判断这是不是本面板自带的节点：自带的节点从本机（127.0.0.1）连面板。
+// 主备面板时别的面板自带的节点也连着本面板，面板域名不能推给它（那台机器的 Caddy 反代的是那个面板）。
+func (c *Conn) ownEmbedded(req *nagiv1.ReportRequest) bool {
+	return req.GetNode().GetEmbedded() && c.remote.IsLoopback()
+}
+
+// PushAddress 把面板的新对外地址告诉在线的节点（节点只接受面板改自己的地址），之后节点用新地址重连。
+// 本机自带的节点从 127.0.0.1 连，不改。离线的节点要在节点上用 nagi panel add 更新地址。
+func (r *Registry) PushAddress(address, fingerprint string) {
+	if r.ReadOnly {
+		return
+	}
+	for _, c := range r.Conns() {
+		if c.remote.IsLoopback() || c.Pending() {
+			continue
+		}
+		go func(c *Conn) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			if _, err := c.Agent.AddPanel(ctx, &nagiv1.AddPanelRequest{Address: address, Fingerprint: fingerprint}); err != nil {
+				r.log.Warn("把面板的新地址告诉节点失败", "node", c.NodeID, "err", err)
+			}
+		}(c)
 	}
 }

@@ -19,7 +19,7 @@ export function useRun(projectId: string) {
     if (!keep) setLines([]);
     try {
       for await (const ev of start()) {
-        if (ev.event.case === "output") setLines((l) => [...l, ev.event.value as string]);
+        if (ev.event.case === "output") setLines((l) => appendLine(l, ev.event.value as string));
         if (ev.event.case === "result") setResult(ev.event.value as RunResult);
       }
     } catch (err) {
@@ -34,6 +34,29 @@ export function useRun(projectId: string) {
   return { run, busy, output, setLines };
 }
 
+// 拉取镜像时每一层的进度（"1fdd0614a47e Downloading 11.5MB"）原地更新，不是每次都加一行。
+const layerLine = /^\s*([0-9a-f]{12}) (Waiting|Pulling fs layer|Downloading|Download complete|Verifying Checksum|Extracting|Pull complete|Already exists)\b/;
+
+function appendLine(lines: string[], text: string): string[] {
+  // 一次输出可能有好几行。
+  const parts = text.split(/\r?\n/);
+  if (parts.length > 1) return parts.filter((l) => l !== "").reduce(appendLine, lines);
+  const m = layerLine.exec(text);
+  if (m) {
+    for (let i = lines.length - 1; i >= 0 && i >= lines.length - 50; i--) {
+      if (layerLine.exec(lines[i])?.[1] === m[1]) {
+        const next = lines.slice();
+        next[i] = text;
+        return next;
+      }
+    }
+  }
+  return [...lines, text];
+}
+
+// 需要用户注意的输出（端口没开放、自动加了映射）：单独列在结果上面，免得淹没在日志里。
+const noteLine = /未开放|已按配置里的端口添加映射/;
+
 function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   const outRef = useRef<HTMLPreElement>(null);
   useEffect(() => {
@@ -43,6 +66,13 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   return (
     <div className="grid gap-2">
       {result && (result.success ? <Notice tone="success">已完成</Notice> : <Alert>{result.error || "操作失败"}</Alert>)}
+      {lines
+        .filter((l) => noteLine.test(l))
+        .map((l, i) => (
+          <Notice key={i} tone={l.includes("未开放") ? "warning" : undefined}>
+            {l}
+          </Notice>
+        ))}
       {lines.length > 0 && (
         <LogBox ref={outRef} className="max-h-72">
           {lines.join("\n")}

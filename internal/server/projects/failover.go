@@ -329,7 +329,20 @@ func (s *Service) ChangeWitness(ctx context.Context, projectID, name, witnessNod
 	if err := s.Q.SetContainerFailover(ctx, store.SetContainerFailoverParams{Failover: raw, FailoverEpoch: c.FailoverEpoch, ProjectID: projectID, Name: name}); err != nil {
 		return nil, err
 	}
-	s.Log.Info("已更换见证人", "project", projectID, "container", name, "from", cfg.GetWitness().GetName(), "to", next.GetWitness().GetName())
+	from := cfg.GetWitness().GetName()
+	if cfg.GetWitnessIsPanel() {
+		from = "旧面板"
+		if m := s.Nodes.Mesh(); m != nil {
+			if self := m.PublicKey(); string(cfg.GetWitness().GetKey()) == string(self[:]) {
+				from = "本面板"
+			}
+		}
+	}
+	to := next.GetWitness().GetName()
+	if next.GetWitnessIsPanel() {
+		to = "本面板"
+	}
+	s.Log.Info("已更换见证人", "project", projectID, "container", name, "from", from, "to", to)
 	return s.reload(ctx, projectID)
 }
 

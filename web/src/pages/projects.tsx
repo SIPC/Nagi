@@ -189,7 +189,9 @@ export function ProjectsPage() {
                     <span>
                       {p.containers.length} 个容器{p.routes.length > 0 && ` · ${p.routes.length} 个端口映射`}
                     </span>
-                    <span className="tabular-nums">创建于 {formatDate(toDate(p.createdAt))}</span>
+                    <span className="tabular-nums">
+                      {p.rebuiltAt ? `拼回于 ${formatDate(toDate(p.rebuiltAt))}` : `创建于 ${formatDate(toDate(p.createdAt))}`}
+                    </span>
                   </div>
                 </Link>
               );

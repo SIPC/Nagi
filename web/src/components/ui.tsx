@@ -74,15 +74,29 @@ export function Label({ className, ...props }: React.ComponentProps<"label">) {
 }
 
 // HelpTip：字段或标题旁的问号，悬停或聚焦时显示详细说明。
+// 说明框不显示时不占位置；靠近窗口边缘时改为向内对齐，不会撑出横向滚动条。
 export function HelpTip({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [align, setAlign] = useState<"center" | "left" | "right">("center");
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const half = 150; // 说明框最宽 18rem 的一半左右
+    const mid = r.left + r.width / 2;
+    setAlign(mid - half < 8 ? "left" : mid + half > window.innerWidth - 8 ? "right" : "center");
+  };
+  const pos = align === "left" ? "left-0" : align === "right" ? "right-0" : "left-1/2 -translate-x-1/2";
   return (
-    <span className={cn("group/help relative inline-flex align-middle", className)}>
+    <span ref={ref} className={cn("group/help relative inline-flex align-middle", className)} onMouseEnter={place} onFocus={place}>
       <span tabIndex={0} className="inline-flex cursor-help text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground">
         <CircleHelp className="size-3.5" />
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none invisible absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-72 -translate-x-1/2 rounded-md border bg-card px-2.5 py-1.5 text-xs leading-relaxed font-normal text-foreground opacity-0 shadow-lg transition-opacity group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100"
+        className={cn(
+          "pointer-events-none absolute bottom-full z-50 mb-2 hidden w-max max-w-72 rounded-md border bg-card px-2.5 py-1.5 text-xs leading-relaxed font-normal text-foreground shadow-lg group-hover/help:block group-focus-within/help:block",
+          pos,
+        )}
       >
         {children}
       </span>
@@ -97,6 +111,7 @@ export function Field({
   help,
   htmlFor,
   className,
+  error,
   children,
 }: {
   label: React.ReactNode;
@@ -104,6 +119,8 @@ export function Field({
   help?: React.ReactNode;
   htmlFor?: string;
   className?: string;
+  // error：填写有误时的说明，显示在格式说明的位置。
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -113,7 +130,7 @@ export function Field({
         {help && <HelpTip>{help}</HelpTip>}
       </div>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error ? <p className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

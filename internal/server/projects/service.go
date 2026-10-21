@@ -266,6 +266,9 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 		Id: p.ID, Name: p.Name, NetworkName: p.NetworkName, Revision: p.Revision,
 		CreatedAt: timestamppb.New(time.Unix(p.CreatedAt, 0)), Settings: settings,
 	}
+	if p.RebuiltAt > 0 {
+		proj.RebuiltAt = timestamppb.New(time.Unix(p.RebuiltAt, 0))
+	}
 	if d, ok, err := s.sharedEnvDraft(p); err != nil {
 		return nil, err
 	} else if ok {
@@ -319,6 +322,10 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		mem.Failover = cfg
 		mem.FailoverHolder = s.reportedFailover(c.NodeID, c.ProjectID, c.Name)
 		mem.FailoverStandby = s.reportedFailover(standbyOf(cfg, c.NodeID).GetNodeId(), c.ProjectID, c.Name)
+		if m := s.Nodes.Mesh(); m != nil && cfg.GetWitnessIsPanel() {
+			self := m.PublicKey()
+			mem.FailoverWitnessSelf = string(cfg.GetWitness().GetKey()) == string(self[:])
+		}
 	}
 	if c.BackupNodeID != "" {
 		if conn, err := s.Nodes.Peek(c.NodeID); err == nil {

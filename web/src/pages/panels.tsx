@@ -139,6 +139,7 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
               <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
                 {p.fingerprint}
               </div>
+              {!p.connected && p.lastError && <div className="mt-0.5 text-xs text-warning">{p.lastError}</div>}
             </div>
             {p.connected ? <Status tone="success">已连接</Status> : <Status>未连接</Status>}
             <Button
@@ -147,7 +148,7 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
               onClick={async () => {
                 const msg = p.isSelf
                   ? "从节点上移除本面板？本面板将不再管理该节点，节点由其他面板继续管理。"
-                  : `从节点上移除面板 ${p.address}？该面板将无法再连接和操作此节点。`;
+                  : `从节点上移除面板 ${p.address}（公钥 ${p.fingerprint.replace("sha256//", "").slice(0, 12)}…）？该面板将无法再连接和操作此节点。`;
                 if (!confirm(msg)) return;
                 setError("");
                 try {

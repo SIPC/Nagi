@@ -90,8 +90,13 @@ func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Reque
 	if net.ParseIP(addr) == nil && !hostnameRe.MatchString(addr) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("对外地址必须是 IP 或域名，不含端口"))
 	}
+	old := s.Panel.PublicAddress(ctx)
 	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPublicAddress, Value: addr}); err != nil {
 		return nil, err
+	}
+	if addr != old {
+		s.Nodes.PushAddress(s.Panel.PublicHostPort(ctx), s.Panel.Fingerprint)
+		s.Log.Info("面板对外地址已更新，已通知在线节点", "address", addr)
 	}
 	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
 }

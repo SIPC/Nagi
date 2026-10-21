@@ -127,6 +127,7 @@ function ContainersTable({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const targets = project.containers.filter((m) => checked[m.name]);
   const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
+  const multi = project.containers.length > 1;
 
   const deploy = (containers: Container[]) =>
     run(() =>
@@ -147,15 +148,25 @@ function ContainersTable({
             <Plus />
             添加容器
           </Button>
-          {changed.length > 0 && (
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => deploy(changed)}>
-              部署变更（{changed.length}）
+          {/* 批量部署只在有多个容器时出现；只有一个容器时用下面详情里的「部署」。 */}
+          {multi && changed.length > 0 && targets.length === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => deploy(changed)}
+              title={"有草稿、共享变量改过或还没部署过的容器：" + changed.map((m) => m.name).join("、")}
+            >
+              {busy ? <Spinner /> : <Rocket />}
+              部署有改动的（{changed.length}）
             </Button>
           )}
-          <Button size="sm" disabled={busy || targets.length === 0} onClick={() => deploy(targets)}>
-            {busy ? <Spinner /> : <Rocket />}
-            部署所选{targets.length > 0 && `（${targets.length}）`}
-          </Button>
+          {multi && targets.length > 0 && (
+            <Button size="sm" disabled={busy} onClick={() => deploy(targets)}>
+              {busy ? <Spinner /> : <Rocket />}
+              部署所选（{targets.length}）
+            </Button>
+          )}
         </>
       }
     >

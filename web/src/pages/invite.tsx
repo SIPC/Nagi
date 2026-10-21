@@ -27,8 +27,8 @@ export function InviteCard() {
 
   return (
     <Section
-      title="接入码"
-      description="供其他面板将节点移交至本面板。"
+      title="接收移交的节点"
+      description="别的面板要把它的节点交给本面板时，在那边粘贴这里生成的接入码。添加新机器请用节点页的「添加节点」。"
       help="接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点需在节点页批准后才能使用，以防接入码泄露后被他人利用。"
       actions={
         <Button size="sm" onClick={create}>

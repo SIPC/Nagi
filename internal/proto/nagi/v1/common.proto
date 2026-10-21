@@ -32,6 +32,8 @@ message Project {
   repeated EnvVar shared_env_draft = 11;
   // 已连接的项目（见 docs/agent.md#项目连接）。
   repeated LinkedProject links = 12;
+  // 从节点缓存拼回的时间（见 docs/panel.md#项目数据）；没拼回过时为空。拼回的项目原来的创建时间不知道。
+  google.protobuf.Timestamp rebuilt_at = 13;
 }
 
 message LinkedProject {
@@ -96,6 +98,8 @@ message Container {
   // 持有租约的节点和热备上报的顶替状态（节点不在线时为空）。
   FailoverStatus failover_holder = 22;
   FailoverStatus failover_standby = 23;
+  // 见证人是面板时，是不是本面板（不是时是换面板以前的旧面板，本面板会自动换成自己）。
+  bool failover_witness_self = 24;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -463,6 +467,8 @@ message TrustedPanel {
   bool is_self = 4;
   // 主备面板里的角色："primary"、"standby"；不在主备面板里时为空（见 docs/standby.md）。
   string role = 5;
+  // 节点最近一次连接这个面板失败的原因，连着时为空。
+  string last_error = 6;
 }
 
 // MeshPeer 是面板告诉节点的一个 mesh 成员。

@@ -440,6 +440,22 @@ func (e *Engine) Resolve(ctx context.Context, key string) {
 	}
 }
 
+// ResolveUnless 把 key 以 prefix 开头、keep 判断不再需要的事件类告警都标为已恢复
+// （例如域名已经删掉了，它的"申请证书失败"不会再有成功的那一刻）。
+func (e *Engine) ResolveUnless(ctx context.Context, prefix string, keep func(rest string) bool) {
+	var keys []string
+	e.mu.Lock()
+	for k, st := range e.states {
+		if rest, ok := strings.CutPrefix(k, "event:"+prefix); ok && st.firing && !keep(rest) {
+			keys = append(keys, strings.TrimPrefix(k, "event:"))
+		}
+	}
+	e.mu.Unlock()
+	for _, k := range keys {
+		e.Resolve(ctx, k)
+	}
+}
+
 // ---- 状态与发送 ----
 
 // setFiring 更新告警状态，需要通知时返回要发送的告警。调用方持有 e.mu。

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
@@ -182,9 +183,19 @@ func (a *agent) applyCluster(p trustedPanel, c *nagiv1.PanelCluster) bool {
 	return switched
 }
 
-// role 返回面板在主备面板里的角色："primary"、"standby"，不在主备面板里时为空。
+// role 返回面板在主备面板里的角色："primary"、"standby"；没有备用面板（这组只有它一个）时为空。
 func (a *agent) role(p trustedPanel) string {
-	st := a.id.cluster(p.clusterID())
+	cid := p.clusterID()
+	n := 0
+	for _, x := range a.id.Panels() {
+		if x.clusterID() == cid {
+			n++
+		}
+	}
+	if n < 2 {
+		return ""
+	}
+	st := a.id.cluster(cid)
 	switch {
 	case st.Primary == "":
 		return ""
@@ -251,4 +262,35 @@ func (a *agent) primaryGuard(fp string) (grpc.UnaryServerInterceptor, grpc.Strea
 // clusterOf 返回节点对面板 p 那一组记下的任期和主面板，随上报告诉面板。
 func (a *agent) clusterOf(p trustedPanel) clusterState {
 	return a.id.cluster(p.clusterID())
+}
+
+// setConnectError 记下连接某个面板失败的原因（面板的"受信面板"列表里显示）。
+func (a *agent) setConnectError(fingerprint string, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.connErrs == nil {
+		a.connErrs = map[string]string{}
+	}
+	if err == nil {
+		delete(a.connErrs, fingerprint)
+		return
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "指纹不匹配"):
+		msg = "这个地址上的面板公钥变了（面板可能重装过）。确认不再使用后可以移除"
+	case strings.Contains(msg, "connection refused"):
+		msg = "连接被拒绝：面板没有运行，或者地址、端口不对"
+	case strings.Contains(msg, "i/o timeout"), strings.Contains(msg, "no route to host"), strings.Contains(msg, "network is unreachable"):
+		msg = "连接超时：网络不通，或者面板所在的机器关机了"
+	case strings.Contains(msg, "no such host"):
+		msg = "找不到面板的地址（域名解析失败）"
+	}
+	a.connErrs[fingerprint] = msg
+}
+
+func (a *agent) connectError(fingerprint string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.connErrs[fingerprint]
 }

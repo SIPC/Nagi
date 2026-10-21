@@ -29,6 +29,20 @@ export function textToPorts(text: string): PortMapping[] {
     });
 }
 
+// checkPorts 检查"对外端口"的写法，返回第一个问题的说明，没有问题时返回空。和面板的规则一致：
+// 80、443 留给域名访问（网站部署后在「网络」里绑定域名）。
+export function checkPorts(text: string): string {
+  for (const p of text.split(/[\s,]+/).filter(Boolean)) {
+    const m = /^(\d+)(?::(\d+))?(?:\/(tcp|udp))?$/.exec(p);
+    if (!m) return `「${p}」格式不对，应为 节点端口:容器端口，例如 8080:80 或 53:53/udp`;
+    const published = Number(m[1]);
+    const target = Number(m[2] ?? m[1]);
+    if (published < 1 || published > 65535 || target < 1 || target > 65535) return `「${p}」端口应在 1～65535 之间`;
+    if (published === 80 || published === 443) return `节点端口 ${published} 留给域名访问。网站请换一个端口（如 8080:${target}），或部署后在「网络」里绑定域名`;
+  }
+  return "";
+}
+
 export function lines(text: string): string[] {
   return text
     .split("\n")

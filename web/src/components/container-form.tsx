@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { Field, Input, Segmented, Textarea } from "@/components/ui";
-import { envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
+import { checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import type { ImageForm, ImageFormSchema, ContainerConfigSchema } from "@/gen/nagi/v1/common_pb";
 
 const exampleCompose = `services:
@@ -58,9 +58,20 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
             label="对外端口"
             htmlFor={prefix + "ports"}
             hint="格式：节点端口:容器端口，空格分隔"
+            error={checkPorts(ports)}
             help="例如 8080:80 53:53/udp。首次部署时转为端口映射，经 Caddy 对外开放；之后在「网络」标签页修改或绑定域名。"
           >
-            <Input id={prefix + "ports"} value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono" placeholder="8080:80" />
+            <Input
+              id={prefix + "ports"}
+              value={ports}
+              onChange={(e) => {
+                setPorts(e.target.value);
+                // 有问题时阻止提交（浏览器自带的表单校验）。
+                e.target.setCustomValidity(checkPorts(e.target.value));
+              }}
+              className="font-mono"
+              placeholder="8080:80"
+            />
           </Field>
         )}
         <Field label="工作目录" htmlFor={prefix + "workdir"} help="将容器的 data/ 目录（上传或从 git 拉取的文件）挂载到容器内的这个路径。留空则不挂载。">

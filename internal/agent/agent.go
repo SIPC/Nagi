@@ -251,6 +251,7 @@ type agent struct {
 	subs     []chan struct{}
 	panels   map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
 	sessions map[string]context.CancelFunc        // 面板指纹 → 停止连接
+	connErrs map[string]string                    // 面板指纹 → 最近一次连接失败的原因
 	reload   chan struct{}
 }
 
@@ -342,6 +343,16 @@ func (a *agent) proxyLoop(ctx context.Context) {
 		if err == nil {
 			err = a.proxy.Apply(routes)
 		}
+		if err == nil {
+			// 已经不用的域名，"申请证书失败"的告警标为已恢复。
+			domains := map[string]bool{}
+			for _, r := range routes {
+				for _, d := range r.Domains {
+					domains[d] = true
+				}
+			}
+			a.alerts.ResolveUnless(ctx, "cert_failed:", func(d string) bool { return domains[d] })
+		}
 		if err != nil && ctx.Err() == nil {
 			a.log.Warn("更新对外访问规则失败", "err", err)
 		}
@@ -430,6 +441,7 @@ func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 		if time.Since(start) > time.Minute {
 			backoff = time.Second
 		}
+		a.setConnectError(fingerprint, err)
 		a.log.Warn("与面板的连接已断开，稍后重连", "panel", p.Address, "err", err, "retry_in", backoff)
 		select {
 		case <-ctx.Done():
@@ -477,6 +489,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.setConnectError(p.Fingerprint, nil)
 	a.mu.Lock()
 	if a.panels == nil {
 		a.panels = map[string]nagiv1.PanelServiceClient{}
