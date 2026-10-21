@@ -603,6 +603,17 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 		return err
 	}
 	defer tx.Rollback()
+	// 登录会话是本面板自己的：主面板上删了账号、改了密码或两步验证的，本面板上这个账号的会话也作废。
+	if _, err := tx.ExecContext(ctx, `DELETE FROM main.sessions WHERE user_id NOT IN (SELECT id FROM snap.users)
+		OR user_id IN (SELECT m.id FROM main.users m JOIN snap.users s ON s.id = m.id
+			WHERE s.password_hash != m.password_hash OR s.totp_secret != m.totp_secret)`); err != nil {
+		return err
+	}
+	// 两步验证用过的最后一个时间步取两边大的：在本面板上用过的验证码，不会因为同步回到旧值而能再用一次。
+	if _, err := tx.ExecContext(ctx, "CREATE TEMP TABLE keep_totp AS SELECT id, totp_last_step FROM main.users"); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), "DROP TABLE IF EXISTS temp.keep_totp")
 	local := "'" + strings.Join(LocalSettings, "','") + "'"
 	for _, t := range tables {
 		if localTables[t] {
@@ -624,6 +635,13 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO main."+q+" SELECT * FROM snap."+q); err != nil {
 			return err
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE main.users SET totp_last_step = MAX(totp_last_step,
+		(SELECT k.totp_last_step FROM temp.keep_totp k WHERE k.id = users.id)) WHERE id IN (SELECT id FROM temp.keep_totp)`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DROP TABLE temp.keep_totp"); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

@@ -355,8 +355,19 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 		return undo(err)
 	}
 	// 容器已经在目标节点上（启动失败也算：数据都在那里，用户修改配置后重新部署即可）。
-	if merr := s.moved(ctx, projectID, name, nodeID, sp.GetDir()); merr != nil {
-		return merr
+	// 记下新位置；写不进数据库时（重试几次）撤销：不然面板还记着原节点，之后会把目标节点上的这份当成多余的停掉。
+	var merr error
+	for i := 0; i < 3; i++ {
+		if merr = s.moved(ctx, projectID, name, nodeID, sp.GetDir()); merr == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if merr != nil {
+		if _, derr := target.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: projectID, Container: name, Retire: true}); derr != nil {
+			out("警告：目标节点停止容器失败：" + derr.Error())
+		}
+		return undo(fmt.Errorf("记录容器的新位置失败：%w", merr))
 	}
 	if _, derr := source.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: projectID, Container: name}); derr != nil {
 		out("警告：原节点删除容器缓存失败：" + derr.Error())

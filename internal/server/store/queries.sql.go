@@ -1553,6 +1553,21 @@ func (q *Queries) SetContainerImportedPorts(ctx context.Context, arg SetContaine
 	return err
 }
 
+const setContainerRevision = `-- name: SetContainerRevision :exec
+UPDATE containers SET revision = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerRevisionParams struct {
+	Revision  int64
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) SetContainerRevision(ctx context.Context, arg SetContainerRevisionParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerRevision, arg.Revision, arg.ProjectID, arg.Name)
+	return err
+}
+
 const setNodeEnrollment = `-- name: SetNodeEnrollment :exec
 UPDATE nodes SET revoked = 0, mesh_key = ?, pending = ? WHERE id = ?
 `

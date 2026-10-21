@@ -66,12 +66,12 @@ func (s *Server) startDomain(ctx context.Context, domain string, handler http.Ha
 	tlsCfg.NextProtos = append([]string{"h2", "http/1.1"}, tlsCfg.NextProtos...)
 	tlsCfg.MinVersion = tls.VersionTLS12
 
-	ln443, err := net.Listen("tcp", ":443")
+	ln443, err := listenRetry(":443")
 	if err != nil {
 		cache.Stop()
 		return nil, err
 	}
-	ln80, err := net.Listen("tcp", ":80")
+	ln80, err := listenRetry(":80")
 	if err != nil {
 		ln443.Close()
 		cache.Stop()
@@ -100,4 +100,17 @@ func (s *Server) startDomain(ctx context.Context, domain string, handler http.Ha
 		_ = plain.Shutdown(sctx)
 		cache.Stop()
 	}, nil
+}
+
+// listenRetry 监听端口，端口一时被占用时（例如面板换角色重启，上一个还没完全关掉）重试几次。
+func listenRetry(addr string) (net.Listener, error) {
+	var err error
+	for i := 0; i < 5; i++ {
+		var ln net.Listener
+		if ln, err = net.Listen("tcp", addr); err == nil {
+			return ln, nil
+		}
+		time.Sleep(time.Second)
+	}
+	return nil, err
 }

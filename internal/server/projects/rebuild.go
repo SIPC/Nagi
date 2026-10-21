@@ -335,6 +335,12 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 		_ = s.Q.DeleteContainer(ctx, store.DeleteContainerParams{ProjectID: pid, Name: name})
 		return err
 	}
+	// 记下拼回的那份缓存的修订号：别的节点上报同一个容器的更新的一份时（例如旧的原节点先报上来），据此换成更新的那份。
+	if sp.GetRevision() > 1 {
+		if err := s.Q.SetContainerRevision(ctx, store.SetContainerRevisionParams{Revision: sp.GetRevision(), ProjectID: pid, Name: name}); err != nil {
+			return fail(err)
+		}
+	}
 	version := sp.GetVersion()
 	if version == 0 {
 		version = 1

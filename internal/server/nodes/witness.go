@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -83,7 +84,10 @@ func (r *Registry) SetWitnessFrom(cfg *nagiv1.FailoverConfig, holder []byte, epo
 	_, existed := w.cfgs[id]
 	w.cfgs[id] = cfg
 	w.mu.Unlock()
-	if !existed {
+	// 已有的票（例如本面板以前当过这个容器的见证人留下的）比给的持有者和轮次旧时，换成给的：
+	// 否则面板会按旧的票"刚续过约"处理，一个租约时长内不投给真正的持有者。
+	cur, curEpoch, _ := w.voter.State(id, leaseDuration(cfg))
+	if !existed || epoch > curEpoch || (epoch == curEpoch && !bytes.Equal(cur, holder)) {
 		return w.voter.Set(id, holder, epoch, leaseDuration(cfg))
 	}
 	return nil

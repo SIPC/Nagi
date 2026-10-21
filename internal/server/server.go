@@ -344,7 +344,11 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.nodes.RunOfflineAlerts(ctx)
 		go s.nodes.ServeMesh(ctx)
 	}
-	go s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
+	domainDone := make(chan struct{})
+	go func() {
+		s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
+		close(domainDone)
+	}()
 	if m := s.nodes.Mesh(); m != nil {
 		defer m.Close()
 	}
@@ -368,6 +372,11 @@ func (s *Server) Run(ctx context.Context) error {
 		s.listener.Close()
 		_ = srv.Shutdown(shutdownCtx)
 		cancel()
+		// 等面板域名的 80/443 关掉，按新角色启动时才能再监听。
+		select {
+		case <-domainDone:
+		case <-time.After(10 * time.Second):
+		}
 		return ErrRoleChanged
 	case err := <-errc:
 		return err

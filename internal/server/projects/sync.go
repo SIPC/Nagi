@@ -234,6 +234,13 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 		if !l.TryLock() {
 			continue
 		}
+		// 项目刚从节点缓存拼回，而这个节点上的这份比拼回的那份新（例如容器在备份节点上恢复过，
+		// 拼回时先报上来的是旧的原节点）：换成这一份，旧的那份等它的节点下次上报时停掉。
+		if p, perr := s.project(ctx, cs.GetProjectId()); perr == nil && recentlyRebuilt(p) && err == nil && cs.GetRevision() > row.Revision {
+			s.preferNewerCopy(ctx, c, row)
+			l.Unlock()
+			continue
+		}
 		// 拿到锁以后再确认一次。
 		if row, err = s.container(ctx, cs.GetProjectId(), cs.GetName()); err == nil && row.NodeID != c.NodeID {
 			_, err = c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true})
@@ -312,4 +319,27 @@ func (s *Service) saveDeclaredPorts(ctx context.Context, rows []store.Container,
 			s.Log.Warn("保存容器声明的端口失败", "project", r.ProjectID, "container", r.Name, "err", err)
 		}
 	}
+}
+
+// preferNewerCopy 删掉容器的记录（保留 webhook 令牌），让节点 c 下次上报时按它缓存里更新的那份拼回。调用方持有项目的锁。
+func (s *Service) preferNewerCopy(ctx context.Context, c *nodes.Conn, row store.Container) {
+	if sec, err := s.secrets(row); err == nil {
+		s.mu.Lock()
+		if s.keepTokens == nil {
+			s.keepTokens = map[string]string{}
+		}
+		s.keepTokens[row.ProjectID+"/"+row.Name] = sec.WebhookToken
+		s.mu.Unlock()
+	}
+	if cfg := failoverOf(row); cfg != nil && cfg.GetWitnessIsPanel() {
+		s.Nodes.ClearWitness(row.ProjectID, row.Name)
+	}
+	if err := s.Q.DeleteContainer(ctx, store.DeleteContainerParams{ProjectID: row.ProjectID, Name: row.Name}); err != nil {
+		s.Log.Warn("换成更新的那份时删除旧记录失败", "project", row.ProjectID, "container", row.Name, "err", err)
+		return
+	}
+	s.mu.Lock()
+	delete(s.rebuilt, c)
+	s.mu.Unlock()
+	s.Log.Warn("节点上的这份比拼回的那份新，改用这一份", "project", row.ProjectID, "container", row.Name, "node", c.NodeID, "old_node", row.NodeID)
 }

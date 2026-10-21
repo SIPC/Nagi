@@ -410,6 +410,20 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 			continue
 		}
 		if !isParticipant(cur, conn.NodeID) {
+			// 节点既不是 A、B，也不是现在的见证人：它是以前的见证人（更换或取消时它离线，没收到），让它删掉。
+			// 在项目的锁里再确认一次：更换见证人时先通知新见证人、再写数据库，中间收到它的上报不能删。
+			l := s.lock(pid)
+			if !l.TryLock() {
+				continue
+			}
+			if c2, err := s.container(ctx, pid, name); err == nil {
+				if cfg2 := failoverOf(c2); cfg2 != nil && !isParticipant(cfg2, conn.NodeID) &&
+					(cfg2.GetWitnessIsPanel() || cfg2.GetWitness().GetNodeId() != conn.NodeID) {
+					_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
+					s.Log.Info("节点已不是这个容器的见证人，删掉它上面的顶替设置", "project", pid, "container", name, "node", conn.NodeID)
+				}
+			}
+			l.Unlock()
 			continue
 		}
 		s.adoptWitness(c, cur)
