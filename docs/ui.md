@@ -4,11 +4,19 @@
 
 ## 视觉
 
-- **克制的工具风**（参照 Vercel、Linear 的控制台）：灰阶为主、细边框、紧凑但不拥挤。彩色只用于状态：绿色正常、琥珀警告、红色错误、蓝色信息；品牌色（波浪）只用在标识上。
+- **克制的工具风**（参照 OpenAI 平台、Vercel、Linear 的控制台）：白底（深色模式近黑）、灰阶为主、少用卡片，区块之间用细分隔线而不是边框盒子。彩色只用于状态：绿色正常、琥珀警告、红色错误、蓝色信息；品牌色（波浪）只用在标识上。
 - **颜色只用变量**（`index.css`）：`background`、`card`、`muted`、`subtle`、`border`、`muted-foreground`、`success`、`warning`、`destructive`、`info`、`log`。不要写死 `zinc-950`、`sky-400` 这类颜色。深浅色都要能看。
-- **字号**：页面标题 20px（`text-xl font-semibold`）；区块标题 14px 加粗；正文 14px；辅助说明、表头、元信息 12–13px（`text-[13px]`、`text-xs`）。等宽字体只用于路径、地址、镜像、命令、ID、版本号。
-- **间距**：页面内区块之间 24px（`gap-6`）；区块内边距 20px（`px-5`）；表单字段之间 16px（`gap-4`）；同一行的按钮之间 8px。
-- **圆角**：区块 10px（`rounded-lg`），输入框、按钮 7px（`rounded-md`），徽标 5px。
+- **字号**：页面标题 24px（`text-2xl font-semibold`）；区块标题 15px 加粗；正文 14px；辅助说明、表头、元信息 12–13px（`text-[13px]`、`text-xs`）。等宽字体只用于路径、地址、镜像、命令、ID、版本号。
+- **间距**：区块之间一条分隔线，线上下各 24px（`Section` 自带）；表单字段之间 16px（`gap-4`）；同一行的按钮之间 8px。区块和表格不加左右内边距，和页面标题左对齐。
+- **卡片只用在概览网格**：项目列表、节点列表用卡片；其余内容（容器、快照、渠道、接入码……）一律是无框的列表或表格。
+- **圆角**：卡片、对话框 10px（`rounded-lg`），输入框、按钮 7px（`rounded-md`），徽标 5px。
+
+## 布局
+
+- **左侧竖排导航**（`AppLayout`）：顶部标识，中间 项目 / 节点 / 设置，底部用户名、主题切换、退出。窄屏（< 768px）改为顶部一行。内容区最宽 1024px。
+- **详情页**：`Breadcrumb` 上级链接 → `PageHeader`（标题、状态、元信息、操作）→ `Tabs` → 内容。当前标签记在地址的 `tab` 参数里。
+- **项目页**标签：容器、网络、设置。容器是一张表，点一行进入**容器页**（`/projects/<项目>/c/<容器>`），标签：概览、配置、版本、日志、终端、数据（快照、顶替、备份节点、更换节点）。删除容器在容器页标题右侧的 ⋯ 菜单里。
+- **设置页**：左侧二级菜单（面板访问、账号安全、告警、备用面板、接收移交、Mesh），右侧是选中的一组；单项设置用 `SettingRow`（左侧名称和说明，右侧控件，行之间分隔线）。
 
 ## 组件（`components/ui.tsx`、`pages/layout.tsx`）
 
@@ -17,11 +25,12 @@
 | `PageHeader` | 页面标题、一行描述、`meta`（元信息行）、右侧操作 |
 | `Breadcrumb` | 详情页顶部的上级链接 |
 | `Tabs` | 页面内的标签页（下划线样式） |
-| `Section` | 页面上的一个区块：`title`、一句 `description`、`help`（问号提示）、右侧 `actions`；放表格时用 `flush`；危险操作用 `tone="danger"` |
+| `Section` | 页面上的一个区块（无边框，上方分隔线）：`title`、一句 `description`、`help`（问号提示）、右侧 `actions`；放表格时用 `flush`；危险操作用 `tone="danger"` |
+| `SettingRows` / `SettingRow` | 设置项列表：左侧 `label`、`description`、`help`，右侧控件 |
 | `Field` | 表单字段：`label`、一行 `hint`（格式说明）、`help`（详细说明，收进问号） |
 | `Check` | 带文字的复选框，可带 `help` |
 | `Segmented` | 两三个选项之间切换 |
-| `Table` / `Th` / `Td` | 表格；放在 `Section flush` 里，首尾单元格自动对齐区块的内边距 |
+| `Table` / `Th` / `Td` | 表格；首尾单元格不留内边距，和区块标题左对齐 |
 | `Status` | 状态点加文字（运行中、离线……） |
 | `Badge` | 小标记（草稿、有状态、本面板……），`tone` 区分含义 |
 | `Notice` | 提示条：`tone` 为 `info`、`warning`、`danger`、`success`，可带 `title` 和 `actions` |

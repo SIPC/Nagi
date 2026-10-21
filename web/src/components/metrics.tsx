@@ -32,7 +32,7 @@ export function Sparkline({ values, className }: { values: number[]; className?:
 // Metric：一个指标的方块：名称、当前值、趋势线。
 function Metric({ label, value, values }: { label: string; value: string; values: number[] }) {
   return (
-    <div className="grid gap-1 rounded-md border bg-subtle px-3 py-2.5">
+    <div className="grid gap-1 rounded-md bg-subtle px-3 py-2.5">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-mono text-sm font-medium">{value}</div>
       <Sparkline values={values} className="h-7 w-full" />

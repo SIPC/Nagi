@@ -164,7 +164,8 @@ export function Check({
 
 // ---- 区块 ----
 
-// Section：页面上的一个区块。标题一行、可选的一句描述和右侧操作；flush 时内容区不留左右内边距（放表格）。
+// Section：页面上的一组内容。不加外框：标题一行、可选的一句描述和右侧操作，组与组之间用一条细分隔线隔开
+// （参照 OpenAI 平台后台：靠标题、留白和分隔线分组，不用卡片）。flush 时内容直接是表格。
 export function Section({
   title,
   description,
@@ -185,45 +186,42 @@ export function Section({
   children?: React.ReactNode;
 }) {
   return (
-    <section className={cn("rounded-lg border bg-card", tone === "danger" && "border-destructive/35", className)}>
+    <section className={cn("border-t pt-6 first-of-type:border-t-0 first-of-type:pt-0", className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pt-4 pb-3">
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
-            <h2 className={cn("flex items-center gap-1.5 text-sm font-semibold", tone === "danger" && "text-destructive")}>
+            <h2 className={cn("flex items-center gap-1.5 text-[15px] font-semibold", tone === "danger" && "text-destructive")}>
               {title}
               {help && <HelpTip>{help}</HelpTip>}
             </h2>
-            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
+            {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      {children !== undefined && children !== null && children !== false && (
-        <div className={cn(flush ? "pb-1" : "px-5 pb-5", !title && !actions && !flush && "pt-5")}>{children}</div>
-      )}
+      {children !== undefined && children !== null && children !== false && <div className={cn(flush && "-mt-1")}>{children}</div>}
     </section>
   );
 }
 
-// 旧的卡片组件，部分页面还在用。
-export function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("rounded-lg border bg-card text-card-foreground", className)} {...props} />;
+// SettingRow：设置里的一项，左边名称和说明，右边控件；行与行之间细分隔线。放在 SettingRows 里。
+export function SettingRow({ label, description, help, htmlFor, children }: { label: React.ReactNode; description?: React.ReactNode; help?: React.ReactNode; htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-x-8 gap-y-2 border-b py-5 first:pt-0 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : label}
+          {help && <HelpTip>{help}</HelpTip>}
+        </div>
+        {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
+      </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
 }
 
-export function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1 px-5 pt-4 pb-3", className)} {...props} />;
-}
-
-export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return <h3 className={cn("text-sm font-semibold", className)} {...props} />;
-}
-
-export function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p className={cn("text-[13px] text-muted-foreground", className)} {...props} />;
-}
-
-export function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("px-5 pb-5", className)} {...props} />;
+export function SettingRows({ children }: { children: React.ReactNode }) {
+  return <div className="grid">{children}</div>;
 }
 
 // ---- 表格 ----
@@ -239,14 +237,14 @@ export function Table({ className, ...props }: React.ComponentProps<"table">) {
 export function Th({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
-      className={cn("h-9 border-y bg-subtle px-3 text-left text-xs font-medium whitespace-nowrap text-muted-foreground first:pl-5 last:pr-5", className)}
+      className={cn("h-9 border-b px-3 text-left text-xs font-medium whitespace-nowrap text-muted-foreground first:pl-0 last:pr-0", className)}
       {...props}
     />
   );
 }
 
 export function Td({ className, ...props }: React.ComponentProps<"td">) {
-  return <td className={cn("h-11 border-b px-3 py-2 align-middle first:pl-5 last:pr-5 [tr:last-child>&]:border-b-0", className)} {...props} />;
+  return <td className={cn("h-12 border-b px-3 py-2 align-middle first:pl-0 last:pr-0 [tr:last-child>&]:border-b-0", className)} {...props} />;
 }
 
 // ---- 状态与提示 ----
@@ -356,7 +354,7 @@ export function Loading() {
 // Empty：空状态。
 export function Empty({ title, children, action, icon }: { title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
+    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
       <div className="mb-1 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">{icon ?? <Inbox className="size-5" />}</div>
       <p className="text-sm font-medium">{title}</p>
       {children && <div className="max-w-md text-[13px] text-muted-foreground">{children}</div>}
@@ -367,7 +365,7 @@ export function Empty({ title, children, action, icon }: { title: string; childr
 
 // EmptyRow：区块里没有内容时的一行说明。
 export function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="px-5 py-6 text-center text-[13px] text-muted-foreground">{children}</p>;
+  return <p className="py-6 text-[13px] text-muted-foreground">{children}</p>;
 }
 
 // ---- 文本 ----

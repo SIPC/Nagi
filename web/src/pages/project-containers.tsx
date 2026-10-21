@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus, Rocket } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -10,6 +11,8 @@ import { ProjectState, ServiceState } from "@/components/status";
 import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
+import { Breadcrumb, PageHeader } from "@/pages/layout";
+import { ContainerData } from "@/pages/project-data";
 import {
   Alert,
   Badge,
@@ -20,6 +23,8 @@ import {
   Field,
   Input,
   KeyValue,
+  Loading,
+  Menu,
   Status,
   Notice,
   Section,
@@ -36,7 +41,8 @@ import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb"
 // 「容器」标签页：容器列表、批量部署、添加容器，以及选中容器的详情（概览、配置、版本、日志、终端）和监控。
 
 type ImageUpdate = { container: string; service: string; image: string };
-type DetailView = "overview" | "config" | "versions" | "logs" | "terminal";
+export const containerTabs = ["overview", "config", "versions", "logs", "terminal", "data"] as const;
+export type DetailView = (typeof containerTabs)[number];
 
 export function ContainersTab({
   project,
@@ -47,46 +53,19 @@ export function ContainersTab({
   services: ServiceStatus[];
   imageUpdates: ImageUpdate[];
 }) {
-  const [selected, setSelected] = useState("");
   const [adding, setAdding] = useState(project.containers.length === 0);
-  const [view, setView] = useState<DetailView>("overview");
-  const container = project.containers.find((m) => m.name === selected) ?? project.containers[0];
+  const navigate = useNavigate();
+  const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-8">
       {imageUpdates.length > 0 && (
         <Notice tone="info" title="镜像有新版本">
-          {imageUpdates.map((u) => `${u.container}/${u.service}（${u.image}）`).join("、")}。在容器详情中选择「更新镜像」拉取并部署。
+          {imageUpdates.map((u) => `${u.container}/${u.service}（${u.image}）`).join("、")}。在容器页选择「更新镜像」拉取并部署。
         </Notice>
       )}
-      <ContainersTable
-        project={project}
-        services={services}
-        selected={container?.name ?? ""}
-        onSelect={setSelected}
-        onAdd={() => setAdding(true)}
-      />
-      {adding && (
-        <AddContainer
-            project={project}
-          onClose={() => setAdding(false)}
-          onAdded={(name) => {
-            setSelected(name);
-            setAdding(false);
-          }}
-        />
-      )}
-      {container && (
-        <ContainerDetail
-          key={container.name}
-            project={project}
-          container={container}
-          services={services.filter((s) => s.container === container.name)}
-          hasImageUpdate={imageUpdates.some((u) => u.container === container.name)}
-          view={view}
-          onView={setView}
-        />
-      )}
+      <ContainersTable project={project} services={services} onOpen={open} onAdd={() => setAdding(true)} />
+      {adding && <AddContainer project={project} onClose={() => setAdding(false)} onAdded={open} />}
       <Section title="监控" description="最近 1 小时的资源占用和请求情况。">
         <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} />
       </Section>
@@ -110,14 +89,12 @@ export function containerKind(m: Container) {
 function ContainersTable({
   project,
   services,
-  selected,
-  onSelect,
+  onOpen,
   onAdd,
 }: {
   project: Project;
   services: ServiceStatus[];
-  selected: string;
-  onSelect: (name: string) => void;
+  onOpen: (name: string) => void;
   onAdd: () => void;
 }) {
   const { run, busy, output } = useRun(project.id);
@@ -187,10 +164,9 @@ function ContainersTable({
           <tbody>
             {project.containers.map((m) => {
               const svc = services.filter((s) => s.container === m.name);
-              const active = m.name === selected;
               return (
-                <tr key={m.name} className={cn("cursor-pointer transition-colors hover:bg-subtle", active && "bg-subtle")} onClick={() => onSelect(m.name)}>
-                  <Td onClick={(e) => e.stopPropagation()} className={cn(active && "shadow-[inset_2px_0_0_var(--foreground)]")}>
+                <tr key={m.name} className="group cursor-pointer transition-colors hover:bg-subtle" onClick={() => onOpen(m.name)}>
+                  <Td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       aria-label={`选择 ${m.name}`}
@@ -200,7 +176,7 @@ function ContainersTable({
                   </Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-medium">{m.name}</span>
+                      <span className="font-medium group-hover:underline">{m.name}</span>
                       <span className="text-xs text-muted-foreground">{containerKind(m)}</span>
                       {m.hasDraft && <Badge tone="warning">草稿</Badge>}
                       {m.sharedEnvOutdated && <Badge tone="warning">共享变量待部署</Badge>}
@@ -233,12 +209,46 @@ function ContainersTable({
           </tbody>
         </Table>
       )}
-      {output && <div className="px-5 pt-3 pb-4 empty:hidden">{output}</div>}
+      {output && <div className="pt-3 empty:hidden">{output}</div>}
     </Section>
   );
 }
 
 // ---- 一个容器 ----
+
+// ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 tab 参数里。
+export function ContainerPage({ projectId, name, view, onView }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void }) {
+  const project = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projectClient.getProject({ projectId }),
+    refetchInterval: 5000,
+  });
+  if (project.isPending) return <Loading />;
+  if (project.error) return <Alert>{errorMessage(project.error)}</Alert>;
+  const p = project.data.project;
+  if (!p) return null;
+  const container = p.containers.find((c) => c.name === name);
+  const crumbs = [
+    { label: "项目", to: "/projects" },
+    { label: p.name, to: `/projects/${p.id}` },
+  ];
+  if (!container) {
+    return (
+      <>
+        <Breadcrumb items={crumbs} />
+        <Alert>项目里没有容器 {name}（可能已删除）</Alert>
+      </>
+    );
+  }
+  const services = (project.data.status?.services ?? []).filter((s) => s.container === name);
+  const hasImageUpdate = (project.data.status?.imageUpdates ?? []).some((u) => u.container === name);
+  return (
+    <>
+      <Breadcrumb items={[...crumbs, { label: name }]} />
+      <ContainerDetail project={p} container={container} services={services} hasImageUpdate={hasImageUpdate} view={view} onView={onView} />
+    </>
+  );
+}
 
 function ContainerDetail({
   project,
@@ -286,16 +296,18 @@ function ContainerDetail({
     await deploy({ useUpload: true }, true);
   };
 
-  const remove = async () => {
+  const remove = async (): Promise<boolean> => {
     const deleteDir = confirm(
       `删除${kind} ${container.name}？${kind === "容器组" ? "组内的容器" : "容器"}将被停止并删除。\n\n选择"确定"同时删除${kind}目录及其中的数据；选择"取消"仅删除容器并保留目录。`,
     );
-    if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器并保留${kind}目录？`)) return;
+    if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器并保留${kind}目录？`)) return false;
     try {
       await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      return true;
     } catch (err) {
       setLines(["删除失败：" + errorMessage(err)]);
+      return false;
     }
   };
 
@@ -305,74 +317,96 @@ function ContainerDetail({
       ? `当前运行版本 v${container.deployedVersion}。`
       : "尚未部署。";
 
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
+  const navigate = useNavigate();
+
   return (
-    <Section
-      title={
-        <>
-          {container.name}
-          <span className="text-xs font-normal text-muted-foreground">{kind === "容器组" ? "容器组（compose）" : "容器"}</span>
-          {container.hasDraft && <Badge tone="warning">草稿</Badge>}
-        </>
-      }
-      description={summary + (container.sharedEnvOutdated ? "共享变量有更新，将在下次部署时生效。" : "")}
-      actions={
-        <>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".zip,.tar,.tar.gz,.tgz"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) upload(f);
-            }}
-          />
-          <Button variant="ghost" size="sm" className="hover:text-destructive" onClick={remove} disabled={busy}>
-            删除
-          </Button>
-          {(!cfg?.form || cfg.form.workdir) && (
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
-              上传并部署
+    <>
+      <PageHeader
+        title={
+          <>
+            {container.name}
+            <ProjectState services={services} deployed={container.deployedVersion > 0n} />
+            {container.hasDraft && <Badge tone="warning">草稿</Badge>}
+            {container.stateful && <Badge>有状态</Badge>}
+          </>
+        }
+        meta={
+          <>
+            <span>{kind === "容器组" ? "容器组（compose）" : "容器"}</span>
+            <span>{node?.name ?? container.nodeId}</span>
+            <span className="font-mono">{container.dir}</span>
+            <span>{summary + (container.sharedEnvOutdated ? "共享变量有更新，下次部署生效。" : "")}</span>
+          </>
+        }
+        actions={
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".zip,.tar,.tar.gz,.tgz"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) upload(f);
+              }}
+            />
+            {(!cfg?.form || cfg.form.workdir) && (
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
+                上传并部署
+              </Button>
+            )}
+            {cfg?.source?.gitUrl && (
+              <Button variant="outline" size="sm" onClick={() => deploy({ pull: true })} disabled={busy}>
+                拉取并部署
+              </Button>
+            )}
+            {hasImageUpdate && (
+              <Button variant="outline" size="sm" onClick={() => deploy({ pullImages: true })} disabled={busy}>
+                更新镜像
+              </Button>
+            )}
+            <Button size="sm" onClick={() => deploy({})} disabled={busy}>
+              {busy ? <Spinner /> : <Rocket />}
+              {busy ? "部署中" : container.hasDraft ? "部署草稿" : container.deployedVersion > 0n ? "重新部署" : "部署"}
             </Button>
-          )}
-          {cfg?.source?.gitUrl && (
-            <Button variant="outline" size="sm" onClick={() => deploy({ pull: true })} disabled={busy}>
-              拉取并部署
-            </Button>
-          )}
-          {hasImageUpdate && (
-            <Button variant="outline" size="sm" onClick={() => deploy({ pullImages: true })} disabled={busy}>
-              更新镜像
-            </Button>
-          )}
-          <Button size="sm" onClick={() => deploy({})} disabled={busy}>
-            {busy ? <Spinner /> : <Rocket />}
-            {busy ? "部署中" : container.hasDraft ? "部署草稿" : container.deployedVersion > 0n ? "重新部署" : "部署"}
-          </Button>
-        </>
-      }
-    >
-      <div className="grid gap-5">
-        <Tabs
-          className="-mx-5 px-5"
-          value={view}
-          onChange={onView}
-          items={[
-            { value: "overview", label: "概览" },
-            { value: "config", label: "配置" },
-            { value: "versions", label: "版本" },
-            { value: "logs", label: "日志" },
-            { value: "terminal", label: "终端" },
-          ]}
-        />
-        {output}
+            <Menu
+              items={[
+                {
+                  label: `删除${kind}`,
+                  danger: true,
+                  onSelect: async () => {
+                    if (await remove()) navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
+                  },
+                },
+              ]}
+            />
+          </>
+        }
+      />
+      <Tabs
+        className="mb-6"
+        value={view}
+        onChange={onView}
+        items={[
+          { value: "overview", label: "概览" },
+          { value: "config", label: "配置" },
+          { value: "versions", label: "版本" },
+          { value: "logs", label: "日志" },
+          { value: "terminal", label: "终端" },
+          { value: "data", label: "数据" },
+        ]}
+      />
+      <div className="grid gap-6">
+        {view !== "data" && output}
         {view === "overview" && <Overview container={container} services={services} />}
         {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} project={project} container={container} services={serviceNames} />}
         {view === "versions" && <Versions project={project} container={container} onRun={() => !busy && setLines([])} />}
         {view === "logs" && (
           <Logs
-                projectId={project.id}
+            projectId={project.id}
             container={container.name}
             services={serviceNames}
             containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
@@ -381,8 +415,9 @@ function ContainerDetail({
         {view === "terminal" && (
           <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         )}
+        {view === "data" && <ContainerData project={project} container={container} />}
       </div>
-    </Section>
+    </>
   );
 }
 
@@ -392,18 +427,12 @@ function Overview({ container, services }: { container: Container; services: Ser
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   return (
     <div className="grid gap-5">
-      <KeyValue
-        items={[
-          [
-            "节点",
-            <span className="inline-flex items-center gap-1.5">
-              {node?.name ?? container.nodeId}
-              {node && !node.online && <Status tone="warning">离线</Status>}
-            </span>,
-          ],
-          ["容器目录", <span className="font-mono">{container.dir}</span>],
-        ]}
-      />
+      {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
+      {node && !node.online && (
+        <Notice tone="warning" title="节点离线">
+          容器所在的节点 {node.name} 离线，状态可能不是最新的。
+        </Notice>
+      )}
       {container.hostNetworkServices.length > 0 && (
         <Notice tone="warning" title="使用 host 网络">
           容器 {container.hostNetworkServices.join("、")} 不经过 Caddy、不在项目内网中，端口直接对外开放，需自行配置防火墙。
@@ -414,7 +443,7 @@ function Overview({ container, services }: { container: Container; services: Ser
           {container.unmanagedVolumes.join("、")} 为 external 或使用自定义 driver，快照、迁移和顶替均不包含其数据。
         </Notice>
       )}
-      <div className="overflow-hidden rounded-md border">
+      <div>
         <Table>
           <thead>
             <tr>
@@ -688,7 +717,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
         </div>
       )}
       {error && <Alert>{error}</Alert>}
-      <div className="flex items-center justify-end gap-2 border-t pt-4">
+      <div className="flex items-center justify-end gap-2 pt-2">
         {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存为草稿</span>}
         {container.hasDraft && (
           <Button variant="ghost" size="sm" onClick={discard} disabled={busy}>
@@ -725,7 +754,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
         </Check>
       </div>
       {output}
-      <div className="overflow-hidden rounded-md border">
+      <div>
         <Table>
           <thead>
             <tr>
@@ -837,7 +866,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
         {node.fields}
         {form.fields}
         {error && <Alert>{error}</Alert>}
-        <div className="flex justify-end gap-2 border-t pt-4">
+        <div className="flex justify-end gap-2 pt-2">
           {project.containers.length > 0 && (
             <Button variant="ghost" size="sm" onClick={onClose}>
               取消

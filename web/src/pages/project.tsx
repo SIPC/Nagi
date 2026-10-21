@@ -6,14 +6,13 @@ import { ProjectState } from "@/components/status";
 import { Alert, Badge, Loading, Tabs } from "@/components/ui";
 import { ContainersTab } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
-import { DataTab } from "@/pages/project-data";
 import { SettingsTab } from "@/pages/project-settings";
 import type { Container } from "@/gen/nagi/v1/common_pb";
 
 // 项目页：项目由多个容器组成，每个容器指定一个节点运行，各自部署、记版本、回滚（见 docs/agent.md#项目与容器）。
-// 内容分四个标签页：容器、网络、数据、设置；当前标签页记在地址的 tab 参数里。
+// 内容分三个标签页：容器、网络、设置；当前标签页记在地址的 tab 参数里。每个容器有自己的页（快照、顶替、迁移在容器页的「数据」里）。
 
-export const projectTabs = ["containers", "network", "data", "settings"] as const;
+export const projectTabs = ["containers", "network", "settings"] as const;
 export type ProjectTab = (typeof projectTabs)[number];
 
 export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab: ProjectTab; onTab: (t: ProjectTab) => void }) {
@@ -71,13 +70,11 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
         items={[
           { value: "containers", label: "容器", count: p.containers.length },
           { value: "network", label: "网络", count: p.routes.length },
-          { value: "data", label: "数据" },
           { value: "settings", label: "设置" },
         ]}
       />
       {tab === "containers" && <ContainersTab project={p} services={services} imageUpdates={imageUpdates} />}
       {tab === "network" && <NetworkTab project={p} services={services} />}
-      {tab === "data" && <DataTab project={p} />}
       {tab === "settings" && <SettingsTab project={p} />}
     </>
   );

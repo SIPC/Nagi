@@ -9,7 +9,20 @@ import {
   type AlertChannel,
   type AlertRules,
 } from "@/gen/nagi/v1/common_pb";
-import { Alert, Button, EmptyRow, Field, HelpTip, Input, Loading, Notice, Section, Select, Table, Td, Th } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  EmptyRow,
+  Field,
+  Input,
+  Loading,
+  Notice,
+  Section,
+  Select,
+  Table,
+  Td,
+  Th,
+} from "@/components/ui";
 
 // ---- 告警设置：通知渠道和触发规则，一起保存 ----
 
@@ -31,7 +44,11 @@ export function AlertSettings() {
   }, [cfg.data]);
 
   const update = (i: number, patch: Partial<AlertChannel>) =>
-    setChannels(channels.map((c, j) => (j === i ? create(AlertChannelSchema, { ...c, ...patch }) : c)));
+    setChannels(
+      channels.map((c, j) =>
+        j === i ? create(AlertChannelSchema, { ...c, ...patch }) : c,
+      ),
+    );
 
   const save = async () => {
     setError("");
@@ -58,7 +75,11 @@ export function AlertSettings() {
     }
   };
 
-  const ruleField = (label: string, key: keyof AlertRules, placeholder: number) => (
+  const ruleField = (
+    label: string,
+    key: keyof AlertRules,
+    placeholder: number,
+  ) => (
     <Field label={label} htmlFor={`rule-${key}`}>
       <Input
         id={`rule-${key}`}
@@ -79,15 +100,17 @@ export function AlertSettings() {
 
   if (cfg.isPending)
     return (
-      <Section title="告警">
+      <Section title="通知渠道">
         <Loading />
       </Section>
     );
 
+  const addChannel = () =>
+    setChannels([...channels, create(AlertChannelSchema, { type: "webhook" })]);
   return (
-    <Section title="告警" description="通过 Webhook 或 Telegram 发送节点和容器的异常通知。" flush>
+    <div className="grid gap-8">
       {(error || cfg.data?.lost) && (
-        <div className="grid gap-3 px-5 pb-4">
+        <div className="grid gap-3">
           {error && <Alert>{error}</Alert>}
           {cfg.data?.lost && (
             <Notice tone="warning" title="告警配置无法解密">
@@ -97,91 +120,106 @@ export function AlertSettings() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-4 border-t px-5 py-3">
-        <h3 className="text-[13px] font-medium">通知渠道</h3>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setChannels([...channels, create(AlertChannelSchema, { type: "webhook" })])}
-        >
-          添加渠道
-        </Button>
-      </div>
-      {channels.length === 0 ? (
-        <div className="border-t">
+      <Section
+        title="通知渠道"
+        flush
+        actions={
+          <Button size="sm" variant="outline" onClick={addChannel}>
+            添加渠道
+          </Button>
+        }
+      >
+        {channels.length === 0 ? (
           <EmptyRow>未配置渠道，告警不会发送。</EmptyRow>
-        </div>
-      ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th className="w-40">名称</Th>
-              <Th className="w-36">类型</Th>
-              <Th>目标</Th>
-              <Th className="w-px" />
-            </tr>
-          </thead>
-          <tbody>
-            {channels.map((c, i) => (
-              <tr key={i}>
-                <Td>
-                  <Input className="h-8" placeholder="名称" aria-label="名称" value={c.name} onChange={(e) => update(i, { name: e.target.value })} />
-                </Td>
-                <Td>
-                  <Select className="h-8" aria-label="类型" value={c.type} onChange={(e) => update(i, { type: e.target.value })}>
-                    <option value="webhook">Webhook</option>
-                    <option value="telegram">Telegram</option>
-                  </Select>
-                </Td>
-                <Td>
-                  {c.type === "telegram" ? (
-                    <div className="flex gap-2">
-                      <Input
-                        className="h-8 min-w-48 flex-[2] font-mono"
-                        placeholder="机器人令牌"
-                        aria-label="机器人令牌"
-                        value={c.telegramToken}
-                        onChange={(e) => update(i, { telegramToken: e.target.value })}
-                      />
-                      <Input
-                        className="h-8 min-w-28 flex-1 font-mono"
-                        placeholder="聊天 ID"
-                        aria-label="聊天 ID"
-                        value={c.telegramChatId}
-                        onChange={(e) => update(i, { telegramChatId: e.target.value })}
-                      />
-                    </div>
-                  ) : (
-                    <Input
-                      className="h-8 min-w-64 font-mono"
-                      placeholder="https://..."
-                      aria-label="Webhook 地址"
-                      value={c.url}
-                      onChange={(e) => update(i, { url: e.target.value })}
-                    />
-                  )}
-                </Td>
-                <Td>
-                  <div className="flex justify-end gap-1">
-                    <Button size="xs" variant="ghost" onClick={() => test(c)}>
-                      测试
-                    </Button>
-                    <Button size="xs" variant="ghost" onClick={() => setChannels(channels.filter((_, j) => j !== i))}>
-                      删除
-                    </Button>
-                  </div>
-                </Td>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th className="w-40">名称</Th>
+                <Th className="w-40">类型</Th>
+                <Th>目标</Th>
+                <Th className="w-px" />
               </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
+            </thead>
+            <tbody>
+              {channels.map((c, i) => (
+                <tr key={i}>
+                  <Td>
+                    <Input
+                      className="h-8"
+                      placeholder="名称"
+                      aria-label="名称"
+                      value={c.name}
+                      onChange={(e) => update(i, { name: e.target.value })}
+                    />
+                  </Td>
+                  <Td>
+                    <Select
+                      className="h-8"
+                      aria-label="类型"
+                      value={c.type}
+                      onChange={(e) => update(i, { type: e.target.value })}
+                    >
+                      <option value="webhook">Webhook</option>
+                      <option value="telegram">Telegram</option>
+                    </Select>
+                  </Td>
+                  <Td>
+                    {c.type === "telegram" ? (
+                      <div className="flex gap-2">
+                        <Input
+                          className="h-8 min-w-48 flex-[2] font-mono"
+                          placeholder="机器人令牌"
+                          aria-label="机器人令牌"
+                          value={c.telegramToken}
+                          onChange={(e) =>
+                            update(i, { telegramToken: e.target.value })
+                          }
+                        />
+                        <Input
+                          className="h-8 min-w-28 flex-1 font-mono"
+                          placeholder="聊天 ID"
+                          aria-label="聊天 ID"
+                          value={c.telegramChatId}
+                          onChange={(e) =>
+                            update(i, { telegramChatId: e.target.value })
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <Input
+                        className="h-8 min-w-64 font-mono"
+                        placeholder="https://..."
+                        aria-label="Webhook 地址"
+                        value={c.url}
+                        onChange={(e) => update(i, { url: e.target.value })}
+                      />
+                    )}
+                  </Td>
+                  <Td>
+                    <div className="flex justify-end gap-1">
+                      <Button size="xs" variant="ghost" onClick={() => test(c)}>
+                        测试
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() =>
+                          setChannels(channels.filter((_, j) => j !== i))
+                        }
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Section>
 
-      <div className="border-t px-5 pt-3 pb-5">
-        <h3 className="mb-3 flex items-center gap-1.5 text-[13px] font-medium">
-          触发规则
-          <HelpTip>留空时使用默认值，即输入框中的灰色数字。</HelpTip>
-        </h3>
+      <Section title="触发规则" help="留空时使用默认值，即输入框中的灰色数字。">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {ruleField("磁盘使用率（%）", "diskPercent", 90)}
           {ruleField("内存使用率（%）", "memPercent", 90)}
@@ -192,14 +230,14 @@ export function AlertSettings() {
           {ruleField("节点失联时间（秒）", "offlineSeconds", 60)}
           {ruleField("5xx 错误率（%）", "errorPercent", 5)}
         </div>
-      </div>
+      </Section>
 
-      <div className="flex items-center justify-end gap-4 border-t px-5 py-3">
-        {msg && <span className="text-[13px] text-success">{msg}</span>}
+      <div className="flex items-center gap-4">
         <Button size="sm" onClick={save}>
           保存
         </Button>
+        {msg && <span className="text-[13px] text-success">{msg}</span>}
       </div>
-    </Section>
+    </div>
   );
 }

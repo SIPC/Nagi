@@ -114,7 +114,7 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
   return (
     <div className="grid gap-3">
       <MeshSummary status={q.data} />
-      <div className="overflow-hidden rounded-md border">
+      <div>
         <MeshPeers status={q.data} nodeId={nodeId} />
       </div>
     </div>
@@ -130,20 +130,19 @@ export function PanelMeshCard() {
   });
   return (
     <Section
-      title="面板 Mesh"
-      description="面板在 mesh 网络中的地址和与各节点的连接。"
+      title="连接"
       help="节点之间、节点与面板之间优先使用 UDP 直连；无法直连时经面板中转。"
       flush
     >
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
-        <div className="px-5 pb-4">
+        <div className="pb-4">
           <Alert>{errorMessage(q.error)}</Alert>
         </div>
       ) : (
         <>
-          <div className="px-5 pb-3">
+          <div className="pb-3">
             <MeshSummary status={q.data} />
           </div>
           <MeshPeers status={q.data} />

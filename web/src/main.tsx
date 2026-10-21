@@ -14,8 +14,9 @@ import { LoginPage, SetupPage } from "@/pages/auth";
 import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, projectTabs, type ProjectTab } from "@/pages/project";
+import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab } from "@/pages/nodes";
-import { SettingsPage } from "@/pages/settings";
+import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import "./index.css";
 
 // 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
@@ -102,6 +103,28 @@ const projectRoute = createRoute({
   },
 });
 
+const containerRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/projects/$projectId/c/$container",
+  validateSearch: (search: Record<string, unknown>): { tab?: DetailView } => ({
+    tab: containerTabs.includes(search.tab as DetailView) ? (search.tab as DetailView) : undefined,
+  }),
+  component: function ContainerRoute() {
+    const { projectId, container } = containerRoute.useParams();
+    const { tab } = containerRoute.useSearch();
+    const navigate = containerRoute.useNavigate();
+    return (
+      <ContainerPage
+        key={projectId + "/" + container}
+        projectId={projectId}
+        name={container}
+        view={tab ?? "overview"}
+        onView={(t) => navigate({ search: { tab: t === "overview" ? undefined : t }, replace: true })}
+      />
+    );
+  },
+});
+
 const nodesRoute = createRoute({ getParentRoute: () => appRoute, path: "/nodes", component: NodesPage });
 
 const nodeRoute = createRoute({
@@ -125,12 +148,23 @@ const nodeRoute = createRoute({
   },
 });
 
-const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsPage });
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/settings",
+  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab } => ({
+    tab: settingsTabs.some((t) => t.value === search.tab) ? (search.tab as SettingsTab) : undefined,
+  }),
+  component: function Settings() {
+    const { tab } = settingsRoute.useSearch();
+    const navigate = settingsRoute.useNavigate();
+    return <SettingsPage tab={tab ?? "access"} onTab={(t) => navigate({ search: { tab: t === "access" ? undefined : t }, replace: true })} />;
+  },
+});
 
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
-  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, nodesRoute, nodeRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, containerRoute, nodesRoute, nodeRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });

@@ -114,7 +114,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
         )
       }
     >
-      {error && !open && <Alert className="mx-5 mb-3">{error}</Alert>}
+      {error && !open && <Alert className="mb-3">{error}</Alert>}
       {project.routes.length === 0 ? (
         <EmptyRow>暂无端口映射</EmptyRow>
       ) : (
@@ -196,7 +196,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
       )}
       {open && (
         <form
-          className="mt-1 grid gap-4 border-t bg-subtle px-5 pt-4 pb-4"
+          className="mt-1 grid gap-4 rounded-md bg-subtle p-4"
           onSubmit={(e) => {
             e.preventDefault();
             save();
@@ -349,7 +349,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
         {addresses.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">暂无容器</p>
         ) : (
-          <div className="overflow-hidden rounded-md border">
+          <div>
             <Table>
               <thead>
                 <tr>
@@ -383,7 +383,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
           />
         </Field>
         {error && <Alert>{error}</Alert>}
-        <div className="flex items-center justify-end gap-3 border-t pt-4">
+        <div className="flex items-center justify-end gap-3 pt-2">
           {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存</span>}
           <Button size="sm" onClick={save} disabled={busy}>
             {busy && <Spinner />}
@@ -463,7 +463,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
         )
       }
     >
-      {error && !open && <Alert className="mx-5 mb-3">{error}</Alert>}
+      {error && !open && <Alert className="mb-3">{error}</Alert>}
       {project.links.length === 0 ? (
         <EmptyRow>未连接其他项目</EmptyRow>
       ) : (
@@ -493,7 +493,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
         </Table>
       )}
       {addresses.length > 0 && (
-        <div className="border-t px-5 py-4">
+        <div className="border-t py-4">
           <p className="mb-2 text-[13px] text-muted-foreground">已连接的项目访问本项目容器时使用的地址：</p>
           <div className="flex flex-wrap gap-2">
             {addresses.map((a) => (
@@ -506,7 +506,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       )}
       {open && (
         <form
-          className="grid gap-4 border-t px-5 py-4"
+          className="grid gap-4 border-t py-4"
           onSubmit={(e) => {
             e.preventDefault();
             connect();

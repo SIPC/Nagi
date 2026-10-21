@@ -54,7 +54,7 @@ export function StandbyCard() {
 
   if (d.isStandby) {
     return (
-      <Section title="备用面板" description="本面板是备用面板，实时同步主面板的数据。" actions={<PromoteButton />}>
+      <Section title="同步状态" description="本面板是备用面板，实时同步主面板的数据。" actions={<PromoteButton />}>
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
           <dt className="text-muted-foreground">主面板</dt>
           <dd className="font-mono">{d.primaryAddress}</dd>
@@ -94,8 +94,7 @@ export function StandbyCard() {
   return (
     <Section
       flush
-      title="备用面板"
-      description="备用面板实时同步本面板的数据，主面板故障时可提升为主面板。"
+      title="已配对的备用面板"
       help="备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。平时只读，所有修改在主面板上进行。"
       actions={
         <Button size="sm" variant="outline" onClick={create} disabled={busy}>
@@ -104,7 +103,7 @@ export function StandbyCard() {
         </Button>
       }
     >
-      {error && <Alert className="mx-5 mb-3">{error}</Alert>}
+      {error && <Alert className="mb-3">{error}</Alert>}
       {d.standbys.length === 0 ? (
         <EmptyRow>暂无备用面板</EmptyRow>
       ) : (

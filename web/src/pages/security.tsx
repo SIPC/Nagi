@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { renderSVG } from "uqr";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
-import { Alert, Badge, Button, CodeBlock, Field, Input, Section } from "@/components/ui";
+import { Alert, Badge, Button, CodeBlock, Field, Input, SettingRow, SettingRows } from "@/components/ui";
 
 type Scope = "password" | "totp" | "entrance";
 
-// 账号安全：面板主密钥、修改密码、两步验证、安全入口，各占一个区块。
+// 账号安全：面板主密钥、登录密码、两步验证、安全入口，一项一行。
 export function SecurityCard() {
   const sec = useQuery({
     queryKey: ["security"],
@@ -16,7 +16,7 @@ export function SecurityCard() {
   const [next, setNext] = useState("");
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
   const [code, setCode] = useState("");
-  // 提示和错误显示在触发它的区块里。
+  // 提示和错误显示在触发它的那一项里。
   const [msg, setMsg] = useState<{ scope: Scope; text: string } | null>(null);
   const [error, setError] = useState<{ scope: Scope; text: string } | null>(null);
 
@@ -44,31 +44,27 @@ export function SecurityCard() {
   const keyPath = settings.data?.settings?.masterKeyPath;
 
   return (
-    <>
+    <SettingRows>
       {keyPath && (
-        <Section
-          title="面板主密钥"
-          description="用于加密配置备份密钥、两步验证密钥和告警令牌。"
-          help="请单独备份此文件。主密钥丢失后，即使在其他机器上恢复面板数据库，上述密钥也无法解密。"
+        <SettingRow
+          label="面板主密钥"
+          description="用于加密配置备份密钥、两步验证密钥和告警令牌，请单独备份。"
+          help="主密钥丢失后，即使在其他机器上恢复面板数据库，上述密钥也无法解密。"
         >
-          <Field label="文件路径">
-            <CodeBlock copy>{keyPath}</CodeBlock>
-          </Field>
-        </Section>
+          <CodeBlock copy>{keyPath}</CodeBlock>
+        </SettingRow>
       )}
 
-      <Section title="登录密码" help="忘记密码时，在面板所在机器上执行 nagi reset password。">
-        <div className="grid gap-4">
+      <SettingRow label="登录密码" description="修改后其他会话退出登录。" help="忘记密码时，在面板所在机器上执行 nagi reset password。">
+        <div className="grid max-w-sm gap-3">
           {feedback("password")}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="当前密码" htmlFor="sec-cur">
-              <Input id="sec-cur" type="password" value={cur} onChange={(e) => setCur(e.target.value)} />
-            </Field>
-            <Field label="新密码" htmlFor="sec-next" hint="至少 8 位">
-              <Input id="sec-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
-            </Field>
-          </div>
-          <div className="flex justify-end">
+          <Field label="当前密码" htmlFor="sec-cur">
+            <Input id="sec-cur" type="password" value={cur} onChange={(e) => setCur(e.target.value)} />
+          </Field>
+          <Field label="新密码" htmlFor="sec-next" hint="至少 8 位">
+            <Input id="sec-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
+          </Field>
+          <div>
             <Button
               size="sm"
               onClick={() =>
@@ -87,19 +83,22 @@ export function SecurityCard() {
             </Button>
           </div>
         </div>
-      </Section>
+      </SettingRow>
 
-      <Section
-        title="两步验证"
+      <SettingRow
+        label={
+          <>
+            两步验证 {s?.totpEnabled ? <Badge tone="success">已开启</Badge> : <Badge>未开启</Badge>}
+          </>
+        }
         description="登录时额外校验验证器应用生成的 6 位验证码。"
         help="丢失验证器时，在面板所在机器上执行 nagi reset 2fa。"
-        actions={s?.totpEnabled ? <Badge tone="success">已开启</Badge> : <Badge>未开启</Badge>}
       >
         <div className="grid gap-4">
           {feedback("totp")}
           {!s?.totpEnabled && !setup && (
             <div>
-              <Button size="sm" onClick={() => run("totp", async () => setSetup(await settingsClient.beginTOTP({})), "")}>
+              <Button size="sm" variant="outline" onClick={() => run("totp", async () => setSetup(await settingsClient.beginTOTP({})), "")}>
                 开启两步验证
               </Button>
             </div>
@@ -109,32 +108,20 @@ export function SecurityCard() {
               <div className="flex flex-wrap items-start gap-5">
                 {/* 二维码固定黑底白字，深色模式下也能扫。 */}
                 <div
-                  className="size-40 shrink-0 rounded-md bg-white p-1.5 [&_svg]:size-full"
+                  className="size-36 shrink-0 rounded-md bg-white p-1.5 [&_svg]:size-full"
                   role="img"
                   aria-label="两步验证二维码"
                   dangerouslySetInnerHTML={{ __html: renderSVG(setup.uri, { border: 1 }) }}
                 />
                 <div className="grid min-w-0 flex-1 gap-3">
                   <p className="text-[13px] text-muted-foreground">用验证器应用（例如 Google Authenticator、1Password）扫描二维码；不能扫码时手动输入密钥。</p>
-                  <Field label="密钥">
-                    <CodeBlock copy>{setup.secret}</CodeBlock>
-                  </Field>
+                  <CodeBlock copy>{setup.secret}</CodeBlock>
                 </div>
               </div>
               <Field label="验证码" htmlFor="totp-enable" hint="验证器应用显示的 6 位数字">
                 <Input id="totp-enable" className="w-40 font-mono" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
               </Field>
-              <div className="flex justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSetup(null);
-                    setCode("");
-                  }}
-                >
-                  取消
-                </Button>
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   onClick={() =>
@@ -150,6 +137,16 @@ export function SecurityCard() {
                   }
                 >
                   确认开启
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSetup(null);
+                    setCode("");
+                  }}
+                >
+                  取消
                 </Button>
               </div>
             </>
@@ -184,35 +181,25 @@ export function SecurityCard() {
             </div>
           )}
         </div>
-      </Section>
+      </SettingRow>
 
-      <Section
-        title="安全入口"
-        description="开启后，需先访问入口地址才能打开登录页。"
-        help="忘记入口地址时，在面板所在机器上执行 nagi reset entrance。"
-        actions={
-          s?.entrance ? (
-            <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: false }), "已关闭安全入口")}>
-              关闭安全入口
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: true }), "已开启安全入口，请记录入口地址")}>
-              开启安全入口
-            </Button>
-          )
-        }
-      >
-        {(s?.entrance || msg?.scope === "entrance" || error?.scope === "entrance") && (
-          <div className="grid gap-4">
-            {feedback("entrance")}
-            {s?.entrance && (
-              <Field label="入口地址">
-                <CodeBlock copy>{`${window.location.origin}/${s.entrance}`}</CodeBlock>
-              </Field>
+      <SettingRow label="安全入口" description="开启后，需先访问入口地址才能打开登录页。" help="忘记入口地址时，在面板所在机器上执行 nagi reset entrance。">
+        <div className="grid gap-3">
+          {feedback("entrance")}
+          {s?.entrance && <CodeBlock copy>{`${window.location.origin}/${s.entrance}`}</CodeBlock>}
+          <div>
+            {s?.entrance ? (
+              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: false }), "已关闭安全入口")}>
+                关闭安全入口
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: true }), "已开启安全入口，请记录入口地址")}>
+                开启安全入口
+              </Button>
             )}
           </div>
-        )}
-      </Section>
-    </>
+        </div>
+      </SettingRow>
+    </SettingRows>
   );
 }

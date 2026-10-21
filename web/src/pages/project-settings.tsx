@@ -84,7 +84,7 @@ function GeneralSettings({ project }: { project: Project }) {
           </Field>
         </div>
         {error && <Alert>{error}</Alert>}
-        <div className="flex items-center justify-end gap-3 border-t pt-4">
+        <div className="flex items-center justify-end gap-3 pt-2">
           {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存</span>}
           <Button type="submit" size="sm" disabled={busy}>
             {busy && <Spinner />}
@@ -162,7 +162,7 @@ function SharedEnv({ project }: { project: Project }) {
         )}
         {error && <Alert>{error}</Alert>}
         {output}
-        <div className="flex justify-end gap-2 border-t pt-4">
+        <div className="flex justify-end gap-2 pt-2">
           {project.hasSharedEnvDraft && (
             <Button
               size="sm"
@@ -209,7 +209,7 @@ function Deployments({ project }: { project: Project }) {
 
   return (
     <Section flush title="部署记录" description="每次部署记录所有容器的版本，可将项目恢复到任一次部署时的状态。">
-      {output && <div className="px-5 pb-3 empty:hidden">{output}</div>}
+      {output && <div className="pb-3 empty:hidden">{output}</div>}
       {list.isPending ? (
         <EmptyRow>
           <Spinner />
@@ -307,7 +307,7 @@ function DeleteProject({ project }: { project: Project }) {
           </Field>
         )}
         {error && <Alert>{error}</Alert>}
-        <div className="flex justify-end border-t pt-4">
+        <div className="flex justify-end pt-2">
           <Button variant="destructive" size="sm" onClick={remove} disabled={deleteDir && confirmName !== project.name}>
             删除项目
           </Button>

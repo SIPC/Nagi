@@ -125,10 +125,10 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
     <div className="grid gap-3">
       <p className="text-[13px] text-muted-foreground">节点接受这些面板的连接和操作。</p>
       {error && <Alert>{error}</Alert>}
-      <div className="divide-y rounded-md border">
-        {q.data.panels.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">暂无面板</p>}
+      <div className="divide-y border-y">
+        {q.data.panels.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">暂无面板</p>}
         {q.data.panels.map((p) => (
-          <div key={p.fingerprint} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+          <div key={p.fingerprint} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[13px]">{p.address}</span>

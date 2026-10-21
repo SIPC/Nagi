@@ -17,7 +17,6 @@ import {
   Field,
   Input,
   Loading,
-  Notice,
   Section,
   Select,
   Spinner,
@@ -52,7 +51,7 @@ function Reminders() {
       text: (
         <>
           建议在
-          <Link to="/settings" className="mx-1 text-foreground underline underline-offset-2">
+          <Link to="/settings" search={{ tab: "security" }} className="mx-1 text-foreground underline underline-offset-2">
             设置 › 账号安全
           </Link>
           中开启。
@@ -74,21 +73,18 @@ function Reminders() {
     });
   }
   if (items.length === 0) return null;
+  // 一项一行的待办提醒，不用大块的提示框。
   return (
-    <div className="grid gap-2">
+    <div className="divide-y rounded-lg border">
       {items.map((it) => (
-        <Notice
-          key={it.key}
-          tone="warning"
-          title={it.title}
-          actions={
-            <Button size="xs" variant="ghost" onClick={() => hide(it.key, it.storage)}>
-              不再提醒
-            </Button>
-          }
-        >
-          {it.text}
-        </Notice>
+        <div key={it.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[13px]">
+          <span className="size-1.5 shrink-0 rounded-full bg-warning" />
+          <span className="font-medium">{it.title}</span>
+          <span className="min-w-0 flex-1 text-muted-foreground">{it.text}</span>
+          <Button size="xs" variant="ghost" onClick={() => hide(it.key, it.storage)}>
+            不再提醒
+          </Button>
+        </div>
       ))}
     </div>
   );
@@ -139,7 +135,7 @@ export function ProjectsPage() {
             新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。
           </Empty>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
             {projects.data.projects.map((summary) => {
               const p = summary.project;
               if (!p) return null;

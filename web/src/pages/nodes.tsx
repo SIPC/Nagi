@@ -67,7 +67,7 @@ export function NodesPage() {
           生成安装命令，在新机器上执行后即接入本面板。
         </Empty>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
           {list.map((n) => (
             <NodeCard key={n.id} n={n} onApproved={() => nodes.refetch()} />
           ))}
@@ -356,12 +356,12 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
     <div className="grid gap-3">
       <p className="text-[13px] text-muted-foreground">本节点作为备份节点或热备保存的容器副本。</p>
       {error && <Alert>{error}</Alert>}
-      <div className="divide-y rounded-md border">
-        {q.data.replicas.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">暂无副本</p>}
+      <div className="divide-y border-y">
+        {q.data.replicas.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">暂无副本</p>}
         {q.data.replicas.map(({ replica: r, inUse }) => {
           const label = `${r?.projectName || r?.projectId}/${r?.container}`;
           return (
-            <div key={`${r?.projectId}-${r?.container}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+            <div key={`${r?.projectId}-${r?.container}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[13px]">
                   <span className="font-medium">{label}</span>
