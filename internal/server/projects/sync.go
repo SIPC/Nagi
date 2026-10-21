@@ -302,8 +302,8 @@ type declaredPorts map[string][]uint32
 func (s *Service) saveDeclaredPorts(ctx context.Context, rows []store.Container, have map[string]*nagiv1.ContainerStatus) {
 	for _, r := range rows {
 		cs := have[r.ProjectID+"/"+r.Name]
-		if cs == nil {
-			continue
+		if cs == nil || !reportsPorts(cs) {
+			continue // 容器停着时上报里没有端口，记下的保持不变
 		}
 		d := declaredPorts{}
 		for _, svc := range cs.GetServices() {
@@ -342,4 +342,14 @@ func (s *Service) preferNewerCopy(ctx context.Context, c *nodes.Conn, row store.
 	delete(s.rebuilt, c)
 	s.mu.Unlock()
 	s.Log.Warn("节点上的这份比拼回的那份新，改用这一份", "project", row.ProjectID, "container", row.Name, "node", c.NodeID, "old_node", row.NodeID)
+}
+
+// reportsPorts 判断节点上报的容器状态里有没有端口（容器停着时没有）。
+func reportsPorts(cs *nagiv1.ContainerStatus) bool {
+	for _, svc := range cs.GetServices() {
+		if len(svc.GetPorts()) > 0 {
+			return true
+		}
+	}
+	return false
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { renderSVG } from "uqr";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { Alert, Badge, Button, CodeBlock, Field, Input, Section } from "@/components/ui";
 
@@ -105,16 +106,35 @@ export function SecurityCard() {
           )}
           {setup && !s?.totpEnabled && (
             <>
-              <Field label="密钥" help="在验证器应用中手动添加此密钥，或使用下方地址生成二维码。">
-                <CodeBlock copy>{setup.secret}</CodeBlock>
-              </Field>
-              <Field label="otpauth 地址">
-                <CodeBlock copy>{setup.uri}</CodeBlock>
-              </Field>
+              <div className="flex flex-wrap items-start gap-5">
+                {/* 二维码固定黑底白字，深色模式下也能扫。 */}
+                <div
+                  className="size-40 shrink-0 rounded-md bg-white p-1.5 [&_svg]:size-full"
+                  role="img"
+                  aria-label="两步验证二维码"
+                  dangerouslySetInnerHTML={{ __html: renderSVG(setup.uri, { border: 1 }) }}
+                />
+                <div className="grid min-w-0 flex-1 gap-3">
+                  <p className="text-[13px] text-muted-foreground">用验证器应用（例如 Google Authenticator、1Password）扫描二维码；不能扫码时手动输入密钥。</p>
+                  <Field label="密钥">
+                    <CodeBlock copy>{setup.secret}</CodeBlock>
+                  </Field>
+                </div>
+              </div>
               <Field label="验证码" htmlFor="totp-enable" hint="验证器应用显示的 6 位数字">
                 <Input id="totp-enable" className="w-40 font-mono" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
               </Field>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSetup(null);
+                    setCode("");
+                  }}
+                >
+                  取消
+                </Button>
                 <Button
                   size="sm"
                   onClick={() =>
@@ -136,10 +156,29 @@ export function SecurityCard() {
           )}
           {s?.totpEnabled && (
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="验证码" htmlFor="totp-disable" help="关闭两步验证前需输入当前验证码。">
-                <Input id="totp-disable" className="h-8 w-40 font-mono" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
+              <Field label="验证码或登录密码" htmlFor="totp-disable" help="关闭两步验证前需确认身份：输入验证器应用当前的 6 位验证码；验证器丢了时输入登录密码。">
+                <Input
+                  id="totp-disable"
+                  type={/^\d{0,6}$/.test(code) ? "text" : "password"}
+                  autoComplete="off"
+                  className="h-8 w-48 font-mono"
+                  placeholder="000000 或密码"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
               </Field>
-              <Button size="sm" variant="destructive-outline" onClick={() => run("totp", () => settingsClient.disableTOTP({ code }), "已关闭两步验证")}>
+              <Button
+                size="sm"
+                variant="destructive-outline"
+                onClick={() =>
+                  run(
+                    "totp",
+                    // 6 位数字按验证码，其余按登录密码。
+                    () => settingsClient.disableTOTP(/^\d{6}$/.test(code.trim()) ? { code: code.trim() } : { password: code }),
+                    "已关闭两步验证",
+                  )
+                }
+              >
                 关闭两步验证
               </Button>
             </div>

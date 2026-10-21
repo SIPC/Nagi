@@ -47,9 +47,10 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 			continue
 		}
 		hostNet := spec.HostNetworkServices(cp)
-		// 声明的端口：所在节点在线时用它最近一次上报的；不在线时用记下的（不能因为节点断开就撤掉别的节点上的代理）。
+		// 声明的端口：所在节点最近一次上报的；节点不在线、或者容器正好停着（上报里没有端口）时用记下的，
+		// 不能因为节点断开、容器重启就撤掉别的节点上的代理。
 		declared := declaredPorts{}
-		if cs := reports[c.NodeID][c.ProjectID+"/"+c.Name]; cs != nil {
+		if cs := reports[c.NodeID][c.ProjectID+"/"+c.Name]; cs != nil && reportsPorts(cs) {
 			for _, svc := range cs.GetServices() {
 				declared[svc.GetName()] = append(declared[svc.GetName()], svc.GetPorts()...)
 			}
