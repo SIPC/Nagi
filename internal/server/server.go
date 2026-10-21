@@ -213,6 +213,11 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
+	// 记下本面板（主面板）现在的地址，随同步传给备用面板。
+	if err := s.q.SetSetting(ctx, store.SetSettingParams{Key: standby.SettingPrimaryAddress, Value: s.hostPort(ctx)}); err != nil {
+		d.Close()
+		return nil, err
+	}
 	s.nodes.OnReport = s.projects.Sync
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
@@ -684,4 +689,13 @@ func localAddresses() []string {
 		}
 	}
 	return out
+}
+
+// hostPort 返回本面板的对外地址和端口（host:port）。
+func (s *Server) hostPort(ctx context.Context) string {
+	addr := s.publicAddress
+	if v, err := s.q.GetSetting(ctx, api.SettingPublicAddress); err == nil && v != "" {
+		addr = v
+	}
+	return net.JoinHostPort(addr, strconv.Itoa(s.port))
 }

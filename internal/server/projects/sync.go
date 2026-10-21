@@ -143,7 +143,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
 	if !c.Pending() {
 		// 节点上的配置是别的面板写的（本面板离开期间节点归别的面板管过）：本面板的记录旧了，以节点的为准。
-		if stale := s.staleProjects(ctx, c.NodeID, req.GetContainers()); len(stale) > 0 {
+		if stale := s.staleProjects(ctx, c.NodeID, req.GetContainers(), req.GetPanels()); len(stale) > 0 {
 			s.adoptFrom(ctx, c, stale)
 		} else if s.needsRebuild(ctx, req.GetContainers()) {
 			s.rebuildFrom(ctx, c, false)
@@ -175,6 +175,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	s.retireMoved(ctx, c, req.GetContainers(), rows)
 	s.saveDeclaredPorts(ctx, rows, have)
 	projects := map[string]store.Project{}
+	self := s.ownPanels(ctx)
 	for _, r := range rows {
 		p, ok := projects[r.ProjectID]
 		if !ok {
@@ -184,10 +185,16 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 			projects[r.ProjectID] = p
 		}
 		cs := have[r.ProjectID+"/"+r.Name]
+		if cs != nil && otherPanelActive(cs, self, req.GetPanels()) {
+			s.warnOnce("conflict:"+c.NodeID+"/"+r.ProjectID+"/"+r.Name, "节点同时被另一个面板管着，它改过这个容器的配置；本面板不覆盖。请在节点上移除不用的那个面板",
+				"project", r.ProjectID, "container", r.Name, "node", c.NodeID)
+			continue
+		}
 		// 节点缓存的配置是别的面板（拼回之前的旧面板、提升之前的主面板）写的，也重新推一次：
-		// 缓存里记上本面板，下次就不会再被当成别的面板写的、又以节点为准重建一遍。
+		// 缓存里记上本面板，下次就不会再被当成别的面板写的、又以节点为准重建一遍。推不进去时（节点报错）10 分钟后再试。
 		ownCache := s.Fingerprint == nil || cs.GetPanel() == s.Fingerprint()
-		if cs != nil && cs.GetRevision() == r.Revision && cs.GetProjectRevision() == p.Revision && ownCache {
+		if cs != nil && cs.GetRevision() == r.Revision && cs.GetProjectRevision() == p.Revision &&
+			(ownCache || !s.restampDue(c.NodeID+"/"+r.ProjectID+"/"+r.Name)) {
 			continue
 		}
 		// 设置了顶替的容器还没在这个节点上：节点正在（或将要）用副本恢复它，不能先放一份空的。
@@ -352,4 +359,34 @@ func reportsPorts(cs *nagiv1.ContainerStatus) bool {
 		}
 	}
 	return false
+}
+
+// restampDue 判断是不是该再推一次（只为了在节点缓存里记上本面板）：同一个容器 10 分钟最多一次。
+func (s *Service) restampDue(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restamped == nil {
+		s.restamped = map[string]time.Time{}
+	}
+	if time.Since(s.restamped[key]) < 10*time.Minute {
+		return false
+	}
+	s.restamped[key] = time.Now()
+	return true
+}
+
+// warnOnce 同一件事每小时最多记一条警告。
+func (s *Service) warnOnce(key, msg string, args ...any) {
+	s.mu.Lock()
+	if s.warned == nil {
+		s.warned = map[string]time.Time{}
+	}
+	due := time.Since(s.warned[key]) >= time.Hour
+	if due {
+		s.warned[key] = time.Now()
+	}
+	s.mu.Unlock()
+	if due {
+		s.Log.Warn(msg, args...)
+	}
 }

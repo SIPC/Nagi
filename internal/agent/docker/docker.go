@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/netip"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -551,3 +552,22 @@ func (d *Client) Mirrors(ctx context.Context) ([]string, error) {
 	}
 	return info.Info.RegistryConfig.Mirrors, nil
 }
+
+// AnonymousVolumes 返回容器用到的匿名卷的挂载位置（镜像声明了 VOLUME、compose 里又没有挂载的目录，Docker 自动建的卷）。
+// 这些卷不在容器目录里，快照、备份、迁移和顶替都不包含它们。
+func (d *Client) AnonymousVolumes(ctx context.Context, id string) ([]string, error) {
+	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, m := range info.Container.Mounts {
+		if string(m.Type) == "volume" && anonymousVolume.MatchString(m.Name) {
+			out = append(out, m.Destination)
+		}
+	}
+	return out, nil
+}
+
+// anonymousVolume 是匿名卷的名字：64 位十六进制。
+var anonymousVolume = regexp.MustCompile(`^[0-9a-f]{64}$`)

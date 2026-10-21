@@ -388,8 +388,10 @@ type ReportRequest struct {
 	Primary string `protobuf:"bytes,7,opt,name=primary,proto3" json:"primary,omitempty"`
 	// 那个主面板的地址（节点信任列表里的），落后的面板据此改为跟随它。
 	PrimaryAddress string `protobuf:"bytes,8,opt,name=primary_address,json=primaryAddress,proto3" json:"primary_address,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 节点信任的所有面板的公钥指纹。面板据此判断写节点缓存的另一个面板是不是还在管这个节点（见 docs/panel.md#项目数据）。
+	Panels        []string `protobuf:"bytes,9,rep,name=panels,proto3" json:"panels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReportRequest) Reset() {
@@ -478,6 +480,13 @@ func (x *ReportRequest) GetPrimaryAddress() string {
 	return ""
 }
 
+func (x *ReportRequest) GetPanels() []string {
+	if x != nil {
+		return x.Panels
+	}
+	return nil
+}
+
 type ReportResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Mesh  *MeshConfig            `protobuf:"bytes,1,opt,name=mesh,proto3" json:"mesh,omitempty"`
@@ -536,8 +545,10 @@ type PanelCluster struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Term  uint64                 `protobuf:"varint,1,opt,name=term,proto3" json:"term,omitempty"`
 	// 主面板的公钥指纹。
-	Primary       string          `protobuf:"bytes,2,opt,name=primary,proto3" json:"primary,omitempty"`
-	Panels        []*ClusterPanel `protobuf:"bytes,3,rep,name=panels,proto3" json:"panels,omitempty"`
+	Primary string          `protobuf:"bytes,2,opt,name=primary,proto3" json:"primary,omitempty"`
+	Panels  []*ClusterPanel `protobuf:"bytes,3,rep,name=panels,proto3" json:"panels,omitempty"`
+	// 已经移除的备用面板的公钥指纹：节点移除它们，以后也不认它们是主面板（被移除的面板手里还有 CA 和数据库）。
+	Removed       []string `protobuf:"bytes,4,rep,name=removed,proto3" json:"removed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -589,6 +600,13 @@ func (x *PanelCluster) GetPrimary() string {
 func (x *PanelCluster) GetPanels() []*ClusterPanel {
 	if x != nil {
 		return x.Panels
+	}
+	return nil
+}
+
+func (x *PanelCluster) GetRemoved() []string {
+	if x != nil {
+		return x.Removed
 	}
 	return nil
 }
@@ -672,7 +690,7 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x17RenewCertificateRequest\x12\x10\n" +
 	"\x03csr\x18\x01 \x01(\fR\x03csr\"<\n" +
 	"\x18RenewCertificateResponse\x12 \n" +
-	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xcf\x02\n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xe7\x02\n" +
 	"\rReportRequest\x12%\n" +
 	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x12%\n" +
 	"\x04mesh\x18\x02 \x01(\v2\x11.nagi.v1.MeshInfoR\x04mesh\x128\n" +
@@ -683,14 +701,16 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x05usage\x18\x05 \x01(\v2\x12.nagi.v1.NodeUsageR\x05usage\x12\x12\n" +
 	"\x04term\x18\x06 \x01(\x04R\x04term\x12\x18\n" +
 	"\aprimary\x18\a \x01(\tR\aprimary\x12'\n" +
-	"\x0fprimary_address\x18\b \x01(\tR\x0eprimaryAddress\"j\n" +
+	"\x0fprimary_address\x18\b \x01(\tR\x0eprimaryAddress\x12\x16\n" +
+	"\x06panels\x18\t \x03(\tR\x06panels\"j\n" +
 	"\x0eReportResponse\x12'\n" +
 	"\x04mesh\x18\x01 \x01(\v2\x13.nagi.v1.MeshConfigR\x04mesh\x12/\n" +
-	"\acluster\x18\x02 \x01(\v2\x15.nagi.v1.PanelClusterR\acluster\"k\n" +
+	"\acluster\x18\x02 \x01(\v2\x15.nagi.v1.PanelClusterR\acluster\"\x85\x01\n" +
 	"\fPanelCluster\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\x12\x18\n" +
 	"\aprimary\x18\x02 \x01(\tR\aprimary\x12-\n" +
-	"\x06panels\x18\x03 \x03(\v2\x15.nagi.v1.ClusterPanelR\x06panels\"J\n" +
+	"\x06panels\x18\x03 \x03(\v2\x15.nagi.v1.ClusterPanelR\x06panels\x12\x18\n" +
+	"\aremoved\x18\x04 \x03(\tR\aremoved\"J\n" +
 	"\fClusterPanel\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint2\xa4\x02\n" +

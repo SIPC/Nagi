@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -26,6 +27,8 @@ import (
 type clusterState struct {
 	Term    uint64 `json:"term"`
 	Primary string `json:"primary"`
+	// Removed 是主面板告诉的、已经移除的面板：不再认它们是主面板（只增不减）。
+	Removed []string `json:"removed,omitempty"`
 }
 
 func (id *identity) clusterPath() string { return filepath.Join(id.dir, "cluster.json") }
@@ -61,17 +64,42 @@ func (id *identity) observe(cid string, term uint64, primary string) (clusterSta
 	defer id.mu.Unlock()
 	all := id.readClusters()
 	st := all[cid]
-	if term < st.Term || (term == st.Term && st.Primary != "") {
+	if term < st.Term || (term == st.Term && st.Primary != "") || slices.Contains(st.Removed, primary) {
 		return st, nil
 	}
-	st = clusterState{Term: term, Primary: primary}
+	st.Term, st.Primary = term, primary
 	all[cid] = st
+	return st, id.writeClusters(all)
+}
+
+// setRemoved 记下主面板告诉的已移除的面板。
+func (id *identity) setRemoved(cid string, removed []string) error {
+	id.mu.Lock()
+	defer id.mu.Unlock()
+	all := id.readClusters()
+	st := all[cid]
+	changed := false
+	for _, fp := range removed {
+		if fp != "" && !slices.Contains(st.Removed, fp) {
+			st.Removed = append(st.Removed, fp)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	all[cid] = st
+	return id.writeClusters(all)
+}
+
+// writeClusters 保存各组面板的状态。调用方持有 id.mu。
+func (id *identity) writeClusters(all map[string]clusterState) error {
 	b, _ := json.MarshalIndent(all, "", "  ")
 	tmp := id.clusterPath() + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return st, err
+		return err
 	}
-	return st, os.Rename(tmp, id.clusterPath())
+	return os.Rename(tmp, id.clusterPath())
 }
 
 // errUnchanged 让 update 不写文件。
@@ -130,17 +158,7 @@ func (id *identity) pruneClusters() (bool, error) {
 		return id.readClusters()
 	}()
 	err := id.update(func(panels []trustedPanel) ([]trustedPanel, error) {
-		trusted := map[string]bool{}
-		for _, p := range panels {
-			trusted[p.Fingerprint] = true
-		}
-		var out []trustedPanel
-		for _, p := range panels {
-			if p.Cluster != "" && !trusted[clusters[p.Cluster].Primary] {
-				continue
-			}
-			out = append(out, p)
-		}
+		out := survivors(panels, clusters)
 		if len(out) == len(panels) {
 			return nil, errUnchanged
 		}
@@ -159,8 +177,11 @@ func (a *agent) applyCluster(p trustedPanel, c *nagiv1.PanelCluster) bool {
 	if c == nil || c.GetTerm() == 0 || c.GetPrimary() == "" || cid == "" {
 		return false
 	}
-	// 主面板必须是节点信任的面板（自己就是主面板，或者是同一组里已经信任的面板）。
+	// 主面板必须是节点信任的面板（自己就是主面板，或者是同一组里已经信任的面板）；已经移除的面板说的都不算。
 	if c.GetPrimary() != p.Fingerprint && !a.id.trusts(c.GetPrimary()) {
+		return false
+	}
+	if removed := a.id.cluster(cid).Removed; slices.Contains(removed, p.Fingerprint) || slices.Contains(removed, c.GetPrimary()) {
 		return false
 	}
 	before := a.id.cluster(cid)
@@ -169,13 +190,16 @@ func (a *agent) applyCluster(p trustedPanel, c *nagiv1.PanelCluster) bool {
 		a.log.Warn("保存主备面板信息失败", "err", err)
 		return false
 	}
-	switched := st != before
+	switched := st.Term != before.Term || st.Primary != before.Primary
 	if switched && before.Primary != "" {
 		a.log.Warn("主面板已更换", "term", st.Term, "panel", p.Address)
 	}
 	// 成员列表只听当前主面板的。
 	if st.Primary != p.Fingerprint || st.Term != c.GetTerm() {
 		return switched
+	}
+	if err := a.id.setRemoved(cid, c.GetRemoved()); err != nil {
+		a.log.Warn("保存已移除的面板失败", "err", err)
 	}
 	changed, err := a.id.syncCluster(cid, p, c.GetPanels())
 	if err != nil {
@@ -299,4 +323,20 @@ func (a *agent) connectError(fingerprint string) string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.connErrs[fingerprint]
+}
+
+// survivors 返回清理以后留下的面板：主面板带进来的备用面板，主面板不在列表里了就去掉。
+func survivors(panels []trustedPanel, clusters map[string]clusterState) []trustedPanel {
+	trusted := map[string]bool{}
+	for _, p := range panels {
+		trusted[p.Fingerprint] = true
+	}
+	var out []trustedPanel
+	for _, p := range panels {
+		if p.Cluster != "" && !trusted[clusters[p.Cluster].Primary] {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }

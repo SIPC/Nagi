@@ -258,6 +258,11 @@ function ContainerDetail({
   const { run, busy, output, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  // 换了容器时，上一个容器的部署输出不再显示。
+  useEffect(() => {
+    if (!busy) setLines([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container.name]);
   const cfg = container.draft ?? container.config;
   const target = [{ container: container.name, baseRevision: container.revision }];
   const kind = containerKind(container);
@@ -364,7 +369,7 @@ function ContainerDetail({
         {output}
         {view === "overview" && <Overview container={container} services={services} />}
         {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} project={project} container={container} services={serviceNames} />}
-        {view === "versions" && <Versions project={project} container={container} />}
+        {view === "versions" && <Versions project={project} container={container} onRun={() => !busy && setLines([])} />}
         {view === "logs" && (
           <Logs
                 projectId={project.id}
@@ -701,7 +706,8 @@ function ContainerConfig({ project, container, services }: { project: Project; c
 
 // ---- 版本 ----
 
-function Versions({ project, container }: { project: Project; container: Container }) {
+// onRun：开始回滚时调用（上面那次部署的输出就过时了）。
+function Versions({ project, container, onRun }: { project: Project; container: Container; onRun: () => void }) {
   const { run, busy, output } = useRun(project.id);
   const ref = { projectId: project.id, container: container.name };
   const versions = useQuery({
@@ -769,7 +775,7 @@ function Versions({ project, container }: { project: Project; container: Contain
                         disabled={busy}
                         onClick={() =>
                           confirm(`将 ${container.name} 回滚到 v${v.version}？${restoreData ? "数据将同时恢复为该版本部署前的状态。" : "数据保持不变。"}`) &&
-                          run(() => projectClient.rollback({ ...ref, version: v.version, restoreData }))
+                          (onRun(), run(() => projectClient.rollback({ ...ref, version: v.version, restoreData })))
                         }
                       >
                         回滚

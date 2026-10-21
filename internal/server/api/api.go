@@ -187,6 +187,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		if c, err := s.Q.CountNodeContainers(ctx, row.ID); err == nil {
 			n.Containers = int32(c)
 		}
+		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -344,4 +345,11 @@ func fromGRPC(err error) error {
 		return err
 	}
 	return connect.NewError(connect.Code(st.Code()), errors.New(st.Message()))
+}
+
+func (s *nodeService) AdoptNodeContainer(ctx context.Context, req *connect.Request[nagiv1.AdoptNodeContainerRequest]) (*connect.Response[nagiv1.AdoptNodeContainerResponse], error) {
+	if err := s.Projects.AdoptContainer(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId(), req.Msg.GetContainer()); err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&nagiv1.AdoptNodeContainerResponse{}), nil
 }

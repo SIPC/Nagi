@@ -562,7 +562,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 		primaryAddr = pp.Address
 	}
 	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
-		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr})
+		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels())})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。
@@ -672,4 +672,12 @@ func (a *agent) setProjectsRoot(root string) error {
 		return project.ErrInvalidArgument
 	}
 	return os.WriteFile(filepath.Join(a.cfg.DataDir, "identity", "projects-root"), []byte(filepath.Clean(root)+"\n"), 0o644)
+}
+
+func trustedFingerprints(panels []trustedPanel) []string {
+	out := make([]string, 0, len(panels))
+	for _, p := range panels {
+		out = append(out, p.Fingerprint)
+	}
+	return out
 }

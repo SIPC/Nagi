@@ -389,66 +389,74 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 	for _, st := range report {
 		cfg := st.GetConfig()
 		pid, name := cfg.GetProjectId(), cfg.GetContainer()
-		c, err := s.container(ctx, pid, name)
-		if errors.Is(err, ErrNotFound) {
-			if p, perr := s.project(ctx, pid); perr == nil && !recentlyRebuilt(p) {
-				// 容器已经删了：这个节点上的设置也删掉。
-				_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
-			}
-			continue
-		}
-		if err != nil {
-			continue
-		}
-		cur := failoverOf(c)
-		if cur == nil {
-			// 项目刚从节点缓存拼回时，容器可能还没从持有者那里拼回顶替设置（例如先从热备拼回的）：先不删节点上的。
-			if p, perr := s.project(ctx, pid); perr == nil && recentlyRebuilt(p) {
-				continue
-			}
-			_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
-			continue
-		}
-		if !isParticipant(cur, conn.NodeID) {
-			// 节点既不是 A、B，也不是现在的见证人：它是以前的见证人（更换或取消时它离线，没收到），让它删掉。
-			// 在项目的锁里再确认一次：更换见证人时先通知新见证人、再写数据库，中间收到它的上报不能删。
-			l := s.lock(pid)
-			if !l.TryLock() {
-				continue
-			}
-			if c2, err := s.container(ctx, pid, name); err == nil {
-				if cfg2 := failoverOf(c2); cfg2 != nil && !isParticipant(cfg2, conn.NodeID) &&
-					(cfg2.GetWitnessIsPanel() || cfg2.GetWitness().GetNodeId() != conn.NodeID) {
-					_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
-					s.Log.Info("节点已不是这个容器的见证人，删掉它上面的顶替设置", "project", pid, "container", name, "node", conn.NodeID)
-				}
-			}
-			l.Unlock()
-			continue
-		}
-		s.adoptWitness(c, cur)
+		// 在项目的锁里处理：设置、更换、取消顶替时先通知各节点再写数据库，中间收到的上报不能按旧记录处理
+		// （例如热备刚收到设置、数据库还没写，就让它删掉）。项目正在操作时跳过，下次上报再说。
 		l := s.lock(pid)
 		if !l.TryLock() {
 			continue
 		}
-		switch {
-		case st.GetRole() == "holder" && st.GetEpoch() > uint64(c.FailoverEpoch) && !s.witnessDisagrees(c, cur, conn.NodeID, st.GetEpoch()):
-			dir := cur.GetA().GetDir()
-			if cur.GetB().GetNodeId() == conn.NodeID {
-				dir = cur.GetB().GetDir()
-			}
-			if c.NodeID != conn.NodeID || dir != c.Dir {
-				s.Log.Warn("容器已由另一个节点运行（顶替或切回）", "project", pid, "container", name, "from", c.NodeID, "to", conn.NodeID, "epoch", st.GetEpoch())
-			}
-			if err := s.Q.SetContainerHolder(ctx, store.SetContainerHolderParams{NodeID: conn.NodeID, Dir: dir, FailoverEpoch: int64(st.GetEpoch()), ProjectID: pid, Name: name}); err == nil {
-				s.refreshLinks()
-			}
-		case st.GetRole() == "standby" && c.NodeID != conn.NodeID && st.GetSpecRevision() > 0 &&
-			(st.GetSpecRevision() != c.Revision || st.GetSpecProjectRevision() != s.projectRevision(ctx, pid)):
-			s.refreshStandby(ctx, c, cur, conn)
-		}
+		adopt := s.syncFailover(ctx, conn, st, pid, name)
 		l.Unlock()
+		if adopt != nil {
+			s.adoptWitness(adopt.c, adopt.cfg)
+		}
 	}
+}
+
+type witnessAdopt struct {
+	c   store.Container
+	cfg *nagiv1.FailoverConfig
+}
+
+// syncFailover 处理一个容器的顶替状态。调用方持有项目的锁。需要把见证人换成本面板时返回它（在锁外做）。
+func (s *Service) syncFailover(ctx context.Context, conn *nodes.Conn, st *nagiv1.FailoverStatus, pid, name string) *witnessAdopt {
+	clear := func() {
+		_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
+	}
+	c, err := s.container(ctx, pid, name)
+	if errors.Is(err, ErrNotFound) {
+		if p, perr := s.project(ctx, pid); perr == nil && !recentlyRebuilt(p) {
+			clear() // 容器已经删了：这个节点上的设置也删掉。
+		}
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+	cur := failoverOf(c)
+	if cur == nil {
+		// 项目刚从节点缓存拼回时，容器可能还没从持有者那里拼回顶替设置（例如先从热备拼回的）：先不删节点上的。
+		if p, perr := s.project(ctx, pid); perr == nil && recentlyRebuilt(p) {
+			return nil
+		}
+		clear()
+		return nil
+	}
+	if !isParticipant(cur, conn.NodeID) {
+		// 节点既不是 A、B，也不是现在的见证人：它是以前的见证人（更换或取消时它离线，没收到），让它删掉。
+		if cur.GetWitnessIsPanel() || cur.GetWitness().GetNodeId() != conn.NodeID {
+			clear()
+			s.Log.Info("节点已不是这个容器的见证人，删掉它上面的顶替设置", "project", pid, "container", name, "node", conn.NodeID)
+		}
+		return nil
+	}
+	switch {
+	case st.GetRole() == "holder" && st.GetEpoch() > uint64(c.FailoverEpoch) && !s.witnessDisagrees(c, cur, conn.NodeID, st.GetEpoch()):
+		dir := cur.GetA().GetDir()
+		if cur.GetB().GetNodeId() == conn.NodeID {
+			dir = cur.GetB().GetDir()
+		}
+		if c.NodeID != conn.NodeID || dir != c.Dir {
+			s.Log.Warn("容器已由另一个节点运行（顶替或切回）", "project", pid, "container", name, "from", c.NodeID, "to", conn.NodeID, "epoch", st.GetEpoch())
+		}
+		if err := s.Q.SetContainerHolder(ctx, store.SetContainerHolderParams{NodeID: conn.NodeID, Dir: dir, FailoverEpoch: int64(st.GetEpoch()), ProjectID: pid, Name: name}); err == nil {
+			s.refreshLinks()
+		}
+	case st.GetRole() == "standby" && c.NodeID != conn.NodeID && st.GetSpecRevision() > 0 &&
+		(st.GetSpecRevision() != c.Revision || st.GetSpecProjectRevision() != s.projectRevision(ctx, pid)):
+		s.refreshStandby(ctx, c, cur, conn)
+	}
+	return &witnessAdopt{c, cur}
 }
 
 func (s *Service) projectRevision(ctx context.Context, id string) int64 {
@@ -562,6 +570,14 @@ func recentlyRebuilt(p store.Project) bool {
 // 见证人的记录落后时（持有者靠另外两票拿到的租约），持有者下次续约会问到见证人，到时再改。
 func (s *Service) witnessDisagrees(c store.Container, cfg *nagiv1.FailoverConfig, nodeID string, epoch uint64) bool {
 	if !cfg.GetWitnessIsPanel() {
+		return false
+	}
+	// 见证人是别的面板（例如换面板、提升以前的那个）时，本地留着的票不作数。
+	m := s.Nodes.Mesh()
+	if m == nil {
+		return false
+	}
+	if self := m.PublicKey(); !bytes.Equal(cfg.GetWitness().GetKey(), self[:]) {
 		return false
 	}
 	holder, recorded, ok := s.Nodes.WitnessRecord(c.ProjectID, c.Name)

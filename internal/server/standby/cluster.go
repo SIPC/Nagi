@@ -26,7 +26,30 @@ const (
 	// SettingMembers 是这组面板里出现过的所有面板的公钥指纹（JSON 列表，只增不减）：
 	// 它们写进节点缓存的配置都算本组写的，移除备用面板以后也一样（见 docs/standby.md）。
 	SettingMembers = "panel_members"
+	// SettingPrimaryAddress 是主面板现在的地址（host:port），随同步传给备用面板：主面板改了地址，备用面板跟着改连新地址。
+	SettingPrimaryAddress = "panel_primary_address"
+	// SettingRemoved 是移除过的备用面板的公钥指纹（JSON 列表，只增不减），告诉节点不再认它们。
+	SettingRemoved = "panel_removed"
 )
+
+// Removed 返回移除过的备用面板。
+func Removed(ctx context.Context, q *store.Queries) []string {
+	var out []string
+	if v, err := q.GetSetting(ctx, SettingRemoved); err == nil {
+		_ = json.Unmarshal([]byte(v), &out)
+	}
+	return out
+}
+
+// AddRemoved 记下移除的备用面板。
+func AddRemoved(ctx context.Context, q *store.Queries, fingerprint string) error {
+	list := Removed(ctx, q)
+	if slices.Contains(list, fingerprint) {
+		return nil
+	}
+	b, _ := json.Marshal(append(list, fingerprint))
+	return q.SetSetting(ctx, store.SetSettingParams{Key: SettingRemoved, Value: string(b)})
+}
 
 // SettingSeenTerm 是本面板向别的面板核实过的最大任期。是本面板自己的设置，同步时不覆盖。
 const SettingSeenTerm = "seen_term"
@@ -105,7 +128,7 @@ func Cluster(ctx context.Context, q *store.Queries, primaryAddress string) *nagi
 	if primary == "" {
 		return nil
 	}
-	c := &nagiv1.PanelCluster{Term: term, Primary: primary,
+	c := &nagiv1.PanelCluster{Term: term, Primary: primary, Removed: Removed(ctx, q),
 		Panels: []*nagiv1.ClusterPanel{{Address: primaryAddress, Fingerprint: primary}}}
 	rows, err := q.ListStandbyPanels(ctx)
 	if err != nil {

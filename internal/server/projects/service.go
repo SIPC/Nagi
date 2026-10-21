@@ -66,6 +66,11 @@ type Service struct {
 	// 以节点为准重建项目时，保留本面板原来的 webhook 令牌（项目 ID/容器名 → 令牌）。
 	keepTokens map[string]string
 	adoptedAt  map[string]time.Time
+	// restamped：上次只为在节点缓存里记上本面板而重推的时间；warned：上次记某条警告的时间。
+	restamped map[string]time.Time
+	// unknown：节点上有、面板不认识、没有自动加入的容器（节点 ID → "项目/容器" → 容器）。
+	unknown map[string]map[string]*nagiv1.UnknownContainer
+	warned  map[string]time.Time
 	// 第一次上报已经处理完的连接（之后才给它推代理计划）。
 	synced map[*nodes.Conn]bool
 }

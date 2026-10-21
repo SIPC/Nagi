@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,6 +75,7 @@ func (m *Manager) watchStart(ctx context.Context, composeProject string, hasPrev
 			return fmt.Errorf("容器 %s %s，部署算作失败。%s", c.Service, reason, next)
 		}
 		if !time.Now().Before(deadline) {
+			m.warnAnonymousVolumes(ctx, instances, onLine)
 			return nil
 		}
 		select {
@@ -81,5 +83,19 @@ func (m *Manager) watchStart(ctx context.Context, composeProject string, hasPrev
 			return ctx.Err()
 		case <-time.After(time.Second):
 		}
+	}
+}
+
+// warnAnonymousVolumes 提示数据写在匿名卷里的容器：镜像声明了数据目录（VOLUME），配置里却没有把它设为持久化目录，
+// Docker 自动建了一个卷放在别处。这些数据不在容器目录里，快照、备份、迁移和顶替都不包含它们。
+func (m *Manager) warnAnonymousVolumes(ctx context.Context, instances []docker.Instance, onLine func(string)) {
+	for _, c := range instances {
+		dirs, err := m.docker.AnonymousVolumes(ctx, c.ID)
+		if err != nil || len(dirs) == 0 {
+			continue
+		}
+		onLine(fmt.Sprintf("注意：容器 %s 的 %s 是镜像声明的数据目录，没有设为持久化目录，数据在 Docker 的匿名卷里，"+
+			"快照、备份、迁移和顶替都不包含它。在配置的「持久化目录」里加上 %s（compose 里挂到 ./volumes/ 下）后重新部署。",
+			c.Service, strings.Join(dirs, "、"), strings.Join(dirs, "、")))
 	}
 }

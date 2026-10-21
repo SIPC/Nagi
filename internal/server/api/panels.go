@@ -198,6 +198,10 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 
 func (s *nodeService) RemoveNodePanel(ctx context.Context, req *connect.Request[nagiv1.RemoveNodePanelRequest]) (*connect.Response[nagiv1.RemoveNodePanelResponse], error) {
 	nodeID := req.Msg.GetNodeId()
+	// 本面板的备用面板由主面板的成员列表管，从单个节点上移除它马上又会被加回来：要在设置的「备用面板」里移除。
+	if _, err := s.Q.GetStandbyPanelByServerFP(ctx, req.Msg.GetFingerprint()); err == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是本面板的备用面板，请在设置的「备用面板」里移除，所有节点会一起移除它"))
+	}
 	agent, err := s.agent(nodeID)
 	if err != nil {
 		return nil, err

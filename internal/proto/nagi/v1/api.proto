@@ -99,6 +99,8 @@ service NodeService {
   // 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
   // 所以这样加入的节点要管理员确认。
   rpc ApproveNode(ApproveNodeRequest) returns (ApproveNodeResponse);
+  // 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
+  rpc AdoptNodeContainer(AdoptNodeContainerRequest) returns (AdoptNodeContainerResponse);
 }
 
 message NodeRef {
@@ -362,7 +364,24 @@ message Node {
   NodeUsage usage = 8;
   // 面板上运行在这个节点上的容器数。
   int32 containers = 9;
+  // 节点上有、面板却不认识的容器（所属项目在面板上是建好的，不是从节点缓存拼回的，所以不自动加进去）。
+  // 管理员确认是自己的以后可以加入项目（AdoptNodeContainer）。
+  repeated UnknownContainer unknown_containers = 10;
 }
+
+message UnknownContainer {
+  string project_id = 1;
+  string project_name = 2;
+  string container = 3;
+}
+
+message AdoptNodeContainerRequest {
+  string node_id = 1;
+  string project_id = 2;
+  string container = 3;
+}
+
+message AdoptNodeContainerResponse {}
 
 message ListNodesRequest {}
 

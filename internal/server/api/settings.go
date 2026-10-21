@@ -95,6 +95,10 @@ func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Reque
 		return nil, err
 	}
 	if addr != old {
+		if s.Panel.Primary != nil {
+			// 备用面板同步到这个设置后改连新地址。
+			_ = s.Q.SetSetting(ctx, store.SetSettingParams{Key: standby.SettingPrimaryAddress, Value: s.Panel.PublicHostPort(ctx)})
+		}
 		s.Nodes.PushAddress(s.Panel.PublicHostPort(ctx), s.Panel.Fingerprint)
 		s.Log.Info("面板对外地址已更新，已通知在线节点", "address", addr)
 	}
@@ -265,7 +269,7 @@ func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[na
 	out := &nagiv1.GetStandbysResponse{}
 	if c := s.Panel.Standby; c != nil {
 		st := c.Status()
-		out.IsStandby, out.PrimaryAddress, out.Connected, out.LastError = true, c.Info.PrimaryAddress, st.Connected, st.LastError
+		out.IsStandby, out.PrimaryAddress, out.Connected, out.LastError = true, c.PrimaryAddress(), st.Connected, st.LastError
 		if !st.LastSync.IsZero() {
 			out.LastSync = timestamppb.New(st.LastSync)
 		}
@@ -303,6 +307,12 @@ func (s *settingsService) PromoteStandby(ctx context.Context, _ *connect.Request
 func (s *settingsService) RemoveStandby(ctx context.Context, req *connect.Request[nagiv1.RemoveStandbyRequest]) (*connect.Response[nagiv1.RemoveStandbyResponse], error) {
 	if s.Panel.Primary == nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是备用面板，请在主面板上操作"))
+	}
+	if sp, err := s.Q.GetStandbyPanel(ctx, req.Msg.GetId()); err == nil {
+		// 记下来告诉节点：以后不认它是主面板（它手里还有 CA 和数据库，可能自己提升）。
+		if err := standby.AddRemoved(ctx, s.Q, sp.ServerFp); err != nil {
+			return nil, err
+		}
 	}
 	n, err := s.Q.DeleteStandbyPanel(ctx, req.Msg.GetId())
 	if err != nil {

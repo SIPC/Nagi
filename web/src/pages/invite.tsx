@@ -73,6 +73,8 @@ export function InviteCard() {
                       variant="ghost"
                       onClick={async () => {
                         await settingsClient.revokeInvite({ id: i.id });
+                        // 上面显示的接入码可能就是作废的这个：不再显示，有效的看列表。
+                        setCode("");
                         invites.refetch();
                       }}
                     >

@@ -68,6 +68,8 @@ message ReportRequest {
   string primary = 7;
   // 那个主面板的地址（节点信任列表里的），落后的面板据此改为跟随它。
   string primary_address = 8;
+  // 节点信任的所有面板的公钥指纹。面板据此判断写节点缓存的另一个面板是不是还在管这个节点（见 docs/panel.md#项目数据）。
+  repeated string panels = 9;
 }
 
 message ReportResponse {
@@ -82,6 +84,8 @@ message PanelCluster {
   // 主面板的公钥指纹。
   string primary = 2;
   repeated ClusterPanel panels = 3;
+  // 已经移除的备用面板的公钥指纹：节点移除它们，以后也不认它们是主面板（被移除的面板手里还有 CA 和数据库）。
+  repeated string removed = 4;
 }
 
 message ClusterPanel {

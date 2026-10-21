@@ -9,7 +9,7 @@ import { NodeMetrics, fmtBytes } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
 import { Alert, Badge, Button, CodeBlock, Dialog, Empty, Field, Input, Loading, Menu, Meter, Notice, Status, Tabs } from "@/components/ui";
-import type { Node } from "@/gen/nagi/v1/api_pb";
+import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
@@ -200,6 +200,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
           </>
         }
       />
+      {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
         <Notice tone="warning" title="尚未批准">
           该节点通过接入码加入，尚未批准。确认是自有机器后批准，批准后才能查看和操作。
@@ -383,3 +384,36 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
   );
 }
 
+
+// UnknownContainers：节点上有、面板却不认识的容器（所属项目是在面板上建的，所以不自动加进去，防止节点冒充）。
+function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: UnknownContainer[]; onDone: () => void }) {
+  const [error, setError] = useState("");
+  const adopt = async (u: UnknownContainer) => {
+    if (!confirm(`把节点上的容器 ${u.container} 加入项目 ${u.projectName}？按节点缓存里的配置加入，所在节点是这个节点。请确认这是你自己部署的容器。`)) return;
+    setError("");
+    try {
+      await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <Notice tone="warning" title="节点上有面板不认识的容器" className="mb-6">
+      <p>这些容器的配置在节点上，项目里却没有它们（例如面板从备份恢复过）。确认是自己的容器后可以加入项目；不认识的不要加入。</p>
+      {error && <Alert className="mt-2">{error}</Alert>}
+      <ul className="mt-2 grid gap-1.5">
+        {list.map((u) => (
+          <li key={u.projectId + "/" + u.container} className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[13px]">
+              {u.projectName} / {u.container}
+            </span>
+            <Button size="xs" variant="outline" onClick={() => adopt(u)}>
+              加入项目
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Notice>
+  );
+}

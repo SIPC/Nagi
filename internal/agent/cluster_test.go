@@ -89,3 +89,61 @@ func TestClusterStandbys(t *testing.T) {
 		t.Fatal("主面板移除后备用面板应一起移除")
 	}
 }
+
+// 节点只剩主面板和它带进来的备用面板时，不能移除主面板（备用面板会跟着被清掉，节点就谁都不信任了）。
+func TestRemoveLastPanelCountsSurvivors(t *testing.T) {
+	id, err := loadIdentity(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := tlsutil.NewCA("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Cert.Raw}))
+	primary := trustedPanel{Address: "a:1", Fingerprint: "fp-a", NodeID: "n1", CertPEM: "cert", CAPEM: caPEM}
+	if err := id.addPanel(primary); err != nil {
+		t.Fatal(err)
+	}
+	a := &agent{id: id, log: slog.Default(), reload: make(chan struct{}, 1)}
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: []*nagiv1.ClusterPanel{{Address: "a:1", Fingerprint: "fp-a"}, {Address: "b:1", Fingerprint: "fp-b"}}})
+	if _, err := id.removePanel("fp-a", false, nil); err != errLastPanel {
+		t.Fatalf("应拒绝移除：%v", err)
+	}
+	if _, err := id.removePanel("fp-b", false, nil); err != nil {
+		t.Fatalf("移除备用面板应该可以：%v", err)
+	}
+}
+
+// 主面板告诉节点移除了某个备用面板以后，它再说自己是主面板（任期更大）也不认。
+func TestRemovedPanelCannotClaimPrimary(t *testing.T) {
+	id, err := loadIdentity(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := tlsutil.NewCA("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Cert.Raw}))
+	primary := trustedPanel{Address: "a:1", Fingerprint: "fp-a", NodeID: "n1", CertPEM: "cert", CAPEM: caPEM}
+	if err := id.addPanel(primary); err != nil {
+		t.Fatal(err)
+	}
+	a := &agent{id: id, log: slog.Default(), reload: make(chan struct{}, 1)}
+	both := []*nagiv1.ClusterPanel{{Address: "a:1", Fingerprint: "fp-a"}, {Address: "b:1", Fingerprint: "fp-b"}}
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: both})
+	b, _ := id.panel("fp-b")
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: both[:1], Removed: []string{"fp-b"}})
+	if _, ok := id.panel("fp-b"); ok {
+		t.Fatal("移除的备用面板应从信任列表里去掉")
+	}
+	// 节点当时离线、还信任着它的情况：手动加回来再试。
+	if err := id.addPanel(b); err != nil {
+		t.Fatal(err)
+	}
+	a.applyCluster(b, &nagiv1.PanelCluster{Term: 9, Primary: "fp-b", Panels: both})
+	if st := id.cluster(primary.clusterID()); st.Primary != "fp-a" || st.Term != 1 {
+		t.Fatalf("移除过的面板说的不应采用：%+v", st)
+	}
+}

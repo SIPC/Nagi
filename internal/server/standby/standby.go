@@ -420,6 +420,38 @@ type Client struct {
 	lastError string
 	stop      context.CancelFunc
 	done      chan struct{}
+	// addr 是现在连的主面板地址：主面板改了对外地址时换成新的（见 followAddress）。
+	addr string
+}
+
+// PrimaryAddress 返回主面板的地址。
+func (c *Client) PrimaryAddress() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.addr == "" {
+		return c.Info.PrimaryAddress
+	}
+	return c.addr
+}
+
+// followAddress 主面板改了对外地址（同步过来的 panel_primary_address 和现在连的不一样）时改用新地址，
+// 记进 standby.json。连接仍然钉住主面板的公钥指纹，地址不对也连不到别的面板。
+func (c *Client) followAddress(ctx context.Context) {
+	var addr string
+	if err := c.DB.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", SettingPrimaryAddress).Scan(&addr); err != nil || addr == "" {
+		return
+	}
+	if addr == c.PrimaryAddress() {
+		return
+	}
+	if err := Follow(c.DataDir, addr, c.Info.PrimaryFingerprint); err != nil {
+		c.Log.Warn("记下主面板的新地址失败", "err", err)
+		return
+	}
+	c.mu.Lock()
+	c.addr = addr
+	c.mu.Unlock()
+	c.Log.Info("主面板的地址变了，改连新地址", "primary", addr)
 }
 
 // ClientStatus 是备用面板看到的同步状态。
@@ -453,7 +485,8 @@ func (c *Client) Run(ctx context.Context) {
 		}
 		c.mu.Unlock()
 		if err != nil && ctx.Err() == nil {
-			c.Log.Warn("与主面板的同步连接断开，稍后重连", "primary", c.Info.PrimaryAddress, "err", err, "retry_in", backoff)
+			c.Log.Warn("与主面板的同步连接断开，稍后重连", "primary", c.PrimaryAddress(), "err", err, "retry_in", backoff)
+			c.followAddress(ctx)
 		}
 		select {
 		case <-ctx.Done():
@@ -510,7 +543,7 @@ func (c *Client) syncOnce(ctx context.Context) error {
 	cfg.Certificates = []tls.Certificate{cert}
 	cfg.NextProtos = []string{ALPN}
 	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	conn, err := tls.DialWithDialer(d, "tcp", c.Info.PrimaryAddress, cfg)
+	conn, err := tls.DialWithDialer(d, "tcp", c.PrimaryAddress(), cfg)
 	if err != nil {
 		return err
 	}
@@ -534,7 +567,7 @@ func (c *Client) syncOnce(ctx context.Context) error {
 			c.mu.Lock()
 			c.connected, c.lastError = true, ""
 			c.mu.Unlock()
-			c.Log.Info("已连接主面板", "primary", c.Info.PrimaryAddress)
+			c.Log.Info("已连接主面板", "primary", c.PrimaryAddress())
 		}
 		if len(frame) == 0 {
 			continue // 心跳

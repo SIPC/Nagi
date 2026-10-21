@@ -25,7 +25,7 @@ export function textToPorts(text: string): PortMapping[] {
     .map((p) => {
       const [ports, protocol = "tcp"] = p.split("/");
       const [published, target = published] = ports.split(":");
-      return create(PortMappingSchema, { published: Number(published), target: Number(target), protocol });
+      return create(PortMappingSchema, { published: Number(published), target: Number(target), protocol: protocol.toLowerCase() });
     });
 }
 
@@ -33,7 +33,7 @@ export function textToPorts(text: string): PortMapping[] {
 // 80、443 留给域名访问（网站部署后在「网络」里绑定域名）。
 export function checkPorts(text: string): string {
   for (const p of text.split(/[\s,]+/).filter(Boolean)) {
-    const m = /^(\d+)(?::(\d+))?(?:\/(tcp|udp))?$/.exec(p);
+    const m = /^(\d+)(?::(\d+))?(?:\/(tcp|udp))?$/i.exec(p);
     if (!m) return `「${p}」格式不对，应为 节点端口:容器端口，例如 8080:80 或 53:53/udp`;
     const published = Number(m[1]);
     const target = Number(m[2] ?? m[1]);

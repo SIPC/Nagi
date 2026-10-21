@@ -40,19 +40,16 @@ func (s *Service) needsRebuild(ctx context.Context, report []*nagiv1.ContainerSt
 
 // staleProjects 返回节点上报的、配置由别的面板写的容器所属的项目（面板上有这个项目时）。
 // 只看面板记录里本来就在这个节点上的容器：节点不能凭一句"配置是别的面板写的"让面板删掉别的节点上的项目。
-func (s *Service) staleProjects(ctx context.Context, nodeID string, report []*nagiv1.ContainerStatus) []string {
+// 写配置的那个面板节点还信任着时不算（两个面板同时管着这个节点），见 otherPanelActive。
+func (s *Service) staleProjects(ctx context.Context, nodeID string, report []*nagiv1.ContainerStatus, trusted []string) []string {
 	if s.Fingerprint == nil {
 		return nil
 	}
-	// 同一组主备面板（现在的和曾经的）写的都算自己写的（数据库是同一份，见 docs/standby.md）。
-	self := map[string]bool{s.Fingerprint(): true}
-	for _, fp := range standby.Members(ctx, s.Q) {
-		self[fp] = true
-	}
+	self := s.ownPanels(ctx)
 	seen := map[string]bool{}
 	var out []string
 	for _, cs := range report {
-		if cs.GetPanel() == "" || self[cs.GetPanel()] || seen[cs.GetProjectId()] {
+		if cs.GetPanel() == "" || self[cs.GetPanel()] || seen[cs.GetProjectId()] || slices.Contains(trusted, cs.GetPanel()) {
 			continue
 		}
 		// 面板上没有这个容器：按拼回处理（例如项目刚从另一个节点以节点为准重建过，这个节点上的容器还没加回来）。
@@ -175,6 +172,15 @@ func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool)
 	}
 	sort.Strings(ids)
 	changed := false
+	unknown := map[string]*nagiv1.UnknownContainer{}
+	defer func() {
+		s.mu.Lock()
+		if s.unknown == nil {
+			s.unknown = map[string]map[string]*nagiv1.UnknownContainer{}
+		}
+		s.unknown[conn.NodeID] = unknown
+		s.mu.Unlock()
+	}()
 	for _, id := range ids {
 		specs := byProject[id]
 		sort.Slice(specs, func(i, j int) bool { return specs[i].GetName() < specs[j].GetName() })
@@ -188,10 +194,12 @@ func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool)
 		}
 		// 面板上本来就有的项目（不是刚从节点缓存拼回的）不接受节点缓存里多出来的容器：
 		// 否则一个节点可以把自己的容器塞进别的项目，拿到它的共享变量、连进它的内网。
+		// 这些容器列在节点页上，管理员确认后可以加入（AdoptContainer）。
 		if p, err := s.project(ctx, id); err == nil && !created && time.Since(time.Unix(p.RebuiltAt, 0)) > rebuildWindow {
 			for _, sp := range specs {
 				if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: id, Name: sp.GetName()}); err != nil {
-					s.Log.Warn("节点缓存里有项目不知道的容器，不自动加入（项目不是从节点缓存拼回的）", "project", id, "container", sp.GetName(), "node", conn.NodeID)
+					s.Log.Warn("节点缓存里有项目不知道的容器，不自动加入（项目不是从节点缓存拼回的），可在节点页确认后加入", "project", id, "container", sp.GetName(), "node", conn.NodeID)
+					unknown[id+"/"+sp.GetName()] = &nagiv1.UnknownContainer{ProjectId: id, ProjectName: p.Name, Container: sp.GetName()}
 				}
 			}
 			continue
@@ -437,4 +445,86 @@ func (s *Service) adoptWitness(c store.Container, cfg *nagiv1.FailoverConfig) {
 		}
 		s.Log.Info("已把顶替的见证人换成本面板", "project", c.ProjectID, "container", c.Name)
 	}()
+}
+
+// ownPanels 返回算作本面板写的配置的面板：本面板和同一组主备面板（现在的和曾经的，数据库是同一份，见 docs/standby.md）。
+func (s *Service) ownPanels(ctx context.Context) map[string]bool {
+	self := map[string]bool{}
+	if s.Fingerprint != nil {
+		self[s.Fingerprint()] = true
+	}
+	for _, fp := range standby.Members(ctx, s.Q) {
+		self[fp] = true
+	}
+	return self
+}
+
+// otherPanelActive 判断节点上这个容器的配置是不是另一个面板写的、而节点现在还信任着那个面板：
+// 两个面板同时管着这个节点（例如面板丢了以后让节点加入了新面板，旧面板又回来了）。这时本面板不以节点为准删记录，
+// 也不把自己的配置推过去，免得两个面板轮流覆盖对方；记一条警告，等用户在节点上移除其中一个面板。
+func otherPanelActive(cs *nagiv1.ContainerStatus, self map[string]bool, trusted []string) bool {
+	return cs.GetPanel() != "" && !self[cs.GetPanel()] && slices.Contains(trusted, cs.GetPanel())
+}
+
+// UnknownContainers 返回节点上有、面板却不认识、没有自动加入的容器（最近一次读节点缓存时看到的）。
+func (s *Service) UnknownContainers(ctx context.Context, nodeID string) []*nagiv1.UnknownContainer {
+	s.mu.Lock()
+	m := s.unknown[nodeID]
+	s.mu.Unlock()
+	var out []*nagiv1.UnknownContainer
+	for _, u := range m {
+		// 已经加入（或者同名的容器建好了）的不再列出。
+		if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: u.GetProjectId(), Name: u.GetContainer()}); err == nil {
+			continue
+		}
+		out = append(out, u)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].GetProjectName()+"/"+out[i].GetContainer() < out[j].GetProjectName()+"/"+out[j].GetContainer()
+	})
+	return out
+}
+
+// AdoptContainer 管理员确认后，按节点缓存里的配置把这个容器加入项目（所在节点就是这个节点）。
+func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name string) error {
+	l := s.lock(projectID)
+	l.Lock()
+	defer l.Unlock()
+	if _, err := s.project(ctx, projectID); err != nil {
+		return err
+	}
+	if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: projectID, Name: name}); err == nil {
+		return invalid("项目里已经有容器 %s", name)
+	}
+	conn, err := s.Nodes.Get(nodeID)
+	if err != nil {
+		return s.nodeErr(ctx, nodeID, err)
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	cache, err := conn.Agent.GetCache(cctx, &nagiv1.GetCacheRequest{})
+	cancel()
+	if err != nil {
+		return err
+	}
+	var sp *nagiv1.ContainerSpec
+	for _, x := range cache.GetContainers() {
+		if x.GetProjectId() == projectID && x.GetName() == name && checkSpecIDs(x) == nil {
+			sp = x
+		}
+	}
+	if sp == nil {
+		return invalid("节点上已经没有这个容器了")
+	}
+	var fo *nagiv1.FailoverStatus
+	for _, st := range cache.GetFailovers() {
+		if st.GetRole() == "holder" && st.GetConfig().GetProjectId() == projectID && st.GetConfig().GetContainer() == name {
+			fo = st
+		}
+	}
+	if err := s.rebuildContainer(ctx, nodeID, sp, fo); err != nil {
+		return err
+	}
+	s.Log.Info("已按节点缓存把容器加入项目", "project", projectID, "container", name, "node", nodeID)
+	s.refreshLinks()
+	return nil
 }

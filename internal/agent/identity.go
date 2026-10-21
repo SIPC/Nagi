@@ -203,7 +203,9 @@ func (id *identity) removePanel(which string, force bool, guard func(fingerprint
 	err := id.update(func(panels []trustedPanel) ([]trustedPanel, error) {
 		for i, p := range panels {
 			if p.Fingerprint == which || p.Address == which {
-				if len(panels) == 1 && !force {
+				rest := append(panels[:i:i], panels[i+1:]...)
+				// 移除以后还剩的面板里，由被移除的主面板带进来的备用面板也会跟着移除（见 pruneClusters），不算。
+				if len(survivors(rest, id.readClusters())) == 0 && !force {
 					return nil, errLastPanel
 				}
 				if guard != nil {

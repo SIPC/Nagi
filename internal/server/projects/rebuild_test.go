@@ -42,12 +42,16 @@ func TestStaleProjectsOnlyOwnContainers(t *testing.T) {
 		{ProjectId: "aaaaaaaaaaaaaaaa", Name: "web", Panel: "fp-other"},
 		{ProjectId: "bbbbbbbbbbbbbbbb", Name: "web", Panel: "fp-other"}, // 不在 n1 上：n1 说了不算
 	}
-	got := s.staleProjects(ctx, "n1", report)
+	got := s.staleProjects(ctx, "n1", report, nil)
 	if len(got) != 1 || got[0] != "aaaaaaaaaaaaaaaa" {
 		t.Fatalf("stale = %v, want only project a", got)
 	}
+	// 写配置的面板节点还信任着（两个面板同时管着节点）：不以节点为准。
+	if got := s.staleProjects(ctx, "n1", report[:1], []string{"fp-self", "fp-other"}); len(got) != 0 {
+		t.Fatalf("另一个面板还在管这个节点时不应以节点为准: %v", got)
+	}
 	report[0].Panel = "fp-old-standby"
-	if got := s.staleProjects(ctx, "n1", report[:1]); len(got) != 0 {
+	if got := s.staleProjects(ctx, "n1", report[:1], nil); len(got) != 0 {
 		t.Fatalf("本组面板写的不应算别的面板写的: %v", got)
 	}
 }

@@ -55,7 +55,7 @@ function appendLine(lines: string[], text: string): string[] {
 }
 
 // 需要用户注意的输出（端口没开放、自动加了映射）：单独列在结果上面，免得淹没在日志里。
-const noteLine = /未开放|已按配置里的端口添加映射/;
+const noteLine = /未开放|已按配置里的端口添加映射|匿名卷/;
 
 function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   const outRef = useRef<HTMLPreElement>(null);
@@ -69,7 +69,7 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
       {lines
         .filter((l) => noteLine.test(l))
         .map((l, i) => (
-          <Notice key={i} tone={l.includes("未开放") ? "warning" : undefined}>
+          <Notice key={i} tone={l.includes("未开放") || l.includes("匿名卷") ? "warning" : undefined}>
             {l}
           </Notice>
         ))}
