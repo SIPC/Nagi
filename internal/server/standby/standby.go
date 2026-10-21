@@ -43,7 +43,7 @@ const (
 )
 
 // LocalSettings 是每个面板自己的设置，不随同步覆盖。
-var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token"}
+var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", SettingSeenTerm}
 
 // localTables 是不同步的表：登录会话各面板自己的。
 var localTables = map[string]bool{"sessions": true}
@@ -152,6 +152,10 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 	if err := p.Q.InsertStandbyPanel(ctx, store.InsertStandbyPanelParams{
 		ID: id, Name: name, Address: req.Address, ServerFp: req.ServerFP, CreatedAt: time.Now().Unix(),
 	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := AddMember(ctx, p.Q, req.ServerFP); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

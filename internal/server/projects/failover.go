@@ -77,8 +77,8 @@ func (s *Service) witnessFor(ctx context.Context, nodeID string) (*nagiv1.Failov
 // SetFailoverRequest 是顶替设置。
 type SetFailoverRequest struct {
 	ProjectID, Container, StandbyNodeID, StandbyDir, WitnessNodeID string
-	LeaseSeconds                                                     uint32
-	AutoStateful, AutoFailback                                       bool
+	LeaseSeconds                                                   uint32
+	AutoStateful, AutoFailback                                     bool
 }
 
 // SetFailover 设置顶替：检查顶替节点（目录、端口），在它上面登记副本，再按见证人 → B → A 的顺序下发设置，
@@ -377,7 +377,7 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 		pid, name := cfg.GetProjectId(), cfg.GetContainer()
 		c, err := s.container(ctx, pid, name)
 		if errors.Is(err, ErrNotFound) {
-			if _, perr := s.project(ctx, pid); perr == nil {
+			if p, perr := s.project(ctx, pid); perr == nil && !recentlyRebuilt(p) {
 				// 容器已经删了：这个节点上的设置也删掉。
 				_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
 			}
@@ -388,6 +388,10 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 		}
 		cur := failoverOf(c)
 		if cur == nil {
+			// 项目刚从节点缓存拼回时，容器可能还没从持有者那里拼回顶替设置（例如先从热备拼回的）：先不删节点上的。
+			if p, perr := s.project(ctx, pid); perr == nil && recentlyRebuilt(p) {
+				continue
+			}
 			_, _ = conn.Agent.SetFailover(ctx, &nagiv1.SetFailoverRequest{Clear: true, ProjectId: pid, Container: name})
 			continue
 		}
@@ -518,4 +522,9 @@ func (s *Service) ReplicaInUse(ctx context.Context, nodeID, projectID, name stri
 	}
 	cfg := failoverOf(c)
 	return cfg != nil && c.NodeID != nodeID && isParticipant(cfg, nodeID)
+}
+
+// recentlyRebuilt 判断项目是不是刚从节点缓存拼回的（拼回还没完成，面板上的记录可能还缺东西）。
+func recentlyRebuilt(p store.Project) bool {
+	return p.RebuiltAt > 0 && time.Since(time.Unix(p.RebuiltAt, 0)) < 10*time.Minute
 }

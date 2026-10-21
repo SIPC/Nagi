@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +25,9 @@ import (
 //   - 项目连接：两边的项目都拼回来以后，按节点代理计划里"容器.网络名"的代理连上。
 // 拼不回来的：草稿、旧版本和部署记录、webhook 令牌（重新生成，git 那边的 webhook 地址要更新）。
 
+// rebuildWindow：项目从节点缓存拼回后多久内，别的节点缓存里这个项目的容器还能自动加回来。
+const rebuildWindow = 24 * time.Hour
+
 // needsRebuild 判断节点上报的容器里有没有面板不知道的。
 func (s *Service) needsRebuild(ctx context.Context, report []*nagiv1.ContainerStatus) bool {
 	for _, cs := range report {
@@ -35,19 +39,15 @@ func (s *Service) needsRebuild(ctx context.Context, report []*nagiv1.ContainerSt
 }
 
 // staleProjects 返回节点上报的、配置由别的面板写的容器所属的项目（面板上有这个项目时）。
-func (s *Service) staleProjects(ctx context.Context, report []*nagiv1.ContainerStatus) []string {
+// 只看面板记录里本来就在这个节点上的容器：节点不能凭一句"配置是别的面板写的"让面板删掉别的节点上的项目。
+func (s *Service) staleProjects(ctx context.Context, nodeID string, report []*nagiv1.ContainerStatus) []string {
 	if s.Fingerprint == nil {
 		return nil
 	}
-	// 同一组主备面板写的都算自己写的（数据库是同一份，见 docs/standby.md）。
+	// 同一组主备面板（现在的和曾经的）写的都算自己写的（数据库是同一份，见 docs/standby.md）。
 	self := map[string]bool{s.Fingerprint(): true}
-	if rows, err := s.Q.ListStandbyPanels(ctx); err == nil {
-		for _, r := range rows {
-			self[r.ServerFp] = true
-		}
-	}
-	if v, err := s.Q.GetSetting(ctx, standby.SettingPrimary); err == nil {
-		self[v] = true
+	for _, fp := range standby.Members(ctx, s.Q) {
+		self[fp] = true
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -56,7 +56,8 @@ func (s *Service) staleProjects(ctx context.Context, report []*nagiv1.ContainerS
 			continue
 		}
 		// 面板上没有这个容器：按拼回处理（例如项目刚从另一个节点以节点为准重建过，这个节点上的容器还没加回来）。
-		if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: cs.GetProjectId(), Name: cs.GetName()}); err != nil {
+		c, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: cs.GetProjectId(), Name: cs.GetName()})
+		if err != nil || !slices.Contains(failoverNodes(c), nodeID) {
 			continue
 		}
 		s.mu.Lock()
@@ -108,6 +109,10 @@ func (s *Service) adoptFrom(ctx context.Context, conn *nodes.Conn, projectIDs []
 			continue
 		}
 		s.Log.Warn("节点上的配置由别的面板写过，以节点为准重建项目", "project", id, "node", conn.NodeID)
+		// 项目在别的节点上的容器也要重新拼回：那些连接下次上报时再读一遍缓存。
+		s.mu.Lock()
+		clear(s.rebuilt)
+		s.mu.Unlock()
 	}
 	s.rebuildFrom(ctx, conn, true)
 }
@@ -180,6 +185,16 @@ func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool)
 		}
 		if created {
 			s.Log.Info("已从节点缓存拼回项目", "project", id, "name", specs[0].GetProjectName(), "node", conn.NodeID)
+		}
+		// 面板上本来就有的项目（不是刚从节点缓存拼回的）不接受节点缓存里多出来的容器：
+		// 否则一个节点可以把自己的容器塞进别的项目，拿到它的共享变量、连进它的内网。
+		if p, err := s.project(ctx, id); err == nil && !created && time.Since(time.Unix(p.RebuiltAt, 0)) > rebuildWindow {
+			for _, sp := range specs {
+				if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: id, Name: sp.GetName()}); err != nil {
+					s.Log.Warn("节点缓存里有项目不知道的容器，不自动加入（项目不是从节点缓存拼回的）", "project", id, "container", sp.GetName(), "node", conn.NodeID)
+				}
+			}
+			continue
 		}
 		for _, sp := range specs {
 			if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: id, Name: sp.GetName()}); err == nil {
@@ -272,6 +287,9 @@ func (s *Service) rebuildProject(ctx context.Context, specs []*nagiv1.ContainerS
 	if err := s.Q.InsertProject(ctx, store.InsertProjectParams{ID: id, Name: name, NetworkName: network, CreatedAt: time.Now().Unix(), Settings: sealed}); err != nil {
 		return false, err
 	}
+	if err := s.Q.SetProjectRebuiltAt(ctx, store.SetProjectRebuiltAtParams{RebuiltAt: time.Now().Unix(), ID: id}); err != nil {
+		return false, err
+	}
 	if len(newest.GetDockerConfig()) > 0 {
 		if err := s.saveDocker(ctx, id, newest.GetDockerConfig()); err != nil {
 			s.Log.Warn("拼回项目的镜像仓库认证失败", "project", id, "err", err)
@@ -340,10 +358,27 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 			return fail(err)
 		}
 	}
+	// 端口映射：只拼回这个容器自己的、名字没被占用、和别的映射不冲突的（不能借拼回抢别的容器的映射或域名）。
+	existing, _ := s.Q.ListRoutes(ctx, pid)
+	taken := map[string]bool{}
+	for _, e := range existing {
+		taken[e.Name] = true
+	}
 	for _, r := range sp.GetRoutes() {
+		r = proto.Clone(r).(*nagiv1.Exposure)
+		r.Container = name
+		if r.GetName() == "" || taken[r.GetName()] {
+			continue
+		}
+		if err := s.checkConflicts(ctx, nodeID, pid, "", r); err != nil {
+			s.Log.Warn("拼回端口映射时有冲突，跳过", "project", pid, "container", name, "route", r.GetName(), "err", err)
+			continue
+		}
 		if err := s.upsertRoute(ctx, pid, r); err != nil {
 			s.Log.Warn("拼回端口映射失败", "project", pid, "container", name, "route", r.GetName(), "err", err)
+			continue
 		}
+		taken[r.GetName()] = true
 	}
 	// compose 里现有的端口都算导入过：用户以前删掉的映射，下次部署时不会被加回来。
 	if cp, err := spec.Load(ctx, sp.GetConfig(), name, sp.GetSharedEnv(), checkData(store.Container{Dir: sp.GetDir()}), spec.ComposeProjectName(pid, name)); err == nil {

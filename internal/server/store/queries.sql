@@ -173,6 +173,12 @@ UPDATE containers SET revision = revision + 1 WHERE project_id = ? AND name = ?;
 -- name: SetContainerCommit :exec
 UPDATE containers SET last_commit = ? WHERE project_id = ? AND name = ?;
 
+-- name: SetProjectRebuiltAt :exec
+UPDATE projects SET rebuilt_at = ? WHERE id = ?;
+
+-- name: SetContainerDeclaredPorts :exec
+UPDATE containers SET declared_ports = ? WHERE project_id = ? AND name = ?;
+
 -- name: SetContainerImportedPorts :exec
 UPDATE containers SET imported_ports = ? WHERE project_id = ? AND name = ?;
 

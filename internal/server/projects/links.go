@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"slices"
 	"sort"
 	"time"
@@ -46,11 +47,14 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 			continue
 		}
 		hostNet := spec.HostNetworkServices(cp)
-		declared := map[string][]uint32{}
+		// 声明的端口：所在节点在线时用它最近一次上报的；不在线时用记下的（不能因为节点断开就撤掉别的节点上的代理）。
+		declared := declaredPorts{}
 		if cs := reports[c.NodeID][c.ProjectID+"/"+c.Name]; cs != nil {
 			for _, svc := range cs.GetServices() {
 				declared[svc.GetName()] = append(declared[svc.GetName()], svc.GetPorts()...)
 			}
+		} else if c.DeclaredPorts != "" {
+			_ = json.Unmarshal([]byte(c.DeclaredPorts), &declared)
 		}
 		for _, svc := range cp.ServiceNames() {
 			if slices.Contains(hostNet, svc) {

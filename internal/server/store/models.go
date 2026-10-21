@@ -26,6 +26,7 @@ type Container struct {
 	BackupNodeID    string
 	Failover        []byte
 	FailoverEpoch   int64
+	DeclaredPorts   string
 }
 
 type Deployment struct {
@@ -69,6 +70,7 @@ type Project struct {
 	Settings       []byte
 	SharedEnvDraft []byte
 	DockerConfig   []byte
+	RebuiltAt      int64
 }
 
 type ProjectLink struct {

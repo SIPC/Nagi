@@ -192,7 +192,13 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 		r.log.Warn("拒绝没有有效客户端证书的节点连接", "remote", conn.RemoteAddr())
 		return
 	}
-	nodeID := state.PeerCertificates[0].Subject.CommonName
+	// 节点 ID 由节点的身份公钥算出：证书里写的 ID 必须和证书的公钥对得上，不能拿一张别的证书冒充别的节点。
+	cert := state.PeerCertificates[0]
+	nodeID := cert.Subject.CommonName
+	if nodeID != NodeID(cert.RawSubjectPublicKeyInfo) {
+		r.log.Warn("拒绝节点 ID 和公钥不一致的证书", "node", nodeID, "remote", conn.RemoteAddr())
+		return
+	}
 	node, err := r.q.GetNode(ctx, nodeID)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && node.Revoked != 0) {
 		r.log.Warn("拒绝未知或已移除的节点", "node", nodeID, "remote", conn.RemoteAddr())
@@ -301,8 +307,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
+	// 节点认的主面板不是本面板时，Behind 去核实（本面板可能已经落后）；这次不补推配置，
+	// 但回复照常带上主备信息：节点可能只是还没收到本面板的新任期。
 	if !pending && p.r.Behind != nil && p.r.Behind(ctx, req) {
-		return &nagiv1.ReportResponse{}, nil
+		accepts = false
 	}
 	if !pending && accepts && p.r.OnReport != nil {
 		go p.r.OnReport(p.conn, req)

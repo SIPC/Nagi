@@ -56,7 +56,10 @@ CREATE TABLE projects (
     -- 共享变量的草稿（EnvList，protobuf，加密），NULL 表示没有草稿
     shared_env_draft BLOB,
     -- 登录过的私有仓库（docker 的 config.json，加密），NULL 表示没有
-    docker_config    BLOB
+    docker_config    BLOB,
+    -- 从节点缓存拼回的时间（见 docs/panel.md#项目数据），0 表示是在面板上建的。
+    -- 拼回后 24 小时内，别的节点缓存里的这个项目的容器可以自动加回来；之后不再接受节点的说法
+    rebuilt_at       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE containers (
@@ -85,6 +88,8 @@ CREATE TABLE containers (
     failover         BLOB,
     -- 面板知道的最新租约轮次：持有者上报更高的轮次时，面板据此改容器的所在节点
     failover_epoch   INTEGER NOT NULL DEFAULT 0,
+    -- 所在节点最近一次上报的各服务声明的端口（JSON：服务名 → 端口列表）。节点断开时项目内网的代理照旧按它放
+    declared_ports   TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (project_id, name)
 );
 

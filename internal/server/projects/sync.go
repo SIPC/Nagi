@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -142,7 +143,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
 	if !c.Pending() {
 		// 节点上的配置是别的面板写的（本面板离开期间节点归别的面板管过）：本面板的记录旧了，以节点的为准。
-		if stale := s.staleProjects(ctx, req.GetContainers()); len(stale) > 0 {
+		if stale := s.staleProjects(ctx, c.NodeID, req.GetContainers()); len(stale) > 0 {
 			s.adoptFrom(ctx, c, stale)
 		} else if s.needsRebuild(ctx, req.GetContainers()) {
 			s.rebuildFrom(ctx, c, false)
@@ -172,6 +173,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 		return
 	}
 	s.retireMoved(ctx, c, req.GetContainers(), rows)
+	s.saveDeclaredPorts(ctx, rows, have)
 	projects := map[string]store.Project{}
 	for _, r := range rows {
 		p, ok := projects[r.ProjectID]
@@ -182,7 +184,10 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 			projects[r.ProjectID] = p
 		}
 		cs := have[r.ProjectID+"/"+r.Name]
-		if cs != nil && cs.GetRevision() == r.Revision && cs.GetProjectRevision() == p.Revision {
+		// 节点缓存的配置是别的面板（拼回之前的旧面板、提升之前的主面板）写的，也重新推一次：
+		// 缓存里记上本面板，下次就不会再被当成别的面板写的、又以节点为准重建一遍。
+		ownCache := s.Fingerprint == nil || cs.GetPanel() == s.Fingerprint()
+		if cs != nil && cs.GetRevision() == r.Revision && cs.GetProjectRevision() == p.Revision && ownCache {
 			continue
 		}
 		// 设置了顶替的容器还没在这个节点上：节点正在（或将要）用副本恢复它，不能先放一份空的。
@@ -280,4 +285,31 @@ func boolInt(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// declaredPorts 是容器各服务声明的端口（服务名 → 端口），存在容器的记录里。
+type declaredPorts map[string][]uint32
+
+// saveDeclaredPorts 记下节点上报的、本来就在这个节点上的容器声明的端口：节点断开时，
+// 别的节点上的项目内网代理照旧按它放（见 docs/agent.md#项目内网）。
+func (s *Service) saveDeclaredPorts(ctx context.Context, rows []store.Container, have map[string]*nagiv1.ContainerStatus) {
+	for _, r := range rows {
+		cs := have[r.ProjectID+"/"+r.Name]
+		if cs == nil {
+			continue
+		}
+		d := declaredPorts{}
+		for _, svc := range cs.GetServices() {
+			ports := append(d[svc.GetName()], svc.GetPorts()...)
+			slices.Sort(ports)
+			d[svc.GetName()] = slices.Compact(ports)
+		}
+		b, _ := json.Marshal(d)
+		if string(b) == r.DeclaredPorts {
+			continue
+		}
+		if err := s.Q.SetContainerDeclaredPorts(ctx, store.SetContainerDeclaredPortsParams{DeclaredPorts: string(b), ProjectID: r.ProjectID, Name: r.Name}); err != nil {
+			s.Log.Warn("保存容器声明的端口失败", "project", r.ProjectID, "container", r.Name, "err", err)
+		}
+	}
 }
