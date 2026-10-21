@@ -43,7 +43,7 @@ const (
 )
 
 // LocalSettings 是每个面板自己的设置，不随同步覆盖。
-var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", SettingSeenTerm}
+var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", "proxy_secret", SettingSeenTerm}
 
 // localTables 是不同步的表：登录会话各面板自己的。
 var localTables = map[string]bool{"sessions": true}
@@ -582,7 +582,9 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 	if theirs != ours {
 		return fmt.Errorf("主面板的数据库版本（%d）和本面板（%d）不同，请把两个面板升级到同一个版本", theirs, ours)
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT name FROM snap.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+	// 表名取本面板自己的数据库里有的（两边版本相同，表一样）：不拿快照里的名字拼 SQL。
+	rows, err := conn.QueryContext(ctx, "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "+
+		"AND name IN (SELECT name FROM snap.sqlite_master WHERE type = 'table')")
 	if err != nil {
 		return err
 	}
@@ -606,7 +608,7 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 		if localTables[t] {
 			continue
 		}
-		q := fmt.Sprintf("%q", t)
+		q := `"` + strings.ReplaceAll(t, `"`, `""`) + `"`
 		if t == "settings" {
 			if _, err := tx.ExecContext(ctx, "DELETE FROM main.settings WHERE key NOT IN ("+local+")"); err != nil {
 				return err

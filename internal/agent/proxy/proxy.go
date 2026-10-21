@@ -36,6 +36,8 @@ type Route struct {
 	Upstreams []string
 	// UpstreamTLS 不为空时用 HTTPS 连上游（反代面板时用面板的 CA 校验）。
 	UpstreamTLS *UpstreamTLS
+	// RequestHeaders 是转发给上游时设置的请求头（覆盖客户端带的同名请求头）。
+	RequestHeaders map[string]string
 }
 
 // UpstreamTLS 是连上游时用的 TLS 设置。
@@ -215,8 +217,21 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 func handlers(r Route) []obj {
 	return []obj{
 		{"handler": "log_append", "key": logRouteKey, "value": r.Project + "/" + r.Name},
-		reverseProxyTLS(r.Upstreams, r.UpstreamTLS),
+		withHeaders(reverseProxyTLS(r.Upstreams, r.UpstreamTLS), r.RequestHeaders),
 	}
+}
+
+// withHeaders 让反向代理转发时设置这些请求头。
+func withHeaders(h obj, headers map[string]string) obj {
+	if len(headers) == 0 || h["handler"] != "reverse_proxy" {
+		return h
+	}
+	set := obj{}
+	for k, v := range headers {
+		set[k] = []string{v}
+	}
+	h["headers"] = obj{"request": obj{"set": set}}
+	return h
 }
 
 func notFound() obj {

@@ -349,6 +349,9 @@ func NodeID(spki []byte) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// SettingProxySecret 是自带节点的 Caddy 反代面板时带的 X-Nagi-Proxy 请求头的值（每个面板自己的，不随主备同步）。
+const SettingProxySecret = "proxy_secret"
+
 // settingDomain 和 api.SettingDomain 相同（面板绑定的域名）。
 const settingDomain = "panel_domain"
 
@@ -359,7 +362,8 @@ func (r *Registry) pushDomain(c *Conn) {
 	d, _ := r.q.GetSetting(context.Background(), settingDomain)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := c.Agent.SetPanelDomain(ctx, &nagiv1.SetPanelDomainRequest{Domain: d}); err != nil {
+	secret, _ := r.q.GetSetting(context.Background(), SettingProxySecret)
+	if _, err := c.Agent.SetPanelDomain(ctx, &nagiv1.SetPanelDomainRequest{Domain: d, ProxySecret: secret}); err != nil {
 		r.log.Warn("把面板域名告诉自带节点失败", "err", err)
 	}
 }

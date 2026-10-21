@@ -219,6 +219,9 @@ message SetProjectsRootResponse {}
 
 message SetPanelDomainRequest {
   string domain = 1;
+  // 节点的 Caddy 反代面板时带上的请求头 X-Nagi-Proxy 的值：面板据此确认请求是自带节点的 Caddy 转发的，
+  // 才相信 X-Forwarded-For 里的客户端地址（登录限速用）。
+  string proxy_secret = 2;
 }
 
 message SetPanelDomainResponse {}

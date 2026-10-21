@@ -135,6 +135,15 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 自带节点的 Caddy 反代面板时带的请求头的值：面板据此才相信 X-Forwarded-For（见 auth.RequestIP）。
+	proxySecret, err := s.setting(ctx, nodes.SettingProxySecret, func() string {
+		t, _ := auth.RandomToken()
+		return t
+	})
+	if err != nil {
+		return nil, err
+	}
+	auth.SetProxySecret(proxySecret)
 	if err := s.listen(ctx); err != nil {
 		d.Close()
 		return nil, err

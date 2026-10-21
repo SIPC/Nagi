@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"time"
+	"unicode"
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -164,9 +165,11 @@ func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertReq
 		return nil, status.Error(codes.ResourceExhausted, "代发的告警太多，稍后再试")
 	}
 	a := req.GetAlert()
+	// 节点名由面板填（节点不能冒充别的节点）；节点给的文字限制长度、去掉控制字符，告警按纯文本发送。
 	if node, err := p.r.q.GetNode(ctx, p.conn.NodeID); err == nil && node.Name != "" {
 		a.Node = node.Name
 	}
+	a.Title, a.Message, a.Project = clipText(a.GetTitle(), 120), clipText(a.GetMessage(), 2000), clipText(a.GetProject(), 64)
 	if err := p.r.SendAlert(ctx, a, req.GetChannelIds()); err != nil {
 		return nil, err
 	}
@@ -248,4 +251,19 @@ func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
 	if err := r.SendAlert(ctx, a, nil); err != nil {
 		r.log.Warn("发送告警失败", "err", err)
 	}
+}
+
+// clipText 去掉控制字符（保留换行），超过 n 个字时截断。
+func clipText(s string, n int) string {
+	out := make([]rune, 0, min(len(s), n))
+	for _, r := range s {
+		if len(out) >= n {
+			out = append(out, '…')
+			break
+		}
+		if r == '\n' || !unicode.IsControl(r) {
+			out = append(out, r)
+		}
+	}
+	return string(out)
 }

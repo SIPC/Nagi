@@ -1358,8 +1358,11 @@ func (*SetProjectsRootResponse) Descriptor() ([]byte, []int) {
 }
 
 type SetPanelDomainRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Domain string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	// 节点的 Caddy 反代面板时带上的请求头 X-Nagi-Proxy 的值：面板据此确认请求是自带节点的 Caddy 转发的，
+	// 才相信 X-Forwarded-For 里的客户端地址（登录限速用）。
+	ProxySecret   string `protobuf:"bytes,2,opt,name=proxy_secret,json=proxySecret,proto3" json:"proxy_secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1397,6 +1400,13 @@ func (*SetPanelDomainRequest) Descriptor() ([]byte, []int) {
 func (x *SetPanelDomainRequest) GetDomain() string {
 	if x != nil {
 		return x.Domain
+	}
+	return ""
+}
+
+func (x *SetPanelDomainRequest) GetProxySecret() string {
+	if x != nil {
+		return x.ProxySecret
 	}
 	return ""
 }
@@ -2500,9 +2510,10 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\rdocker_config\x18\x01 \x01(\fR\fdockerConfig\",\n" +
 	"\x16SetProjectsRootRequest\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\tR\x04root\"\x19\n" +
-	"\x17SetProjectsRootResponse\"/\n" +
+	"\x17SetProjectsRootResponse\"R\n" +
 	"\x15SetPanelDomainRequest\x12\x16\n" +
-	"\x06domain\x18\x01 \x01(\tR\x06domain\"\x18\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12!\n" +
+	"\fproxy_secret\x18\x02 \x01(\tR\vproxySecret\"\x18\n" +
 	"\x16SetPanelDomainResponse\"(\n" +
 	"\x0eUpgradeRequest\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\"+\n" +

@@ -141,6 +141,23 @@ func (p *panelMesh) LeaseVotes(ctx context.Context, req *nagiv1.LeaseVotesReques
 	return out, nil
 }
 
+// WitnessRecord 返回面板作为见证人记下的这个容器的持有者和轮次；面板不是它的见证人时 ok 为 false。
+func (r *Registry) WitnessRecord(projectID, container string) (holder []byte, epoch uint64, ok bool) {
+	w := r.witness
+	if w == nil {
+		return nil, 0, false
+	}
+	id := witnessID(projectID, container)
+	w.mu.Lock()
+	cfg := w.cfgs[id]
+	w.mu.Unlock()
+	if cfg == nil {
+		return nil, 0, false
+	}
+	holder, epoch, _ = w.voter.State(id, leaseDuration(cfg))
+	return holder, epoch, true
+}
+
 // witnessVote 处理一个容器的投票请求。面板不是这个容器的见证人时不同意。
 func (r *Registry) witnessVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) *nagiv1.LeaseVoteResponse {
 	w := r.witness

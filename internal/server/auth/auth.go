@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
@@ -340,10 +341,20 @@ func SessionToken(h http.Header) string {
 }
 
 // ClientIP 从 "ip:port" 形式的地址中取出 IP。
-// RequestIP 返回客户端 IP。请求来自本机（面板绑定域名后经本机 Caddy 转发）时，用 X-Forwarded-For 里的第一个地址。
+// proxySecret 是面板自带节点的 Caddy 反代面板时带的 X-Nagi-Proxy 请求头的值（见 SetProxySecret）。
+var proxySecret atomic.Value
+
+// SetProxySecret 设置 X-Nagi-Proxy 的值。
+func SetProxySecret(s string) { proxySecret.Store(s) }
+
+// RequestIP 返回客户端 IP。请求是面板自带节点的 Caddy 转发的（面板绑定了域名；来自本机，并且带着正确的 X-Nagi-Proxy）时，
+// 用 X-Forwarded-For 里的第一个地址（Caddy 不采用客户端自己带的 X-Forwarded-For，写的是它看到的客户端地址）。
+// 只看来源是不是本机不够：本机上的其他程序（例如 host 网络的容器）可以随便填 X-Forwarded-For，绕过登录限速。
 func RequestIP(addr string, h http.Header) string {
 	ip := ClientIP(addr)
-	if p := net.ParseIP(ip); p != nil && p.IsLoopback() {
+	secret, _ := proxySecret.Load().(string)
+	fromProxy := secret != "" && subtle.ConstantTimeCompare([]byte(h.Get("X-Nagi-Proxy")), []byte(secret)) == 1
+	if p := net.ParseIP(ip); p != nil && p.IsLoopback() && fromProxy {
 		if xff := h.Get("X-Forwarded-For"); xff != "" {
 			first, _, _ := strings.Cut(xff, ",")
 			if fp := net.ParseIP(strings.TrimSpace(first)); fp != nil {

@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"time"
@@ -417,7 +418,7 @@ func (s *Service) syncFailovers(ctx context.Context, conn *nodes.Conn, report []
 			continue
 		}
 		switch {
-		case st.GetRole() == "holder" && st.GetEpoch() > uint64(c.FailoverEpoch):
+		case st.GetRole() == "holder" && st.GetEpoch() > uint64(c.FailoverEpoch) && !s.witnessDisagrees(c, cur, conn.NodeID, st.GetEpoch()):
 			dir := cur.GetA().GetDir()
 			if cur.GetB().GetNodeId() == conn.NodeID {
 				dir = cur.GetB().GetDir()
@@ -540,4 +541,23 @@ func (s *Service) ReplicaInUse(ctx context.Context, nodeID, projectID, name stri
 // recentlyRebuilt 判断项目是不是刚从节点缓存拼回的（拼回还没完成，面板上的记录可能还缺东西）。
 func recentlyRebuilt(p store.Project) bool {
 	return p.RebuiltAt > 0 && time.Since(time.Unix(p.RebuiltAt, 0)) < 10*time.Minute
+}
+
+// witnessDisagrees 判断节点上报的"我是持有者、轮次 epoch"和面板作为见证人记下的对不上（节点可能被攻破，
+// 随便报一个大轮次就能让面板把容器记到它那里）。面板不是见证人时没法核对，按节点的说法。
+// 见证人的记录落后时（持有者靠另外两票拿到的租约），持有者下次续约会问到见证人，到时再改。
+func (s *Service) witnessDisagrees(c store.Container, cfg *nagiv1.FailoverConfig, nodeID string, epoch uint64) bool {
+	if !cfg.GetWitnessIsPanel() {
+		return false
+	}
+	holder, recorded, ok := s.Nodes.WitnessRecord(c.ProjectID, c.Name)
+	if !ok {
+		return false
+	}
+	key := cfg.GetA().GetKey()
+	if cfg.GetB().GetNodeId() == nodeID {
+		key = cfg.GetB().GetKey()
+	}
+	// 见证人记录的轮次更新时，上报的已经过时；更旧时等见证人跟上。
+	return recorded != epoch || !bytes.Equal(holder, key)
 }
