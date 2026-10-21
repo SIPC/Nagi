@@ -267,3 +267,8 @@ func clipText(s string, n int) string {
 	}
 	return string(out)
 }
+
+// SendPanelAlert 发送面板自己的告警（例如备用面板连不上主面板），记日志，失败只记日志。
+func (r *Registry) SendPanelAlert(ctx context.Context, a *nagiv1.Alert) {
+	r.sendLogged(ctx, a)
+}

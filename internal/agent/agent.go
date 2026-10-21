@@ -304,10 +304,15 @@ func (a *agent) reconcile(ctx context.Context) {
 	}
 	a.mu.Unlock()
 	keep := make([]string, 0, len(want))
-	for fp := range want {
+	alertPanels := make([]string, 0, len(want))
+	for fp, p := range want {
 		keep = append(keep, fp)
+		// 备用面板的告警配置不用（它当主面板时下发过的，现在以主面板的为准），否则渠道会重复、阈值取了旧的。
+		if a.role(p) != "standby" {
+			alertPanels = append(alertPanels, fp)
+		}
 	}
-	a.alerts.Retain(keep)
+	a.alerts.Retain(alertPanels)
 	a.mesh.retain(keep)
 }
 

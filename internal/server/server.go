@@ -296,6 +296,7 @@ func (s *Server) Run(ctx context.Context) error {
 	defer cancel()
 	if s.standby != nil {
 		go s.standby.Run(ctx)
+		go s.watchPrimary(ctx)
 	} else if err := s.printSetupLink(ctx); err != nil {
 		return err
 	}

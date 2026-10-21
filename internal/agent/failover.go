@@ -443,6 +443,15 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		if ok {
 			st.leaseEnd = sent.Add(L)
 			st.everOK = true
+			// 某个投票人（例如见证人）记着另一方更高的轮次，而那一方并没有拿到租约（本节点照样拿到了两票）：
+			// 把自己的轮次调到它之上。否则那个投票人一直不投给本节点，等另一方真挂了，本节点只剩一票，
+			// 还会以为被那一方顶替了而停掉容器。
+			if r.higher != nil && r.higher.GetEpoch() >= epoch && !bytes.Equal(r.higher.GetHolder(), me.GetKey()) {
+				st.epoch = r.higher.GetEpoch() + 1
+				st.nextRenew = now // 马上用新的轮次续约
+				_ = f.save(id, st)
+				a.log.Warn("有投票人记着更高的轮次，本节点调高轮次", "project", pid, "container", name, "epoch", st.epoch)
+			}
 		} else {
 			st.nextRenew = now.Add(2 * time.Second) // 续不上时尽快重试
 		}

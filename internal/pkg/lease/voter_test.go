@@ -80,3 +80,21 @@ func TestHandover(t *testing.T) {
 		t.Fatal("转让以后原持有者不能再续约")
 	}
 }
+
+// 票现在投给的一方可以把自己的轮次调高；别人不行（票还有效时）。
+func TestVoteRaiseOwnEpoch(t *testing.T) {
+	v := NewVoter(t.TempDir())
+	const L = time.Minute
+	if err := v.Set("p", a, 1, L); err != nil {
+		t.Fatal(err)
+	}
+	if ok, h, e := v.Vote("p", m, a, 5, L); !ok || string(h) != "node-a" || e != 5 {
+		t.Fatalf("A 应能把自己的轮次调到 5：%v %s %d", ok, h, e)
+	}
+	if ok, _, e := v.Vote("p", m, b, 6, L); ok || e != 5 {
+		t.Fatalf("A 的票还有效，B 不应拿到：%v %d", ok, e)
+	}
+	if ok, _, _ := v.Vote("p", m, a, 5, L); !ok {
+		t.Fatal("A 按新的轮次续约应该成功")
+	}
+}

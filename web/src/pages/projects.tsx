@@ -230,12 +230,18 @@ export function useDefaultDir(nodeId: string, projectId: string, projectName: st
 
 // useNodeChoice：选择容器运行的节点和容器目录。目录的占位文字是默认目录，随节点、项目名、容器名实时变化；
 // 不填时提交的就是这个默认目录。新建项目和添加容器共用。
-export function useNodeChoice(args: { projectId?: string; projectName: string; container: string }) {
+// preferNodes：项目已有容器所在的节点，默认选其中容器最多的那个（在线时）。
+export function useNodeChoice(args: { projectId?: string; projectName: string; container: string; preferNodes?: string[] }) {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const onlineNodes = nodes.data?.nodes.filter((n) => n.online && !n.pending) ?? [];
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
-  const selected = nodeId || onlineNodes[0]?.id || "";
+  const counts = new Map<string, number>();
+  for (const id of args.preferNodes ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const preferred = onlineNodes
+    .filter((n) => counts.has(n.id))
+    .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0))[0]?.id;
+  const selected = nodeId || preferred || onlineNodes[0]?.id || "";
   const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">

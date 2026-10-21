@@ -794,7 +794,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContainerForm(project.containers.length === 0);
-  const node = useNodeChoice({ projectId: project.id, projectName: project.name, container: name || "api" });
+  const node = useNodeChoice({ projectId: project.id, projectName: project.name, container: name || "api", preferNodes: project.containers.map((m) => m.nodeId) });
 
   const add = async () => {
     setBusy(true);

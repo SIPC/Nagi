@@ -47,8 +47,8 @@ func (s *Service) placeDir(ctx context.Context, conn *nodes.Conn, p store.Projec
 		return "", invalid("容器目录必须是绝对路径")
 	}
 	dir = path.Clean(dir)
-	if owner, err := s.Q.ContainerDirOwner(ctx, store.ContainerDirOwnerParams{NodeID: conn.NodeID, Dir: dir}); err == nil {
-		return "", invalid("这个节点上的容器 %s 已经在用目录 %s", owner.Name, dir)
+	if owner, ok := s.dirOwner(ctx, conn.NodeID, dir, p.ID, c.Name); ok {
+		return "", invalid("这个节点上的容器 %s 已经在用目录 %s（或顶替时要用）", owner, dir)
 	}
 	return dir, nil
 }

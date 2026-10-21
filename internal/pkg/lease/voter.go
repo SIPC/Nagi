@@ -90,6 +90,14 @@ func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch u
 	case bytes.Equal(x.For, candidate) && epoch == x.Epoch:
 		x.expires = now.Add(lease)
 		return true, x.For, x.Epoch
+	case bytes.Equal(x.For, candidate) && epoch > x.Epoch:
+		// 票现在投给的一方把自己的轮次调高（它发现别的投票人记着一个更高的轮次）：不涉及别人，照投。
+		nx := &vote{For: x.For, Epoch: epoch, expires: now.Add(lease)}
+		if err := v.save(project, nx); err != nil {
+			return false, x.For, x.Epoch
+		}
+		v.v[project] = nx
+		return true, nx.For, nx.Epoch
 	case epoch > x.Epoch && (len(x.For) == 0 || now.After(x.expires)):
 		nx := &vote{For: append([]byte(nil), candidate...), Epoch: epoch, expires: now.Add(lease)}
 		if err := v.save(project, nx); err != nil {

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/standby"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // 主备面板的角色变化（见 docs/standby.md）：备用面板提升为主面板、落后的面板改为跟随新的主面板。
@@ -121,4 +124,48 @@ func (s *Server) Promote(ctx context.Context) (uint64, error) {
 		s.changeRole()
 	}()
 	return term, nil
+}
+
+// watchPrimary：备用面板连不上主面板超过 1 分钟时发告警，重新连上时发恢复通知（见 docs/standby.md#同步）。
+// 告警渠道用同步过来的那份配置。
+func (s *Server) watchPrimary(ctx context.Context) {
+	const after = time.Minute
+	t := time.NewTicker(15 * time.Second)
+	defer t.Stop()
+	lastOK := time.Now()
+	firing := false
+	var notified time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		st := s.standby.Status()
+		now := time.Now()
+		if st.Connected {
+			lastOK = now
+			if firing {
+				firing = false
+				s.nodes.SendPanelAlert(ctx, &nagiv1.Alert{Key: "standby_sync", Status: "resolved", Title: "备用面板已重新连上主面板",
+					Node: "备用面板 " + s.publicAddress, Time: timestamppb.New(now)})
+			}
+			continue
+		}
+		if now.Sub(lastOK) < after || (firing && now.Sub(notified) < alert.RepeatInterval) {
+			continue
+		}
+		firing, notified = true, now
+		msg := "主面板 " + s.standby.Info.PrimaryAddress
+		if st.LastError != "" {
+			msg += "：" + st.LastError
+		}
+		if !st.LastSync.IsZero() {
+			msg += "。最近一次同步：" + st.LastSync.Local().Format("2006-01-02 15:04:05")
+		}
+		s.nodes.SendPanelAlert(ctx, &nagiv1.Alert{Key: "standby_sync", Status: "firing",
+			Title:   fmt.Sprintf("备用面板连不上主面板超过 %d 分钟", int(now.Sub(lastOK).Minutes())),
+			Message: msg + "。主面板确实坏了时，可以在备用面板上提升为主面板。",
+			Node:    "备用面板 " + s.publicAddress, Time: timestamppb.New(now)})
+	}
 }

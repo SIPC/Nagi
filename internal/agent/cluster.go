@@ -91,14 +91,20 @@ func (id *identity) syncCluster(cid string, p trustedPanel, members []*nagiv1.Cl
 		for _, x := range panels {
 			addr, ok := want[x.Fingerprint]
 			delete(want, x.Fingerprint)
-			if x.Cluster != cid || x.Fingerprint == p.Fingerprint {
+			// 别的组的面板（不同的 CA）、主面板自己：不动。
+			if x.clusterID() != cid || x.Fingerprint == p.Fingerprint {
 				out = append(out, x)
 				continue
 			}
-			if ok {
-				x.Address, x.NodeID, x.CertPEM, x.CAPEM = addr, p.NodeID, p.CertPEM, p.CAPEM
-				out = append(out, x)
+			// 同一组的面板，主面板的列表里没有了就移除：包括节点直接加入的那个（例如提升以后被移除的原主面板）。
+			if !ok {
+				continue
 			}
+			// 主面板告诉的备用面板跟着主面板的地址和证书更新；节点直接加入的（地址可能是 127.0.0.1）保持原样。
+			if x.Cluster == cid {
+				x.Address, x.NodeID, x.CertPEM, x.CAPEM = addr, p.NodeID, p.CertPEM, p.CAPEM
+			}
+			out = append(out, x)
 		}
 		for _, m := range members {
 			if addr, ok := want[m.GetFingerprint()]; ok {

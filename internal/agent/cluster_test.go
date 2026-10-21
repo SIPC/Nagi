@@ -60,6 +60,20 @@ func TestClusterStandbys(t *testing.T) {
 		t.Fatal("备用面板应已移除")
 	}
 
+	// 节点直接加入的同组面板（例如提升以后的原主面板），新主面板的列表里没有了也移除。
+	old := trustedPanel{Address: "o:1", Fingerprint: "fp-old", NodeID: "n1", CertPEM: "cert", CAPEM: caPEM}
+	if err := id.addPanel(old); err != nil {
+		t.Fatal(err)
+	}
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: append(members[:1:1], &nagiv1.ClusterPanel{Address: "o:2", Fingerprint: "fp-old"})})
+	if x, ok := id.panel("fp-old"); !ok || x.Address != "o:1" {
+		t.Fatalf("列表里有的、节点直接加入的面板应保留原样: %+v", x)
+	}
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: members[:1]})
+	if _, ok := id.panel("fp-old"); ok {
+		t.Fatal("主面板的列表里没有的同组面板应移除")
+	}
+
 	// 主面板不再信任时，它的备用面板一起移除。
 	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: members})
 	if err := id.addPanel(trustedPanel{Address: "c:1", Fingerprint: "fp-c"}); err != nil {
