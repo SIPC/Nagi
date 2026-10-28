@@ -91,7 +91,7 @@
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>一行命令，加入新节点</h1>
@@ -115,7 +115,7 @@
             <div class="term">
               <div class="p">$ curl … | sh</div>
               <div><span class="ok">✓</span> 检查 Docker 与 compose</div>
-              <div><span class="ok">✓</span> 从面板下载 nagi</div>
+              <div><span class="ok">✓</span> 下载并校验 nagi</div>
               <div><span class="ok">✓</span> 加入面板</div>
               <div><span class="ok">✓</span> 安装为系统服务</div>
             </div>
@@ -145,8 +145,8 @@
           <div class="nd">全程校验面板公钥，防止他人冒充面板。</div>
         </div>
         <div>
-          <div class="nt">就近下载</div>
-          <div class="nd">程序从面板下载，不依赖 GitHub。</div>
+          <div class="nt">版本一致</div>
+          <div class="nd">自动下载与面板相同的版本，并校验 SHA-256。</div>
         </div>
       </div>
     </div>
