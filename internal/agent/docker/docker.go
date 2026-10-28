@@ -167,9 +167,16 @@ func (d *Client) listInstances(ctx context.Context, filters client.Filters, proj
 }
 
 // health 返回健康检查状态；没有健康检查时返回空字符串。
+//
+// Docker 停掉健康检查（例如快照时暂停容器）时会直接把状态置为 unhealthy，恢复后要等下一次检查
+// （默认 30 秒）才变回来，快照暂停不到一秒也会被当成不健康、发出告警。真正检查失败时连续失败次数
+// 至少是 1，所以连续失败 0 次的 unhealthy 按上一次检查的结果算，也就是 healthy。
 func health(h *container.HealthSummary) string {
 	if h == nil || h.Status == container.NoHealthcheck {
 		return ""
+	}
+	if h.Status == container.Unhealthy && h.FailingStreak == 0 {
+		return string(container.Healthy)
 	}
 	return string(h.Status)
 }
