@@ -371,6 +371,10 @@ message NodeInfo {
   bool embedded = 7;
   // 项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
   string projects_root = 8;
+  // 配置：CPU 核数、内存总量、数据目录所在磁盘的总容量（字节）。旧版本的节点不报，读不到时为 0。
+  int32 cpus = 9;
+  uint64 memory_bytes = 10;
+  uint64 disk_bytes = 11;
 }
 
 message LogLine {

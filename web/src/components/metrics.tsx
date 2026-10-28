@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, MemoryStick } from "lucide-react";
+import { Cpu, HardDrive, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
 import { Alert, EmptyRow, Loading, Segmented } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
-import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
+import type { MetricSeries, NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 
 const m = t.metrics;
@@ -47,8 +47,23 @@ export function fmtBytes(v: number) {
 }
 
 
+// CPU 图的纵轴至少到 1%，空闲容器的微小波动贴在底部，不被放大成尖峰。
+const cpuMinMax = 1;
+
 // Metric：一个指标的方块：名称、当前值、趋势图（鼠标移上去显示各时刻的值）。
-function Metric({ label, points, format, range }: { label: string; points: Pt[]; format: (v: number) => string; range: MetricRange }) {
+function Metric({
+  label,
+  points,
+  format,
+  range,
+  minMax,
+}: {
+  label: string;
+  points: Pt[];
+  format: (v: number) => string;
+  range: MetricRange;
+  minMax?: number;
+}) {
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   return (
@@ -63,6 +78,7 @@ function Metric({ label, points, format, range }: { label: string; points: Pt[];
         format={format}
         height={32}
         axis={false}
+        minMax={minMax}
       />
     </div>
   );
@@ -92,12 +108,12 @@ function NodeMetricCards({ nodeId, range }: { nodeId: string; range: MetricRange
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const series = new Map(q.data.series.map((s) => [s.name, s]));
-  const metric = (label: string, name: string, format: (v: number) => string) => (
-    <Metric key={name} label={label} points={toPoints(series.get(name))} format={format} range={range} />
+  const metric = (label: string, name: string, format: (v: number) => string, minMax?: number) => (
+    <Metric key={name} label={label} points={toPoints(series.get(name))} format={format} range={range} minMax={minMax} />
   );
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {metric("CPU", "node:cpu", fmtCpu)}
+      {metric("CPU", "node:cpu", fmtCpu, cpuMinMax)}
       {metric(m.memory, "node:mem", fmtCpu)}
       {metric(m.disk, "node:disk", fmtCpu)}
       {metric(m.netRx, "node:net_rx", fmtRate)}
@@ -189,11 +205,13 @@ export function containerUsage(series: MetricSeries[] | undefined) {
   return usage;
 }
 
-export const fmtCpu = (v: number) => `${v.toFixed(1)}%`;
+// 不是 0 但按一位小数会显示成 0.0 的值写成 <0.1，和真正的 0 区分开。
+const tiny = (v: number) => v > 0 && v < 0.05;
+export const fmtCpu = (v: number) => (tiny(v) ? "<0.1%" : `${v.toFixed(1)}%`);
 
 // 短格式，用在占用条旁：不到 10 保留一位小数，否则取整，单位自动换算，最多 5 个字符：0.2%、12%、512KB、6.0MB、1.5GB。
 const short = (v: number) => (v < 10 ? v.toFixed(1) : Math.round(v).toString());
-export const fmtCpuShort = (v: number) => `${short(v)}%`;
+export const fmtCpuShort = (v: number) => (tiny(v) ? "<0.1%" : `${short(v)}%`);
 export function fmtBytesShort(v: number) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let i = 0;
@@ -237,6 +255,61 @@ export function UsageBars({ usage, memFallback, className }: { usage?: Usage; me
   );
 }
 
+// NodeUsageBars：节点的 CPU、内存、磁盘占用，样式同容器的占用条：图标、条、数值。
+// CPU 显示百分比，内存和磁盘显示「已用 / 总量」（旧版本的节点不报总量，退回百分比）。三行在同一个网格里，条的长度对齐。
+export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; info?: NodeInfo; className?: string }) {
+  // 例如 1.4 GB、15.6 GB、512 MB：到 1000 就进位，不到 100 保留一位小数。
+  const size = (v: number) => {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let i = 0;
+    while (v >= 1000 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return `${v < 100 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+  };
+
+  // 每行：图标、条、「已用 / 总量」。数值是一列、靠左，几行从同一处开始；已用是重点，「/ 总量」淡一些。
+  const row = (icon: ReactNode, label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt) => {
+    const ratio = percent === undefined ? 0 : percent / 100;
+    const used = percent !== undefined && total ? ratio * total : undefined;
+    const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
+    const title =
+      percent === undefined ? `${label} —` : used !== undefined ? `${label} ${fmt(used)} / ${fmtTotal(total!)} (${fmtPct(percent)})` : `${label} ${fmtPct(percent)}`;
+    return (
+      <span className="contents">
+        <span className="opacity-70 [&_svg]:size-3" title={title}>
+          {icon}
+        </span>
+        <span className="h-1 min-w-0 overflow-hidden rounded-full bg-foreground/10" title={title}>
+          <span
+            className={cn("block h-full origin-left rounded-full transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", tone(ratio))}
+            style={{ transform: `scaleX(${r})` }}
+          />
+        </span>
+        <span className="truncate pl-1" title={title}>
+          {percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)}
+          {used !== undefined && <span className="text-muted-foreground/50"> / {fmtTotal(total!)}</span>}
+        </span>
+      </span>
+    );
+  };
+  // CPU 和容器一样按每核 100% 算：12 核的机器总量是 1200%。
+  const cpuTotal = info?.cpus ? info.cpus * 100 : undefined;
+  return (
+    <span
+      className={cn(
+        "grid grid-cols-[auto_1fr_auto] items-center gap-x-1.5 gap-y-1.5 font-mono text-[11px] leading-4 tabular-nums text-muted-foreground",
+        className,
+      )}
+    >
+      {row(<Cpu />, "CPU", usage?.cpu, cpuTotal, fmtCpuShort)}
+      {row(<MemoryStick />, m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
+      {row(<HardDrive />, m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
+    </span>
+  );
+}
+
 function UsageBar({ icon, ratio, value, title, fill }: { icon: ReactNode; ratio: number; value: string; title: string; fill: string }) {
   // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
   const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
@@ -268,6 +341,7 @@ function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]
                 points={points}
                 format={containerMetricFormat[metric]?.[1] ?? String}
                 range={range}
+                minMax={metric === "cpu" ? cpuMinMax : undefined}
               />
             ))}
           </div>

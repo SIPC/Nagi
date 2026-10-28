@@ -20,6 +20,7 @@ export default {
   approve: "批准",
   memory: "内存",
   disk: "磁盘",
+  cores: (n: number) => `${n} 核`,
   lastSeen: (ago: string) => `最后在线 ${ago}`,
   containers: (n: number) => `${n} 个容器`,
   notFound: "节点不存在",

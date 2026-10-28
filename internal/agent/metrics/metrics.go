@@ -99,6 +99,17 @@ func DiskFree(path string) (mount string, free uint64, ok bool) {
 	return mountOf(path), free, ok
 }
 
+// Capacity 返回内存总量和 path 所在磁盘的总容量（字节），读不到时为 0。
+func Capacity(path string) (memory, disk uint64) {
+	if total, _, ok := readMem(); ok {
+		memory = total
+	}
+	if total, _, ok := readDisk(path); ok {
+		disk = total
+	}
+	return memory, disk
+}
+
 // New 创建采集器。diskPath 用来计算磁盘使用率（节点目录所在的文件系统）。
 func New(db *sql.DB, dc *docker.Client, diskPath string, log *slog.Logger) *Collector {
 	return &Collector{

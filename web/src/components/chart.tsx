@@ -42,6 +42,7 @@ export function TimeChart({
   stacked,
   height = 72,
   axis = true,
+  minMax = 0,
   className,
 }: {
   series: ChartSeries[];
@@ -52,6 +53,8 @@ export function TimeChart({
   stacked?: boolean;
   height?: number;
   axis?: boolean;
+  // minMax：纵轴上限至少是多少。数值很小时（例如空闲容器 0.01% 的 CPU），不让微小波动撑满整个图。
+  minMax?: number;
   className?: string;
 }) {
   const { ref, width } = useWidth();
@@ -63,7 +66,7 @@ export function TimeChart({
   const times = [...new Set(series.flatMap((s) => s.points.map((p) => p[0])))].filter((t) => t >= from - step && t <= to).sort((a, b) => a - b);
   const total = (t: number) => byTime.reduce((sum, m) => sum + (m.get(t) ?? 0), 0);
   const peak = Math.max(0, ...(stacked ? times.map(total) : series.flatMap((s) => s.points.map((p) => p[1]))));
-  const yMax = peak > 0 ? peak * 1.1 : 1;
+  const yMax = Math.max(peak > 0 ? peak * 1.1 : 1, minMax);
   const span = Math.max(to - from, 1);
   const x = (t: number) => ((t - from) / span) * width;
   const y = (v: number) => height - (v / yMax) * (height - 2) - 1;

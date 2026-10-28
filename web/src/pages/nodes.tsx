@@ -6,11 +6,12 @@ import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { NodeMetrics, fmtBytes } from "@/components/metrics";
+import { NodeMetrics, NodeUsageBars, fmtBytes, fmtBytesShort } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import { Alert, Badge, Button, CodeBlock, Dialog, Empty, Field, Input, Loading, Menu, Meter, Notice, Status, Tabs } from "@/components/ui";
+import { Alert, Badge, Button, CodeBlock, Dialog, Empty, Field, Input, Loading, Menu, Notice, Status, Tabs } from "@/components/ui";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
+import type { NodeInfo } from "@/gen/nagi/v1/common_pb";
 
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
@@ -25,6 +26,17 @@ export const nodeTabs: { value: NodeTab; label: string }[] = [
 function useNodeList() {
   return useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 5000 });
 }
+
+// nodeSpec：节点的配置，例如「2 核 · 内存 3.8GB · 磁盘 39GB」。旧版本的节点不报配置，返回空串。
+function nodeSpec(info?: NodeInfo) {
+  if (!info) return "";
+  const parts: string[] = [];
+  if (info.cpus) parts.push(t.nodes.cores(info.cpus));
+  if (info.memoryBytes) parts.push(`${t.nodes.memory} ${fmtBytesShort(Number(info.memoryBytes))}`);
+  if (info.diskBytes) parts.push(`${t.nodes.disk} ${fmtBytesShort(Number(info.diskBytes))}`);
+  return parts.join(" · ");
+}
+
 
 function NodeStatus({ n }: { n: Node }) {
   if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
@@ -95,6 +107,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
             {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
           </div>
           <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
+
         </div>
         <NodeStatus n={n} />
       </div>
@@ -114,11 +127,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
             </Button>
           </div>
         ) : n.online ? (
-          <>
-            <Meter label="CPU" value={u?.cpu} />
-            <Meter label={t.nodes.memory} value={u?.memory} />
-            <Meter label={t.nodes.disk} value={u?.disk} />
-          </>
+          <NodeUsageBars usage={u} info={n.info} />
         ) : (
           <span className="text-[13px] text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>
         )}
@@ -176,6 +185,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                 <span>
                   {n.info.os}/{n.info.arch}
                 </span>
+                {nodeSpec(n.info) && <span>{nodeSpec(n.info)}</span>}
                 <span className="font-mono">
                   Docker {n.info.dockerVersion || "?"} / Compose {n.info.composeVersion || "?"}
                 </span>

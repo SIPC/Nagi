@@ -2246,7 +2246,11 @@ type NodeInfo struct {
 	// 面板自带的节点（面板绑定域名时由它的 Caddy 反代面板）。
 	Embedded bool `protobuf:"varint,7,opt,name=embedded,proto3" json:"embedded,omitempty"`
 	// 项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
-	ProjectsRoot  string `protobuf:"bytes,8,opt,name=projects_root,json=projectsRoot,proto3" json:"projects_root,omitempty"`
+	ProjectsRoot string `protobuf:"bytes,8,opt,name=projects_root,json=projectsRoot,proto3" json:"projects_root,omitempty"`
+	// 配置：CPU 核数、内存总量、数据目录所在磁盘的总容量（字节）。旧版本的节点不报，读不到时为 0。
+	Cpus          int32  `protobuf:"varint,9,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryBytes   uint64 `protobuf:"varint,10,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DiskBytes     uint64 `protobuf:"varint,11,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2335,6 +2339,27 @@ func (x *NodeInfo) GetProjectsRoot() string {
 		return x.ProjectsRoot
 	}
 	return ""
+}
+
+func (x *NodeInfo) GetCpus() int32 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *NodeInfo) GetMemoryBytes() uint64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *NodeInfo) GetDiskBytes() uint64 {
+	if x != nil {
+		return x.DiskBytes
+	}
+	return 0
 }
 
 type LogLine struct {
@@ -4451,7 +4476,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tNodeUsage\x12\x10\n" +
 	"\x03cpu\x18\x01 \x01(\x01R\x03cpu\x12\x16\n" +
 	"\x06memory\x18\x02 \x01(\x01R\x06memory\x12\x12\n" +
-	"\x04disk\x18\x03 \x01(\x01R\x04disk\"\xf5\x01\n" +
+	"\x04disk\x18\x03 \x01(\x01R\x04disk\"\xcb\x02\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -4460,7 +4485,12 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0edocker_version\x18\x05 \x01(\tR\rdockerVersion\x12'\n" +
 	"\x0fcompose_version\x18\x06 \x01(\tR\x0ecomposeVersion\x12\x1a\n" +
 	"\bembedded\x18\a \x01(\bR\bembedded\x12#\n" +
-	"\rprojects_root\x18\b \x01(\tR\fprojectsRoot\"\x9d\x01\n" +
+	"\rprojects_root\x18\b \x01(\tR\fprojectsRoot\x12\x12\n" +
+	"\x04cpus\x18\t \x01(\x05R\x04cpus\x12!\n" +
+	"\fmemory_bytes\x18\n" +
+	" \x01(\x04R\vmemoryBytes\x12\x1d\n" +
+	"\n" +
+	"disk_bytes\x18\v \x01(\x04R\tdiskBytes\"\x9d\x01\n" +
 	"\aLogLine\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06stream\x18\x02 \x01(\tR\x06stream\x12\x12\n" +

@@ -415,7 +415,9 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		Version:      a.cfg.Version,
 		Embedded:     a.cfg.Embedded,
 		ProjectsRoot: a.projectsRoot(),
+		Cpus:         int32(runtime.NumCPU()),
 	}
+	info.MemoryBytes, info.DiskBytes = metrics.Capacity(a.cfg.DataDir)
 	if v, err := a.docker.Version(ctx); err == nil {
 		info.DockerVersion = v
 	} else {

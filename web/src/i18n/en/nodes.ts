@@ -21,6 +21,7 @@ export default {
   approve: "Approve",
   memory: "Memory",
   disk: "Disk",
+  cores: (n) => `${n} vCPU`,
   lastSeen: (ago) => `Last seen ${ago}`,
   containers: (n) => (n === 1 ? "1 container" : `${n} containers`),
   notFound: "Node not found",
