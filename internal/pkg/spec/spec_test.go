@@ -210,13 +210,13 @@ func TestComposePorts(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("ports: %v", got)
 	}
-	if p := got["web/80/tcp"]; p.Skip != "" || p.Route.GetProtocol() != ProtoHTTP || !p.Guessed || p.Route.GetPublished() != 38080 {
+	if p := got["web/80/tcp"]; p.Skip != nil || p.Route.GetProtocol() != ProtoHTTP || !p.Guessed || p.Route.GetPublished() != 38080 {
 		t.Fatalf("http: %+v", p)
 	}
-	if p := got["web/53/udp"]; p.Skip != "" || p.Route.GetProtocol() != ProtoUDP {
+	if p := got["web/53/udp"]; p.Skip != nil || p.Route.GetProtocol() != ProtoUDP {
 		t.Fatalf("udp: %+v", p)
 	}
-	if p := got["web/9000/tcp"]; p.Skip == "" {
+	if p := got["web/9000/tcp"]; p.Skip == nil {
 		t.Fatalf("no published port should be skipped: %+v", p)
 	}
 	if NewRouteName(got["web/80/tcp"].Route, map[string]bool{"web-80": true}) != "web-80-2" {

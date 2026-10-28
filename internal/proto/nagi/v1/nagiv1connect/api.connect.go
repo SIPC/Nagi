@@ -55,6 +55,8 @@ const (
 	// AuthServiceChangePasswordProcedure is the fully-qualified name of the AuthService's
 	// ChangePassword RPC.
 	AuthServiceChangePasswordProcedure = "/nagi.v1.AuthService/ChangePassword"
+	// AuthServiceSetLanguageProcedure is the fully-qualified name of the AuthService's SetLanguage RPC.
+	AuthServiceSetLanguageProcedure = "/nagi.v1.AuthService/SetLanguage"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
@@ -379,6 +381,8 @@ type AuthServiceClient interface {
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
+	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
+	SetLanguage(context.Context, *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -416,6 +420,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
 			connect.WithClientOptions(opts...),
 		),
+		setLanguage: connect.NewClient[v1.SetLanguageRequest, v1.SetLanguageResponse](
+			httpClient,
+			baseURL+AuthServiceSetLanguageProcedure,
+			connect.WithSchema(authServiceMethods.ByName("SetLanguage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -425,6 +435,7 @@ type authServiceClient struct {
 	logout         *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
 	me             *connect.Client[v1.MeRequest, v1.MeResponse]
 	changePassword *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	setLanguage    *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -447,6 +458,11 @@ func (c *authServiceClient) ChangePassword(ctx context.Context, req *connect.Req
 	return c.changePassword.CallUnary(ctx, req)
 }
 
+// SetLanguage calls nagi.v1.AuthService.SetLanguage.
+func (c *authServiceClient) SetLanguage(ctx context.Context, req *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error) {
+	return c.setLanguage.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -455,6 +471,8 @@ type AuthServiceHandler interface {
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
+	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
+	SetLanguage(context.Context, *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -488,6 +506,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceSetLanguageHandler := connect.NewUnaryHandler(
+		AuthServiceSetLanguageProcedure,
+		svc.SetLanguage,
+		connect.WithSchema(authServiceMethods.ByName("SetLanguage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -498,6 +522,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceMeHandler.ServeHTTP(w, r)
 		case AuthServiceChangePasswordProcedure:
 			authServiceChangePasswordHandler.ServeHTTP(w, r)
+		case AuthServiceSetLanguageProcedure:
+			authServiceSetLanguageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -521,6 +547,10 @@ func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.M
 
 func (UnimplementedAuthServiceHandler) ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ChangePassword is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) SetLanguage(context.Context, *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.SetLanguage is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.

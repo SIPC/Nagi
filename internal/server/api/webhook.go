@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/server/projects"
 )
 
@@ -29,8 +30,10 @@ type webhooks struct {
 }
 
 func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
+	// 调用方是 git 托管平台，一般不带 Accept-Language，这时是中文。
+	lang := requestLang(r)
 	if r.Method != http.MethodPost {
-		http.Error(w, "只接受 POST", http.StatusMethodNotAllowed)
+		http.Error(w, i18n.Sprintf(lang, "只接受 POST"), http.StatusMethodNotAllowed)
 		return
 	}
 	io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
@@ -45,7 +48,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, "内部错误", http.StatusInternalServerError)
+		http.Error(w, i18n.Sprintf(lang, "内部错误"), http.StatusInternalServerError)
 		return
 	}
 	hook := hookTarget{projectID, container}
@@ -55,7 +58,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 		h.again[key] = true
 		h.mu.Unlock()
 		w.WriteHeader(http.StatusAccepted)
-		io.WriteString(w, "已排队：当前部署完成后再部署一次\n")
+		io.WriteString(w, i18n.Sprintf(lang, "已排队：当前部署完成后再部署一次")+"\n")
 		return
 	}
 	h.running[key] = true
@@ -63,7 +66,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 
 	go h.deployLoop(hook)
 	w.WriteHeader(http.StatusAccepted)
-	io.WriteString(w, "已开始拉取并部署\n")
+	io.WriteString(w, i18n.Sprintf(lang, "已开始拉取并部署")+"\n")
 }
 
 type hookTarget struct{ projectID, container string }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/standby"
@@ -88,7 +88,7 @@ func (s *settingsService) GetSettings(ctx context.Context, _ *connect.Request[na
 func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateSettingsRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
 	addr := strings.TrimSpace(req.Msg.GetPublicAddress())
 	if net.ParseIP(addr) == nil && !hostnameRe.MatchString(addr) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("对外地址必须是 IP 或域名，不含端口"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("对外地址必须是 IP 或域名，不含端口"))
 	}
 	old := s.Panel.PublicAddress(ctx)
 	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPublicAddress, Value: addr}); err != nil {
@@ -108,7 +108,7 @@ func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Reque
 func (s *settingsService) SetPanelDomain(ctx context.Context, req *connect.Request[nagiv1.SetPanelDomainApiRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
 	d := strings.ToLower(strings.TrimSpace(req.Msg.GetDomain()))
 	if d != "" && (net.ParseIP(d) != nil || !hostnameRe.MatchString(d) || !strings.Contains(d, ".")) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("请填写域名，例如 panel.example.com"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请填写域名，例如 panel.example.com"))
 	}
 	var err error
 	if d == "" {
@@ -160,7 +160,7 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		ch.TelegramToken = strings.TrimSpace(ch.GetTelegramToken())
 		ch.TelegramChatId = strings.TrimSpace(ch.GetTelegramChatId())
 		if err := alert.Validate(ch); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("渠道 %q：%w", ch.GetName(), err))
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("渠道 %q：%w", ch.GetName(), err))
 		}
 		if ch.GetName() == "" {
 			ch.Name = ch.GetType()
@@ -171,7 +171,7 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		ids[ch.GetId()] = true
 	}
 	if r := cfg.GetRules(); r != nil && (r.GetDiskPercent() > 100 || r.GetMemPercent() > 100) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("百分比不能超过 100"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("百分比不能超过 100"))
 	}
 	if err := s.Nodes.SetAlertConfig(ctx, cfg); err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func masterKeyPath(dataDir string) string {
 
 func (s *settingsService) CreateStandbyCode(ctx context.Context, _ *connect.Request[nagiv1.CreateStandbyCodeRequest]) (*connect.Response[nagiv1.CreateStandbyCodeResponse], error) {
 	if s.Panel.Primary == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是备用面板，请在主面板上添加备用面板"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这是备用面板，请在主面板上添加备用面板"))
 	}
 	addr := net.JoinHostPort(s.Panel.PublicAddress(ctx), strconv.Itoa(s.Panel.Port))
 	code, expires, err := s.Panel.Primary.NewCode(ctx, addr, s.Panel.Fingerprint)
@@ -269,7 +269,7 @@ func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[na
 	out := &nagiv1.GetStandbysResponse{}
 	if c := s.Panel.Standby; c != nil {
 		st := c.Status()
-		out.IsStandby, out.PrimaryAddress, out.Connected, out.LastError = true, c.PrimaryAddress(), st.Connected, st.LastError
+		out.IsStandby, out.PrimaryAddress, out.Connected, out.LastError = true, c.PrimaryAddress(), st.Connected, i18n.Localize(i18n.FromContext(ctx), st.LastError)
 		if !st.LastSync.IsZero() {
 			out.LastSync = timestamppb.New(st.LastSync)
 		}
@@ -295,7 +295,7 @@ func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[na
 
 func (s *settingsService) PromoteStandby(ctx context.Context, _ *connect.Request[nagiv1.PromoteStandbyRequest]) (*connect.Response[nagiv1.PromoteStandbyResponse], error) {
 	if s.Panel.Standby == nil || s.Panel.Promote == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("本面板已经是主面板"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("本面板已经是主面板"))
 	}
 	term, err := s.Panel.Promote(ctx)
 	if err != nil {
@@ -306,7 +306,7 @@ func (s *settingsService) PromoteStandby(ctx context.Context, _ *connect.Request
 
 func (s *settingsService) RemoveStandby(ctx context.Context, req *connect.Request[nagiv1.RemoveStandbyRequest]) (*connect.Response[nagiv1.RemoveStandbyResponse], error) {
 	if s.Panel.Primary == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是备用面板，请在主面板上操作"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这是备用面板，请在主面板上操作"))
 	}
 	if sp, err := s.Q.GetStandbyPanel(ctx, req.Msg.GetId()); err == nil {
 		// 记下来告诉节点：以后不认它是主面板（它手里还有 CA 和数据库，可能自己提升）。
@@ -319,7 +319,7 @@ func (s *settingsService) RemoveStandby(ctx context.Context, req *connect.Reques
 		return nil, err
 	}
 	if n == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("备用面板不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("备用面板不存在"))
 	}
 	s.Log.Info("已移除备用面板", "standby", req.Msg.GetId())
 	return connect.NewResponse(&nagiv1.RemoveStandbyResponse{}), nil

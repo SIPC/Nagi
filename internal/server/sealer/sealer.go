@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
 // version 是密文格式的版本号，放在密文的第一个字节。
@@ -65,7 +67,7 @@ func (s *Sealer) Seal(plaintext, additional []byte) ([]byte, error) {
 func (s *Sealer) Open(ciphertext, additional []byte) ([]byte, error) {
 	n := s.aead.NonceSize()
 	if len(ciphertext) < 1+n || ciphertext[0] != version {
-		return nil, errors.New("密文格式无效")
+		return nil, i18n.New("密文格式无效")
 	}
 	return s.aead.Open(nil, ciphertext[1:1+n], ciphertext[1+n:], additional)
 }

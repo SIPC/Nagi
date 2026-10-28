@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -291,7 +292,7 @@ func readFrame(r io.Reader) ([]byte, error) {
 	}
 	n := binary.BigEndian.Uint64(hdr[:])
 	if n > maxFrame {
-		return nil, errors.New("快照太大")
+		return nil, i18n.New("快照太大")
 	}
 	b := make([]byte, n)
 	_, err := io.ReadFull(r, b)
@@ -417,7 +418,7 @@ type Client struct {
 	mu        sync.Mutex
 	connected bool
 	lastSync  time.Time
-	lastError string
+	lastError error
 	stop      context.CancelFunc
 	done      chan struct{}
 	// addr 是现在连的主面板地址：主面板改了对外地址时换成新的（见 followAddress）。
@@ -454,11 +455,11 @@ func (c *Client) followAddress(ctx context.Context) {
 	c.Log.Info("主面板的地址变了，改连新地址", "primary", addr)
 }
 
-// ClientStatus 是备用面板看到的同步状态。
+// ClientStatus 是备用面板看到的同步状态。LastError 显示给浏览器时用 i18n.Localize 按请求的语言。
 type ClientStatus struct {
 	Connected bool
 	LastSync  time.Time
-	LastError string
+	LastError error
 }
 
 func (c *Client) Status() ClientStatus {
@@ -481,7 +482,7 @@ func (c *Client) Run(ctx context.Context) {
 		c.mu.Lock()
 		c.connected = false
 		if err != nil && ctx.Err() == nil {
-			c.lastError = err.Error()
+			c.lastError = err
 		}
 		c.mu.Unlock()
 		if err != nil && ctx.Err() == nil {
@@ -558,14 +559,14 @@ func (c *Client) syncOnce(ctx context.Context) error {
 		frame, err := readFrame(conn)
 		if err != nil {
 			if first && errors.Is(err, io.EOF) {
-				return errors.New("主面板拒绝了同步（本面板可能已在主面板上被移除）")
+				return i18n.New("主面板拒绝了同步（本面板可能已在主面板上被移除）")
 			}
 			return err
 		}
 		if first {
 			first = false
 			c.mu.Lock()
-			c.connected, c.lastError = true, ""
+			c.connected, c.lastError = true, nil
 			c.mu.Unlock()
 			c.Log.Info("已连接主面板", "primary", c.PrimaryAddress())
 		}
@@ -574,7 +575,7 @@ func (c *Client) syncOnce(ctx context.Context) error {
 		}
 		if err := c.apply(ctx, frame); err != nil {
 			c.mu.Lock()
-			c.lastError = "应用主面板的数据失败：" + err.Error()
+			c.lastError = i18n.Errorf("应用主面板的数据失败：%w", err)
 			c.mu.Unlock()
 			c.Log.Error("应用主面板的数据失败", "err", err)
 			continue
@@ -613,7 +614,7 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 		return err
 	}
 	if theirs != ours {
-		return fmt.Errorf("主面板的数据库版本（%d）和本面板（%d）不同，请把两个面板升级到同一个版本", theirs, ours)
+		return i18n.Errorf("主面板的数据库版本（%d）和本面板（%d）不同，请把两个面板升级到同一个版本", theirs, ours)
 	}
 	// 表名取本面板自己的数据库里有的（两边版本相同，表一样）：不拿快照里的名字拼 SQL。
 	rows, err := conn.QueryContext(ctx, "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "+

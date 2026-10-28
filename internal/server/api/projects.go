@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -50,7 +51,8 @@ func reply[T any](m *T, err error) (*connect.Response[T], error) {
 }
 
 // streamOp 执行一个会输出过程的操作，把输出和结果发给浏览器。参数错误、冲突这些直接作为错误返回。
-func streamOp(out *connect.ServerStream[nagiv1.DeployEvent], op func(projects.Output) (int64, error)) error {
+// 结果里的错误按 ctx 里的语言显示（节点直接返回的错误除外）。
+func streamOp(ctx context.Context, out *connect.ServerStream[nagiv1.DeployEvent], op func(projects.Output) (int64, error)) error {
 	version, err := op(func(line string) {
 		_ = out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	})
@@ -59,10 +61,10 @@ func streamOp(out *connect.ServerStream[nagiv1.DeployEvent], op func(projects.Ou
 	}
 	res := &nagiv1.DeployResult{Success: err == nil, Version: version}
 	if err != nil {
-		if st, ok := status.FromError(err); ok {
-			res.Error = st.Message()
+		if isStatus(err) {
+			res.Error = status.Convert(err).Message()
 		} else {
-			res.Error = err.Error()
+			res.Error = i18n.Localize(i18n.FromContext(ctx), err)
 		}
 	}
 	return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: res}})
@@ -168,7 +170,7 @@ func (s *projectService) Deploy(ctx context.Context, req *connect.Request[nagiv1
 		Pull: m.GetPull(), Upload: m.GetUseUpload(), PullImages: m.GetPullImages(),
 		ApplySharedEnv: m.GetApplySharedEnv(), SettingsRevision: m.GetSettingsRevision(),
 	}
-	return streamOp(out, func(o2 projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o2 projects.Output) (int64, error) {
 		return s.Projects.Deploy(ctx, m.GetProjectId(), targets, o, o2)
 	})
 }
@@ -180,7 +182,7 @@ func (s *projectService) ListVersions(ctx context.Context, req *connect.Request[
 
 func (s *projectService) Rollback(ctx context.Context, req *connect.Request[nagiv1.RollbackRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return s.Projects.Rollback(ctx, m.GetProjectId(), m.GetContainer(), m.GetVersion(), m.GetRestoreData(), o)
 	})
 }
@@ -192,7 +194,7 @@ func (s *projectService) ListDeployments(ctx context.Context, req *connect.Reque
 
 func (s *projectService) RestoreDeployment(ctx context.Context, req *connect.Request[nagiv1.RestoreDeploymentRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return s.Projects.RestoreDeployment(ctx, m.GetProjectId(), m.GetDeploymentId(), o)
 	})
 }
@@ -249,21 +251,21 @@ func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.R
 
 func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Request[nagiv1.RestoreFromBackupRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.RestoreFromBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId(), m.GetDir(), o)
 	})
 }
 
 func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.Migrate(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
 	})
 }
 
 func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.RedeployElsewhere(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
 	})
 }
@@ -302,14 +304,14 @@ func (s *projectService) ListSnapshots(ctx context.Context, req *connect.Request
 }
 
 func (s *projectService) CreateSnapshot(ctx context.Context, req *connect.Request[nagiv1.ContainerRef], out *connect.ServerStream[nagiv1.DeployEvent]) error {
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.CreateSnapshot(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer(), o)
 	})
 }
 
 func (s *projectService) RestoreSnapshot(ctx context.Context, req *connect.Request[nagiv1.RestoreSnapshotRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	return streamOp(out, func(o projects.Output) (int64, error) {
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.RestoreSnapshot(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId(), o)
 	})
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
 // installScript 是节点安装脚本，由面板填入自己的地址和公钥指纹后提供下载。
@@ -115,7 +117,7 @@ func (a *API) DownloadHandler() http.Handler {
 		}
 		path, err := a.binaryPath(arch)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, i18n.Localize(requestLang(r), err), http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -134,7 +136,7 @@ func (a *API) binaryPath(arch string) (string, error) {
 		return "", err
 	}
 	if runtime.GOOS != "linux" || runtime.GOARCH != arch {
-		return "", errors.New("面板没有 linux/" + arch + " 的 nagi，请把它放到面板数据目录的 binaries/" + name)
+		return "", i18n.Errorf("面板没有 linux/%s 的 nagi，请把它放到面板数据目录的 binaries/%s", arch, name)
 	}
 	return os.Executable()
 }

@@ -90,6 +90,9 @@ UPDATE users SET totp_secret = ?, totp_last_step = 0 WHERE id = ?;
 -- name: UseTOTPStep :execrows
 UPDATE users SET totp_last_step = ? WHERE id = ? AND totp_last_step < ?;
 
+-- name: SetUserLanguage :exec
+UPDATE users SET language = ? WHERE id = ?;
+
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = ?;
 

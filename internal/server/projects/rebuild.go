@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -253,7 +253,7 @@ func containsString(list []string, x string) bool {
 
 func checkSpecIDs(sp *nagiv1.ContainerSpec) error {
 	if len(sp.GetProjectId()) != 16 || spec.CheckContainerName(sp.GetName()) != nil || sp.GetConfig() == nil {
-		return errors.New("缓存的配置不完整")
+		return i18n.New("缓存的配置不完整")
 	}
 	return nil
 }

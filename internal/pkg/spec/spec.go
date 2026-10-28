@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
@@ -22,14 +23,15 @@ import (
 // ErrInvalid 是参数错误：errors.Is(err, ErrInvalid) 能识别 Invalid 返回的错误。
 var ErrInvalid = errors.New("参数无效")
 
-type invalidError struct{ msg string }
+type invalidError struct{ err error }
 
-func (e invalidError) Error() string        { return e.msg }
+func (e invalidError) Error() string        { return e.err.Error() }
+func (e invalidError) Unwrap() error        { return e.err }
 func (e invalidError) Is(target error) bool { return target == ErrInvalid }
 
-// Invalid 返回一个参数错误，消息只包含具体原因。
+// Invalid 返回一个参数错误，消息只包含具体原因。按请求的语言显示（见 i18n）。
 func Invalid(format string, args ...any) error {
-	return invalidError{msg: fmt.Sprintf(format, args...)}
+	return invalidError{err: i18n.Errorf(format, args...)}
 }
 
 var (
@@ -205,7 +207,9 @@ func volumeName(target string, used map[string]bool) string {
 }
 
 // ComposeProjectName 是容器的 compose 项目名。
-func ComposeProjectName(projectID, container string) string { return "nagi-" + projectID + "-" + container }
+func ComposeProjectName(projectID, container string) string {
+	return "nagi-" + projectID + "-" + container
+}
 
 // Validate 校验容器配置：compose 能解析、变量名合法、服务级变量对应的服务存在、git 地址有效、依赖的容器名合法。
 // shared 是项目的共享变量，用来替换 compose 里的 ${变量}（同名时以容器自己的为准）。会规范 cfg 里的部分字段。

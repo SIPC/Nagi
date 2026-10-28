@@ -3,10 +3,9 @@ package projects
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sort"
-	"strings"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -55,10 +54,10 @@ func (s *Service) CreateSnapshot(ctx context.Context, projectID, name string, ou
 			return invalid("项目还没有部署过的容器")
 		}
 	}
-	var failed []string
+	var failed i18n.List
 	for _, c := range targets {
 		if len(targets) > 1 {
-			out("==== 容器 " + c.Name + " ====")
+			out(i18n.T(ctx, "==== 容器 %s ====", c.Name))
 		}
 		err := func() error {
 			agent, err := s.agent(ctx, c.NodeID)
@@ -76,12 +75,12 @@ func (s *Service) CreateSnapshot(ctx context.Context, projectID, name string, ou
 			if len(targets) == 1 {
 				return err
 			}
-			out("容器 " + c.Name + " 快照失败：" + err.Error())
+			out(i18n.T(ctx, "容器 %s 快照失败：%v", c.Name, err))
 			failed = append(failed, c.Name)
 		}
 	}
 	if len(failed) > 0 {
-		return errors.New("这些容器快照失败：" + strings.Join(failed, "、"))
+		return i18n.Errorf("这些容器快照失败：%s", failed)
 	}
 	return nil
 }
@@ -240,7 +239,7 @@ func (s *Service) mergeDocker(p store.Project, add []byte, remove string) ([]byt
 	if len(add) > 0 {
 		var n dockerAuths
 		if err := json.Unmarshal(add, &n); err != nil || len(n.Auths) == 0 {
-			return nil, errors.New("节点返回的登录信息无法识别")
+			return nil, i18n.New("节点返回的登录信息无法识别")
 		}
 		for k, v := range n.Auths {
 			cur.Auths[k] = v

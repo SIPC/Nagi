@@ -124,6 +124,7 @@ type User struct {
 	CreatedAt    int64
 	TotpSecret   string
 	TotpLastStep int64
+	Language     string
 }
 
 type Version struct {

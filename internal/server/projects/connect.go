@@ -5,8 +5,9 @@ import (
 	"slices"
 	"time"
 
-	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 )
 
@@ -165,7 +166,7 @@ func (s *Service) Disconnect(ctx context.Context, id, otherID string) (*nagiv1.P
 		return nil, err
 	}
 	if n == 0 {
-		return nil, notFoundError{"没有连接这个项目"}
+		return nil, notFoundError{i18n.New("没有连接这个项目")}
 	}
 	s.refreshLinks()
 	return s.reload(ctx, id)

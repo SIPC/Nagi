@@ -2,10 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
@@ -22,24 +22,26 @@ func (a *API) UploadHandler() http.Handler {
 			w.WriteHeader(code)
 			_ = json.NewEncoder(w).Encode(v)
 		}
+		lang := requestLang(r)
 		fail := func(code int, err error) {
-			if st, ok := status.FromError(err); ok {
-				err = errors.New(st.Message())
+			msg := i18n.Localize(lang, err)
+			if isStatus(err) {
+				msg = status.Convert(err).Message()
 			}
-			reply(code, map[string]string{"message": err.Error()})
+			reply(code, map[string]string{"message": msg})
 		}
 		if _, err := a.Auth.Authenticate(r.Context(), auth.SessionToken(r.Header)); err != nil {
-			fail(http.StatusUnauthorized, errors.New("未登录"))
+			fail(http.StatusUnauthorized, i18n.New("未登录"))
 			return
 		}
 		if r.Header.Get("X-Nagi-Upload") != "1" {
-			fail(http.StatusBadRequest, errors.New("缺少 X-Nagi-Upload 请求头"))
+			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return
 		}
 		q := r.URL.Query()
 		m := a.Nodes.Mesh()
 		if m == nil {
-			fail(http.StatusServiceUnavailable, errors.New("面板的 mesh 没有启动，无法上传"))
+			fail(http.StatusServiceUnavailable, i18n.New("面板的 mesh 没有启动，无法上传"))
 			return
 		}
 		nodeID, err := a.Projects.Locate(r.Context(), q.Get("project"), q.Get("container"))

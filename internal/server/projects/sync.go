@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -29,6 +30,9 @@ type offlineError struct{ name string }
 
 func (e offlineError) Error() string        { return "节点 " + e.name + " 不在线" }
 func (e offlineError) Is(target error) bool { return target == nodes.ErrOffline }
+func (e offlineError) Localize(l i18n.Lang) string {
+	return i18n.Sprintf(l, "节点 %s 不在线", e.name)
+}
 
 func (s *Service) nodeErr(ctx context.Context, nodeID string, err error) error {
 	if errors.Is(err, nodes.ErrOffline) {

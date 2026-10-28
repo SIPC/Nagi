@@ -556,7 +556,7 @@ func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users WHERE id = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -569,12 +569,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.TotpSecret,
 		&i.TotpLastStep,
+		&i.Language,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -587,6 +588,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CreatedAt,
 		&i.TotpSecret,
 		&i.TotpLastStep,
+		&i.Language,
 	)
 	return i, err
 }
@@ -1245,7 +1247,7 @@ func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error)
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step FROM users ORDER BY id
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -1264,6 +1266,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.TotpSecret,
 			&i.TotpLastStep,
+			&i.Language,
 		); err != nil {
 			return nil, err
 		}
@@ -1665,6 +1668,20 @@ type SetTOTPParams struct {
 
 func (q *Queries) SetTOTP(ctx context.Context, arg SetTOTPParams) error {
 	_, err := q.db.ExecContext(ctx, setTOTP, arg.TotpSecret, arg.ID)
+	return err
+}
+
+const setUserLanguage = `-- name: SetUserLanguage :exec
+UPDATE users SET language = ? WHERE id = ?
+`
+
+type SetUserLanguageParams struct {
+	Language string
+	ID       int64
+}
+
+func (q *Queries) SetUserLanguage(ctx context.Context, arg SetUserLanguageParams) error {
+	_, err := q.db.ExecContext(ctx, setUserLanguage, arg.Language, arg.ID)
 	return err
 }
 

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
 )
@@ -147,8 +148,8 @@ type ComposePort struct {
 	Route *nagiv1.Exposure
 	// Guessed：按端口猜测是网站（按 http 开放）。
 	Guessed bool
-	// Skip 不为空时不导入，原因写在部署日志里。
-	Skip string
+	// Skip 不为 nil 时不导入，原因写在部署日志里（用 i18n.Localize 按请求的语言显示）。
+	Skip error
 }
 
 // ComposePorts 列出容器 compose 里的对外端口（host 网络的服务除外）：写了 app_protocol: http 或者是常见网站端口的按 http，
@@ -168,7 +169,7 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 			cp := ComposePort{Key: fmt.Sprintf("%s/%d/%s", name, port.Target, proto)}
 			published, _ := strconv.Atoi(strings.Split(port.Published, "-")[0])
 			if published == 0 {
-				cp.Skip = fmt.Sprintf("compose 里 %s 的端口 %d 没有指定对外端口，未开放，可以手动添加映射", name, port.Target)
+				cp.Skip = i18n.Errorf("compose 里 %s 的端口 %d 没有指定对外端口，未开放，可以手动添加映射", name, port.Target)
 				out = append(out, cp)
 				continue
 			}
@@ -177,7 +178,7 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 				r.Protocol, cp.Guessed = ProtoHTTP, port.AppProtocol == ""
 			}
 			if err := CheckRoute(r); err != nil {
-				cp.Skip = fmt.Sprintf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err)
+				cp.Skip = i18n.Errorf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err)
 			}
 			cp.Route = r
 			out = append(out, cp)

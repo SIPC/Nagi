@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -27,13 +28,15 @@ import (
 
 // 错误类型，供接口层转换成对应的错误码。参数错误用 spec.ErrInvalid。
 var (
-	ErrNotFound = errors.New("项目或容器不存在")
-	ErrConflict = errors.New("已被其他人修改，请刷新后重试")
+	ErrNotFound = i18n.New("项目或容器不存在")
+	ErrConflict = i18n.New("已被其他人修改，请刷新后重试")
 )
 
-type notFoundError struct{ msg string }
+// notFoundError 是"某个东西不存在"：errors.Is 能识别为 ErrNotFound，消息是具体原因（用 i18n 创建，按请求的语言显示）。
+type notFoundError struct{ err error }
 
-func (e notFoundError) Error() string        { return e.msg }
+func (e notFoundError) Error() string        { return e.err.Error() }
+func (e notFoundError) Unwrap() error        { return e.err }
 func (e notFoundError) Is(target error) bool { return target == ErrNotFound }
 
 func invalid(format string, args ...any) error { return spec.Invalid(format, args...) }
@@ -103,7 +106,7 @@ func (s *Service) seal(m proto.Message, context string) ([]byte, error) {
 func (s *Service) open(data []byte, context string, m proto.Message) error {
 	b, err := s.Sealer.Open(data, []byte(context))
 	if err != nil {
-		return fmt.Errorf("解密 %s: %w", context, err)
+		return i18n.Errorf("解密 %s: %w", context, err)
 	}
 	return proto.Unmarshal(b, m)
 }
@@ -128,7 +131,7 @@ func (s *Service) secrets(c store.Container) (secrets, error) {
 	var out secrets
 	b, err := s.Sealer.Open(c.Secrets, []byte(secretsCtx(c.ProjectID, c.Name)))
 	if err != nil {
-		return out, fmt.Errorf("解密容器 %s 的密钥: %w", c.Name, err)
+		return out, i18n.Errorf("解密容器 %s 的密钥: %w", c.Name, err)
 	}
 	return out, json.Unmarshal(b, &out)
 }
@@ -188,7 +191,7 @@ func (s *Service) sealVersion(id, name string, version int64, cfg *nagiv1.Contai
 func (s *Service) project(ctx context.Context, id string) (store.Project, error) {
 	p, err := s.Q.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return p, notFoundError{"项目不存在"}
+		return p, notFoundError{i18n.New("项目不存在")}
 	}
 	return p, err
 }
@@ -196,7 +199,7 @@ func (s *Service) project(ctx context.Context, id string) (store.Project, error)
 func (s *Service) container(ctx context.Context, id, name string) (store.Container, error) {
 	c, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: id, Name: name})
 	if errors.Is(err, sql.ErrNoRows) {
-		return c, notFoundError{fmt.Sprintf("容器 %s 不存在", name)}
+		return c, notFoundError{i18n.Errorf("容器 %s 不存在", name)}
 	}
 	return c, err
 }

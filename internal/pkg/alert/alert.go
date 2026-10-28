@@ -5,14 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -82,14 +81,14 @@ func Validate(c *nagiv1.AlertChannel) error {
 	case "webhook":
 		u, err := url.Parse(c.GetUrl())
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return errors.New("webhook 地址必须是 http 或 https 地址")
+			return i18n.New("webhook 地址必须是 http 或 https 地址")
 		}
 	case "telegram":
 		if strings.TrimSpace(c.GetTelegramToken()) == "" || strings.TrimSpace(c.GetTelegramChatId()) == "" {
-			return errors.New("Telegram 需要机器人令牌和聊天 ID")
+			return i18n.New("Telegram 需要机器人令牌和聊天 ID")
 		}
 	default:
-		return errors.New("渠道类型只能是 webhook 或 telegram")
+		return i18n.New("渠道类型只能是 webhook 或 telegram")
 	}
 	return nil
 }
@@ -141,7 +140,7 @@ func Send(ctx context.Context, c *nagiv1.AlertChannel, a *nagiv1.Alert) error {
 		body, _ := json.Marshal(map[string]any{"chat_id": c.GetTelegramChatId(), "text": Text(a)})
 		return post(ctx, "https://api.telegram.org/bot"+c.GetTelegramToken()+"/sendMessage", body)
 	}
-	return fmt.Errorf("未知的渠道类型 %q", c.GetType())
+	return i18n.Errorf("未知的渠道类型 %q", c.GetType())
 }
 
 func post(ctx context.Context, url string, body []byte) error {
@@ -157,7 +156,7 @@ func post(ctx context.Context, url string, body []byte) error {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
-		return fmt.Errorf("渠道返回 %d：%s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		return i18n.Errorf("渠道返回 %d：%s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return nil
 }

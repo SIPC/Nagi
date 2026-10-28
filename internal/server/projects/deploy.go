@@ -5,12 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -100,7 +99,7 @@ func (s *Service) Deploy(ctx context.Context, projectID string, targets []Target
 		if err := s.Q.SetSharedEnvDraft(ctx, store.SetSharedEnvDraftParams{SharedEnvDraft: nil, ID: projectID}); err != nil {
 			return 0, err
 		}
-		out("共享变量已生效")
+		out(i18n.T(ctx, "共享变量已生效"))
 		if o.Source == "" {
 			o.Source = "shared_env"
 		}
@@ -159,19 +158,19 @@ func (s *Service) runJobs(ctx context.Context, p store.Project, jobs []job, sour
 		name := j.c.Name
 		touched = append(touched, name)
 		if len(ordered) > 1 {
-			out(fmt.Sprintf("==== 部署容器 %s（%d/%d）====", name, i+1, len(ordered)))
+			out(i18n.T(ctx, "==== 部署容器 %s（%d/%d）====", name, i+1, len(ordered)))
 		}
 		v, err := s.deployOne(ctx, p, j, out)
 		if err != nil {
 			failErr = err
 			if len(ordered) > 1 {
-				failErr = fmt.Errorf("容器 %s 部署失败：%w", name, err)
-				var rest []string
+				failErr = i18n.Errorf("容器 %s 部署失败：%w", name, err)
+				var rest i18n.List
 				for _, r := range ordered[i+1:] {
 					rest = append(rest, r.c.Name)
 				}
 				if len(rest) > 0 {
-					out("已停止，没有部署：" + strings.Join(rest, "、"))
+					out(i18n.T(ctx, "已停止，没有部署：%s", rest))
 				}
 			}
 			break
@@ -332,11 +331,11 @@ func recvResult(recv func() (*nagiv1.DeployEvent, error), out Output) (*nagiv1.D
 	for {
 		ev, err := recv()
 		if errors.Is(err, io.EOF) {
-			return nil, errors.New("节点没有返回结果")
+			return nil, i18n.New("节点没有返回结果")
 		}
 		if err != nil {
 			if status.Code(err) == codes.Unavailable {
-				return nil, errors.New("和节点的连接在操作过程中断开了，操作可能没做完，也可能已经做完。等节点重新连上后，看一下容器的状态和部署记录")
+				return nil, i18n.New("和节点的连接在操作过程中断开了，操作可能没做完，也可能已经做完。等节点重新连上后，看一下容器的状态和部署记录")
 			}
 			return nil, err
 		}
@@ -443,7 +442,7 @@ func (s *Service) Rollback(ctx context.Context, projectID, name string, target i
 		return 0, err
 	}
 	j.restoreData = restoreData
-	out(fmt.Sprintf("把容器 %s 回滚到版本 %d", name, target))
+	out(i18n.T(ctx, "把容器 %s 回滚到版本 %d", name, target))
 	return s.runJobs(ctx, p, []job{j}, "rollback", 0, out)
 }
 
@@ -474,7 +473,7 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 	for _, c := range rows {
 		target, ok := versions[c.Name]
 		if !ok {
-			out("容器 " + c.Name + " 是之后才加的（或那时还没部署过），不动")
+			out(i18n.T(ctx, "容器 %s 是之后才加的（或那时还没部署过），不动", c.Name))
 			continue
 		}
 		if c.DeployedVersion == target {
@@ -484,7 +483,7 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 		if err != nil {
 			return 0, err
 		}
-		out(fmt.Sprintf("容器 %s：版本 %d → 回到版本 %d", c.Name, c.DeployedVersion, target))
+		out(i18n.T(ctx, "容器 %s：版本 %d → 回到版本 %d", c.Name, c.DeployedVersion, target))
 		jobs = append(jobs, j)
 	}
 	if len(jobs) == 0 {

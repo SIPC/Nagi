@@ -3,9 +3,9 @@ package projects
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -224,13 +224,13 @@ func (s *Service) importPorts(ctx context.Context, p store.Project, c store.Cont
 			continue
 		}
 		imported[port.Key], changed = true, true
-		if port.Skip != "" {
-			out(port.Skip)
+		if port.Skip != nil {
+			out(i18n.Localize(i18n.FromContext(ctx), port.Skip))
 			continue
 		}
 		r := port.Route
 		if err := s.checkConflicts(ctx, c.NodeID, p.ID, "", r); err != nil {
-			out(fmt.Sprintf("compose 里 %s 的端口 %d 未开放：%v", r.GetService(), r.GetTarget(), err))
+			out(i18n.T(ctx, "compose 里 %s 的端口 %d 未开放：%v", r.GetService(), r.GetTarget(), err))
 			continue
 		}
 		r.Name = spec.NewRouteName(r, taken)
@@ -239,9 +239,9 @@ func (s *Service) importPorts(ctx context.Context, p store.Project, c store.Cont
 			return err
 		}
 		if port.Guessed {
-			out("已按配置里的端口添加映射：" + spec.RouteLabel(r) + "（按端口猜测是网站，按 HTTP 开放；不是的话在端口映射里改成 TCP）")
+			out(i18n.T(ctx, "已按配置里的端口添加映射：%s（按端口猜测是网站，按 HTTP 开放；不是的话在端口映射里改成 TCP）", spec.RouteLabel(r)))
 		} else {
-			out("已按配置里的端口添加映射：" + spec.RouteLabel(r))
+			out(i18n.T(ctx, "已按配置里的端口添加映射：%s", spec.RouteLabel(r)))
 		}
 	}
 	if !changed {

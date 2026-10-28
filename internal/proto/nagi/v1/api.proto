@@ -37,6 +37,8 @@ service AuthService {
   rpc Me(MeRequest) returns (MeResponse);
   // 修改密码。成功后其他地方的登录全部失效。
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  // 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
+  rpc SetLanguage(SetLanguageRequest) returns (SetLanguageResponse);
 }
 
 message LoginRequest {
@@ -64,7 +66,16 @@ message MeRequest {}
 message MeResponse {
   string username = 1;
   bool totp_enabled = 2;
+  // 保存的界面语言（"zh-CN"、"en"），空表示没有选过。
+  string language = 3;
 }
+
+message SetLanguageRequest {
+  // "zh-CN"、"en"；空表示不指定（跟随浏览器）。
+  string language = 1;
+}
+
+message SetLanguageResponse {}
 
 service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);

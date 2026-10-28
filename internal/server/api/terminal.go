@@ -8,13 +8,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/coder/websocket"
 	"google.golang.org/grpc/status"
 )
 
-// TerminalHandler 处理 GET /ws/exec?project=&container=&service=&cols=&rows=：
+// TerminalHandler 处理 GET /ws/exec?project=&container=&service=&cols=&rows=&lang=：
 // 浏览器通过 WebSocket 打开容器终端，面板桥接到节点的 AgentService.Exec。
 //
 // 消息格式：二进制帧是终端的输入输出；文本帧是控制消息（JSON），
@@ -22,8 +23,9 @@ import (
 // 需要已登录；WebSocket 库默认只接受同源请求，防止其他网站借用户的 cookie 打开终端。
 func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lang := requestLang(r)
 		if _, err := a.Auth.Authenticate(r.Context(), auth.SessionToken(r.Header)); err != nil {
-			http.Error(w, "未登录", http.StatusUnauthorized)
+			http.Error(w, i18n.Sprintf(lang, "未登录"), http.StatusUnauthorized)
 			return
 		}
 		q := r.URL.Query()
@@ -49,17 +51,17 @@ func (a *API) TerminalHandler() http.Handler {
 
 		nodeID, err := a.Projects.Locate(ctx, q.Get("project"), q.Get("container"))
 		if err != nil {
-			fail(err.Error())
+			fail(i18n.Localize(lang, err))
 			return
 		}
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
-			fail("容器所在的节点不在线")
+			fail(i18n.Sprintf(lang, "容器所在的节点不在线"))
 			return
 		}
 		stream, err := conn.Agent.Exec(ctx)
 		if err != nil {
-			fail(err.Error())
+			fail(i18n.Localize(lang, err))
 			return
 		}
 		if err := stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: &nagiv1.ExecStart{

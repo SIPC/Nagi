@@ -2,11 +2,11 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 )
 
@@ -38,8 +38,8 @@ func readOnlyProcedure(procedure string) bool {
 }
 
 // standbyError 是备用面板拒绝修改时的说明。
-func (a *API) standbyError() string {
-	return "这是备用面板，只能查看；修改请到主面板 " + a.Panel.Standby.PrimaryAddress()
+func (a *API) standbyError() error {
+	return i18n.Errorf("这是备用面板，只能查看；修改请到主面板 %s", a.Panel.Standby.PrimaryAddress())
 }
 
 // readOnly 拒绝备用面板上的修改。
@@ -48,7 +48,7 @@ type readOnly struct{ a *API }
 func (r readOnly) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		if !readOnlyProcedure(req.Spec().Procedure) {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(r.a.standbyError()))
+			return nil, connect.NewError(connect.CodeFailedPrecondition, r.a.standbyError())
 		}
 		return next(ctx, req)
 	}
@@ -61,7 +61,7 @@ func (r readOnly) WrapStreamingClient(next connect.StreamingClientFunc) connect.
 func (r readOnly) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
 		if !readOnlyProcedure(conn.Spec().Procedure) {
-			return connect.NewError(connect.CodeFailedPrecondition, errors.New(r.a.standbyError()))
+			return connect.NewError(connect.CodeFailedPrecondition, r.a.standbyError())
 		}
 		return next(ctx, conn)
 	}
@@ -73,6 +73,6 @@ func (a *API) standbyBlock(h http.Handler) http.Handler {
 		return h
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, a.standbyError(), http.StatusServiceUnavailable)
+		http.Error(w, i18n.Localize(requestLang(r), a.standbyError()), http.StatusServiceUnavailable)
 	})
 }

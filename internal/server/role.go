@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -157,7 +158,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 // Promote 把备用面板提升为主面板：停止同步，任期加一（至少比节点上报里见过的大），然后按主面板重新启动。
 func (s *Server) Promote(ctx context.Context) (uint64, error) {
 	if s.standby == nil {
-		return 0, errors.New("本面板已经是主面板")
+		return 0, i18n.New("本面板已经是主面板")
 	}
 	// 和"改为跟随别的主面板"互斥：已经决定跟随别人（马上按备用面板重启）时不能再提升。
 	s.role.followMu.Lock()
@@ -166,7 +167,7 @@ func (s *Server) Promote(ctx context.Context) (uint64, error) {
 	s.role.mu.Unlock()
 	if changing {
 		s.role.followMu.Unlock()
-		return 0, errors.New("面板正在切换角色，请稍后再试")
+		return 0, i18n.New("面板正在切换角色，请稍后再试")
 	}
 	s.role.promoting = true
 	s.role.followMu.Unlock()
@@ -218,8 +219,8 @@ func (s *Server) watchPrimary(ctx context.Context) {
 		}
 		firing, notified = true, now
 		msg := "主面板 " + s.standby.PrimaryAddress()
-		if st.LastError != "" {
-			msg += "：" + st.LastError
+		if st.LastError != nil {
+			msg += "：" + st.LastError.Error()
 		}
 		if !st.LastSync.IsZero() {
 			msg += "。最近一次同步：" + st.LastSync.Local().Format("2006-01-02 15:04:05")

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/server/store"
 	"golang.org/x/crypto/argon2"
 )
@@ -31,7 +32,7 @@ const CookieName = "nagi_session"
 const sessionTTL = 7 * 24 * time.Hour
 
 // ErrBadCredentials 表示用户名或密码错误。
-var ErrBadCredentials = errors.New("用户名或密码错误")
+var ErrBadCredentials = i18n.New("用户名或密码错误")
 
 // Service 管理用户和会话。
 type Service struct {
@@ -123,18 +124,18 @@ func (s *Service) CreateUser(ctx context.Context, username, password string) (in
 }
 
 // ErrTOTPRequired 表示密码正确，但还需要两步验证码。
-var ErrTOTPRequired = errors.New("请输入两步验证码")
+var ErrTOTPRequired = i18n.New("请输入两步验证码")
 
 // Login 校验用户名、密码和两步验证码（开启了的话），成功时返回新会话的 cookie。按客户端 IP 限速。
 func (s *Service) Login(ctx context.Context, ip, username, password, code string) (*http.Cookie, error) {
 	key := limitKey(ip)
 	done, wait := s.limiter.begin(key)
 	if done == nil && wait == 0 {
-		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("上一次登录还在处理，请稍后再试"))
+		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录还在处理，请稍后再试"))
 	}
 	if wait > 0 {
 		return nil, connect.NewError(connect.CodeResourceExhausted,
-			fmt.Errorf("登录失败次数过多，请 %d 秒后再试", int(wait.Seconds())+1))
+			i18n.Errorf("登录失败次数过多，请 %d 秒后再试", int(wait.Seconds())+1))
 	}
 	failed := true
 	defer func() { done(failed) }()
@@ -235,15 +236,15 @@ type User struct {
 
 func (s *Service) session(ctx context.Context, token string) (User, error) {
 	if token == "" {
-		return User{}, errors.New("未登录")
+		return User{}, i18n.New("未登录")
 	}
 	row, err := s.q.GetSession(ctx, HashToken(token))
 	if err != nil {
-		return User{}, errors.New("未登录")
+		return User{}, i18n.New("未登录")
 	}
 	if row.ExpiresAt < time.Now().Unix() {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
-		return User{}, errors.New("登录已过期")
+		return User{}, i18n.New("登录已过期")
 	}
 	return User{ID: row.UserID, Name: row.Username}, nil
 }

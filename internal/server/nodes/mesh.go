@@ -2,11 +2,11 @@ package nodes
 
 import (
 	"context"
-	"errors"
 	"net/netip"
 	"slices"
 	"sync"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
@@ -123,7 +123,7 @@ func (r *Registry) NodeMeshKey(nodeID string) (mesh.Key, error) {
 	defer c.mu.RUnlock()
 	k, err := mesh.ParseKey(c.mesh.GetPublicKey())
 	if err != nil {
-		return mesh.Key{}, errors.New("节点还没有加入 mesh")
+		return mesh.Key{}, i18n.New("节点还没有加入 mesh")
 	}
 	return k, nil
 }

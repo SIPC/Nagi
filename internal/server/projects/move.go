@@ -3,11 +3,11 @@ package projects
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -21,7 +21,7 @@ import (
 func (s *Service) targetNode(ctx context.Context, nodeID string) (*nodes.Conn, store.Node, error) {
 	n, err := s.Q.GetNode(ctx, nodeID)
 	if err != nil {
-		return nil, n, notFoundError{"节点不存在"}
+		return nil, n, notFoundError{i18n.New("节点不存在")}
 	}
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {
@@ -131,7 +131,7 @@ func (s *Service) SetBackupNode(ctx context.Context, projectID, name, nodeID str
 			return nil, err
 		}
 		if err := s.acceptReplica(ctx, target, sp, source); err != nil {
-			return nil, fmt.Errorf("备份节点登记副本: %w", s.nodeErr(ctx, nodeID, err))
+			return nil, i18n.Errorf("备份节点登记副本: %w", s.nodeErr(ctx, nodeID, err))
 		}
 	}
 	if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: nodeID, ProjectID: projectID, Name: name}); err != nil {
@@ -246,7 +246,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if err != nil {
 		return err
 	}
-	out("在节点 " + s.NodeName(ctx, target.NodeID) + " 上恢复容器 " + name)
+	out(i18n.T(ctx, "在节点 %s 上恢复容器 %s", s.NodeName(ctx, target.NodeID), name))
 	stream, err := target.Agent.RestoreReplica(ctx, &nagiv1.RestoreReplicaRequest{Spec: sp, SnapshotId: snapshotID})
 	if err != nil {
 		return err
@@ -261,7 +261,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if err != nil {
 		return err
 	}
-	out("容器已在 " + s.NodeName(ctx, target.NodeID) + " 上运行。原节点回来后，它上面的这个容器会被停止，目录改名保留。")
+	out(i18n.T(ctx, "容器已在 %s 上运行。原节点回来后，它上面的这个容器会被停止，目录改名保留。", s.NodeName(ctx, target.NodeID)))
 	return nil
 }
 
@@ -289,7 +289,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	}
 	source, err := s.Nodes.Get(c.NodeID)
 	if err != nil {
-		return fmt.Errorf("%w。原节点离线时用"+`"从备份节点恢复"`+"或"+`"重新部署到其他节点"`, s.nodeErr(ctx, c.NodeID, err))
+		return i18n.Errorf("%w。原节点离线时用"+`"从备份节点恢复"`+"或"+`"重新部署到其他节点"`, s.nodeErr(ctx, c.NodeID, err))
 	}
 	sourceNode, err := s.Q.GetNode(ctx, c.NodeID)
 	if err != nil {
@@ -305,7 +305,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	if dir, err = s.placeDir(ctx, target, p, c, dir); err != nil {
 		return err
 	}
-	out("检查节点 " + targetNode.Name)
+	out(i18n.T(ctx, "检查节点 %s", targetNode.Name))
 	sp, err := s.checkPlacement(ctx, target, p, c, dir)
 	if err != nil {
 		return err
@@ -319,18 +319,18 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 			return err
 		}
 		_, _ = source.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: projectID, Container: name})
-		out("容器还没有部署过，已换到 " + targetNode.Name)
+		out(i18n.T(ctx, "容器还没有部署过，已换到 %s", targetNode.Name))
 		return nil
 	}
 	if err := s.acceptReplica(ctx, target, sp, sourceNode); err != nil {
-		return fmt.Errorf("目标节点登记副本: %w", err)
+		return i18n.Errorf("目标节点登记副本: %w", err)
 	}
 	undo := func(cause error) error {
-		out("撤销迁移：" + cause.Error())
+		out(i18n.T(ctx, "撤销迁移：%v", cause))
 		_, _ = target.Agent.DeleteReplica(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
 		if stream, err := source.Agent.MigrateResume(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name}); err == nil {
 			if _, err := recvResult(stream.Recv, out); err != nil {
-				out("警告：原节点重新启动容器失败：" + err.Error())
+				out(i18n.T(ctx, "警告：原节点重新启动容器失败：%v", err))
 			}
 		}
 		return cause
@@ -342,7 +342,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	if _, err := recvResult(stream.Recv, out); err != nil {
 		return undo(err)
 	}
-	out("在 " + targetNode.Name + " 上恢复容器")
+	out(i18n.T(ctx, "在 %s 上恢复容器", targetNode.Name))
 	rs, err := target.Agent.RestoreReplica(ctx, &nagiv1.RestoreReplicaRequest{Spec: sp})
 	if err != nil {
 		return undo(err)
@@ -350,7 +350,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	res, err := recvResult(rs.Recv, out)
 	if !res.GetPlaced() {
 		if err == nil {
-			err = errors.New("目标节点没有恢复出容器")
+			err = i18n.New("目标节点没有恢复出容器")
 		}
 		return undo(err)
 	}
@@ -365,18 +365,18 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	}
 	if merr != nil {
 		if _, derr := target.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: projectID, Container: name, Retire: true}); derr != nil {
-			out("警告：目标节点停止容器失败：" + derr.Error())
+			out(i18n.T(ctx, "警告：目标节点停止容器失败：%v", derr))
 		}
-		return undo(fmt.Errorf("记录容器的新位置失败：%w", merr))
+		return undo(i18n.Errorf("记录容器的新位置失败：%w", merr))
 	}
 	if _, derr := source.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: projectID, Container: name}); derr != nil {
-		out("警告：原节点删除容器缓存失败：" + derr.Error())
+		out(i18n.T(ctx, "警告：原节点删除容器缓存失败：%v", derr))
 	}
 	s.Log.Info("容器已迁移", "project", projectID, "container", name, "from", c.NodeID, "to", nodeID)
 	if err != nil {
 		return err
 	}
-	out(fmt.Sprintf("已迁移到 %s。原节点上的目录 %s 保留，确认没问题后可以手动删除。", targetNode.Name, c.Dir))
+	out(i18n.T(ctx, "已迁移到 %s。原节点上的目录 %s 保留，确认没问题后可以手动删除。", targetNode.Name, c.Dir))
 	return nil
 }
 
@@ -436,9 +436,9 @@ func (s *Service) redeployMove(ctx context.Context, projectID, name, nodeID, dir
 		return false, opts, err
 	}
 	s.Log.Info("容器已换到其他节点重新部署", "project", projectID, "container", name, "from", c.NodeID, "to", nodeID)
-	out("容器已换到 " + targetNode.Name + "，目录 " + dir)
+	out(i18n.T(ctx, "容器已换到 %s，目录 %s", targetNode.Name, dir))
 	if c.DeployedVersion == 0 {
-		out("容器还没有部署过，需要时再部署")
+		out(i18n.T(ctx, "容器还没有部署过，需要时再部署"))
 		return false, opts, nil
 	}
 	_, cfg, shared, err := s.latest(ctx, c)
@@ -453,7 +453,7 @@ func (s *Service) redeployMove(ctx context.Context, projectID, name, nodeID, dir
 	moved.Dir = dir
 	cp, err := spec.Load(ctx, cfg, name, shared, checkData(moved), spec.ComposeProjectName(projectID, name))
 	if err == nil && len(spec.DataServices(cp, checkData(moved))) > 0 {
-		out("这个容器要用 data/ 里的文件，但没有文件来源：请先上传文件再部署")
+		out(i18n.T(ctx, "这个容器要用 data/ 里的文件，但没有文件来源：请先上传文件再部署"))
 		return false, opts, nil
 	}
 	return true, opts, nil

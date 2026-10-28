@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
@@ -54,7 +55,7 @@ func (r *Registry) AlertConfig(ctx context.Context) (*nagiv1.AlertConfig, error)
 	}
 	plain, err := r.sealer.Open(sealed, alertConfigContext)
 	if err != nil {
-		return nil, fmt.Errorf("解密告警配置: %w", err)
+		return nil, i18n.Errorf("解密告警配置: %w", err)
 	}
 	return cfg, proto.Unmarshal(plain, cfg)
 }

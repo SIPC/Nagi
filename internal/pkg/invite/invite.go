@@ -5,8 +5,9 @@ package invite
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"strings"
+
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
 const prefix = "nagi-invite:"
@@ -29,11 +30,11 @@ func Decode(code string) (Invite, error) {
 	var i Invite
 	raw, ok := strings.CutPrefix(strings.TrimSpace(code), prefix)
 	if !ok {
-		return i, errors.New("接入码格式不对，应该以 " + prefix + " 开头")
+		return i, i18n.Errorf("接入码格式不对，应该以 %s 开头", prefix)
 	}
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil || json.Unmarshal(data, &i) != nil || i.Address == "" || i.Fingerprint == "" || i.Token == "" {
-		return i, errors.New("接入码无效，请重新复制")
+		return i, i18n.New("接入码无效，请重新复制")
 	}
 	return i, nil
 }

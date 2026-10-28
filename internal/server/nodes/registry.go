@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -28,10 +29,10 @@ import (
 )
 
 // ErrOffline 表示节点当前没有连上面板。
-var ErrOffline = errors.New("节点不在线")
+var ErrOffline = i18n.New("节点不在线")
 
 // ErrPending 表示节点是用接入码加入的，还没有批准。
-var ErrPending = errors.New("节点是用接入码加入的，还没有批准。在节点页确认是自己的节点后批准，才能操作它")
+var ErrPending = i18n.New("节点是用接入码加入的，还没有批准。在节点页确认是自己的节点后批准，才能操作它")
 
 // Registry 记录在线的节点。
 type Registry struct {
@@ -147,7 +148,7 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 		return err
 	}
 	if n == 0 {
-		return errors.New("没有这个节点")
+		return i18n.New("没有这个节点")
 	}
 	if c, err := r.Peek(nodeID); err == nil {
 		c.mu.Lock()

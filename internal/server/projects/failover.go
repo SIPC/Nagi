@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -49,7 +50,7 @@ func noFailover(c store.Container) error {
 func (s *Service) participant(ctx context.Context, nodeID, dir string) (*nagiv1.FailoverParticipant, error) {
 	n, err := s.Q.GetNode(ctx, nodeID)
 	if err != nil {
-		return nil, notFoundError{"节点不存在"}
+		return nil, notFoundError{i18n.New("节点不存在")}
 	}
 	if len(n.MeshKey) != 32 {
 		return nil, invalid("节点 %s 还没有加入 mesh", n.Name)

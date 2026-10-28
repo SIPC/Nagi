@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -65,7 +64,7 @@ func (s *settingsService) RevokeInvite(ctx context.Context, req *connect.Request
 		return nil, err
 	}
 	if n == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("接入码不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("接入码不存在"))
 	}
 	return connect.NewResponse(&nagiv1.RevokeInviteResponse{}), nil
 }
@@ -81,14 +80,15 @@ func (s *nodeService) handoverProjects(ctx context.Context, nodeIDs []string) ([
 	if err != nil {
 		return nil, err
 	}
-	var out, problems []string
+	var out []string
+	var problems problemList
 	for _, p := range projects {
 		related, err := s.Projects.RelatedNodes(ctx, p.ID)
 		if err != nil {
 			return nil, err
 		}
 		touched := false
-		var missing []string
+		var missing i18n.List
 		for n := range related {
 			if selected[n] {
 				touched = true
@@ -101,15 +101,28 @@ func (s *nodeService) handoverProjects(ctx context.Context, nodeIDs []string) ([
 		}
 		if len(missing) > 0 {
 			sort.Strings(missing)
-			problems = append(problems, fmt.Sprintf("项目 %s 还需要一起移交节点 %s", p.Name, strings.Join(missing, "、")))
+			problems = append(problems, i18n.Errorf("项目 %s 还需要一起移交节点 %s", p.Name, missing))
 			continue
 		}
 		out = append(out, p.ID)
 	}
 	if len(problems) > 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("移交按整个项目进行："+strings.Join(problems, "；")))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("移交按整个项目进行：%s", problems))
 	}
 	return out, nil
+}
+
+// problemList 是几条说明，作为 i18n 的参数时按语言用分号连起来。
+type problemList []error
+
+func (p problemList) String() string { return p.Localize(i18n.Zh) }
+
+func (p problemList) Localize(l i18n.Lang) string {
+	texts := make([]string, len(p))
+	for i, e := range p {
+		texts[i] = i18n.Localize(l, e)
+	}
+	return strings.Join(texts, i18n.Sprintf(l, "；"))
 }
 
 func (s *nodeService) agent(nodeID string) (nagiv1.AgentServiceClient, error) {
@@ -141,15 +154,15 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	if inv.Fingerprint == s.Panel.Fingerprint {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("这是本面板自己的接入码，请到新面板上生成"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("这是本面板自己的接入码，请到新面板上生成"))
 	}
 	ids := req.Msg.GetNodeIds()
 	if len(ids) == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("请选择要移交的节点"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请选择要移交的节点"))
 	}
 	for _, id := range ids {
 		if _, err := s.agent(id); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("节点 %s 不在线", s.Projects.NodeName(ctx, id)))
+			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 不在线", s.Projects.NodeName(ctx, id)))
 		}
 	}
 	// 移交按整个项目：项目相关的节点必须一起移交，免得项目被拆到两个面板上。
@@ -170,11 +183,15 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 		if err == nil {
 			s.Log.Info("节点已加入另一个面板", "node", id, "panel", inv.Address)
 			if _, rerr := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); rerr != nil {
-				err = fmt.Errorf("已加入新面板，但移除本面板失败：%w", rerr)
+				err = i18n.Errorf("已加入新面板，但移除本面板失败：%w", rerr)
 			}
 		}
 		if err != nil {
-			res.Error = status.Convert(err).Message()
+			if isStatus(err) {
+				res.Error = status.Convert(err).Message()
+			} else {
+				res.Error = i18n.Localize(i18n.FromContext(ctx), err)
+			}
 			failed++
 		}
 	}
@@ -200,7 +217,7 @@ func (s *nodeService) RemoveNodePanel(ctx context.Context, req *connect.Request[
 	nodeID := req.Msg.GetNodeId()
 	// 本面板的备用面板由主面板的成员列表管，从单个节点上移除它马上又会被加回来：要在设置的「备用面板」里移除。
 	if _, err := s.Q.GetStandbyPanelByServerFP(ctx, req.Msg.GetFingerprint()); err == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这是本面板的备用面板，请在设置的「备用面板」里移除，所有节点会一起移除它"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这是本面板的备用面板，请在设置的「备用面板」里移除，所有节点会一起移除它"))
 	}
 	agent, err := s.agent(nodeID)
 	if err != nil {
@@ -246,7 +263,7 @@ func (s *nodeService) PingNodeMesh(ctx context.Context, req *connect.Request[nag
 func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetPanelMeshRequest]) (*connect.Response[nagiv1.MeshStatus], error) {
 	m := s.Nodes.Mesh()
 	if m == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("面板的 mesh 没有启动"))
+		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板的 mesh 没有启动"))
 	}
 	return connect.NewResponse(mesh.StatusProto(m, s.Nodes.MeshPeerName)), nil
 }
@@ -260,7 +277,7 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 	}
 	info := conn.LastReport().GetNode()
 	if info.GetOs() != "linux" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("只能升级 Linux 节点"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("只能升级 Linux 节点"))
 	}
 	path, err := s.binaryPath(info.GetArch())
 	if err != nil {
@@ -344,7 +361,7 @@ func (s *nodeService) ListNodeReplicas(ctx context.Context, req *connect.Request
 func (s *nodeService) DeleteNodeReplica(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeReplicaRequest]) (*connect.Response[nagiv1.DeleteNodeReplicaResponse], error) {
 	m := req.Msg
 	if s.Projects.ReplicaInUse(ctx, m.GetNodeId(), m.GetProjectId(), m.GetContainer()) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("这个副本还在使用：先在容器上取消备份节点或顶替"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这个副本还在使用：先在容器上取消备份节点或顶替"))
 	}
 	agent, err := s.agent(m.GetNodeId())
 	if err != nil {

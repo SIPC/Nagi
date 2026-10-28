@@ -163,6 +163,7 @@ const (
 	AuthService_Logout_FullMethodName         = "/nagi.v1.AuthService/Logout"
 	AuthService_Me_FullMethodName             = "/nagi.v1.AuthService/Me"
 	AuthService_ChangePassword_FullMethodName = "/nagi.v1.AuthService/ChangePassword"
+	AuthService_SetLanguage_FullMethodName    = "/nagi.v1.AuthService/SetLanguage"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -175,6 +176,8 @@ type AuthServiceClient interface {
 	Me(ctx context.Context, in *MeRequest, opts ...grpc.CallOption) (*MeResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
+	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
+	SetLanguage(ctx context.Context, in *SetLanguageRequest, opts ...grpc.CallOption) (*SetLanguageResponse, error)
 }
 
 type authServiceClient struct {
@@ -225,6 +228,16 @@ func (c *authServiceClient) ChangePassword(ctx context.Context, in *ChangePasswo
 	return out, nil
 }
 
+func (c *authServiceClient) SetLanguage(ctx context.Context, in *SetLanguageRequest, opts ...grpc.CallOption) (*SetLanguageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetLanguageResponse)
+	err := c.cc.Invoke(ctx, AuthService_SetLanguage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -235,6 +248,8 @@ type AuthServiceServer interface {
 	Me(context.Context, *MeRequest) (*MeResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
+	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
+	SetLanguage(context.Context, *SetLanguageRequest) (*SetLanguageResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -256,6 +271,9 @@ func (UnimplementedAuthServiceServer) Me(context.Context, *MeRequest) (*MeRespon
 }
 func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
+}
+func (UnimplementedAuthServiceServer) SetLanguage(context.Context, *SetLanguageRequest) (*SetLanguageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetLanguage not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -350,6 +368,24 @@ func _AuthService_ChangePassword_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_SetLanguage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetLanguageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetLanguage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_SetLanguage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).SetLanguage(ctx, req.(*SetLanguageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -372,6 +408,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangePassword",
 			Handler:    _AuthService_ChangePassword_Handler,
+		},
+		{
+			MethodName: "SetLanguage",
+			Handler:    _AuthService_SetLanguage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
