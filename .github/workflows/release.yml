@@ -1,0 +1,55 @@
+# 推送 v* 标签时发布：编译 linux/amd64、linux/arm64 的 nagi（前端打包在内），
+# 连同面板安装脚本和 SHA256SUMS 上传到 GitHub Release。
+# 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build web
+        run: |
+          pnpm -C web install --frozen-lockfile
+          pnpm -C web build
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+              -o dist/nagi-linux-$arch ./cmd/nagi
+          done
+          cp scripts/install.sh dist/install.sh
+          cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

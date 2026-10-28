@@ -42,11 +42,13 @@ Nagi 是一个开源的 Docker 项目面板，追求简单、美观、易于部�
 
 支持 Linux（amd64 / arm64），前置依赖为 Docker 与 compose 插件（2.24 及以上版本）。
 
-**单机使用**：面板内嵌一个节点，启动即可使用。首次启动时随机选择一个端口，面板地址会输出在启动日志中，也可通过 `--port` 指定。80 与 443 端口保留给项目域名。
+**安装面板**：用 root 执行。脚本下载 nagi 并校验 SHA-256，安装为 systemd 服务 `nagi-server`，启动后打印面板地址和初始化链接。面板内嵌一个节点，单机即可使用。首次启动时随机选择一个端口，也可通过 `--port` 指定；80 与 443 端口保留给项目域名。
 
 ```bash
-nagi server
+curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh
 ```
+
+可选参数（追加在 `sh -s --` 之后）：`--port <端口>`、`--no-agent`（只运行面板，不带内嵌节点）、`--version <版本>`、`--download-url <镜像地址>`，完整说明见 `--help`。再次执行即为升级。
 
 **添加节点**：在面板中复制安装命令，在新服务器上执行。
 
@@ -56,10 +58,10 @@ curl --pinnedpubkey "sha256//<面板公钥指纹>" -k https://<地址:端口>/in
 
 ![一行命令，加入新节点](docs/assets/join.png)
 
-**添加备用面板**：在主面板设置页生成配对码，在新服务器上以该配对码启动。主面板故障时，可在备用面板上将其提升为主面板。
+**添加备用面板**：在主面板设置页生成配对码，在新服务器上用该配对码安装。主面板故障时，可在备用面板上将其提升为主面板。
 
 ```bash
-nagi server --standby <配对码>
+curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh -s -- --standby <配对码>
 ```
 
 **更换面板**：在新面板上生成接入码，粘贴到旧面板即可移交节点，新面板根据节点缓存自动重建项目（草稿与历史版本记录不会保留）。若旧面板已不可用，可在节点上执行：
