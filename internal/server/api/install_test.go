@@ -37,14 +37,20 @@ func TestInstallScriptsSyntax(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	if err := installScript.Execute(&buf, map[string]string{
-		"Panel": "203.0.113.10:34567", "Fingerprint": "sha256//abc=", "Shared": sharedScript,
+		"Panel": "203.0.113.10:34567", "Fingerprint": "sha256//abc=", "Version": "v0.1.0",
+		"Base": "https://github.com/SIPC/Nagi/releases/download/v0.1.0", "Shared": sharedScript,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []string{"ensure_docker\n", "link_command\n", `PANEL="203.0.113.10:34567"`} {
+	for _, s := range []string{"ensure_docker\n", "link_command\n", "download_nagi\n", `PANEL="203.0.113.10:34567"`,
+		`BASE="https://github.com/SIPC/Nagi/releases/download/v0.1.0"`, `PANEL_VERSION="v0.1.0"`} {
 		if !strings.Contains(buf.String(), s) {
 			t.Errorf("节点安装脚本里没有 %q", s)
 		}
+	}
+	// 二进制不再从面板下载。
+	if strings.Contains(buf.String(), "/download/nagi-linux-") && strings.Contains(buf.String(), "$PANEL/download") {
+		t.Error("节点安装脚本还在从面板下载 nagi")
 	}
 	node := filepath.Join(t.TempDir(), "node.sh")
 	if err := os.WriteFile(node, buf.Bytes(), 0o644); err != nil {

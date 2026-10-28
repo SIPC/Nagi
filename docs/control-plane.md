@@ -80,8 +80,9 @@ nagi panel remove <地址或指纹>      # 移除最后一个面板需要 --forc
    ```
 
    面板是自签证书，所以用 `-k` 跳过 CA 校验，真正的校验靠 `--pinnedpubkey` 钉住面板公钥，中间人无法冒充。
-2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从面板的 `/download/nagi-linux-<架构>` 下载 nagi 二进制（同样钉住公钥），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。不依赖 GitHub，国内节点也能快速下载。
-   - 面板提供的二进制：优先用面板数据目录 `binaries/nagi-linux-<架构>`；没有时，如果面板自己就是这个架构的 Linux 版本，直接提供面板自身。面板和节点架构不同时，需要把对应架构的 nagi 放到 `binaries/` 下。
+2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从和面板同一版本的 GitHub Release 下载 `nagi-linux-<架构>`，按同一处的 `SHA256SUMS` 校验（下载和校验也在共用代码里，`download_nagi`），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。
+   - **面板不提供二进制**：以前的 `/download/` 已经去掉，明确返回 404。面板不是正式版本（本地编译的 `dev`）时从最新发布的版本下载，脚本提示版本不一致。
+   - **镜像**：无法访问 GitHub 时在安装命令末尾加 `--download-url <地址>`（或环境变量 `NAGI_DOWNLOAD_URL`），该地址下要有 `nagi-linux-<架构>` 和 `SHA256SUMS`。脚本把它记在 `<节点目录>/identity/download-url`，之后一键升级也从这里下载。
 3. **agent 在本地生成两对密钥**：身份密钥和 WireGuard 密钥。私钥都不离开节点。mesh 地址由 WireGuard 公钥直接算出，不需要分配（见 [mesh.md](mesh.md#地址)）。
 4. **agent 调用面板的 Enroll 接口**，提交令牌、身份公钥（CSR）和 WireGuard 公钥。
 5. **面板先校验请求**（证书签名请求的签名、WireGuard 公钥没有被别的节点用过），**再校验令牌并作废**，然后签发证书，返回节点 ID、证书和 CA。节点 ID 由节点的身份公钥算出，写在证书里；节点连上来时面板核对证书里的 ID 和证书的公钥对得上，拿着 CA 私钥（例如被移除的备用面板）也冒充不了已有的节点。用安装命令（一次性令牌）加入的节点直接可用；用接入码加入的要批准（见[接入码](#接入码)）。
@@ -126,4 +127,4 @@ agent 主动连上面板后，在同一条 TLS 连接上用 yamux 复用出多�
 - proto 只加字段，不修改、不删除已有字段。
 - 面板兼容比自己旧一个大版本的节点，升级面板时节点不用同时停。
 - 节点之间（顶替、备份节点、迁移）同步容器时带上容器目录的格式版本号，对方不认识就拒绝并告警（见 [agent.md](agent.md#容器目录)）。所以升级时先升级热备和备份节点，再升级容器所在的节点。
-- 面板上可以一键把节点升级到同一版本，二进制从面板下载。节点版本和面板不一样时界面上提示可以升级（面板在设置里返回自己的版本）。面板按节点的架构找到要提供的二进制（数据目录 `binaries/nagi-linux-<架构>`，没有时用面板自身），把 SHA-256 发给节点；节点钉住面板公钥从 `/download/` 下载、核对 SHA-256、试运行一次 `version` 确认能在本机运行，再替换自己的可执行文件，然后原地重启（`exec`，进程号不变，systemd 和容器里都适用）。项目容器由 Docker 运行，不受影响；内嵌的 Caddy 会中断一两秒。面板自带的节点和面板是同一个二进制，随面板一起升级，不能单独升级。
+- 面板上可以一键把节点升级到和面板同一版本。节点版本和面板不一样时界面上提示可以升级（面板在设置里返回自己的版本）。面板把自己的版本号发给节点（`UpgradeRequest.version`；面板不是正式版本时拒绝）；节点从这个版本的 GitHub Release（安装时指定了镜像就从镜像）下载，按 `SHA256SUMS` 核对、试运行一次 `version` 确认能在本机运行且版本对得上（镜像地址不分版本，里面放的可能不是要求的版本），再替换自己的可执行文件，然后原地重启（`exec`，进程号不变，systemd 和容器里都适用）。项目容器由 Docker 运行，不受影响；内嵌的 Caddy 会中断一两秒。面板自带的节点和面板是同一个二进制，随面板一起升级，不能单独升级。

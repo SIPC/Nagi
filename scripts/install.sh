@@ -70,7 +70,7 @@ fi
 case "$DATA_DIR" in "" | /*) ;; *) fail "数据目录须为绝对路径" ;; esac
 
 # >>> 共用代码开始：scripts/install.sh 与 internal/server/api/install.go 中的这一段须保持一致（有测试检查）。
-# 用到调用方定义的 say、fail、BIN、ARCH、TMP（临时目录）、DOCKER_MIRROR。
+# 用到调用方定义的 say、fail、BIN、ARCH、TMP（临时目录）、DOCKER_MIRROR、BASE（下载地址）。
 
 # compose_version 打印 docker compose 插件的版本号（不带 v），没有插件时失败。
 compose_version() {
@@ -140,6 +140,28 @@ link_command() {
   fi
 }
 
+# download_nagi 从 BASE 下载 nagi-linux-<架构> 到 $TMP/nagi，按同一地址下的 SHA256SUMS 校验，
+# 试运行确认能在本机运行，版本号放在 NEW_VERSION。BASE 是 GitHub Release 或 --download-url 指定的镜像。
+download_nagi() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    SHA="sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then
+    SHA="shasum -a 256"
+  else
+    fail "需要 sha256sum 或 shasum 以校验下载的文件"
+  fi
+  say "下载 nagi（linux/$ARCH）：$BASE"
+  curl -fL --retry 3 --progress-bar -o "$TMP/nagi" "$BASE/nagi-linux-$ARCH" ||
+    fail "下载失败：$BASE/nagi-linux-$ARCH（网络不通时可用 --download-url 指定镜像）"
+  curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || fail "下载校验文件失败：$BASE/SHA256SUMS"
+  WANT=$(awk -v f="nagi-linux-$ARCH" '$2 == f || $2 == "*" f { print $1 }' "$TMP/SHA256SUMS")
+  [ -n "$WANT" ] || fail "SHA256SUMS 中没有 nagi-linux-$ARCH"
+  GOT=$($SHA "$TMP/nagi" | awk '{ print $1 }')
+  [ "$WANT" = "$GOT" ] || fail "SHA-256 校验失败：应为 $WANT，实际为 $GOT"
+  chmod 0755 "$TMP/nagi"
+  NEW_VERSION=$("$TMP/nagi" version 2>/dev/null) || fail "下载的 nagi 无法在本机运行"
+}
+
 # <<< 共用代码结束
 
 # ---- 环境检查 ----
@@ -152,13 +174,6 @@ case "$(uname -m)" in
   *) fail "不支持的 CPU 架构 $(uname -m)，仅支持 amd64 和 arm64" ;;
 esac
 command -v curl >/dev/null 2>&1 || fail "需要 curl"
-if command -v sha256sum >/dev/null 2>&1; then
-  SHA="sha256sum"
-elif command -v shasum >/dev/null 2>&1; then
-  SHA="shasum -a 256"
-else
-  fail "需要 sha256sum 或 shasum 以校验下载的文件"
-fi
 
 HAS_SYSTEMD=""
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
@@ -221,17 +236,7 @@ else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
 fi
 
-say "下载 nagi（linux/$ARCH）：$BASE"
-curl -fL --retry 3 --progress-bar -o "$TMP/nagi" "$BASE/nagi-linux-$ARCH" ||
-  fail "下载失败：$BASE/nagi-linux-$ARCH（网络不通时可用 --download-url 指定镜像）"
-curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || fail "下载校验文件失败：$BASE/SHA256SUMS"
-
-WANT=$(awk -v f="nagi-linux-$ARCH" '$2 == f || $2 == "*" f { print $1 }' "$TMP/SHA256SUMS")
-[ -n "$WANT" ] || fail "SHA256SUMS 中没有 nagi-linux-$ARCH"
-GOT=$($SHA "$TMP/nagi" | awk '{ print $1 }')
-[ "$WANT" = "$GOT" ] || fail "SHA-256 校验失败：应为 $WANT，实际为 $GOT"
-chmod 0755 "$TMP/nagi"
-NEW_VERSION=$("$TMP/nagi" version 2>/dev/null) || fail "下载的 nagi 无法在本机运行"
+download_nagi
 
 OLD_VERSION=""
 [ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)

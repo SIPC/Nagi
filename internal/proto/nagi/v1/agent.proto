@@ -227,8 +227,11 @@ message SetPanelDomainRequest {
 message SetPanelDomainResponse {}
 
 message UpgradeRequest {
-  // 二进制的 SHA-256（十六进制），节点下载后核对。
+  // 不再使用：面板以前自己提供二进制时发的 SHA-256。
   string sha256 = 1;
+  // 要升级到的版本（面板自己的版本，例如 v0.1.0）。节点从这个版本的 GitHub Release
+  // （或安装时指定的镜像）下载，按 SHA256SUMS 核对。
+  string version = 2;
 }
 
 message UpgradeResponse {

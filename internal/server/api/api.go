@@ -79,7 +79,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
 	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
 	mux.Handle("GET /install.sh", a.InstallHandler())
-	mux.Handle("GET /download/", a.DownloadHandler())
+	// 面板不提供 nagi 二进制（节点从 GitHub Release 或镜像下载）。以前的 /download/ 明确返回 404，
+	// 免得落到前端路由拿到 index.html，旧版节点安装脚本把它当成二进制安装。
+	mux.Handle("/download/", http.NotFoundHandler())
 }
 
 // ---- 初始化 ----

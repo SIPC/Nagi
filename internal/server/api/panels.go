@@ -2,10 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +10,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -279,21 +276,11 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 	if info.GetOs() != "linux" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("只能升级 Linux 节点"))
 	}
-	path, err := s.binaryPath(info.GetArch())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	// 节点从 GitHub Release（或安装时指定的镜像）下载和面板同一个版本，面板不提供二进制。
+	if !release.IsVersion(s.Panel.Version) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，不能一键升级节点"))
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	resp, err := conn.Agent.Upgrade(ctx, &nagiv1.UpgradeRequest{Sha256: hex.EncodeToString(h.Sum(nil))})
+	resp, err := conn.Agent.Upgrade(ctx, &nagiv1.UpgradeRequest{Version: s.Panel.Version})
 	if err != nil {
 		return nil, fromGRPC(err)
 	}

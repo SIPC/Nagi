@@ -1449,8 +1449,11 @@ func (*SetPanelDomainResponse) Descriptor() ([]byte, []int) {
 
 type UpgradeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 二进制的 SHA-256（十六进制），节点下载后核对。
-	Sha256        string `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	// 不再使用：面板以前自己提供二进制时发的 SHA-256。
+	Sha256 string `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	// 要升级到的版本（面板自己的版本，例如 v0.1.0）。节点从这个版本的 GitHub Release
+	// （或安装时指定的镜像）下载，按 SHA256SUMS 核对。
+	Version       string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1488,6 +1491,13 @@ func (*UpgradeRequest) Descriptor() ([]byte, []int) {
 func (x *UpgradeRequest) GetSha256() string {
 	if x != nil {
 		return x.Sha256
+	}
+	return ""
+}
+
+func (x *UpgradeRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
 	}
 	return ""
 }
@@ -2524,9 +2534,10 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x15SetPanelDomainRequest\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12!\n" +
 	"\fproxy_secret\x18\x02 \x01(\tR\vproxySecret\"\x18\n" +
-	"\x16SetPanelDomainResponse\"(\n" +
+	"\x16SetPanelDomainResponse\"B\n" +
 	"\x0eUpgradeRequest\x12\x16\n" +
-	"\x06sha256\x18\x01 \x01(\tR\x06sha256\"+\n" +
+	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"+\n" +
 	"\x0fUpgradeResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\"\x13\n" +
 	"\x11GetMirrorsRequest\";\n" +
