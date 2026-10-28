@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20amd64%20%7C%20arm64-lightgrey" alt="Platform: Linux amd64 | arm64">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
-  <img src="https://img.shields.io/badge/status-%E5%BC%80%E5%8F%91%E4%B8%AD-orange" alt="Status: 开发中">
+  <a href="https://github.com/SIPC/Nagi/releases/latest"><img src="https://img.shields.io/github/v/release/SIPC/Nagi" alt="Release"></a>
 </p>
 
 # Nagi（凪）
@@ -12,8 +12,6 @@
 > 风平浪静。
 
 Nagi 是一个开源的 Docker 项目面板，追求简单、美观、易于部署，可直接用于生产环境，并支持多节点与高可用。
-
-> 状态：开发中，尚未发布。
 
 ## 特性
 
@@ -44,8 +42,6 @@ Nagi 是一个开源的 Docker 项目面板，追求简单、美观、易于部�
 暂不支持：自动调度、单个容器多副本运行、多面板同时管理、多用户、恢复演练、接管已有项目、在节点上构建、应用模板。跨节点的容器之间仅转发 TCP。
 
 ## 快速开始
-
-> 尚未发布，以下命令可能变更。
 
 ### 安装面板
 
