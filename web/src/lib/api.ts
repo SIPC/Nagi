@@ -8,9 +8,19 @@ import {
   SettingsService,
   SetupService,
 } from "@/gen/nagi/v1/api_pb";
+import { locale } from "@/i18n";
 
 // 浏览器与面板同源，cookie 会随请求自动带上。
-const transport = createConnectTransport({ baseUrl: window.location.origin });
+// Accept-Language 换成界面当前的语言（可能和浏览器的不同），面板按它返回错误信息。
+const transport = createConnectTransport({
+  baseUrl: window.location.origin,
+  interceptors: [
+    (next) => (req) => {
+      req.header.set("Accept-Language", locale);
+      return next(req);
+    },
+  ],
+});
 
 export const setupClient = createClient(SetupService, transport);
 export const authClient = createClient(AuthService, transport);

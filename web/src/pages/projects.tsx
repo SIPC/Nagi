@@ -4,7 +4,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
 import { authClient, errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { slugName } from "@/lib/utils";
+import { formatDate, slugName } from "@/lib/utils";
+import { t } from "@/i18n";
 import { ProjectState, stateOf } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { useContainerForm } from "@/components/container-form";
@@ -47,15 +48,11 @@ function Reminders() {
     items.push({
       key: "totp",
       storage: "nagi.hide.totp",
-      title: "未开启两步验证",
-      text: (
-        <>
-          建议在
-          <Link to="/settings" search={{ tab: "security" }} className="mx-1 text-foreground underline underline-offset-2">
-            设置 › 账号安全
-          </Link>
-          中开启。
-        </>
+      title: t.projects.reminders.totpTitle,
+      text: t.projects.reminders.totpText(
+        <Link to="/settings" search={{ tab: "security" }} className="mx-1 text-foreground underline underline-offset-2">
+          {t.projects.reminders.totpLink}
+        </Link>,
       ),
     });
   }
@@ -64,12 +61,8 @@ function Reminders() {
     items.push({
       key: "key",
       storage: "nagi.hide.masterkey",
-      title: "备份面板主密钥",
-      text: (
-        <>
-          面板数据库中的密钥均由主密钥加密，主密钥丢失后无法解密。请单独备份 <span className="font-mono text-foreground">{path}</span>。
-        </>
-      ),
+      title: t.projects.reminders.masterKeyTitle,
+      text: t.projects.reminders.masterKeyText(<span className="font-mono text-foreground">{path}</span>),
     });
   }
   if (items.length === 0) return null;
@@ -82,7 +75,7 @@ function Reminders() {
           <span className="font-medium">{it.title}</span>
           <span className="min-w-0 flex-1 text-muted-foreground">{it.text}</span>
           <Button size="xs" variant="ghost" onClick={() => hide(it.key, it.storage)}>
-            不再提醒
+            {t.projects.reminders.dismiss}
           </Button>
         </div>
       ))}
@@ -90,10 +83,6 @@ function Reminders() {
   );
 }
 
-function formatDate(d: Date | undefined) {
-  if (!d) return "—";
-  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
 
 const dot = {
   success: "bg-success",
@@ -116,14 +105,14 @@ export function ProjectsPage() {
     <Link to="/projects/new">
       <Button>
         <Plus />
-        新建项目
+        {t.projects.newProject}
       </Button>
     </Link>
   );
 
   return (
     <>
-      <PageHeader title="项目" description="项目由一组协同工作的容器组成，容器可分布在不同节点，并按名称互相访问。" actions={newButton} />
+      <PageHeader title={t.projects.title} description={t.projects.description} actions={newButton} />
       <div className="grid gap-6">
         <Reminders />
         {projects.isPending ? (
@@ -131,8 +120,8 @@ export function ProjectsPage() {
         ) : projects.error ? (
           <Alert>{errorMessage(projects.error)}</Alert>
         ) : projects.data.projects.length === 0 ? (
-          <Empty title="暂无项目" icon={<FolderKanban className="size-5" />}>
-            新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。
+          <Empty title={t.projects.empty.title} icon={<FolderKanban className="size-5" />}>
+            {t.projects.empty.text}
           </Empty>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
@@ -153,18 +142,18 @@ export function ProjectsPage() {
                       <div className="truncate text-[13px] font-medium group-hover:underline">{p.name}</div>
                       <div className="mt-0.5 flex items-center gap-2">
                         <span className="truncate font-mono text-xs text-muted-foreground">{p.networkName}</span>
-                        {p.stateful && <Badge>有状态</Badge>}
+                        {p.stateful && <Badge>{t.projects.card.stateful}</Badge>}
                       </div>
                     </div>
                     <ProjectState services={services} deployed={deployed} />
                   </div>
                   <div className="grid flex-1 content-start gap-1 px-3.5 py-2.5">
                     {p.containers.length === 0 ? (
-                      <span className="text-[13px] text-muted-foreground">暂无容器</span>
+                      <span className="text-[13px] text-muted-foreground">{t.projects.card.noContainers}</span>
                     ) : (
                       p.containers.map((c) => {
                         const st = offline(c.nodeId)
-                          ? { tone: "warning" as const, label: "节点离线" }
+                          ? { tone: "warning" as const, label: t.projects.card.nodeOffline }
                           : stateOf(
                               services.filter((x) => x.container === c.name),
                               c.deployedVersion > 0n,
@@ -174,7 +163,7 @@ export function ProjectsPage() {
                           <div key={c.name} className="flex items-center gap-2 text-[13px]" title={st.label}>
                             <span className={cn("size-2 shrink-0 rounded-full", dot[st.tone])} />
                             <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                            {c.failover && <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? "已顶替" : "顶替"}</Badge>}
+                            {c.failover && <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? t.projects.card.tookOver : t.projects.card.failover}</Badge>}
                             <span className="shrink-0 text-xs text-muted-foreground">{nodeName(c.nodeId)}</span>
                           </div>
                         );
@@ -183,10 +172,13 @@ export function ProjectsPage() {
                   </div>
                   <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
                     <span>
-                      {p.containers.length} 个容器{p.routes.length > 0 && ` · ${p.routes.length} 个端口映射`}
+                      {t.projects.card.containers(p.containers.length)}
+                      {p.routes.length > 0 && ` · ${t.projects.card.portMappings(p.routes.length)}`}
                     </span>
                     <span className="tabular-nums">
-                      {p.rebuiltAt ? `重建于 ${formatDate(toDate(p.rebuiltAt))}` : `创建于 ${formatDate(toDate(p.createdAt))}`}
+                      {p.rebuiltAt
+                                              ? t.projects.card.rebuiltAt(formatDate(toDate(p.rebuiltAt)) ?? "—")
+                                              : t.projects.card.createdAt(formatDate(toDate(p.createdAt)) ?? "—")}
                     </span>
                   </div>
                 </Link>
@@ -241,9 +233,9 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
   const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="节点" htmlFor="container-node" help="容器在此节点上运行，创建后可迁移至其他节点。">
+      <Field label={t.projects.nodeChoice.node} htmlFor="container-node" help={t.projects.nodeChoice.nodeHelp}>
         <Select id="container-node" value={selected} onChange={(e) => setNodeId(e.target.value)} required>
-          {onlineNodes.length === 0 && <option value="">无在线节点</option>}
+          {onlineNodes.length === 0 && <option value="">{t.projects.nodeChoice.noOnlineNodes}</option>}
           {onlineNodes.map((n) => (
             <option key={n.id} value={n.id}>
               {n.name}
@@ -252,9 +244,9 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
         </Select>
       </Field>
       <Field
-        label="容器目录"
+        label={t.projects.nodeChoice.dir}
         htmlFor="container-dir"
-        help="存放容器的运行文件、数据和快照。须为绝对路径，且目录不存在或为空。留空时使用默认目录：<项目根目录>/<项目名>/<容器名>，项目名转为拼音，重名时追加 -2 等后缀。"
+        help={t.projects.nodeChoice.dirHelp}
       >
         <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} className="font-mono" />
       </Field>
@@ -286,8 +278,8 @@ export function NewProjectPage() {
 
   return (
     <div className="max-w-3xl">
-      <Breadcrumb items={[{ label: "项目", to: "/projects" }, { label: "新建项目" }]} />
-      <PageHeader title="新建项目" description="创建后不自动部署，确认配置后可手动部署。" />
+      <Breadcrumb items={[{ label: t.projects.title, to: "/projects" }, { label: t.projects.newProject }]} />
+      <PageHeader title={t.projects.newProject} description={t.projects.create.description} />
       <form
         className="grid gap-6"
         onSubmit={(e) => {
@@ -295,16 +287,16 @@ export function NewProjectPage() {
           create.mutate();
         }}
       >
-        <Section title="基本信息">
+        <Section title={t.projects.create.basics}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="名称" htmlFor="name">
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="我的应用" required maxLength={64} />
+            <Field label={t.projects.create.name} htmlFor="name">
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} required maxLength={64} />
             </Field>
             <Field
-              label="网络名"
+              label={t.projects.create.networkName}
               htmlFor="network"
-              hint="小写字母、数字和 -"
-              help="在面板内唯一。已连接本项目的项目通过「容器.网络名」访问本项目的容器。留空时由项目名生成，汉字转为拼音。"
+              hint={t.projects.create.slugHint}
+              help={t.projects.create.networkHelp}
             >
               <Input
                 id="network"
@@ -318,21 +310,21 @@ export function NewProjectPage() {
         </Section>
 
         <Section
-          title="第一个容器"
-          description="可选，创建项目后也可继续添加容器。"
+          title={t.projects.create.firstContainer}
+          description={t.projects.create.firstContainerDescription}
           actions={
             <Check checked={withContainer} onChange={setWithContainer}>
-              同时创建
+              {t.projects.create.withContainer}
             </Check>
           }
         >
           {withContainer && (
             <div className="grid gap-4">
               <Field
-                label={container.mode === "compose" ? "容器组名称" : "容器名称"}
+                label={container.mode === "compose" ? t.projects.create.groupName : t.projects.create.containerName}
                 htmlFor="container"
-                hint="小写字母、数字和 -"
-                help="创建后不可修改。单个容器在项目内网中使用此名称；容器组内的容器名称为「容器.容器组名」。"
+                hint={t.projects.create.slugHint}
+                help={t.projects.create.containerNameHelp}
               >
                 <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" placeholder="web" />
               </Field>
@@ -346,12 +338,12 @@ export function NewProjectPage() {
         <div className="flex justify-end gap-2">
           <Link to="/projects">
             <Button type="button" variant="ghost">
-              取消
+              {t.common.actions.cancel}
             </Button>
           </Link>
           <Button type="submit" disabled={create.isPending || (withContainer && !node.nodeId)}>
             {create.isPending && <Spinner />}
-            创建项目
+            {t.projects.create.submit}
           </Button>
         </div>
       </form>

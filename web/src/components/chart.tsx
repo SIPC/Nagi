@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
 // 时间图表：折线（可有多条）或堆叠柱。横轴是选定的时间范围 [from, to]，不是数据的范围，
 // 所以一段时间没有数据时那一段就是空的。鼠标移上去显示该时刻各条序列的值。
@@ -141,14 +142,14 @@ export function TimeChart({
         onPointerLeave={() => setHover(null)}
       >
         {width > 0 && (
-          <svg width={width} height={height} className="block overflow-visible" role="img" aria-label={series.map((s) => s.label).join("、")}>
+          <svg width={width} height={height} className="block overflow-visible" role="img" aria-label={series.map((s) => s.label).join(t.metrics.seriesSeparator)}>
             <line x1={0} x2={width} y1={height - 0.5} y2={height - 0.5} className="stroke-border" />
             {stacked ? bars() : series.map(lines)}
             {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={height} className="stroke-foreground/30" strokeDasharray="2 2" />}
           </svg>
         )}
         {axis && !empty && <span className="pointer-events-none absolute top-0 left-0 font-mono text-[10px] leading-none text-muted-foreground/80">{format(peak)}</span>}
-        {empty && <span className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">暂无数据</span>}
+        {empty && <span className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">{t.metrics.noData}</span>}
         {hover !== null && (
           <div
             className={cn(

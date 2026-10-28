@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { formatDateTime, timeAgo } from "@/lib/utils";
+import { t } from "@/i18n";
 import { Alert, Button, CodeBlock, Dialog, EmptyRow, Field, Notice, Section, Spinner, Status, Table, Td, Th } from "@/components/ui";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
@@ -15,18 +16,13 @@ export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
   const [busy, setBusy] = useState(false);
   const promote = async () => {
     if (
-      !confirm(
-        "将本面板提升为主面板？\n\n" +
-          "· 主面板仍在运行时不应提升，否则两个面板可能产生不一致的修改。\n" +
-          "· 提升后，节点仅接受本面板的修改，其他备用面板改为从本面板同步。\n" +
-          "· 原主面板恢复后自动降为备用面板，其最后数秒内未同步的修改将丢失。",
-      )
+      !confirm(t.standby.promote.confirm)
     )
       return;
     setBusy(true);
     try {
       const res = await settingsClient.promoteStandby({});
-      alert(`已提升为主面板（任期 ${res.term}）。面板正在重启，页面将自动刷新。`);
+      alert(t.standby.promote.done(res.term));
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
       alert(errorMessage(err));
@@ -36,7 +32,7 @@ export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
   return (
     <Button readOnlyOk size={size} variant="outline" onClick={promote} disabled={busy}>
       {busy && <Spinner />}
-      提升为主面板
+      {t.standby.promote.button}
     </Button>
   );
 }
@@ -54,14 +50,14 @@ export function StandbyCard() {
 
   if (d.isStandby) {
     return (
-      <Section title="同步状态" description="本面板是备用面板，实时同步主面板的数据。" actions={<PromoteButton />}>
+      <Section title={t.standby.status.title} description={t.standby.status.description} actions={<PromoteButton />}>
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">主面板</dt>
+          <dt className="text-muted-foreground">{t.standby.status.primary}</dt>
           <dd className="font-mono">{d.primaryAddress}</dd>
-          <dt className="text-muted-foreground">连接</dt>
-          <dd>{d.connected ? <Status tone="success">已连接</Status> : <Status tone="warning">未连接</Status>}</dd>
-          <dt className="text-muted-foreground">最近同步</dt>
-          <dd title={toDate(d.lastSync)?.toLocaleString()}>{d.lastSync ? timeAgo(toDate(d.lastSync)) : "尚未同步"}</dd>
+          <dt className="text-muted-foreground">{t.standby.status.connection}</dt>
+          <dd>{d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>}</dd>
+          <dt className="text-muted-foreground">{t.standby.lastSync}</dt>
+          <dd title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? timeAgo(toDate(d.lastSync)) : t.standby.status.neverSynced}</dd>
         </dl>
         {d.lastError && <Alert className="mt-4">{d.lastError}</Alert>}
       </Section>
@@ -81,7 +77,7 @@ export function StandbyCard() {
     }
   };
   const remove = async (id: string, name: string) => {
-    if (!confirm(`移除备用面板 ${name}？该备用面板将无法再同步本面板数据，其数据目录须手动删除。`)) return;
+    if (!confirm(t.standby.removeConfirm(name))) return;
     setError("");
     try {
       await settingsClient.removeStandby({ id });
@@ -94,26 +90,26 @@ export function StandbyCard() {
   return (
     <Section
       flush
-      title="已配对的备用面板"
-      help="备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。备用面板为只读，所有修改在主面板上进行。"
+      title={t.standby.list.title}
+      help={t.standby.list.help}
       actions={
         <Button size="sm" variant="outline" onClick={create} disabled={busy}>
           {busy && <Spinner />}
-          添加备用面板
+          {t.standby.list.add}
         </Button>
       }
     >
       {error && <Alert className="mb-3">{error}</Alert>}
       {d.standbys.length === 0 ? (
-        <EmptyRow>暂无备用面板</EmptyRow>
+        <EmptyRow>{t.standby.list.empty}</EmptyRow>
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>名称</Th>
-              <Th>地址</Th>
-              <Th>状态</Th>
-              <Th>最近同步</Th>
+              <Th>{t.standby.list.name}</Th>
+              <Th>{t.standby.list.address}</Th>
+              <Th>{t.standby.list.status}</Th>
+              <Th>{t.standby.lastSync}</Th>
               <Th />
             </tr>
           </thead>
@@ -122,13 +118,13 @@ export function StandbyCard() {
               <tr key={s.id}>
                 <Td className="font-medium">{s.name}</Td>
                 <Td className="font-mono text-xs text-muted-foreground">{s.address}</Td>
-                <Td>{s.connected ? <Status tone="success">已连接</Status> : <Status>未连接</Status>}</Td>
-                <Td className="text-[13px] text-muted-foreground" title={toDate(s.lastSync)?.toLocaleString()}>
+                <Td>{s.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status>{t.standby.disconnected}</Status>}</Td>
+                <Td className="text-[13px] text-muted-foreground" title={formatDateTime(toDate(s.lastSync))}>
                   {s.lastSync ? timeAgo(toDate(s.lastSync)) : "—"}
                 </Td>
                 <Td className="text-right">
                   <Button size="xs" variant="ghost" onClick={() => remove(s.id, s.name)}>
-                    移除
+                    {t.common.actions.remove}
                   </Button>
                 </Td>
               </tr>
@@ -136,13 +132,13 @@ export function StandbyCard() {
           </tbody>
         </Table>
       )}
-      <Dialog open={code !== null} onClose={() => setCode(null)} title="添加备用面板" description="在新机器上使用配对码启动备用面板。">
+      <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} description={t.standby.dialog.description}>
         {code && (
           <div className="grid gap-4">
-            <Field label="启动命令" hint="数据目录须为空；配对码 1 小时内有效，仅可使用一次">
+            <Field label={t.standby.dialog.command} hint={t.standby.dialog.commandHint}>
               <CodeBlock copy>{`nagi server --standby ${code.code}`}</CodeBlock>
             </Field>
-            <Notice>备用面板启动后自动连接本面板并开始同步，同时显示在列表中。</Notice>
+            <Notice>{t.standby.dialog.notice}</Notice>
           </div>
         )}
       </Dialog>

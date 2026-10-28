@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { formatDateTime, timeAgo } from "@/lib/utils";
+import { t } from "@/i18n";
 import { useRun } from "@/components/run";
 import { fmtBytes } from "@/components/metrics";
 import {
@@ -28,10 +29,10 @@ import { useDefaultDir } from "@/pages/projects";
 // 见 docs/snapshot.md、docs/failover.md。
 
 const snapshotKinds: Record<string, string> = {
-  scheduled: "定时",
-  manual: "手动",
-  predeploy: "部署前数据",
-  version: "版本文件",
+  scheduled: t.projectData.snapshotKinds.scheduled,
+  manual: t.projectData.snapshotKinds.manual,
+  predeploy: t.projectData.snapshotKinds.predeploy,
+  version: t.projectData.snapshotKinds.version,
 };
 
 function useNodes() {
@@ -88,9 +89,9 @@ function Snapshots({
   return (
     <Section
       flush
-      title="快照"
-      description="容器的 data/ 和 volumes/ 单独保存，恢复时配置保持不变。"
-      help="定时和手动快照可在此恢复。「部署前数据」和「版本文件」用于回滚，在容器的「版本」中操作。快照仓库位于容器所在节点的容器目录 backups/ 下。"
+      title={t.projectData.snapshots.title}
+      description={t.projectData.snapshots.description}
+      help={t.projectData.snapshots.help}
       actions={
         deployed &&
         online && (
@@ -109,16 +110,16 @@ function Snapshots({
               }
             >
               {run.busy && <Spinner />}
-              创建快照
+              {t.projectData.snapshots.create}
             </Button>
           </>
         )
       }
     >
       {!deployed ? (
-        <EmptyRow>容器尚未部署</EmptyRow>
+        <EmptyRow>{t.projectData.snapshots.notDeployed}</EmptyRow>
       ) : !online ? (
-        <EmptyRow>容器所在的节点离线，无法读取快照</EmptyRow>
+        <EmptyRow>{t.projectData.snapshots.nodeOffline}</EmptyRow>
       ) : (
         <SnapshotList
           project={project}
@@ -146,17 +147,17 @@ function SnapshotTable({
 }) {
   // 默认只列最近几份，其余收起。
   const [all, setAll] = useState(false);
-  if (snapshots.length === 0) return <EmptyRow>暂无快照</EmptyRow>;
+  if (snapshots.length === 0) return <EmptyRow>{t.projectData.snapshots.empty}</EmptyRow>;
   const shown = all ? snapshots : snapshots.slice(0, 6);
   return (
     <>
       <Table>
         <thead>
           <tr>
-            <Th>类型</Th>
-            <Th>时间</Th>
-            <Th>版本</Th>
-            <Th>大小</Th>
+            <Th>{t.projectData.snapshots.kind}</Th>
+            <Th>{t.projectData.snapshots.time}</Th>
+            <Th>{t.projectData.snapshots.version}</Th>
+            <Th>{t.projectData.snapshots.size}</Th>
             <Th />
           </tr>
         </thead>
@@ -176,7 +177,7 @@ function SnapshotTable({
               </Td>
               <Td
                 className="text-[13px] text-muted-foreground"
-                title={toDate(sn.time)?.toLocaleString()}
+                title={formatDateTime(toDate(sn.time))}
               >
                 {timeAgo(toDate(sn.time))}
               </Td>
@@ -197,7 +198,7 @@ function SnapshotTable({
           className="mt-3 cursor-pointer text-[13px] text-muted-foreground hover:text-foreground"
           onClick={() => setAll(true)}
         >
-          显示全部 {snapshots.length} 份
+          {t.projectData.snapshots.showAll(snapshots.length)}
         </button>
       )}
     </>
@@ -241,9 +242,7 @@ function SnapshotList({
             variant="ghost"
             disabled={busy}
             onClick={() =>
-              confirm(
-                `从此快照恢复容器 ${container} 的 data/ 和 volumes/？恢复前将停止容器，当前数据将被覆盖。`,
-              ) &&
+              confirm(t.projectData.snapshots.restoreConfirm(container)) &&
               run(() =>
                 projectClient.restoreSnapshot({
                   projectId: project.id,
@@ -253,7 +252,7 @@ function SnapshotList({
               )
             }
           >
-            恢复
+            {t.projectData.snapshots.restore}
           </Button>
         )
       }
@@ -309,43 +308,43 @@ function Backup({
   if (backup?.syncing)
     state = (
       <Status tone="info" pulse>
-        同步中
+        {t.common.status.syncing}
       </Status>
     );
-  else if (backup?.lastError) state = <Status tone="danger">同步失败</Status>;
-  else if (backup?.lastSync) state = <Status tone="success">正常</Status>;
+  else if (backup?.lastError) state = <Status tone="danger">{t.projectData.backup.syncFailed}</Status>;
+  else if (backup?.lastSync) state = <Status tone="success">{t.projectData.backup.healthy}</Status>;
   else if (container.backupNodeId)
-    state = <Status tone="neutral">等待首次同步</Status>;
+    state = <Status tone="neutral">{t.projectData.backup.waitingFirstSync}</Status>;
 
   return (
     <Section
-      title="备份节点"
-      description="每次定时快照后，将容器的快照仓库增量同步到另一节点。"
-      help="备份节点仅保存副本，不运行容器，也不自动顶替。容器所在节点损坏时，可在备份节点上恢复容器：数据来自副本，配置来自面板。"
+      title={t.projectData.backup.title}
+      description={t.projectData.backup.description}
+      help={t.projectData.backup.help}
     >
       <div className="grid gap-4">
         {container.backupNodeId ? (
           <>
             <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-              <dt className="text-muted-foreground">备份节点</dt>
+              <dt className="text-muted-foreground">{t.projectData.backup.node}</dt>
               <dd>
                 {nodes.name(container.backupNodeId)}
                 {!nodes.online(container.backupNodeId) && (
-                  <Badge className="ml-2">离线</Badge>
+                  <Badge className="ml-2">{t.common.status.offline}</Badge>
                 )}
               </dd>
-              <dt className="text-muted-foreground">状态</dt>
+              <dt className="text-muted-foreground">{t.projectData.state}</dt>
               <dd>
                 {sourceOnline ? (
                   state
                 ) : (
                   <span className="text-muted-foreground">
-                    容器所在的节点离线
+                    {t.projectData.backup.sourceOffline}
                   </span>
                 )}
               </dd>
-              <dt className="text-muted-foreground">最近同步</dt>
-              <dd title={toDate(backup?.lastSync)?.toLocaleString()}>
+              <dt className="text-muted-foreground">{t.projectData.lastSync}</dt>
+              <dd title={formatDateTime(toDate(backup?.lastSync))}>
                 {backup?.lastSync ? timeAgo(toDate(backup.lastSync)) : "—"}
               </dd>
             </dl>
@@ -359,7 +358,7 @@ function Backup({
                   onClick={() => setRestoring(!restoring)}
                   disabled={run.busy}
                 >
-                  从备份节点恢复
+                  {t.projectData.backup.restoreFromBackup}
                 </Button>
               )}
               <Button
@@ -367,12 +366,11 @@ function Backup({
                 variant="ghost"
                 disabled={busy}
                 onClick={() =>
-                  confirm(
-                    `取消容器 ${container.name} 的备份节点？备份节点上的副本将被删除。`,
-                  ) && setBackup("", true)
+                  confirm(t.projectData.backup.removeConfirm(container.name)) &&
+                  setBackup("", true)
                 }
               >
-                取消备份
+                {t.projectData.backup.remove}
               </Button>
               <Button
                 size="sm"
@@ -388,7 +386,7 @@ function Backup({
                 }
               >
                 {busy && <Spinner />}
-                立即同步
+                {t.projectData.backup.syncNow}
               </Button>
             </div>
             {restoring && (
@@ -401,17 +399,17 @@ function Backup({
           </>
         ) : container.failover ? (
           <p className="text-[13px] text-muted-foreground">
-            容器已设置顶替，顶替节点上已有持续更新的副本，无需备份节点。
+            {t.projectData.backup.hasFailover}
           </p>
         ) : (
           <>
             {candidates.length === 0 ? (
               <p className="text-[13px] text-muted-foreground">
-                无其他在线节点可用作备份节点。
+                {t.projectData.backup.noCandidates}
               </p>
             ) : (
               <div className="flex flex-wrap items-end gap-3">
-                <Field label="节点" htmlFor="backup-node">
+                <Field label={t.projectData.backup.nodeLabel} htmlFor="backup-node">
                   <Select
                     id="backup-node"
                     value={choice}
@@ -431,7 +429,7 @@ function Backup({
                   onClick={() => setBackup(choice)}
                 >
                   {busy && <Spinner />}
-                  设为备份节点
+                  {t.projectData.backup.set}
                 </Button>
               </div>
             )}
@@ -465,7 +463,10 @@ function RestoreFromBackup({
   });
   const restore = (snapshotId: string) =>
     confirm(
-      `在 ${nodes.name(container.backupNodeId)} 上恢复容器 ${container.name}？恢复后容器将在该节点上运行；原节点重新上线时，其上的该容器将被停止，目录保留。`,
+      t.projectData.restore.confirm(
+        nodes.name(container.backupNodeId),
+        container.name,
+      ),
     ) &&
     run.run(() =>
       projectClient.restoreFromBackup({
@@ -479,9 +480,9 @@ function RestoreFromBackup({
     <div className="grid gap-3 rounded-md bg-subtle">
       <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
         <Field
-          label="恢复到目录"
+          label={t.projectData.restore.dir}
           htmlFor="restore-dir"
-          help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
+          help={t.projectData.dirHelp}
         >
           <DirInput
             id="restore-dir"
@@ -494,7 +495,7 @@ function RestoreFromBackup({
           />
         </Field>
         <Button size="sm" disabled={run.busy} onClick={() => restore("")}>
-          从最新快照恢复
+          {t.projectData.restore.latest}
         </Button>
       </div>
       {snapshots.isPending ? (
@@ -514,7 +515,7 @@ function RestoreFromBackup({
                 disabled={run.busy}
                 onClick={() => restore(id)}
               >
-                从此快照恢复
+                {t.projectData.restore.fromSnapshot}
               </Button>
             )
           }
@@ -551,9 +552,7 @@ function Placement({
   const target = nodes.name(choice);
 
   const migrate = () =>
-    confirm(
-      `将容器 ${container.name} 迁移到 ${target}？迁移期间容器停止，完成后在新节点上启动，原节点上的目录保留。`,
-    ) &&
+    confirm(t.projectData.placement.migrateConfirm(container.name, target)) &&
     run.run(() =>
       projectClient.migrateContainer({
         projectId: project.id,
@@ -563,9 +562,7 @@ function Placement({
       }),
     );
   const redeploy = () =>
-    confirm(
-      `将容器 ${container.name} 重新部署到 ${target}？运行数据和旧版本文件均保留在原节点上，新节点上的数据为空，回滚到旧版本时不包含版本文件。`,
-    ) &&
+    confirm(t.projectData.placement.redeployConfirm(container.name, target)) &&
     run.run(() =>
       projectClient.redeployElsewhere({
         projectId: project.id,
@@ -577,40 +574,40 @@ function Placement({
 
   return (
     <Section
-      title="更换节点"
+      title={t.projectData.placement.title}
       description={
         online
-          ? "将容器连同数据迁移到另一节点，名称、配置、版本记录和 webhook 地址不变。"
-          : "容器所在的节点离线。"
+          ? t.projectData.placement.description
+          : t.projectData.placement.descriptionOffline
       }
-      help="迁移：容器运行时进行首次同步，停止后增量同步剩余数据，停机时间短，数据不丢失。原节点离线时：已设置备份节点的，使用「从备份节点恢复」；无副本的，仅可重新部署到其他节点（数据为空）。"
+      help={t.projectData.placement.help}
     >
       <div className="grid gap-4">
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">所在节点</dt>
+          <dt className="text-muted-foreground">{t.projectData.placement.currentNode}</dt>
           <dd>
             {nodes.name(container.nodeId)}
-            {!online && <Badge className="ml-2">离线</Badge>}
+            {!online && <Badge className="ml-2">{t.common.status.offline}</Badge>}
           </dd>
-          <dt className="text-muted-foreground">容器目录</dt>
+          <dt className="text-muted-foreground">{t.projectData.placement.dir}</dt>
           <dd className="font-mono text-xs">{container.dir}</dd>
         </dl>
         {!online && container.backupNodeId && (
           <Notice tone="warning">
-            容器已设置备份节点，建议在上方「备份节点」中从副本恢复，以保留数据。
+            {t.projectData.placement.backupHint}
           </Notice>
         )}
         {container.failover ? (
           <p className="border-t pt-4 text-[13px] text-muted-foreground">
-            容器已设置顶替，运行节点由租约决定。更换节点前须取消顶替。
+            {t.projectData.placement.hasFailover}
           </p>
         ) : candidates.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            无其他在线节点。
+            {t.projectData.placement.noCandidates}
           </p>
         ) : (
           <div className="flex flex-wrap items-end gap-3 border-t pt-4">
-            <Field label="目标节点" htmlFor="move-node">
+            <Field label={t.projectData.placement.target} htmlFor="move-node">
               <Select
                 id="move-node"
                 value={choice}
@@ -620,15 +617,17 @@ function Placement({
                 {candidates.map((n) => (
                   <option key={n.id} value={n.id}>
                     {n.name}
-                    {n.id === container.backupNodeId ? "（备份节点）" : ""}
+                    {n.id === container.backupNodeId
+                                          ? t.projectData.placement.backupSuffix
+                                          : ""}
                   </option>
                 ))}
               </Select>
             </Field>
             <Field
-              label="容器目录"
+              label={t.projectData.placement.dir}
               htmlFor="move-dir"
-              help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
+              help={t.projectData.dirHelp}
             >
               <DirInput
                 id="move-dir"
@@ -647,7 +646,7 @@ function Placement({
                 onClick={migrate}
               >
                 {run.busy && <Spinner />}
-                迁移
+                {t.projectData.placement.migrate}
               </Button>
             ) : (
               <Button
@@ -657,7 +656,7 @@ function Placement({
                 onClick={redeploy}
               >
                 {run.busy && <Spinner />}
-                重新部署到此节点
+                {t.projectData.placement.redeploy}
               </Button>
             )}
           </div>
@@ -671,7 +670,9 @@ function Placement({
 
 function duration(ms: bigint) {
   const s = Math.ceil(Number(ms) / 1000);
-  return s >= 60 ? `${Math.ceil(s / 60)} 分钟` : `${s} 秒`;
+  return s >= 60
+    ? t.common.time.minutes(Math.ceil(s / 60))
+    : t.common.time.seconds(s);
 }
 
 function Failover({
@@ -723,22 +724,22 @@ function Failover({
     );
     return (
       <Section
-        title="顶替"
-        description="容器所在节点故障时，由指定的顶替节点自动接管运行。"
-        help="容器所在节点、顶替节点和见证人各持一票，获得两票的一方运行容器。所在节点每 15 分钟将快照同步至顶替节点，顶替节点预先拉取镜像。有状态容器默认在确认后顶替，因最后一次同步之后写入的数据将丢失。"
+        title={t.projectData.failover.title}
+        description={t.projectData.failover.setupDescription}
+        help={t.projectData.failover.setupHelp}
       >
         {container.backupNodeId ? (
           <p className="text-[13px] text-muted-foreground">
-            容器已设置备份节点。顶替与备份节点不可同时设置，设置顶替前须取消备份节点。
+            {t.projectData.failover.hasBackup}
           </p>
         ) : standbys.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            无其他在线节点可用作顶替节点。
+            {t.projectData.failover.noCandidates}
           </p>
         ) : (
           <div className="grid gap-4">
             <div className="flex flex-wrap items-end gap-3">
-              <Field label="顶替节点" htmlFor="fo-standby">
+              <Field label={t.projectData.failover.standbyNode} htmlFor="fo-standby">
                 <Select
                   id="fo-standby"
                   value={standbyId}
@@ -755,9 +756,9 @@ function Failover({
                 </Select>
               </Field>
               <Field
-                label="顶替节点目录"
+                label={t.projectData.failover.standbyDir}
                 htmlFor="fo-dir"
-                help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
+                help={t.projectData.dirHelp}
               >
                 <DirInput
                   id="fo-dir"
@@ -772,9 +773,9 @@ function Failover({
             </div>
             <div className="flex flex-wrap items-end gap-3">
               <Field
-                label="见证人"
+                label={t.projectData.failover.witness}
                 htmlFor="fo-witness"
-                help="仅参与投票，不运行容器。默认为面板；为避免面板与节点同时故障，可指定其他节点。"
+                help={t.projectData.failover.witnessHelp}
               >
                 <Select
                   id="fo-witness"
@@ -784,7 +785,7 @@ function Failover({
                   }
                   className="min-w-44"
                 >
-                  <option value="">本面板</option>
+                  <option value="">{t.projectData.thisPanel}</option>
                   {witnesses.map((n) => (
                     <option key={n.id} value={n.id}>
                       {n.name}
@@ -793,9 +794,9 @@ function Failover({
                 </Select>
               </Field>
               <Field
-                label="租约时长（秒）"
+                label={t.projectData.failover.leaseSeconds}
                 htmlFor="fo-lease"
-                help="默认 30 秒，每 1/3 租约时长续约一次。所在节点故障后约 40 秒内完成顶替。"
+                help={t.projectData.failover.leaseHelp}
               >
                 <Input
                   id="fo-lease"
@@ -811,17 +812,17 @@ function Failover({
               <Check
                 checked={form.autoFailback}
                 onChange={(v) => setForm({ ...form, autoFailback: v })}
-                help="原节点恢复并稳定运行 10 分钟后，将容器切回原节点：停止容器、同步剩余数据、在原节点上启动，数据不丢失。"
+                help={t.projectData.failover.autoFailbackHelp}
               >
-                原节点恢复后自动切回
+                {t.projectData.failover.autoFailback}
               </Check>
               {container.stateful && (
                 <Check
                   checked={form.autoStateful}
                   onChange={(v) => setForm({ ...form, autoStateful: v })}
-                  help="无需确认即顶替，最后一次同步之后写入的数据将丢失。"
+                  help={t.projectData.failover.autoStatefulHelp}
                 >
-                  有状态容器自动顶替
+                  {t.projectData.failover.autoStateful}
                 </Check>
               )}
             </div>
@@ -845,7 +846,7 @@ function Failover({
                 }
               >
                 {busy && <Spinner />}
-                设置顶替
+                {t.projectData.failover.set}
               </Button>
             </div>
           </div>
@@ -862,16 +863,19 @@ function Failover({
   if (holder?.failingBack)
     state = (
       <Status tone="info" pulse>
-        正在切回原节点
+        {t.projectData.failover.failingBack}
       </Status>
     );
   else if (holder?.role === "holder" && holder.leaseRemainingMs > 0n)
-    state = <Status tone="success">运行中</Status>;
+    state = <Status tone="success">{t.common.status.running}</Status>;
   else if (holder?.role === "holder")
-    state = <Status tone="danger">租约续约失败，容器已停止</Status>;
+    state = <Status tone="danger">{t.projectData.failover.leaseLost}</Status>;
   else if (!holderOnline && standby?.pendingConfirm)
-    state = <Status tone="warning">所在节点失联，等待确认顶替</Status>;
-  else if (!holderOnline) state = <Status tone="warning">所在节点离线</Status>;
+    state = (
+      <Status tone="warning">{t.projectData.failover.awaitingConfirm}</Status>
+    );
+  else if (!holderOnline)
+    state = <Status tone="warning">{t.projectData.failover.holderOffline}</Status>;
   const witnessOptions = nodes.usable.filter(
     (n) =>
       n.id !== cfg.a?.nodeId &&
@@ -881,62 +885,70 @@ function Failover({
 
   return (
     <Section
-      title="顶替"
-      description="容器所在节点故障时，由另一节点自动接管运行。"
-      help="容器所在节点、顶替节点和见证人各持一票，获得两票的一方运行容器。所在节点每 15 分钟将快照同步至热备。"
+      title={t.projectData.failover.title}
+      description={t.projectData.failover.description}
+      help={t.projectData.failover.help}
     >
       <div className="grid gap-4">
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">状态</dt>
+          <dt className="text-muted-foreground">{t.projectData.state}</dt>
           <dd>{state}</dd>
-          <dt className="text-muted-foreground">运行节点</dt>
+          <dt className="text-muted-foreground">{t.projectData.failover.runningNode}</dt>
           <dd>
             {nodes.name(container.nodeId)}
             {cfg.a?.nodeId === container.nodeId ? (
-              <Badge className="ml-2">原节点</Badge>
+              <Badge className="ml-2">{t.projectData.failover.originalNode}</Badge>
             ) : (
               <Badge tone="warning" className="ml-2">
-                已顶替
+                {t.projectData.failover.failedOver}
               </Badge>
             )}
           </dd>
-          <dt className="text-muted-foreground">热备</dt>
+          <dt className="text-muted-foreground">{t.projectData.failover.hotStandby}</dt>
           <dd>
             {standbyNode?.name}
             {standbyNode && !nodes.online(standbyNode.nodeId) && (
-              <Badge className="ml-2">离线</Badge>
+              <Badge className="ml-2">{t.common.status.offline}</Badge>
             )}
           </dd>
-          <dt className="text-muted-foreground">见证人</dt>
+          <dt className="text-muted-foreground">{t.projectData.failover.witness}</dt>
           <dd>
             {!cfg.witnessIsPanel ? (
               cfg.witness?.name
             ) : container.failoverWitnessSelf ? (
-              "本面板"
+              t.projectData.thisPanel
             ) : (
               <span
                 className="text-warning"
-                title="见证人仍为更换前的旧面板。节点上报后自动切换为本面板；切换完成前，容器所在节点与顶替节点的两票仍构成多数。"
+                title={t.projectData.failover.oldPanelHint}
               >
-                旧面板（正在切换为本面板）
+                {t.projectData.failover.oldPanel}
               </span>
             )}
           </dd>
-          <dt className="text-muted-foreground">最近同步</dt>
-          <dd title={toDate(lastSync)?.toLocaleString()}>
-            {lastSync ? timeAgo(toDate(lastSync)) : "尚未同步"}
+          <dt className="text-muted-foreground">{t.projectData.lastSync}</dt>
+          <dd title={formatDateTime(toDate(lastSync))}>
+            {lastSync
+              ? timeAgo(toDate(lastSync))
+              : t.projectData.failover.notSynced}
           </dd>
-          <dt className="text-muted-foreground">租约</dt>
+          <dt className="text-muted-foreground">{t.projectData.failover.lease}</dt>
           <dd>
-            {cfg.leaseSeconds || 30} 秒
-            {holder?.epoch ? `，第 ${holder.epoch} 轮` : ""}
+            {t.common.time.seconds(cfg.leaseSeconds || 30)}
+            {holder?.epoch ? t.projectData.failover.epoch(holder.epoch) : ""}
           </dd>
-          <dt className="text-muted-foreground">自动切回</dt>
+          <dt className="text-muted-foreground">
+            {t.projectData.failover.autoFailbackLabel}
+          </dt>
           <dd>
-            {cfg.autoFailback ? "开启" : "关闭"}
+            {cfg.autoFailback
+              ? t.projectData.failover.on
+              : t.projectData.failover.off}
             {holder && holder.failbackInMs > 0n && (
               <span className="ml-2 text-muted-foreground">
-                原节点已恢复，约 {duration(holder.failbackInMs)}后切回
+                {t.projectData.failover.failbackIn(
+                  duration(holder.failbackInMs),
+                )}
               </span>
             )}
           </dd>
@@ -944,7 +956,7 @@ function Failover({
         {standby?.pendingConfirm && (
           <Notice
             tone="warning"
-            title="等待确认顶替"
+            title={t.projectData.failover.pendingTitle}
             actions={
               <Button
                 size="sm"
@@ -952,15 +964,18 @@ function Failover({
                 disabled={busy}
                 onClick={() =>
                   confirm(
-                    `确认由 ${standbyNode?.name} 顶替容器 ${container.name}？最后一次同步之后写入的数据将丢失。`,
+                    t.projectData.failover.confirmTakeoverPrompt(
+                      standbyNode?.name ?? "",
+                      container.name,
+                    ),
                   ) && call(() => projectClient.confirmTakeover(ref))
                 }
               >
-                确认顶替
+                {t.projectData.failover.confirmTakeover}
               </Button>
             }
           >
-            容器所在节点失联。该容器为有状态容器，顶替后最后一次同步之后写入的数据将丢失。
+            {t.projectData.failover.pendingBody}
           </Notice>
         )}
         {(holder?.lastError || standby?.lastError) && (
@@ -968,7 +983,10 @@ function Failover({
         )}
         {error && <Alert>{error}</Alert>}
         <div className="flex flex-wrap items-end gap-2 border-t pt-4">
-          <Field label="更换见证人" htmlFor="fo-change-witness">
+          <Field
+            label={t.projectData.failover.changeWitness}
+            htmlFor="fo-change-witness"
+          >
             <Select
               id="fo-change-witness"
               value={witness}
@@ -976,10 +994,10 @@ function Failover({
               className="min-w-40"
             >
               <option value="-" disabled>
-                请选择
+                {t.projectData.failover.select}
               </option>
               {!(cfg.witnessIsPanel && container.failoverWitnessSelf) && (
-                <option value="">本面板</option>
+                <option value="">{t.projectData.thisPanel}</option>
               )}
               {witnessOptions.map((n) => (
                 <option key={n.id} value={n.id}>
@@ -998,7 +1016,7 @@ function Failover({
               ).then((ok) => ok && setWitness("-"))
             }
           >
-            更换
+            {t.projectData.failover.change}
           </Button>
           <Button
             size="sm"
@@ -1007,11 +1025,14 @@ function Failover({
             disabled={busy}
             onClick={() =>
               confirm(
-                `取消容器 ${container.name} 的顶替？热备上的副本将被删除，容器保留在 ${nodes.name(container.nodeId)} 上。`,
+                t.projectData.failover.clearConfirm(
+                  container.name,
+                  nodes.name(container.nodeId),
+                ),
               ) && call(() => projectClient.clearFailover(ref))
             }
           >
-            取消顶替
+            {t.projectData.failover.clear}
           </Button>
         </div>
       </div>

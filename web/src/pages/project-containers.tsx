@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Plus, Rocket } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
+import { locale, t } from "@/i18n";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { ContainerMetrics, containerUsage, ProjectMetrics, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
@@ -62,16 +63,18 @@ export function ContainersTab({
   return (
     <div className="grid gap-8">
       {imageUpdates.length > 0 && (
-        <Notice tone="info" title="镜像有新版本">
-          {imageUpdates.map((u) => `${u.container}/${u.service}（${u.image}）`).join("、")}。在容器页选择「更新镜像」拉取并部署。
+        <Notice tone="info" title={t.projectContainers.imageUpdates.title}>
+          {t.projectContainers.imageUpdates.body(
+            imageUpdates.map((u) => t.projectContainers.imageUpdates.item(u.container, u.service, u.image)).join(t.projectContainers.listSeparator),
+          )}
         </Notice>
       )}
       <ContainersTable project={project} services={services} onOpen={open} onAdd={() => setAdding(true)} />
       {adding && <AddContainer project={project} onClose={() => setAdding(false)} onAdded={open} />}
       <Section
-        title="监控"
-        description="所有容器的资源占用合计及端口映射的请求情况。"
-        help="各容器的监控见容器页。耗时图中每个时段的 P95、P99 取该时段内的最大值，其余指标取平均值。"
+        title={t.projectContainers.monitoring}
+        description={t.projectContainers.projectMetrics.description}
+        help={t.projectContainers.projectMetrics.help}
         actions={picker}
       >
         <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} range={range} />
@@ -88,7 +91,7 @@ function shortImage(image: string) {
 
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
 export function containerKind(m: Container) {
-  return m.kind === "group" ? "容器组" : "容器";
+  return m.kind === "group" ? t.projectContainers.kind.group : t.projectContainers.kind.container;
 }
 
 // ---- 容器列表与批量部署 ----
@@ -125,19 +128,19 @@ function ContainersTable({
   return (
     <Section
       flush
-      title="容器"
+      title={t.projectContainers.table.title}
       description={
         <>
-          <span className="xl:hidden">选择容器查看详情；勾选多个可批量部署。</span>
-          <span className="hidden xl:inline">在左侧项目栏中选择容器查看详情。</span>
+          <span className="xl:hidden">{t.projectContainers.table.descriptionNarrow}</span>
+          <span className="hidden xl:inline">{t.projectContainers.table.descriptionWide}</span>
         </>
       }
-      help="批量部署按依赖顺序依次部署所选容器，并生成一条部署记录。"
+      help={t.projectContainers.table.help}
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={onAdd}>
             <Plus />
-            添加容器
+            {t.projectContainers.table.addContainer}
           </Button>
           {/* 批量部署只在有多个容器时出现；只有一个容器时用下面详情里的「部署」。 */}
           {multi && changed.length > 0 && targets.length === 0 && (
@@ -146,16 +149,16 @@ function ContainersTable({
               size="sm"
               disabled={busy}
               onClick={() => deploy(changed)}
-              title={"存在草稿、共享变量已变更或尚未部署的容器：" + changed.map((m) => m.name).join("、")}
+              title={t.projectContainers.table.changedTitle(changed.map((m) => m.name).join(t.projectContainers.listSeparator))}
             >
               {busy ? <Spinner /> : <Rocket />}
-              部署全部变更（{changed.length}）
+              {t.projectContainers.table.deployChanged(changed.length)}
             </Button>
           )}
           {multi && targets.length > 0 && (
             <Button size="sm" disabled={busy} onClick={() => deploy(targets)}>
               {busy ? <Spinner /> : <Rocket />}
-              部署所选（{targets.length}）
+              {t.projectContainers.table.deploySelected(targets.length)}
             </Button>
           )}
         </>
@@ -163,19 +166,19 @@ function ContainersTable({
     >
       {project.containers.length === 0 ? (
         <div className="xl:hidden">
-          <EmptyRow>暂无容器</EmptyRow>
+          <EmptyRow>{t.projectContainers.table.empty}</EmptyRow>
         </div>
       ) : (
         <Table className="xl:hidden">
           <thead>
             <tr>
               <Th className="w-10" />
-              <Th>名称</Th>
-              <Th>节点</Th>
-              <Th>状态</Th>
-              <Th>CPU / 内存</Th>
-              <Th>版本</Th>
-              <Th>内网地址</Th>
+              <Th>{t.projectContainers.columns.name}</Th>
+              <Th>{t.projectContainers.columns.node}</Th>
+              <Th>{t.projectContainers.columns.status}</Th>
+              <Th>{t.projectContainers.columns.usage}</Th>
+              <Th>{t.projectContainers.columns.version}</Th>
+              <Th>{t.projectContainers.columns.address}</Th>
             </tr>
           </thead>
           <tbody>
@@ -187,7 +190,7 @@ function ContainersTable({
                   <Td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
-                      aria-label={`选择 ${m.name}`}
+                      aria-label={t.projectContainers.table.select(m.name)}
                       checked={!!checked[m.name]}
                       onChange={(e) => setChecked({ ...checked, [m.name]: e.target.checked })}
                     />
@@ -196,28 +199,28 @@ function ContainersTable({
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-medium group-hover:underline">{m.name}</span>
                       <span className="text-xs text-muted-foreground">{containerKind(m)}</span>
-                      {m.hasDraft && <Badge tone="warning">草稿</Badge>}
-                      {m.sharedEnvOutdated && <Badge tone="warning">共享变量待部署</Badge>}
-                      {m.stateful && <Badge>有状态</Badge>}
-                      {m.hostNetworkServices.length > 0 && <Badge tone="danger">host 网络</Badge>}
-                      {m.unmanagedVolumes.length > 0 && <Badge tone="warning">volume 未纳入快照</Badge>}
+                      {m.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
+                      {m.sharedEnvOutdated && <Badge tone="warning">{t.projectContainers.badges.sharedEnvPending}</Badge>}
+                      {m.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
+                      {m.hostNetworkServices.length > 0 && <Badge tone="danger">{t.projectContainers.badges.hostNetwork}</Badge>}
+                      {m.unmanagedVolumes.length > 0 && <Badge tone="warning">{t.projectContainers.badges.volumeUnmanaged}</Badge>}
                     </div>
                   </Td>
                   <Td className="text-[13px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       {nodeName(m.nodeId)}
-                      {nodeOffline(m.nodeId) && <Badge tone="warning">离线</Badge>}
+                      {nodeOffline(m.nodeId) && <Badge tone="warning">{t.common.status.offline}</Badge>}
                     </span>
                   </Td>
                   <Td>
-                    {nodeOffline(m.nodeId) ? <Status tone="warning">节点离线</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
+                    {nodeOffline(m.nodeId) ? <Status tone="warning">{t.projectContainers.nodeOffline}</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
                   </Td>
                   <Td>
                     <UsageBars usage={u} memFallback={memFallback} className="w-36" />
                   </Td>
                   <Td className="font-mono text-xs">
                     {m.deployedVersion > 0n ? `v${m.deployedVersion}` : <span className="text-muted-foreground">—</span>}
-                    {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground"> / 最新 v{String(m.latestVersion)}</span>}
+                    {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground">{t.projectContainers.table.latest(String(m.latestVersion))}</span>}
                   </Td>
                   <Td className="font-mono text-xs text-muted-foreground">
                     {m.kind !== "group"
@@ -251,14 +254,14 @@ export function ContainerPage({ projectId, name, view, onView }: { projectId: st
   if (!p) return null;
   const container = p.containers.find((c) => c.name === name);
   const crumbs = [
-    { label: "项目", to: "/projects" },
+    { label: t.projectContainers.page.projects, to: "/projects" },
     { label: p.name, to: `/projects/${p.id}` },
   ];
   if (!container) {
     return (
       <>
         <Breadcrumb items={crumbs} className="xl:hidden" />
-        <Alert>项目中不存在容器 {name}，可能已被删除。</Alert>
+        <Alert>{t.projectContainers.page.notFound(name)}</Alert>
       </>
     );
   }
@@ -297,7 +300,7 @@ function ContainerDetail({
   }, [container.name]);
   const cfg = container.draft ?? container.config;
   const target = [{ container: container.name, baseRevision: container.revision }];
-  const kind = containerKind(container);
+  const isGroup = container.kind === "group";
   const serviceNames = [...new Set(services.map((s) => s.name))];
 
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) =>
@@ -306,38 +309,36 @@ function ContainerDetail({
   // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换容器的 data/。
   const upload = async (file: File) => {
     onView("overview");
-    setLines([`上传 ${file.name}（${(file.size / 1048576).toFixed(1)} MB）`]);
+    setLines([t.projectContainers.detail.uploading(file.name, (file.size / 1048576).toFixed(1))]);
     const q = new URLSearchParams({ project: project.id, container: container.name });
-    const res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1" }, body: file });
+    const res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: file });
     const body = await res.json();
     if (!res.ok) {
-      setLines((l) => [...l, "上传失败：" + body.message]);
+      setLines((l) => [...l, t.projectContainers.detail.uploadFailed(body.message)]);
       return;
     }
-    setLines((l) => [...l, `已上传 ${body.files} 个文件${body.stripped ? `（已去除顶层目录 ${body.stripped}/）` : ""}`]);
+    setLines((l) => [...l, t.projectContainers.detail.uploaded(body.files, body.stripped)]);
     await deploy({ useUpload: true }, true);
   };
 
   const remove = async (): Promise<boolean> => {
-    const deleteDir = confirm(
-      `删除${kind} ${container.name}？${kind === "容器组" ? "组内的容器" : "容器"}将被停止并删除。\n\n选择「确定」同时删除${kind}目录及其中的数据；选择「取消」仅删除容器并保留目录。`,
-    );
-    if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器？${kind}目录及其中的数据将保留。`)) return false;
+    const deleteDir = confirm(t.projectContainers.detail.deleteConfirm(isGroup, container.name));
+    if (!deleteDir && !confirm(t.projectContainers.detail.deleteContainersOnlyConfirm(isGroup, container.name))) return false;
     try {
       await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       return true;
     } catch (err) {
-      setLines(["删除失败：" + errorMessage(err)]);
+      setLines([t.projectContainers.detail.deleteFailed(errorMessage(err))]);
       return false;
     }
   };
 
   const summary = container.hasDraft
-    ? "存在未部署的草稿，部署时保存为新版本。"
+    ? t.projectContainers.detail.summaryDraft
     : container.deployedVersion > 0n
-      ? `当前运行版本 v${container.deployedVersion}。`
-      : "尚未部署。";
+      ? t.projectContainers.detail.summaryRunning(String(container.deployedVersion))
+      : t.projectContainers.detail.summaryNotDeployed;
 
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
@@ -350,16 +351,16 @@ function ContainerDetail({
           <>
             {container.name}
             <ProjectState services={services} deployed={container.deployedVersion > 0n} />
-            {container.hasDraft && <Badge tone="warning">草稿</Badge>}
-            {container.stateful && <Badge>有状态</Badge>}
+            {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
+            {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
           </>
         }
         meta={
           <>
-            <span>{kind === "容器组" ? "容器组（compose）" : "容器"}</span>
+            <span>{isGroup ? t.projectContainers.kind.groupCompose : t.projectContainers.kind.container}</span>
             <span>{node?.name ?? container.nodeId}</span>
             <span className="font-mono">{container.dir}</span>
-            <span>{summary + (container.sharedEnvOutdated ? "共享变量有更新，下次部署生效。" : "")}</span>
+            <span>{summary + (container.sharedEnvOutdated ? t.projectContainers.detail.sharedEnvOutdated : "")}</span>
           </>
         }
         actions={
@@ -377,27 +378,33 @@ function ContainerDetail({
             />
             {(!cfg?.form || cfg.form.workdir) && (
               <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
-                上传并部署
+                {t.projectContainers.detail.uploadDeploy}
               </Button>
             )}
             {cfg?.source?.gitUrl && (
               <Button variant="outline" size="sm" onClick={() => deploy({ pull: true })} disabled={busy}>
-                拉取并部署
+                {t.projectContainers.detail.pullDeploy}
               </Button>
             )}
             {hasImageUpdate && (
               <Button variant="outline" size="sm" onClick={() => deploy({ pullImages: true })} disabled={busy}>
-                更新镜像
+                {t.projectContainers.detail.updateImage}
               </Button>
             )}
             <Button size="sm" onClick={() => deploy({})} disabled={busy}>
               {busy ? <Spinner /> : <Rocket />}
-              {busy ? "部署中" : container.hasDraft ? "部署草稿" : container.deployedVersion > 0n ? "重新部署" : "部署"}
+              {busy
+                ? t.projectContainers.detail.deploying
+                : container.hasDraft
+                  ? t.projectContainers.detail.deployDraft
+                  : container.deployedVersion > 0n
+                    ? t.projectContainers.detail.redeploy
+                    : t.projectContainers.detail.deploy}
             </Button>
             <Menu
               items={[
                 {
-                  label: `删除${kind}`,
+                  label: t.projectContainers.detail.deleteKind(isGroup),
                   danger: true,
                   onSelect: async () => {
                     if (await remove()) navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
@@ -413,12 +420,12 @@ function ContainerDetail({
         value={view}
         onChange={onView}
         items={[
-          { value: "overview", label: "概览" },
-          { value: "config", label: "配置" },
-          { value: "versions", label: "版本" },
-          { value: "logs", label: "日志" },
-          { value: "terminal", label: "终端" },
-          { value: "data", label: "数据" },
+          { value: "overview", label: t.projectContainers.tabs.overview },
+          { value: "config", label: t.projectContainers.tabs.config },
+          { value: "versions", label: t.projectContainers.tabs.versions },
+          { value: "logs", label: t.projectContainers.tabs.logs },
+          { value: "terminal", label: t.projectContainers.tabs.terminal },
+          { value: "data", label: t.projectContainers.tabs.data },
         ]}
       />
       <div key={view} className="grid animate-fade-in gap-6">
@@ -452,35 +459,35 @@ function Overview({ project, container, services }: { project: Project; containe
     <div className="grid gap-5">
       {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
       {node && !node.online && (
-        <Notice tone="warning" title="节点离线">
-          容器所在节点 {node.name} 离线，状态可能未及时更新。
+        <Notice tone="warning" title={t.projectContainers.nodeOffline}>
+          {t.projectContainers.overview.nodeOfflineBody(node.name)}
         </Notice>
       )}
       {container.hostNetworkServices.length > 0 && (
-        <Notice tone="warning" title="使用 host 网络">
-          容器 {container.hostNetworkServices.join("、")} 不经过 Caddy，不在项目内网中，端口对外开放，需自行配置防火墙。
+        <Notice tone="warning" title={t.projectContainers.overview.hostNetworkTitle}>
+          {t.projectContainers.overview.hostNetworkBody(container.hostNetworkServices.join(t.projectContainers.listSeparator))}
         </Notice>
       )}
       {container.unmanagedVolumes.length > 0 && (
-        <Notice tone="warning" title="volume 未纳入快照">
-          {container.unmanagedVolumes.join("、")} 为 external 或使用自定义 driver，快照、迁移和顶替均不包含其数据。
+        <Notice tone="warning" title={t.projectContainers.badges.volumeUnmanaged}>
+          {t.projectContainers.overview.volumeBody(container.unmanagedVolumes.join(t.projectContainers.listSeparator))}
         </Notice>
       )}
       <div>
         <Table>
           <thead>
             <tr>
-              <Th>容器</Th>
-              <Th>状态</Th>
-              <Th>镜像</Th>
-              <Th>详情</Th>
+              <Th>{t.projectContainers.columns.container}</Th>
+              <Th>{t.projectContainers.columns.status}</Th>
+              <Th>{t.projectContainers.columns.image}</Th>
+              <Th>{t.projectContainers.columns.details}</Th>
             </tr>
           </thead>
           <tbody>
             {services.length === 0 ? (
               <tr>
                 <Td colSpan={4} className="text-center text-[13px] text-muted-foreground">
-                  尚未部署
+                  {t.projectContainers.overview.notDeployed}
                 </Td>
               </tr>
             ) : (
@@ -502,36 +509,36 @@ function Overview({ project, container, services }: { project: Project; containe
       </div>
       {cfg?.source?.gitUrl && (
         <div className="grid gap-3">
-          <h3 className="text-[13px] font-semibold">git 仓库</h3>
+          <h3 className="text-[13px] font-semibold">{t.projectContainers.overview.gitTitle}</h3>
           <KeyValue
             items={[
               [
-                "仓库",
+                t.projectContainers.overview.gitRepo,
                 <span className="font-mono">
                   {cfg.source.gitUrl}
                   {cfg.source.gitRef && ` @ ${cfg.source.gitRef}`}
                 </span>,
               ],
-              ["当前提交", <span className="font-mono">{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>],
+              [t.projectContainers.overview.gitCommit, <span className="font-mono">{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>],
               [
                 <span className="inline-flex items-center gap-1">deploy key</span>,
                 <div className="grid gap-1">
                   <CodeBlock copy>{container.deployKey}</CodeBlock>
-                  <span className="text-xs text-muted-foreground">需在仓库中添加为只读 deploy key。</span>
+                  <span className="text-xs text-muted-foreground">{t.projectContainers.overview.deployKeyHint}</span>
                 </div>,
               ],
               [
                 "webhook",
                 <div className="grid gap-1">
                   <CodeBlock copy>{`${location.origin}/hooks/${container.webhookToken}`}</CodeBlock>
-                  <span className="text-xs text-muted-foreground">推送后自动拉取并部署此容器。</span>
+                  <span className="text-xs text-muted-foreground">{t.projectContainers.overview.webhookHint}</span>
                 </div>,
               ],
             ]}
           />
         </div>
       )}
-      <Section title="监控" description="容器的资源占用。" actions={picker}>
+      <Section title={t.projectContainers.monitoring} description={t.projectContainers.overview.metricsDescription} actions={picker}>
         <ContainerMetrics projectId={project.id} nodeIds={project.containers.map((c) => c.nodeId)} container={container.name} range={range} />
       </Section>
     </div>
@@ -583,10 +590,10 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">实时日志，最近 {maxLines} 行</span>
+        <span className="text-[13px] text-muted-foreground">{t.projectContainers.logs.live(maxLines)}</span>
         {services.length > 1 && (
           <Select value={service} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]">
-            <option value="">全部容器</option>
+            <option value="">{t.projectContainers.logs.allContainers}</option>
             {services.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -605,7 +612,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         className="h-96 overflow-auto rounded-md bg-log p-3.5 font-mono text-xs leading-relaxed text-log-foreground"
       >
         {lines.length === 0 ? (
-          <span className="opacity-50">暂无日志</span>
+          <span className="opacity-50">{t.projectContainers.logs.empty}</span>
         ) : (
           lines.map((l) => (
             <div key={l.key} className="break-all whitespace-pre-wrap">
@@ -697,40 +704,52 @@ function ContainerConfig({ project, container, services }: { project: Project; c
         save();
       }}
     >
-      <Notice>修改保存为草稿，部署后生效。</Notice>
+      <Notice>{t.projectContainers.config.notice}</Notice>
       {isForm ? (
         imageForm.fields
       ) : (
-        <Field label="compose" htmlFor="edit-compose" help="ports 仅在首次出现时导入为端口映射；已有的对外端口和域名在「网络」标签页修改，此处修改 ports 不生效。">
+        <Field label="compose" htmlFor="edit-compose" help={t.projectContainers.config.composeHelp}>
           <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className="min-h-56 font-mono text-[13px]" />
         </Field>
       )}
       <div className="grid gap-4 border-t pt-5 sm:grid-cols-3">
         <Field
-          label="git 仓库"
+          label={t.projectContainers.config.git}
           htmlFor="edit-git"
           className="sm:col-span-2"
-          help="SSH 地址使用 deploy key 拉取；HTTPS 仅支持公开仓库。留空则由上传的文件提供 data/ 目录。"
+          help={t.projectContainers.config.gitHelp}
         >
           <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className="font-mono" />
         </Field>
-        <Field label="分支或标签" htmlFor="edit-ref" hint="留空则使用默认分支">
+        <Field label={t.projectContainers.config.ref} htmlFor="edit-ref" hint={t.projectContainers.config.refHint}>
           <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} className="font-mono" />
         </Field>
-        <Field label="保留路径" htmlFor="edit-preserve" className="sm:col-span-2" hint="相对 data/，每行一个" help="更新文件（上传或 git 拉取）时保留这些路径，例如用户上传的文件。">
+        <Field
+                  label={t.projectContainers.config.preserve}
+                  htmlFor="edit-preserve"
+                  className="sm:col-span-2"
+                  hint={t.projectContainers.config.preserveHint}
+                  help={t.projectContainers.config.preserveHelp}
+                >
           <Textarea id="edit-preserve" value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
         </Field>
-        <Field label="依赖" htmlFor="edit-deps" hint="容器名，逗号分隔" help="批量部署时，优先部署所列容器。">
+        <Field label={t.projectContainers.config.dependsOn} htmlFor="edit-deps" hint={t.projectContainers.config.dependsOnHint} help={t.projectContainers.config.dependsOnHelp}>
           <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
         </Field>
       </div>
       {!isForm && (
         <div className="grid gap-4 border-t pt-5">
-          <Field label="容器组变量" htmlFor="edit-env" hint="KEY=VALUE，每行一个" help="替换 compose 中的 ${变量}；与项目共享变量同名时，以此处为准。">
+          <Field label={t.projectContainers.config.groupEnv} htmlFor="edit-env" hint={t.projectContainers.config.envHint} help={t.projectContainers.config.groupEnvHelp}>
             <Textarea id="edit-env" value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
           </Field>
           {services.map((s) => (
-            <Field key={s} label={`环境变量：${s}`} htmlFor={`edit-env-${s}`} hint="KEY=VALUE，每行一个" help="仅注入此容器。">
+            <Field
+                          key={s}
+                          label={t.projectContainers.config.serviceEnv(s)}
+                          htmlFor={`edit-env-${s}`}
+                          hint={t.projectContainers.config.envHint}
+                          help={t.projectContainers.config.serviceEnvHelp}
+                        >
               <Textarea
                 id={`edit-env-${s}`}
                 value={serviceEnv[s] ?? ""}
@@ -744,15 +763,15 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       )}
       {error && <Alert>{error}</Alert>}
       <div className="flex items-center justify-end gap-2 pt-2">
-        {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存为草稿</span>}
+        {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.projectContainers.config.savedDraft}</span>}
         {container.hasDraft && (
           <Button variant="ghost" size="sm" onClick={discard} disabled={busy}>
-            放弃草稿
+            {t.projectContainers.config.discardDraft}
           </Button>
         )}
         <Button type="submit" size="sm" disabled={busy}>
           {busy && <Spinner />}
-          保存草稿
+          {t.projectContainers.config.saveDraft}
         </Button>
       </div>
     </form>
@@ -774,9 +793,9 @@ function Versions({ project, container, onRun }: { project: Project; container: 
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">每次部署生成一个版本。</span>
-        <Check checked={restoreData} onChange={setRestoreData} help="同时将 data/ 和 volumes/ 恢复为该版本部署前的快照。">
-          <span className="text-[13px]">回滚时恢复数据</span>
+        <span className="text-[13px] text-muted-foreground">{t.projectContainers.versions.intro}</span>
+        <Check checked={restoreData} onChange={setRestoreData} help={t.projectContainers.versions.restoreDataHelp}>
+          <span className="text-[13px]">{t.projectContainers.versions.restoreData}</span>
         </Check>
       </div>
       {output}
@@ -784,9 +803,9 @@ function Versions({ project, container, onRun }: { project: Project; container: 
         <Table>
           <thead>
             <tr>
-              <Th>版本</Th>
-              <Th>部署时间</Th>
-              <Th>镜像</Th>
+              <Th>{t.projectContainers.columns.version}</Th>
+              <Th>{t.projectContainers.columns.deployedAt}</Th>
+              <Th>{t.projectContainers.columns.image}</Th>
               <Th />
             </tr>
           </thead>
@@ -800,7 +819,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
             ) : versions.data?.versions.length === 0 ? (
               <tr>
                 <Td colSpan={4} className="text-center text-[13px] text-muted-foreground">
-                  暂无版本
+                  {t.projectContainers.versions.empty}
                 </Td>
               </tr>
             ) : (
@@ -810,13 +829,13 @@ function Versions({ project, container, onRun }: { project: Project; container: 
                     v{String(v.version)}
                     {v.version === container.deployedVersion && (
                       <Badge tone="success" className="ml-2">
-                        当前
+                        {t.projectContainers.versions.current}
                       </Badge>
                     )}
                   </Td>
                   <Td className="text-[13px] text-muted-foreground">
-                    {v.deployedAt ? timeAgo(toDate(v.deployedAt)) : "部署失败"}
-                    {v.rollbackOf > 0n && ` · 回滚自 v${v.rollbackOf}`}
+                    {v.deployedAt ? timeAgo(toDate(v.deployedAt)) : t.projectContainers.versions.deployFailed}
+                    {v.rollbackOf > 0n && t.projectContainers.versions.rollbackOf(String(v.rollbackOf))}
                     {v.commit && <span className="font-mono"> · {v.commit.slice(0, 8)}</span>}
                   </Td>
                   <Td className="max-w-80 truncate font-mono text-xs text-muted-foreground" title={Object.values(v.images).join(", ")}>
@@ -829,11 +848,11 @@ function Versions({ project, container, onRun }: { project: Project; container: 
                         variant="ghost"
                         disabled={busy}
                         onClick={() =>
-                          confirm(`将 ${container.name} 回滚到 v${v.version}？${restoreData ? "数据将同时恢复为该版本部署前的状态。" : "数据保持不变。"}`) &&
+                          confirm(t.projectContainers.versions.rollbackConfirm(container.name, String(v.version), restoreData)) &&
                           (onRun(), run(() => projectClient.rollback({ ...ref, version: v.version, restoreData })))
                         }
                       >
-                        回滚
+                        {t.projectContainers.versions.rollback}
                       </Button>
                     )}
                   </Td>
@@ -873,7 +892,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
   };
 
   return (
-    <Section title="添加容器" description="添加后不会自动部署。">
+    <Section title={t.projectContainers.add.title} description={t.projectContainers.add.description}>
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -882,10 +901,10 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
         }}
       >
         <Field
-          label="名称"
+          label={t.projectContainers.columns.name}
           htmlFor="new-container"
-          hint="小写字母、数字和 -，创建后不可修改"
-          help="单个容器在项目内网中以此名称访问；容器组内的容器以「容器.容器组名」访问。"
+          hint={t.projectContainers.add.nameHint}
+          help={t.projectContainers.add.nameHelp}
         >
           <Input id="new-container" value={name} onChange={(e) => setName(e.target.value)} required className="max-w-80 font-mono" placeholder="api" />
         </Field>
@@ -895,12 +914,12 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
         <div className="flex justify-end gap-2 pt-2">
           {project.containers.length > 0 && (
             <Button variant="ghost" size="sm" onClick={onClose}>
-              取消
+              {t.common.actions.cancel}
             </Button>
           )}
           <Button type="submit" size="sm" disabled={busy || !node.nodeId}>
             {busy && <Spinner />}
-            添加
+            {t.common.actions.add}
           </Button>
         </div>
       </form>

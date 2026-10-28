@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { SquareTerminal } from "lucide-react";
 import { Button, Notice, Select } from "@/components/ui";
+import { locale, t } from "@/i18n";
 
 // 容器终端：通过 WebSocket 连到面板，面板转发到节点上的 docker exec。
 export function TerminalView({ projectId, container, services }: { projectId: string; container: string; services: string[] }) {
@@ -26,11 +27,13 @@ export function TerminalView({ projectId, container, services }: { projectId: st
       service: selected,
       cols: String(term.cols),
       rows: String(term.rows),
+      // WebSocket 不能设置请求头，界面语言放在参数里，面板按它返回错误信息。
+      lang: locale,
     });
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/exec?${params}`);
     ws.binaryType = "arraybuffer";
     const enc = new TextEncoder();
-    setStatus("正在连接…");
+    setStatus(t.app.terminal.connecting);
     ws.onopen = () => {
       setStatus("");
       term.focus();
@@ -38,13 +41,13 @@ export function TerminalView({ projectId, container, services }: { projectId: st
     ws.onmessage = (e) => {
       if (typeof e.data === "string") {
         const msg = JSON.parse(e.data);
-        if (msg.type === "exit") setStatus(`进程已退出（退出码 ${msg.code}）`);
+        if (msg.type === "exit") setStatus(t.app.terminal.exited(msg.code));
         if (msg.type === "error") setStatus(msg.message);
         return;
       }
       term.write(new Uint8Array(e.data));
     };
-    ws.onclose = () => setStatus((s) => s || "连接已关闭");
+    ws.onclose = () => setStatus((s) => s || t.app.terminal.closed);
     const input = term.onData((d) => ws.readyState === WebSocket.OPEN && ws.send(enc.encode(d)));
     const onResize = () => {
       fit.fit();
@@ -62,7 +65,7 @@ export function TerminalView({ projectId, container, services }: { projectId: st
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">{services.length ? "在容器内打开 shell。" : "无运行中的容器。"}</span>
+        <span className="text-[13px] text-muted-foreground">{services.length ? t.app.terminal.intro : t.app.terminal.noRunning}</span>
         <div className="flex gap-2">
           {services.length > 1 && (
             <Select value={selected} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]">
@@ -75,7 +78,7 @@ export function TerminalView({ projectId, container, services }: { projectId: st
           )}
           <Button size="sm" variant="outline" onClick={() => setSession((n) => n + 1)} disabled={!selected}>
             <SquareTerminal />
-            {session ? "重新连接" : "连接"}
+            {session ? t.app.terminal.reconnect : t.app.terminal.connect}
           </Button>
         </div>
       </div>

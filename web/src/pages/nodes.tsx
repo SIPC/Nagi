@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus, Server } from "lucide-react";
 import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
+import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeMetrics, fmtBytes } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
@@ -14,10 +15,10 @@ import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
 export const nodeTabs: { value: NodeTab; label: string }[] = [
-  { value: "metrics", label: "监控" },
-  { value: "settings", label: "设置" },
-  { value: "replicas", label: "副本" },
-  { value: "panels", label: "受信面板" },
+  { value: "metrics", label: t.nodes.tabs.metrics },
+  { value: "settings", label: t.nodes.tabs.settings },
+  { value: "replicas", label: t.nodes.tabs.replicas },
+  { value: "panels", label: t.nodes.tabs.panels },
   { value: "mesh", label: "Mesh" },
 ];
 
@@ -26,14 +27,14 @@ function useNodeList() {
 }
 
 function NodeStatus({ n }: { n: Node }) {
-  if (n.pending) return <Status tone="warning">待批准</Status>;
-  if (n.online) return <Status tone="success">在线</Status>;
-  return <Status>离线</Status>;
+  if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
+  if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
+  return <Status>{t.common.status.offline}</Status>;
 }
 
 // approve 批准用接入码加入的节点。
 async function approve(n: Node) {
-  if (!confirm(`批准节点 ${n.name}（${n.address || n.id}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`)) return false;
+  if (!confirm(t.nodes.approveConfirm(n.name, n.address || n.id))) return false;
   await nodeClient.approveNode({ nodeId: n.id });
   return true;
 }
@@ -46,15 +47,15 @@ export function NodesPage() {
   return (
     <>
       <PageHeader
-        title="节点"
-        description="运行容器的机器，由节点主动连接面板；面板不可用时容器照常运行。"
+        title={t.nodes.title}
+        description={t.nodes.description}
         actions={
           <>
             <Button onClick={() => setDialog("add")}>
               <Plus />
-              添加节点
+              {t.nodes.addNode}
             </Button>
-            {list.length > 0 && <Menu items={[{ label: "移交给其他面板", onSelect: () => setDialog("handover") }]} />}
+            {list.length > 0 && <Menu items={[{ label: t.nodes.handover, onSelect: () => setDialog("handover") }]} />}
           </>
         }
       />
@@ -63,8 +64,8 @@ export function NodesPage() {
       ) : nodes.error ? (
         <Alert>{errorMessage(nodes.error)}</Alert>
       ) : list.length === 0 ? (
-        <Empty title="暂无节点" icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>添加节点</Button>}>
-          生成安装命令，在新机器上执行后即接入本面板。
+        <Empty title={t.nodes.empty} icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>{t.nodes.addNode}</Button>}>
+          {t.nodes.addNodeDescription}
         </Empty>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
@@ -73,10 +74,10 @@ export function NodesPage() {
           ))}
         </div>
       )}
-      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title="添加节点" description="生成安装命令，在新机器上执行后即接入本面板。">
+      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} description={t.nodes.addNodeDescription}>
         <AddNode />
       </Dialog>
-      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title="移交给其他面板" description="使用其他面板生成的接入码，将节点移交给该面板。">
+      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} description={t.nodes.handoverDescription}>
         <HandOver nodes={list} />
       </Dialog>
     </>
@@ -91,7 +92,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-[13px] font-medium group-hover:underline">{n.name}</span>
-            {n.info?.embedded && <Badge>面板内置</Badge>}
+            {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
           </div>
           <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
         </div>
@@ -100,7 +101,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
       <div className="grid flex-1 content-start gap-1.5 px-3.5 py-2.5">
         {n.pending ? (
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] text-muted-foreground">通过接入码加入，批准后可用。</span>
+            <span className="text-[13px] text-muted-foreground">{t.nodes.pendingHint}</span>
             <Button
               size="xs"
               variant="outline"
@@ -109,21 +110,21 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
                 if (await approve(n)) onApproved();
               }}
             >
-              批准
+              {t.nodes.approve}
             </Button>
           </div>
         ) : n.online ? (
           <>
             <Meter label="CPU" value={u?.cpu} />
-            <Meter label="内存" value={u?.memory} />
-            <Meter label="磁盘" value={u?.disk} />
+            <Meter label={t.nodes.memory} value={u?.memory} />
+            <Meter label={t.nodes.disk} value={u?.disk} />
           </>
         ) : (
-          <span className="text-[13px] text-muted-foreground">最后在线 {timeAgo(toDate(n.lastSeen))}</span>
+          <span className="text-[13px] text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
-        <span>{n.containers} 个容器</span>
+        <span>{t.nodes.containers(n.containers)}</span>
         <span className="truncate font-mono">
           {n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}
         </span>
@@ -142,13 +143,13 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   if (!n) {
     return (
       <>
-        <Breadcrumb items={[{ label: "节点", to: "/nodes" }]} />
-        <Alert>节点不存在</Alert>
+        <Breadcrumb items={[{ label: t.nodes.title, to: "/nodes" }]} />
+        <Alert>{t.nodes.notFound}</Alert>
       </>
     );
   }
   const remove = async () => {
-    if (!confirm(`移除节点 ${n.name}？面板将不再管理该节点并拒绝其重新连接，节点上的容器照常运行。`)) return;
+    if (!confirm(t.nodes.removeConfirm(n.name))) return;
     try {
       await nodeClient.removeNode({ nodeId: n.id });
       navigate({ to: "/nodes" });
@@ -158,13 +159,13 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   };
   return (
     <>
-      <Breadcrumb items={[{ label: "节点", to: "/nodes" }, { label: n.name }]} />
+      <Breadcrumb items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
       <PageHeader
         title={
           <>
             {n.name}
             <NodeStatus n={n} />
-            {n.info?.embedded && <Badge>面板内置</Badge>}
+            {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
           </>
         }
         meta={
@@ -181,8 +182,8 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                 <span className="font-mono">Nagi {n.info.version || "?"}</span>
               </>
             )}
-            <span>{n.containers} 个容器</span>
-            {!n.online && <span>最后在线 {timeAgo(toDate(n.lastSeen))}</span>}
+            <span>{t.nodes.containers(n.containers)}</span>
+            {!n.online && <span>{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>}
           </>
         }
         actions={
@@ -193,23 +194,23 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                   if (await approve(n)) nodes.refetch();
                 }}
               >
-                批准
+                {t.nodes.approve}
               </Button>
             )}
-            <Menu items={[{ label: "移除节点", onSelect: remove, danger: true }]} />
+            <Menu items={[{ label: t.nodes.removeNode, onSelect: remove, danger: true }]} />
           </>
         }
       />
       {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
-        <Notice tone="warning" title="待批准">
-          该节点通过接入码加入。请确认为自有机器后批准；批准前无法查看和操作。
+        <Notice tone="warning" title={t.common.status.pendingApproval}>
+          {t.nodes.pendingNotice}
         </Notice>
       ) : (
         <>
           <Tabs value={tab} onChange={onTab} items={nodeTabs} className="mb-6" />
           {!n.online ? (
-            <Notice title="节点离线">节点离线时无法查询监控、副本和 mesh 状态。</Notice>
+            <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
           ) : tab === "metrics" ? (
             <NodeMetrics nodeId={n.id} />
           ) : tab === "mesh" ? (
@@ -262,25 +263,25 @@ function AddNode() {
   return (
     <div className="grid gap-4">
       {error && <Alert>{error}</Alert>}
-      <Field label="面板对外地址" help="节点通过该地址连接面板，须可从节点访问。" htmlFor="public-address">
+      <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address">
         <div className="flex flex-wrap items-center gap-2">
           <Input id="public-address" className="w-56 font-mono" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
           <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
           {address !== null && (
             <Button size="sm" variant="outline" onClick={saveAddress}>
-              保存
+              {t.common.actions.save}
             </Button>
           )}
         </div>
       </Field>
       {command && (
-        <Field label="安装命令" hint="以 root 身份在新机器上执行" help="令牌仅可使用一次：每台机器一条命令，有效期 1 小时。">
+        <Field label={t.nodes.add.command} hint={t.nodes.add.commandHint} help={t.nodes.add.commandHelp}>
           <CodeBlock copy>{command}</CodeBlock>
         </Field>
       )}
       <div className="flex justify-end border-t pt-4">
         <Button size="sm" onClick={create}>
-          {command ? "重新生成" : "生成安装命令"}
+          {command ? t.nodes.add.regenerate : t.nodes.add.generate}
         </Button>
       </div>
     </div>
@@ -317,19 +318,19 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
       }}
     >
       <Field
-        label="项目根目录"
+        label={t.nodes.settings.root}
         htmlFor={`root-${nodeId}`}
-        hint="绝对路径"
-        help="新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。"
+        hint={t.nodes.settings.rootHint}
+        help={t.nodes.settings.rootHelp}
       >
         <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
       </Field>
       {error && <Alert>{error}</Alert>}
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={busy || !value.trim()}>
-          保存
+          {t.common.actions.save}
         </Button>
-        {saved && <span className="text-[13px] text-muted-foreground">已保存</span>}
+        {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
       </div>
     </form>
   );
@@ -343,7 +344,7 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const remove = async (projectId: string, container: string, label: string) => {
-    if (!confirm(`删除副本 ${label}？副本中的快照将被删除，且无法恢复。`)) return;
+    if (!confirm(t.nodes.replicas.deleteConfirm(label))) return;
     setError("");
     try {
       await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
@@ -354,10 +355,10 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
   };
   return (
     <div className="grid gap-3">
-      <p className="text-[13px] text-muted-foreground">本节点作为备份节点或热备保存的容器副本。</p>
+      <p className="text-[13px] text-muted-foreground">{t.nodes.replicas.intro}</p>
       {error && <Alert>{error}</Alert>}
       <div className="divide-y border-y">
-        {q.data.replicas.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">暂无副本</p>}
+        {q.data.replicas.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">{t.nodes.replicas.empty}</p>}
         {q.data.replicas.map(({ replica: r, inUse }) => {
           const label = `${r?.projectName || r?.projectId}/${r?.container}`;
           return (
@@ -365,15 +366,19 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[13px]">
                   <span className="font-medium">{label}</span>
-                  {!inUse && <Badge tone="warning">未使用</Badge>}
+                  {!inUse && <Badge tone="warning">{t.nodes.replicas.unused}</Badge>}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  来自 {r?.sourceName || "—"} · {fmtBytes(Number(r?.bytes ?? 0))} · 最近同步 {r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—"}
+                  {t.nodes.replicas.detail(
+                    r?.sourceName || "—",
+                    fmtBytes(Number(r?.bytes ?? 0)),
+                    r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—",
+                  )}
                 </div>
               </div>
               {!inUse && (
                 <Button size="xs" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
-                  删除
+                  {t.common.actions.delete}
                 </Button>
               )}
             </div>
@@ -389,7 +394,7 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
 function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: UnknownContainer[]; onDone: () => void }) {
   const [error, setError] = useState("");
   const adopt = async (u: UnknownContainer) => {
-    if (!confirm(`将容器 ${u.container} 加入项目 ${u.projectName}？容器按节点缓存中的配置加入，所在节点为本节点。请确认该容器为自行部署。`)) return;
+    if (!confirm(t.nodes.unknown.adoptConfirm(u.container, u.projectName))) return;
     setError("");
     try {
       await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
@@ -399,8 +404,8 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
     }
   };
   return (
-    <Notice tone="warning" title="未识别的容器" className="mb-6">
-      <p>以下容器的配置存在于节点上，但不在对应项目中（例如面板曾从备份恢复）。确认为自有容器后可加入项目；来源不明的容器请勿加入。</p>
+    <Notice tone="warning" title={t.nodes.unknown.title} className="mb-6">
+      <p>{t.nodes.unknown.text}</p>
       {error && <Alert className="mt-2">{error}</Alert>}
       <ul className="mt-2 grid gap-1.5">
         {list.map((u) => (
@@ -409,7 +414,7 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
               {u.projectName} / {u.container}
             </span>
             <Button size="xs" variant="outline" onClick={() => adopt(u)}>
-              加入项目
+              {t.nodes.unknown.adopt}
             </Button>
           </li>
         ))}

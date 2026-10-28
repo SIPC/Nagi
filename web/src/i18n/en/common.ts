@@ -1,0 +1,56 @@
+import type zh from "../zh/common";
+
+const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+
+export default {
+  status: {
+    running: "Running",
+    stopped: "Stopped",
+    restarting: "Restarting",
+    paused: "Paused",
+    created: "Created",
+    abnormal: "Error",
+    removing: "Removing",
+    notDeployed: "Not deployed",
+    unhealthy: "Unhealthy",
+    starting: "Starting",
+    partial: (running, total) => `Partially running ${running}/${total}`,
+    online: "Online",
+    offline: "Offline",
+    syncing: "Syncing",
+    pendingApproval: "Pending approval",
+  },
+  actions: {
+    save: "Save",
+    cancel: "Cancel",
+    delete: "Delete",
+    remove: "Remove",
+    confirm: "Confirm",
+    close: "Close",
+    copy: "Copy",
+    edit: "Edit",
+    add: "Add",
+    create: "Create",
+    refresh: "Refresh",
+    retry: "Retry",
+    more: "More actions",
+  },
+  feedback: {
+    loading: "Loading",
+    saved: "Saved",
+    copied: "Copied",
+    done: "Done",
+    failed: "Operation failed",
+  },
+  time: {
+    never: "Never",
+    justNow: "Just now",
+    seconds: (n) => plural(n, "second"),
+    minutes: (n) => plural(n, "minute"),
+    hours: (n) => plural(n, "hour"),
+    days: (n) => plural(n, "day"),
+  },
+  readOnlyHint: "This is a standby panel and is read-only. Make changes on the primary panel",
+  language: "Language",
+  switchLanguage: "Switch language",
+} satisfies typeof zh;

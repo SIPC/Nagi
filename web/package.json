@@ -5,7 +5,8 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc && vite build",
-        "typecheck": "tsc"
+        "typecheck": "tsc",
+        "check:i18n": "node scripts/check-i18n.mjs"
     },
     "dependencies": {
         "@bufbuild/protobuf": "^2.16.0",

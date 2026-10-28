@@ -1,0 +1,30 @@
+// 设置页「告警」：通知渠道和触发规则。
+export default {
+  savedAndPushed: "已保存并下发至在线节点",
+  testSent: (name: string) => `已发送测试消息至 ${name}`,
+  channels: "通知渠道",
+  lostTitle: "告警配置无法解密",
+  lostBody:
+    "面板主密钥已重新生成，原告警配置无法解密，请重新填写并保存。保存前各节点继续按原配置发送告警，但面板自身的节点失联告警无法发送。",
+  addChannel: "添加渠道",
+  noChannels: "未配置渠道，告警不会发送。",
+  name: "名称",
+  type: "类型",
+  target: "目标",
+  botToken: "机器人令牌",
+  chatId: "聊天 ID",
+  webhookUrl: "Webhook 地址",
+  test: "测试",
+  rules: "触发规则",
+  rulesHelp: "留空时使用默认值，即输入框中的灰色数字。",
+  rule: {
+    diskPercent: "磁盘使用率（%）",
+    memPercent: "内存使用率（%）",
+    memMinutes: "内存持续时间（分钟）",
+    restartCount: "重启次数",
+    restartMinutes: "重启统计窗口（分钟）",
+    certDays: "证书剩余天数",
+    offlineSeconds: "节点失联时间（秒）",
+    errorPercent: "5xx 错误率（%）",
+  },
+};

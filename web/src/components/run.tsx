@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "@/lib/api";
 import { Alert, LogBox, Notice } from "@/components/ui";
+import { t } from "@/i18n";
 
 // 执行一个会输出过程的操作（部署、回滚、快照……），显示输出和结果。
 
@@ -55,7 +56,10 @@ function appendLine(lines: string[], text: string): string[] {
 }
 
 // 需要用户注意的输出（端口没开放、自动加了映射）：单独列在结果上面，免得淹没在日志里。
-const noteLine = /未开放|已按配置里的端口添加映射|匿名卷/;
+// 匹配的是面板和节点输出的文字，两种语言都要认得（节点的输出还没有翻译，始终是中文）。
+// 改了面板上这几条的译文（internal/pkg/i18n/en.go）时要跟着改。
+const noteLine = /未开放|已按配置里的端口添加映射|匿名卷|not exposed|Added a port mapping from the config|anonymous volume/i; // i18n-ignore
+const warnLine = /未开放|匿名卷|not exposed|anonymous volume/i; // i18n-ignore
 
 function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   const outRef = useRef<HTMLPreElement>(null);
@@ -65,11 +69,11 @@ function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
   if (lines.length === 0 && !result) return null;
   return (
     <div className="grid gap-2">
-      {result && (result.success ? <Notice tone="success">已完成</Notice> : <Alert>{result.error || "操作失败"}</Alert>)}
+      {result && (result.success ? <Notice tone="success">{t.common.feedback.done}</Notice> : <Alert>{result.error || t.common.feedback.failed}</Alert>)}
       {lines
         .filter((l) => noteLine.test(l))
         .map((l, i) => (
-          <Notice key={i} tone={l.includes("未开放") || l.includes("匿名卷") ? "warning" : undefined}>
+          <Notice key={i} tone={warnLine.test(l) ? "warning" : undefined}>
             {l}
           </Notice>
         ))}

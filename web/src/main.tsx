@@ -18,6 +18,7 @@ import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages
 import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
+import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
 
 // 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
@@ -61,7 +62,8 @@ const appRoute = createRoute({
   id: "app",
   beforeLoad: async ({ context }) => {
     try {
-      await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: () => authClient.me({}), staleTime: 60_000 });
+      const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: () => authClient.me({}), staleTime: 60_000 });
+      adoptAccountLocale(me.language);
     } catch (err) {
       if (!isUnauthenticated(err)) throw err;
       const state = await setupClient.getSetupState({});

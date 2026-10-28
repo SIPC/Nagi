@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { Alert, Button, CodeBlock, EmptyRow, Section, Table, Td, Th } from "@/components/ui";
+import { formatTime } from "@/lib/utils";
+import { t } from "@/i18n";
 
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
 export function InviteCard() {
@@ -27,12 +29,12 @@ export function InviteCard() {
 
   return (
     <Section
-      title="接入码"
-      description="在原面板移交节点时使用；添加新机器使用节点页的「添加节点」。"
-      help="接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点须在节点页批准后方可使用，以防接入码泄露后被他人利用。"
+      title={t.invite.title}
+      description={t.invite.description}
+      help={t.invite.help}
       actions={
         <Button size="sm" onClick={create}>
-          生成接入码
+          {t.invite.generate}
         </Button>
       }
       flush
@@ -43,7 +45,7 @@ export function InviteCard() {
           {code && (
             <>
               <p className="text-[13px] text-muted-foreground">
-                在原面板移交节点时粘贴此接入码，或在节点上执行 <span className="font-mono">nagi panel add &lt;接入码&gt;</span>。
+                {t.invite.pasteHint(<span className="font-mono">{t.invite.command}</span>)}
               </p>
               <CodeBlock copy>{code}</CodeBlock>
             </>
@@ -54,9 +56,9 @@ export function InviteCard() {
         <Table>
           <thead>
             <tr>
-              <Th>接入码 ID</Th>
-              <Th>使用次数</Th>
-              <Th>到期时间</Th>
+              <Th>{t.invite.id}</Th>
+              <Th>{t.invite.uses}</Th>
+              <Th>{t.invite.expires}</Th>
               <Th className="w-px" />
             </tr>
           </thead>
@@ -64,8 +66,8 @@ export function InviteCard() {
             {list.map((i) => (
               <tr key={i.id}>
                 <Td className="font-mono text-xs">{i.id}</Td>
-                <Td className="text-[13px]">{i.uses} 次</Td>
-                <Td className="text-[13px] text-muted-foreground">{toDate(i.expiresAt)?.toLocaleTimeString()}</Td>
+                <Td className="text-[13px]">{t.invite.usesCount(i.uses)}</Td>
+                <Td className="text-[13px] text-muted-foreground">{formatTime(toDate(i.expiresAt))}</Td>
                 <Td>
                   <div className="flex justify-end">
                     <Button
@@ -78,7 +80,7 @@ export function InviteCard() {
                         invites.refetch();
                       }}
                     >
-                      作废
+                      {t.invite.revoke}
                     </Button>
                   </div>
                 </Td>
@@ -87,7 +89,7 @@ export function InviteCard() {
           </tbody>
         </Table>
       ) : (
-        <EmptyRow>暂无有效的接入码</EmptyRow>
+        <EmptyRow>{t.invite.empty}</EmptyRow>
       )}
     </Section>
   );

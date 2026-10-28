@@ -7,16 +7,19 @@ import { errorMessage, nodeClient } from "@/lib/api";
 import { Alert, EmptyRow, Loading, Segmented } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
+import { locale, t } from "@/i18n";
+
+const m = t.metrics;
 
 // 监控：节点、项目、容器和端口映射的指标。可选时间范围，节点按范围对应的步长聚合后返回，每条序列不超过约 180 个点。
 
 // 时间范围和对应的聚合步长（秒）。24 小时以内节点有 10 秒精度的数据，更长的只有 5 分钟精度。
 export const metricRanges = [
-  { value: "1h", label: "1 小时", seconds: 3600, step: 20 },
-  { value: "6h", label: "6 小时", seconds: 6 * 3600, step: 120 },
-  { value: "24h", label: "24 小时", seconds: 86400, step: 600 },
-  { value: "7d", label: "7 天", seconds: 7 * 86400, step: 3600 },
-  { value: "30d", label: "30 天", seconds: 30 * 86400, step: 14400 },
+  { value: "1h", label: m.ranges["1h"], seconds: 3600, step: 20 },
+  { value: "6h", label: m.ranges["6h"], seconds: 6 * 3600, step: 120 },
+  { value: "24h", label: m.ranges["24h"], seconds: 86400, step: 600 },
+  { value: "7d", label: m.ranges["7d"], seconds: 7 * 86400, step: 3600 },
+  { value: "30d", label: m.ranges["30d"], seconds: 30 * 86400, step: 14400 },
 ] as const;
 export type MetricRange = (typeof metricRanges)[number]["value"];
 const rangeOf = (r: MetricRange) => metricRanges.find((x) => x.value === r)!;
@@ -95,24 +98,24 @@ function NodeMetricCards({ nodeId, range }: { nodeId: string; range: MetricRange
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {metric("CPU", "node:cpu", fmtCpu)}
-      {metric("内存", "node:mem", fmtCpu)}
-      {metric("磁盘", "node:disk", fmtCpu)}
-      {metric("下行", "node:net_rx", fmtRate)}
-      {metric("上行", "node:net_tx", fmtRate)}
+      {metric(m.memory, "node:mem", fmtCpu)}
+      {metric(m.disk, "node:disk", fmtCpu)}
+      {metric(m.netRx, "node:net_rx", fmtRate)}
+      {metric(m.netTx, "node:net_tx", fmtRate)}
     </div>
   );
 }
 
 const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
-const fmtCount = (v: number) => `${Math.round(v).toLocaleString()} 次`;
+const fmtCount = (v: number) => m.count(Math.round(v).toLocaleString(locale));
 
 const containerMetricFormat: Record<string, [string, (v: number) => string]> = {
   cpu: ["CPU", (v) => fmtCpu(v)],
-  mem: ["内存", fmtBytes],
-  net_rx: ["下行", fmtRate],
-  net_tx: ["上行", fmtRate],
-  restarts: ["重启次数", (v) => String(v)],
+  mem: [m.memory, fmtBytes],
+  net_rx: [m.netRx, fmtRate],
+  net_tx: [m.netTx, fmtRate],
+  restarts: [m.restarts, (v) => String(v)],
 };
 
 // useProjectMetrics 取项目在时间范围内的容器、容器资源上限和端口映射（http）监控。监控数据存在容器所在的节点上，逐个节点查询。
@@ -227,7 +230,7 @@ export function UsageBars({ usage, memFallback, className }: { usage?: Usage; me
         icon={<MemoryStick />}
         ratio={mem}
         value={usage ? fmtBytesShort(usage.mem) : "—"}
-        title={!usage ? "内存 —" : usage.memLimit ? `内存 ${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : `内存 ${fmtBytes(usage.mem)}`}
+        title={m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem))}
         fill={usage?.memLimit ? tone(mem) : "bg-info"}
       />
     </span>
@@ -277,7 +280,7 @@ function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]
 // ProjectMetrics：项目概览里的监控。各容器的占用在项目栏和容器页里看，这里只给所有容器的合计和各端口映射的请求情况。
 export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[]; projectId: string; range: MetricRange }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
-  if (nodeIds.length === 0) return <EmptyRow>暂无数据</EmptyRow>;
+  if (nodeIds.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const byMetric = new Map<string, MetricSeries[]>();
@@ -293,10 +296,10 @@ export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[
   }
   const order = ["cpu", "mem", "net_rx", "net_tx"];
   const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
-  if (total.size === 0 && routes.size === 0) return <EmptyRow>暂无数据</EmptyRow>;
+  if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
     <div className="grid gap-8">
-      {total.size > 0 && <MetricGroups groups={[["全部容器合计", total]]} range={range} />}
+      {total.size > 0 && <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />}
       {[...routes.entries()].map(([name, data]) => (
         <RouteMetrics key={name} name={name} data={data} range={range} />
       ))}
@@ -314,14 +317,14 @@ const statusSeries = [
   { metric: "5xx", label: "5xx", className: "text-destructive" },
 ];
 const latencySeries = [
-  { metric: "lat", label: "平均", className: "text-muted-foreground" },
+  { metric: "lat", label: m.average, className: "text-muted-foreground" },
   { metric: "p50", label: "P50", className: "text-info" },
   { metric: "p95", label: "P95", className: "text-warning" },
   { metric: "p99", label: "P99", className: "text-destructive" },
 ];
 const trafficSeries = [
-  { metric: "in", label: "入站", className: "text-info" },
-  { metric: "out", label: "出站", className: "text-success" },
+  { metric: "in", label: m.inbound, className: "text-info" },
+  { metric: "out", label: m.outbound, className: "text-success" },
 ];
 
 // RouteMetrics：一条端口映射的请求情况。上面是时间范围内的汇总，下面是三张图：按状态码堆叠的请求数、耗时分位数、流量。
@@ -352,12 +355,12 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
   const hasClasses = statusSeries.some((s) => data.has(s.metric) && s.metric !== "5xx");
 
   const stats: { label: string; value: string; title?: string }[] = [
-    { label: "请求", value: fmtCount(requests), title: `平均 ${(requests / r.seconds).toFixed(2)}/s` },
-    { label: "错误率", value: requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—", title: `5xx ${fmtCount(errors)}` },
-    { label: "平均耗时", value: lat === undefined ? "—" : fmtMs(lat) },
+    { label: m.requests, value: fmtCount(requests), title: m.requestsAvgTitle((requests / r.seconds).toFixed(2)) },
+    { label: m.errorRate, value: requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—", title: `5xx ${fmtCount(errors)}` },
+    { label: m.avgLatency, value: lat === undefined ? "—" : fmtMs(lat) },
   ];
-  if (data.has("p95")) stats.push({ label: "P95 耗时", value: p95 === undefined ? "—" : fmtMs(p95), title: "各时段 P95 按请求数加权平均" });
-  if (data.has("in")) stats.push({ label: "入站流量", value: fmtBytes(sum("in")) }, { label: "出站流量", value: fmtBytes(sum("out")) });
+  if (data.has("p95")) stats.push({ label: m.p95Latency, value: p95 === undefined ? "—" : fmtMs(p95), title: m.p95Title });
+  if (data.has("in")) stats.push({ label: m.inboundTraffic, value: fmtBytes(sum("in")) }, { label: m.outboundTraffic, value: fmtBytes(sum("out")) });
 
   const pick = (defs: { metric: string; label: string; className: string }[], conv: (m: string) => Pt[]): ChartSeries[] =>
     defs.filter((d) => data.has(d.metric)).map((d) => ({ label: d.label, className: d.className, points: conv(d.metric) }));
@@ -374,7 +377,7 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
 
   return (
     <div className="grid gap-3">
-      <div className="font-mono text-xs text-muted-foreground">端口映射 {name}</div>
+      <div className="font-mono text-xs text-muted-foreground">{m.portMapping(name)}</div>
       <dl className={cn("grid grid-cols-3 gap-px overflow-hidden rounded-md bg-border", stats.length === 6 && "sm:grid-cols-6")}>
         {stats.map((s) => (
           <div key={s.label} className="grid gap-0.5 bg-subtle px-3 py-2" title={s.title}>
@@ -385,13 +388,13 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
       </dl>
       <div className="grid gap-3 lg:grid-cols-3">
         {chart(
-          hasClasses ? "请求数（按状态码）" : "请求数",
-          hasClasses ? pick(statusSeries, counts) : [{ label: "请求", className: "text-info", points: counts("req") }],
+          hasClasses ? m.requestCountByStatus : m.requestCount,
+          hasClasses ? pick(statusSeries, counts) : [{ label: m.requests, className: "text-info", points: counts("req") }],
           fmtCount,
           true,
         )}
-        {chart("耗时", pick(latencySeries, get), fmtMs)}
-        {chart("流量", pick(trafficSeries, get), fmtRate)}
+        {chart(m.latency, pick(latencySeries, get), fmtMs)}
+        {chart(m.traffic, pick(trafficSeries, get), fmtRate)}
       </div>
     </div>
   );
@@ -410,7 +413,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
     if (!services.has(service)) services.set(service, new Map());
     services.get(service)!.set(metric, toPoints(s));
   }
-  if (services.size === 0) return <EmptyRow>暂无数据</EmptyRow>;
+  if (services.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   // 单个容器（只有一个服务）不再重复名称。
   const groups = [...services.entries()].map(([name, m]): [string, Map<string, Pt[]>] => [services.size > 1 ? name : "", m]);
   return <MetricGroups groups={groups} range={range} />;

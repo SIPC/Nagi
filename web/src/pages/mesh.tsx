@@ -4,15 +4,17 @@ import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
 import { Alert, Button, Loading, Section, Status, Table, Td, Th } from "@/components/ui";
+import { formatTime } from "@/lib/utils";
+import { t } from "@/i18n";
 
 // ---- mesh 状态 ----
 
 const pathLabel: Record<string, string> = {
-  direct: "UDP 直连",
-  link: "控制连接",
-  "udp-relay": "UDP 经面板中转",
-  "tls-relay": "TLS 经面板中转",
-  none: "不可达",
+  direct: t.mesh.path.direct,
+  link: t.mesh.path.link,
+  "udp-relay": t.mesh.path.udpRelay,
+  "tls-relay": t.mesh.path.tlsRelay,
+  none: t.mesh.path.none,
 };
 
 // MeshSummary：本端在 mesh 中的地址、端口和直连地址。
@@ -20,13 +22,13 @@ function MeshSummary({ status }: { status: MeshStatus }) {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-muted-foreground">
       <span>
-        地址 <span className="font-mono text-foreground">{status.address}</span>
+        {t.mesh.address} <span className="font-mono text-foreground">{status.address}</span>
       </span>
       <span>
-        UDP 端口 <span className="font-mono text-foreground">{status.port}</span>
+        {t.mesh.udpPort} <span className="font-mono text-foreground">{status.port}</span>
       </span>
       <span>
-        直连地址 <span className="font-mono text-foreground">{status.endpoints.join(", ") || "—"}</span>
+        {t.mesh.endpoints} <span className="font-mono text-foreground">{status.endpoints.join(", ") || "—"}</span>
       </span>
     </div>
   );
@@ -39,10 +41,10 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
     <Table>
       <thead>
         <tr>
-          <Th>节点 / 面板</Th>
-          <Th>路径</Th>
-          <Th>最近握手</Th>
-          <Th>接收 / 发送</Th>
+          <Th>{t.mesh.peer}</Th>
+          <Th>{t.mesh.pathColumn}</Th>
+          <Th>{t.mesh.lastHandshake}</Th>
+          <Th>{t.mesh.rxTx}</Th>
           {nodeId && <Th />}
         </tr>
       </thead>
@@ -50,7 +52,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
         {status.peers.length === 0 && (
           <tr>
             <Td colSpan={nodeId ? 5 : 4} className="py-6 text-center text-[13px] text-muted-foreground">
-              暂无连接
+              {t.mesh.noPeers}
             </Td>
           </tr>
         )}
@@ -69,7 +71,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
                   {p.path === "direct" && ` · ${p.rttMs.toFixed(1)} ms`}
                 </div>
               </Td>
-              <Td className="text-[13px] text-muted-foreground">{toDate(p.lastHandshake)?.toLocaleTimeString() ?? "—"}</Td>
+              <Td className="text-[13px] text-muted-foreground">{formatTime(toDate(p.lastHandshake)) ?? "—"}</Td>
               <Td className="font-mono text-xs whitespace-nowrap text-muted-foreground">
                 {fmtBytes(Number(p.rxBytes))} / {fmtBytes(Number(p.txBytes))}
               </Td>
@@ -130,8 +132,8 @@ export function PanelMeshCard() {
   });
   return (
     <Section
-      title="连接"
-      help="节点之间、节点与面板之间优先使用 UDP 直连；无法直连时经面板中转。"
+      title={t.mesh.title}
+      help={t.mesh.help}
       flush
     >
       {q.isPending ? (

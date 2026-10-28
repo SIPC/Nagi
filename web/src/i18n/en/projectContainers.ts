@@ -1,0 +1,153 @@
+import type zh from "../zh/projectContainers";
+
+export default {
+  kind: {
+    container: "Container",
+    group: "Container group",
+    groupCompose: "Container group (compose)",
+  },
+  listSeparator: ", ",
+  tabs: {
+    overview: "Overview",
+    config: "Config",
+    versions: "Versions",
+    logs: "Logs",
+    terminal: "Terminal",
+    data: "Data",
+  },
+  columns: {
+    name: "Name",
+    node: "Node",
+    status: "Status",
+    usage: "CPU / memory",
+    version: "Version",
+    address: "Network address",
+    container: "Container",
+    image: "Image",
+    details: "Details",
+    deployedAt: "Deployed",
+  },
+  badges: {
+    draft: "Draft",
+    sharedEnvPending: "Shared variables pending",
+    stateful: "Stateful",
+    hostNetwork: "host network",
+    volumeUnmanaged: "Volume not in snapshots",
+  },
+  nodeOffline: "Node offline",
+  monitoring: "Monitoring",
+  imageUpdates: {
+    title: "New image versions available",
+    item: (container, service, image) => `${container}/${service} (${image})`,
+    body: (list) => `${list}. Choose "Update image" on the container page to pull and deploy.`,
+  },
+  projectMetrics: {
+    description: "Combined resource usage of all containers and requests to port mappings.",
+    help: "Per-container metrics are on each container page. In latency charts, P95 and P99 show the maximum within each interval; other metrics show the average.",
+  },
+  table: {
+    title: "Containers",
+    descriptionNarrow: "Select a container to view details. Check several to deploy them together.",
+    descriptionWide: "Select a container in the project sidebar to view details.",
+    help: "Batch deployment deploys the selected containers in dependency order and creates a single deployment history entry.",
+    addContainer: "Add container",
+    changedTitle: (names) => `Containers with drafts, changed shared variables, or not yet deployed: ${names}`,
+    deployChanged: (n) => `Deploy all changes (${n})`,
+    deploySelected: (n) => `Deploy selected (${n})`,
+    empty: "No containers",
+    select: (name) => `Select ${name}`,
+    latest: (v) => ` / latest v${v}`,
+  },
+  page: {
+    projects: "Projects",
+    notFound: (name) => `Container ${name} does not exist in this project. It may have been deleted.`,
+  },
+  detail: {
+    uploading: (name, size) => `Uploading ${name} (${size} MB)`,
+    uploadFailed: (msg) => `Upload failed: ${msg}`,
+    uploaded: (files, stripped) =>
+      `Uploaded ${files === 1 ? "1 file" : `${files} files`}${stripped ? ` (removed top-level directory ${stripped}/)` : ""}`,
+    deleteConfirm: (group, name) => {
+      const kind = group ? "container group" : "container";
+      return `Delete ${kind} ${name}? ${group ? "Its containers" : "The container"} will be stopped and removed.\n\nChoose OK to also delete the ${kind} directory and its data. Choose Cancel to remove only the containers and keep the directory.`;
+    },
+    deleteContainersOnlyConfirm: (group, name) => {
+      const kind = group ? "container group" : "container";
+      return `Remove only the containers of ${kind} ${name}? The ${kind} directory and its data will be kept.`;
+    },
+    deleteFailed: (msg) => `Delete failed: ${msg}`,
+    deleteKind: (group) => (group ? "Delete container group" : "Delete container"),
+    summaryDraft: "Has an undeployed draft, saved as a new version on deploy.",
+    summaryRunning: (v) => `Running version v${v}.`,
+    summaryNotDeployed: "Not deployed yet.",
+    sharedEnvOutdated: " Shared variables changed and take effect on the next deployment.",
+    uploadDeploy: "Upload and deploy",
+    pullDeploy: "Pull and deploy",
+    updateImage: "Update image",
+    deploying: "Deploying",
+    deployDraft: "Deploy draft",
+    redeploy: "Redeploy",
+    deploy: "Deploy",
+  },
+  overview: {
+    nodeOfflineBody: (node) => `Node ${node} hosting this container is offline. Status may be out of date.`,
+    hostNetworkTitle: "Uses host network",
+    hostNetworkBody: (names) =>
+      `Not routed through Caddy and not on the project network: ${names}. Their ports are publicly exposed; configure a firewall yourself.`,
+    volumeBody: (names) =>
+      `External or custom-driver volumes: ${names}. Snapshots, migration, and failover do not include their data.`,
+    notDeployed: "Not deployed yet",
+    gitTitle: "Git repository",
+    gitRepo: "Repository",
+    gitCommit: "Current commit",
+    deployKeyHint: "Add this to the repository as a read-only deploy key.",
+    webhookHint: "Pushes automatically pull and deploy this container.",
+    metricsDescription: "Resource usage of the container.",
+  },
+  logs: {
+    live: (n) => `Live logs, last ${n} lines`,
+    allContainers: "All containers",
+    empty: "No logs",
+  },
+  config: {
+    notice: "Changes are saved as a draft and take effect after deployment.",
+    composeHelp:
+      "ports are imported as port mappings only when they first appear. Change existing published ports and domains in the Network tab; editing ports here has no effect.",
+    git: "Git repository",
+    gitHelp: "SSH URLs are pulled with the deploy key; HTTPS supports public repositories only. Leave empty to provide the data/ directory by upload.",
+    ref: "Branch or tag",
+    refHint: "Leave empty for the default branch",
+    preserve: "Preserved paths",
+    preserveHint: "Relative to data/, one per line",
+    preserveHelp: "Kept when files are updated (upload or Git pull), e.g. user-uploaded files.",
+    dependsOn: "Dependencies",
+    dependsOnHint: "Container names, comma-separated",
+    dependsOnHelp: "Listed containers are deployed first in batch deployments.",
+    groupEnv: "Container group variables",
+    envHint: "KEY=VALUE, one per line",
+    groupEnvHelp: "Replaces ${VAR} in compose. Takes precedence over project shared variables with the same name.",
+    serviceEnv: (service) => `Environment variables: ${service}`,
+    serviceEnvHelp: "Injected into this container only.",
+    savedDraft: "Saved as draft",
+    discardDraft: "Discard draft",
+    saveDraft: "Save draft",
+  },
+  versions: {
+    intro: "Each deployment creates a version.",
+    restoreData: "Restore data on rollback",
+    restoreDataHelp: "Also restores data/ and volumes/ to the snapshot taken before this version was deployed.",
+    empty: "No versions",
+    current: "Current",
+    deployFailed: "Deployment failed",
+    rollbackOf: (v) => ` · rollback of v${v}`,
+    rollbackConfirm: (name, v, restoreData) =>
+      `Roll back ${name} to v${v}? ${restoreData ? "Data will also be restored to its state before this version was deployed." : "Data stays unchanged."}`,
+    rollback: "Roll back",
+  },
+  add: {
+    title: "Add container",
+    description: "Containers are not deployed automatically after being added.",
+    nameHint: "Lowercase letters, digits, and -. Cannot be changed later",
+    nameHelp: "A single container is reachable on the project network by this name; containers in a container group are reachable as <container>.<group name>.",
+  },
+} satisfies typeof zh;

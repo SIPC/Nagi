@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { renderSVG } from "uqr";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { Alert, Badge, Button, CodeBlock, Field, Input, SettingRow, SettingRows } from "@/components/ui";
+import { t } from "@/i18n";
 
 type Scope = "password" | "totp" | "entrance";
 
@@ -47,21 +48,21 @@ export function SecurityCard() {
     <SettingRows>
       {keyPath && (
         <SettingRow
-          label="面板主密钥"
-          description="用于加密配置备份密钥、两步验证密钥和告警令牌，请单独备份。"
-          help="主密钥丢失后，即使在其他机器上恢复面板数据库，上述密钥也无法解密。"
+          label={t.security.masterKey.label}
+          description={t.security.masterKey.description}
+          help={t.security.masterKey.help}
         >
           <CodeBlock copy>{keyPath}</CodeBlock>
         </SettingRow>
       )}
 
-      <SettingRow label="登录密码" description="修改后其他会话将退出登录。" help="忘记密码时，在面板所在机器上执行 nagi reset password。">
+      <SettingRow label={t.security.password.label} description={t.security.password.description} help={t.security.password.help}>
         <div className="grid max-w-sm gap-3">
           {feedback("password")}
-          <Field label="当前密码" htmlFor="sec-cur">
+          <Field label={t.security.password.current} htmlFor="sec-cur">
             <Input id="sec-cur" type="password" value={cur} onChange={(e) => setCur(e.target.value)} />
           </Field>
-          <Field label="新密码" htmlFor="sec-next" hint="至少 8 个字符">
+          <Field label={t.security.password.newPassword} htmlFor="sec-next" hint={t.security.password.hint}>
             <Input id="sec-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
           </Field>
           <div>
@@ -75,11 +76,11 @@ export function SecurityCard() {
                       current: cur,
                       newPassword: next,
                     }),
-                  "已修改密码，其他会话已退出登录",
+                  t.security.password.changed,
                 )
               }
             >
-              修改密码
+              {t.security.password.submit}
             </Button>
           </div>
         </div>
@@ -88,18 +89,18 @@ export function SecurityCard() {
       <SettingRow
         label={
           <>
-            两步验证 {s?.totpEnabled ? <Badge tone="success">已开启</Badge> : <Badge>未开启</Badge>}
+            {t.security.totp.label} {s?.totpEnabled ? <Badge tone="success">{t.security.totp.enabled}</Badge> : <Badge>{t.security.totp.disabled}</Badge>}
           </>
         }
-        description="登录时额外校验验证器应用生成的 6 位验证码。"
-        help="丢失验证器时，在面板所在机器上执行 nagi reset 2fa。"
+        description={t.security.totp.description}
+        help={t.security.totp.help}
       >
         <div className="grid gap-4">
           {feedback("totp")}
           {!s?.totpEnabled && !setup && (
             <div>
               <Button size="sm" variant="outline" onClick={() => run("totp", async () => setSetup(await settingsClient.beginTOTP({})), "")}>
-                开启两步验证
+                {t.security.totp.enable}
               </Button>
             </div>
           )}
@@ -110,15 +111,15 @@ export function SecurityCard() {
                 <div
                   className="size-36 shrink-0 rounded-md bg-white p-1.5 [&_svg]:size-full"
                   role="img"
-                  aria-label="两步验证二维码"
+                  aria-label={t.security.totp.qrCode}
                   dangerouslySetInnerHTML={{ __html: renderSVG(setup.uri, { border: 1 }) }}
                 />
                 <div className="grid min-w-0 flex-1 gap-3">
-                  <p className="text-[13px] text-muted-foreground">使用验证器应用（如 Google Authenticator、1Password）扫描二维码；无法扫码时可手动输入密钥。</p>
+                  <p className="text-[13px] text-muted-foreground">{t.security.totp.scanHint}</p>
                   <CodeBlock copy>{setup.secret}</CodeBlock>
                 </div>
               </div>
-              <Field label="验证码" htmlFor="totp-enable" hint="6 位数字">
+              <Field label={t.security.totp.code} htmlFor="totp-enable" hint={t.security.totp.codeHint}>
                 <Input id="totp-enable" className="w-40 font-mono" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
               </Field>
               <div className="flex gap-2">
@@ -132,11 +133,11 @@ export function SecurityCard() {
                         setSetup(null);
                         setCode("");
                       },
-                      "已开启两步验证，其他会话已退出登录",
+                      t.security.totp.enabledMsg,
                     )
                   }
                 >
-                  确认开启
+                  {t.security.totp.confirmEnable}
                 </Button>
                 <Button
                   size="sm"
@@ -146,20 +147,20 @@ export function SecurityCard() {
                     setCode("");
                   }}
                 >
-                  取消
+                  {t.common.actions.cancel}
                 </Button>
               </div>
             </>
           )}
           {s?.totpEnabled && (
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="验证码或登录密码" htmlFor="totp-disable" help="关闭两步验证前需验证身份：输入验证器应用当前的 6 位验证码；验证器丢失时输入登录密码。">
+              <Field label={t.security.totp.disableLabel} htmlFor="totp-disable" help={t.security.totp.disableHelp}>
                 <Input
                   id="totp-disable"
                   type={/^\d{0,6}$/.test(code) ? "text" : "password"}
                   autoComplete="off"
                   className="h-8 w-48 font-mono"
-                  placeholder="000000 或密码"
+                  placeholder={t.security.totp.disablePlaceholder}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                 />
@@ -172,29 +173,29 @@ export function SecurityCard() {
                     "totp",
                     // 6 位数字按验证码，其余按登录密码。
                     () => settingsClient.disableTOTP(/^\d{6}$/.test(code.trim()) ? { code: code.trim() } : { password: code }),
-                    "已关闭两步验证",
+                    t.security.totp.disabledMsg,
                   )
                 }
               >
-                关闭两步验证
+                {t.security.totp.disable}
               </Button>
             </div>
           )}
         </div>
       </SettingRow>
 
-      <SettingRow label="安全入口" description="开启后须通过入口地址访问登录页。" help="忘记入口地址时，在面板所在机器上执行 nagi reset entrance。">
+      <SettingRow label={t.security.entrance.label} description={t.security.entrance.description} help={t.security.entrance.help}>
         <div className="grid gap-3">
           {feedback("entrance")}
           {s?.entrance && <CodeBlock copy>{`${window.location.origin}/${s.entrance}`}</CodeBlock>}
           <div>
             {s?.entrance ? (
-              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: false }), "已关闭安全入口")}>
-                关闭安全入口
+              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: false }), t.security.entrance.disabledMsg)}>
+                {t.security.entrance.disable}
               </Button>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: true }), "已开启安全入口，请记录入口地址")}>
-                开启安全入口
+              <Button size="sm" variant="outline" onClick={() => run("entrance", () => settingsClient.setEntrance({ enabled: true }), t.security.entrance.enabledMsg)}>
+                {t.security.entrance.enable}
               </Button>
             )}
           </div>

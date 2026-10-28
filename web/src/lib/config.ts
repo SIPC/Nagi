@@ -1,6 +1,7 @@
 // 测试界面用的简单转换：环境变量用 KEY=VALUE 每行一个的文本编辑。
 import { create } from "@bufbuild/protobuf";
 import { EnvVarSchema, PortMappingSchema, type EnvVar, type PortMapping } from "@/gen/nagi/v1/common_pb";
+import { t } from "@/i18n";
 
 export function envToText(vars: EnvVar[] | undefined): string {
   return (vars ?? []).map((v) => `${v.key}=${v.value}`).join("\n");
@@ -34,11 +35,11 @@ export function textToPorts(text: string): PortMapping[] {
 export function checkPorts(text: string): string {
   for (const p of text.split(/[\s,]+/).filter(Boolean)) {
     const m = /^(\d+)(?::(\d+))?(?:\/(tcp|udp))?$/i.exec(p);
-    if (!m) return `「${p}」格式不对，应为 节点端口:容器端口，例如 8080:80 或 53:53/udp`;
+    if (!m) return t.app.ports.badFormat(p);
     const published = Number(m[1]);
     const target = Number(m[2] ?? m[1]);
-    if (published < 1 || published > 65535 || target < 1 || target > 65535) return `「${p}」端口应在 1～65535 之间`;
-    if (published === 80 || published === 443) return `节点端口 ${published} 留给域名访问。网站请换一个端口（如 8080:${target}），或部署后在「网络」里绑定域名`;
+    if (published < 1 || published > 65535 || target < 1 || target > 65535) return t.app.ports.outOfRange(p);
+    if (published === 80 || published === 443) return t.app.ports.reserved(published, target);
   }
   return "";
 }

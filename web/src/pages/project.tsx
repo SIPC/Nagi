@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { LayoutGrid, Network, Settings2 } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
+import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { ProjectState, stateOf } from "@/components/status";
 import { containerUsage, UsageBars, useProjectMetrics } from "@/components/metrics";
@@ -20,7 +21,7 @@ import type { Container } from "@/gen/nagi/v1/common_pb";
 export const projectTabs = ["containers", "network", "settings"] as const;
 export type ProjectTab = (typeof projectTabs)[number];
 
-const sectionTitles: Record<ProjectTab, string> = { containers: "概览", network: "网络", settings: "设置" };
+const sectionTitles: Record<ProjectTab, string> = { containers: t.project.sections.overview, network: t.project.sections.network, settings: t.project.sections.settings };
 
 export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab: ProjectTab; onTab: (t: ProjectTab) => void }) {
   const project = useQuery({
@@ -35,7 +36,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
   if (project.error) {
     return (
       <>
-        <Breadcrumb items={[{ label: "项目", to: "/projects" }, { label: projectId }]} />
+        <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: projectId }]} />
         <Alert>{errorMessage(project.error)}</Alert>
       </>
     );
@@ -48,7 +49,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
 
   return (
     <>
-      <Breadcrumb items={[{ label: "项目", to: "/projects" }, { label: p.name }]} className="xl:hidden" />
+      <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: p.name }]} className="xl:hidden" />
       {/* 宽屏时项目名已在项目栏里：概览仍显示项目标题和元信息，网络、设置只显示这一块的标题。 */}
       <div className={cn(tab !== "containers" && "xl:hidden")}>
         <PageHeader
@@ -56,18 +57,18 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
             <>
               {p.name}
               <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} />
-              {p.stateful && <Badge>有状态</Badge>}
+              {p.stateful && <Badge>{t.project.stateful}</Badge>}
             </>
           }
           meta={
             <>
               <span className="font-mono text-xs">{p.networkName}</span>
-              <span>{nodeIds.length > 0 ? `节点 ${nodeIds.map(nodeName).join("、")}` : "暂无容器"}</span>
+              <span>{nodeIds.length > 0 ? t.project.nodes(nodeIds.map(nodeName)) : t.project.noContainers}</span>
               <span>{countContainers(p.containers)}</span>
               {p.rebuiltAt ? (
-                <span title="面板丢失或更换后根据节点缓存重建的项目，原创建时间、历史版本和部署记录已丢失。">从节点缓存重建于 {timeAgo(toDate(p.rebuiltAt))}</span>
+                <span title={t.project.rebuiltHint}>{t.project.rebuiltAt(timeAgo(toDate(p.rebuiltAt)))}</span>
               ) : (
-                <span>创建于 {timeAgo(toDate(p.createdAt))}</span>
+                <span>{t.project.createdAt(timeAgo(toDate(p.createdAt)))}</span>
               )}
             </>
           }
@@ -83,9 +84,9 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
         value={tab}
         onChange={onTab}
         items={[
-          { value: "containers", label: "容器", count: p.containers.length },
-          { value: "network", label: "网络", count: p.routes.length },
-          { value: "settings", label: "设置" },
+          { value: "containers", label: t.project.tabs.containers, count: p.containers.length },
+          { value: "network", label: t.project.tabs.network, count: p.routes.length },
+          { value: "settings", label: t.project.tabs.settings },
         ]}
       />
       {tab === "containers" && <ContainersTab project={p} services={services} imageUpdates={imageUpdates} />}
@@ -150,7 +151,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
   return (
     <div className="grid gap-6">
       <div className="px-2.5">
-        <Breadcrumb items={[{ label: "项目", to: "/projects" }]} />
+        <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }]} />
         <h2 className="truncate text-lg font-semibold tracking-tight">{p.name}</h2>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} />
@@ -175,18 +176,18 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
           className={cn(item, "h-8 text-sm", section("containers") ? "font-medium text-foreground" : idle)}
         >
           <LayoutGrid />
-          概览
+          {t.project.sections.overview}
         </Link>
         <div className="mt-4 mb-1 flex items-center px-2.5 text-xs font-medium text-muted-foreground">
-          容器
+          {t.project.column.containers}
           <span className="ml-1.5 tabular-nums opacity-70">{p.containers.length}</span>
         </div>
-        {p.containers.length === 0 && <p className="px-2.5 py-1 text-[13px] text-muted-foreground">暂无容器</p>}
+        {p.containers.length === 0 && <p className="px-2.5 py-1 text-[13px] text-muted-foreground">{t.project.noContainers}</p>}
         {p.containers.map((m) => {
           const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
           const st =
             node?.online === false
-              ? { tone: "warning" as const, label: "节点离线" }
+              ? { tone: "warning" as const, label: t.project.column.nodeOffline }
               : stateOf(
                   services.filter((s) => s.container === m.name),
                   m.deployedVersion > 0n,
@@ -206,12 +207,12 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{m.name}</span>
                   {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
-                  {m.hasDraft && <Badge tone="warning">草稿</Badge>}
+                  {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
                 </span>
                 {/* 状态只用圆点的颜色表示，文字放在悬停提示和读屏里。 */}
                 <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" title={st.label}>
                   <span className={cn("size-2 shrink-0 rounded-full", dotColor[st.tone])} />
-                  <span className="sr-only">{st.label}，节点</span>
+                  <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
                   <span className="truncate text-xs">{node?.name ?? m.nodeId}</span>
                 </span>
               </span>
@@ -228,7 +229,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
           className={cn(item, "h-8 text-sm", section("network") ? "font-medium text-foreground" : idle)}
         >
           <Network />
-          网络
+          {t.project.sections.network}
           {p.routes.length > 0 && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{p.routes.length}</span>}
         </Link>
         <Link
@@ -239,7 +240,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
           className={cn(item, "h-8 text-sm", section("settings") ? "font-medium text-foreground" : idle)}
         >
           <Settings2 />
-          设置
+          {t.project.sections.settings}
         </Link>
       </nav>
     </div>
@@ -265,8 +266,8 @@ function useActiveBox() {
 
 // countContainers 按种类数，例如"2 个容器，1 个容器组"。
 function countContainers(cs: Container[]) {
-  if (cs.length === 0) return "暂无容器";
+  if (cs.length === 0) return t.project.noContainers;
   const groups = cs.filter((c) => c.kind === "group").length;
   const singles = cs.length - groups;
-  return [singles > 0 && `${singles} 个容器`, groups > 0 && `${groups} 个容器组`].filter(Boolean).join("，");
+  return [singles > 0 && t.project.containerCount(singles), groups > 0 && t.project.groupCount(groups)].filter(Boolean).join(t.project.countSeparator);
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { t } from "@/i18n";
 import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
@@ -82,7 +83,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
   };
 
   const remove = async (name: string) => {
-    if (!confirm(`删除端口映射 ${name}？对应的端口和域名将立即停止对外提供访问。`)) return;
+    if (!confirm(t.projectNetwork.routes.deleteConfirm(name))) return;
     setError("");
     try {
       await projectClient.deleteRoute({ projectId: project.id, name });
@@ -95,9 +96,9 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
   return (
     <Section
       flush
-      title="端口映射"
-      description="经 Caddy 对外开放容器端口或绑定域名，保存后立即生效。"
-      help="无需重新部署。映射位于容器所在节点，容器迁移或由其他节点顶替时随之转移。compose 中新增的 ports 在部署时自动导入。"
+      title={t.projectNetwork.routes.title}
+      description={t.projectNetwork.routes.description}
+      help={t.projectNetwork.routes.help}
       actions={
         !open && (
           <Button
@@ -109,22 +110,22 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
               setOpen(true);
             }}
           >
-            添加映射
+            {t.projectNetwork.routes.add}
           </Button>
         )
       }
     >
       {error && !open && <Alert className="mb-3">{error}</Alert>}
       {project.routes.length === 0 ? (
-        <EmptyRow>暂无端口映射</EmptyRow>
+        <EmptyRow>{t.projectNetwork.routes.empty}</EmptyRow>
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>名称</Th>
-              <Th>目标</Th>
-              <Th>对外</Th>
-              <Th>访问地址</Th>
+              <Th>{t.projectNetwork.routes.columns.name}</Th>
+              <Th>{t.projectNetwork.routes.columns.target}</Th>
+              <Th>{t.projectNetwork.routes.columns.published}</Th>
+              <Th>{t.projectNetwork.routes.columns.url}</Th>
               <Th />
             </tr>
           </thead>
@@ -146,7 +147,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                       </Td>
                       <Td className="font-mono text-xs">
                         {r.domains.length ? r.domains.join(", ") : `${r.protocol}/${r.published}`}
-                        {r.httpOnly && <Badge className="ml-2 font-sans">仅 HTTP</Badge>}
+                        {r.httpOnly && <Badge className="ml-2 font-sans">{t.projectNetwork.routes.httpOnlyBadge}</Badge>}
                       </Td>
                       <Td className="font-mono text-xs">
                         {url ? (
@@ -182,10 +183,10 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                         setOpen(true);
                       }}
                     >
-                      编辑
+                      {t.common.actions.edit}
                     </Button>
                     <Button variant="ghost" size="xs" className="hover:text-destructive" onClick={() => remove(r.name)}>
-                      删除
+                      {t.common.actions.delete}
                     </Button>
                   </Td>
                 </tr>
@@ -202,9 +203,9 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
             save();
           }}
         >
-          <div className="text-[13px] font-medium">{form.name ? `编辑映射 ${form.name}` : "添加映射"}</div>
+          <div className="text-[13px] font-medium">{form.name ? t.projectNetwork.routes.edit(form.name) : t.projectNetwork.routes.add}</div>
           <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            <Field label="容器" htmlFor="route-container">
+            <Field label={t.projectNetwork.routes.container} htmlFor="route-container">
               <Select id="route-container" value={container} onChange={(e) => setForm({ ...form, container: e.target.value, service: "" })}>
                 {project.containers.map((m) => (
                   <option key={m.name}>{m.name}</option>
@@ -212,7 +213,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
               </Select>
             </Field>
             {isGroup && (
-              <Field label="组内容器" htmlFor="route-service">
+              <Field label={t.projectNetwork.routes.groupService} htmlFor="route-service">
                 <Select id="route-service" value={form.service || containerServices[0] || ""} onChange={(e) => setForm({ ...form, service: e.target.value })}>
                   {containerServices.map((s) => (
                     <option key={s}>{s}</option>
@@ -220,7 +221,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                 </Select>
               </Field>
             )}
-            <Field label="容器端口" htmlFor="route-target">
+            <Field label={t.projectNetwork.routes.containerPort} htmlFor="route-target">
               <Input
                 id="route-target"
                 required
@@ -231,14 +232,14 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                 onChange={(e) => setForm({ ...form, target: e.target.value })}
               />
             </Field>
-            <Field label="协议" htmlFor="route-protocol">
+            <Field label={t.projectNetwork.routes.protocol} htmlFor="route-protocol">
               <Select id="route-protocol" value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value })}>
                 <option value="http">HTTP</option>
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
               </Select>
             </Field>
-            <Field label="节点端口" htmlFor="route-published" help="在节点上对外开放的端口。绑定域名时可留空，通过 80/443 访问。">
+            <Field label={t.projectNetwork.routes.nodePort} htmlFor="route-published" help={t.projectNetwork.routes.nodePortHelp}>
               <Input
                 id="route-published"
                 inputMode="numeric"
@@ -249,10 +250,10 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
               />
             </Field>
             <Field
-              label="域名"
+              label={t.projectNetwork.routes.domains}
               htmlFor="route-domains"
               className={isGroup ? "" : "lg:col-span-2"}
-              help="多个域名以逗号分隔。域名需解析到此节点，Caddy 自动申请证书。"
+              help={t.projectNetwork.routes.domainsHelp}
             >
               <Input
                 id="route-domains"
@@ -266,15 +267,15 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
           {error && <Alert>{error}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })}>
-              <span className="text-[13px]">仅 HTTP，不申请证书</span>
+              <span className="text-[13px]">{t.projectNetwork.routes.httpOnly}</span>
             </Check>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                取消
+                {t.common.actions.cancel}
               </Button>
               <Button type="submit" size="sm" disabled={busy}>
                 {busy && <Spinner />}
-                保存
+                {t.common.actions.save}
               </Button>
             </div>
           </div>
@@ -291,7 +292,7 @@ function intranetAddresses(project: Project, services: ServiceStatus[]) {
   return project.containers.flatMap((c) => {
     if (c.kind !== "group") return [{ name: c.name, node: c.nodeId }];
     const names = [...new Set(services.filter((s) => s.container === c.name).map((s) => s.name))];
-    return (names.length ? names : ["<容器>"]).map((s) => ({
+    return (names.length ? names : [t.projectNetwork.intranet.servicePlaceholder]).map((s) => ({
       name: `${s}.${c.name}`,
       node: c.nodeId,
     }));
@@ -341,20 +342,20 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
 
   return (
     <Section
-      title="项目内网"
-      description="项目内的容器无论位于哪个节点，均可按名称互相访问。"
-      help="单个容器的地址为「容器名」，容器组内的容器为「容器.容器组」。容器组内部仍使用 compose 中的服务名。跨节点访问仅转发 TCP，经节点间加密通道传输。"
+      title={t.projectNetwork.intranet.title}
+      description={t.projectNetwork.intranet.description}
+      help={t.projectNetwork.intranet.help}
     >
       <div className="grid gap-5">
         {addresses.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">暂无容器</p>
+          <p className="text-[13px] text-muted-foreground">{t.projectNetwork.intranet.empty}</p>
         ) : (
           <div>
             <Table>
               <thead>
                 <tr>
-                  <Th>名称</Th>
-                  <Th>节点</Th>
+                  <Th>{t.projectNetwork.intranet.columns.name}</Th>
+                  <Th>{t.projectNetwork.intranet.columns.node}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -369,10 +370,10 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
           </div>
         )}
         <Field
-          label="内部端口"
+          label={t.projectNetwork.intranet.internalPorts}
           htmlFor="net-internal-ports"
-          hint="每行一个，如 pg:5432；容器组内为 容器.容器组:端口"
-          help="容器声明的端口（镜像的 EXPOSE、compose 的 ports、expose）自动对其他节点上的容器开放；未声明的端口在此补充。"
+          hint={t.projectNetwork.intranet.internalPortsHint}
+          help={t.projectNetwork.intranet.internalPortsHelp}
         >
           <Textarea
             id="net-internal-ports"
@@ -384,10 +385,10 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
         </Field>
         {error && <Alert>{error}</Alert>}
         <div className="flex items-center justify-end gap-3 pt-2">
-          {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存</span>}
+          {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
           <Button size="sm" onClick={save} disabled={busy}>
             {busy && <Spinner />}
-            保存
+            {t.common.actions.save}
           </Button>
         </div>
       </div>
@@ -436,7 +437,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
   };
 
   const disconnect = async (id: string, name: string) => {
-    if (!confirm(`断开与项目 ${name} 的连接？两个项目的容器将立即无法互相访问。`)) return;
+    if (!confirm(t.projectNetwork.links.disconnectConfirm(name))) return;
     setError("");
     try {
       await projectClient.disconnectProject({
@@ -452,27 +453,27 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
   return (
     <Section
       flush
-      title="项目连接"
-      description="连接后两个项目的容器可互相访问，地址为「容器.网络名」。"
-      help="连接为双向，但不可传递：A 连接 B、B 连接 C 时，A 与 C 仍相互隔离。跨节点访问仅转发 TCP，经节点间加密通道传输。"
+      title={t.projectNetwork.links.title}
+      description={t.projectNetwork.links.description}
+      help={t.projectNetwork.links.help}
       actions={
         !open && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-            连接项目
+            {t.projectNetwork.links.add}
           </Button>
         )
       }
     >
       {error && !open && <Alert className="mb-3">{error}</Alert>}
       {project.links.length === 0 ? (
-        <EmptyRow>未连接其他项目</EmptyRow>
+        <EmptyRow>{t.projectNetwork.links.empty}</EmptyRow>
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>项目</Th>
-              <Th>网络名</Th>
-              <Th>访问示例</Th>
+              <Th>{t.projectNetwork.links.columns.project}</Th>
+              <Th>{t.projectNetwork.links.columns.networkName}</Th>
+              <Th>{t.projectNetwork.links.columns.example}</Th>
               <Th />
             </tr>
           </thead>
@@ -481,10 +482,10 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
               <tr key={l.projectId}>
                 <Td className="font-medium">{l.name}</Td>
                 <Td className="font-mono text-xs">{l.networkName}</Td>
-                <Td className="font-mono text-xs text-muted-foreground">容器.{l.networkName}</Td>
+                <Td className="font-mono text-xs text-muted-foreground">{t.projectNetwork.links.example(l.networkName)}</Td>
                 <Td className="text-right">
                   <Button size="sm" variant="ghost" onClick={() => disconnect(l.projectId, l.name)}>
-                    断开
+                    {t.projectNetwork.links.disconnect}
                   </Button>
                 </Td>
               </tr>
@@ -494,7 +495,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       )}
       {addresses.length > 0 && (
         <div className="border-t py-4">
-          <p className="mb-2 text-[13px] text-muted-foreground">已连接的项目访问本项目容器时使用的地址：</p>
+          <p className="mb-2 text-[13px] text-muted-foreground">{t.projectNetwork.links.addressesIntro}</p>
           <div className="flex flex-wrap gap-2">
             {addresses.map((a) => (
               <Badge key={a.name} className="font-mono">
@@ -513,13 +514,13 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
           }}
         >
           {candidates.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">无可连接的其他项目。</p>
+            <p className="text-[13px] text-muted-foreground">{t.projectNetwork.links.noCandidates}</p>
           ) : (
-            <Field label="项目" htmlFor="link-project">
+            <Field label={t.projectNetwork.links.project} htmlFor="link-project">
               <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)} className="max-w-sm">
                 {candidates.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}（{p.networkName}）
+                    {t.projectNetwork.links.option(p.name, p.networkName)}
                   </option>
                 ))}
               </Select>
@@ -536,11 +537,11 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
                 setError("");
               }}
             >
-              取消
+              {t.common.actions.cancel}
             </Button>
             <Button type="submit" size="sm" disabled={busy || !selected}>
               {busy && <Spinner />}
-              连接
+              {t.projectNetwork.links.connect}
             </Button>
           </div>
         </form>

@@ -1,20 +1,23 @@
 import type { ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { Status } from "@/components/ui";
+import { t } from "@/i18n";
+
+const s = t.common.status;
 
 const stateLabels: Record<string, string> = {
-  running: "运行中",
-  exited: "已停止",
-  restarting: "重启中",
-  paused: "已暂停",
-  created: "已创建",
-  dead: "异常",
-  removing: "删除中",
+  running: s.running,
+  exited: s.stopped,
+  restarting: s.restarting,
+  paused: s.paused,
+  created: s.created,
+  dead: s.abnormal,
+  removing: s.removing,
 };
 
 export function ServiceState({ service }: { service: ServiceStatus }) {
-  if (!service.state) return <Status>未部署</Status>;
-  if (service.health === "unhealthy") return <Status tone="danger">不健康</Status>;
-  if (service.state === "running" && service.health === "starting") return <Status tone="warning">启动中</Status>;
+  if (!service.state) return <Status>{s.notDeployed}</Status>;
+  if (service.health === "unhealthy") return <Status tone="danger">{s.unhealthy}</Status>;
+  if (service.state === "running" && service.health === "starting") return <Status tone="warning">{s.starting}</Status>;
   const tone =
     service.state === "running"
       ? "success"
@@ -28,23 +31,23 @@ export function ServiceState({ service }: { service: ServiceStatus }) {
 
 // stateOf 是项目（或一个容器组）的整体状态：颜色和文字。
 export function stateOf(services: ServiceStatus[], deployed: boolean): { tone: "success" | "warning" | "danger" | "neutral"; label: string } {
-  if (!deployed) return { tone: "neutral", label: "未部署" };
+  if (!deployed) return { tone: "neutral", label: s.notDeployed };
   const total = services.length;
-  const running = services.filter((s) => s.state === "running").length;
-  if (services.some((s) => s.health === "unhealthy" || s.state === "restarting")) return { tone: "danger", label: "异常" };
-  if (total > 0 && running === total) return { tone: "success", label: "运行中" };
-  if (running > 0) return { tone: "warning", label: `部分运行 ${running}/${total}` };
-  return { tone: "neutral", label: "已停止" };
+  const running = services.filter((v) => v.state === "running").length;
+  if (services.some((v) => v.health === "unhealthy" || v.state === "restarting")) return { tone: "danger", label: s.abnormal };
+  if (total > 0 && running === total) return { tone: "success", label: s.running };
+  if (running > 0) return { tone: "warning", label: s.partial(running, total) };
+  return { tone: "neutral", label: s.stopped };
 }
 
 // 项目（或一个容器组）的整体状态：全部运行、部分运行、全部停止或未部署。
 export function ProjectState({ services, deployed }: { services: ServiceStatus[]; deployed: boolean }) {
-  if (!deployed) return <Status>未部署</Status>;
+  if (!deployed) return <Status>{s.notDeployed}</Status>;
   const total = services.length;
-  const running = services.filter((s) => s.state === "running").length;
-  const unhealthy = services.some((s) => s.health === "unhealthy" || s.state === "restarting");
-  if (unhealthy) return <Status tone="danger">异常</Status>;
-  if (total > 0 && running === total) return <Status tone="success">运行中</Status>;
-  if (running > 0) return <Status tone="warning">部分运行 {running}/{total}</Status>;
-  return <Status>已停止</Status>;
+  const running = services.filter((v) => v.state === "running").length;
+  const unhealthy = services.some((v) => v.health === "unhealthy" || v.state === "restarting");
+  if (unhealthy) return <Status tone="danger">{s.abnormal}</Status>;
+  if (total > 0 && running === total) return <Status tone="success">{s.running}</Status>;
+  if (running > 0) return <Status tone="warning">{s.partial(running, total)}</Status>;
+  return <Status>{s.stopped}</Status>;
 }

@@ -6,16 +6,17 @@ import { InviteCard } from "@/pages/invite";
 import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
 // 设置页：左边二级菜单，右边只显示选中的一组（参照 OpenAI 平台、Render 的设置页）。选中的一组记在地址的 tab 参数里。
 
 export const settingsTabs = [
-  { value: "access", label: "面板访问", description: "节点和浏览器访问本面板所用的地址。" },
-  { value: "security", label: "账号安全", description: "登录密码、两步验证和安全入口。" },
-  { value: "alerts", label: "告警", description: "节点和容器异常时的通知渠道和触发规则。" },
-  { value: "standby", label: "备用面板", description: "实时同步本面板数据的备用面板，主面板故障时提升为主面板。" },
-  { value: "invite", label: "接收移交", description: "其他面板向本面板移交节点时使用的接入码。" },
-  { value: "mesh", label: "Mesh", description: "面板在 mesh 网络中的地址及与各节点的连接。" },
+  { value: "access", label: t.settings.tabs.access.label, description: t.settings.tabs.access.description },
+  { value: "security", label: t.settings.tabs.security.label, description: t.settings.tabs.security.description },
+  { value: "alerts", label: t.settings.tabs.alerts.label, description: t.settings.tabs.alerts.description },
+  { value: "standby", label: t.settings.tabs.standby.label, description: t.settings.tabs.standby.description },
+  { value: "invite", label: t.settings.tabs.invite.label, description: t.settings.tabs.invite.description },
+  { value: "mesh", label: t.settings.tabs.mesh.label, description: t.settings.tabs.mesh.description },
 ] as const;
 
 export type SettingsTab = (typeof settingsTabs)[number]["value"];
@@ -24,7 +25,7 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
   const cur = settingsTabs.find((t) => t.value === tab) ?? settingsTabs[0];
   return (
     <>
-      <PageHeader title="设置" />
+      <PageHeader title={t.settings.title} />
       <div className="grid gap-8 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-12">
         <nav className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
           {settingsTabs.map((t) => (

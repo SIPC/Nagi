@@ -23,6 +23,7 @@ import {
   Td,
   Th,
 } from "@/components/ui";
+import { t } from "@/i18n";
 
 // ---- 告警设置：通知渠道和触发规则，一起保存 ----
 
@@ -58,7 +59,7 @@ export function AlertSettings() {
         config: create(AlertConfigSchema, { channels, rules }),
       });
       setChannels(res.config?.channels ?? []);
-      setMsg("已保存并下发至在线节点");
+      setMsg(t.alerts.savedAndPushed);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -69,7 +70,7 @@ export function AlertSettings() {
     setMsg("");
     try {
       await settingsClient.testAlertChannel({ channel: c });
-      setMsg(`已发送测试消息至 ${c.name || c.type}`);
+      setMsg(t.alerts.testSent(c.name || c.type));
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -100,7 +101,7 @@ export function AlertSettings() {
 
   if (cfg.isPending)
     return (
-      <Section title="通知渠道">
+      <Section title={t.alerts.channels}>
         <Loading />
       </Section>
     );
@@ -113,31 +114,31 @@ export function AlertSettings() {
         <div className="grid gap-3">
           {error && <Alert>{error}</Alert>}
           {cfg.data?.lost && (
-            <Notice tone="warning" title="告警配置无法解密">
-              面板主密钥已重新生成，原告警配置无法解密，请重新填写并保存。保存前各节点继续按原配置发送告警，但面板自身的节点失联告警无法发送。
+            <Notice tone="warning" title={t.alerts.lostTitle}>
+              {t.alerts.lostBody}
             </Notice>
           )}
         </div>
       )}
 
       <Section
-        title="通知渠道"
+        title={t.alerts.channels}
         flush
         actions={
           <Button size="sm" variant="outline" onClick={addChannel}>
-            添加渠道
+            {t.alerts.addChannel}
           </Button>
         }
       >
         {channels.length === 0 ? (
-          <EmptyRow>未配置渠道，告警不会发送。</EmptyRow>
+          <EmptyRow>{t.alerts.noChannels}</EmptyRow>
         ) : (
           <Table>
             <thead>
               <tr>
-                <Th className="w-40">名称</Th>
-                <Th className="w-40">类型</Th>
-                <Th>目标</Th>
+                <Th className="w-40">{t.alerts.name}</Th>
+                <Th className="w-40">{t.alerts.type}</Th>
+                <Th>{t.alerts.target}</Th>
                 <Th className="w-px" />
               </tr>
             </thead>
@@ -147,8 +148,8 @@ export function AlertSettings() {
                   <Td>
                     <Input
                       className="h-8"
-                      placeholder="名称"
-                      aria-label="名称"
+                      placeholder={t.alerts.name}
+                      aria-label={t.alerts.name}
                       value={c.name}
                       onChange={(e) => update(i, { name: e.target.value })}
                     />
@@ -156,7 +157,7 @@ export function AlertSettings() {
                   <Td>
                     <Select
                       className="h-8"
-                      aria-label="类型"
+                      aria-label={t.alerts.type}
                       value={c.type}
                       onChange={(e) => update(i, { type: e.target.value })}
                     >
@@ -169,8 +170,8 @@ export function AlertSettings() {
                       <div className="flex gap-2">
                         <Input
                           className="h-8 min-w-48 flex-[2] font-mono"
-                          placeholder="机器人令牌"
-                          aria-label="机器人令牌"
+                          placeholder={t.alerts.botToken}
+                          aria-label={t.alerts.botToken}
                           value={c.telegramToken}
                           onChange={(e) =>
                             update(i, { telegramToken: e.target.value })
@@ -178,8 +179,8 @@ export function AlertSettings() {
                         />
                         <Input
                           className="h-8 min-w-28 flex-1 font-mono"
-                          placeholder="聊天 ID"
-                          aria-label="聊天 ID"
+                          placeholder={t.alerts.chatId}
+                          aria-label={t.alerts.chatId}
                           value={c.telegramChatId}
                           onChange={(e) =>
                             update(i, { telegramChatId: e.target.value })
@@ -190,7 +191,7 @@ export function AlertSettings() {
                       <Input
                         className="h-8 min-w-64 font-mono"
                         placeholder="https://..."
-                        aria-label="Webhook 地址"
+                        aria-label={t.alerts.webhookUrl}
                         value={c.url}
                         onChange={(e) => update(i, { url: e.target.value })}
                       />
@@ -199,7 +200,7 @@ export function AlertSettings() {
                   <Td>
                     <div className="flex justify-end gap-1">
                       <Button size="xs" variant="ghost" onClick={() => test(c)}>
-                        测试
+                        {t.alerts.test}
                       </Button>
                       <Button
                         size="xs"
@@ -208,7 +209,7 @@ export function AlertSettings() {
                           setChannels(channels.filter((_, j) => j !== i))
                         }
                       >
-                        删除
+                        {t.common.actions.delete}
                       </Button>
                     </div>
                   </Td>
@@ -219,22 +220,22 @@ export function AlertSettings() {
         )}
       </Section>
 
-      <Section title="触发规则" help="留空时使用默认值，即输入框中的灰色数字。">
+      <Section title={t.alerts.rules} help={t.alerts.rulesHelp}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {ruleField("磁盘使用率（%）", "diskPercent", 90)}
-          {ruleField("内存使用率（%）", "memPercent", 90)}
-          {ruleField("内存持续时间（分钟）", "memMinutes", 5)}
-          {ruleField("重启次数", "restartCount", 3)}
-          {ruleField("重启统计窗口（分钟）", "restartMinutes", 10)}
-          {ruleField("证书剩余天数", "certDays", 7)}
-          {ruleField("节点失联时间（秒）", "offlineSeconds", 60)}
-          {ruleField("5xx 错误率（%）", "errorPercent", 5)}
+          {ruleField(t.alerts.rule.diskPercent, "diskPercent", 90)}
+          {ruleField(t.alerts.rule.memPercent, "memPercent", 90)}
+          {ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)}
+          {ruleField(t.alerts.rule.restartCount, "restartCount", 3)}
+          {ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10)}
+          {ruleField(t.alerts.rule.certDays, "certDays", 7)}
+          {ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60)}
+          {ruleField(t.alerts.rule.errorPercent, "errorPercent", 5)}
         </div>
       </Section>
 
       <div className="flex items-center gap-4">
         <Button size="sm" onClick={save}>
-          保存
+          {t.common.actions.save}
         </Button>
         {msg && <span className="text-[13px] text-success">{msg}</span>}
       </div>

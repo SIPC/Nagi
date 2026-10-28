@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type * as React from "react";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t } from "@/i18n";
 
 // ---- 按钮与输入 ----
 
@@ -48,7 +49,7 @@ export function Button({
       type={type}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || readOnly}
-      title={readOnly ? "备用面板只能查看，修改请到主面板" : title}
+      title={readOnly ? t.common.readOnlyHint : title}
       {...props}
     />
   );
@@ -339,7 +340,7 @@ export function Alert({ className, children }: { className?: string; children?: 
 }
 
 export function Spinner({ className }: { className?: string }) {
-  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)} aria-label="加载中" />;
+  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)} aria-label={t.common.feedback.loading} />;
 }
 
 // Loading：整块区域加载中。
@@ -393,8 +394,8 @@ export function CopyButton({ text, className }: { text: string; className?: stri
       size="icon"
       variant="ghost"
       className={cn("size-7", className)}
-      aria-label="复制"
-      title="复制"
+      aria-label={t.common.actions.copy}
+      title={done ? t.common.feedback.copied : t.common.actions.copy}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -524,7 +525,7 @@ export function Dialog({
             <h2 className="text-sm font-semibold">{title}</h2>
             {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
           </div>
-          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label="关闭" readOnlyOk>
+          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label={t.common.actions.close} readOnlyOk>
             <X />
           </Button>
         </div>
@@ -535,7 +536,7 @@ export function Dialog({
 }
 
 // Menu：「更多」按钮和下拉菜单。
-export function Menu({ items, label = "更多操作" }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean }[]; label?: string }) {
+export function Menu({ items, label = t.common.actions.more }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean }[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

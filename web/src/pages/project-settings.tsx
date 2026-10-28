@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Rocket } from "lucide-react";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
+import { t } from "@/i18n";
 import { envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
@@ -59,7 +60,7 @@ function GeneralSettings({ project }: { project: Project }) {
   };
 
   return (
-    <Section title="基本设置">
+    <Section title={t.projectSettings.general.title}>
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -68,27 +69,27 @@ function GeneralSettings({ project }: { project: Project }) {
         }}
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="项目名称" htmlFor="p-name">
+          <Field label={t.projectSettings.general.name} htmlFor="p-name">
             <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </Field>
           <Field
-            label="网络名"
+            label={t.projectSettings.general.networkName}
             htmlFor="p-network"
-            hint="小写字母、数字和 -，在面板上唯一"
-            help="通过项目连接接入的其他项目以「容器.网络名」访问本项目的容器，修改后须同步更新这些项目中引用的地址。已有容器的目录不变。"
+            hint={t.projectSettings.general.networkNameHint}
+            help={t.projectSettings.general.networkNameHelp}
           >
             <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required className="font-mono" />
           </Field>
-          <Field label="定时快照间隔（分钟）" htmlFor="p-interval" hint="留空则为 60 分钟">
+          <Field label={t.projectSettings.general.snapshotInterval} htmlFor="p-interval" hint={t.projectSettings.general.snapshotIntervalHint}>
             <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" className="font-mono" />
           </Field>
         </div>
         {error && <Alert>{error}</Alert>}
         <div className="flex items-center justify-end gap-3 pt-2">
-          {saved && <span className="mr-auto text-[13px] text-muted-foreground">已保存</span>}
+          {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
           <Button type="submit" size="sm" disabled={busy}>
             {busy && <Spinner />}
-            保存
+            {t.common.actions.save}
           </Button>
         </div>
       </form>
@@ -138,19 +139,19 @@ function SharedEnv({ project }: { project: Project }) {
     <Section
       title={
         <>
-          共享变量
-          {project.hasSharedEnvDraft && <Badge tone="warning">草稿</Badge>}
+          {t.projectSettings.sharedEnv.title}
+          {project.hasSharedEnvDraft && <Badge tone="warning">{t.projectSettings.sharedEnv.draft}</Badge>}
         </>
       }
-      description="所有容器的 compose 中可通过 ${变量} 引用。"
-      help="与容器自身变量同名时，以容器变量为准。修改保存为草稿，部署后生效。"
+      description={t.projectSettings.sharedEnv.description}
+      help={t.projectSettings.sharedEnv.help}
     >
       <div className="grid gap-4">
-        <Field label="变量" htmlFor="shared-env" hint="KEY=VALUE，每行一个">
+        <Field label={t.projectSettings.sharedEnv.vars} htmlFor="shared-env" hint={t.projectSettings.sharedEnv.varsHint}>
           <Textarea id="shared-env" value={sharedEnv} onChange={(e) => setSharedEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
         </Field>
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
-          <Field label="部署范围" help="默认选中引用了已修改变量的容器。">
+          <Field label={t.projectSettings.sharedEnv.scope} help={t.projectSettings.sharedEnv.scopeHelp}>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {project.containers.map((m) => (
                 <Check key={m.name} checked={!!affected[m.name]} onChange={(v) => setAffected({ ...affected, [m.name]: v })}>
@@ -170,17 +171,17 @@ function SharedEnv({ project }: { project: Project }) {
               onClick={() => call(() => projectClient.discardSharedEnv({ projectId: project.id, baseRevision: project.revision }))}
               disabled={busy}
             >
-              放弃草稿
+              {t.projectSettings.sharedEnv.discardDraft}
             </Button>
           )}
           <Button size="sm" variant={project.hasSharedEnvDraft ? "outline" : "default"} onClick={save} disabled={busy}>
             {busy && <Spinner />}
-            保存草稿
+            {t.projectSettings.sharedEnv.saveDraft}
           </Button>
           {project.hasSharedEnvDraft && (
             <Button size="sm" onClick={deploy} disabled={running}>
               {running ? <Spinner /> : <Rocket />}
-              部署
+              {t.projectSettings.sharedEnv.deploy}
             </Button>
           )}
         </div>
@@ -192,12 +193,12 @@ function SharedEnv({ project }: { project: Project }) {
 // ---- 部署记录 ----
 
 const sourceLabel: Record<string, string> = {
-  manual: "手动部署",
-  git: "git 拉取",
-  image: "镜像更新",
-  rollback: "容器回滚",
-  shared_env: "共享变量",
-  restore: "恢复部署",
+  manual: t.projectSettings.deployments.sources.manual,
+  git: t.projectSettings.deployments.sources.git,
+  image: t.projectSettings.deployments.sources.image,
+  rollback: t.projectSettings.deployments.sources.rollback,
+  shared_env: t.projectSettings.deployments.sources.sharedEnv,
+  restore: t.projectSettings.deployments.sources.restore,
 };
 
 function Deployments({ project }: { project: Project }) {
@@ -208,22 +209,22 @@ function Deployments({ project }: { project: Project }) {
   });
 
   return (
-    <Section flush title="部署记录" description="每次部署记录所有容器的版本，可将项目恢复到任一次部署时的状态。">
+    <Section flush title={t.projectSettings.deployments.title} description={t.projectSettings.deployments.description}>
       {output && <div className="pb-3 empty:hidden">{output}</div>}
       {list.isPending ? (
         <EmptyRow>
           <Spinner />
         </EmptyRow>
       ) : list.data?.deployments.length === 0 ? (
-        <EmptyRow>暂无部署记录</EmptyRow>
+        <EmptyRow>{t.projectSettings.deployments.empty}</EmptyRow>
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>编号</Th>
-              <Th>时间</Th>
-              <Th>来源</Th>
-              <Th>版本</Th>
+              <Th>{t.projectSettings.deployments.columns.id}</Th>
+              <Th>{t.projectSettings.deployments.columns.time}</Th>
+              <Th>{t.projectSettings.deployments.columns.source}</Th>
+              <Th>{t.projectSettings.deployments.columns.versions}</Th>
               <Th />
             </tr>
           </thead>
@@ -235,11 +236,11 @@ function Deployments({ project }: { project: Project }) {
                 <Td className="text-[13px]">
                   {sourceLabel[d.source] ?? d.source}
                   {d.restoreOf > 0n && ` #${d.restoreOf}`}
-                  <span className="text-muted-foreground"> · {d.containers.join("、")}</span>
+                  <span className="text-muted-foreground"> · {t.projectSettings.deployments.containerList(d.containers)}</span>
                   {!d.success && (
                     <div className="mt-0.5 text-xs text-destructive">
                       <Badge tone="danger" className="mr-1.5">
-                        失败
+                        {t.projectSettings.deployments.failed}
                       </Badge>
                       {d.error}
                     </div>
@@ -257,11 +258,11 @@ function Deployments({ project }: { project: Project }) {
                       variant="ghost"
                       disabled={busy}
                       onClick={() =>
-                        confirm(`将项目恢复到部署 #${d.id} 时的状态？版本不同的容器将被回滚。`) &&
+                        confirm(t.projectSettings.deployments.restoreConfirm(d.id)) &&
                         run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))
                       }
                     >
-                      恢复
+                      {t.projectSettings.deployments.restore}
                     </Button>
                   )}
                 </Td>
@@ -284,7 +285,7 @@ function DeleteProject({ project }: { project: Project }) {
   const [error, setError] = useState("");
 
   const remove = async () => {
-    if (!deleteDir && !confirm(`删除项目 ${project.name}？项目内的所有容器和容器组将被删除，项目目录保留。`)) return;
+    if (!deleteDir && !confirm(t.projectSettings.delete.confirm(project.name))) return;
     setError("");
     try {
       await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName });
@@ -296,20 +297,20 @@ function DeleteProject({ project }: { project: Project }) {
   };
 
   return (
-    <Section tone="danger" title="删除项目" description="停止并删除项目内的所有容器和容器组。" help="各容器的目录（包括数据和快照）默认保留在所在节点上。容器所在的节点须在线。">
+    <Section tone="danger" title={t.projectSettings.delete.title} description={t.projectSettings.delete.description} help={t.projectSettings.delete.help}>
       <div className="grid gap-4">
         <Check checked={deleteDir} onChange={setDeleteDir}>
-          同时删除容器目录（数据和快照将无法恢复）
+          {t.projectSettings.delete.deleteDir}
         </Check>
         {deleteDir && (
-          <Field label={`输入项目名称 ${project.name} 以确认`} htmlFor="confirm-name">
+          <Field label={t.projectSettings.delete.confirmName(project.name)} htmlFor="confirm-name">
             <Input id="confirm-name" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} className="max-w-80" />
           </Field>
         )}
         {error && <Alert>{error}</Alert>}
         <div className="flex justify-end pt-2">
           <Button variant="destructive" size="sm" onClick={remove} disabled={deleteDir && confirmName !== project.name}>
-            删除项目
+            {t.projectSettings.delete.submit}
           </Button>
         </div>
       </div>

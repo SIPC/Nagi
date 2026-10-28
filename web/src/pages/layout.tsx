@@ -6,6 +6,8 @@ import { authClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { Button, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
+import { LanguageButton } from "@/components/language";
+import { t } from "@/i18n";
 
 function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -24,9 +26,9 @@ function useTheme() {
 
 // 左侧导航（参照 OpenAI 平台后台）：上面是产品名和三个入口，下面是账号、主题和退出。窄屏时收成顶部一行。
 const navItems = [
-  { to: "/projects", label: "项目", icon: Boxes },
-  { to: "/nodes", label: "节点", icon: Server },
-  { to: "/settings", label: "设置", icon: Settings },
+  { to: "/projects", label: t.app.nav.projects, icon: Boxes },
+  { to: "/nodes", label: t.app.nav.nodes, icon: Server },
+  { to: "/settings", label: t.app.nav.settings, icon: Settings },
 ] as const;
 
 const navLink =
@@ -62,10 +64,18 @@ export function AppLayout() {
   ));
   const actions = (
     <>
-      <Button readOnlyOk variant="ghost" size="icon" onClick={toggle} aria-label={dark ? "切换为浅色" : "切换为深色"} title={dark ? "浅色" : "深色"}>
+      <LanguageButton account />
+      <Button
+        readOnlyOk
+        variant="ghost"
+        size="icon"
+        onClick={toggle}
+        aria-label={dark ? t.app.theme.toLight : t.app.theme.toDark}
+        title={dark ? t.app.theme.light : t.app.theme.dark}
+      >
         {dark ? <Sun /> : <Moon />}
       </Button>
-      <Button readOnlyOk variant="ghost" size="icon" onClick={logout} aria-label="退出登录" title="退出登录">
+      <Button readOnlyOk variant="ghost" size="icon" onClick={logout} aria-label={t.app.logout} title={t.app.logout}>
         <LogOut />
       </Button>
     </>
@@ -89,18 +99,20 @@ export function AppLayout() {
         {standby?.isStandby && (
           <div className="border-b bg-subtle">
             <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-2 text-[13px] md:px-10">
-              <span className="font-medium">备用面板</span>
+              <span className="font-medium">{t.app.standby.title}</span>
               <span className="text-muted-foreground">
-                只能查看，修改请到主面板{" "}
+                {t.app.standby.readOnly}{" "}
                 <a className="font-mono text-foreground underline-offset-2 hover:underline" href={`https://${standby.primaryAddress}`} target="_blank" rel="noreferrer">
                   {standby.primaryAddress}
                 </a>
               </span>
               <span className="ml-auto text-muted-foreground">
                 {standby.connected ? (
-                  <>已同步{standby.lastSync && `（${timeAgo(toDate(standby.lastSync))}）`}</>
+                  <>{standby.lastSync ? t.app.standby.syncedAgo(timeAgo(toDate(standby.lastSync))) : t.app.standby.synced}</>
                 ) : (
-                  <span className="text-warning">未连接主面板{standby.lastSync && `，最近同步 ${timeAgo(toDate(standby.lastSync))}`}</span>
+                  <span className="text-warning">
+                    {standby.lastSync ? t.app.standby.disconnectedAgo(timeAgo(toDate(standby.lastSync))) : t.app.standby.disconnected}
+                  </span>
                 )}
               </span>
               <PromoteButton size="xs" />
