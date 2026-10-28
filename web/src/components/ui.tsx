@@ -482,12 +482,13 @@ export function Segmented<T extends string>({ value, onChange, items }: { value:
   );
 }
 
-// 品牌标识：两道平缓的波浪。
+// 品牌标识：两道平缓的波浪，和 public/favicon.svg 同一形状（去掉底板）。
+// 下面一道用 currentColor（品牌色），上面一道用前景色、半透明，深浅色下都能看清。
 export function Waves({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 40 16" fill="none" className={className} aria-hidden>
-      <path d="M2 11c4-4 8-4 12 0s8 4 12 0 8-4 12 0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M2 5c4-4 8-4 12 0s8 4 12 0 8-4 12 0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" opacity=".4" />
+    <svg viewBox="4 9 24 14" fill="none" className={className} aria-hidden>
+      <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--foreground)" strokeWidth="2.4" strokeLinecap="round" opacity=".55" />
     </svg>
   );
 }
@@ -582,6 +583,7 @@ export function Meter({ label, value }: { label: string; value?: number }) {
         <div className={cn("h-full rounded-full transition-[width]", tone)} style={{ width: `${v ?? 0}%` }} />
       </div>
       <span className="text-right font-mono tabular-nums text-muted-foreground">{v === undefined ? "—" : `${v.toFixed(0)}%`}</span>
+
     </div>
   );
 }
