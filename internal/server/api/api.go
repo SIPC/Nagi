@@ -222,7 +222,7 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
 	resp, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{
-		Prefix: req.Msg.GetPrefix(), From: req.Msg.GetFrom(), To: req.Msg.GetTo(),
+		Prefix: req.Msg.GetPrefix(), From: req.Msg.GetFrom(), To: req.Msg.GetTo(), Step: req.Msg.GetStep(),
 	})
 	if err != nil {
 		return nil, fromGRPC(err)

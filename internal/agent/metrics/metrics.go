@@ -8,7 +8,8 @@
 //   - c:<项目 ID>/<容器>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
 //   - l:<项目 ID>/<容器>:cpu（百分比，每核 100）、:mem（字节）：运行中的容器最多能用多少。
 //     设了限制按限制，没设按主机；容器组把各服务的限制加起来，有一个没设或加起来超过主机就按主机
-//   - r:<项目 ID>/<规则名>:req、:5xx（请求/秒）、:lat（平均耗时，毫秒），由 AddSource 提供
+//   - r:<项目 ID>/<规则名>:req、:2xx、:3xx、:4xx、:5xx（请求/秒）、:in、:out（字节/秒）、
+//     :lat、:p50、:p95、:p99（耗时，毫秒），由 AddSource 提供
 package metrics
 
 import (
@@ -16,6 +17,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -323,6 +325,47 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 }
 
 // Query 查询以 prefix 开头的序列在一段时间内的数据。24 小时以内用 10 秒精度，更长用 5 分钟精度。
+// Aggregate 把每条序列按 step 合并：每个窗口一个点，时间取窗口起点。
+// 名字以 :p95、:p99 结尾的取窗口内的最大值（耗时的尖峰不被平均掉），其余取平均值。
+// step 不大于采样间隔时原样返回。points 须按时间排序（Query 的结果就是）。
+func Aggregate(data map[string][]Point, step time.Duration) map[string][]Point {
+	if step <= Interval {
+		return data
+	}
+	s := int64(step / time.Second)
+	out := make(map[string][]Point, len(data))
+	for name, points := range data {
+		useMax := strings.HasSuffix(name, ":p95") || strings.HasSuffix(name, ":p99")
+		var res []Point
+		var bucket int64
+		var sum, peak float64
+		n := 0
+		flush := func() {
+			if n == 0 {
+				return
+			}
+			v := sum / float64(n)
+			if useMax {
+				v = peak
+			}
+			res = append(res, Point{Time: time.Unix(bucket, 0), Value: v})
+		}
+		for _, p := range points {
+			b := p.Time.Unix() / s * s
+			if n == 0 || b != bucket {
+				flush()
+				bucket, sum, peak, n = b, 0, p.Value, 0
+			}
+			sum += p.Value
+			peak = max(peak, p.Value)
+			n++
+		}
+		flush()
+		out[name] = res
+	}
+	return out
+}
+
 func (c *Collector) Query(ctx context.Context, prefix string, from, to time.Time) (map[string][]Point, error) {
 	out := map[string][]Point{}
 	add := func(series string, ts int64, value float64) {

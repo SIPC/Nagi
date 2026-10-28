@@ -48,6 +48,7 @@ func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetric
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	data = metrics.Aggregate(data, time.Duration(req.GetStep())*time.Second)
 	out := &nagiv1.QueryMetricsResponse{}
 	for name, points := range data {
 		ser := &nagiv1.MetricSeries{Name: name}

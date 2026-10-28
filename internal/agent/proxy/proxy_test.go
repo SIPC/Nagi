@@ -42,11 +42,16 @@ func mustConfig(t *testing.T, data []byte) *caddy.Config {
 	return &cfg
 }
 
-// 经过 Caddy 的请求按规则统计请求数和 5xx 数。
+// 经过 Caddy 的请求按规则统计请求数、各类状态码、响应字节和耗时样本。
 func TestRouteStats(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/fail" {
+		switch r.URL.Path {
+		case "/fail":
 			w.WriteHeader(http.StatusInternalServerError)
+		case "/missing":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			io.WriteString(w, "hello")
 		}
 	}))
 	defer up.Close()
@@ -66,7 +71,7 @@ func TestRouteStats(t *testing.T) {
 	}
 	TakeStats()
 	base := "http://127.0.0.1:" + strconv.Itoa(port)
-	for _, path := range []string{"/", "/", "/fail"} {
+	for _, path := range []string{"/", "/", "/fail", "/missing"} {
 		resp, err := http.Get(base + path)
 		if err != nil {
 			t.Fatal(err)
@@ -80,7 +85,25 @@ func TestRouteStats(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if s.Requests != 3 || s.Errors != 1 {
+	if s.Requests != 4 || s.Errors != 1 || s.Classes[2] != 2 || s.Classes[4] != 1 || s.Classes[5] != 1 {
 		t.Fatalf("统计不对：%+v", s)
+	}
+	if s.BytesOut != 10 || len(s.Durations) != 4 {
+		t.Fatalf("响应字节或耗时样本不对：BytesOut=%d 样本=%d", s.BytesOut, len(s.Durations))
+	}
+}
+
+func TestPercentile(t *testing.T) {
+	s := RouteStats{}
+	if s.Percentile(0.95) != 0 {
+		t.Fatal("没有样本时应为 0")
+	}
+	for i := 100; i >= 1; i-- {
+		s.Durations = append(s.Durations, float64(i))
+	}
+	for q, want := range map[float64]float64{0.5: 50, 0.95: 95, 0.99: 99, 1: 100} {
+		if got := s.Percentile(q); got != want {
+			t.Errorf("第 %v 分位是 %v，应为 %v", q, got, want)
+		}
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"slices"
 	"sync"
 
 	"github.com/caddyserver/caddy/v2"
@@ -13,7 +15,7 @@ import (
 )
 
 // 这里注册两个 Caddy 模块，把 Caddy 内部的信息交给节点：
-//   - 日志输出 nagi_metrics：读访问日志，按规则统计请求数、5xx 数和耗时；
+//   - 日志输出 nagi_metrics：读访问日志，按规则统计请求数、各类状态码、收发字节和耗时；
 //   - 事件处理 nagi：证书申请成功或失败时通知节点，用于告警。
 //
 // Caddy 模块由 Caddy 自己创建，拿不到 Proxy，所以通过包级变量 observer 传递。
@@ -31,6 +33,26 @@ type RouteStats struct {
 	Requests int
 	Errors   int     // 5xx 响应数
 	Seconds  float64 // 耗时总和
+	// Classes 是各类状态码的响应数，下标是状态码的百位（1xx～5xx）。
+	Classes  [6]int
+	BytesIn  int64 // 请求体字节数
+	BytesOut int64 // 响应体字节数
+	// Durations 是耗时的样本（秒），用来算分位数。请求太多时只留 maxSamples 个，等概率抽样。
+	Durations []float64
+}
+
+// maxSamples 是一条规则在一个采样间隔内最多保留的耗时样本数。
+const maxSamples = 2048
+
+// Percentile 返回耗时样本的第 q 分位（0~1，最近秩法），单位秒。没有样本时返回 0。
+// 会对 Durations 排序。
+func (s *RouteStats) Percentile(q float64) float64 {
+	if len(s.Durations) == 0 {
+		return 0
+	}
+	slices.Sort(s.Durations)
+	i := int(q*float64(len(s.Durations))+0.5) - 1
+	return s.Durations[min(max(i, 0), len(s.Durations)-1)]
 }
 
 type observerT struct {
@@ -62,9 +84,11 @@ func OnCertEvent(fn func(domain string, err error)) {
 
 func (o *observerT) record(line []byte) {
 	var entry struct {
-		Route    string  `json:"nagi_route"`
-		Status   int     `json:"status"`
-		Duration float64 `json:"duration"`
+		Route     string  `json:"nagi_route"`
+		Status    int     `json:"status"`
+		Duration  float64 `json:"duration"`
+		BytesRead int64   `json:"bytes_read"`
+		Size      int64   `json:"size"`
 	}
 	if json.Unmarshal(line, &entry) != nil || entry.Route == "" {
 		return
@@ -80,7 +104,18 @@ func (o *observerT) record(line []byte) {
 	if entry.Status >= 500 {
 		s.Errors++
 	}
+	if c := entry.Status / 100; c >= 1 && c <= 5 {
+		s.Classes[c]++
+	}
 	s.Seconds += entry.Duration
+	s.BytesIn += entry.BytesRead
+	s.BytesOut += entry.Size
+	// 蓄水池抽样：每个请求被留下的概率相同，内存有上限。
+	if len(s.Durations) < maxSamples {
+		s.Durations = append(s.Durations, entry.Duration)
+	} else if i := rand.IntN(s.Requests); i < maxSamples {
+		s.Durations[i] = entry.Duration
+	}
 }
 
 // ---- 访问日志 → 统计 ----

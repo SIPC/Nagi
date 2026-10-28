@@ -620,9 +620,17 @@ func routeMetrics() metrics.Source {
 			s := stats[k]
 			prefix := "r:" + k + ":"
 			out[prefix+"req"] = float64(s.Requests) / elapsed
+			out[prefix+"2xx"] = float64(s.Classes[2]) / elapsed
+			out[prefix+"3xx"] = float64(s.Classes[3]) / elapsed
+			out[prefix+"4xx"] = float64(s.Classes[4]) / elapsed
 			out[prefix+"5xx"] = float64(s.Errors) / elapsed
+			out[prefix+"in"] = float64(s.BytesIn) / elapsed
+			out[prefix+"out"] = float64(s.BytesOut) / elapsed
 			if s.Requests > 0 {
 				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Requests)
+				out[prefix+"p50"] = 1000 * s.Percentile(0.50)
+				out[prefix+"p95"] = 1000 * s.Percentile(0.95)
+				out[prefix+"p99"] = 1000 * s.Percentile(0.99)
 			}
 		}
 		return out

@@ -123,6 +123,8 @@ message QueryNodeMetricsRequest {
   string prefix = 2;
   google.protobuf.Timestamp from = 3;
   google.protobuf.Timestamp to = 4;
+  // 聚合步长（秒），见 QueryMetricsRequest.step。
+  int64 step = 5;
 }
 
 message RemoveNodeRequest {

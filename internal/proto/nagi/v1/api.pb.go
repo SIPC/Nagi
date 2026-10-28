@@ -721,11 +721,13 @@ func (*ApproveNodeResponse) Descriptor() ([]byte, []int) {
 }
 
 type QueryNodeMetricsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Prefix        string                 `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	From          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
-	To            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Prefix string                 `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	From   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
+	To     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	// 聚合步长（秒），见 QueryMetricsRequest.step。
+	Step          int64 `protobuf:"varint,5,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -786,6 +788,13 @@ func (x *QueryNodeMetricsRequest) GetTo() *timestamppb.Timestamp {
 		return x.To
 	}
 	return nil
+}
+
+func (x *QueryNodeMetricsRequest) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
 }
 
 type RemoveNodeRequest struct {
@@ -5760,12 +5769,13 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x04root\x18\x02 \x01(\tR\x04root\"-\n" +
 	"\x12ApproveNodeRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\x15\n" +
-	"\x13ApproveNodeResponse\"\xa6\x01\n" +
+	"\x13ApproveNodeResponse\"\xba\x01\n" +
 	"\x17QueryNodeMetricsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
 	"\x06prefix\x18\x02 \x01(\tR\x06prefix\x12.\n" +
 	"\x04from\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
-	"\x02to\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\",\n" +
+	"\x02to\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x12\n" +
+	"\x04step\x18\x05 \x01(\x03R\x04step\",\n" +
 	"\x11RemoveNodeRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\x14\n" +
 	"\x12RemoveNodeResponse\"\x1c\n" +

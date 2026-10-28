@@ -308,6 +308,9 @@ message QueryMetricsRequest {
   string prefix = 1;
   google.protobuf.Timestamp from = 2;
   google.protobuf.Timestamp to = 3;
+  // 聚合步长（秒）。大于数据精度时，每条序列按步长合并成一个点（时间取窗口起点）：
+  // 名字以 :p95、:p99 结尾的取最大值，其余取平均值。0 表示不聚合。
+  int64 step = 4;
 }
 
 message QueryMetricsResponse {

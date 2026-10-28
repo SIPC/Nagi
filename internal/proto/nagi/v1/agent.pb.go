@@ -2312,9 +2312,12 @@ func (*SetAlertConfigResponse) Descriptor() ([]byte, []int) {
 type QueryMetricsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 序列名前缀，例如 "node:"、"c:<项目 ID>/"。
-	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	From          *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
-	To            *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	Prefix string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	From   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
+	To     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	// 聚合步长（秒）。大于数据精度时，每条序列按步长合并成一个点（时间取窗口起点）：
+	// 名字以 :p95、:p99 结尾的取最大值，其余取平均值。0 表示不聚合。
+	Step          int64 `protobuf:"varint,4,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2368,6 +2371,13 @@ func (x *QueryMetricsRequest) GetTo() *timestamppb.Timestamp {
 		return x.To
 	}
 	return nil
+}
+
+func (x *QueryMetricsRequest) GetStep() int64 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
 }
 
 type QueryMetricsResponse struct {
@@ -2557,11 +2567,12 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x06output\"E\n" +
 	"\x15SetAlertConfigRequest\x12,\n" +
 	"\x06config\x18\x01 \x01(\v2\x14.nagi.v1.AlertConfigR\x06config\"\x18\n" +
-	"\x16SetAlertConfigResponse\"\x89\x01\n" +
+	"\x16SetAlertConfigResponse\"\x9d\x01\n" +
 	"\x13QueryMetricsRequest\x12\x16\n" +
 	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12.\n" +
 	"\x04from\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
-	"\x02to\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\"E\n" +
+	"\x02to\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\x03R\x04step\"E\n" +
 	"\x14QueryMetricsResponse\x12-\n" +
 	"\x06series\x18\x01 \x03(\v2\x15.nagi.v1.MetricSeriesR\x06series2\xac\x13\n" +
 	"\fAgentService\x12K\n" +
