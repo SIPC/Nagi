@@ -57,3 +57,12 @@
 - **数值提示用「当前 / 上限」**，单位一致，不写成句子：「CPU 0.3% / 1200%」「内存 6.0 MB / 15.5 GB」，而不是「CPU 0.3%，上限 12 核」。
 - **路径示例用占位符**：「默认：<项目根目录>/<项目名>/<容器名>」。
 - 术语统一：项目、容器、容器组、节点、面板、项目内网、项目连接、网络名、端口映射、快照、备份节点、顶替、热备、见证人、迁移、部署、版本、草稿。
+
+## 多语言
+
+界面支持中文和英文，中文是基准。
+
+- **选择顺序**：浏览器里记住的选择（`localStorage` 的 `lang`）→ 账号保存的语言（登录后，浏览器里没有选过时采用，例如换了设备）→ 浏览器的语言偏好（`navigator.languages`，中文以外的都显示英文）。导航底部、登录页右上角的按钮切换语言，刷新页面后生效；登录后同时保存到账号（`AuthService.SetLanguage`，`users.language`）。
+- **前端文案**放在 `web/src/i18n/zh/<命名空间>.ts`，英文在 `en/` 下同名文件，结构必须一致（`satisfies`，少一条 `tsc` 报错）。每个页面或组件一个命名空间，通用的状态词、按钮、时间单位在 `common`。代码里 `import { t } from "@/i18n"` 后直接用 `t.<命名空间>.<键>`，模块顶层的常量里也可以用。带参数的写成函数，句子里夹着链接等元素的写成返回 JSX 的函数（文件用 `.tsx`）。日期用 `lib/utils` 的 `formatDateTime` / `formatDate` / `formatTime`，不直接调 `toLocaleString()`。`pnpm -C web check:i18n` 检查有没有写死的中文，确实需要的行尾加 `// i18n-ignore`。
+- **面板返回的文字**：前端请求都带 `Accept-Language`（终端的 WebSocket 用 `lang` 参数），面板按它返回错误信息和操作过程的输出。Go 代码里照常写中文，返回给浏览器的错误用 `i18n.Errorf` / `i18n.New`（`spec.Invalid` 已经是），过程输出用 `i18n.T(ctx, …)`，英文译文登记在 `internal/pkg/i18n/en.go`，`go test ./internal/pkg/i18n` 检查有没有漏。日志不翻译。节点返回的信息、告警消息、已保存的部署记录目前还是中文。
+- **英文文案**：简洁的控制台用语，标题和按钮用句首大写（「Delete project」「Sync now」），不用感叹号，少用 please。术语：项目 project、容器 container、容器组 container group、节点 node、面板 panel、主面板 primary panel、备用面板 standby panel、项目内网 project network、项目连接 project link、网络名 network name、端口映射 port mapping、快照 snapshot、备份节点 backup node、顶替 failover、热备 hot standby、见证人 witness、迁移 migration、部署 deployment、版本 version、草稿 draft、接入码 invite code、移交 handover。
