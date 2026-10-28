@@ -8,12 +8,13 @@ import {
   Outlet,
   redirect,
   RouterProvider,
+  useMatch,
 } from "@tanstack/react-router";
 import { authClient, isUnauthenticated, setupClient } from "@/lib/api";
 import { LoginPage, SetupPage } from "@/pages/auth";
 import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
-import { ProjectPage, projectTabs, type ProjectTab } from "@/pages/project";
+import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages/project";
 import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
@@ -82,6 +83,7 @@ const projectsRoute = createRoute({ getParentRoute: () => appRoute, path: "/proj
 
 const newProjectRoute = createRoute({ getParentRoute: () => appRoute, path: "/projects/new", component: NewProjectPage });
 
+// 项目页。宽屏左边是项目栏，右边是概览、网络、设置之一，或者打开的容器（子路由 c/$container）。
 const projectRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/projects/$projectId",
@@ -92,34 +94,41 @@ const projectRoute = createRoute({
     const { projectId } = projectRoute.useParams();
     const { tab } = projectRoute.useSearch();
     const navigate = projectRoute.useNavigate();
+    const child = useMatch({ from: containerRoute.id, shouldThrow: false });
     return (
-      <ProjectPage
-        key={projectId}
-        projectId={projectId}
-        tab={tab ?? "containers"}
-        onTab={(t) => navigate({ search: { tab: t === "containers" ? undefined : t }, replace: true })}
-      />
+      <ProjectSplit key={projectId} projectId={projectId} tab={tab ?? "containers"} container={child?.params.container} view={child?.search.view}>
+        {child ? (
+          <Outlet />
+        ) : (
+          <ProjectPage
+            projectId={projectId}
+            tab={tab ?? "containers"}
+            onTab={(t) => navigate({ search: { tab: t === "containers" ? undefined : t }, replace: true })}
+          />
+        )}
+      </ProjectSplit>
     );
   },
 });
 
+// 容器页的标签记在 view 参数里（tab 是上层项目页的）。
 const containerRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/projects/$projectId/c/$container",
-  validateSearch: (search: Record<string, unknown>): { tab?: DetailView } => ({
-    tab: containerTabs.includes(search.tab as DetailView) ? (search.tab as DetailView) : undefined,
+  getParentRoute: () => projectRoute,
+  path: "c/$container",
+  validateSearch: (search: Record<string, unknown>): { view?: DetailView } => ({
+    view: containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
   }),
   component: function ContainerRoute() {
     const { projectId, container } = containerRoute.useParams();
-    const { tab } = containerRoute.useSearch();
+    const { view } = containerRoute.useSearch();
     const navigate = containerRoute.useNavigate();
     return (
       <ContainerPage
         key={projectId + "/" + container}
         projectId={projectId}
         name={container}
-        view={tab ?? "overview"}
-        onView={(t) => navigate({ search: { tab: t === "overview" ? undefined : t }, replace: true })}
+        view={view ?? "overview"}
+        onView={(t) => navigate({ search: { view: t === "overview" ? undefined : t }, replace: true })}
       />
     );
   },
@@ -164,7 +173,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
-  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute, containerRoute, nodesRoute, nodeRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute]), nodesRoute, nodeRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });

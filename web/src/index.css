@@ -81,6 +81,22 @@
   --radius-lg: 0.625rem;
   --radius-md: 0.4375rem;
   --radius-sm: 0.3125rem;
+
+  /* 切换动画：短、只动 opacity 和 transform。不加 fill-mode，结束后不留 transform（否则里面 fixed 的对话框会错位）。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --animate-pane-in: pane-in 220ms var(--ease-out);
+  --animate-fade-in: fade-in 160ms var(--ease-out);
+  @keyframes pane-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 @layer base {

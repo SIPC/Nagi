@@ -276,7 +276,7 @@ export function Badge({
   );
 }
 
-const dotColor = {
+export const dotColor = {
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-destructive",

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { Link, Outlet, useMatch, useNavigate } from "@tanstack/react-router";
 import { Boxes, ChevronRight, LogOut, Moon, Server, Settings, Sun } from "lucide-react";
 import { authClient, toDate } from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { Button, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 
@@ -39,6 +39,8 @@ export function AppLayout() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
   const standby = useStandbys().data;
   const readOnly = standby?.isStandby ?? false;
+  // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
+  const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
 
   const logout = async () => {
     await authClient.logout({});
@@ -105,7 +107,12 @@ export function AppLayout() {
             </div>
           </div>
         )}
-        <main className="mx-auto max-w-5xl px-6 pt-8 pb-16 md:px-10 md:pt-10">
+        <main
+          className={cn(
+            "mx-auto max-w-5xl px-6 pt-8 pb-16 md:px-10 md:pt-10",
+            split && "xl:flex xl:max-w-none xl:items-start xl:px-0 xl:pt-0 xl:pb-0",
+          )}
+        >
           <ReadOnlyContext.Provider value={readOnly}>
             <Outlet />
           </ReadOnlyContext.Provider>
@@ -116,9 +123,9 @@ export function AppLayout() {
 }
 
 // Breadcrumb：页面顶部的上级链接。
-export function Breadcrumb({ items }: { items: { label: React.ReactNode; to?: string }[] }) {
+export function Breadcrumb({ items, className }: { items: { label: React.ReactNode; to?: string }[]; className?: string }) {
   return (
-    <nav className="mb-3 flex items-center gap-1 text-[13px] text-muted-foreground">
+    <nav className={cn("mb-3 flex items-center gap-1 text-[13px] text-muted-foreground", className)}>
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1">
           {i > 0 && <ChevronRight className="size-3.5 opacity-60" />}

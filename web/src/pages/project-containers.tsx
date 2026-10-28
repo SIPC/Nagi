@@ -6,7 +6,7 @@ import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { ProjectMetrics } from "@/components/metrics";
+import { ContainerMetrics, containerUsage, ProjectMetrics, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
 import { ProjectState, ServiceState } from "@/components/status";
 import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
@@ -38,7 +38,8 @@ import {
 } from "@/components/ui";
 import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
-// 「容器」标签页：容器列表、批量部署、添加容器，以及选中容器的详情（概览、配置、版本、日志、终端）和监控。
+// 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
+// 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
 
 type ImageUpdate = { container: string; service: string; image: string };
 export const containerTabs = ["overview", "config", "versions", "logs", "terminal", "data"] as const;
@@ -55,6 +56,7 @@ export function ContainersTab({
 }) {
   const [adding, setAdding] = useState(project.containers.length === 0);
   const navigate = useNavigate();
+  const { range, picker } = useRange();
   const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
 
   return (
@@ -66,8 +68,13 @@ export function ContainersTab({
       )}
       <ContainersTable project={project} services={services} onOpen={open} onAdd={() => setAdding(true)} />
       {adding && <AddContainer project={project} onClose={() => setAdding(false)} onAdded={open} />}
-      <Section title="监控" description="最近 1 小时的资源占用和请求情况。">
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} />
+      <Section
+        title="监控"
+        description="所有容器的资源占用合计及端口映射的请求情况。"
+        help="各容器的监控见容器页。耗时图中每个时段的 P95、P99 取该时段内的最大值，其余指标取平均值。"
+        actions={picker}
+      >
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} range={range} />
       </Section>
     </div>
   );
@@ -105,6 +112,8 @@ function ContainersTable({
   const targets = project.containers.filter((m) => checked[m.name]);
   const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
   const multi = project.containers.length > 1;
+  const usage = containerUsage(useProjectMetrics(project.id, project.containers.map((c) => c.nodeId)).data);
+  const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
 
   const deploy = (containers: Container[]) =>
     run(() =>
@@ -117,7 +126,12 @@ function ContainersTable({
     <Section
       flush
       title="容器"
-      description="选择容器查看详情；勾选多个可批量部署。"
+      description={
+        <>
+          <span className="xl:hidden">选择容器查看详情；勾选多个可批量部署。</span>
+          <span className="hidden xl:inline">在左侧项目栏中选择容器查看详情。</span>
+        </>
+      }
       help="批量部署按依赖顺序依次部署所选容器，并生成一条部署记录。"
       actions={
         <>
@@ -148,15 +162,18 @@ function ContainersTable({
       }
     >
       {project.containers.length === 0 ? (
-        <EmptyRow>暂无容器</EmptyRow>
+        <div className="xl:hidden">
+          <EmptyRow>暂无容器</EmptyRow>
+        </div>
       ) : (
-        <Table>
+        <Table className="xl:hidden">
           <thead>
             <tr>
               <Th className="w-10" />
               <Th>名称</Th>
               <Th>节点</Th>
               <Th>状态</Th>
+              <Th>CPU / 内存</Th>
               <Th>版本</Th>
               <Th>内网地址</Th>
             </tr>
@@ -164,6 +181,7 @@ function ContainersTable({
           <tbody>
             {project.containers.map((m) => {
               const svc = services.filter((s) => s.container === m.name);
+              const u = nodeOffline(m.nodeId) ? undefined : usage.get(m.name);
               return (
                 <tr key={m.name} className="group cursor-pointer transition-colors hover:bg-subtle" onClick={() => onOpen(m.name)}>
                   <Td onClick={(e) => e.stopPropagation()}>
@@ -194,6 +212,9 @@ function ContainersTable({
                   <Td>
                     {nodeOffline(m.nodeId) ? <Status tone="warning">节点离线</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
                   </Td>
+                  <Td>
+                    <UsageBars usage={u} memFallback={memFallback} className="w-36" />
+                  </Td>
                   <Td className="font-mono text-xs">
                     {m.deployedVersion > 0n ? `v${m.deployedVersion}` : <span className="text-muted-foreground">—</span>}
                     {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground"> / 最新 v{String(m.latestVersion)}</span>}
@@ -216,7 +237,8 @@ function ContainersTable({
 
 // ---- 一个容器 ----
 
-// ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 tab 参数里。
+// ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 view 参数里。
+// 宽屏时左边有项目栏（见 ProjectSplit），不再显示上级链接。
 export function ContainerPage({ projectId, name, view, onView }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void }) {
   const project = useQuery({
     queryKey: ["project", projectId],
@@ -235,7 +257,7 @@ export function ContainerPage({ projectId, name, view, onView }: { projectId: st
   if (!container) {
     return (
       <>
-        <Breadcrumb items={crumbs} />
+        <Breadcrumb items={crumbs} className="xl:hidden" />
         <Alert>项目里没有容器 {name}（可能已删除）</Alert>
       </>
     );
@@ -244,7 +266,7 @@ export function ContainerPage({ projectId, name, view, onView }: { projectId: st
   const hasImageUpdate = (project.data.status?.imageUpdates ?? []).some((u) => u.container === name);
   return (
     <>
-      <Breadcrumb items={[...crumbs, { label: name }]} />
+      <Breadcrumb items={[...crumbs, { label: name }]} className="xl:hidden" />
       <ContainerDetail project={p} container={container} services={services} hasImageUpdate={hasImageUpdate} view={view} onView={onView} />
     </>
   );
@@ -399,9 +421,9 @@ function ContainerDetail({
           { value: "data", label: "数据" },
         ]}
       />
-      <div className="grid gap-6">
+      <div key={view} className="grid animate-fade-in gap-6">
         {view !== "data" && output}
-        {view === "overview" && <Overview container={container} services={services} />}
+        {view === "overview" && <Overview project={project} container={container} services={services} />}
         {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} project={project} container={container} services={serviceNames} />}
         {view === "versions" && <Versions project={project} container={container} onRun={() => !busy && setLines([])} />}
         {view === "logs" && (
@@ -421,8 +443,9 @@ function ContainerDetail({
   );
 }
 
-function Overview({ container, services }: { container: Container; services: ServiceStatus[] }) {
+function Overview({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
   const cfg = container.draft ?? container.config;
+  const { range, picker } = useRange();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   return (
@@ -508,6 +531,9 @@ function Overview({ container, services }: { container: Container; services: Ser
           />
         </div>
       )}
+      <Section title="监控" description="容器的资源占用。" actions={picker}>
+        <ContainerMetrics projectId={project.id} nodeIds={project.containers.map((c) => c.nodeId)} container={container.name} range={range} />
+      </Section>
     </div>
   );
 }
