@@ -5,7 +5,9 @@
 //   - node:cpu、node:mem（百分比），node:mem_used、node:disk_free（字节），node:disk（百分比），
 //     node:net_rx、node:net_tx（字节/秒）
 //   - node:disk@<挂载点>（百分比）：项目目录所在、和节点目录不是同一块的磁盘
-//   - c:<项目 ID>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
+//   - c:<项目 ID>/<容器>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
+//   - l:<项目 ID>/<容器>:cpu（百分比，每核 100）、:mem（字节）：运行中的容器最多能用多少。
+//     设了限制按限制，没设按主机；容器组把各服务的限制加起来，有一个没设或加起来超过主机就按主机
 //   - r:<项目 ID>/<规则名>:req、:5xx（请求/秒）、:lat（平均耗时，毫秒），由 AddSource 提供
 package metrics
 
@@ -13,6 +15,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 
@@ -143,7 +146,9 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		}
 		c.prevCPUTotal, c.prevCPUIdle = total, idle
 	}
+	var memTotal uint64
 	if total, avail, ok := readMem(); ok {
+		memTotal = total
 		v["node:mem"] = 100 * float64(total-avail) / float64(total)
 		v["node:mem_used"] = float64(total - avail)
 	}
@@ -165,9 +170,12 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	containers, err := c.docker.ManagedInstances(ctx, labelLabel)
 	if err == nil {
 		seen := map[string]bool{}
+		limits := map[string]*limitSum{}
 		for _, ct := range containers {
 			prefix := "c:" + ct.Project + "/" + ct.Container + "/" + ct.Service + ":"
-			if n, err := c.docker.RestartCount(ctx, ct.ID); err == nil {
+			rt, rtErr := c.docker.Runtime(ctx, ct.ID)
+			if rtErr == nil {
+				n := rt.RestartCount
 				if c.ExtraRestarts != nil {
 					n += c.ExtraRestarts(ct.ID)
 				}
@@ -182,6 +190,13 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 			}
 			seen[ct.ID] = true
 			v[prefix+"mem"] += float64(st.MemUsed)
+			if rtErr == nil {
+				key := "l:" + ct.Project + "/" + ct.Container + ":"
+				if limits[key] == nil {
+					limits[key] = &limitSum{}
+				}
+				limits[key].add(rt, st)
+			}
 			if prev, ok := c.prevContainer[ct.ID]; ok && elapsed > 0 {
 				if st.SystemTotal > prev.SystemTotal && st.CPUTotal >= prev.CPUTotal {
 					cpus := float64(st.OnlineCPUs)
@@ -202,6 +217,11 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 				delete(c.prevContainer, id)
 			}
 		}
+		for key, l := range limits {
+			cpu, mem := l.result(memTotal)
+			v[key+"cpu"] = cpu
+			v[key+"mem"] = mem
+		}
 	}
 
 	if !first && elapsed > 0 {
@@ -217,6 +237,50 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	c.latest = v
 	c.mu.Unlock()
 	return v
+}
+
+// limitSum 累加一个容器（容器组里的各服务）的资源限制。
+type limitSum struct {
+	cpu, mem                   float64 // 设了限制的服务加起来：核数、字节
+	cpuUnlimited, memUnlimited bool    // 有服务没设限制
+	hostCPUs                   float64 // 主机（容器能用的）核数
+	hostMem                    float64 // Docker 报的内存上限：没设限制时就是主机内存，读不到 /proc/meminfo 时备用
+}
+
+func (l *limitSum) add(rt docker.Runtime, st docker.Stats) {
+	if rt.CPULimit > 0 {
+		l.cpu += rt.CPULimit
+	} else {
+		l.cpuUnlimited = true
+	}
+	if rt.MemLimit > 0 {
+		l.mem += float64(rt.MemLimit)
+	} else {
+		l.memUnlimited = true
+		l.hostMem = max(l.hostMem, float64(st.MemLimit))
+	}
+	l.hostCPUs = max(l.hostCPUs, float64(st.OnlineCPUs))
+}
+
+// result 返回 CPU（百分比，每核 100）和内存（字节）的上限。memTotal 是主机内存，读不到时为 0。
+func (l *limitSum) result(memTotal uint64) (cpu, mem float64) {
+	hostCPUs := l.hostCPUs
+	if hostCPUs == 0 {
+		hostCPUs = float64(runtime.NumCPU())
+	}
+	cpu = l.cpu
+	if l.cpuUnlimited || cpu > hostCPUs {
+		cpu = hostCPUs
+	}
+	hostMem := float64(memTotal)
+	if hostMem == 0 {
+		hostMem = l.hostMem
+	}
+	mem = l.mem
+	if hostMem > 0 && (l.memUnlimited || mem > hostMem) {
+		mem = hostMem
+	}
+	return 100 * cpu, mem
 }
 
 func (c *Collector) store(ctx context.Context, now time.Time, values map[string]float64) error {

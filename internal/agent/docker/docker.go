@@ -453,13 +453,33 @@ func (d *Client) StartInfo(ctx context.Context, id string) (StartInfo, error) {
 	return out, nil
 }
 
-// RestartCount 返回容器被 Docker 自动重启的次数。
-func (d *Client) RestartCount(ctx context.Context, id string) (int, error) {
+// Runtime 是容器被 Docker 自动重启的次数和设置的资源限制。
+type Runtime struct {
+	RestartCount int
+	MemLimit     uint64  // 字节，0 表示没有限制
+	CPULimit     float64 // 核数，0 表示没有限制
+}
+
+// Runtime 读取容器的重启次数和资源限制。
+// CPU 限制来自 compose 的 cpus / deploy.resources.limits.cpus（NanoCpus），或者 cpu_quota / cpu_period。
+func (d *Client) Runtime(ctx context.Context, id string) (Runtime, error) {
 	info, err := d.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	if err != nil {
-		return 0, err
+		return Runtime{}, err
 	}
-	return info.Container.RestartCount, nil
+	out := Runtime{RestartCount: info.Container.RestartCount}
+	if hc := info.Container.HostConfig; hc != nil {
+		if hc.Memory > 0 {
+			out.MemLimit = uint64(hc.Memory)
+		}
+		switch {
+		case hc.NanoCPUs > 0:
+			out.CPULimit = float64(hc.NanoCPUs) / 1e9
+		case hc.CPUQuota > 0 && hc.CPUPeriod > 0:
+			out.CPULimit = float64(hc.CPUQuota) / float64(hc.CPUPeriod)
+		}
+	}
+	return out, nil
 }
 
 // Kill 立即结束带某个标签的所有正在运行的容器（SIGKILL）。顶替时来不及优雅停止才用。
