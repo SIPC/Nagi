@@ -106,7 +106,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 
 ## 发布
 
-推送 `v*` 标签时，`.github/workflows/release.yml` 构建前端、运行 `go test ./...`，编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh` 和 `SHA256SUMS` 上传到 GitHub Release。
+推送 `v*` 标签时，`.github/workflows/release.yml` 构建前端、运行 `go test ./...`，编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh` 和 `SHA256SUMS` 上传到 GitHub Release。
 
 `scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。其他要点：
 
@@ -115,6 +115,12 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。
 - 带内嵌节点时确保 Docker 和 compose 插件可用，没有就自动安装；安装后把 nagi 注册为命令（`/usr/bin/nagi` 链接、bash 补全）。这些函数和节点安装脚本共用，源头是 `internal/server/api/install.go` 的 `sharedScript`，改动时两边一起改，`go test ./internal/server/api` 会检查。
 - 没有 systemd 时只安装二进制，并打印需要自行运行的命令。
+
+`scripts/uninstall.sh` 是面板和节点通用的卸载脚本。安装脚本或节点运行时新增了东西（服务、文件、容器标签、网络、镜像），要同步更新它：
+
+- 默认：停止并删除 `nagi-server`、`nagi-agent` 服务，删除 `/usr/local/bin/nagi`、`/usr/bin/nagi` 链接和 bash 补全，删除代理容器（`nagi.link` 标签）和它们的镜像 `nagi-link:empty`。
+- `--purge`：另外按 `nagi.project` 标签删除项目容器及其 compose 网络和 volume 对象、项目内网，以及服务配置里 `--data-dir` 指向的数据目录。
+- 容器目录（含运行数据和快照）任何情况下都不删，只列出位置；Docker 和 `/etc/docker/daemon.json` 不动。
 
 ## 改为项目在面板、容器分节点
 

@@ -1,5 +1,5 @@
 # 推送 v* 标签时发布：编译 linux/amd64、linux/arm64 的 nagi（前端打包在内），
-# 连同面板安装脚本和 SHA256SUMS 上传到 GitHub Release。
+# 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
 name: release
 
@@ -46,8 +46,8 @@ jobs:
               -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
               -o dist/nagi-linux-$arch ./cmd/nagi
           done
-          cp scripts/install.sh dist/install.sh
-          cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh > SHA256SUMS
+          cp scripts/install.sh scripts/uninstall.sh dist/
+          cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh > SHA256SUMS
 
       - uses: softprops/action-gh-release@v2
         with:
