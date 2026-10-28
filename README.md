@@ -40,7 +40,7 @@ Nagi 是一个开源的 Docker 项目面板，追求简单、美观、易于部�
 
 > 尚未发布，以下命令可能变更。
 
-支持 Linux（amd64 / arm64），前置依赖为 Docker 与 compose 插件（2.24 及以上版本）。
+支持 Linux（amd64 / arm64），需要 Docker 与 compose 插件（2.24 及以上版本）。面板和节点的安装脚本在未安装时会通过官方脚本 get.docker.com 自动安装，国内服务器可加 `--docker-mirror Aliyun`。安装后 `nagi` 注册为系统命令（含 bash 补全），可在 SSH 中直接使用，例如 `nagi reset password` 重置管理员密码。
 
 **安装面板**：用 root 执行。脚本下载 nagi 并校验 SHA-256，安装为 systemd 服务 `nagi-server`，启动后打印面板地址和初始化链接。面板内嵌一个节点，单机即可使用。首次启动时随机选择一个端口，也可通过 `--port` 指定；80 与 443 端口保留给项目域名。
 
@@ -48,9 +48,9 @@ Nagi 是一个开源的 Docker 项目面板，追求简单、美观、易于部�
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh
 ```
 
-可选参数（追加在 `sh -s --` 之后）：`--port <端口>`、`--no-agent`（只运行面板，不带内嵌节点）、`--version <版本>`、`--download-url <镜像地址>`，完整说明见 `--help`。再次执行即为升级。
+可选参数（追加在 `sh -s --` 之后）：`--port <端口>`、`--no-agent`（只运行面板，不带内嵌节点，也不需要 Docker）、`--version <版本>`、`--download-url <镜像地址>`、`--docker-mirror <Aliyun|AzureChinaCloud>`，完整说明见 `--help`。再次执行即为升级。
 
-**添加节点**：在面板中复制安装命令，在新服务器上执行。
+**添加节点**：在面板中复制安装命令，在新服务器上执行（同样可追加 `--docker-mirror Aliyun`）。
 
 ```bash
 curl --pinnedpubkey "sha256//<面板公钥指纹>" -k https://<地址:端口>/install.sh | sh -s -- --token <令牌>

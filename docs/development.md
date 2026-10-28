@@ -113,6 +113,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 已安装时再次执行即为升级，只更换二进制并重启；端口、数据目录、是否带内嵌节点不允许在升级时修改（已加入的节点按原端口连接面板）。
 - `--standby <配对码>` 安装备用面板：首次启动带上配对码，配对成功（数据目录出现 `panel/paired`）后从服务配置中去掉。
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。
+- 带内嵌节点时确保 Docker 和 compose 插件可用，没有就自动安装；安装后把 nagi 注册为命令（`/usr/bin/nagi` 链接、bash 补全）。这些函数和节点安装脚本共用，源头是 `internal/server/api/install.go` 的 `sharedScript`，改动时两边一起改，`go test ./internal/server/api` 会检查。
 - 没有 systemd 时只安装二进制，并打印需要自行运行的命令。
 
 ## 改为项目在面板、容器分节点

@@ -80,7 +80,7 @@ nagi panel remove <地址或指纹>      # 移除最后一个面板需要 --forc
    ```
 
    面板是自签证书，所以用 `-k` 跳过 CA 校验，真正的校验靠 `--pinnedpubkey` 钉住面板公钥，中间人无法冒充。
-2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root、是否已安装 Docker 和 compose 插件（2.24 或更新版本），不满足就提示用户先安装，不自动安装 Docker。然后从面板的 `/download/nagi-linux-<架构>` 下载 nagi 二进制（同样钉住公钥），执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。不依赖 GitHub，国内节点也能快速下载。
+2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从面板的 `/download/nagi-linux-<架构>` 下载 nagi 二进制（同样钉住公钥），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。不依赖 GitHub，国内节点也能快速下载。
    - 面板提供的二进制：优先用面板数据目录 `binaries/nagi-linux-<架构>`；没有时，如果面板自己就是这个架构的 Linux 版本，直接提供面板自身。面板和节点架构不同时，需要把对应架构的 nagi 放到 `binaries/` 下。
 3. **agent 在本地生成两对密钥**：身份密钥和 WireGuard 密钥。私钥都不离开节点。mesh 地址由 WireGuard 公钥直接算出，不需要分配（见 [mesh.md](mesh.md#地址)）。
 4. **agent 调用面板的 Enroll 接口**，提交令牌、身份公钥（CSR）和 WireGuard 公钥。
