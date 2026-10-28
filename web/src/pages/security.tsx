@@ -55,13 +55,13 @@ export function SecurityCard() {
         </SettingRow>
       )}
 
-      <SettingRow label="登录密码" description="修改后其他会话退出登录。" help="忘记密码时，在面板所在机器上执行 nagi reset password。">
+      <SettingRow label="登录密码" description="修改后其他会话将退出登录。" help="忘记密码时，在面板所在机器上执行 nagi reset password。">
         <div className="grid max-w-sm gap-3">
           {feedback("password")}
           <Field label="当前密码" htmlFor="sec-cur">
             <Input id="sec-cur" type="password" value={cur} onChange={(e) => setCur(e.target.value)} />
           </Field>
-          <Field label="新密码" htmlFor="sec-next" hint="至少 8 位">
+          <Field label="新密码" htmlFor="sec-next" hint="至少 8 个字符">
             <Input id="sec-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
           </Field>
           <div>
@@ -114,11 +114,11 @@ export function SecurityCard() {
                   dangerouslySetInnerHTML={{ __html: renderSVG(setup.uri, { border: 1 }) }}
                 />
                 <div className="grid min-w-0 flex-1 gap-3">
-                  <p className="text-[13px] text-muted-foreground">用验证器应用（例如 Google Authenticator、1Password）扫描二维码；不能扫码时手动输入密钥。</p>
+                  <p className="text-[13px] text-muted-foreground">使用验证器应用（如 Google Authenticator、1Password）扫描二维码；无法扫码时可手动输入密钥。</p>
                   <CodeBlock copy>{setup.secret}</CodeBlock>
                 </div>
               </div>
-              <Field label="验证码" htmlFor="totp-enable" hint="验证器应用显示的 6 位数字">
+              <Field label="验证码" htmlFor="totp-enable" hint="6 位数字">
                 <Input id="totp-enable" className="w-40 font-mono" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
               </Field>
               <div className="flex gap-2">
@@ -153,7 +153,7 @@ export function SecurityCard() {
           )}
           {s?.totpEnabled && (
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="验证码或登录密码" htmlFor="totp-disable" help="关闭两步验证前需确认身份：输入验证器应用当前的 6 位验证码；验证器丢了时输入登录密码。">
+              <Field label="验证码或登录密码" htmlFor="totp-disable" help="关闭两步验证前需验证身份：输入验证器应用当前的 6 位验证码；验证器丢失时输入登录密码。">
                 <Input
                   id="totp-disable"
                   type={/^\d{0,6}$/.test(code) ? "text" : "password"}
@@ -183,7 +183,7 @@ export function SecurityCard() {
         </div>
       </SettingRow>
 
-      <SettingRow label="安全入口" description="开启后，需先访问入口地址才能打开登录页。" help="忘记入口地址时，在面板所在机器上执行 nagi reset entrance。">
+      <SettingRow label="安全入口" description="开启后须通过入口地址访问登录页。" help="忘记入口地址时，在面板所在机器上执行 nagi reset entrance。">
         <div className="grid gap-3">
           {feedback("entrance")}
           {s?.entrance && <CodeBlock copy>{`${window.location.origin}/${s.entrance}`}</CodeBlock>}

@@ -90,7 +90,7 @@ function Snapshots({
       flush
       title="快照"
       description="容器的 data/ 和 volumes/ 单独保存，恢复时配置保持不变。"
-      help="定时和手动快照可在此恢复。「部署前数据」和「版本文件」用于回滚，在容器的「版本」中操作。快照仓库在容器所在的节点上，容器目录的 backups/ 里。"
+      help="定时和手动快照可在此恢复。「部署前数据」和「版本文件」用于回滚，在容器的「版本」中操作。快照仓库位于容器所在节点的容器目录 backups/ 下。"
       actions={
         deployed &&
         online && (
@@ -242,7 +242,7 @@ function SnapshotList({
             disabled={busy}
             onClick={() =>
               confirm(
-                `从此快照恢复容器 ${container} 的 data/ 和 volumes/？恢复前将先停止容器，当前数据将被覆盖。`,
+                `从此快照恢复容器 ${container} 的 data/ 和 volumes/？恢复前将停止容器，当前数据将被覆盖。`,
               ) &&
               run(() =>
                 projectClient.restoreSnapshot({
@@ -320,8 +320,8 @@ function Backup({
   return (
     <Section
       title="备份节点"
-      description="每次定时快照后，把容器的快照仓库增量同步到另一个节点。"
-      help="备份节点只保存副本，不运行容器、不会自动顶替。容器所在的节点损坏时，可以在备份节点上把容器恢复出来；数据来自副本，配置来自面板。"
+      description="每次定时快照后，将容器的快照仓库增量同步到另一节点。"
+      help="备份节点仅保存副本，不运行容器，也不自动顶替。容器所在节点损坏时，可在备份节点上恢复容器：数据来自副本，配置来自面板。"
     >
       <div className="grid gap-4">
         {container.backupNodeId ? (
@@ -401,13 +401,13 @@ function Backup({
           </>
         ) : container.failover ? (
           <p className="text-[13px] text-muted-foreground">
-            容器设置了顶替，顶替节点上已有一份随时更新的副本，不需要备份节点。
+            容器已设置顶替，顶替节点上已有持续更新的副本，无需备份节点。
           </p>
         ) : (
           <>
             {candidates.length === 0 ? (
               <p className="text-[13px] text-muted-foreground">
-                没有其他在线节点可用作备份节点。
+                无其他在线节点可用作备份节点。
               </p>
             ) : (
               <div className="flex flex-wrap items-end gap-3">
@@ -465,7 +465,7 @@ function RestoreFromBackup({
   });
   const restore = (snapshotId: string) =>
     confirm(
-      `在 ${nodes.name(container.backupNodeId)} 上恢复容器 ${container.name}？恢复后容器改在该节点上运行，原节点恢复上线时会停止其上的这个容器并保留目录。`,
+      `在 ${nodes.name(container.backupNodeId)} 上恢复容器 ${container.name}？恢复后容器将在该节点上运行；原节点重新上线时，其上的该容器将被停止，目录保留。`,
     ) &&
     run.run(() =>
       projectClient.restoreFromBackup({
@@ -481,7 +481,7 @@ function RestoreFromBackup({
         <Field
           label="恢复到目录"
           htmlFor="restore-dir"
-          help="默认是备份节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。"
+          help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
         >
           <DirInput
             id="restore-dir"
@@ -494,7 +494,7 @@ function RestoreFromBackup({
           />
         </Field>
         <Button size="sm" disabled={run.busy} onClick={() => restore("")}>
-          用最新的快照恢复
+          从最新快照恢复
         </Button>
       </div>
       {snapshots.isPending ? (
@@ -514,7 +514,7 @@ function RestoreFromBackup({
                 disabled={run.busy}
                 onClick={() => restore(id)}
               >
-                用此快照恢复
+                从此快照恢复
               </Button>
             )
           }
@@ -564,7 +564,7 @@ function Placement({
     );
   const redeploy = () =>
     confirm(
-      `将容器 ${container.name} 重新部署到 ${target}？运行数据和旧版本的文件都在原节点上，新节点上的数据为空，旧版本无法带文件回滚。`,
+      `将容器 ${container.name} 重新部署到 ${target}？运行数据和旧版本文件均保留在原节点上，新节点上的数据为空，回滚到旧版本时不包含版本文件。`,
     ) &&
     run.run(() =>
       projectClient.redeployElsewhere({
@@ -580,10 +580,10 @@ function Placement({
       title="更换节点"
       description={
         online
-          ? "把容器连同数据迁移到另一个节点，名称、配置、版本记录和 webhook 地址不变。"
+          ? "将容器连同数据迁移到另一节点，名称、配置、版本记录和 webhook 地址不变。"
           : "容器所在的节点离线。"
       }
-      help="迁移：先在容器运行时同步一次，停止后再增量同步最后的数据，停机时间很短，不丢数据。原节点离线时：设置了备份节点的，用「从备份节点恢复」；没有副本的，只能重新部署到其他节点（数据为空）。"
+      help="迁移：容器运行时进行首次同步，停止后增量同步剩余数据，停机时间短，数据不丢失。原节点离线时：已设置备份节点的，使用「从备份节点恢复」；无副本的，仅可重新部署到其他节点（数据为空）。"
     >
       <div className="grid gap-4">
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
@@ -597,16 +597,16 @@ function Placement({
         </dl>
         {!online && container.backupNodeId && (
           <Notice tone="warning">
-            容器设置了备份节点，建议在上方「备份节点」中从副本恢复，可保留数据。
+            容器已设置备份节点，建议在上方「备份节点」中从副本恢复，以保留数据。
           </Notice>
         )}
         {container.failover ? (
           <p className="border-t pt-4 text-[13px] text-muted-foreground">
-            容器设置了顶替，由租约决定在哪个节点运行。要更换节点，请先取消顶替。
+            容器已设置顶替，运行节点由租约决定。更换节点前须取消顶替。
           </p>
         ) : candidates.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            没有其他在线节点。
+            无其他在线节点。
           </p>
         ) : (
           <div className="flex flex-wrap items-end gap-3 border-t pt-4">
@@ -628,7 +628,7 @@ function Placement({
             <Field
               label="容器目录"
               htmlFor="move-dir"
-              help="默认是目标节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。"
+              help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
             >
               <DirInput
                 id="move-dir"
@@ -724,16 +724,16 @@ function Failover({
     return (
       <Section
         title="顶替"
-        description="指定一个顶替节点：容器所在的节点故障时，由顶替节点自动接手运行。"
-        help="容器所在节点、顶替节点和见证人各有一票，拿到两票的一方运行容器。所在节点每 15 分钟把快照同步给顶替节点，顶替节点提前拉好镜像。有状态容器默认等待确认后才顶替，因为最后一次同步之后写入的数据会丢失。"
+        description="容器所在节点故障时，由指定的顶替节点自动接管运行。"
+        help="容器所在节点、顶替节点和见证人各持一票，获得两票的一方运行容器。所在节点每 15 分钟将快照同步至顶替节点，顶替节点预先拉取镜像。有状态容器默认在确认后顶替，因最后一次同步之后写入的数据将丢失。"
       >
         {container.backupNodeId ? (
           <p className="text-[13px] text-muted-foreground">
-            容器设置了备份节点。顶替与备份节点二选一，请先取消备份节点。
+            容器已设置备份节点。顶替与备份节点不可同时设置，设置顶替前须取消备份节点。
           </p>
         ) : standbys.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            没有其他在线节点可用作顶替节点。
+            无其他在线节点可用作顶替节点。
           </p>
         ) : (
           <div className="grid gap-4">
@@ -755,9 +755,9 @@ function Failover({
                 </Select>
               </Field>
               <Field
-                label="顶替节点上的目录"
+                label="顶替节点目录"
                 htmlFor="fo-dir"
-                help="默认是顶替节点的项目根目录下「项目名/容器名」，可以改成任意绝对路径，须不存在或为空。"
+                help="默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。"
               >
                 <DirInput
                   id="fo-dir"
@@ -774,7 +774,7 @@ function Failover({
               <Field
                 label="见证人"
                 htmlFor="fo-witness"
-                help="只投票，不运行容器。默认是面板；担心面板和某个节点同时故障时，可以选另一台节点。"
+                help="仅参与投票，不运行容器。默认为面板；为避免面板与节点同时故障，可指定其他节点。"
               >
                 <Select
                   id="fo-witness"
@@ -795,7 +795,7 @@ function Failover({
               <Field
                 label="租约时长（秒）"
                 htmlFor="fo-lease"
-                help="默认 30 秒，每 1/3 续约一次。所在节点故障后大约 40 秒内完成顶替。"
+                help="默认 30 秒，每 1/3 租约时长续约一次。所在节点故障后约 40 秒内完成顶替。"
               >
                 <Input
                   id="fo-lease"
@@ -811,7 +811,7 @@ function Failover({
               <Check
                 checked={form.autoFailback}
                 onChange={(v) => setForm({ ...form, autoFailback: v })}
-                help="原节点恢复并稳定 10 分钟后，把容器交还给它：停止、同步最后的数据、在原节点上启动，不丢数据。"
+                help="原节点恢复并稳定运行 10 分钟后，将容器切回原节点：停止容器、同步剩余数据、在原节点上启动，数据不丢失。"
               >
                 原节点恢复后自动切回
               </Check>
@@ -819,9 +819,9 @@ function Failover({
                 <Check
                   checked={form.autoStateful}
                   onChange={(v) => setForm({ ...form, autoStateful: v })}
-                  help="不等确认直接顶替，接受丢失最后一次同步之后写入的数据。"
+                  help="无需确认即顶替，最后一次同步之后写入的数据将丢失。"
                 >
-                  有状态容器也自动顶替
+                  有状态容器自动顶替
                 </Check>
               )}
             </div>
@@ -866,9 +866,9 @@ function Failover({
       </Status>
     );
   else if (holder?.role === "holder" && holder.leaseRemainingMs > 0n)
-    state = <Status tone="success">正常运行</Status>;
+    state = <Status tone="success">运行中</Status>;
   else if (holder?.role === "holder")
-    state = <Status tone="danger">续不上租约，容器已停止</Status>;
+    state = <Status tone="danger">租约续约失败，容器已停止</Status>;
   else if (!holderOnline && standby?.pendingConfirm)
     state = <Status tone="warning">所在节点失联，等待确认顶替</Status>;
   else if (!holderOnline) state = <Status tone="warning">所在节点离线</Status>;
@@ -882,8 +882,8 @@ function Failover({
   return (
     <Section
       title="顶替"
-      description="容器所在的节点故障时，由另一个节点自动接手运行。"
-      help="容器所在节点、顶替节点和见证人各有一票，拿到两票的一方运行容器。所在节点每 15 分钟把快照同步给热备。"
+      description="容器所在节点故障时，由另一节点自动接管运行。"
+      help="容器所在节点、顶替节点和见证人各持一票，获得两票的一方运行容器。所在节点每 15 分钟将快照同步至热备。"
     >
       <div className="grid gap-4">
         <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
@@ -916,9 +916,9 @@ function Failover({
             ) : (
               <span
                 className="text-warning"
-                title="见证人还是换面板以前的旧面板；节点上报后本面板会自动换成自己，之前容器所在节点和顶替节点两票照常构成多数。"
+                title="见证人仍为更换前的旧面板。节点上报后自动切换为本面板；切换完成前，容器所在节点与顶替节点的两票仍构成多数。"
               >
-                旧面板（正在换成本面板）
+                旧面板（正在切换为本面板）
               </span>
             )}
           </dd>
@@ -960,7 +960,7 @@ function Failover({
               </Button>
             }
           >
-            容器所在的节点失联。这是有状态容器，顶替会丢失最后一次同步之后写入的数据。
+            容器所在节点失联。该容器为有状态容器，顶替后最后一次同步之后写入的数据将丢失。
           </Notice>
         )}
         {(holder?.lastError || standby?.lastError) && (
@@ -1007,7 +1007,7 @@ function Failover({
             disabled={busy}
             onClick={() =>
               confirm(
-                `取消容器 ${container.name} 的顶替？热备上的副本将被删除，容器留在 ${nodes.name(container.nodeId)} 上。`,
+                `取消容器 ${container.name} 的顶替？热备上的副本将被删除，容器保留在 ${nodes.name(container.nodeId)} 上。`,
               ) && call(() => projectClient.clearFailover(ref))
             }
           >

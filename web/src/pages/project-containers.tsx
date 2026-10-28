@@ -146,10 +146,10 @@ function ContainersTable({
               size="sm"
               disabled={busy}
               onClick={() => deploy(changed)}
-              title={"有草稿、共享变量改过或还没部署过的容器：" + changed.map((m) => m.name).join("、")}
+              title={"存在草稿、共享变量已变更或尚未部署的容器：" + changed.map((m) => m.name).join("、")}
             >
               {busy ? <Spinner /> : <Rocket />}
-              部署有改动的（{changed.length}）
+              部署全部变更（{changed.length}）
             </Button>
           )}
           {multi && targets.length > 0 && (
@@ -258,7 +258,7 @@ export function ContainerPage({ projectId, name, view, onView }: { projectId: st
     return (
       <>
         <Breadcrumb items={crumbs} className="xl:hidden" />
-        <Alert>项目里没有容器 {name}（可能已删除）</Alert>
+        <Alert>项目中不存在容器 {name}，可能已被删除。</Alert>
       </>
     );
   }
@@ -320,9 +320,9 @@ function ContainerDetail({
 
   const remove = async (): Promise<boolean> => {
     const deleteDir = confirm(
-      `删除${kind} ${container.name}？${kind === "容器组" ? "组内的容器" : "容器"}将被停止并删除。\n\n选择"确定"同时删除${kind}目录及其中的数据；选择"取消"仅删除容器并保留目录。`,
+      `删除${kind} ${container.name}？${kind === "容器组" ? "组内的容器" : "容器"}将被停止并删除。\n\n选择「确定」同时删除${kind}目录及其中的数据；选择「取消」仅删除容器并保留目录。`,
     );
-    if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器并保留${kind}目录？`)) return false;
+    if (!deleteDir && !confirm(`仅删除${kind} ${container.name} 的容器？${kind}目录及其中的数据将保留。`)) return false;
     try {
       await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
@@ -453,12 +453,12 @@ function Overview({ project, container, services }: { project: Project; containe
       {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
       {node && !node.online && (
         <Notice tone="warning" title="节点离线">
-          容器所在的节点 {node.name} 离线，状态可能不是最新的。
+          容器所在节点 {node.name} 离线，状态可能未及时更新。
         </Notice>
       )}
       {container.hostNetworkServices.length > 0 && (
         <Notice tone="warning" title="使用 host 网络">
-          容器 {container.hostNetworkServices.join("、")} 不经过 Caddy、不在项目内网中，端口直接对外开放，需自行配置防火墙。
+          容器 {container.hostNetworkServices.join("、")} 不经过 Caddy，不在项目内网中，端口对外开放，需自行配置防火墙。
         </Notice>
       )}
       {container.unmanagedVolumes.length > 0 && (
@@ -517,7 +517,7 @@ function Overview({ project, container, services }: { project: Project; containe
                 <span className="inline-flex items-center gap-1">deploy key</span>,
                 <div className="grid gap-1">
                   <CodeBlock copy>{container.deployKey}</CodeBlock>
-                  <span className="text-xs text-muted-foreground">添加到仓库的只读 deploy key。</span>
+                  <span className="text-xs text-muted-foreground">需在仓库中添加为只读 deploy key。</span>
                 </div>,
               ],
               [
@@ -720,7 +720,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
         <Field label="保留路径" htmlFor="edit-preserve" className="sm:col-span-2" hint="相对 data/，每行一个" help="更新文件（上传或 git 拉取）时保留这些路径，例如用户上传的文件。">
           <Textarea id="edit-preserve" value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
         </Field>
-        <Field label="依赖" htmlFor="edit-deps" hint="容器名，逗号分隔" help="批量部署时，先部署这里列出的容器。">
+        <Field label="依赖" htmlFor="edit-deps" hint="容器名，逗号分隔" help="批量部署时，优先部署所列容器。">
           <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
         </Field>
       </div>
@@ -730,7 +730,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
             <Textarea id="edit-env" value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
           </Field>
           {services.map((s) => (
-            <Field key={s} label={`环境变量：${s}`} htmlFor={`edit-env-${s}`} hint="KEY=VALUE，每行一个；仅注入此容器">
+            <Field key={s} label={`环境变量：${s}`} htmlFor={`edit-env-${s}`} hint="KEY=VALUE，每行一个" help="仅注入此容器。">
               <Textarea
                 id={`edit-env-${s}`}
                 value={serviceEnv[s] ?? ""}

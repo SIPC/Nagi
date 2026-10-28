@@ -74,7 +74,7 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
             />
           </Field>
         )}
-        <Field label="工作目录" htmlFor={prefix + "workdir"} help="将容器的 data/ 目录（上传或从 git 拉取的文件）挂载到容器内的这个路径。留空则不挂载。">
+        <Field label="工作目录" htmlFor={prefix + "workdir"} help="容器 data/ 目录（上传或从 git 拉取的文件）在容器内的挂载路径。留空则不挂载。">
           <Input id={prefix + "workdir"} value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className="font-mono" />
         </Field>
         <Field label="持久化目录" htmlFor={prefix + "volumes"} hint="容器内路径，每行一个" help="数据保存在容器目录的 volumes/ 下，包含在快照、备份和迁移中。">
@@ -138,7 +138,7 @@ export function useContainerForm(first = false): { fields: ReactNode; build: () 
         </div>
       </Field>
       {mode === "compose" ? (
-        <Field label="compose" htmlFor="compose" help="整份 compose 作为一个容器组，适合自带数据库等依赖的应用。组内容器通过 compose 中的服务名互相访问。">
+        <Field label="compose" htmlFor="compose" help="compose 文件整体作为一个容器组，适用于自带数据库等依赖的应用。组内容器通过 compose 中的服务名互相访问。">
           <Textarea
             id="compose"
             value={compose}
@@ -152,7 +152,7 @@ export function useContainerForm(first = false): { fields: ReactNode; build: () 
         imageForm.fields
       )}
       {!first && (
-        <Field label="依赖" htmlFor="deps" hint="容器名，逗号分隔" help="批量部署时，先部署这里列出的容器，例如后端依赖数据库。">
+        <Field label="依赖" htmlFor="deps" hint="容器名，逗号分隔" help="批量部署时，优先部署此处列出的容器，例如后端依赖的数据库。">
           <Input id="deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
         </Field>
       )}

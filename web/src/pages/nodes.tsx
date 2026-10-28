@@ -47,7 +47,7 @@ export function NodesPage() {
     <>
       <PageHeader
         title="节点"
-        description="运行容器的机器。节点主动连接面板，面板不可用时节点上的容器照常运行。"
+        description="运行容器的机器，由节点主动连接面板；面板不可用时容器照常运行。"
         actions={
           <>
             <Button onClick={() => setDialog("add")}>
@@ -100,7 +100,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
       <div className="grid flex-1 content-start gap-1.5 px-3.5 py-2.5">
         {n.pending ? (
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] text-muted-foreground">通过接入码加入，批准后才能使用。</span>
+            <span className="text-[13px] text-muted-foreground">通过接入码加入，批准后可用。</span>
             <Button
               size="xs"
               variant="outline"
@@ -202,8 +202,8 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       />
       {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
-        <Notice tone="warning" title="尚未批准">
-          该节点通过接入码加入，尚未批准。确认是自有机器后批准，批准后才能查看和操作。
+        <Notice tone="warning" title="待批准">
+          该节点通过接入码加入。请确认为自有机器后批准；批准前无法查看和操作。
         </Notice>
       ) : (
         <>
@@ -262,7 +262,7 @@ function AddNode() {
   return (
     <div className="grid gap-4">
       {error && <Alert>{error}</Alert>}
-      <Field label="面板对外地址" help="节点通过该地址连接面板，必须能从节点访问。" htmlFor="public-address">
+      <Field label="面板对外地址" help="节点通过该地址连接面板，须可从节点访问。" htmlFor="public-address">
         <div className="flex flex-wrap items-center gap-2">
           <Input id="public-address" className="w-56 font-mono" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
           <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
@@ -320,7 +320,7 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
         label="项目根目录"
         htmlFor={`root-${nodeId}`}
         hint="绝对路径"
-        help="新放到这个节点的容器，目录默认是 <项目根目录>/<网络名>/<容器名>。已有容器的目录不变。"
+        help="新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。"
       >
         <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
       </Field>
@@ -343,7 +343,7 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const remove = async (projectId: string, container: string, label: string) => {
-    if (!confirm(`删除副本 ${label}？副本里的快照将被删除，无法恢复。`)) return;
+    if (!confirm(`删除副本 ${label}？副本中的快照将被删除，且无法恢复。`)) return;
     setError("");
     try {
       await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
@@ -389,7 +389,7 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
 function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: UnknownContainer[]; onDone: () => void }) {
   const [error, setError] = useState("");
   const adopt = async (u: UnknownContainer) => {
-    if (!confirm(`把节点上的容器 ${u.container} 加入项目 ${u.projectName}？按节点缓存里的配置加入，所在节点是这个节点。请确认这是你自己部署的容器。`)) return;
+    if (!confirm(`将容器 ${u.container} 加入项目 ${u.projectName}？容器按节点缓存中的配置加入，所在节点为本节点。请确认该容器为自行部署。`)) return;
     setError("");
     try {
       await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
@@ -399,8 +399,8 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
     }
   };
   return (
-    <Notice tone="warning" title="节点上有面板不认识的容器" className="mb-6">
-      <p>这些容器的配置在节点上，项目里却没有它们（例如面板从备份恢复过）。确认是自己的容器后可以加入项目；不认识的不要加入。</p>
+    <Notice tone="warning" title="未识别的容器" className="mb-6">
+      <p>以下容器的配置存在于节点上，但不在对应项目中（例如面板曾从备份恢复）。确认为自有容器后可加入项目；来源不明的容器请勿加入。</p>
       {error && <Alert className="mt-2">{error}</Alert>}
       <ul className="mt-2 grid gap-1.5">
         {list.map((u) => (

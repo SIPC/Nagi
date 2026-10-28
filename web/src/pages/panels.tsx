@@ -36,7 +36,7 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
   };
 
   const run = async () => {
-    if (!confirm(`移交选中的 ${selected.length} 个节点？移交后本面板将不再管理这些节点和只在这些节点上的项目，新面板从节点上的缓存恢复这些项目。`)) return;
+    if (!confirm(`移交选中的 ${selected.length} 个节点？本面板将不再管理这些节点及仅部署在其上的项目，新面板从节点缓存恢复这些项目。`)) return;
     setBusy(true);
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
     try {
@@ -53,7 +53,7 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
   return (
     <div className="grid gap-4">
       <p className="text-[13px] text-muted-foreground">
-        接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交按整个项目进行，项目相关的节点（容器所在、顶替、备份、见证）须一并选中。
+        接入码在新面板的「设置」页生成。新面板接管后，本面板从节点上移除自身，不再管理这些节点。移交以项目为单位，项目相关节点（容器所在节点、顶替节点、备份节点、见证人）须一并选中。
       </p>
         <Field label="接入码" hint="格式：nagi-invite:…" htmlFor="handover-code">
           <Textarea
@@ -66,7 +66,7 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
           />
         </Field>
         {projectList.length > 0 && (
-          <Field label="按项目选择" help="选中项目会同时选中它的容器所在节点、备份节点、顶替节点和作为见证人的节点。">
+          <Field label="按项目选择" help="选中项目时，同时选中其容器所在节点、备份节点、顶替节点和见证人节点。">
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {projectList.map((p) => (
                 <Check key={p.id} checked={projectSelected(p)} onChange={(v) => toggleProject(p, v)}>

@@ -123,7 +123,7 @@ export function ProjectsPage() {
 
   return (
     <>
-      <PageHeader title="项目" description="项目是一组协同工作的容器，容器可以分布在不同节点上，互相按名称访问。" actions={newButton} />
+      <PageHeader title="项目" description="项目由一组协同工作的容器组成，容器可分布在不同节点，并按名称互相访问。" actions={newButton} />
       <div className="grid gap-6">
         <Reminders />
         {projects.isPending ? (
@@ -186,7 +186,7 @@ export function ProjectsPage() {
                       {p.containers.length} 个容器{p.routes.length > 0 && ` · ${p.routes.length} 个端口映射`}
                     </span>
                     <span className="tabular-nums">
-                      {p.rebuiltAt ? `拼回于 ${formatDate(toDate(p.rebuiltAt))}` : `创建于 ${formatDate(toDate(p.createdAt))}`}
+                      {p.rebuiltAt ? `重建于 ${formatDate(toDate(p.rebuiltAt))}` : `创建于 ${formatDate(toDate(p.createdAt))}`}
                     </span>
                   </div>
                 </Link>
@@ -241,7 +241,7 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
   const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="节点" htmlFor="container-node" help="容器运行在这个节点上，之后可以迁移到其他节点。">
+      <Field label="节点" htmlFor="container-node" help="容器在此节点上运行，创建后可迁移至其他节点。">
         <Select id="container-node" value={selected} onChange={(e) => setNodeId(e.target.value)} required>
           {onlineNodes.length === 0 && <option value="">无在线节点</option>}
           {onlineNodes.map((n) => (
@@ -254,7 +254,7 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
       <Field
         label="容器目录"
         htmlFor="container-dir"
-        help="容器的运行文件、数据和快照都在这个目录里，可以填任意绝对路径，须不存在或为空。不填则使用默认目录：节点的项目根目录下「项目名/容器名」，项目名转成拼音，重名时加 -2。"
+        help="存放容器的运行文件、数据和快照。须为绝对路径，且目录不存在或为空。留空时使用默认目录：<项目根目录>/<项目名>/<容器名>，项目名转为拼音，重名时追加 -2 等后缀。"
       >
         <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} className="font-mono" />
       </Field>
@@ -287,7 +287,7 @@ export function NewProjectPage() {
   return (
     <div className="max-w-3xl">
       <Breadcrumb items={[{ label: "项目", to: "/projects" }, { label: "新建项目" }]} />
-      <PageHeader title="新建项目" description="创建后不会立即部署，检查配置后可手动部署。" />
+      <PageHeader title="新建项目" description="创建后不自动部署，确认配置后可手动部署。" />
       <form
         className="grid gap-6"
         onSubmit={(e) => {
@@ -303,8 +303,8 @@ export function NewProjectPage() {
             <Field
               label="网络名"
               htmlFor="network"
-              hint="小写字母、数字和 -；留空则由名称生成"
-              help="在面板上唯一。连接本项目的项目通过「容器.网络名」访问本项目的容器。留空时由项目名生成，汉字转成拼音。"
+              hint="小写字母、数字和 -"
+              help="在面板内唯一。已连接本项目的项目通过「容器.网络名」访问本项目的容器。留空时由项目名生成，汉字转为拼音。"
             >
               <Input
                 id="network"

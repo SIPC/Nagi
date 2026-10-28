@@ -17,16 +17,16 @@ export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
     if (
       !confirm(
         "将本面板提升为主面板？\n\n" +
-          "· 主面板仍在运行时不要提升，否则可能出现两份不一致的修改。\n" +
-          "· 提升后节点只接受本面板的修改，其他备用面板改为从本面板同步。\n" +
-          "· 原主面板恢复后会自动降为备用面板，它最后几秒内未同步的修改将丢失。",
+          "· 主面板仍在运行时不应提升，否则两个面板可能产生不一致的修改。\n" +
+          "· 提升后，节点仅接受本面板的修改，其他备用面板改为从本面板同步。\n" +
+          "· 原主面板恢复后自动降为备用面板，其最后数秒内未同步的修改将丢失。",
       )
     )
       return;
     setBusy(true);
     try {
       const res = await settingsClient.promoteStandby({});
-      alert(`已提升为主面板（任期 ${res.term}），面板正在重新启动，页面将自动刷新。`);
+      alert(`已提升为主面板（任期 ${res.term}）。面板正在重启，页面将自动刷新。`);
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
       alert(errorMessage(err));
@@ -81,7 +81,7 @@ export function StandbyCard() {
     }
   };
   const remove = async (id: string, name: string) => {
-    if (!confirm(`移除备用面板 ${name}？它将无法再同步本面板的数据，备用面板上的数据目录需要手动删除。`)) return;
+    if (!confirm(`移除备用面板 ${name}？该备用面板将无法再同步本面板数据，其数据目录须手动删除。`)) return;
     setError("");
     try {
       await settingsClient.removeStandby({ id });
@@ -95,7 +95,7 @@ export function StandbyCard() {
     <Section
       flush
       title="已配对的备用面板"
-      help="备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。平时只读，所有修改在主面板上进行。"
+      help="备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。备用面板为只读，所有修改在主面板上进行。"
       actions={
         <Button size="sm" variant="outline" onClick={create} disabled={busy}>
           {busy && <Spinner />}
@@ -136,13 +136,13 @@ export function StandbyCard() {
           </tbody>
         </Table>
       )}
-      <Dialog open={code !== null} onClose={() => setCode(null)} title="添加备用面板" description="在新机器上用配对码启动备用面板。">
+      <Dialog open={code !== null} onClose={() => setCode(null)} title="添加备用面板" description="在新机器上使用配对码启动备用面板。">
         {code && (
           <div className="grid gap-4">
-            <Field label="启动命令" hint="数据目录须为空；配对码 1 小时内有效，只能使用一次">
+            <Field label="启动命令" hint="数据目录须为空；配对码 1 小时内有效，仅可使用一次">
               <CodeBlock copy>{`nagi server --standby ${code.code}`}</CodeBlock>
             </Field>
-            <Notice>备用面板启动后自动连接本面板并开始同步，出现在列表中。</Notice>
+            <Notice>备用面板启动后自动连接本面板并开始同步，同时显示在列表中。</Notice>
           </div>
         )}
       </Dialog>

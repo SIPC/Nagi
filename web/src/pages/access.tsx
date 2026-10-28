@@ -59,8 +59,8 @@ export function PanelAccessCard() {
       <SettingRow
         label="对外地址"
         htmlFor="panel-address"
-        description="节点通过「对外地址:面板端口」连接面板，安装命令里也用它。"
-        help="必须能从所有节点访问。修改后在线的节点会收到新地址，下次重连时使用；当时离线的节点要在节点上执行 nagi panel add 更新。"
+        description="节点通过「对外地址:面板端口」连接面板，安装命令同样使用该地址。"
+        help="须可从所有节点访问。修改后，在线节点接收新地址并在下次重连时使用；修改时离线的节点须在节点上执行 nagi panel add 更新。"
       >
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -92,7 +92,7 @@ export function PanelAccessCard() {
             ? `通过 https://${s.domain} 访问面板。`
             : "留空表示不绑定，通过 https://对外地址:端口 访问。"
         }
-        help="域名要先解析到本机。绑定后由本机的 Caddy 经 80/443 反代面板并自动申请证书；节点仍然通过对外地址和面板端口连接。"
+        help="域名须预先解析到本机。绑定后由本机 Caddy 经 80/443 端口反向代理面板并自动申请证书；节点仍通过对外地址和面板端口连接。"
       >
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -116,7 +116,7 @@ export function PanelAccessCard() {
       </SettingRow>
       <SettingRow
         label="公钥指纹"
-        description="节点和备用面板连接时核对这个指纹，确认连的是本面板。"
+        description="节点和备用面板连接时核对此指纹，以确认连接的是本面板。"
       >
         <div className="flex items-center gap-1">
           <code className="truncate font-mono text-[13px]">

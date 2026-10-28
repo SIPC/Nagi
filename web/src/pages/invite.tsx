@@ -28,8 +28,8 @@ export function InviteCard() {
   return (
     <Section
       title="接入码"
-      description="在原面板移交节点时粘贴。添加新机器请用节点页的「添加节点」。"
-      help="接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点需在节点页批准后才能使用，以防接入码泄露后被他人利用。"
+      description="在原面板移交节点时使用；添加新机器使用节点页的「添加节点」。"
+      help="接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点须在节点页批准后方可使用，以防接入码泄露后被他人利用。"
       actions={
         <Button size="sm" onClick={create}>
           生成接入码

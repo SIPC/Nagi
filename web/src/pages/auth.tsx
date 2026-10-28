@@ -137,7 +137,7 @@ export function LoginPage() {
   return (
     <AuthShell
       title={needCode ? "两步验证" : "登录"}
-      description={needCode ? "输入身份验证器应用中的 6 位验证码。" : "使用管理员账号登录面板。"}
+      description={needCode ? "输入验证器应用中的 6 位验证码。" : "使用管理员账号登录面板。"}
     >
       {setupState.data && !setupState.data.initialized ? (
         <Notice tone="warning" title="面板尚未初始化">

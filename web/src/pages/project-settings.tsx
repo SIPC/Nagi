@@ -75,7 +75,7 @@ function GeneralSettings({ project }: { project: Project }) {
             label="网络名"
             htmlFor="p-network"
             hint="小写字母、数字和 -，在面板上唯一"
-            help="连接本项目的项目通过「容器.网络名」访问本项目的容器，修改后它们那边用到的地址要跟着改。已有容器的目录不变。"
+            help="通过项目连接接入的其他项目以「容器.网络名」访问本项目的容器，修改后须同步更新这些项目中引用的地址。已有容器的目录不变。"
           >
             <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required className="font-mono" />
           </Field>
@@ -143,7 +143,7 @@ function SharedEnv({ project }: { project: Project }) {
         </>
       }
       description="所有容器的 compose 中可通过 ${变量} 引用。"
-      help="与容器自身的变量同名时，以容器的为准。修改先保存为草稿，部署后生效。"
+      help="与容器自身变量同名时，以容器变量为准。修改保存为草稿，部署后生效。"
     >
       <div className="grid gap-4">
         <Field label="变量" htmlFor="shared-env" hint="KEY=VALUE，每行一个">

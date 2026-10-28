@@ -62,7 +62,7 @@ export function TerminalView({ projectId, container, services }: { projectId: st
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">{services.length ? "在容器内打开 shell。" : "没有运行中的容器。"}</span>
+        <span className="text-[13px] text-muted-foreground">{services.length ? "在容器内打开 shell。" : "无运行中的容器。"}</span>
         <div className="flex gap-2">
           {services.length > 1 && (
             <Select value={selected} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]">

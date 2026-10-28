@@ -97,7 +97,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
       flush
       title="端口映射"
       description="经 Caddy 对外开放容器端口或绑定域名，保存后立即生效。"
-      help="无需重新部署。映射开在容器所在的节点上，容器迁移或顶替到其他节点时跟着过去。compose 中新增的 ports 会在部署时自动导入。"
+      help="无需重新部署。映射位于容器所在节点，容器迁移或由其他节点顶替时随之转移。compose 中新增的 ports 在部署时自动导入。"
       actions={
         !open && (
           <Button
@@ -342,8 +342,8 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
   return (
     <Section
       title="项目内网"
-      description="项目里的容器不论在哪个节点上，都按名称互相访问。"
-      help="单个容器用「容器名」，容器组里的容器用「容器.容器组」。容器组内部照常用 compose 里的服务名。跨节点的访问只转发 TCP，经节点之间的加密通道。"
+      description="项目内的容器无论位于哪个节点，均可按名称互相访问。"
+      help="单个容器的地址为「容器名」，容器组内的容器为「容器.容器组」。容器组内部仍使用 compose 中的服务名。跨节点访问仅转发 TCP，经节点间加密通道传输。"
     >
       <div className="grid gap-5">
         {addresses.length === 0 ? (
@@ -371,8 +371,8 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
         <Field
           label="内部端口"
           htmlFor="net-internal-ports"
-          hint="每行一个，如 pg:5432；容器组内写 容器.容器组:端口"
-          help="容器声明的端口（镜像的 EXPOSE、compose 的 ports、expose）会自动开放给其他节点上的容器；没有声明的端口在这里补充。"
+          hint="每行一个，如 pg:5432；容器组内为 容器.容器组:端口"
+          help="容器声明的端口（镜像的 EXPOSE、compose 的 ports、expose）自动对其他节点上的容器开放；未声明的端口在此补充。"
         >
           <Textarea
             id="net-internal-ports"
@@ -453,8 +453,8 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
     <Section
       flush
       title="项目连接"
-      description="连接后两个项目的容器可以互相访问，地址为「容器.网络名」。"
-      help="连接是双向的，但不传递：A 连接 B、B 连接 C 时，A 与 C 仍然隔离。跨节点的访问只转发 TCP，经节点之间的加密通道。"
+      description="连接后两个项目的容器可互相访问，地址为「容器.网络名」。"
+      help="连接为双向，但不可传递：A 连接 B、B 连接 C 时，A 与 C 仍相互隔离。跨节点访问仅转发 TCP，经节点间加密通道传输。"
       actions={
         !open && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
@@ -513,7 +513,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
           }}
         >
           {candidates.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">没有可以连接的其他项目。</p>
+            <p className="text-[13px] text-muted-foreground">无可连接的其他项目。</p>
           ) : (
             <Field label="项目" htmlFor="link-project">
               <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)} className="max-w-sm">

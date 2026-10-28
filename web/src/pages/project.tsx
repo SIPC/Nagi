@@ -65,7 +65,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
               <span>{nodeIds.length > 0 ? `节点 ${nodeIds.map(nodeName).join("、")}` : "暂无容器"}</span>
               <span>{countContainers(p.containers)}</span>
               {p.rebuiltAt ? (
-                <span title="面板丢失或更换后，从节点缓存拼回的项目：原来的创建时间、旧版本和部署记录不在了">从节点缓存拼回于 {timeAgo(toDate(p.rebuiltAt))}</span>
+                <span title="面板丢失或更换后根据节点缓存重建的项目，原创建时间、历史版本和部署记录已丢失。">从节点缓存重建于 {timeAgo(toDate(p.rebuiltAt))}</span>
               ) : (
                 <span>创建于 {timeAgo(toDate(p.createdAt))}</span>
               )}
