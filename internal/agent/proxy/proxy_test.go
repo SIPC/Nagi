@@ -1,9 +1,15 @@
 package proxy
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +29,9 @@ func TestBuildValidates(t *testing.T) {
 		{Project: "p1", Service: "api", Protocol: "http", Published: 18080},
 		{Project: "p2", Service: "db", Protocol: "tcp", Published: 15432, Upstreams: []string{"10.200.0.66:5432"}},
 		{Project: "p2", Service: "dns", Protocol: "udp", Published: 15353, Upstreams: []string{"10.200.0.67:53"}},
+		// 用 HTTPS 连上游、设置请求头（反代面板时）。
+		{Project: "p3", Service: "panel", Protocol: "http", Domains: []string{"panel.example.com"}, Upstreams: []string{"127.0.0.1:28443"},
+			UpstreamTLS: &UpstreamTLS{CA: testCA(t), ServerName: "panel"}, RequestHeaders: map[string]string{"X-Forwarded-Host": "panel.example.com"}},
 	}
 	data, err := json.Marshal(build(routes, t.TempDir(), func(d string) bool { return d == "example.com" }))
 	if err != nil {
@@ -31,6 +40,29 @@ func TestBuildValidates(t *testing.T) {
 	if err := caddy.Validate(mustConfig(t, data)); err != nil {
 		t.Fatalf("invalid caddy config: %v\n%s", err, data)
 	}
+}
+
+// testCA 生成一张自签的 CA 证书（DER）。
+func testCA(t *testing.T) []byte {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
 }
 
 func mustConfig(t *testing.T, data []byte) *caddy.Config {

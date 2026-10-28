@@ -14,8 +14,18 @@ import (
 	"sync"
 
 	"github.com/caddyserver/caddy/v2"
-	// 标准模块：http、tls、reverse_proxy 等。
-	_ "github.com/caddyserver/caddy/v2/modules/standard"
+	// 只引入生成的配置用到的模块（见 build），不用 modules/standard：后者还会带进让 Caddy 充当证书机构的
+	// ACME 服务端、模板（markdown、语法高亮）、tracing、brotli/zstd 等用不到的模块。
+	// 自动 HTTPS 用的是 caddytls 里的 ACME 客户端（向 Let's Encrypt 申请证书），不受影响。
+	// 配置里新用到其他模块时在这里加，TestBuildValidates 会把生成的配置交给 Caddy 校验。
+	_ "github.com/caddyserver/caddy/v2/modules/caddyevents"
+	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp/logging"
+	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp/reverseproxy"
+	_ "github.com/caddyserver/caddy/v2/modules/caddytls"
+	_ "github.com/caddyserver/caddy/v2/modules/filestorage"
+	_ "github.com/caddyserver/caddy/v2/modules/logging"
+
 	// layer4：tcp/udp 转发。
 	_ "github.com/mholt/caddy-l4/layer4"
 	_ "github.com/mholt/caddy-l4/modules/l4proxy"
