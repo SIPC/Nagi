@@ -164,7 +164,7 @@ func entranceToken(path string) string { return HashToken("entrance/" + path)[:3
 
 // EntranceMiddleware：开启安全入口后，没登录的访问者必须先打开一次 /<入口>（设置一个 cookie），
 // 否则面板的页面和接口一律返回 404，看起来就像这个地址上没有面板。已登录的会话、项目 webhook、
-// 节点安装脚本不受影响（节点的控制连接按 ALPN 分流，不经过这里）。
+// 节点安装脚本和旧版节点升级用的二进制下载不受影响（节点的控制连接按 ALPN 分流，不经过这里）。
 func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := s.Entrance(r.Context())
@@ -179,7 +179,7 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || p == "/api/standby/pair" || p == "/api/standby/status" {
+		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || strings.HasPrefix(p, "/download/") || p == "/api/standby/pair" || p == "/api/standby/status" {
 			next.ServeHTTP(w, r)
 			return
 		}

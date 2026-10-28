@@ -81,7 +81,7 @@ nagi panel remove <地址或指纹>      # 移除最后一个面板需要 --forc
 
    面板是自签证书，所以用 `-k` 跳过 CA 校验，真正的校验靠 `--pinnedpubkey` 钉住面板公钥，中间人无法冒充。
 2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从和面板同一版本的 GitHub Release 下载 `nagi-linux-<架构>`，按同一处的 `SHA256SUMS` 校验（下载和校验也在共用代码里，`download_nagi`），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。
-   - **面板不提供二进制**：以前的 `/download/` 已经去掉，明确返回 404。面板不是正式版本（本地编译的 `dev`）时从最新发布的版本下载，脚本提示版本不一致。
+   - **面板不提供二进制**：`/download/nagi-linux-<架构>` 只为 v0.1.0 的节点一键升级保留（它们仍从面板下载）：面板从 GitHub Release 下载自己这个版本的二进制、按 SHA256SUMS 核对后缓存在数据目录的 `release/<版本>/` 下再提供；其余请求和本地编译的面板一律返回 404。面板不是正式版本（本地编译的 `dev`）时从最新发布的版本下载，脚本提示版本不一致。
    - **镜像**：无法访问 GitHub 时在安装命令末尾加 `--download-url <地址>`（或环境变量 `NAGI_DOWNLOAD_URL`），该地址下要有 `nagi-linux-<架构>` 和 `SHA256SUMS`。脚本把它记在 `<节点目录>/identity/download-url`，之后一键升级也从这里下载。
 3. **agent 在本地生成两对密钥**：身份密钥和 WireGuard 密钥。私钥都不离开节点。mesh 地址由 WireGuard 公钥直接算出，不需要分配（见 [mesh.md](mesh.md#地址)）。
 4. **agent 调用面板的 Enroll 接口**，提交令牌、身份公钥（CSR）和 WireGuard 公钥。
