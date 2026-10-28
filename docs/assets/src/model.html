@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .node {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .file {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="0 0 32 32">
+          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
+          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
+        </svg>
+        Nagi
+      </div>
+      <h1>一个项目，一组容器</h1>
+      <p class="lead">前端、后端、数据库放进同一个项目，每个容器各自选择运行的节点。导入现有的 compose 文件，即成为一个容器组。</p>
+
+      <div class="zone" style="left: 72px; top: 214px; width: 720px; height: 350px">
+        <div class="zl">项目<span>shop</span></div>
+      </div>
+
+      <svg class="wires">
+        <path class="wire dash" d="M204 364V452" />
+        <path class="wire dash" d="M430 364V452" />
+      </svg>
+
+      <div class="box" style="left: 104px; top: 260px; width: 200px; height: 104px">
+        <div class="k">容器</div>
+        <div class="t"><i class="dot"></i>web</div>
+        <div class="node">节点 1</div>
+      </div>
+      <div class="box" style="left: 330px; top: 260px; width: 200px; height: 104px">
+        <div class="k">容器</div>
+        <div class="t"><i class="dot"></i>api</div>
+        <div class="node">节点 2</div>
+      </div>
+      <div class="box ghost" style="left: 104px; top: 452px; width: 200px; height: 76px">
+        <div class="file">compose.yml</div>
+        <div class="s">由镜像表单生成</div>
+      </div>
+      <div class="box ghost" style="left: 330px; top: 452px; width: 200px; height: 76px">
+        <div class="file">compose.yml</div>
+        <div class="s">由镜像表单生成</div>
+      </div>
+
+      <div class="box" style="left: 556px; top: 260px; width: 204px; height: 268px">
+        <div class="k">容器组 · <span class="mono">compose.yml</span></div>
+        <div class="t"><i class="dot"></i>umami</div>
+        <div class="node">节点 1</div>
+      </div>
+      <div class="box ghost" style="left: 574px; top: 378px; width: 168px; height: 60px">
+        <div class="k">容器</div>
+        <div class="t" style="font-size: 15px">app</div>
+      </div>
+      <div class="box ghost" style="left: 574px; top: 450px; width: 168px; height: 60px">
+        <div class="k">容器</div>
+        <div class="t" style="font-size: 15px">db</div>
+      </div>
+
+      <div class="aside" style="left: 860px; top: 222px; width: 340px">
+        <div class="item">
+          <div class="it">层级扁平</div>
+          <div class="ix">只有容器和容器组两种，容器组展开可见其中的容器。</div>
+        </div>
+        <div class="item">
+          <div class="it">独立部署</div>
+          <div class="ix">每个容器可单独部署、回滚和迁移，互不影响。</div>
+        </div>
+        <div class="item">
+          <div class="it">随时导出</div>
+          <div class="ix">底层均为标准 compose，导出即可独立运行。</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

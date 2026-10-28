@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .step {
+        position: absolute;
+        top: 226px;
+        width: 330px;
+      }
+      .step .n {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--wave);
+      }
+      .step .st {
+        margin-top: 4px;
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .card {
+        position: absolute;
+        top: 300px;
+        z-index: 1;
+        width: 330px;
+        height: 200px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--card);
+      }
+      .card .k {
+        font-size: 12px;
+        color: var(--faint);
+      }
+      .cmd {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--bg);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        line-height: 1.8;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .cmd b {
+        font-weight: 400;
+        color: var(--fg);
+      }
+      .btn {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 5px 14px;
+        border-radius: 5px;
+        background: var(--fg);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--bg);
+      }
+      .term {
+        margin-top: 12px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 2;
+        color: var(--muted);
+      }
+      .term .ok {
+        color: var(--success);
+      }
+      .term .p {
+        color: var(--fg);
+      }
+      .rows {
+        margin-top: 10px;
+      }
+      .rows div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+        font-size: 14px;
+      }
+      .rows div:first-child {
+        border-top: 0;
+      }
+      .rows span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .rows .new {
+        color: var(--wave);
+      }
+      .facts {
+        position: absolute;
+        top: 540px;
+        left: 80px;
+        display: flex;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .facts span {
+        padding: 0 24px;
+        border-left: 1px solid var(--border);
+      }
+      .facts span:first-child {
+        padding-left: 0;
+        border-left: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="0 0 32 32">
+          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
+          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
+        </svg>
+        Nagi
+      </div>
+      <h1>一行命令，加入新节点</h1>
+      <p class="lead">在面板上复制安装命令，在新服务器上执行，节点即自动加入面板。</p>
+
+      <svg class="wires">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 1L9 5L0 9z" style="fill: var(--line)" />
+          </marker>
+        </defs>
+        <path class="wire" marker-end="url(#arr)" d="M410 400H469" />
+        <path class="wire" marker-end="url(#arr)" d="M800 400H859" />
+      </svg>
+
+      <div class="step" style="left: 80px">
+        <div class="n">01</div>
+        <div class="st">复制安装命令</div>
+      </div>
+      <div class="card" style="left: 80px">
+        <div class="k">面板 · 添加节点</div>
+        <div class="cmd">curl --pinnedpubkey "sha256//…" -k \<br />&nbsp;&nbsp;https://<b>panel:8443</b>/install.sh \<br />&nbsp;&nbsp;| sh -s -- --token <b>••••••</b></div>
+        <div class="btn">复制</div>
+      </div>
+
+      <div class="step" style="left: 470px">
+        <div class="n">02</div>
+        <div class="st">在新服务器上执行</div>
+      </div>
+      <div class="card" style="left: 470px">
+        <div class="k">新服务器</div>
+        <div class="term">
+          <div class="p">$ curl … | sh -s -- --token …</div>
+          <div><span class="ok">✓</span> 检查 Docker 与 compose</div>
+          <div><span class="ok">✓</span> 从面板下载 nagi</div>
+          <div><span class="ok">✓</span> 加入面板</div>
+          <div><span class="ok">✓</span> 安装为系统服务</div>
+        </div>
+      </div>
+
+      <div class="step" style="left: 860px">
+        <div class="n">03</div>
+        <div class="st">节点上线</div>
+      </div>
+      <div class="card" style="left: 860px">
+        <div class="k">面板 · 节点</div>
+        <div class="rows">
+          <div>节点 1<span><i class="dot"></i>在线</span></div>
+          <div>节点 2<span><i class="dot"></i>在线</span></div>
+          <div>节点 3<span class="new"><i class="dot"></i>刚刚加入</span></div>
+        </div>
+      </div>
+
+      <div class="facts">
+        <span>令牌仅可使用一次，1 小时内有效</span>
+        <span>全程校验面板公钥，防止冒充</span>
+        <span>从面板下载，不依赖 GitHub</span>
+      </div>
+    </div>
+  </body>
+</html>

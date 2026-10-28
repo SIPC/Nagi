@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .list {
+        margin-top: 10px;
+        font-size: 13px;
+        line-height: 1.9;
+        color: var(--muted);
+      }
+      .list .hl {
+        color: var(--wave);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="0 0 32 32">
+          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
+          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
+        </svg>
+        Nagi
+      </div>
+      <h1>面板故障，服务不受影响</h1>
+      <p class="lead">配置保存在面板，容器与数据位于节点；每个节点另外缓存一份本节点的配置。</p>
+
+      <svg class="wires">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 1L9 5L0 9z" style="fill: var(--line)" />
+          </marker>
+        </defs>
+        <path class="wire" marker-end="url(#arr)" d="M360 330V378H210V419" />
+        <path class="wire" marker-end="url(#arr)" d="M360 330V378H510V419" />
+      </svg>
+
+      <div class="box" style="left: 230px; top: 226px; width: 260px; height: 104px">
+        <div class="k">nagi server</div>
+        <div class="t"><i class="dot"></i>面板</div>
+        <div class="list">项目配置 · 版本记录 · 部署记录</div>
+      </div>
+
+      <div class="box" style="left: 80px; top: 420px; width: 260px; height: 124px">
+        <div class="k">nagi agent</div>
+        <div class="t"><i class="dot"></i>节点 1</div>
+        <div class="list">运行中的容器 · 数据 · 快照<br /><span class="hl">配置缓存</span></div>
+      </div>
+      <div class="box" style="left: 380px; top: 420px; width: 260px; height: 124px">
+        <div class="k">nagi agent</div>
+        <div class="t"><i class="dot"></i>节点 2</div>
+        <div class="list">运行中的容器 · 数据 · 快照<br /><span class="hl">配置缓存</span></div>
+      </div>
+
+      <div class="tag c" style="left: 360px; top: 378px">下发配置</div>
+
+      <div class="aside" style="left: 760px; top: 226px; width: 440px">
+        <div class="item">
+          <div class="it">面板暂时离线</div>
+          <div class="ix">容器继续运行，快照与自动接替不受影响；面板恢复后即可继续管理。</div>
+        </div>
+        <div class="item">
+          <div class="it">已配置备用面板</div>
+          <div class="ix">在备用面板上一键提升为主面板，数据完整。</div>
+        </div>
+        <div class="item">
+          <div class="it">面板彻底丢失</div>
+          <div class="ix">安装新面板后，项目根据各节点的配置缓存自动重建。</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
