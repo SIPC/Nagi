@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* 长图：文字介绍 + 现有配图，配图按原尺寸（1000px）嵌入 */
+      .frame {
+        width: 1080px;
+        padding: 40px 40px 56px;
+      }
+      .shot {
+        display: block;
+        width: 1000px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+
+      .intro {
+        padding: 48px 16px 8px;
+      }
+      .intro h2 {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .intro h2 em {
+        font-style: normal;
+        color: var(--wave);
+      }
+      .intro p {
+        margin: 16px 0 0;
+        font-size: 19px;
+        line-height: 1.85;
+        color: var(--muted);
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 20px;
+        padding: 4px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .status i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: oklch(0.8 0.14 85);
+      }
+
+      .principles {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        margin-top: 32px;
+      }
+      .pr {
+        padding: 20px 22px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+      }
+      .pr .pt {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .pr .pd {
+        margin-top: 6px;
+        font-size: 15.5px;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      /* 分节标题 */
+      .chapter {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 80px 16px 0;
+        font-size: 15px;
+        letter-spacing: 0.2em;
+        color: var(--wave);
+      }
+      .chapter::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      .feature {
+        margin-top: 48px;
+      }
+
+      .feature .fd {
+        margin: 20px 16px 0;
+        padding: 2px 0 2px 18px;
+        border-left: 2px solid var(--wave);
+        font-size: 17px;
+        line-height: 1.85;
+        color: var(--muted);
+      }
+      .feature .fd b {
+        font-weight: 500;
+        color: var(--fg);
+      }
+
+      .more {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 32px;
+      }
+      .more .pr .pt {
+        font-size: 17px;
+      }
+      .more .pr .pd {
+        font-size: 15px;
+      }
+
+      .step {
+        margin-top: 36px;
+        padding: 0 16px;
+      }
+      .step .st {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .step .st span {
+        font-family: var(--mono);
+        font-size: 15px;
+        font-weight: 400;
+        color: var(--wave);
+      }
+      .step .sd {
+        margin-top: 8px;
+        font-size: 16px;
+        line-height: 1.8;
+        color: var(--muted);
+      }
+      .cmd {
+        margin-top: 14px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        font-family: var(--mono);
+        font-size: 14.5px;
+        color: var(--fg);
+        white-space: nowrap;
+      }
+      .cmd b {
+        margin-right: 10px;
+        font-weight: 400;
+        color: var(--wave);
+      }
+      .step + .shot {
+        margin-top: 20px;
+      }
+
+      .stack {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        row-gap: 14px;
+        margin-top: 32px;
+        padding: 0 16px;
+        font-size: 15px;
+      }
+      .stack .sl {
+        padding-top: 5px;
+        color: var(--faint);
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip {
+        padding: 4px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 14px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .end {
+        position: relative;
+        margin-top: 80px;
+        padding: 0 16px;
+        height: 150px;
+      }
+      .end svg.sea {
+        position: absolute;
+        left: -40px;
+        top: 0;
+        width: 1080px;
+        height: 60px;
+      }
+      .end .el {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      .end .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .end .brand svg {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        box-shadow: 0 0 0 1px var(--border);
+      }
+      .end .brand small {
+        font-size: 16px;
+        font-weight: 400;
+        letter-spacing: 0.3em;
+        color: var(--muted);
+      }
+      .end .meta {
+        text-align: right;
+        font-size: 15px;
+        line-height: 1.8;
+        color: var(--faint);
+      }
+      .end .meta .mono {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <img class="shot" src="../hero.png" />
+
+      <section class="intro">
+        <h2>开源的 Docker 项目面板，<em>默认即可上生产</em></h2>
+        <p>
+          Nagi 追求简单、美观、易于部署。用一个面板管理多台服务器上的容器：项目由一组容器组成，可以分布在不同节点上，跨节点按名字互相访问；节点或面板出故障时，服务尽量不受影响。
+        </p>
+        <div class="status"><i></i>开发中，尚未发布</div>
+
+        <div class="principles">
+          <div class="pr">
+            <div class="pt">概念最少</div>
+            <div class="pd">只需要理解节点、项目、容器三个概念。</div>
+          </div>
+          <div class="pr">
+            <div class="pt">compose 是唯一的底层定义</div>
+            <div class="pd">镜像表单也会生成 compose，随时可以导出、脱离平台。</div>
+          </div>
+          <div class="pr">
+            <div class="pt">默认可上生产</div>
+            <div class="pd">开箱即用的默认值就是安全、可靠的，高级选项默认折叠。</div>
+          </div>
+          <div class="pr">
+            <div class="pt">零外部依赖</div>
+            <div class="pd">除 Docker 与 compose 插件外，不依赖域名、外部 CA、云服务或数据库。</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="chapter">项目与部署</div>
+
+      <section class="feature">
+        <img class="shot" src="../model.png" />
+        <p class="fd">
+          项目保存在面板上，不属于任何一台机器。添加容器有两种方式：<b>填写镜像表单</b>（直接运行在线镜像，也可以附带文件），或者<b>粘贴一份 compose</b> 作为容器组。项目之间默认隔离，需要时可以单独连通两个项目。
+        </p>
+      </section>
+
+      <section class="feature">
+        <img class="shot" src="../versions.png" />
+        <p class="fd">
+          每个容器独立记录版本，<b>配置、文件、镜像摘要一起回滚</b>，可选同时恢复数据；部署记录还能把整个项目回到某次部署时的状态。文件可以上传压缩包，也可以从 git 仓库拉取（支持 webhook）。
+        </p>
+      </section>
+
+      <section class="feature">
+        <img class="shot" src="../exposure.png" />
+        <p class="fd">
+          在界面上按服务开关对外访问：<b>绑定域名即自动签发证书</b>，也可以转发 TCP/UDP 端口。80 和 443 端口留给项目域名，面板自己使用单独的端口。
+        </p>
+      </section>
+
+      <div class="chapter">多节点</div>
+
+      <section class="feature">
+        <img class="shot" src="../architecture.png" />
+        <p class="fd">
+          节点通过 <b>mTLS</b> 主动连接面板，单条连接经 yamux 多路复用，面板通过反向 gRPC 调用节点。面板使用自签 CA，节点以公钥指纹校验面板身份。
+        </p>
+      </section>
+
+      <section class="feature">
+        <img class="shot" src="../intranet.png" />
+        <p class="fd">
+          节点之间基于用户态 wireguard-go 组成全互联网络，直连不通时依次回退到面板的 UDP 中继和 TLS 中继。<b>网络连通不代表有权访问</b>，每次调用都按调用方公钥单独鉴权。
+        </p>
+      </section>
+
+      <div class="chapter">高可用</div>
+
+      <section class="feature">
+        <img class="shot" src="../failover.png" />
+        <p class="fd">
+          无状态容器自动接替；有状态容器先告警，由你确认后接替，<b>原节点恢复后自动切回</b>。也可以手动把容器迁移到另一个节点，数据不丢失。
+        </p>
+      </section>
+
+      <section class="feature">
+        <img class="shot" src="../recovery.png" />
+        <p class="fd">
+          面板离线时，容器照常运行、重启、快照和接替，告警照常发送，只是暂时不能修改和部署。可以配置<b>备用面板</b>实时同步，主面板故障时手动提升；面板彻底丢失时，新面板从节点缓存重建项目。
+        </p>
+      </section>
+
+      <div class="chapter">此外还支持</div>
+
+      <div class="more">
+        <div class="pr">
+          <div class="pt">快照</div>
+          <div class="pd">按容器定时备份与恢复，可指定备份节点作为异地副本。</div>
+        </div>
+        <div class="pr">
+          <div class="pt">日志、终端、监控</div>
+          <div class="pd">告警支持 webhook 与 Telegram，面板离线也能发出。</div>
+        </div>
+        <div class="pr">
+          <div class="pt">环境变量与密钥</div>
+          <div class="pd">项目、容器组、容器三层变量，以及私有镜像仓库认证。</div>
+        </div>
+        <div class="pr">
+          <div class="pt">健康检查与资源限制</div>
+          <div class="pd">在界面上配置，不需要手写 compose。</div>
+        </div>
+        <div class="pr">
+          <div class="pt">镜像</div>
+          <div class="pd">每天检查更新并提醒，国内节点可配置镜像加速。</div>
+        </div>
+        <div class="pr">
+          <div class="pt">面板安全</div>
+          <div class="pd">可选两步验证、登录限速与安全入口，一键升级节点。</div>
+        </div>
+      </div>
+
+      <div class="chapter">快速开始</div>
+
+      <div class="step">
+        <div class="st"><span>01</span>安装面板</div>
+        <div class="sd">支持 Linux（amd64 / arm64），需要 Docker 与 compose 插件，未安装时脚本会自动安装。面板内嵌一个节点，单机即可使用。</div>
+        <div class="cmd"><b>$</b>curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh</div>
+      </div>
+
+      <div class="step">
+        <div class="st"><span>02</span>添加节点</div>
+        <div class="sd">在面板中复制安装命令，到新服务器上执行即可。</div>
+      </div>
+      <img class="shot" src="../join.png" />
+
+      <div class="step">
+        <div class="st"><span>03</span>添加备用面板（可选）</div>
+        <div class="sd">在主面板设置页生成配对码，在新服务器上用配对码安装。</div>
+        <div class="cmd"><b>$</b>curl -fsSL .../install.sh | sh -s -- --standby &lt;配对码&gt;</div>
+      </div>
+
+      <div class="chapter">技术栈</div>
+
+      <div class="stack">
+        <div class="sl">后端</div>
+        <div class="chips">
+          <span class="chip">Go</span>
+          <span class="chip">gRPC</span>
+          <span class="chip">Connect-RPC</span>
+          <span class="chip">SQLite</span>
+          <span class="chip">wireguard-go</span>
+          <span class="chip">Caddy（含 layer4）</span>
+          <span class="chip">kopia</span>
+        </div>
+        <div class="sl">前端</div>
+        <div class="chips">
+          <span class="chip">React</span>
+          <span class="chip">TypeScript</span>
+          <span class="chip">Vite</span>
+          <span class="chip">TanStack Router / Query</span>
+          <span class="chip">shadcn/ui</span>
+        </div>
+        <div class="sl">交付</div>
+        <div class="chips">
+          <span class="chip">单个二进制 nagi</span>
+          <span class="chip">nagi server · 面板</span>
+          <span class="chip">nagi agent · 节点</span>
+        </div>
+      </div>
+
+      <div class="end">
+        <svg class="sea" viewBox="0 0 1080 60"></svg>
+        <div class="el">
+          <div class="brand">
+            <svg viewBox="0 0 32 32">
+              <rect width="32" height="32" rx="8" fill="#0f172a" />
+              <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
+              <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
+            </svg>
+            Nagi<small>风平浪静</small>
+          </div>
+          <div class="meta">
+            <div class="mono">github.com/SIPC/Nagi</div>
+            <div>Apache-2.0 开源</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // 结尾一道逐渐平息的波，与 hero 呼应。
+      const sea = document.querySelector(".end .sea");
+      let d = "";
+      for (let x = 1080; x >= 0; x -= 2) {
+        const t = (1080 - x) / 640;
+        const amp = 14 * Math.exp(-t * 3.2);
+        const y = 30 + Math.sin((1080 - x) / 30) * amp;
+        d += (x === 1080 ? "M" : "L") + x + " " + y.toFixed(2);
+      }
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "var(--wave)");
+      p.setAttribute("stroke-width", "1.5");
+      sea.appendChild(p);
+
+      const imgs = [...document.images].map((img) => (img.complete ? Promise.resolve() : new Promise((r) => (img.onload = img.onerror = r))));
+      Promise.all([document.fonts.ready, ...imgs]).then(() => (window.__ready = true));
+    </script>
+  </body>
+</html>
