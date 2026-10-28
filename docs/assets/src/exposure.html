@@ -4,14 +4,31 @@
     <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css" />
     <style>
+      .flow {
+        display: grid;
+        grid-template-columns: 250px 1fr 220px 1fr 230px;
+      }
+      .list {
+        display: grid;
+        gap: 18px;
+      }
+      .list .box {
+        min-height: 88px;
+      }
       .addr {
         font-family: var(--mono);
-        font-size: 14px;
-        color: var(--fg);
+        font-size: 16px;
+      }
+      .stage > .caddy {
+        position: relative;
+        grid-column: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
       }
       .feat {
-        margin-top: 18px;
-        font-size: 13px;
+        margin-top: 16px;
+        font-size: 15.5px;
         line-height: 2.1;
         color: var(--muted);
       }
@@ -25,92 +42,85 @@
         background: var(--wave);
         vertical-align: middle;
       }
-      .facts {
-        position: absolute;
-        top: 568px;
-        left: 110px;
-        display: flex;
-        font-size: 13.5px;
-        color: var(--muted);
-      }
-      .facts span {
-        padding: 0 24px;
-        border-left: 1px solid var(--border);
-      }
-      .facts span:first-child {
-        padding-left: 0;
-        border-left: 0;
+      .dst {
+        grid-column: 5;
       }
     </style>
   </head>
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32">
-          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
-          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
-        </svg>
+        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>统一入口，自动 HTTPS</h1>
-      <p class="lead">容器不直接映射端口，所有对外访问都经节点上内嵌的 Caddy 转发；绑定域名后自动申请证书。</p>
+      <p class="lead">容器不直接映射端口，所有对外访问都经节点上内嵌的 Caddy 转发。</p>
 
-      <svg class="wires">
-        <defs>
-          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--line)" />
-          </marker>
-        </defs>
-        <path class="wire" marker-end="url(#arr)" d="M380 278H519" />
-        <path class="wire" marker-end="url(#arr)" d="M380 388H519" />
-        <path class="wire" marker-end="url(#arr)" d="M380 498H519" />
-        <path class="wire" marker-end="url(#arr)" d="M760 278H899" />
-        <path class="wire" marker-end="url(#arr)" d="M760 388H899" />
-        <path class="wire" marker-end="url(#arr)" d="M760 498H899" />
-      </svg>
+      <div class="stage flow">
+        <div class="list">
+          <div class="box ghost" id="s1">
+            <div class="addr">blog.example.com</div>
+            <div class="s">网站 · HTTPS</div>
+          </div>
+          <div class="box ghost" id="s2">
+            <div class="addr">203.0.113.8:5432</div>
+            <div class="s">数据库 · TCP</div>
+          </div>
+          <div class="box ghost" id="s3">
+            <div class="addr">203.0.113.8:27015</div>
+            <div class="s">游戏服务器 · UDP</div>
+          </div>
+        </div>
 
-      <div class="box ghost" style="left: 110px; top: 240px; width: 270px; height: 76px">
-        <div class="addr">blog.example.com</div>
-        <div class="s">网站 · HTTPS</div>
-      </div>
-      <div class="box ghost" style="left: 110px; top: 350px; width: 270px; height: 76px">
-        <div class="addr">203.0.113.8:5432</div>
-        <div class="s">数据库 · TCP</div>
-      </div>
-      <div class="box ghost" style="left: 110px; top: 460px; width: 270px; height: 76px">
-        <div class="addr">203.0.113.8:27015</div>
-        <div class="s">游戏服务器 · UDP</div>
-      </div>
+        <div class="box caddy" id="caddy">
+          <div class="k">节点上的统一入口</div>
+          <div class="t">Caddy</div>
+          <div class="feat">
+            <div>域名与 HTTPS</div>
+            <div>TCP / UDP 转发</div>
+            <div>访问量与耗时统计</div>
+          </div>
+        </div>
 
-      <div class="box" style="left: 520px; top: 240px; width: 240px; height: 296px; display: flex; flex-direction: column; justify-content: center; padding-left: 24px">
-        <div class="k">节点上的统一入口</div>
-        <div class="t">Caddy</div>
-        <div class="feat">
-          <div>自动申请和续期证书</div>
-          <div>HTTP 自动跳转 HTTPS</div>
-          <div>TCP / UDP 端口转发</div>
-          <div>访问量与耗时统计</div>
+        <div class="list dst">
+          <div class="box" id="d1">
+            <div class="k">容器</div>
+            <div class="t"><i class="dot"></i>blog</div>
+          </div>
+          <div class="box" id="d2">
+            <div class="k">容器</div>
+            <div class="t"><i class="dot"></i>postgres</div>
+          </div>
+          <div class="box" id="d3">
+            <div class="k">容器</div>
+            <div class="t"><i class="dot"></i>game</div>
+          </div>
         </div>
       </div>
 
-      <div class="box" style="left: 900px; top: 240px; width: 270px; height: 76px">
-        <div class="k">容器</div>
-        <div class="t"><i class="dot"></i>blog</div>
-      </div>
-      <div class="box" style="left: 900px; top: 350px; width: 270px; height: 76px">
-        <div class="k">容器</div>
-        <div class="t"><i class="dot"></i>postgres</div>
-      </div>
-      <div class="box" style="left: 900px; top: 460px; width: 270px; height: 76px">
-        <div class="k">容器</div>
-        <div class="t"><i class="dot"></i>game</div>
-      </div>
-
-      <div class="facts">
-        <span>证书签发前，网站仍可通过 HTTP 访问</span>
-        <span>修改端口和域名立即生效，无需重新部署</span>
-        <span>出口唯一，不会绕过防火墙规则</span>
+      <div class="notes">
+        <div>
+          <div class="nt">自动证书</div>
+          <div class="nd">绑定域名后自动申请和续期证书；签发前仍可通过 HTTP 访问。</div>
+        </div>
+        <div>
+          <div class="nt">即时生效</div>
+          <div class="nd">修改端口和域名立即生效，无需重新部署容器。</div>
+        </div>
+        <div>
+          <div class="nt">出口唯一</div>
+          <div class="nd">所有流量经同一入口，不会绕过防火墙规则。</div>
+        </div>
       </div>
     </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        for (const i of [1, 2, 3]) {
+          wire(`#s${i}`, "r", "#caddy", "l", { align: "a", arrow: true });
+          wire("#caddy", "r", `#d${i}`, "l", { align: "b", arrow: true });
+        }
+      });
+    </script>
   </body>
 </html>

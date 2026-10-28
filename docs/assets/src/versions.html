@@ -4,121 +4,112 @@
     <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css" />
     <style>
+      .timeline {
+        position: relative;
+        height: 200px;
+        margin-top: 16px;
+      }
+      .timeline svg {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+      }
       .v {
         position: absolute;
-        z-index: 2;
+        top: 140px;
         width: 160px;
         transform: translateX(-50%);
         text-align: center;
       }
       .v .vn {
         font-family: var(--mono);
-        font-size: 14px;
-        color: var(--fg);
+        font-size: 17px;
       }
       .v .vd {
         margin-top: 4px;
-        font-size: 13px;
+        font-size: 15.5px;
         color: var(--muted);
       }
       .v.draft .vn {
         color: var(--muted);
       }
-      .pt {
-        position: absolute;
-        z-index: 2;
-        width: 14px;
-        height: 14px;
-        transform: translate(-50%, -50%);
-        border: 2px solid var(--fg);
-        border-radius: 50%;
-        background: var(--bg);
-      }
-      .pt.cur {
-        border-color: var(--success);
-        background: var(--success);
-      }
-      .pt.draft {
-        border: 1.5px dashed var(--muted);
+      .timeline .tag {
+        top: 50px;
+        left: 380px;
       }
       .inc {
-        position: absolute;
-        top: 466px;
-        left: 110px;
-        font-size: 12.5px;
+        margin-top: 36px;
+        font-size: 15px;
         color: var(--faint);
       }
-      .part {
-        position: absolute;
-        top: 490px;
-        z-index: 1;
-        width: 340px;
-        padding: 12px 16px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--card);
+      .parts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-top: 12px;
       }
-      .part .pt2 {
-        font-size: 15px;
-        font-weight: 600;
+      .parts .t {
+        margin-top: 0;
+        font-size: 18px;
       }
-      .part .pd {
-        margin-top: 4px;
-        font-size: 13px;
-        color: var(--muted);
+      .parts .s {
+        font-size: 15.5px;
+        line-height: 1.6;
       }
     </style>
   </head>
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32">
-          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
-          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
-        </svg>
+        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>每次部署，都是一个版本</h1>
       <p class="lead">修改先存为草稿，部署时生成新版本；可随时回滚到任一版本，恢复当时的状态。</p>
 
-      <svg class="wires">
-        <defs>
-          <marker id="arr-wave" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--wave)" />
-          </marker>
-        </defs>
-        <path class="wire" d="M120 346H860" />
-        <path class="wire dash" d="M860 346H1060" />
-        <path class="wire wave" marker-end="url(#arr-wave)" d="M690 334C690 250 350 250 350 333" />
-      </svg>
-
-      <div class="tag c wave" style="left: 520px; top: 272px">回滚</div>
-
-      <i class="pt" style="left: 180px; top: 346px"></i>
-      <i class="pt" style="left: 350px; top: 346px"></i>
-      <i class="pt" style="left: 520px; top: 346px"></i>
-      <i class="pt cur" style="left: 690px; top: 346px"></i>
-      <i class="pt draft" style="left: 1000px; top: 346px"></i>
-
-      <div class="v" style="left: 180px; top: 368px"><div class="vn">v1</div><div class="vd">首次部署</div></div>
-      <div class="v" style="left: 350px; top: 368px"><div class="vn">v2</div><div class="vd">更新镜像</div></div>
-      <div class="v" style="left: 520px; top: 368px"><div class="vn">v3</div><div class="vd">上传新代码</div></div>
-      <div class="v" style="left: 690px; top: 368px"><div class="vn">v4</div><div class="vd">回滚到 v2</div></div>
-      <div class="v draft" style="left: 1000px; top: 368px"><div class="vn">草稿</div><div class="vd">未部署的修改</div></div>
+      <div class="stage timeline">
+        <svg width="888" height="200">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 1L9 5L0 9z" style="fill: var(--wave)" />
+            </marker>
+          </defs>
+          <path class="wire" d="M0 120H660" />
+          <path class="wire dash" d="M660 120H888" />
+          <path class="wire wave" marker-end="url(#arr)" d="M550 110C550 30 210 30 210 109" />
+          <circle cx="40" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="210" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="380" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="550" cy="120" r="8" style="fill: var(--success)" />
+          <circle cx="800" cy="120" r="7" style="fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3" />
+        </svg>
+        <div class="tag wave">回滚</div>
+        <div class="v" style="left: 40px"><div class="vn">v1</div><div class="vd">首次部署</div></div>
+        <div class="v" style="left: 210px"><div class="vn">v2</div><div class="vd">更新镜像</div></div>
+        <div class="v" style="left: 380px"><div class="vn">v3</div><div class="vd">上传新代码</div></div>
+        <div class="v" style="left: 550px"><div class="vn">v4</div><div class="vd">回滚到 v2</div></div>
+        <div class="v draft" style="left: 800px"><div class="vn">草稿</div><div class="vd">未部署的修改</div></div>
+      </div>
 
       <div class="inc">每个版本包含</div>
-      <div class="part" style="left: 110px">
-        <div class="pt2">配置</div>
-        <div class="pd">compose、环境变量与密钥</div>
-      </div>
-      <div class="part" style="left: 470px">
-        <div class="pt2">文件</div>
-        <div class="pd">部署时的代码与静态文件</div>
-      </div>
-      <div class="part" style="left: 830px">
-        <div class="pt2">镜像</div>
-        <div class="pd">按摘要记录，即使使用 latest 也能精确还原</div>
+      <div class="parts">
+        <div class="box">
+          <div class="t">配置</div>
+          <div class="s">compose、环境变量与密钥</div>
+        </div>
+        <div class="box">
+          <div class="t">文件</div>
+          <div class="s">部署时的代码与静态文件</div>
+        </div>
+        <div class="box">
+          <div class="t">镜像</div>
+          <div class="s">按摘要记录，即使使用 latest 也能精确还原</div>
+        </div>
       </div>
     </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(() => {});
+    </script>
   </body>
 </html>

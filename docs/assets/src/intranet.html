@@ -4,88 +4,89 @@
     <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css" />
     <style>
-      .facts {
-        position: absolute;
-        top: 548px;
-        left: 72px;
-        display: flex;
-        font-size: 13.5px;
-        color: var(--muted);
+      .nodes {
+        display: grid;
+        grid-template-columns: 372px 372px;
+        justify-content: space-between;
       }
-      .facts span {
-        padding: 0 24px;
-        border-left: 1px solid var(--border);
+      .nodes .zone {
+        height: 330px;
       }
-      .facts span:first-child {
-        padding-left: 0;
-        border-left: 0;
+      .zone > .box {
+        width: 130px;
+      }
+      .top {
+        top: 62px;
+        min-height: 108px;
+      }
+      .bottom {
+        top: 214px;
       }
     </style>
   </head>
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32">
-          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
-          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
-        </svg>
+        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>跨节点，按名字访问</h1>
       <p class="lead">同一项目的容器即使分布在不同节点上，也可直接通过容器名互相访问，无需额外配置网络。</p>
 
-      <div class="zone" style="left: 72px; top: 214px; width: 488px; height: 300px">
-        <div class="zl">节点 1</div>
-      </div>
-      <div class="zone" style="left: 720px; top: 214px; width: 488px; height: 300px">
-        <div class="zl">节点 2</div>
-      </div>
-
-      <svg class="wires">
-        <defs>
-          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--line)" />
-          </marker>
-          <marker id="arr-wave" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--wave)" />
-          </marker>
-        </defs>
-        <path class="wire" marker-end="url(#arr)" d="M274 322H359" />
-        <path class="wire" marker-end="url(#arr)" d="M445 360V413" />
-        <path class="wire wave" marker-end="url(#arr-wave)" d="M530 448H751" />
-        <path class="wire" marker-end="url(#arr)" d="M922 448H1091V361" />
-      </svg>
-
-      <div class="box" style="left: 104px; top: 284px; width: 170px; height: 76px">
-        <div class="k">容器</div>
-        <div class="t"><i class="dot"></i>web</div>
-      </div>
-      <div class="box ghost" style="left: 360px; top: 284px; width: 170px; height: 76px">
-        <div class="k">代理，指向节点 2</div>
-        <div class="t">db</div>
-      </div>
-      <div class="box" style="left: 360px; top: 414px; width: 170px; height: 68px">
-        <div class="k">agent</div>
-        <div class="t">nagi</div>
+      <div class="stage nodes">
+        <div class="zone">
+          <div class="zl">节点 1</div>
+          <div class="box top" id="web" style="left: 16px">
+            <div class="k">容器</div>
+            <div class="t"><i class="dot"></i>web</div>
+          </div>
+          <div class="box ghost top" id="proxy" style="left: 226px">
+            <div class="k">代理</div>
+            <div class="t">db</div>
+            <div class="s">指向节点 2</div>
+          </div>
+          <div class="box bottom" id="na" style="left: 226px">
+            <div class="k mono">agent</div>
+            <div class="t">nagi</div>
+          </div>
+        </div>
+        <div class="zone">
+          <div class="zl">节点 2</div>
+          <div class="box bottom" id="nb" style="left: 16px">
+            <div class="k mono">agent</div>
+            <div class="t">nagi</div>
+          </div>
+          <div class="box top" id="db" style="left: 226px">
+            <div class="k">容器</div>
+            <div class="t"><i class="dot"></i>db</div>
+            <div class="s">postgres</div>
+          </div>
+        </div>
       </div>
 
-      <div class="box" style="left: 752px; top: 414px; width: 170px; height: 68px">
-        <div class="k">agent</div>
-        <div class="t">nagi</div>
-      </div>
-      <div class="box" style="left: 1006px; top: 284px; width: 170px; height: 76px">
-        <div class="k">容器</div>
-        <div class="t"><i class="dot"></i>db</div>
-      </div>
-
-      <div class="tag c" style="left: 317px; top: 302px; color: var(--fg)">db:5432</div>
-      <div class="tag c wave" style="left: 641px; top: 428px">WireGuard</div>
-
-      <div class="facts">
-        <span>使用容器名访问，与所在节点无关</span>
-        <span>容器迁移到其他节点后，名称不变</span>
-        <span>不同项目之间默认隔离</span>
+      <div class="notes">
+        <div>
+          <div class="nt">按名称访问</div>
+          <div class="nd">使用容器名即可访问，与容器所在的节点无关。</div>
+        </div>
+        <div>
+          <div class="nt">迁移后不变</div>
+          <div class="nd">容器迁移到其他节点后，名称和访问方式不变。</div>
+        </div>
+        <div>
+          <div class="nt">默认隔离</div>
+          <div class="nd">不同项目之间默认隔离，可按需连接两个项目。</div>
+        </div>
       </div>
     </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#web", "r", "#proxy", "l", { align: "a", arrow: true, label: "db:5432", labelCls: "code" });
+        wire("#proxy", "b", "#na", "t", { align: "a", arrow: true });
+        wire("#na", "r", "#nb", "l", { align: "a", arrow: true, cls: "wave", label: "WireGuard", labelCls: "wave" });
+        wire("#nb", "r", "#db", "b", { arrow: true });
+      });
+    </script>
   </body>
 </html>

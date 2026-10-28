@@ -4,29 +4,16 @@
     <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css" />
     <style>
-      .x {
-        position: absolute;
-        z-index: 2;
-        display: grid;
-        place-items: center;
-        width: 16px;
-        height: 16px;
-        transform: translate(-50%, -50%);
-        background: var(--bg);
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--danger);
-      }
       .votes {
         position: absolute;
-        top: 12px;
-        right: 14px;
+        top: 16px;
+        right: 16px;
         display: flex;
-        gap: 4px;
+        gap: 5px;
       }
       .votes i {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border: 1px solid var(--line);
         border-radius: 2px;
       }
@@ -34,56 +21,22 @@
         border-color: var(--success);
         background: var(--success);
       }
-      .steps {
-        position: absolute;
-        top: 222px;
-        left: 720px;
-        width: 480px;
-      }
-      .steps .h {
-        font-size: 12.5px;
-        color: var(--faint);
-      }
-      .step {
-        display: flex;
-        gap: 16px;
-        padding: 14px 0;
-        border-bottom: 1px solid var(--border);
-      }
-      .step .n {
-        flex: none;
-        width: 22px;
-        padding-top: 2px;
-        font-family: var(--mono);
-        font-size: 13px;
-        color: var(--wave);
-      }
-      .step .st {
-        font-size: 15px;
-        font-weight: 600;
-      }
-      .step .sd {
-        margin-top: 4px;
-        font-size: 13.5px;
-        line-height: 1.7;
-        color: var(--muted);
-      }
       .rule {
-        margin-top: 14px;
-        font-size: 13.5px;
-        line-height: 1.7;
-        color: var(--fg);
+        margin-top: 28px;
+        padding: 14px 18px;
+        border-left: 2px solid var(--wave);
+        background: var(--card);
+        font-size: 17px;
+        line-height: 1.6;
       }
       .facts {
-        position: absolute;
-        top: 572px;
-        left: 86px;
         display: flex;
-        font-size: 13.5px;
+        margin-top: 20px;
+        font-size: 16px;
         color: var(--muted);
       }
       .facts span {
-        padding: 0 24px;
+        padding: 0 22px;
         border-left: 1px solid var(--border);
       }
       .facts span:first-child {
@@ -100,79 +53,61 @@
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32">
-          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
-          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
-        </svg>
+        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>节点故障，自动接替</h1>
-      <p class="lead">为容器指定一个备用节点。原节点、备用节点和见证人各有一票，拿到两票的一方才能运行容器。</p>
+      <p class="lead">为容器指定一个备用节点。原节点、备用节点和见证人各有一票，获得两票的一方才能运行容器。</p>
 
-      <svg class="wires">
-        <defs>
-          <marker id="arr-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--success)" />
-          </marker>
-        </defs>
-        <path class="wire dead" d="M296 270H420" />
-        <path class="wire dead" d="M196 318V478H258" />
-        <path class="wire ok" marker-end="url(#arr-ok)" d="M468 478H525V319" />
-      </svg>
-
-      <div class="box" style="left: 86px; top: 222px; width: 210px; height: 96px; opacity: 0.55">
-        <div class="votes"><i></i><i></i></div>
-        <div class="k">原节点</div>
-        <div class="t"><i class="dot off"></i>节点 1</div>
-        <div class="s">已失联，0 票</div>
-      </div>
-      <div class="box" style="left: 420px; top: 222px; width: 210px; height: 96px">
-        <div class="votes"><i class="on"></i><i class="on"></i></div>
-        <div class="k">备用节点</div>
-        <div class="t"><i class="dot"></i>节点 2</div>
-        <div class="s">自己 + 见证人 = 2 票</div>
-      </div>
-      <div class="box" style="left: 258px; top: 430px; width: 210px; height: 96px">
-        <div class="k">见证人</div>
-        <div class="t"><i class="dot idle"></i>面板</div>
-        <div class="s">只投票，不运行容器</div>
-      </div>
-
-      <div class="x" style="left: 358px; top: 270px">×</div>
-      <div class="x" style="left: 196px; top: 398px">×</div>
-      <div class="tag c" style="left: 525px; top: 398px; color: var(--success)">投票</div>
-
-      <div class="steps">
-        <div class="h">投票过程</div>
-        <div class="step">
-          <div class="n">01</div>
-          <div>
-            <div class="st">平时</div>
-            <div class="sd">原节点每 10 秒向另外两方续约，保持两票，容器持续运行。</div>
-          </div>
+      <div class="stage" style="height: 320px">
+        <div class="box" id="a" style="left: 24px; top: 0; width: 280px; opacity: 0.55">
+          <div class="votes"><i></i><i></i></div>
+          <div class="k">原节点</div>
+          <div class="t"><i class="dot off"></i>节点 1</div>
+          <div class="s">已失联，0 票</div>
         </div>
-        <div class="step">
-          <div class="n">02</div>
-          <div>
-            <div class="st">失联</div>
-            <div class="sd">原节点续约失败，会在 30 秒的租约到期前自行停止容器。</div>
-          </div>
+        <div class="box" id="b" style="left: 584px; top: 0; width: 280px">
+          <div class="votes"><i class="on"></i><i class="on"></i></div>
+          <div class="k">备用节点</div>
+          <div class="t"><i class="dot"></i>节点 2</div>
+          <div class="s">自己 + 见证人 = 2 票</div>
         </div>
-        <div class="step">
-          <div class="n">03</div>
-          <div>
-            <div class="st">接替</div>
-            <div class="sd">租约到期后，见证人改投备用节点；备用节点获得两票后启动容器。</div>
-          </div>
+        <div class="box" id="w" style="left: 304px; top: 206px; width: 280px">
+          <div class="k">见证人</div>
+          <div class="t"><i class="dot idle"></i>面板</div>
+          <div class="s">只投票，不运行容器</div>
         </div>
-        <div class="rule">三票中只可能有一方获得两票，因此容器不会在两个节点上同时运行。</div>
       </div>
 
+      <div class="notes">
+        <div>
+          <div class="nt"><span class="n">01</span>平时</div>
+          <div class="nd">原节点每&nbsp;10&nbsp;秒向另外两方续约，保持两票，容器持续运行。</div>
+        </div>
+        <div>
+          <div class="nt"><span class="n">02</span>失联</div>
+          <div class="nd">原节点续约失败，会在租约（<span style="white-space: nowrap">30 秒</span>）到期前自行停止容器。</div>
+        </div>
+        <div>
+          <div class="nt"><span class="n">03</span>接替</div>
+          <div class="nd">租约到期后，见证人改投备用节点；备用节点获得两票后启动容器。</div>
+        </div>
+      </div>
+
+      <div class="rule">三票中只可能有一方获得两票，因此容器不会在两个节点上同时运行。</div>
       <div class="facts">
         <span><b>备用节点故障</b>不受影响</span>
         <span><b>面板离线</b>不受影响</span>
         <span><b>原节点恢复</b>稳定后自动切回</span>
       </div>
     </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#a", "r", "#b", "l", { align: "a", cls: "dead", label: "×", labelCls: "x" });
+        wire("#a", "b", "#w", "l", { cls: "dead", label: "×", labelCls: "x" });
+        wire("#w", "r", "#b", "b", { cls: "ok", arrow: true, label: "投票", labelCls: "ok" });
+      });
+    </script>
   </body>
 </html>

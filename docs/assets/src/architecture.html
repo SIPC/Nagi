@@ -7,75 +7,67 @@
   <body>
     <div class="frame">
       <div class="mark">
-        <svg viewBox="0 0 32 32">
-          <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" />
-          <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" />
-        </svg>
+        <svg viewBox="0 0 32 32"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
         Nagi
       </div>
       <h1>一个面板，管理多个节点</h1>
       <p class="lead">每个节点主动连接面板，无需开放端口；节点之间通过 WireGuard 直接通信。</p>
 
-      <svg class="wires">
-        <defs>
-          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 1L9 5L0 9z" style="fill: var(--line)" />
-          </marker>
-        </defs>
-        <path class="wire" marker-end="url(#arr)" d="M177 440V380H376V319" />
-        <path class="wire" marker-end="url(#arr)" d="M431 440V319" />
-        <path class="wire" marker-end="url(#arr)" d="M685 440V380H486V319" />
-        <path class="wire dash" d="M556 270H610" />
-        <path class="wire wave" d="M282 488H326" />
-        <path class="wire wave" d="M536 488H580" />
-        <path class="wire wave" d="M177 536V576H685V536" />
-      </svg>
-
-      <div class="box" style="left: 306px; top: 222px; width: 250px; height: 96px">
-        <div class="k">nagi server</div>
-        <div class="t"><i class="dot"></i>面板</div>
-        <div class="s">网页控制台</div>
-      </div>
-      <div class="box ghost" style="left: 610px; top: 222px; width: 180px; height: 96px">
-        <div class="k">standby</div>
-        <div class="t"><i class="dot idle"></i>备用面板</div>
-        <div class="s">随时接替</div>
-      </div>
-
-      <div class="box" style="left: 72px; top: 440px; width: 210px; height: 96px">
-        <div class="k">nagi agent</div>
-        <div class="t"><i class="dot"></i>节点 1</div>
-        <div class="s">运行容器</div>
-      </div>
-      <div class="box" style="left: 326px; top: 440px; width: 210px; height: 96px">
-        <div class="k">nagi agent</div>
-        <div class="t"><i class="dot"></i>节点 2</div>
-        <div class="s">运行容器</div>
-      </div>
-      <div class="box" style="left: 580px; top: 440px; width: 210px; height: 96px">
-        <div class="k">nagi agent</div>
-        <div class="t"><i class="dot"></i>节点 3</div>
-        <div class="s">运行容器</div>
-      </div>
-
-      <div class="tag c" style="left: 431px; top: 380px">主动连接</div>
-      <div class="tag c" style="left: 583px; top: 270px">同步</div>
-      <div class="tag c wave" style="left: 431px; top: 576px">WireGuard</div>
-
-      <div class="aside" style="left: 860px; top: 222px; width: 340px">
-        <div class="item">
-          <div class="it"><i class="swatch"></i>无需开放端口</div>
-          <div class="ix">由节点主动连接面板，位于内网的服务器也可加入。</div>
+      <div class="stage" style="height: 400px">
+        <div class="box" id="panel" style="left: 304px; top: 0; width: 280px">
+          <div class="k mono">nagi server</div>
+          <div class="t"><i class="dot"></i>面板</div>
+          <div class="s">网页控制台</div>
         </div>
-        <div class="item">
-          <div class="it"><i class="swatch wave"></i>节点直接互通</div>
-          <div class="ix">节点间组成 WireGuard 网络，不通时由面板中转。</div>
+        <div class="box ghost" id="standby" style="left: 664px; top: 0; width: 224px">
+          <div class="k mono">standby</div>
+          <div class="t"><i class="dot idle"></i>备用面板</div>
+          <div class="s">随时接替</div>
         </div>
-        <div class="item">
-          <div class="it">面板离线不影响服务</div>
-          <div class="ix">节点缓存配置，面板离线时容器继续运行。</div>
+
+        <div class="box" id="n1" style="left: 0; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>节点 1</div>
+          <div class="s">运行容器</div>
+        </div>
+        <div class="box" id="n2" style="left: 312px; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>节点 2</div>
+          <div class="s">运行容器</div>
+        </div>
+        <div class="box" id="n3" style="left: 624px; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>节点 3</div>
+          <div class="s">运行容器</div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt"><i class="swatch"></i>无需开放端口</div>
+          <div class="nd">由节点主动连接面板，位于内网的服务器也可加入。</div>
+        </div>
+        <div>
+          <div class="nt"><i class="swatch wave"></i>节点直接互通</div>
+          <div class="nd">节点间组成 WireGuard 网络，不通时由面板中转。</div>
+        </div>
+        <div>
+          <div class="nt">面板离线不影响服务</div>
+          <div class="nd">节点缓存配置，面板离线时容器继续运行。</div>
         </div>
       </div>
     </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#n1", "t", "#panel", "b", { fb: 0.2, arrow: true });
+        wire("#n2", "t", "#panel", "b", { fb: 0.5, arrow: true, label: "主动连接" });
+        wire("#n3", "t", "#panel", "b", { fb: 0.8, arrow: true });
+        wire("#panel", "r", "#standby", "l", { align: "a", cls: "dash", label: "同步" });
+        wire("#n1", "r", "#n2", "l", { align: "a", cls: "wave" });
+        wire("#n2", "r", "#n3", "l", { align: "a", cls: "wave" });
+        wire("#n1", "b", "#n3", "b", { drop: 44, cls: "wave", label: "WireGuard", labelCls: "wave" });
+      });
+    </script>
   </body>
 </html>
