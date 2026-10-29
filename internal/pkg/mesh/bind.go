@@ -23,7 +23,12 @@ const (
 	pingSearch    = 5 * time.Second  // 直连不可用时探测候选地址的间隔
 	forget        = 2 * time.Minute  // 学到的地址、看到的自己的公网地址保留多久
 	maxCandidates = 16
+	// pendingInitTTL 是没有路径时暂存的握手包留多久：再久 WireGuard 自己就重发了（REKEY_TIMEOUT 是 5 秒）。
+	pendingInitTTL = 5 * time.Second
 )
+
+// msgInitiation 是 WireGuard 握手发起包的类型（第一个字节）。
+const msgInitiation = 1
 
 // dropUDP 只用于测试：返回 true 时丢弃这个 UDP 包，模拟网络不通。
 var dropUDP func(fromPort uint16, to netip.AddrPort) bool
@@ -56,6 +61,10 @@ type peerState struct {
 	directAt   time.Time                    // 最近一次 pong 的时间
 	rtt        time.Duration
 	relays     []Key // 可以代为中转的面板
+	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
+	// 不补发的话要等 WireGuard 5 秒后重发，这期间对方还用着重启前的会话，发来的包都被丢掉。
+	pendingInit   []byte
+	pendingInitAt time.Time
 }
 
 func (p *peerState) directAlive(now time.Time) bool {
@@ -248,7 +257,33 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 			return
 		}
 	}
+	if len(pkt) > 0 && pkt[0] == msgInitiation {
+		p.pendingInit, p.pendingInitAt = append([]byte(nil), pkt...), now
+	}
 	b.mu.Unlock()
+}
+
+// flushPending 补发暂存的握手包。有新路径可用时调用；仍然没有路径的会被 sendTo 重新暂存。
+func (b *Bind) flushPending() {
+	type pending struct {
+		key Key
+		pkt []byte
+	}
+	var out []pending
+	now := time.Now()
+	b.mu.Lock()
+	for k, p := range b.peers {
+		if p.pendingInit != nil {
+			if now.Sub(p.pendingInitAt) < pendingInitTTL {
+				out = append(out, pending{k, p.pendingInit})
+			}
+			p.pendingInit = nil
+		}
+	}
+	b.mu.Unlock()
+	for _, x := range out {
+		b.sendTo(x.key, x.pkt)
+	}
 }
 
 // forward 替 src 把包转给 dst（面板）。
@@ -310,6 +345,7 @@ func (b *Bind) AttachLink(k Key, l Link) (detach func()) {
 	b.mu.Lock()
 	b.links[k] = entry
 	b.mu.Unlock()
+	b.flushPending()
 	return func() {
 		b.mu.Lock()
 		if b.links[k] == entry {
@@ -346,9 +382,10 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 		}
 		p.learned[from] = now
 		pong := encodePong(b.pub, m.txid, from, p.mac)
-		// 对方能找到我们，我们也立刻反向探测，加快打洞。
+		// 对方能找到我们，我们也立刻反向探测，加快打洞。刚发过的 ping 可能在对方还没加上我们时就到了、被丢掉，
+		// 所以只做很短的限流（ping 带 MAC，只有成员触发得了）。
 		var ping []byte
-		if !(p.direct == from && p.directAlive(now)) && now.Sub(p.lastPing[from]) > time.Second {
+		if !(p.direct == from && p.directAlive(now)) && now.Sub(p.lastPing[from]) > 100*time.Millisecond {
 			ping = b.newPing(p, from, now)
 		}
 		b.mu.Unlock()
@@ -358,26 +395,34 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 		}
 	case typePong:
 		b.mu.Lock()
-		defer b.mu.Unlock()
 		p := b.peers[m.key]
 		if p == nil || !verify(pkt, p.mac) {
+			b.mu.Unlock()
 			return nil, nil
 		}
 		info, ok := p.pings[m.txid]
 		if !ok || info.addr != from {
+			b.mu.Unlock()
 			return nil, nil
 		}
 		delete(p.pings, m.txid)
+		newPath := !p.directAlive(now)
 		if p.direct != from {
 			if p.direct.IsValid() {
 				delete(b.byAddr, p.direct)
 			}
 			b.log.Debug("mesh 直连可用", "peer", p.key.Short(), "addr", from)
+			newPath = true
 		}
 		p.direct, p.directAt, p.rtt = from, now, now.Sub(info.sent)
 		b.byAddr[from] = p.key
 		if m.observed.IsValid() {
 			b.observed[m.observed] = now
+		}
+		b.mu.Unlock()
+		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手。
+		if newPath {
+			b.flushPending()
 		}
 	case typeRelaySend:
 		if !b.relay {

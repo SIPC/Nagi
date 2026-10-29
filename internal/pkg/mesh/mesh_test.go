@@ -3,8 +3,10 @@ package mesh
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/netip"
 	"testing"
 	"time"
@@ -32,8 +34,14 @@ func local(port uint16) []netip.AddrPort {
 }
 
 // setup 建一个面板 P 和两个节点 A、B：节点都能直连面板、互相也能直连，并且各有一条到面板的控制连接。
-func setup(t *testing.T) (p, a, b testNode) {
+func setup(t *testing.T) (p, a, b testNode) { return setupWith(t, nil) }
+
+// setupWith 同 setup，before 在加成员（也就是开始探测）之前调用，用来设置 dropUDP。
+func setupWith(t *testing.T, before func(p, a, b testNode)) (p, a, b testNode) {
 	p, a, b = newNode(t, true), newNode(t, false), newNode(t, false)
+	if before != nil {
+		before(p, a, b)
+	}
 	pk, ak, bk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
 	_ = a.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
@@ -118,21 +126,99 @@ func TestDirect(t *testing.T) {
 }
 
 func TestUDPRelay(t *testing.T) {
-	_, a, b := setup(t)
-	dropUDP = func(from uint16, to netip.AddrPort) bool {
-		return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
-	}
 	defer func() { dropUDP = nil }()
+	_, a, b := setupWith(t, func(_, a, b testNode) {
+		dropUDP = func(from uint16, to netip.AddrPort) bool {
+			return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
+		}
+	})
 	waitPath(t, a.m, b.m.PublicKey(), "udp-relay")
 	echo(t, a, b)
 }
 
 func TestTLSRelay(t *testing.T) {
-	_, a, b := setup(t)
-	dropUDP = func(uint16, netip.AddrPort) bool { return true }
 	defer func() { dropUDP = nil }()
+	_, a, b := setupWith(t, func(_, _, _ testNode) {
+		dropUDP = func(uint16, netip.AddrPort) bool { return true }
+	})
 	waitPath(t, a.m, b.m.PublicKey(), "tls-relay")
 	echo(t, a, b)
+}
+
+// TestPeerRestart：对端重启（同一私钥、同一端口，会话全丢）后，新连接很快能建立，旧连接很快报错。
+// 重启的一方加上成员时就发起握手，这时直连还没确认；要是这个握手包被丢掉，对方会一直用旧会话发包，
+// 等 WireGuard 自己重新握手要十几秒。
+func TestPeerRestart(t *testing.T) {
+	dropUDP = nil
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var privB Key
+	_, _ = rand.Read(privB[:])
+	a := newNode(t, false)
+	b, err := New(Config{PrivateKey: privB, Logger: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ka, kb := a.m.PublicKey(), b.PublicKey()
+	portB := b.Port()
+	_ = a.m.SetPeers([]Peer{{Key: kb, Endpoints: local(portB)}})
+	_ = b.SetPeers([]Peer{{Key: ka, Endpoints: local(a.port)}})
+	serve := func(m *Mesh) {
+		ln, err := m.Listen(7000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() { _, _ = io.Copy(io.Discard, c) }()
+			}
+		}()
+	}
+	serve(b)
+	waitPath(t, a.m, kb, "direct")
+	old, err := a.m.Dial(context.Background(), kb, 7000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+
+	b.Close()
+	time.Sleep(time.Second)
+	b, err = New(Config{PrivateKey: privB, Port: portB, Logger: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	_ = b.SetPeers([]Peer{{Key: ka, Endpoints: local(a.port)}})
+	serve(b)
+	start := time.Now()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, err := a.m.Dial(ctx, kb, 7000)
+	if err != nil {
+		t.Fatalf("对端重启后 5 秒内没能建立新连接：%v", err)
+	}
+	c.Close()
+	t.Logf("对端重启后 %s 建立新连接", time.Since(start).Round(time.Millisecond))
+
+	// 旧连接：对端已经没有这条连接了，写一下就会收到 RST。
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_ = old.SetDeadline(time.Now().Add(200 * time.Millisecond))
+		_, werr := old.Write([]byte("x"))
+		_, rerr := old.Read(make([]byte, 1))
+		var ne net.Error
+		if werr != nil || (rerr != nil && !(errors.As(rerr, &ne) && ne.Timeout())) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("对端重启后旧连接 5 秒内没有报错")
+		}
+	}
 }
 
 func TestAddress(t *testing.T) {

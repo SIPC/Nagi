@@ -52,6 +52,7 @@ type Mesh struct {
 	mu         sync.Mutex
 	configured map[Key]bool
 	done       chan struct{}
+	closeOnce  sync.Once
 }
 
 // New 启动 mesh。
@@ -98,10 +99,12 @@ func (m *Mesh) loop() {
 	}
 }
 
-// Close 停止 mesh。
+// Close 停止 mesh。可以重复调用。
 func (m *Mesh) Close() {
-	close(m.done)
-	m.dev.Close()
+	m.closeOnce.Do(func() {
+		close(m.done)
+		m.dev.Close()
+	})
 }
 
 // PublicKey 返回自己的公钥。
@@ -144,7 +147,10 @@ func (m *Mesh) SetPeers(peers []Peer) error {
 	if b.Len() == 0 {
 		return nil
 	}
-	return m.dev.IpcSet(b.String())
+	err := m.dev.IpcSet(b.String())
+	// 新成员立刻探测直连，不等下一轮：WireGuard 加上成员时就发起握手，路径一确认就补发。
+	m.bind.maintain(time.Now())
+	return err
 }
 
 // AttachLink 登记经控制连接到某个对端的通道，返回取消登记的函数。HandleLink 处理从这条通道收到的包。
