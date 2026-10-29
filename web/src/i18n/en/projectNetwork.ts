@@ -29,7 +29,7 @@ export default {
   intranet: {
     title: "Project network",
     description: "Containers in the project reach each other by name, on any node.",
-    help: "A single container is addressed as \"container\", a container in a group as \"container.group\". Inside a container group, compose service names still apply. Cross-node traffic is TCP only, over encrypted node-to-node tunnels.",
+    help: "A single container is addressed as \"container\", a container in a group as \"container.group\". Inside a container group, compose service names still apply. Cross-node traffic supports TCP and UDP (unicast only), over encrypted node-to-node tunnels.",
     servicePlaceholder: "<container>",
     empty: "No containers",
     columns: {
@@ -37,13 +37,13 @@ export default {
       node: "Node",
     },
     internalPorts: "Internal ports",
-    internalPortsHint: "One per line, e.g. pg:5432; in a container group use container.group:port",
+    internalPortsHint: "One per line, e.g. pg:5432; in a container group use container.group:port; append /udp for UDP, e.g. dns:53/udp",
     internalPortsHelp: "Declared ports (image EXPOSE, compose ports and expose) are open to containers on other nodes automatically. Add undeclared ports here.",
   },
   links: {
     title: "Project links",
     description: "Containers in linked projects can reach each other at \"container.network-name\".",
-    help: "Links are bidirectional but not transitive: if A links to B and B links to C, A and C stay isolated. Cross-node traffic is TCP only, over encrypted node-to-node tunnels.",
+    help: "Links are bidirectional but not transitive: if A links to B and B links to C, A and C stay isolated. Cross-node traffic supports TCP and UDP (unicast only), over encrypted node-to-node tunnels.",
     add: "Link project",
     empty: "No linked projects",
     disconnectConfirm: (name) => `Unlink project ${name}? Containers in the two projects will lose access to each other immediately.`,

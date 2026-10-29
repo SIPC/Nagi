@@ -185,13 +185,26 @@ func TestInternalPorts(t *testing.T) {
 	if err != nil || strings.Join(got, ",") != "pg:5432,db.umami:3306" {
 		t.Fatalf("clean: %v %v", got, err)
 	}
-	for _, bad := range []string{"pg", "pg:0", "pg:70000", "PG:1", "a.b.c:1"} {
+	for _, bad := range []string{"pg", "pg:0", "pg:70000", "PG:1", "a.b.c:1", "dns:53/sctp", "dns:53/"} {
 		if _, err := CleanInternalPorts([]string{bad}); err == nil {
 			t.Errorf("%q should be invalid", bad)
 		}
 	}
 	if m := InternalPortMap(got); len(m["pg"]) != 1 || m["db.umami"][0] != 3306 {
 		t.Fatalf("map: %v", m)
+	}
+
+	// UDP 加 /udp；/tcp 去掉，和不带后缀的算同一个。
+	got, err = CleanInternalPorts([]string{"dns:53/udp", "dns:53", "dns:53/tcp", "vpn.wg:51820/udp"})
+	if err != nil || strings.Join(got, ",") != "dns:53/udp,dns:53,vpn.wg:51820/udp" {
+		t.Fatalf("clean udp: %v %v", got, err)
+	}
+	tcp, udp := InternalPortMap(got), InternalUDPPortMap(got)
+	if len(tcp) != 1 || len(tcp["dns"]) != 1 || tcp["dns"][0] != 53 {
+		t.Fatalf("tcp map: %v", tcp)
+	}
+	if len(udp["dns"]) != 1 || udp["dns"][0] != 53 || udp["vpn.wg"][0] != 51820 {
+		t.Fatalf("udp map: %v", udp)
 	}
 }
 

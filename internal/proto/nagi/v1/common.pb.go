@@ -1488,7 +1488,9 @@ type ServiceStatus struct {
 	Health    string `protobuf:"bytes,6,opt,name=health,proto3" json:"health,omitempty"`
 	Container string `protobuf:"bytes,7,opt,name=container,proto3" json:"container,omitempty"`
 	// 容器声明的 TCP 端口（镜像的 EXPOSE、compose 的 ports、expose），别的节点上的容器经代理访问时用。
-	Ports         []uint32 `protobuf:"varint,8,rep,packed,name=ports,proto3" json:"ports,omitempty"`
+	Ports []uint32 `protobuf:"varint,8,rep,packed,name=ports,proto3" json:"ports,omitempty"`
+	// 容器声明的 UDP 端口。
+	UdpPorts      []uint32 `protobuf:"varint,9,rep,packed,name=udp_ports,json=udpPorts,proto3" json:"udp_ports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1575,6 +1577,13 @@ func (x *ServiceStatus) GetContainer() string {
 func (x *ServiceStatus) GetPorts() []uint32 {
 	if x != nil {
 		return x.Ports
+	}
+	return nil
+}
+
+func (x *ServiceStatus) GetUdpPorts() []uint32 {
+	if x != nil {
+		return x.UdpPorts
 	}
 	return nil
 }
@@ -4060,9 +4069,12 @@ type LinkProxy struct {
 	Alias         string                 `protobuf:"bytes,2,opt,name=alias,proto3" json:"alias,omitempty"`
 	TargetProject string                 `protobuf:"bytes,3,opt,name=target_project,json=targetProject,proto3" json:"target_project,omitempty"`
 	// 目标在它自己的项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
-	TargetName    string      `protobuf:"bytes,4,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
-	Ports         []uint32    `protobuf:"varint,5,rep,packed,name=ports,proto3" json:"ports,omitempty"`
-	Nodes         []*LinkNode `protobuf:"bytes,6,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	TargetName string `protobuf:"bytes,4,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	// TCP 端口。
+	Ports []uint32    `protobuf:"varint,5,rep,packed,name=ports,proto3" json:"ports,omitempty"`
+	Nodes []*LinkNode `protobuf:"bytes,6,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// UDP 端口：多路复用到一条通道上（见 docs/agent.md#项目内网）。
+	UdpPorts      []uint32 `protobuf:"varint,7,rep,packed,name=udp_ports,json=udpPorts,proto3" json:"udp_ports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4135,6 +4147,13 @@ func (x *LinkProxy) GetPorts() []uint32 {
 func (x *LinkProxy) GetNodes() []*LinkNode {
 	if x != nil {
 		return x.Nodes
+	}
+	return nil
+}
+
+func (x *LinkProxy) GetUdpPorts() []uint32 {
+	if x != nil {
+		return x.UdpPorts
 	}
 	return nil
 }
@@ -4404,7 +4423,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vPortMapping\x12\x1c\n" +
 	"\tpublished\x18\x01 \x01(\rR\tpublished\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
-	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd6\x01\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xf3\x01\n" +
 	"\rServiceStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fcontainer_id\x18\x02 \x01(\tR\vcontainerId\x12\x14\n" +
@@ -4413,7 +4432,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x16\n" +
 	"\x06health\x18\x06 \x01(\tR\x06health\x12\x1c\n" +
 	"\tcontainer\x18\a \x01(\tR\tcontainer\x12\x14\n" +
-	"\x05ports\x18\b \x03(\rR\x05ports\"\xc6\x01\n" +
+	"\x05ports\x18\b \x03(\rR\x05ports\x12\x1b\n" +
+	"\tudp_ports\x18\t \x03(\rR\budpPorts\"\xc6\x01\n" +
 	"\rProjectStatus\x122\n" +
 	"\bservices\x18\x01 \x03(\v2\x16.nagi.v1.ServiceStatusR\bservices\x129\n" +
 	"\rimage_updates\x18\x02 \x03(\v2\x14.nagi.v1.ImageUpdateR\fimageUpdates\x12F\n" +
@@ -4644,7 +4664,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x15spec_project_revision\x18\x0e \x01(\x03R\x13specProjectRevision\"d\n" +
 	"\bLinkPlan\x12,\n" +
 	"\aproxies\x18\x01 \x03(\v2\x12.nagi.v1.LinkProxyR\aproxies\x12*\n" +
-	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\"\xc7\x01\n" +
+	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\"\xe4\x01\n" +
 	"\tLinkProxy\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
@@ -4653,7 +4673,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtarget_name\x18\x04 \x01(\tR\n" +
 	"targetName\x12\x14\n" +
 	"\x05ports\x18\x05 \x03(\rR\x05ports\x12'\n" +
-	"\x05nodes\x18\x06 \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\"0\n" +
+	"\x05nodes\x18\x06 \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\x12\x1b\n" +
+	"\tudp_ports\x18\a \x03(\rR\budpPorts\"0\n" +
 	"\bLinkNode\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"k\n" +

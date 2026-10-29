@@ -31,6 +31,7 @@ import (
 //     代理把连接经 unix socket 交给节点，节点按计划里的顺序经 mesh 的 7001 端口交给目标所在的节点；
 //   - 对方节点检查调用方有权访问这个项目，再连到项目里的那个容器，然后双向转发。容器不在它那里时回"不在这里"，
 //     本节点接着找下一个节点（例如容器被顶替到了热备）。
+//   - UDP 的部分见 intranet_udp.go。
 
 // linkPort 是 mesh 上转发容器连接的 TCP 端口。
 const linkPort = 7001
@@ -39,6 +40,7 @@ const (
 	labelLink      = "nagi.link"
 	labelLinkAlias = "nagi.link.alias"
 	labelLinkPorts = "nagi.link.ports"
+	labelLinkUDP   = "nagi.link.udp-ports"
 	labelLinkBuild = "nagi.link.build"
 )
 
@@ -47,15 +49,19 @@ type intranet struct {
 	kick chan struct{}
 	file string
 
-	mu    sync.Mutex
-	plan  *nagiv1.LinkPlan
-	socks map[string]net.Listener // 项目 ID → 代理连进来的 unix socket
-	build string                   // 代理容器标签：nagi 换了版本就重建
+	mu     sync.Mutex
+	plan   *nagiv1.LinkPlan
+	socks  map[string]net.Listener // 项目 ID → 代理连进来的 unix socket（TCP 连接）
+	usocks map[string]net.Listener // 项目 ID → 代理连进来的 unixpacket socket（UDP）
+	build  string                  // 代理容器标签：nagi 换了版本就重建
+	// endpoint 找本节点上项目内网里的容器（project.Manager.FindEndpoint），测试时替换。
+	endpoint func(ctx context.Context, projectID, name string) (project.Endpoint, bool)
 }
 
 func newIntranet(a *agent) *intranet {
 	n := &intranet{a: a, kick: make(chan struct{}, 1), file: filepath.Join(a.cfg.DataDir, "links.pb"),
-		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}}
+		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}, usocks: map[string]net.Listener{}}
+	n.endpoint = a.projects.FindEndpoint
 	n.build = a.cfg.Version
 	if exe, err := linkExe(); err == nil {
 		if fi, err := os.Stat(exe); err == nil {
@@ -128,6 +134,9 @@ func (n *intranet) run(ctx context.Context) {
 			for _, s := range n.socks {
 				s.Close()
 			}
+			for _, s := range n.usocks {
+				s.Close()
+			}
 			n.mu.Unlock()
 			return
 		case <-t.C:
@@ -178,7 +187,7 @@ func (n *intranet) wanted(ctx context.Context) map[string]*nagiv1.LinkProxy {
 	}
 	out := map[string]*nagiv1.LinkProxy{}
 	for _, p := range n.current().GetProxies() {
-		if len(out) >= maxProxies || !local[p.GetProjectId()] || !validAlias(p.GetAlias()) || len(p.GetPorts()) == 0 {
+		if len(out) >= maxProxies || !local[p.GetProjectId()] || !validAlias(p.GetAlias()) || (len(p.GetPorts()) == 0 && len(p.GetUdpPorts()) == 0) {
 			continue
 		}
 		// 同项目的容器已经在本节点上（例如刚顶替过来、面板还没更新计划）：名字由容器自己占着，不放代理。
@@ -193,9 +202,10 @@ func (n *intranet) wanted(ctx context.Context) map[string]*nagiv1.LinkProxy {
 	return out
 }
 
-func proxyPorts(p *nagiv1.LinkProxy) []uint32 {
+// proxyPorts 整理代理的端口（TCP 或 UDP 的）：去掉不对的和重复的，最多 maxProxyPorts 个。
+func proxyPorts(ports []uint32) []uint32 {
 	var out []uint32
-	for _, x := range p.GetPorts() {
+	for _, x := range ports {
 		if x > 0 && x <= 65535 && len(out) < maxProxyPorts && !slices.Contains(out, x) {
 			out = append(out, x)
 		}
@@ -215,7 +225,8 @@ func (n *intranet) reconcile(ctx context.Context) error {
 	var firstErr error
 	for _, c := range existing {
 		p, ok := want[c.Name]
-		same := ok && c.Labels[labelLinkPorts] == portsLabel(proxyPorts(p)) && c.Labels[labelLinkBuild] == n.build &&
+		same := ok && c.Labels[labelLinkPorts] == portsLabel(proxyPorts(p.GetPorts())) &&
+			c.Labels[labelLinkUDP] == portsLabel(proxyPorts(p.GetUdpPorts())) && c.Labels[labelLinkBuild] == n.build &&
 			c.State != "exited" && c.State != "dead" && c.State != "created"
 		if same {
 			have[c.Name] = true
@@ -245,12 +256,13 @@ func (n *intranet) reconcile(ctx context.Context) error {
 			}
 			continue
 		}
-		ports := portsLabel(proxyPorts(p))
+		ports, udpPorts := portsLabel(proxyPorts(p.GetPorts())), portsLabel(proxyPorts(p.GetUdpPorts()))
 		err := n.a.docker.RunLinkProxy(ctx, docker.LinkProxySpec{
 			Name: name, Network: project.ProjectNetwork(p.GetProjectId()), Alias: p.GetAlias(),
 			Exe: exe, SockDir: n.sockDir(p.GetProjectId()),
-			Env:    []string{"NAGI_LINK_ALIAS=" + p.GetAlias(), "NAGI_LINK_PORTS=" + ports},
-			Labels: map[string]string{labelLink: p.GetProjectId(), labelLinkAlias: p.GetAlias(), labelLinkPorts: ports, labelLinkBuild: n.build},
+			Env: []string{"NAGI_LINK_ALIAS=" + p.GetAlias(), "NAGI_LINK_PORTS=" + ports, "NAGI_LINK_UDP_PORTS=" + udpPorts},
+			Labels: map[string]string{labelLink: p.GetProjectId(), labelLinkAlias: p.GetAlias(), labelLinkPorts: ports,
+				labelLinkUDP: udpPorts, labelLinkBuild: n.build},
 		})
 		if err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("创建 %s 的代理容器: %w", p.GetAlias(), err)
@@ -265,22 +277,31 @@ func (n *intranet) sockDir(projectID string) string {
 	return filepath.Join(n.a.cfg.DataDir, "run", "link-"+projectID)
 }
 
-// syncSockets 为每个要放代理的项目开一个 unix socket，挂进这个项目的代理容器。
+// syncSockets 为每个要放代理的项目开一个 unix socket，挂进这个项目的代理容器；有 UDP 端口的项目再开一个 unixpacket socket。
 func (n *intranet) syncSockets() {
-	want := map[string]bool{}
+	want, wantUDP := map[string]bool{}, map[string]bool{}
 	for _, p := range n.current().GetProxies() {
 		want[p.GetProjectId()] = true
+		if len(p.GetUdpPorts()) > 0 {
+			wantUDP[p.GetProjectId()] = true
+		}
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for id, s := range n.socks {
+	n.syncListeners(n.socks, want, "unix", "sock", n.handleLocal)
+	n.syncListeners(n.usocks, wantUDP, "unixpacket", "udp", n.handleLocalUDP)
+}
+
+// syncListeners 让 have 里的 socket 和 want 一致。调用方持有 n.mu。
+func (n *intranet) syncListeners(have map[string]net.Listener, want map[string]bool, network, file string, handle func(string, net.Conn)) {
+	for id, s := range have {
 		if !want[id] {
 			s.Close()
-			delete(n.socks, id)
+			delete(have, id)
 		}
 	}
 	for id := range want {
-		if n.socks[id] != nil || len(id) != 16 {
+		if have[id] != nil || len(id) != 16 {
 			continue
 		}
 		dir := n.sockDir(id)
@@ -288,21 +309,21 @@ func (n *intranet) syncSockets() {
 			n.a.log.Warn("创建代理的 socket 目录失败", "err", err)
 			continue
 		}
-		path := filepath.Join(dir, "sock")
+		path := filepath.Join(dir, file)
 		_ = os.Remove(path)
-		ln, err := net.Listen("unix", path)
+		ln, err := net.Listen(network, path)
 		if err != nil {
-			n.a.log.Warn("监听代理的 socket 失败", "project", id, "err", err)
+			n.a.log.Warn("监听代理的 socket 失败", "project", id, "socket", file, "err", err)
 			continue
 		}
-		n.socks[id] = ln
+		have[id] = ln
 		go func(id string) {
 			for {
 				c, err := ln.Accept()
 				if err != nil {
 					return
 				}
-				go n.handleLocal(id, c)
+				go handle(id, c)
 			}
 		}(id)
 	}
@@ -341,7 +362,7 @@ func (n *intranet) handleLocal(projectID string, c net.Conn) {
 		}
 		if n.a.mesh != nil && k == n.a.mesh.m.PublicKey() {
 			// 目标就在本节点上（例如连接了同一个节点上的另一个项目）。
-			e, ok := n.a.projects.FindEndpoint(n.a.ctx, p.GetTargetProject(), p.GetTargetName())
+			e, ok := n.endpoint(n.a.ctx, p.GetTargetProject(), p.GetTargetName())
 			if !ok {
 				continue
 			}
@@ -446,6 +467,10 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		return
 	}
 	_ = c.SetReadDeadline(time.Time{})
+	if rest, ok := strings.CutPrefix(line, "udp "); ok {
+		n.handleRemoteUDP(ctx, c, br, caller, rest)
+		return
+	}
 	projectID, rest, _ := strings.Cut(line, " ")
 	name, port, err := parseLinkHeader(rest)
 	if err != nil {
@@ -457,7 +482,7 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		reply("ERR 无权访问这个项目")
 		return
 	}
-	e, found := n.a.projects.FindEndpoint(ctx, projectID, name)
+	e, found := n.endpoint(ctx, projectID, name)
 	if !found {
 		reply("ERR 不在这里")
 		return

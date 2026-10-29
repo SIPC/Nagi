@@ -305,8 +305,28 @@ func boolInt(b bool) int64 {
 	return 0
 }
 
-// declaredPorts 是容器各服务声明的端口（服务名 → 端口），存在容器的记录里。
+// declaredPorts 是容器各服务声明的端口，存在容器的记录里：服务名 → TCP 端口，"服务名/udp" → UDP 端口
+// （服务名里不会有 /，不会撞；以前只记 TCP 的记录照样能读）。
 type declaredPorts map[string][]uint32
+
+func (d declaredPorts) tcp(svc string) []uint32 { return d[svc] }
+func (d declaredPorts) udp(svc string) []uint32 { return d[svc+"/udp"] }
+
+// add 加上节点上报的容器状态里各服务声明的端口。
+func (d declaredPorts) add(cs *nagiv1.ContainerStatus) {
+	put := func(key string, ports []uint32) {
+		if len(ports) == 0 {
+			return
+		}
+		all := append(d[key], ports...)
+		slices.Sort(all)
+		d[key] = slices.Compact(all)
+	}
+	for _, svc := range cs.GetServices() {
+		put(svc.GetName(), svc.GetPorts())
+		put(svc.GetName()+"/udp", svc.GetUdpPorts())
+	}
+}
 
 // saveDeclaredPorts 记下节点上报的、本来就在这个节点上的容器声明的端口：节点断开时，
 // 别的节点上的项目内网代理照旧按它放（见 docs/agent.md#项目内网）。
@@ -317,11 +337,7 @@ func (s *Service) saveDeclaredPorts(ctx context.Context, rows []store.Container,
 			continue // 容器停着时上报里没有端口，记下的保持不变
 		}
 		d := declaredPorts{}
-		for _, svc := range cs.GetServices() {
-			ports := append(d[svc.GetName()], svc.GetPorts()...)
-			slices.Sort(ports)
-			d[svc.GetName()] = slices.Compact(ports)
-		}
+		d.add(cs)
 		b, _ := json.Marshal(d)
 		if string(b) == r.DeclaredPorts {
 			continue
@@ -358,7 +374,7 @@ func (s *Service) preferNewerCopy(ctx context.Context, c *nodes.Conn, row store.
 // reportsPorts 判断节点上报的容器状态里有没有端口（容器停着时没有）。
 func reportsPorts(cs *nagiv1.ContainerStatus) bool {
 	for _, svc := range cs.GetServices() {
-		if len(svc.GetPorts()) > 0 {
+		if len(svc.GetPorts()) > 0 || len(svc.GetUdpPorts()) > 0 {
 			return true
 		}
 	}

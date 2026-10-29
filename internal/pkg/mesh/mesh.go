@@ -167,6 +167,16 @@ func (m *Mesh) Dial(ctx context.Context, k Key, port uint16) (net.Conn, error) {
 	return m.tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(Address(k), port))
 }
 
+// ListenUDP 在自己的 mesh 地址上开一个 UDP 端口，port 为 0 时随机选。
+func (m *Mesh) ListenUDP(port uint16) (net.PacketConn, error) {
+	return m.tnet.ListenUDPAddrPort(netip.AddrPortFrom(m.addr, port))
+}
+
+// DialUDP 从自己 mesh 地址上的随机端口连接某个成员的 UDP 端口，只收得到对方这个端口发来的包。
+func (m *Mesh) DialUDP(k Key, port uint16) (net.Conn, error) {
+	return m.tnet.DialUDPAddrPort(netip.AddrPortFrom(m.addr, 0), netip.AddrPortFrom(Address(k), port))
+}
+
 // KeyOf 返回 mesh 地址对应的成员。WireGuard 已经校验过来源，所以这就是对方的身份。
 func (m *Mesh) KeyOf(addr net.Addr) (Key, bool) {
 	ap, err := netip.ParseAddrPort(addr.String())

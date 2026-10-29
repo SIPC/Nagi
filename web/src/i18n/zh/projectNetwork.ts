@@ -28,7 +28,7 @@ export default {
   intranet: {
     title: "项目内网",
     description: "项目内的容器无论位于哪个节点，均可按名称互相访问。",
-    help: "单个容器的地址为「容器名」，容器组内的容器为「容器.容器组」。容器组内部仍使用 compose 中的服务名。跨节点访问仅转发 TCP，经节点间加密通道传输。",
+    help: "单个容器的地址为「容器名」，容器组内的容器为「容器.容器组」。容器组内部仍使用 compose 中的服务名。跨节点访问支持 TCP 和 UDP（仅单播），经节点间加密通道传输。",
     servicePlaceholder: "<容器>",
     empty: "暂无容器",
     columns: {
@@ -36,13 +36,13 @@ export default {
       node: "节点",
     },
     internalPorts: "内部端口",
-    internalPortsHint: "每行一个，如 pg:5432；容器组内为 容器.容器组:端口",
+    internalPortsHint: "每行一个，如 pg:5432；容器组内为 容器.容器组:端口；UDP 在末尾加 /udp，如 dns:53/udp",
     internalPortsHelp: "容器声明的端口（镜像的 EXPOSE、compose 的 ports、expose）自动对其他节点上的容器开放；未声明的端口在此补充。",
   },
   links: {
     title: "项目连接",
     description: "连接后两个项目的容器可互相访问，地址为「容器.网络名」。",
-    help: "连接为双向，但不可传递：A 连接 B、B 连接 C 时，A 与 C 仍相互隔离。跨节点访问仅转发 TCP，经节点间加密通道传输。",
+    help: "连接为双向，但不可传递：A 连接 B、B 连接 C 时，A 与 C 仍相互隔离。跨节点访问支持 TCP 和 UDP（仅单播），经节点间加密通道传输。",
     add: "连接项目",
     empty: "未连接其他项目",
     disconnectConfirm: (name: string) => `断开与项目 ${name} 的连接？两个项目的容器将立即无法互相访问。`,

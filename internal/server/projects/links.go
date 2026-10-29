@@ -23,7 +23,7 @@ import (
 // target 是项目内网里的一个名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
 type target struct {
 	project, container, name, nodeID string
-	ports                            []uint32
+	ports, udpPorts                  []uint32
 	// nodes 是容器可能在的节点，所在节点在前（设置了顶替时还有另一方）。
 	nodes []string
 }
@@ -36,6 +36,7 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 		return nil
 	}
 	internal := spec.InternalPortMap(settings.GetInternalPorts())
+	internalUDP := spec.InternalUDPPortMap(settings.GetInternalPorts())
 	var out []target
 	for _, c := range rows {
 		cfg, err := s.runningConfig(ctx, c)
@@ -51,9 +52,7 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 		// 不能因为节点断开、容器重启就撤掉别的节点上的代理。
 		declared := declaredPorts{}
 		if cs := reports[c.NodeID][c.ProjectID+"/"+c.Name]; cs != nil && reportsPorts(cs) {
-			for _, svc := range cs.GetServices() {
-				declared[svc.GetName()] = append(declared[svc.GetName()], svc.GetPorts()...)
-			}
+			declared.add(cs)
 		} else if c.DeclaredPorts != "" {
 			_ = json.Unmarshal([]byte(c.DeclaredPorts), &declared)
 		}
@@ -65,12 +64,20 @@ func (s *Service) targets(ctx context.Context, p store.Project, rows []store.Con
 			if !spec.IsSingle(cfg) {
 				name = svc + "." + c.Name
 			}
-			ports := append(append([]uint32(nil), declared[svc]...), internal[name]...)
-			slices.Sort(ports)
-			out = append(out, target{project: c.ProjectID, container: c.Name, name: name, nodeID: c.NodeID, ports: slices.Compact(ports), nodes: failoverNodes(c)})
+			out = append(out, target{
+				project: c.ProjectID, container: c.Name, name: name, nodeID: c.NodeID, nodes: failoverNodes(c),
+				ports:    mergePorts(declared.tcp(svc), internal[name]),
+				udpPorts: mergePorts(declared.udp(svc), internalUDP[name]),
+			})
 		}
 	}
 	return out
+}
+
+func mergePorts(a, b []uint32) []uint32 {
+	ports := append(append([]uint32(nil), a...), b...)
+	slices.Sort(ports)
+	return slices.Compact(ports)
 }
 
 // runningConfig 返回容器正在运行的配置（部署过的版本），没部署过时用最新版本。
@@ -159,13 +166,13 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		return i
 	}
 	proxy := func(projectID, alias string, t target) *nagiv1.LinkProxy {
-		px := &nagiv1.LinkProxy{ProjectId: projectID, Alias: alias, TargetProject: t.project, TargetName: t.name, Ports: t.ports}
+		px := &nagiv1.LinkProxy{ProjectId: projectID, Alias: alias, TargetProject: t.project, TargetName: t.name, Ports: t.ports, UdpPorts: t.udpPorts}
 		for _, n := range t.nodes {
 			if len(keys[n]) > 0 {
 				px.Nodes = append(px.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
 			}
 		}
-		if len(t.ports) == 0 || len(px.Nodes) == 0 {
+		if (len(t.ports) == 0 && len(t.udpPorts) == 0) || len(px.Nodes) == 0 {
 			return nil
 		}
 		return px

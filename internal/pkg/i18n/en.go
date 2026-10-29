@@ -138,7 +138,7 @@ var en = map[string]string{
 	"依赖的容器 %q 不对":                                      "Invalid dependency: container %q",
 	"变量名 %q 不合法：只能包含字母、数字和下划线，且不能以数字开头": "Invalid variable name %q: only letters, digits, and underscores are allowed, and it cannot start with a digit",
 	"变量 %s 重复": "Duplicate variable %s",
-	"内部端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"": "Invalid internal port %q: expected \"container:port\" or \"service.group:port\"",
+	"内部端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"，UDP 在后面加 /udp": "Invalid internal port %q: expected \"container:port\" or \"service.group:port\", with /udp appended for UDP",
 	"内部端口 %q 的端口号不对": "Invalid port number in internal port %q",
 
 	// ---- 端口映射 ----

@@ -262,6 +262,8 @@ message ServiceStatus {
   string container = 7;
   // 容器声明的 TCP 端口（镜像的 EXPOSE、compose 的 ports、expose），别的节点上的容器经代理访问时用。
   repeated uint32 ports = 8;
+  // 容器声明的 UDP 端口。
+  repeated uint32 udp_ports = 9;
 }
 
 message ProjectStatus {
@@ -616,8 +618,11 @@ message LinkProxy {
   string target_project = 3;
   // 目标在它自己的项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
   string target_name = 4;
+  // TCP 端口。
   repeated uint32 ports = 5;
   repeated LinkNode nodes = 6;
+  // UDP 端口：多路复用到一条通道上（见 docs/agent.md#项目内网）。
+  repeated uint32 udp_ports = 7;
 }
 
 message LinkNode {

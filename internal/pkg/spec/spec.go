@@ -461,9 +461,11 @@ func HostNetworkServices(proj *types.Project) []string {
 
 // ---- 内部端口 ----
 
-var internalPortRe = regexp.MustCompile(`^([a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)?):([0-9]{1,5})$`)
+// 端口后面可以加 /tcp（默认）或 /udp。
+var internalPortRe = regexp.MustCompile(`^([a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)?):([0-9]{1,5})(/(tcp|udp))?$`)
 
-// CleanInternalPorts 检查并整理项目设置里的内部端口（"容器:端口"或"服务.容器组:端口"）。
+// CleanInternalPorts 检查并整理项目设置里的内部端口（"容器:端口"或"服务.容器组:端口"，UDP 在后面加 /udp）。
+// /tcp 去掉：旧版节点只认不带后缀的写法。
 func CleanInternalPorts(in []string) ([]string, error) {
 	var out []string
 	for _, s := range in {
@@ -473,11 +475,12 @@ func CleanInternalPorts(in []string) ([]string, error) {
 		}
 		m := internalPortRe.FindStringSubmatch(s)
 		if m == nil {
-			return nil, Invalid("内部端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"", s)
+			return nil, Invalid("内部端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"，UDP 在后面加 /udp", s)
 		}
 		if p, _ := strconv.Atoi(m[3]); p < 1 || p > 65535 {
 			return nil, Invalid("内部端口 %q 的端口号不对", s)
 		}
+		s = strings.TrimSuffix(s, "/tcp")
 		if !contains(out, s) {
 			out = append(out, s)
 		}
@@ -485,13 +488,22 @@ func CleanInternalPorts(in []string) ([]string, error) {
 	return out, nil
 }
 
-// InternalPortMap 把内部端口按"容器"或"服务.容器组"分组。
-func InternalPortMap(list []string) map[string][]uint32 {
+// InternalPortMap 把 TCP 的内部端口按"容器"或"服务.容器组"分组。
+func InternalPortMap(list []string) map[string][]uint32 { return internalPortMap(list, "tcp") }
+
+// InternalUDPPortMap 把 UDP 的内部端口按"容器"或"服务.容器组"分组。
+func InternalUDPPortMap(list []string) map[string][]uint32 { return internalPortMap(list, "udp") }
+
+func internalPortMap(list []string, proto string) map[string][]uint32 {
 	out := map[string][]uint32{}
 	for _, s := range list {
-		if m := internalPortRe.FindStringSubmatch(s); m != nil {
-			p, _ := strconv.Atoi(m[3])
-			out[m[1]] = append(out[m[1]], uint32(p))
+		m := internalPortRe.FindStringSubmatch(s)
+		if m == nil {
+			continue
+		}
+		if p := m[5]; p == proto || (p == "" && proto == "tcp") {
+			n, _ := strconv.Atoi(m[3])
+			out[m[1]] = append(out[m[1]], uint32(n))
 		}
 	}
 	return out

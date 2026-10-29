@@ -95,6 +95,8 @@ type Instance struct {
 	Name string
 	// Ports 是容器声明的 TCP 端口（镜像的 EXPOSE、compose 的 ports、expose），从小到大。
 	Ports []uint16
+	// UDPPorts 是容器声明的 UDP 端口，从小到大。
+	UDPPorts []uint16
 	// Labels 是容器的全部标签。
 	Labels map[string]string
 }
@@ -129,13 +131,24 @@ func (d *Client) listInstances(ctx context.Context, filters client.Filters, proj
 				}
 			}
 		}
-		var ports []uint16
+		var ports, udpPorts []uint16
 		for _, pt := range c.Ports {
-			if pt.Type == "tcp" && pt.PrivatePort != 0 && !slices.Contains(ports, pt.PrivatePort) {
-				ports = append(ports, pt.PrivatePort)
+			if pt.PrivatePort == 0 {
+				continue
+			}
+			switch pt.Type {
+			case "tcp":
+				if !slices.Contains(ports, pt.PrivatePort) {
+					ports = append(ports, pt.PrivatePort)
+				}
+			case "udp":
+				if !slices.Contains(udpPorts, pt.PrivatePort) {
+					udpPorts = append(udpPorts, pt.PrivatePort)
+				}
 			}
 		}
 		slices.Sort(ports)
+		slices.Sort(udpPorts)
 		name := ""
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
@@ -154,6 +167,7 @@ func (d *Client) listInstances(ctx context.Context, filters client.Filters, proj
 			Project:   c.Labels[projectLabel],
 			ImageID:   c.ImageID,
 			Ports:     ports,
+			UDPPorts:  udpPorts,
 			Labels:    c.Labels,
 		})
 	}

@@ -145,6 +145,55 @@ func TestTLSRelay(t *testing.T) {
 	echo(t, a, b)
 }
 
+// TestUDP 经 mesh 收发 UDP：B 从随机端口连 A 开的端口。超过 MTU 的数据报靠 IPv6 分片。
+func TestUDP(t *testing.T) {
+	dropUDP = nil
+	_, a, b := setup(t)
+	waitPath(t, a.m, b.m.PublicKey(), "direct")
+	pc, err := a.m.ListenUDP(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go func() {
+		buf := make([]byte, 65536)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if k, ok := a.m.KeyOf(from); !ok || k != b.m.PublicKey() {
+				continue
+			}
+			_, _ = pc.WriteTo(buf[:n], from)
+		}
+	}()
+	port := uint16(pc.LocalAddr().(*net.UDPAddr).Port)
+	c, err := b.m.DialUDP(a.m.PublicKey(), port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for _, size := range []int{5, MTU, 16 << 10} {
+		msg := make([]byte, size)
+		_, _ = rand.Read(msg)
+		got := make([]byte, size+1)
+		ok := false
+		// UDP 可能丢包（例如 WireGuard 还在握手），多试几次。
+		for try := 0; try < 10 && !ok; try++ {
+			if _, err := c.Write(msg); err != nil {
+				t.Fatal(err)
+			}
+			_ = c.SetReadDeadline(time.Now().Add(time.Second))
+			n, err := c.Read(got)
+			ok = err == nil && n == size && string(got[:n]) == string(msg)
+		}
+		if !ok {
+			t.Fatalf("%d 字节的数据报没有原样回来", size)
+		}
+	}
+}
+
 // TestPeerRestart：对端重启（同一私钥、同一端口，会话全丢）后，新连接很快能建立，旧连接很快报错。
 // 重启的一方加上成员时就发起握手，这时直连还没确认；要是这个握手包被丢掉，对方会一直用旧会话发包，
 // 等 WireGuard 自己重新握手要十几秒。
