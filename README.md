@@ -7,6 +7,8 @@
   <a href="https://github.com/SIPC/Nagi/releases/latest"><img src="https://img.shields.io/github/v/release/SIPC/Nagi" alt="Release"></a>
 </p>
 
+<p align="center"><b>简体中文</b> · <a href="README.en.md">English</a></p>
+
 # Nagi（凪）
 
 > 风平浪静。
