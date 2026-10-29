@@ -91,6 +91,7 @@ func (r *Registry) SetAlertConfig(ctx context.Context, cfg *nagiv1.AlertConfig) 
 }
 
 // pushAlertConfig 把告警配置下发给一个节点。cfg 为 nil 时读取当前配置。
+// 带上节点在面板上的名称：节点自己发的告警用它，和界面上一致（节点改过名时不再是主机名）。
 func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.AlertConfig) {
 	if r.ReadOnly {
 		return
@@ -105,6 +106,8 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 			return
 		}
 	}
+	cfg = proto.CloneOf(cfg)
+	cfg.NodeName = c.Name()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if _, err := c.Agent.SetAlertConfig(ctx, &nagiv1.SetAlertConfigRequest{Config: cfg}); err != nil {

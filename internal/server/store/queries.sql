@@ -63,6 +63,9 @@ SELECT id FROM nodes WHERE mesh_key = ? AND id != ? AND revoked = 0;
 -- name: ApproveNode :execrows
 UPDATE nodes SET pending = 0 WHERE id = ? AND revoked = 0;
 
+-- name: RenameNode :execrows
+UPDATE nodes SET name = ? WHERE id = ? AND revoked = 0;
+
 -- name: GetNode :one
 SELECT * FROM nodes WHERE id = ?;
 

@@ -47,7 +47,8 @@ function useNodes() {
   const list = nodes.data?.nodes ?? [];
   return {
     list,
-    name: (id: string) => list.find((n) => n.id === id)?.name ?? id,
+    // fallback：顶替设置里记的名字。节点改过名时设置里的是旧名字，所以先按 ID 查当前的名字。
+    name: (id: string, fallback?: string) => list.find((n) => n.id === id)?.name ?? fallback ?? id,
     online: (id: string) => list.find((n) => n.id === id)?.online === true,
     usable: list.filter((n) => n.online && !n.pending),
   };
@@ -906,7 +907,7 @@ function Failover({
           </dd>
           <dt className="text-muted-foreground">{t.projectData.failover.hotStandby}</dt>
           <dd>
-            {standbyNode?.name}
+            {standbyNode && nodes.name(standbyNode.nodeId, standbyNode.name)}
             {standbyNode && !nodes.online(standbyNode.nodeId) && (
               <Badge className="ml-2">{t.common.status.offline}</Badge>
             )}
@@ -914,7 +915,7 @@ function Failover({
           <dt className="text-muted-foreground">{t.projectData.failover.witness}</dt>
           <dd>
             {!cfg.witnessIsPanel ? (
-              cfg.witness?.name
+              cfg.witness && nodes.name(cfg.witness.nodeId, cfg.witness.name)
             ) : container.failoverWitnessSelf ? (
               t.projectData.thisPanel
             ) : (
@@ -965,7 +966,7 @@ function Failover({
                 onClick={() =>
                   confirm(
                     t.projectData.failover.confirmTakeoverPrompt(
-                      standbyNode?.name ?? "",
+                      standbyNode ? nodes.name(standbyNode.nodeId, standbyNode.name) : "",
                       container.name,
                     ),
                   ) && call(() => projectClient.confirmTakeover(ref))

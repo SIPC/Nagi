@@ -228,6 +228,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
   const navigate = useNavigate();
+  const [renaming, setRenaming] = useState(false);
   if (nodes.isPending) return <Loading />;
   if (nodes.error) return <Alert>{errorMessage(nodes.error)}</Alert>;
   const n = nodes.data.nodes.find((x) => x.id === nodeId);
@@ -290,10 +291,18 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                 {t.nodes.approve}
               </Button>
             )}
-            <Menu items={[{ label: t.nodes.removeNode, onSelect: remove, danger: true }]} />
+            <Menu
+              items={[
+                { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
+                { label: t.nodes.removeNode, onSelect: remove, danger: true },
+              ]}
+            />
           </>
         }
       />
+      <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
+        <RenameNode n={n} onDone={() => setRenaming(false)} />
+      </Dialog>
       {target && <NodeUpgrade key={target} n={n} target={target} onDone={() => nodes.refetch()} />}
       {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
@@ -310,7 +319,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
           ) : tab === "mesh" ? (
             <NodeMesh nodeId={n.id} />
           ) : tab === "replicas" ? (
-            <NodeReplicas nodeId={n.id} />
+            <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
           ) : tab === "settings" ? (
             <div className="grid gap-6">
               <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
@@ -322,6 +331,52 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
         </>
       )}
     </>
+  );
+}
+
+// RenameNode：修改节点在面板上显示的名称（放在对话框里）。
+function RenameNode({ n, onDone }: { n: Node; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(n.name);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const trimmed = name.trim();
+  const save = async () => {
+    if (trimmed === n.name) return onDone();
+    setBusy(true);
+    setError("");
+    try {
+      await nodeClient.renameNode({ nodeId: n.id, name: trimmed });
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field label={t.nodes.rename.label} htmlFor="node-name" hint={t.nodes.rename.hint(n.info?.hostname || "—")}>
+        <Input id="node-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus required />
+      </Field>
+      {error && <Alert>{error}</Alert>}
+      <FormActions>
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" size="sm" disabled={busy || !trimmed}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </FormActions>
+    </form>
   );
 }
 
@@ -561,7 +616,7 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
 }
 
 // NodeReplicas：节点作为备份节点或热备保存的副本。已经没有容器使用的副本可以删除。
-function NodeReplicas({ nodeId }: { nodeId: string }) {
+function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
   const [error, setError] = useState("");
@@ -608,7 +663,7 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
                       {!inUse && <Badge tone="warning">{t.nodes.replicas.unused}</Badge>}
                     </div>
                   </Td>
-                  <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{r?.sourceName || "—"}</Td>
+                  <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{nodes.find((x) => x.id === r?.sourceNodeId)?.name || r?.sourceName || "—"}</Td>
                   <Td className="hidden font-mono text-xs whitespace-nowrap text-muted-foreground sm:table-cell">{fmtBytes(Number(r?.bytes ?? 0))}</Td>
                   <Td className="text-[13px] whitespace-nowrap text-muted-foreground">{r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—"}</Td>
                   <Td className="text-right">

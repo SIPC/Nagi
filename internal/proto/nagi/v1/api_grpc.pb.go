@@ -436,6 +436,7 @@ const (
 	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
 	NodeService_ApproveNode_FullMethodName         = "/nagi.v1.NodeService/ApproveNode"
+	NodeService_RenameNode_FullMethodName          = "/nagi.v1.NodeService/RenameNode"
 	NodeService_AdoptNodeContainer_FullMethodName  = "/nagi.v1.NodeService/AdoptNodeContainer"
 )
 
@@ -475,6 +476,8 @@ type NodeServiceClient interface {
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
 	ApproveNode(ctx context.Context, in *ApproveNodeRequest, opts ...grpc.CallOption) (*ApproveNodeResponse, error)
+	// 修改节点在面板上显示的名称（加入时是节点的主机名）。只存在面板上，不改节点本机的主机名。
+	RenameNode(ctx context.Context, in *RenameNodeRequest, opts ...grpc.CallOption) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error)
 }
@@ -657,6 +660,16 @@ func (c *nodeServiceClient) ApproveNode(ctx context.Context, in *ApproveNodeRequ
 	return out, nil
 }
 
+func (c *nodeServiceClient) RenameNode(ctx context.Context, in *RenameNodeRequest, opts ...grpc.CallOption) (*RenameNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_RenameNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdoptNodeContainerResponse)
@@ -703,6 +716,8 @@ type NodeServiceServer interface {
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
 	ApproveNode(context.Context, *ApproveNodeRequest) (*ApproveNodeResponse, error)
+	// 修改节点在面板上显示的名称（加入时是节点的主机名）。只存在面板上，不改节点本机的主机名。
+	RenameNode(context.Context, *RenameNodeRequest) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
@@ -765,6 +780,9 @@ func (UnimplementedNodeServiceServer) RemoveNode(context.Context, *RemoveNodeReq
 }
 func (UnimplementedNodeServiceServer) ApproveNode(context.Context, *ApproveNodeRequest) (*ApproveNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApproveNode not implemented")
+}
+func (UnimplementedNodeServiceServer) RenameNode(context.Context, *RenameNodeRequest) (*RenameNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameNode not implemented")
 }
 func (UnimplementedNodeServiceServer) AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdoptNodeContainer not implemented")
@@ -1096,6 +1114,24 @@ func _NodeService_ApproveNode_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_RenameNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RenameNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RenameNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RenameNode(ctx, req.(*RenameNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_AdoptNodeContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AdoptNodeContainerRequest)
 	if err := dec(in); err != nil {
@@ -1188,6 +1224,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApproveNode",
 			Handler:    _NodeService_ApproveNode_Handler,
+		},
+		{
+			MethodName: "RenameNode",
+			Handler:    _NodeService_RenameNode_Handler,
 		},
 		{
 			MethodName: "AdoptNodeContainer",

@@ -110,6 +110,8 @@ service NodeService {
   // 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
   // 所以这样加入的节点要管理员确认。
   rpc ApproveNode(ApproveNodeRequest) returns (ApproveNodeResponse);
+  // 修改节点在面板上显示的名称（加入时是节点的主机名）。只存在面板上，不改节点本机的主机名。
+  rpc RenameNode(RenameNodeRequest) returns (RenameNodeResponse);
   // 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
   rpc AdoptNodeContainer(AdoptNodeContainerRequest) returns (AdoptNodeContainerResponse);
 }
@@ -128,6 +130,13 @@ message ApproveNodeRequest {
 }
 
 message ApproveNodeResponse {}
+
+message RenameNodeRequest {
+  string node_id = 1;
+  string name = 2;
+}
+
+message RenameNodeResponse {}
 
 message QueryNodeMetricsRequest {
   string node_id = 1;

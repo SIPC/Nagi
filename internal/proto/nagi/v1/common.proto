@@ -449,6 +449,8 @@ message AlertRules {
 message AlertConfig {
   repeated AlertChannel channels = 1;
   AlertRules rules = 2;
+  // 节点在面板上的名称：只在下发给节点时由面板填写，节点发告警时用它；为空时（旧版本的面板）用主机名。
+  string node_name = 3;
 }
 
 // Alert 是一条告警或恢复通知。

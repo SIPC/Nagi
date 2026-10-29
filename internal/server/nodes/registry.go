@@ -168,6 +168,30 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 	return nil
 }
 
+// Rename 修改节点在面板上的名称。节点在线时同时改连接上记的名字：mesh 成员列表里用它，
+// 其他节点下次上报（最多 15 秒）就看到新名字；再重新下发告警配置，节点之后发的告警用新名字。
+// 节点离线时，等它连上来上报时再下发（见 Report）。
+func (r *Registry) Rename(ctx context.Context, nodeID, name string) error {
+	n, err := r.q.RenameNode(ctx, store.RenameNodeParams{Name: name, ID: nodeID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return i18n.New("没有这个节点")
+	}
+	if c, err := r.Peek(nodeID); err == nil {
+		c.mu.Lock()
+		c.name = name
+		push := !c.pending && c.accepted
+		c.mu.Unlock()
+		if push {
+			go r.pushAlertConfig(context.Background(), c, nil)
+		}
+	}
+	r.log.Info("节点已改名", "node", nodeID, "name", name)
+	return nil
+}
+
 // Disconnect 断开节点的当前连接（例如节点被移除时）。
 func (r *Registry) Disconnect(nodeID string) {
 	r.mu.RLock()

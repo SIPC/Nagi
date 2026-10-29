@@ -103,6 +103,8 @@ const (
 	NodeServiceRemoveNodeProcedure = "/nagi.v1.NodeService/RemoveNode"
 	// NodeServiceApproveNodeProcedure is the fully-qualified name of the NodeService's ApproveNode RPC.
 	NodeServiceApproveNodeProcedure = "/nagi.v1.NodeService/ApproveNode"
+	// NodeServiceRenameNodeProcedure is the fully-qualified name of the NodeService's RenameNode RPC.
+	NodeServiceRenameNodeProcedure = "/nagi.v1.NodeService/RenameNode"
 	// NodeServiceAdoptNodeContainerProcedure is the fully-qualified name of the NodeService's
 	// AdoptNodeContainer RPC.
 	NodeServiceAdoptNodeContainerProcedure = "/nagi.v1.NodeService/AdoptNodeContainer"
@@ -587,6 +589,8 @@ type NodeServiceClient interface {
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
 	ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error)
+	// 修改节点在面板上显示的名称（加入时是节点的主机名）。只存在面板上，不改节点本机的主机名。
+	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 }
@@ -704,6 +708,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("ApproveNode")),
 			connect.WithClientOptions(opts...),
 		),
+		renameNode: connect.NewClient[v1.RenameNodeRequest, v1.RenameNodeResponse](
+			httpClient,
+			baseURL+NodeServiceRenameNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RenameNode")),
+			connect.WithClientOptions(opts...),
+		),
 		adoptNodeContainer: connect.NewClient[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse](
 			httpClient,
 			baseURL+NodeServiceAdoptNodeContainerProcedure,
@@ -732,6 +742,7 @@ type nodeServiceClient struct {
 	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 	approveNode         *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
+	renameNode          *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
 	adoptNodeContainer  *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
 }
 
@@ -820,6 +831,11 @@ func (c *nodeServiceClient) ApproveNode(ctx context.Context, req *connect.Reques
 	return c.approveNode.CallUnary(ctx, req)
 }
 
+// RenameNode calls nagi.v1.NodeService.RenameNode.
+func (c *nodeServiceClient) RenameNode(ctx context.Context, req *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error) {
+	return c.renameNode.CallUnary(ctx, req)
+}
+
 // AdoptNodeContainer calls nagi.v1.NodeService.AdoptNodeContainer.
 func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, req *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error) {
 	return c.adoptNodeContainer.CallUnary(ctx, req)
@@ -859,6 +875,8 @@ type NodeServiceHandler interface {
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
 	// 所以这样加入的节点要管理员确认。
 	ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error)
+	// 修改节点在面板上显示的名称（加入时是节点的主机名）。只存在面板上，不改节点本机的主机名。
+	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 }
@@ -972,6 +990,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("ApproveNode")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceRenameNodeHandler := connect.NewUnaryHandler(
+		NodeServiceRenameNodeProcedure,
+		svc.RenameNode,
+		connect.WithSchema(nodeServiceMethods.ByName("RenameNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceAdoptNodeContainerHandler := connect.NewUnaryHandler(
 		NodeServiceAdoptNodeContainerProcedure,
 		svc.AdoptNodeContainer,
@@ -1014,6 +1038,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceRemoveNodeHandler.ServeHTTP(w, r)
 		case NodeServiceApproveNodeProcedure:
 			nodeServiceApproveNodeHandler.ServeHTTP(w, r)
+		case NodeServiceRenameNodeProcedure:
+			nodeServiceRenameNodeHandler.ServeHTTP(w, r)
 		case NodeServiceAdoptNodeContainerProcedure:
 			nodeServiceAdoptNodeContainerHandler.ServeHTTP(w, r)
 		default:
@@ -1091,6 +1117,10 @@ func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Requ
 
 func (UnimplementedNodeServiceHandler) ApproveNode(context.Context, *connect.Request[v1.ApproveNodeRequest]) (*connect.Response[v1.ApproveNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ApproveNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNode is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error) {

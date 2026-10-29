@@ -1373,6 +1373,23 @@ func (q *Queries) ProjectByNetworkName(ctx context.Context, networkName string) 
 	return id, err
 }
 
+const renameNode = `-- name: RenameNode :execrows
+UPDATE nodes SET name = ? WHERE id = ? AND revoked = 0
+`
+
+type RenameNodeParams struct {
+	Name string
+	ID   string
+}
+
+func (q *Queries) RenameNode(ctx context.Context, arg RenameNodeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, renameNode, arg.Name, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const replaceUndeployedVersion = `-- name: ReplaceUndeployedVersion :exec
 UPDATE versions SET config = ?, shared_env = ?, created_at = ?, rollback_of = ?, images = '{}', git_commit = '', has_files = 0
 WHERE project_id = ? AND container = ? AND version = ? AND deployed_at IS NULL

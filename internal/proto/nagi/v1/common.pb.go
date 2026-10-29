@@ -2882,9 +2882,11 @@ func (x *AlertRules) GetErrorPercent() uint32 {
 }
 
 type AlertConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Channels      []*AlertChannel        `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty"`
-	Rules         *AlertRules            `protobuf:"bytes,2,opt,name=rules,proto3" json:"rules,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Channels []*AlertChannel        `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty"`
+	Rules    *AlertRules            `protobuf:"bytes,2,opt,name=rules,proto3" json:"rules,omitempty"`
+	// 节点在面板上的名称：只在下发给节点时由面板填写，节点发告警时用它；为空时（旧版本的面板）用主机名。
+	NodeName      string `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2931,6 +2933,13 @@ func (x *AlertConfig) GetRules() *AlertRules {
 		return x.Rules
 	}
 	return nil
+}
+
+func (x *AlertConfig) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
 }
 
 // Alert 是一条告警或恢复通知。
@@ -4554,10 +4563,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0frestart_minutes\x18\x05 \x01(\rR\x0erestartMinutes\x12\x1b\n" +
 	"\tcert_days\x18\x06 \x01(\rR\bcertDays\x12'\n" +
 	"\x0foffline_seconds\x18\a \x01(\rR\x0eofflineSeconds\x12#\n" +
-	"\rerror_percent\x18\b \x01(\rR\ferrorPercent\"k\n" +
+	"\rerror_percent\x18\b \x01(\rR\ferrorPercent\"\x88\x01\n" +
 	"\vAlertConfig\x121\n" +
 	"\bchannels\x18\x01 \x03(\v2\x15.nagi.v1.AlertChannelR\bchannels\x12)\n" +
-	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\"\xbf\x01\n" +
+	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\x12\x1b\n" +
+	"\tnode_name\x18\x03 \x01(\tR\bnodeName\"\xbf\x01\n" +
 	"\x05Alert\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +

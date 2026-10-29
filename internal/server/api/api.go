@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
@@ -231,6 +232,32 @@ func (s *nodeService) ApproveNode(ctx context.Context, req *connect.Request[nagi
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 	return connect.NewResponse(&nagiv1.ApproveNodeResponse{}), nil
+}
+
+// RenameNode 修改节点在面板上的名称。名字只用于显示，但不能和别的节点重名，否则界面上分不清。
+// 节点离线时也能改。
+func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv1.RenameNodeRequest]) (*connect.Response[nagiv1.RenameNodeResponse], error) {
+	id := req.Msg.GetNodeId()
+	name := strings.TrimSpace(req.Msg.GetName())
+	if name == "" || utf8.RuneCountInString(name) > 64 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能为空，且不超过 64 个字符"))
+	}
+	if strings.ContainsFunc(name, unicode.IsControl) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能包含控制字符"))
+	}
+	rows, err := s.Q.ListNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.ID != id && row.Name == name {
+			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已经有节点叫 %s 了", name))
+		}
+	}
+	if err := s.Nodes.Rename(ctx, id, name); err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	return connect.NewResponse(&nagiv1.RenameNodeResponse{}), nil
 }
 
 // QueryNodeMetrics 查询节点上的监控数据，监控数据存在节点本地。

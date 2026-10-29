@@ -63,6 +63,13 @@ export default {
   removeConfirm: (name) =>
     `Remove node ${name}? The panel will stop managing it and reject its reconnections. Containers on the node keep running.`,
   removeNode: "Remove node",
+  rename: {
+    action: "Rename",
+    title: "Rename node",
+    description: "The name is only shown in the panel. The node's hostname doesn't change.",
+    label: "Name",
+    hint: (hostname) => `Hostname: ${hostname}`,
+  },
   pendingNotice: "This node joined with an invite code. Approve it once you've confirmed it's your machine. Until then it can't be viewed or managed.",
   offlineTitle: "Node offline",
   offlineNotice: "Monitoring, replicas and mesh status are unavailable while the node is offline.",

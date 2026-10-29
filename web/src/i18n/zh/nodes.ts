@@ -61,6 +61,13 @@ export default {
   notFound: "节点不存在",
   removeConfirm: (name: string) => `移除节点 ${name}？面板将不再管理该节点并拒绝其重新连接，节点上的容器照常运行。`,
   removeNode: "移除节点",
+  rename: {
+    action: "重命名",
+    title: "重命名节点",
+    description: "名称只在面板上显示，不改节点本机的主机名。",
+    label: "名称",
+    hint: (hostname: string) => `主机名：${hostname}`,
+  },
   pendingNotice: "该节点通过接入码加入。请确认为自有机器后批准；批准前无法查看和操作。",
   offlineTitle: "节点离线",
   offlineNotice: "节点离线时无法查询监控、副本和 mesh 状态。",

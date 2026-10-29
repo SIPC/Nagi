@@ -115,6 +115,40 @@ func TestRelayAndQueue(t *testing.T) {
 	}
 }
 
+// 告警里的节点名称用面板下发的（节点可能在面板上改过名），没有时用主机名。
+func TestNodeName(t *testing.T) {
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	ch := []*nagiv1.AlertChannel{{Id: "a", Type: "webhook", Url: srv.URL}}
+	ctx := context.Background()
+
+	e := newEngine(t, nil)
+	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Channels: ch})
+	e.Fire(ctx, "k1", "t", "", "")
+	if got := rcv.got[0]["node"]; got != "node1" {
+		t.Fatalf("面板没下发名称时应该用主机名，得到 %v", got)
+	}
+
+	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Channels: ch, NodeName: "东京-1"})
+	e.Resolve(ctx, "k1")
+	e.Notify(ctx, "t", "", "")
+	for _, m := range rcv.got[1:] {
+		if m["node"] != "东京-1" {
+			t.Fatalf("应该用面板下发的名称：%v", m)
+		}
+	}
+
+	// 两个面板的名称不同时（移交过程中），按面板指纹取第一个；重启后从本地配置读回。
+	_ = e.SetConfig("p1", &nagiv1.AlertConfig{NodeName: "大阪-1"})
+	e2 := newEngine(t, nil)
+	e2.dir = e.dir
+	e2.loadConfigs()
+	if got := e2.nodeName(); got != "大阪-1" {
+		t.Fatalf("重新读取配置后名称是 %q", got)
+	}
+}
+
 func TestStrictestRules(t *testing.T) {
 	e := newEngine(t, nil)
 	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{DiskPercent: 80}})

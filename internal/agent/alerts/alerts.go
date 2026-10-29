@@ -31,7 +31,7 @@ type Relay func(ctx context.Context, panel string, a *nagiv1.Alert, channelIDs [
 // Engine 是节点的告警引擎。
 type Engine struct {
 	log         *slog.Logger
-	node        string
+	node        string // 主机名；面板下发了节点名称时用面板的（见 nodeName）
 	dir         string // 保存告警配置和待补发队列
 	certDir     string // Caddy 的证书目录
 	metrics     *metrics.Collector
@@ -170,6 +170,22 @@ func (e *Engine) channels() []channel {
 		}
 	}
 	return out
+}
+
+// nodeName 是告警里的节点名称：面板上的名称（用户可能改过），和界面上一致；面板没下发时用主机名。
+// 移交过程中两个面板的名称可能不同，按面板指纹排序取第一个，结果固定。调用方持有 e.mu。
+func (e *Engine) nodeName() string {
+	panels := make([]string, 0, len(e.configs))
+	for p := range e.configs {
+		panels = append(panels, p)
+	}
+	sort.Strings(panels)
+	for _, p := range panels {
+		if n := e.configs[p].GetNodeName(); n != "" {
+			return n
+		}
+	}
+	return e.node
 }
 
 // rules 取所有面板配置里最严格的阈值。
@@ -420,7 +436,10 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 
 // Notify 发一条一次性的通知（例如"已顶替项目"），不跟踪状态，也没有"已恢复"。
 func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
-	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: e.node, Time: timestamppb.Now()}
+	e.mu.Lock()
+	node := e.nodeName()
+	e.mu.Unlock()
+	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
 	if projectID != "" {
 		a.Project = e.projectName(projectID)
 	}
@@ -471,7 +490,7 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
 		return nil
 	}
 	st.firing, st.lastNotified, st.alert = true, now, a
-	a.Status, a.Node, a.Time = "firing", e.node, timestamppb.New(now)
+	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
 	return a
 }
 
@@ -480,7 +499,7 @@ func (e *Engine) setResolved(key string) *nagiv1.Alert {
 	st := e.states[key]
 	st.firing = false
 	a := &nagiv1.Alert{Key: key, Status: "resolved", Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
-		Node: e.node, Time: timestamppb.Now()}
+		Node: e.nodeName(), Time: timestamppb.Now()}
 	delete(e.states, key)
 	return a
 }
