@@ -8,6 +8,13 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.4.1
+
+### 修复
+
+- 节点拓扑图：只有两个节点时改为和面板成三角形排列，节点之间的线和延迟不再压住面板及其名称；节点较多时，经过面板附近的线也会绕开。
+- 拓扑图上的延迟和容器数标签加上底框，线不再从文字中间穿过。
+
 ## v0.4.0
 
 ### 新功能
