@@ -6,6 +6,7 @@ export default {
     settings: "Settings",
     replicas: "Replicas",
     panels: "Trusted panels",
+    mesh: "Mesh",
   },
   approveConfirm: (name, address) =>
     `Approve node ${name} (${address})? The node will join the mesh and can be managed by the panel. It joined with an invite code, which anyone could use if leaked, so make sure it's your machine.`,
@@ -52,17 +53,34 @@ export default {
     generate: "Generate install command",
   },
   settings: {
+    rootTitle: "Project directories",
     root: "Projects root",
     rootHint: "Absolute path",
     rootHelp:
       "New containers on this node default to <projects root>/<network name>/<container name>. Existing container directories don't change.",
   },
+  mirrors: {
+    title: "Registry mirrors",
+    description: "Mirrors Docker uses to pull images from Docker Hub. Useful for nodes in mainland China.",
+    help: "Written to registry-mirrors in the node's /etc/docker/daemon.json; other settings in the file are kept. Clear the list to remove the entry. Nagi never restarts Docker itself. Restarting Docker briefly interrupts containers, so consider enabling Docker's live-restore.",
+    label: "Mirror URLs",
+    hint: "One per line, starting with http:// or https://",
+    pendingTitle: "Takes effect after Docker restarts",
+    pendingText: (active) => `Written to daemon.json. Run systemctl restart docker on the node to apply. Docker currently uses: ${active}`,
+    none: "none",
+  },
   replicas: {
+    title: "Container replicas",
     deleteConfirm: (label) => `Delete replica ${label}? Its snapshots will be deleted and can't be recovered.`,
     intro: "Container replicas this node stores as a backup node or hot standby.",
     empty: "No replicas",
     unused: "Unused",
-    detail: (source, size, lastSync) => `From ${source} · ${size} · Last synced ${lastSync}`,
+    columns: {
+      container: "Container",
+      source: "Source node",
+      size: "Size",
+      lastSync: "Last synced",
+    },
   },
   unknown: {
     adoptConfirm: (container, project) =>

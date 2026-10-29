@@ -18,7 +18,12 @@ export default {
     submit: "Hand over nodes",
   },
   nodePanels: {
+    title: "Trusted panels",
     intro: "The node accepts connections and operations from these panels.",
+    columns: {
+      panel: "Panel",
+      status: "Status",
+    },
     empty: "No panels",
     self: "This panel",
     primary: "Primary panel",

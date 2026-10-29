@@ -21,14 +21,23 @@ import {
   CodeBlock,
   Dialog,
   Empty,
+  EmptyRow,
   Field,
+  FormActions,
   Input,
   Loading,
   Menu,
   Notice,
+  Section,
+  Spinner,
   Status,
+  Table,
   Tabs,
+  Td,
+  Textarea,
+  Th,
 } from "@/components/ui";
+import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo } from "@/gen/nagi/v1/common_pb";
 
@@ -39,7 +48,7 @@ export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "settings", label: t.nodes.tabs.settings },
   { value: "replicas", label: t.nodes.tabs.replicas },
   { value: "panels", label: t.nodes.tabs.panels },
-  { value: "mesh", label: "Mesh" },
+  { value: "mesh", label: t.nodes.tabs.mesh },
 ];
 
 function useNodeList() {
@@ -82,7 +91,6 @@ function nodeSpec(info?: NodeInfo) {
   if (info.diskBytes) parts.push(`${t.nodes.disk} ${fmtBytesShort(Number(info.diskBytes))}`);
   return parts.join(" · ");
 }
-
 
 function NodeStatus({ n }: { n: Node }) {
   if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
@@ -276,7 +284,10 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
           ) : tab === "replicas" ? (
             <NodeReplicas nodeId={n.id} />
           ) : tab === "settings" ? (
-            <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
+            <div className="grid gap-6">
+              <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
+              <NodeMirrors nodeId={n.id} />
+            </div>
           ) : (
             <NodePanels nodeId={n.id} />
           )}
@@ -379,11 +390,11 @@ function AddNode() {
           <CodeBlock copy>{command}</CodeBlock>
         </Field>
       )}
-      <div className="flex justify-end border-t pt-4">
+      <FormActions className="border-t pt-4">
         <Button size="sm" onClick={create}>
           {command ? t.nodes.add.regenerate : t.nodes.add.generate}
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }
@@ -410,28 +421,113 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
     }
   };
   return (
+    <Section title={t.nodes.settings.rootTitle}>
+      <form
+        className="grid max-w-2xl gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} hint={t.nodes.settings.rootHint} help={t.nodes.settings.rootHelp}>
+          <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
+        </Field>
+        {error && <Alert>{error}</Alert>}
+        <FormActions>
+          {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
+          <Button type="submit" size="sm" disabled={busy || !value.trim()}>
+            {busy && <Spinner />}
+            {t.common.actions.save}
+          </Button>
+        </FormActions>
+      </form>
+    </Section>
+  );
+}
+
+// NodeMirrors：节点的 Docker 镜像加速地址（见 docs/agent.md#镜像）。
+function NodeMirrors({ nodeId }: { nodeId: string }) {
+  const q = useQuery({ queryKey: ["node-mirrors", nodeId], queryFn: () => nodeClient.getNodeMirrors({ nodeId }) });
+  return (
+    <Section title={t.nodes.mirrors.title} description={t.nodes.mirrors.description} help={t.nodes.mirrors.help}>
+      {q.isPending ? (
+        <EmptyRow>
+          <Spinner />
+        </EmptyRow>
+      ) : q.error ? (
+        <Alert>{errorMessage(q.error)}</Alert>
+      ) : (
+        <MirrorsForm nodeId={nodeId} mirrors={q.data} />
+      )}
+    </Section>
+  );
+}
+
+// Docker 会给加速地址补上末尾的 /，比较时忽略。
+const trimSlash = (s: string) => s.replace(/\/+$/, "");
+
+function sameMirrors(a: string[], b: string[]) {
+  return a.length === b.length && a.every((m, i) => trimSlash(m) === trimSlash(b[i]));
+}
+
+function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(mirrors.mirrors.join("\n"));
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      const list = value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await nodeClient.setNodeMirrors({ nodeId, mirrors: list });
+      queryClient.setQueryData(["node-mirrors", nodeId], res);
+      setValue(res.mirrors.join("\n"));
+      setSaved(true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  // daemon.json 里的和 Docker 正在用的不一样：还没有重启 Docker。
+  const pending = !sameMirrors(mirrors.mirrors, mirrors.active);
+  return (
     <form
-      className="grid max-w-xl gap-4"
+      className="grid max-w-2xl gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         save();
       }}
     >
-      <Field
-        label={t.nodes.settings.root}
-        htmlFor={`root-${nodeId}`}
-        hint={t.nodes.settings.rootHint}
-        help={t.nodes.settings.rootHelp}
-      >
-        <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
+      {pending && (
+        <Notice tone="warning" title={t.nodes.mirrors.pendingTitle}>
+          <span className="break-all">{t.nodes.mirrors.pendingText(mirrors.active.join(", ") || t.nodes.mirrors.none)}</span>
+        </Notice>
+      )}
+      <Field label={t.nodes.mirrors.label} htmlFor={`mirrors-${nodeId}`} hint={t.nodes.mirrors.hint}>
+        <Textarea
+          id={`mirrors-${nodeId}`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="https://mirror.example.com"
+          spellCheck={false}
+          className="font-mono text-[13px]"
+        />
       </Field>
       {error && <Alert>{error}</Alert>}
-      <div className="flex items-center gap-3">
-        <Button type="submit" size="sm" disabled={busy || !value.trim()}>
+      <FormActions>
+        {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
+        <Button type="submit" size="sm" disabled={busy}>
+          {busy && <Spinner />}
           {t.common.actions.save}
         </Button>
-        {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
-      </div>
+      </FormActions>
     </form>
   );
 }
@@ -441,8 +537,6 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
   const [error, setError] = useState("");
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const remove = async (projectId: string, container: string, label: string) => {
     if (!confirm(t.nodes.replicas.deleteConfirm(label))) return;
     setError("");
@@ -454,41 +548,57 @@ function NodeReplicas({ nodeId }: { nodeId: string }) {
     }
   };
   return (
-    <div className="grid gap-3">
-      <p className="text-[13px] text-muted-foreground">{t.nodes.replicas.intro}</p>
-      {error && <Alert>{error}</Alert>}
-      <div className="divide-y border-y">
-        {q.data.replicas.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">{t.nodes.replicas.empty}</p>}
-        {q.data.replicas.map(({ replica: r, inUse }) => {
-          const label = `${r?.projectName || r?.projectId}/${r?.container}`;
-          return (
-            <div key={`${r?.projectId}-${r?.container}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 text-[13px]">
-                  <span className="font-medium">{label}</span>
-                  {!inUse && <Badge tone="warning">{t.nodes.replicas.unused}</Badge>}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {t.nodes.replicas.detail(
-                    r?.sourceName || "—",
-                    fmtBytes(Number(r?.bytes ?? 0)),
-                    r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—",
-                  )}
-                </div>
-              </div>
-              {!inUse && (
-                <Button size="xs" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
-                  {t.common.actions.delete}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <Section flush title={t.nodes.replicas.title} description={t.nodes.replicas.intro}>
+      {error && <Alert className="mb-3">{error}</Alert>}
+      {q.isPending ? (
+        <EmptyRow>
+          <Spinner />
+        </EmptyRow>
+      ) : q.error ? (
+        <Alert>{errorMessage(q.error)}</Alert>
+      ) : q.data.replicas.length === 0 ? (
+        <EmptyRow>{t.nodes.replicas.empty}</EmptyRow>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th>{t.nodes.replicas.columns.container}</Th>
+              <Th className="hidden sm:table-cell">{t.nodes.replicas.columns.source}</Th>
+              <Th className="hidden sm:table-cell">{t.nodes.replicas.columns.size}</Th>
+              <Th>{t.nodes.replicas.columns.lastSync}</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.replicas.map(({ replica: r, inUse }) => {
+              const label = `${r?.projectName || r?.projectId}/${r?.container}`;
+              return (
+                <tr key={`${r?.projectId}-${r?.container}`}>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{label}</span>
+                      {!inUse && <Badge tone="warning">{t.nodes.replicas.unused}</Badge>}
+                    </div>
+                  </Td>
+                  <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{r?.sourceName || "—"}</Td>
+                  <Td className="hidden font-mono text-xs whitespace-nowrap text-muted-foreground sm:table-cell">{fmtBytes(Number(r?.bytes ?? 0))}</Td>
+                  <Td className="text-[13px] whitespace-nowrap text-muted-foreground">{r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—"}</Td>
+                  <Td className="text-right">
+                    {!inUse && (
+                      <Button size="xs" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
+                        {t.common.actions.delete}
+                      </Button>
+                    )}
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      )}
+    </Section>
   );
 }
-
 
 // UnknownContainers：节点上有、面板却不认识的容器（所属项目是在面板上建的，所以不自动加进去，防止节点冒充）。
 function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: UnknownContainer[]; onDone: () => void }) {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { Project } from "@/gen/nagi/v1/common_pb";
-import { Alert, Badge, Button, Check, Field, Loading, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, Section, Spinner, Status, Table, Td, Textarea, Th } from "@/components/ui";
 import { t } from "@/i18n";
 
 // ---- 移交给其他面板 ----
@@ -120,51 +120,70 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
     queryFn: () => nodeClient.listNodePanels({ nodeId }),
   });
   const [error, setError] = useState("");
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   return (
-    <div className="grid gap-3">
-      <p className="text-[13px] text-muted-foreground">{t.panels.nodePanels.intro}</p>
-      {error && <Alert>{error}</Alert>}
-      <div className="divide-y border-y">
-        {q.data.panels.length === 0 && <p className="py-6 text-[13px] text-muted-foreground">{t.panels.nodePanels.empty}</p>}
-        {q.data.panels.map((p) => (
-          <div key={p.fingerprint} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[13px]">{p.address}</span>
-                {p.isSelf && <Badge>{t.panels.nodePanels.self}</Badge>}
-                {p.role === "primary" && <Badge>{t.panels.nodePanels.primary}</Badge>}
-                {p.role === "standby" && <Badge>{t.panels.nodePanels.standby}</Badge>}
-              </div>
-              <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
-                {p.fingerprint}
-              </div>
-              {!p.connected && p.lastError && <div className="mt-0.5 text-xs text-warning">{p.lastError}</div>}
-            </div>
-            {p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>}
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={async () => {
-                const msg = p.isSelf
-                  ? t.panels.nodePanels.removeSelfConfirm
-                  : t.panels.nodePanels.removeConfirm(p.address, p.fingerprint.replace("sha256//", "").slice(0, 12));
-                if (!confirm(msg)) return;
-                setError("");
-                try {
-                  await nodeClient.removeNodePanel({ nodeId, fingerprint: p.fingerprint });
-                  queryClient.invalidateQueries({ queryKey: p.isSelf ? ["nodes"] : ["node-panels", nodeId] });
-                } catch (err) {
-                  setError(errorMessage(err));
-                }
-              }}
-            >
-              {t.common.actions.remove}
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Section flush title={t.panels.nodePanels.title} description={t.panels.nodePanels.intro}>
+      {error && <Alert className="mb-3">{error}</Alert>}
+      {q.isPending ? (
+        <EmptyRow>
+          <Spinner />
+        </EmptyRow>
+      ) : q.error ? (
+        <Alert>{errorMessage(q.error)}</Alert>
+      ) : q.data.panels.length === 0 ? (
+        <EmptyRow>{t.panels.nodePanels.empty}</EmptyRow>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th>{t.panels.nodePanels.columns.panel}</Th>
+              <Th>{t.panels.nodePanels.columns.status}</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.panels.map((p) => (
+              <tr key={p.fingerprint}>
+                <Td className="max-w-0 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-mono text-[13px]">{p.address}</span>
+                    {p.isSelf && <Badge>{t.panels.nodePanels.self}</Badge>}
+                    {p.role === "primary" && <Badge>{t.panels.nodePanels.primary}</Badge>}
+                    {p.role === "standby" && <Badge>{t.panels.nodePanels.standby}</Badge>}
+                  </div>
+                  <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
+                    {p.fingerprint}
+                  </div>
+                </Td>
+                <Td>
+                  {p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>}
+                  {!p.connected && p.lastError && <div className="mt-0.5 text-xs text-warning">{p.lastError}</div>}
+                </Td>
+                <Td className="w-px text-right">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={async () => {
+                      const msg = p.isSelf
+                        ? t.panels.nodePanels.removeSelfConfirm
+                        : t.panels.nodePanels.removeConfirm(p.address, p.fingerprint.replace("sha256//", "").slice(0, 12));
+                      if (!confirm(msg)) return;
+                      setError("");
+                      try {
+                        await nodeClient.removeNodePanel({ nodeId, fingerprint: p.fingerprint });
+                        queryClient.invalidateQueries({ queryKey: p.isSelf ? ["nodes"] : ["node-panels", nodeId] });
+                      } catch (err) {
+                        setError(errorMessage(err));
+                      }
+                    }}
+                  >
+                    {t.common.actions.remove}
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Section>
   );
 }

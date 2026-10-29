@@ -17,7 +17,12 @@ export default {
     submit: "移交节点",
   },
   nodePanels: {
+    title: "信任的面板",
     intro: "节点接受这些面板的连接和操作。",
+    columns: {
+      panel: "面板",
+      status: "状态",
+    },
     empty: "暂无面板",
     self: "本面板",
     primary: "主面板",

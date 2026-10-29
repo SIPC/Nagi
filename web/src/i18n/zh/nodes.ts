@@ -5,6 +5,7 @@ export default {
     settings: "设置",
     replicas: "副本",
     panels: "受信面板",
+    mesh: "Mesh",
   },
   approveConfirm: (name: string, address: string) =>
     `批准节点 ${name}（${address}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`,
@@ -50,16 +51,33 @@ export default {
     generate: "生成安装命令",
   },
   settings: {
+    rootTitle: "项目目录",
     root: "项目根目录",
     rootHint: "绝对路径",
     rootHelp: "新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。",
   },
+  mirrors: {
+    title: "镜像加速",
+    description: "Docker 从 Docker Hub 拉取镜像时使用的加速地址，适用于国内节点。",
+    help: "写入节点的 /etc/docker/daemon.json（registry-mirrors），保留其中的其他配置；清空则删除该项。Nagi 不会自动重启 Docker，重启时容器会短暂中断，建议同时开启 Docker 的 live-restore。",
+    label: "加速地址",
+    hint: "每行一个，以 http:// 或 https:// 开头",
+    pendingTitle: "重启 Docker 后生效",
+    pendingText: (active: string) => `已写入 daemon.json，在节点上执行 systemctl restart docker 后生效。Docker 当前使用：${active}`,
+    none: "无",
+  },
   replicas: {
+    title: "容器副本",
     deleteConfirm: (label: string) => `删除副本 ${label}？副本中的快照将被删除，且无法恢复。`,
     intro: "本节点作为备份节点或热备保存的容器副本。",
     empty: "暂无副本",
     unused: "未使用",
-    detail: (source: string, size: string, lastSync: string) => `来自 ${source} · ${size} · 最近同步 ${lastSync}`,
+    columns: {
+      container: "容器",
+      source: "来源节点",
+      size: "大小",
+      lastSync: "最近同步",
+    },
   },
   unknown: {
     adoptConfirm: (container: string, project: string) =>

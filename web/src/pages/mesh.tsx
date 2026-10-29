@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
-import { Alert, Button, Loading, Section, Status, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, EmptyRow, Section, Spinner, Status, Table, Td, Th } from "@/components/ui";
 import { formatTime } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -104,6 +104,28 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
   );
 }
 
+// MeshSection：一端（节点或面板）的 mesh 状态区块。
+function MeshSection({ q, nodeId }: { q: UseQueryResult<MeshStatus>; nodeId?: string }) {
+  return (
+    <Section title={t.mesh.title} help={t.mesh.help} flush>
+      {q.isPending ? (
+        <EmptyRow>
+          <Spinner />
+        </EmptyRow>
+      ) : q.error ? (
+        <Alert>{errorMessage(q.error)}</Alert>
+      ) : (
+        <>
+          <div className="pb-3">
+            <MeshSummary status={q.data} />
+          </div>
+          <MeshPeers status={q.data} nodeId={nodeId} />
+        </>
+      )}
+    </Section>
+  );
+}
+
 // NodeMesh：节点页里一个节点的 mesh 状态。
 export function NodeMesh({ nodeId }: { nodeId: string }) {
   const q = useQuery({
@@ -111,16 +133,7 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
     queryFn: () => nodeClient.getNodeMesh({ nodeId }),
     refetchInterval: 5000,
   });
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
-  return (
-    <div className="grid gap-3">
-      <MeshSummary status={q.data} />
-      <div>
-        <MeshPeers status={q.data} nodeId={nodeId} />
-      </div>
-    </div>
-  );
+  return <MeshSection q={q} nodeId={nodeId} />;
 }
 
 // PanelMeshCard：设置页上面板自己的 mesh 状态。
@@ -130,26 +143,5 @@ export function PanelMeshCard() {
     queryFn: () => nodeClient.getPanelMesh({}),
     refetchInterval: 5000,
   });
-  return (
-    <Section
-      title={t.mesh.title}
-      help={t.mesh.help}
-      flush
-    >
-      {q.isPending ? (
-        <Loading />
-      ) : q.error ? (
-        <div className="pb-4">
-          <Alert>{errorMessage(q.error)}</Alert>
-        </div>
-      ) : (
-        <>
-          <div className="pb-3">
-            <MeshSummary status={q.data} />
-          </div>
-          <MeshPeers status={q.data} />
-        </>
-      )}
-    </Section>
-  );
+  return <MeshSection q={q} />;
 }
