@@ -140,7 +140,7 @@ const nodesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes",
   validateSearch: (search: Record<string, unknown>): { view?: NodesView } => ({
-    view: search.view === "map" ? "map" : undefined,
+    view: search.view === "network" || search.view === "ha" ? search.view : undefined,
   }),
   component: function Nodes() {
     const { view } = nodesRoute.useSearch();

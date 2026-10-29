@@ -9,7 +9,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeMetrics, NodeUsageBars, fmtBytes, fmtBytesShort } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import { NodeMap } from "@/pages/node-map";
+import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
   Alert,
   Badge,
@@ -107,7 +107,7 @@ async function approve(n: Node) {
   return true;
 }
 
-export type NodesView = "cards" | "map";
+export type NodesView = "cards" | MapLayer;
 
 export function NodesPage({ view, onView }: { view: NodesView; onView: (v: NodesView) => void }) {
   const nodes = useNodeList();
@@ -137,7 +137,8 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
                   onChange={onView}
                   items={[
                     { value: "cards", label: t.nodes.views.cards },
-                    { value: "map", label: t.nodes.views.map },
+                    { value: "network", label: t.nodes.views.network },
+                    { value: "ha", label: t.nodes.views.ha },
                   ]}
                 />
               </div>
@@ -158,10 +159,10 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
         <Empty title={t.nodes.empty} icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>{t.nodes.addNode}</Button>}>
           {t.nodes.addNodeDescription}
         </Empty>
-      ) : view === "map" ? (
+      ) : view !== "cards" ? (
         <>
           <div className="hidden sm:block">
-            <NodeMap nodes={list} />
+            <NodeMap nodes={list} layer={view} />
           </div>
           <div className="sm:hidden">{cards}</div>
         </>
