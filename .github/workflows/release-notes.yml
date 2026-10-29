@@ -1,0 +1,30 @@
+# CHANGELOG.md 改动后，把各版本的说明同步到对应 GitHub Release 的正文（只更新已经发布的版本）。
+# 新版本的正文在 release.yml 发布时写入。
+name: release-notes
+
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md, scripts/release-notes.sh]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(sed -n 's/^## \(v[0-9][^ ]*\).*/\1/p' CHANGELOG.md); do
+            if gh release view "$tag" >/dev/null 2>&1; then
+              sh scripts/release-notes.sh "$tag" > notes.md
+              gh release edit "$tag" --notes-file notes.md
+              echo "updated $tag"
+            fi
+          done

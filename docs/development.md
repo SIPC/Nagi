@@ -114,6 +114,8 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 面板和节点可能暂时不是同一版本（面板先升级，节点随后在界面上升级），proto 只新增字段，不删除、不改编号。
 - 节点上缓存的配置、状态文件要能被新版本读取。
 
+发版前先在 `CHANGELOG.md` 顶部写好这个版本的说明（`## v<版本>`，面向用户，分新功能、改进、修复、升级说明），提交后再打标签：Release 的正文由 `scripts/release-notes.sh` 从这里取，没写则发布失败。之后修改 `CHANGELOG.md`，`release-notes.yml` 会把改动同步到已发布的 Release。
+
 推送 `v*` 标签时，`.github/workflows/release.yml` 构建前端、运行 `go test ./...`，编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh` 和 `SHA256SUMS` 上传到 GitHub Release。
 
 `scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。

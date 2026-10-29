@@ -49,7 +49,11 @@ jobs:
           cp scripts/install.sh scripts/uninstall.sh dist/
           cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh > SHA256SUMS
 
+      # 正文取自 CHANGELOG.md 里这个版本的说明，没写的话发布失败（先补上更新日志再打标签）。
+      - name: Release notes
+        run: sh scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: notes.md
