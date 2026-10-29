@@ -26,19 +26,31 @@ const PANEL = "panel";
 
 type Pt = { x: number; y: number };
 
-// layout：节点在圆上的位置。偶数个时转半格，两个节点左右排开，不压在面板上下。
+// CLEAR：线离面板中心至少这么远，不压住面板和它下面的名字。
+const CLEAR = 64;
+
+// layout：节点在圆上的位置。偶数个时转半格；两个节点放在左下、右下，和面板成三角形
+// （左右一字排开时，它们之间的线只能绕过面板）。
 function layout(nodes: Node[]) {
   const count = nodes.length;
   const r = count <= 3 ? 180 : Math.min(260, 130 + count * 14);
   const start = -Math.PI / 2 + (count % 2 === 0 ? Math.PI / count : 0);
+  const angle = (i: number) => (count === 2 ? [(5 * Math.PI) / 6, Math.PI / 6][i] : start + (2 * Math.PI * i) / count);
   const pos = new Map<string, Pt>([[PANEL, { x: 0, y: 0 }]]);
   nodes.forEach((n, i) => {
-    const a = start + (2 * Math.PI * i) / count;
-    pos.set(n.id, { x: r * Math.cos(a), y: r * Math.sin(a) });
+    pos.set(n.id, { x: r * Math.cos(angle(i)), y: r * Math.sin(angle(i)) });
   });
   const ys = [...pos.values()].map((p) => p.y);
   const padX = 100; // 名字和说明写在节点下面，左右留出文字的宽度
-  const top = Math.min(...ys) - 44;
+  // 上方还要容得下从面板上方绕过的线和它的标签（见 bend）：按每对节点之间可能的线算。
+  let top = Math.min(...ys) - 44;
+  const pts = nodes.map((n) => pos.get(n.id)!);
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const P = bend(pts[i], pts[j], 0.16);
+      top = Math.min(top, (pts[i].y + 2 * P.y + pts[j].y) / 4 - 14);
+    }
+  }
   const bottom = Math.max(...ys) + 64;
   return { pos, box: { x: -r - padX, y: top, w: 2 * (r + padX), h: bottom - top } };
 }
@@ -52,7 +64,9 @@ function curve(A: Pt, B: Pt, P: Pt) {
   return { d: `M${A.x},${A.y}Q${P.x},${P.y} ${B.x},${B.y}`, at };
 }
 
-// bend：A、B 连线中点沿法线偏移 k 倍长度的控制点，k 为正时朝远离面板的一侧，为负时朝面板。
+// bend：节点之间的线向外（远离面板的一侧）弯的控制点，弯曲程度至少是长度的 k 倍。
+// 节点都在同一个圆上，弦离圆心（面板）最近的点就是它的中点；二次曲线的中点在弦中点和控制点正中间，
+// 所以把控制点推到曲线中点离面板至少 CLEAR。弦正好穿过面板时从上面绕，面板的名字在下面。
 function bend(A: Pt, B: Pt, k: number): Pt {
   const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
   const dx = B.x - A.x;
@@ -60,11 +74,14 @@ function bend(A: Pt, B: Pt, k: number): Pt {
   const len = Math.hypot(dx, dy) || 1;
   let nx = -dy / len;
   let ny = dx / len;
-  if (nx * M.x + ny * M.y < 0) {
+  let side = nx * M.x + ny * M.y;
+  if (side < -0.5 || (Math.abs(side) <= 0.5 && ny > 0)) {
     nx = -nx;
     ny = -ny;
+    side = -side;
   }
-  return { x: M.x + nx * len * k, y: M.y + ny * len * k };
+  const offset = 2 * Math.max((k * len) / 2, CLEAR - side);
+  return { x: M.x + nx * offset, y: M.y + ny * offset };
 }
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -88,6 +105,20 @@ function arrow(A: Pt, B: Pt, P: Pt) {
   const P1 = { x: A.x + (P.x - A.x) * lo, y: A.y + (P.y - A.y) * lo };
   const head = `M${tip.x},${tip.y}L${tip.x - ux * 8 - uy * 4},${tip.y - uy * 8 + ux * 4}L${tip.x - ux * 8 + uy * 4},${tip.y - uy * 8 - ux * 4}Z`;
   return { d: `M${A.x},${A.y}Q${P1.x},${P1.y} ${tip.x},${tip.y}`, head, at: c.at };
+}
+
+// EdgeLabel：线上的标签（延迟、容器数），带圆角底框，线从下面穿过也不会露在字缝里。
+// 宽度按字符估算：11px 等宽字体每个半角字符约 6.6px，全角字符 11px。
+function EdgeLabel({ at, text, className }: { at: Pt; text: string; className?: string }) {
+  const w = [...text].reduce((s, ch) => s + (/[\u2e80-\uffff]/.test(ch) ? 11 : 6.6), 0) + 12;
+  return (
+    <g transform={`translate(${at.x},${at.y})`} className={className}>
+      <rect x={-w / 2} y={-9} width={w} height={18} rx={9} strokeWidth={1} className="fill-background stroke-border" />
+      <text dy="0.35em" textAnchor="middle" fontSize={11} className="fill-current font-mono tabular-nums">
+        {text}
+      </text>
+    </g>
+  );
 }
 
 // 文字下面垫一圈背景色，压在线上也看得清。
@@ -373,20 +404,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
           // 中转的线中点在面板上，标签放在靠近当前节点的一段。
           const mid = geometry(e).at(e.kind === "relay" && e.a !== PANEL && e.b !== PANEL ? (e.a === active ? 0.3 : 0.7) : 0.5);
           return (
-            label && (
-              <text
-                key={e.a + "|" + e.b}
-                x={mid.x}
-                y={mid.y}
-                dy="0.35em"
-                textAnchor="middle"
-                fontSize={11}
-                {...halo}
-                className={cn("font-mono tabular-nums", e.kind === "none" ? "fill-destructive" : "fill-foreground")}
-              >
-                {label}
-              </text>
-            )
+            label && <EdgeLabel key={e.a + "|" + e.b} at={mid} text={label} className={e.kind === "none" ? "text-destructive" : "text-foreground"} />
           );
         })}
 
@@ -500,14 +518,14 @@ function HaMap({ nodes }: { nodes: Node[] }) {
   }
   const edges = [...edgeMap.values()].filter((e) => nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to));
   const { pos: layoutPos, box } = layout(nodes);
-  // 箭头朝外弯，不压在面板上；两个节点互相指向时，ID 大的一方发出的朝里弯，分在两边。
-  // 同一方向既有顶替又有备份时，备份弯得多一些，免得重叠。
+  // 箭头都朝外弯，不压在面板上。两个节点互相指向时，ID 大的一方发出的弯得更多，两条一里一外；
+  // 同一方向既有顶替又有备份时，备份弯得多一些。
   const directed = new Set(edges.map((e) => e.from + "|" + e.to));
   const geometry = (e: HaEdge) => {
     const A = layoutPos.get(e.from)!;
     const B = layoutPos.get(e.to)!;
-    const inward = e.from > e.to && directed.has(e.to + "|" + e.from);
-    const k = (e.type === "backup" ? 0.28 : 0.14) * (inward ? -0.7 : 1);
+    const outer = e.from > e.to && directed.has(e.to + "|" + e.from);
+    const k = (e.type === "backup" ? 0.28 : 0.14) * (outer ? 2.4 : 1);
     return arrow(A, B, bend(A, B, k));
   };
 
@@ -543,22 +561,16 @@ function HaMap({ nodes }: { nodes: Node[] }) {
         {edges.map((e) => {
           const mid = geometry(e).at(0.5);
           return (
-            <text
+            <EdgeLabel
               key={`${e.from}|${e.to}|${e.type}`}
-              x={mid.x}
-              y={mid.y}
-              dy="0.35em"
-              textAnchor="middle"
-              fontSize={11}
-              {...halo}
+              at={mid}
+              text={e.type === "failover" ? t.nodes.ha.failoverEdge(e.count) : t.nodes.ha.backupEdge(e.count)}
               className={cn(
-                "fill-muted-foreground font-mono tabular-nums transition-opacity duration-150 ease-out",
+                "transition-opacity duration-150 ease-out",
+                focus !== null && e.from === focus ? "text-foreground" : "text-muted-foreground",
                 focus !== null && !touches(e) && "opacity-15",
-                focus !== null && e.from === focus && "fill-foreground",
               )}
-            >
-              {e.type === "failover" ? t.nodes.ha.failoverEdge(e.count) : t.nodes.ha.backupEdge(e.count)}
-            </text>
+            />
           );
         })}
 
