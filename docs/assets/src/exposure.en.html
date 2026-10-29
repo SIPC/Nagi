@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .flow {
+        display: grid;
+        grid-template-columns: 250px 1fr 220px 1fr 230px;
+      }
+      .list {
+        display: grid;
+        gap: 18px;
+      }
+      .list .box {
+        min-height: 88px;
+      }
+      .addr {
+        font-family: var(--mono);
+        font-size: 16px;
+      }
+      .stage > .caddy {
+        position: relative;
+        grid-column: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .feat {
+        margin-top: 16px;
+        font-size: 15.5px;
+        line-height: 2.1;
+        color: var(--muted);
+      }
+      .feat div::before {
+        content: "";
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        margin-right: 10px;
+        border-radius: 50%;
+        background: var(--wave);
+        vertical-align: middle;
+      }
+      .dst {
+        grid-column: 5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>One entry point, automatic HTTPS</h1>
+      <p class="lead">Containers don't publish ports; all external traffic goes through the Caddy built into each node.</p>
+
+      <div class="stage flow">
+        <div class="list">
+          <div class="box ghost" id="s1">
+            <div class="addr">blog.example.com</div>
+            <div class="s">Website · HTTPS</div>
+          </div>
+          <div class="box ghost" id="s2">
+            <div class="addr">203.0.113.8:5432</div>
+            <div class="s">Database · TCP</div>
+          </div>
+          <div class="box ghost" id="s3">
+            <div class="addr">203.0.113.8:27015</div>
+            <div class="s">Game server · UDP</div>
+          </div>
+        </div>
+
+        <div class="box caddy" id="caddy">
+          <div class="k">Entry point on the node</div>
+          <div class="t">Caddy</div>
+          <div class="feat">
+            <div>Domains and HTTPS</div>
+            <div>TCP / UDP forwarding</div>
+            <div>Request stats</div>
+          </div>
+        </div>
+
+        <div class="list dst">
+          <div class="box" id="d1">
+            <div class="k">Container</div>
+            <div class="t"><i class="dot"></i>blog</div>
+          </div>
+          <div class="box" id="d2">
+            <div class="k">Container</div>
+            <div class="t"><i class="dot"></i>postgres</div>
+          </div>
+          <div class="box" id="d3">
+            <div class="k">Container</div>
+            <div class="t"><i class="dot"></i>game</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">Automatic certificates</div>
+          <div class="nd">Certificates are issued and renewed automatically; HTTP works until they are ready.</div>
+        </div>
+        <div>
+          <div class="nt">Instant changes</div>
+          <div class="nd">Port and domain changes apply at once, without redeploying.</div>
+        </div>
+        <div>
+          <div class="nt">Single entry</div>
+          <div class="nd">All traffic passes one entry point and can't bypass firewall rules.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        for (const i of [1, 2, 3]) {
+          wire(`#s${i}`, "r", "#caddy", "l", { align: "a", arrow: true });
+          wire("#caddy", "r", `#d${i}`, "l", { align: "b", arrow: true });
+        }
+      });
+    </script>
+  </body>
+</html>

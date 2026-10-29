@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 40px;
+      }
+      .sn {
+        font-family: var(--mono);
+        font-size: 15px;
+        color: var(--wave);
+      }
+      .st {
+        margin-top: 4px;
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .card {
+        height: 216px;
+        margin-top: 16px;
+      }
+      .cmd {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.8;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .cmd b {
+        font-weight: 400;
+        color: var(--fg);
+      }
+      .btn {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 5px 16px;
+        border-radius: 6px;
+        background: var(--fg);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--bg);
+      }
+      .term {
+        margin-top: 12px;
+        font-family: var(--mono);
+        font-size: 14.5px;
+        line-height: 2;
+        color: var(--muted);
+      }
+      .term .ok {
+        color: var(--success);
+      }
+      .term .p {
+        color: var(--fg);
+      }
+      .rows {
+        margin-top: 8px;
+      }
+      .rows div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+        font-size: 16.5px;
+      }
+      .rows div:first-child {
+        border-top: 0;
+      }
+      .rows span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .rows .new {
+        color: var(--wave);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>Join a node with one command</h1>
+      <p class="lead">Copy the install command from the panel and run it on the new server; the node joins on its own.</p>
+
+      <div class="stage steps">
+        <div>
+          <div class="sn">01</div>
+          <div class="st">Copy the command</div>
+          <div class="box card" id="c1">
+            <div class="k">Panel · Add node</div>
+            <div class="cmd">curl --pinnedpubkey … \<br />&nbsp;&nbsp;https://<b>panel</b>/install.sh \<br />&nbsp;&nbsp;| sh -s -- --token <b>••••</b></div>
+            <div class="btn">Copy</div>
+          </div>
+        </div>
+        <div>
+          <div class="sn">02</div>
+          <div class="st">Run it on the server</div>
+          <div class="box card" id="c2">
+            <div class="k">New server</div>
+            <div class="term">
+              <div class="p">$ curl … | sh</div>
+              <div><span class="ok">✓</span> Check Docker and compose</div>
+              <div><span class="ok">✓</span> Download and verify nagi</div>
+              <div><span class="ok">✓</span> Join the panel</div>
+              <div><span class="ok">✓</span> Install as a service</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="sn">03</div>
+          <div class="st">Node online</div>
+          <div class="box card" id="c3">
+            <div class="k">Panel · Nodes</div>
+            <div class="rows">
+              <div>Node 1<span><i class="dot"></i>Online</span></div>
+              <div>Node 2<span><i class="dot"></i>Online</span></div>
+              <div>Node 3<span class="new"><i class="dot"></i>Just joined</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">One-time token</div>
+          <div class="nd">Works once and expires in 1 hour.</div>
+        </div>
+        <div>
+          <div class="nt">Verified identity</div>
+          <div class="nd">The panel's public key is checked throughout, so nothing can impersonate it.</div>
+        </div>
+        <div>
+          <div class="nt">Matching version</div>
+          <div class="nd">Downloads the panel's version and verifies its SHA-256.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#c1", "r", "#c2", "l", { align: "a", arrow: true });
+        wire("#c2", "r", "#c3", "l", { align: "a", arrow: true });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>One panel, many nodes</h1>
+      <p class="lead">Nodes connect out to the panel, so no inbound ports are needed; nodes talk to each other directly over WireGuard.</p>
+
+      <div class="stage" style="height: 400px">
+        <div class="box" id="panel" style="left: 304px; top: 0; width: 280px">
+          <div class="k mono">nagi server</div>
+          <div class="t"><i class="dot"></i>Panel</div>
+          <div class="s">Web console</div>
+        </div>
+        <div class="box ghost" id="standby" style="left: 664px; top: 0; width: 224px">
+          <div class="k mono">standby</div>
+          <div class="t"><i class="dot idle"></i>Standby panel</div>
+          <div class="s">Ready to take over</div>
+        </div>
+
+        <div class="box" id="n1" style="left: 0; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>Node 1</div>
+          <div class="s">Runs containers</div>
+        </div>
+        <div class="box" id="n2" style="left: 312px; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>Node 2</div>
+          <div class="s">Runs containers</div>
+        </div>
+        <div class="box" id="n3" style="left: 624px; top: 230px; width: 264px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>Node 3</div>
+          <div class="s">Runs containers</div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt"><i class="swatch"></i>No inbound ports</div>
+          <div class="nd">Nodes dial the panel, so servers behind NAT can join too.</div>
+        </div>
+        <div>
+          <div class="nt"><i class="swatch wave"></i>Direct node links</div>
+          <div class="nd">Nodes form a WireGuard mesh, relayed by the panel when needed.</div>
+        </div>
+        <div>
+          <div class="nt">Panel outages are harmless</div>
+          <div class="nd">Nodes cache their config, so containers keep running.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#n1", "t", "#panel", "b", { fb: 0.2, arrow: true });
+        wire("#n2", "t", "#panel", "b", { fb: 0.5, arrow: true, label: "dials" });
+        wire("#n3", "t", "#panel", "b", { fb: 0.8, arrow: true });
+        wire("#panel", "r", "#standby", "l", { align: "a", cls: "dash", label: "sync" });
+        wire("#n1", "r", "#n2", "l", { align: "a", cls: "wave" });
+        wire("#n2", "r", "#n3", "l", { align: "a", cls: "wave" });
+        wire("#n1", "b", "#n3", "b", { drop: 44, cls: "wave", label: "WireGuard", labelCls: "wave" });
+      });
+    </script>
+  </body>
+</html>

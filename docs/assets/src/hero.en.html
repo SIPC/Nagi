@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .frame {
+        width: 1280px;
+        height: 640px;
+        padding: 0;
+      }
+      .body {
+        position: absolute;
+        top: 170px;
+        left: 120px;
+      }
+      .logo {
+        width: 60px;
+        height: 60px;
+        border-radius: 14px;
+        box-shadow: 0 0 0 1px var(--border);
+      }
+      .name {
+        margin-top: 30px;
+        font-size: 80px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .motto {
+        margin-top: 24px;
+        font-size: 28px;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .sea {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1280px;
+        height: 640px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <svg class="sea" viewBox="0 0 1280 640"></svg>
+      <div class="body">
+        <svg class="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0f172a" /><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        <div class="name">Nagi</div>
+        <div class="motto">Calm waters</div>
+      </div>
+    </div>
+    <script>
+      // 一道逐渐平息的波：从右侧起伏开始，向左衰减成一条直线。
+      const sea = document.querySelector(".sea");
+      const y0 = 520;
+      let d = "";
+      for (let x = 1280; x >= 0; x -= 2) {
+        const t = (1280 - x) / 760;
+        const amp = 16 * Math.exp(-t * 3.2);
+        const y = y0 + Math.sin((1280 - x) / 34) * amp;
+        d += (x === 1280 ? "M" : "L") + x + " " + y.toFixed(2);
+      }
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "var(--wave)");
+      p.setAttribute("stroke-width", "1.5");
+      sea.appendChild(p);
+      document.fonts.ready.then(() => (window.__ready = true));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .hl {
+        margin-top: 4px;
+        font-size: 15px;
+        color: var(--wave);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>Panel down, services stay up</h1>
+      <p class="lead">Config lives on the panel, containers and data on the nodes; each node also caches its own config.</p>
+
+      <div class="stage" style="height: 320px">
+        <div class="box" id="panel" style="left: 294px; top: 0; width: 300px">
+          <div class="k mono">nagi server</div>
+          <div class="t"><i class="dot"></i>Panel</div>
+          <div class="s">Projects · Versions · Deployments</div>
+        </div>
+        <div class="box" id="n1" style="left: 84px; top: 190px; width: 300px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>Node 1</div>
+          <div class="s">Containers · Data · Snapshots</div>
+          <div class="hl">Config cache</div>
+        </div>
+        <div class="box" id="n2" style="left: 504px; top: 190px; width: 300px">
+          <div class="k mono">nagi agent</div>
+          <div class="t"><i class="dot"></i>Node 2</div>
+          <div class="s">Containers · Data · Snapshots</div>
+          <div class="hl">Config cache</div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">Panel briefly offline</div>
+          <div class="nd">Containers and snapshots carry on; manage them again once it is back.</div>
+        </div>
+        <div>
+          <div class="nt">With a standby panel</div>
+          <div class="nd">Promote the standby to primary with one click, data intact.</div>
+        </div>
+        <div>
+          <div class="nt">Panel lost for good</div>
+          <div class="nd">Install a new panel and projects are rebuilt from the nodes' caches.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire, tag }) => {
+        const pts = wire("#panel", "b", "#n1", "t", { arrow: true });
+        wire("#panel", "b", "#n2", "t", { arrow: true });
+        tag(pts[0][0], pts[1][1], "pushes config");
+      });
+    </script>
+  </body>
+</html>

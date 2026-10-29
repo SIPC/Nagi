@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .timeline {
+        position: relative;
+        height: 200px;
+        margin-top: 16px;
+      }
+      .timeline svg {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+      }
+      .v {
+        position: absolute;
+        top: 140px;
+        width: 160px;
+        transform: translateX(-50%);
+        text-align: center;
+      }
+      .v .vn {
+        font-family: var(--mono);
+        font-size: 17px;
+      }
+      .v .vd {
+        margin-top: 4px;
+        font-size: 15.5px;
+        color: var(--muted);
+      }
+      .v.draft .vn {
+        color: var(--muted);
+      }
+      .timeline .tag {
+        top: 50px;
+        left: 380px;
+      }
+      .inc {
+        margin-top: 36px;
+        font-size: 15px;
+        color: var(--faint);
+      }
+      .parts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-top: 12px;
+      }
+      .parts .t {
+        margin-top: 0;
+        font-size: 18px;
+      }
+      .parts .s {
+        font-size: 15.5px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>Every deployment is a version</h1>
+      <p class="lead">Changes are saved as a draft and become a new version on deploy; roll back to any version to restore it exactly.</p>
+
+      <div class="stage timeline">
+        <svg width="888" height="200">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 1L9 5L0 9z" style="fill: var(--wave)" />
+            </marker>
+          </defs>
+          <path class="wire" d="M0 120H660" />
+          <path class="wire dash" d="M660 120H888" />
+          <path class="wire wave" marker-end="url(#arr)" d="M550 110C550 30 210 30 210 109" />
+          <circle cx="40" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="210" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="380" cy="120" r="7" style="fill: var(--bg); stroke: var(--fg); stroke-width: 2" />
+          <circle cx="550" cy="120" r="8" style="fill: var(--success)" />
+          <circle cx="800" cy="120" r="7" style="fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3" />
+        </svg>
+        <div class="tag wave">Roll back</div>
+        <div class="v" style="left: 40px"><div class="vn">v1</div><div class="vd">First deploy</div></div>
+        <div class="v" style="left: 210px"><div class="vn">v2</div><div class="vd">New image</div></div>
+        <div class="v" style="left: 380px"><div class="vn">v3</div><div class="vd">New code</div></div>
+        <div class="v" style="left: 550px"><div class="vn">v4</div><div class="vd">Back to v2</div></div>
+        <div class="v draft" style="left: 800px"><div class="vn">Draft</div><div class="vd">Undeployed changes</div></div>
+      </div>
+
+      <div class="inc">Each version includes</div>
+      <div class="parts">
+        <div class="box">
+          <div class="t">Config</div>
+          <div class="s">Compose, environment variables and secrets</div>
+        </div>
+        <div class="box">
+          <div class="t">Files</div>
+          <div class="s">Code and static files as deployed</div>
+        </div>
+        <div class="box">
+          <div class="t">Images</div>
+          <div class="s">Pinned by digest, so even latest restores exactly</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(() => {});
+    </script>
+  </body>
+</html>

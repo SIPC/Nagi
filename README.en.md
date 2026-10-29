@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/assets/hero.png" alt="Nagi · calm waters" width="860"></p>
+<p align="center"><img src="docs/assets/hero.en.png" alt="Nagi · calm waters" width="860"></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
@@ -15,23 +15,23 @@
 
 Nagi is an open-source Docker panel that aims to be simple, good-looking and easy to deploy. It is ready for production out of the box and supports multiple nodes and high availability.
 
-The panel UI is available in English and Chinese. The figures below and the [design docs](docs/README.md) are in Chinese.
+The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
 
 ## Features
 
-![One panel, many nodes](docs/assets/architecture.png)
+![One panel, many nodes](docs/assets/architecture.en.png)
 
-![Reach containers by name across nodes](docs/assets/intranet.png)
+![Reach containers by name across nodes](docs/assets/intranet.en.png)
 
-![Automatic failover when a node goes down](docs/assets/failover.png)
+![Automatic failover when a node goes down](docs/assets/failover.en.png)
 
-![Services keep running when the panel goes down](docs/assets/recovery.png)
+![Panel down, services stay up](docs/assets/recovery.en.png)
 
-![A project is a group of containers](docs/assets/model.png)
+![A project is a group of containers](docs/assets/model.en.png)
 
-![One entry point with automatic HTTPS](docs/assets/exposure.png)
+![One entry point with automatic HTTPS](docs/assets/exposure.en.png)
 
-![Every deployment is a version](docs/assets/versions.png)
+![Every deployment is a version](docs/assets/versions.en.png)
 
 Also included:
 
@@ -71,7 +71,7 @@ Common options (append to the command, for example `| sudo sh -s -- --port 28443
 
 Copy the install command from the **Nodes** page in the panel and run it as root on the new server. The script downloads the same nagi version as the panel from GitHub Releases, verifies its SHA-256 and installs Docker if needed. If GitHub is unreachable, append `--download-url <mirror>`; one-click upgrades from the panel will use the same address later.
 
-![Join a node with one command](docs/assets/join.png)
+![Join a node with one command](docs/assets/join.en.png)
 
 ### Add a standby panel
 

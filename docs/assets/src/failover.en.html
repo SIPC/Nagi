@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .votes {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: flex;
+        gap: 5px;
+      }
+      .votes i {
+        width: 10px;
+        height: 10px;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+      }
+      .votes i.on {
+        border-color: var(--success);
+        background: var(--success);
+      }
+      .rule {
+        margin-top: 28px;
+        padding: 14px 18px;
+        border-left: 2px solid var(--wave);
+        background: var(--card);
+        font-size: 17px;
+        line-height: 1.6;
+      }
+      .facts {
+        display: flex;
+        margin-top: 20px;
+        font-size: 16px;
+        color: var(--muted);
+      }
+      .facts span {
+        padding: 0 22px;
+        border-left: 1px solid var(--border);
+      }
+      .facts span:first-child {
+        padding-left: 0;
+        border-left: 0;
+      }
+      .facts b {
+        margin-right: 8px;
+        font-weight: 400;
+        color: var(--fg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>Automatic failover when a node goes down</h1>
+      <p class="lead">Give a container a standby node. The original node, the standby and a witness each have one vote; only the side with two votes runs it.</p>
+
+      <div class="stage" style="height: 320px">
+        <div class="box" id="a" style="left: 24px; top: 0; width: 280px; opacity: 0.55">
+          <div class="votes"><i></i><i></i></div>
+          <div class="k">Original node</div>
+          <div class="t"><i class="dot off"></i>Node 1</div>
+          <div class="s">Unreachable, 0 votes</div>
+        </div>
+        <div class="box" id="b" style="left: 584px; top: 0; width: 280px">
+          <div class="votes"><i class="on"></i><i class="on"></i></div>
+          <div class="k">Standby node</div>
+          <div class="t"><i class="dot"></i>Node 2</div>
+          <div class="s">Self + witness = 2 votes</div>
+        </div>
+        <div class="box" id="w" style="left: 304px; top: 206px; width: 280px">
+          <div class="k">Witness</div>
+          <div class="t"><i class="dot idle"></i>Panel</div>
+          <div class="s">Votes only, runs nothing</div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt"><span class="n">01</span>Normally</div>
+          <div class="nd">The original node renews with the other two every&nbsp;10&nbsp;s, keeping two votes and running the container.</div>
+        </div>
+        <div>
+          <div class="nt"><span class="n">02</span>Cut off</div>
+          <div class="nd">When renewals fail, it stops the container itself before the lease (<span style="white-space: nowrap">30 s</span>) expires.</div>
+        </div>
+        <div>
+          <div class="nt"><span class="n">03</span>Takeover</div>
+          <div class="nd">Once the lease expires, the witness votes for the standby, which starts the container with two votes.</div>
+        </div>
+      </div>
+
+      <div class="rule">Only one side can hold two of the three votes, so a container never runs on two nodes at once.</div>
+      <div class="facts">
+        <span><b>Standby fails</b> no impact</span>
+        <span><b>Panel offline</b> no impact</span>
+        <span><b>Original returns</b> moves back once stable</span>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#a", "r", "#b", "l", { align: "a", cls: "dead", label: "×", labelCls: "x" });
+        wire("#a", "b", "#w", "l", { cls: "dead", label: "×", labelCls: "x" });
+        wire("#w", "r", "#b", "b", { cls: "ok", arrow: true, label: "vote", labelCls: "ok" });
+      });
+    </script>
+  </body>
+</html>

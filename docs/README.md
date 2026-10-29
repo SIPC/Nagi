@@ -17,7 +17,7 @@
 | [monitoring.md](monitoring.md) | 监控与告警 |
 | [decisions.md](decisions.md) | 技术决策汇总、待定问题 |
 | [development.md](development.md) | 开发规划：仓库结构、依赖库、各步完成标准 |
-| [assets/src](assets/src) | README 配图的源文件，修改后执行 `node docs/assets/src/render.mjs` 重新生成（需本机安装 Edge 或 Chrome） |
+| [assets/src](assets/src) | README 配图的源文件。英文配图（`<名字>.en.html`）由 `translate.mjs` 从中文版生成，译文写在该脚本里，不要直接修改。修改后依次执行 `node docs/assets/src/translate.mjs` 和 `node docs/assets/src/render.mjs` 重新生成（需本机安装 Edge 或 Chrome）；改了中文文字而没同步译文时，`translate.mjs` 会报错 |
 
 ## 设计原则
 

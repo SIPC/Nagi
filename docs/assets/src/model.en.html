@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 48px;
+      }
+      .node {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 2px 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .file {
+        font-family: var(--mono);
+        font-size: 15px;
+        color: var(--fg);
+      }
+      .inner {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .inner .box {
+        padding: 10px 14px;
+      }
+      .inner .t {
+        font-size: 17px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>A project is a group of containers</h1>
+      <p class="lead">Put the frontend, backend and database in one project, each on its own node; import an existing compose file as a container group.</p>
+
+      <div class="stage">
+        <div class="zone" style="padding: 56px 24px 24px">
+          <div class="zl">Project<span>shop</span></div>
+          <div class="cols">
+            <div class="col">
+              <div class="box" id="web">
+                <div class="k">Container</div>
+                <div class="t"><i class="dot"></i>web</div>
+                <div class="node">Node 1</div>
+              </div>
+              <div class="box ghost" id="web-c">
+                <div class="file">compose.yml</div>
+                <div class="s">From the image form</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="box" id="api">
+                <div class="k">Container</div>
+                <div class="t"><i class="dot"></i>api</div>
+                <div class="node">Node 2</div>
+              </div>
+              <div class="box ghost" id="api-c">
+                <div class="file">compose.yml</div>
+                <div class="s">From the image form</div>
+              </div>
+            </div>
+            <div class="box">
+              <div class="k">Container group · <span class="mono">compose.yml</span></div>
+              <div class="t"><i class="dot"></i>umami</div>
+              <div class="node">Node 1</div>
+              <div class="inner">
+                <div class="box ghost"><div class="k">Container</div><div class="t">app</div></div>
+                <div class="box ghost"><div class="k">Container</div><div class="t">db</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">Flat structure</div>
+          <div class="nd">Just containers and container groups; expand a group to see its containers.</div>
+        </div>
+        <div>
+          <div class="nt">Deployed independently</div>
+          <div class="nd">Deploy, roll back and move each container on its own.</div>
+        </div>
+        <div>
+          <div class="nt">Export any time</div>
+          <div class="nd">Everything is plain compose underneath and runs without Nagi.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#web", "b", "#web-c", "t", { cls: "dash" });
+        wire("#api", "b", "#api-c", "t", { cls: "dash" });
+      });
+    </script>
+  </body>
+</html>

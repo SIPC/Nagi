@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .nodes {
+        display: grid;
+        grid-template-columns: 372px 372px;
+        justify-content: space-between;
+      }
+      .nodes .zone {
+        height: 330px;
+      }
+      .zone > .box {
+        width: 130px;
+      }
+      .top {
+        top: 62px;
+        min-height: 108px;
+      }
+      .bottom {
+        top: 214px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>Reach containers by name across nodes</h1>
+      <p class="lead">Containers in a project reach each other by name, even on different nodes, with no network setup.</p>
+
+      <div class="stage nodes">
+        <div class="zone">
+          <div class="zl">Node 1</div>
+          <div class="box top" id="web" style="left: 16px">
+            <div class="k">Container</div>
+            <div class="t"><i class="dot"></i>web</div>
+          </div>
+          <div class="box ghost top" id="proxy" style="left: 226px">
+            <div class="k">Proxy</div>
+            <div class="t">db</div>
+            <div class="s">To node 2</div>
+          </div>
+          <div class="box bottom" id="na" style="left: 226px">
+            <div class="k mono">agent</div>
+            <div class="t">nagi</div>
+          </div>
+        </div>
+        <div class="zone">
+          <div class="zl">Node 2</div>
+          <div class="box bottom" id="nb" style="left: 16px">
+            <div class="k mono">agent</div>
+            <div class="t">nagi</div>
+          </div>
+          <div class="box top" id="db" style="left: 226px">
+            <div class="k">Container</div>
+            <div class="t"><i class="dot"></i>db</div>
+            <div class="s">postgres</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">Access by name</div>
+          <div class="nd">Use the container name wherever the container runs.</div>
+        </div>
+        <div>
+          <div class="nt">Stable across moves</div>
+          <div class="nd">Names and addresses stay the same after a move.</div>
+        </div>
+        <div>
+          <div class="nt">Isolated by default</div>
+          <div class="nd">Projects are isolated; link two projects when needed.</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#web", "r", "#proxy", "l", { align: "a", arrow: true, label: "db:5432", labelCls: "code" });
+        wire("#proxy", "b", "#na", "t", { align: "a", arrow: true });
+        wire("#na", "r", "#nb", "l", { align: "a", arrow: true, cls: "wave", label: "WireGuard", labelCls: "wave" });
+        wire("#nb", "r", "#db", "b", { arrow: true });
+      });
+    </script>
+  </body>
+</html>
