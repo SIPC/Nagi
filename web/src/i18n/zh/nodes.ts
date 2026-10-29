@@ -10,6 +10,18 @@ export default {
   approveConfirm: (name: string, address: string) =>
     `批准节点 ${name}（${address}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`,
   title: "节点",
+  views: {
+    cards: "卡片",
+    map: "拓扑",
+  },
+  map: {
+    panel: "面板",
+    direct: "直连",
+    relay: "经面板中转",
+    none: "不可达",
+    help: "线条是在线节点之间的 mesh（WireGuard）连接。无法直连时流量经面板中转，线条从面板绕过。节点外圈是 CPU、内存、磁盘中占用最高的一项。悬停节点查看延迟。",
+    issues: "未直连的连接",
+  },
   description: "运行容器的机器，由节点主动连接面板；面板不可用时容器照常运行。",
   addNode: "添加节点",
   addNodeDescription: "生成安装命令，在新机器上执行后即接入本面板。",

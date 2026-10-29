@@ -9,7 +9,7 @@ import { t } from "@/i18n";
 
 // ---- mesh 状态 ----
 
-const pathLabel: Record<string, string> = {
+export const pathLabel: Record<string, string> = {
   direct: t.mesh.path.direct,
   link: t.mesh.path.link,
   "udp-relay": t.mesh.path.udpRelay,

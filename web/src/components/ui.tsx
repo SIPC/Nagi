@@ -570,9 +570,10 @@ export function Segmented<T extends string>({ value, onChange, items }: { value:
 
 // 品牌标识：两道平缓的波浪，和 public/favicon.svg 同一形状（去掉底板）。
 // 下面一道用 currentColor（品牌色），上面一道用前景色、半透明，深浅色下都能看清。
-export function Waves({ className }: { className?: string }) {
+// 放在另一个 SVG 里时用 x、y、width、height 定位（CSS 尺寸对嵌套的 svg 不生效）。
+export function Waves({ className, ...props }: React.ComponentProps<"svg">) {
   return (
-    <svg viewBox="4 9 24 14" fill="none" className={className} aria-hidden>
+    <svg viewBox="4 9 24 14" fill="none" className={className} aria-hidden {...props}>
       <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--foreground)" strokeWidth="2.4" strokeLinecap="round" opacity=".55" />
     </svg>

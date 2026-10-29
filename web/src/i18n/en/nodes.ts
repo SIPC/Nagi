@@ -11,6 +11,18 @@ export default {
   approveConfirm: (name, address) =>
     `Approve node ${name} (${address})? The node will join the mesh and can be managed by the panel. It joined with an invite code, which anyone could use if leaked, so make sure it's your machine.`,
   title: "Nodes",
+  views: {
+    cards: "Cards",
+    map: "Map",
+  },
+  map: {
+    panel: "Panel",
+    direct: "Direct",
+    relay: "Relayed via panel",
+    none: "Unreachable",
+    help: "Lines are mesh (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed through the panel and the line bends through it. The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
+    issues: "Connections that aren't direct",
+  },
   description: "Machines that run containers. Nodes connect to the panel, and containers keep running when the panel is unavailable.",
   addNode: "Add node",
   addNodeDescription: "Generate an install command and run it on a new machine to connect it to this panel.",

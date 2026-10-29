@@ -16,7 +16,7 @@ import { AppLayout } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages/project";
 import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
-import { NodePage, NodesPage, nodeTabs, type NodeTab } from "@/pages/nodes";
+import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
@@ -136,7 +136,18 @@ const containerRoute = createRoute({
   },
 });
 
-const nodesRoute = createRoute({ getParentRoute: () => appRoute, path: "/nodes", component: NodesPage });
+const nodesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/nodes",
+  validateSearch: (search: Record<string, unknown>): { view?: NodesView } => ({
+    view: search.view === "map" ? "map" : undefined,
+  }),
+  component: function Nodes() {
+    const { view } = nodesRoute.useSearch();
+    const navigate = nodesRoute.useNavigate();
+    return <NodesPage view={view ?? "cards"} onView={(v) => navigate({ search: { view: v === "cards" ? undefined : v }, replace: true })} />;
+  },
+});
 
 const nodeRoute = createRoute({
   getParentRoute: () => appRoute,

@@ -9,6 +9,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeMetrics, NodeUsageBars, fmtBytes, fmtBytesShort } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
+import { NodeMap } from "@/pages/node-map";
 import {
   Alert,
   Badge,
@@ -29,6 +30,7 @@ import {
   Menu,
   Notice,
   Section,
+  Segmented,
   Spinner,
   Status,
   Table,
@@ -105,11 +107,20 @@ async function approve(n: Node) {
   return true;
 }
 
-export function NodesPage() {
+export type NodesView = "cards" | "map";
+
+export function NodesPage({ view, onView }: { view: NodesView; onView: (v: NodesView) => void }) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
   const [dialog, setDialog] = useState<"add" | "handover" | null>(null);
   const list = nodes.data?.nodes ?? [];
+  const cards = (
+    <CardGrid>
+      {list.map((n) => (
+        <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} onApproved={() => nodes.refetch()} />
+      ))}
+    </CardGrid>
+  );
 
   return (
     <>
@@ -118,6 +129,19 @@ export function NodesPage() {
         description={t.nodes.description}
         actions={
           <>
+            {list.length > 0 && (
+              // 窄屏上拓扑图太小，只用卡片。
+              <div className="hidden sm:block">
+                <Segmented
+                  value={view}
+                  onChange={onView}
+                  items={[
+                    { value: "cards", label: t.nodes.views.cards },
+                    { value: "map", label: t.nodes.views.map },
+                  ]}
+                />
+              </div>
+            )}
             <Button onClick={() => setDialog("add")}>
               <Plus />
               {t.nodes.addNode}
@@ -134,12 +158,15 @@ export function NodesPage() {
         <Empty title={t.nodes.empty} icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>{t.nodes.addNode}</Button>}>
           {t.nodes.addNodeDescription}
         </Empty>
+      ) : view === "map" ? (
+        <>
+          <div className="hidden sm:block">
+            <NodeMap nodes={list} />
+          </div>
+          <div className="sm:hidden">{cards}</div>
+        </>
       ) : (
-        <CardGrid>
-          {list.map((n) => (
-            <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} onApproved={() => nodes.refetch()} />
-          ))}
-        </CardGrid>
+        cards
       )}
       <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} description={t.nodes.addNodeDescription}>
         <AddNode />
