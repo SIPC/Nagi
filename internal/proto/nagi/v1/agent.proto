@@ -81,7 +81,7 @@ service AgentService {
   rpc SetMirrors(Mirrors) returns (Mirrors);
   // 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
   rpc SetPanelDomain(SetPanelDomainRequest) returns (SetPanelDomainResponse);
-  // 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
+  // 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
 }
 

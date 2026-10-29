@@ -31,6 +31,17 @@ export default {
   pendingNotice: "This node joined with an invite code. Approve it once you've confirmed it's your machine. Until then it can't be viewed or managed.",
   offlineTitle: "Node offline",
   offlineNotice: "Monitoring, replicas and mesh status are unavailable while the node is offline.",
+  upgrade: {
+    badge: "Upgrade available",
+    title: (version) => `Upgrade to ${version} available`,
+    text: (current) =>
+      `This node runs ${current}. The node downloads the panel's version from GitHub Release (or the mirror set at install time), verifies it and restarts in place. Containers keep running; the built-in Caddy is interrupted for a second or two.`,
+    confirm: (name, version) => `Upgrade node ${name} to ${version}? The node downloads and verifies the new version, then restarts in place.`,
+    action: "Upgrade",
+    running: "Upgrading…",
+    restartingTitle: (version) => `Replaced with ${version}, node is restarting`,
+    restartingText: "This notice disappears once the node reconnects.",
+  },
   add: {
     publicAddress: "Panel public address",
     publicAddressHelp: "Nodes connect to the panel at this address. It must be reachable from the node.",

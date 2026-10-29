@@ -129,7 +129,7 @@ type AgentServiceClient interface {
 	SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(ctx context.Context, in *SetPanelDomainRequest, opts ...grpc.CallOption) (*SetPanelDomainResponse, error)
-	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
+	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 }
 
@@ -630,7 +630,7 @@ type AgentServiceServer interface {
 	SetMirrors(context.Context, *Mirrors) (*Mirrors, error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(context.Context, *SetPanelDomainRequest) (*SetPanelDomainResponse, error)
-	// 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
+	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }

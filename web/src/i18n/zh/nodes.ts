@@ -29,6 +29,17 @@ export default {
   pendingNotice: "该节点通过接入码加入。请确认为自有机器后批准；批准前无法查看和操作。",
   offlineTitle: "节点离线",
   offlineNotice: "节点离线时无法查询监控、副本和 mesh 状态。",
+  upgrade: {
+    badge: "可升级",
+    title: (version: string) => `可升级到 ${version}`,
+    text: (current: string) =>
+      `节点当前为 ${current}。升级时节点从 GitHub Release（安装时指定了镜像则从镜像）下载与面板相同的版本，校验后原地重启；容器照常运行，内置的 Caddy 会中断一两秒。`,
+    confirm: (name: string, version: string) => `将节点 ${name} 升级到 ${version}？节点下载并校验新版本后原地重启。`,
+    action: "升级",
+    running: "升级中…",
+    restartingTitle: (version: string) => `已替换为 ${version}，节点正在重启`,
+    restartingText: "节点重新连接后此提示自动消失。",
+  },
   add: {
     publicAddress: "面板对外地址",
     publicAddressHelp: "节点通过该地址连接面板，须可从节点访问。",

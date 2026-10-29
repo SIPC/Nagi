@@ -1392,7 +1392,7 @@ export const AgentService: GenService<{
     output: typeof SetPanelDomainResponseSchema;
   },
   /**
-   * 升级节点：从发起请求的面板下载 nagi，校验后替换自己并原地重启（容器不受影响）。
+   * 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
    *
    * @generated from rpc nagi.v1.AgentService.Upgrade
    */

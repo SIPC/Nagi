@@ -27,6 +27,33 @@ function useNodeList() {
   return useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 5000 });
 }
 
+function usePanelVersion() {
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  return settings.data?.settings?.version ?? "";
+}
+
+// 与 internal/pkg/release.IsVersion 一致。
+const versionRe = /^v(\d+)\.(\d+)\.(\d+)([-+][0-9A-Za-z.-]+)?$/;
+
+// isOlder：节点版本 a 是否早于面板版本 b。不是正式版本号（例如本地编译的 dev）时不比较。
+function isOlder(a: string, b: string) {
+  const x = versionRe.exec(a);
+  const y = versionRe.exec(b);
+  if (!x || !y) return false;
+  for (let i = 1; i <= 3; i++) {
+    if (Number(x[i]) !== Number(y[i])) return Number(x[i]) < Number(y[i]);
+  }
+  // 数字相同时，预发布版（v0.2.0-rc.1）早于正式版（v0.2.0）。
+  return a !== b && x[4]?.startsWith("-") === true && !y[4]?.startsWith("-");
+}
+
+// upgradeTarget：节点可以一键升级到的版本（即面板的版本），不能升级时返回空串。
+// 只升不降；面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。
+function upgradeTarget(n: Node, panelVersion: string) {
+  if (!n.online || n.pending || !n.info || n.info.embedded || n.info.os !== "linux") return "";
+  return isOlder(n.info.version, panelVersion) ? panelVersion : "";
+}
+
 // nodeSpec：节点的配置，例如「2 核 · 内存 3.8GB · 磁盘 39GB」。旧版本的节点不报配置，返回空串。
 function nodeSpec(info?: NodeInfo) {
   if (!info) return "";
@@ -53,6 +80,7 @@ async function approve(n: Node) {
 
 export function NodesPage() {
   const nodes = useNodeList();
+  const panelVersion = usePanelVersion();
   const [dialog, setDialog] = useState<"add" | "handover" | null>(null);
   const list = nodes.data?.nodes ?? [];
 
@@ -82,7 +110,7 @@ export function NodesPage() {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
           {list.map((n) => (
-            <NodeCard key={n.id} n={n} onApproved={() => nodes.refetch()} />
+            <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} onApproved={() => nodes.refetch()} />
           ))}
         </div>
       )}
@@ -96,7 +124,7 @@ export function NodesPage() {
   );
 }
 
-function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
+function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean; onApproved: () => void }) {
   const u = n.online && !n.pending ? n.usage : undefined;
   return (
     <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className="group flex flex-col rounded-lg border bg-card transition-colors hover:border-foreground/25">
@@ -105,6 +133,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
           <div className="flex items-center gap-2">
             <span className="truncate text-[13px] font-medium group-hover:underline">{n.name}</span>
             {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
+            {canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>}
           </div>
           <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
 
@@ -145,6 +174,7 @@ function NodeCard({ n, onApproved }: { n: Node; onApproved: () => void }) {
 // NodePage：节点详情页。
 export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab; onTab: (t: NodeTab) => void }) {
   const nodes = useNodeList();
+  const panelVersion = usePanelVersion();
   const navigate = useNavigate();
   if (nodes.isPending) return <Loading />;
   if (nodes.error) return <Alert>{errorMessage(nodes.error)}</Alert>;
@@ -157,6 +187,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       </>
     );
   }
+  const target = upgradeTarget(n, panelVersion);
   const remove = async () => {
     if (!confirm(t.nodes.removeConfirm(n.name))) return;
     try {
@@ -211,6 +242,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
           </>
         }
       />
+      {target && <NodeUpgrade key={target} n={n} target={target} onDone={() => nodes.refetch()} />}
       {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
         <Notice tone="warning" title={t.common.status.pendingApproval}>
@@ -235,6 +267,48 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
         </>
       )}
     </>
+  );
+}
+
+// NodeUpgrade：节点版本早于面板时的升级提示。节点重启后上报新版本，target 变为空，提示随之消失。
+function NodeUpgrade({ n, target, onDone }: { n: Node; target: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const upgrade = async () => {
+    if (!confirm(t.nodes.upgrade.confirm(n.name, target))) return;
+    setError("");
+    setBusy(true);
+    try {
+      await nodeClient.upgradeNode({ nodeId: n.id });
+      setDone(true);
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (done) {
+    return (
+      <Notice tone="success" title={t.nodes.upgrade.restartingTitle(target)} className="mb-6">
+        {t.nodes.upgrade.restartingText}
+      </Notice>
+    );
+  }
+  return (
+    <Notice
+      title={t.nodes.upgrade.title(target)}
+      className="mb-6"
+      actions={
+        <Button size="sm" onClick={upgrade} disabled={busy}>
+          {busy ? t.nodes.upgrade.running : t.nodes.upgrade.action}
+        </Button>
+      }
+    >
+      <p>{t.nodes.upgrade.text(n.info?.version || "?")}</p>
+      {error && <Alert className="mt-2">{error}</Alert>}
+    </Notice>
   );
 }
 
