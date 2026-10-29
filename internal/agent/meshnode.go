@@ -42,6 +42,16 @@ type meshNode struct {
 	// 新面板刚接管时给的列表可能还不全（其他节点还没上报地址）。
 	removedAt      map[string]time.Time
 	pruneScheduled bool
+	// recent 是最近在成员列表里出现过的成员。从列表里消失的成员再留 meshGrace：节点重启、和面板断开一下，
+	// 面板就不再列出它，立刻删掉的话它回来发起的握手会被丢掉，要等下一次上报（最多 15 秒）才重新加上；
+	// 面板刚重启时给的列表也可能还不全。
+	recent         map[mesh.Key]recentPeer
+	applyScheduled bool
+}
+
+type recentPeer struct {
+	peer mesh.Peer
+	at   time.Time
 }
 
 const meshGrace = 2 * time.Minute
@@ -283,6 +293,36 @@ func (n *meshNode) apply() {
 				n.names[k] = mp.GetName()
 			}
 		}
+	}
+	now := time.Now()
+	if n.recent == nil {
+		n.recent = map[mesh.Key]recentPeer{}
+	}
+	for k, p := range merged {
+		n.recent[k] = recentPeer{peer: *p, at: now}
+	}
+	later := false
+	for k, r := range n.recent {
+		if merged[k] != nil {
+			continue
+		}
+		if now.Sub(r.at) >= meshGrace {
+			delete(n.recent, k)
+			continue
+		}
+		p := r.peer
+		merged[k] = &p
+		order = append(order, k)
+		later = true
+	}
+	if later && !n.applyScheduled {
+		n.applyScheduled = true
+		time.AfterFunc(meshGrace, func() {
+			n.mu.Lock()
+			n.applyScheduled = false
+			n.mu.Unlock()
+			n.apply()
+		})
 	}
 	n.mu.Unlock()
 	peers := make([]mesh.Peer, 0, len(order))
