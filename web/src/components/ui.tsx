@@ -163,6 +163,21 @@ export function Check({
   );
 }
 
+// FormBody：区块里的表单，最宽 42rem，字段之间 16px。不要让字段撑满宽屏，按钮也就不会离字段太远。
+export function FormBody({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid max-w-2xl gap-4", className)} {...props} />;
+}
+
+// FormRow：一行两个字段，等宽；窄屏上下排。
+export function FormRow({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid gap-4 sm:grid-cols-2", className)} {...props} />;
+}
+
+// FormActions：表单底部的按钮，在表单宽度内靠右（和对话框一致）；主要操作放最后。提示（已保存……）放在按钮左边。
+export function FormActions({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("flex flex-wrap items-center justify-end gap-2", className)} {...props} />;
+}
+
 // ---- 区块 ----
 
 // Section：页面上的一组内容。不加外框：标题一行、可选的一句描述和右侧操作，组与组之间用一条细分隔线隔开
@@ -195,12 +210,23 @@ export function Section({
               {title}
               {help && <HelpTip>{help}</HelpTip>}
             </h2>
-            {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
+            {description && <p className="mt-1 text-[13px] text-pretty text-muted-foreground">{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      {children !== undefined && children !== null && children !== false && <div className={cn(flush && "-mt-1")}>{children}</div>}
+      {children !== undefined && children !== null && children !== false && (
+        <div
+          className={cn(
+            flush && "-mt-1",
+            // 区块以表格结尾时，把区块之间的 24px 整个收回去：下一个区块的分隔线正好落在最后一行底部，
+            // 和其他行线间隔一致（否则它看起来像最后一行的底线，只是离得更远）。表格可以包在一层 div 里。
+            "[&>:last-child>[data-slot=table]:last-child]:-mb-6 [&>[data-slot=table]:last-child]:-mb-6",
+          )}
+        >
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -208,13 +234,13 @@ export function Section({
 // SettingRow：设置里的一项，左边名称和说明，右边控件；行与行之间细分隔线。放在 SettingRows 里。
 export function SettingRow({ label, description, help, htmlFor, children }: { label: React.ReactNode; description?: React.ReactNode; help?: React.ReactNode; htmlFor?: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-x-8 gap-y-2 border-b py-5 first:pt-0 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+    <div className="grid gap-x-8 gap-y-2 border-b py-5 first:pt-0 last:border-b-0 last:pb-0 md:grid-cols-2">
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : label}
           {help && <HelpTip>{help}</HelpTip>}
         </div>
-        {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
+        {description && <p className="mt-1 text-[13px] text-pretty text-muted-foreground">{description}</p>}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -225,12 +251,66 @@ export function SettingRows({ children }: { children: React.ReactNode }) {
   return <div className="grid">{children}</div>;
 }
 
+// ---- 卡片 ----
+
+// Card：概览网格里的一项（项目、节点），整张可以是链接。四边内边距 16px，头、内容、底栏之间 12px。
+// 其他地方不用卡片（见 docs/ui.md）；监控数值块用 Tile。
+export const cardClass =
+  "group flex flex-col rounded-lg border bg-card outline-none transition-colors hover:border-foreground/25 hover:bg-accent/30 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
+
+export function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn(cardClass, className)} {...props} />;
+}
+
+// CardHeader：标题和副标题在左，状态在右。
+export function CardHeader({ title, subtitle, aside }: { title: React.ReactNode; subtitle?: React.ReactNode; aside?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-4 pt-4">
+      <div className="grid min-w-0 gap-1">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">{title}</div>
+        {subtitle && <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">{subtitle}</div>}
+      </div>
+      {aside && <div className="shrink-0">{aside}</div>}
+    </div>
+  );
+}
+
+export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid flex-1 content-start gap-2 px-4 pt-3 pb-4", className)} {...props} />;
+}
+
+export function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("flex items-center justify-between gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground", className)} {...props} />;
+}
+
+// CardGrid：卡片的网格，每张至少 18rem，卡片之间 16px。
+export function CardGrid({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-4", className)} {...props} />;
+}
+
+// Tile：监控数值块。浅底、无边框，不是卡片（不可点）。min-w-0：里面的图表不能撑破网格。
+export function Tile({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid min-w-0 gap-1 rounded-md bg-subtle px-3 py-3", className)} {...props} />;
+}
+
+// TileGrid：按所在区域的宽度排列（不是窗口宽度：宽屏的项目页内容区只有窗口的一半多），每块至少 9.5rem。
+export function TileGrid({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3", className)} {...props} />;
+}
+
 // ---- 表格 ----
 
-export function Table({ className, ...props }: React.ComponentProps<"table">) {
+// 长列表（快照、版本、部署记录）用 compact，行高 40px；其余 44px。
+const TableDensity = createContext(false);
+
+// 最后一行没有底线，文字下面还有半行空白（44px 行 12px，40px 行 10px）。表格后面还有内容时（例如下面是表单），
+// 用负外边距抵掉这段空白；表格在区块末尾时由 Section 处理（下一条分隔线直接当最后一行的底线）。
+export function Table({ className, compact = false, ...props }: React.ComponentProps<"table"> & { compact?: boolean }) {
   return (
-    <div className="overflow-x-auto">
-      <table className={cn("w-full text-sm", className)} {...props} />
+    <div data-slot="table" className={cn("overflow-x-auto", compact ? "last:-mb-2.5" : "last:-mb-3")}>
+      <TableDensity.Provider value={compact}>
+        <table className={cn("w-full text-sm", className)} {...props} />
+      </TableDensity.Provider>
     </div>
   );
 }
@@ -245,7 +325,13 @@ export function Th({ className, ...props }: React.ComponentProps<"th">) {
 }
 
 export function Td({ className, ...props }: React.ComponentProps<"td">) {
-  return <td className={cn("h-12 border-b px-3 py-2 align-middle first:pl-0 last:pr-0 [tr:last-child>&]:border-b-0", className)} {...props} />;
+  const compact = useContext(TableDensity);
+  return (
+    <td
+      className={cn("border-b px-3 py-2 align-middle first:pl-0 last:pr-0 [tr:last-child>&]:border-b-0", compact ? "h-10 py-1.5" : "h-11", className)}
+      {...props}
+    />
+  );
 }
 
 // ---- 状态与提示 ----
@@ -290,7 +376,7 @@ export function Status({ tone = "neutral", children, pulse }: { tone?: keyof typ
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
       <span className="relative flex size-2">
-        {pulse && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-60", dotColor[tone])} />}
+        {pulse && <span className={cn("absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping", dotColor[tone])} />}
         <span className={cn("relative inline-flex size-2 rounded-full", dotColor[tone])} />
       </span>
       {children}
@@ -321,7 +407,7 @@ export function Notice({
 }) {
   return (
     <div role={tone === "danger" ? "alert" : "status"} className={cn("flex flex-wrap items-start gap-x-4 gap-y-2 rounded-md border px-3.5 py-2.5 text-[13px] leading-relaxed", noticeTone[tone], className)}>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 text-pretty">
         {title && <div className="font-medium">{title}</div>}
         {children && <div className={cn(title && "mt-0.5 text-muted-foreground", tone === "danger" && "text-destructive")}>{children}</div>}
       </div>

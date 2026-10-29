@@ -48,7 +48,6 @@ export default {
   table: {
     title: "Containers",
     descriptionNarrow: "Select a container to view details. Check several to deploy them together.",
-    descriptionWide: "Select a container in the project sidebar to view details.",
     help: "Batch deployment deploys the selected containers in dependency order and creates a single deployment history entry.",
     addContainer: "Add container",
     changedTitle: (names) => `Containers with drafts, changed shared variables, or not yet deployed: ${names}`,
@@ -97,6 +96,7 @@ export default {
     volumeBody: (names) =>
       `External or custom-driver volumes: ${names}. Snapshots, migration, and failover do not include their data.`,
     notDeployed: "Not deployed yet",
+    servicesTitle: "Status",
     gitTitle: "Git repository",
     gitRepo: "Repository",
     gitCommit: "Current commit",

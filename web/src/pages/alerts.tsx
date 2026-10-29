@@ -14,6 +14,7 @@ import {
   Button,
   EmptyRow,
   Field,
+  FormActions,
   Input,
   Loading,
   Notice,
@@ -109,7 +110,7 @@ export function AlertSettings() {
   const addChannel = () =>
     setChannels([...channels, create(AlertChannelSchema, { type: "webhook" })]);
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       {(error || cfg.data?.lost) && (
         <div className="grid gap-3">
           {error && <Alert>{error}</Alert>}
@@ -233,12 +234,13 @@ export function AlertSettings() {
         </div>
       </Section>
 
-      <div className="flex items-center gap-4">
+      {/* 一次保存渠道和规则，所以按钮在两个区块下面。 */}
+      <FormActions className="border-t pt-6">
+        {msg && <span className="text-[13px] text-success">{msg}</span>}
         <Button size="sm" onClick={save}>
           {t.common.actions.save}
         </Button>
-        {msg && <span className="text-[13px] text-success">{msg}</span>}
-      </div>
+      </FormActions>
     </div>
   );
 }

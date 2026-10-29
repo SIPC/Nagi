@@ -8,6 +8,7 @@ export default {
     "7d": "7 days",
     "30d": "30 days",
   },
+  resourceUsage: "Resource usage",
   memory: "Memory",
   disk: "Disk",
   netRx: "Down",

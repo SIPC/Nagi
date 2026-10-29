@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { t } from "@/i18n";
-import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
 // 「网络」标签页：端口映射与域名、项目内网、项目连接（见 docs/agent.md#项目连接）。
@@ -346,7 +346,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
       description={t.projectNetwork.intranet.description}
       help={t.projectNetwork.intranet.help}
     >
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         {addresses.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">{t.projectNetwork.intranet.empty}</p>
         ) : (
@@ -369,28 +369,30 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
             </Table>
           </div>
         )}
-        <Field
-          label={t.projectNetwork.intranet.internalPorts}
-          htmlFor="net-internal-ports"
-          hint={t.projectNetwork.intranet.internalPortsHint}
-          help={t.projectNetwork.intranet.internalPortsHelp}
-        >
-          <Textarea
-            id="net-internal-ports"
-            value={ports}
-            onChange={(e) => setPorts(e.target.value)}
-            spellCheck={false}
-            className="min-h-16 max-w-md font-mono text-[13px]"
-          />
-        </Field>
-        {error && <Alert>{error}</Alert>}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
-          <Button size="sm" onClick={save} disabled={busy}>
-            {busy && <Spinner />}
-            {t.common.actions.save}
-          </Button>
-        </div>
+        <FormBody>
+          <Field
+            label={t.projectNetwork.intranet.internalPorts}
+            htmlFor="net-internal-ports"
+            hint={t.projectNetwork.intranet.internalPortsHint}
+            help={t.projectNetwork.intranet.internalPortsHelp}
+          >
+            <Textarea
+              id="net-internal-ports"
+              value={ports}
+              onChange={(e) => setPorts(e.target.value)}
+              spellCheck={false}
+              className="min-h-16 font-mono text-[13px]"
+            />
+          </Field>
+          {error && <Alert>{error}</Alert>}
+          <FormActions>
+            {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
+            <Button size="sm" onClick={save} disabled={busy}>
+              {busy && <Spinner />}
+              {t.common.actions.save}
+            </Button>
+          </FormActions>
+        </FormBody>
       </div>
     </Section>
   );
@@ -507,17 +509,18 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       )}
       {open && (
         <form
-          className="grid gap-4 border-t py-4"
+          className="border-t py-4"
           onSubmit={(e) => {
             e.preventDefault();
             connect();
           }}
         >
+          <FormBody>
           {candidates.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">{t.projectNetwork.links.noCandidates}</p>
           ) : (
             <Field label={t.projectNetwork.links.project} htmlFor="link-project">
-              <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)} className="max-w-sm">
+              <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)}>
                 {candidates.map((p) => (
                   <option key={p.id} value={p.id}>
                     {t.projectNetwork.links.option(p.name, p.networkName)}
@@ -527,7 +530,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
             </Field>
           )}
           {error && <Alert>{error}</Alert>}
-          <div className="flex justify-end gap-2">
+          <FormActions>
             <Button
               type="button"
               size="sm"
@@ -543,7 +546,8 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
               {busy && <Spinner />}
               {t.projectNetwork.links.connect}
             </Button>
-          </div>
+          </FormActions>
+          </FormBody>
         </form>
       )}
     </Section>

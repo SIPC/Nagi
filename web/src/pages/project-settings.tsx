@@ -7,7 +7,7 @@ import { timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { Alert, Badge, Button, Check, EmptyRow, Field, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
@@ -62,13 +62,13 @@ function GeneralSettings({ project }: { project: Project }) {
   return (
     <Section title={t.projectSettings.general.title}>
       <form
-        className="grid gap-4"
+        className="grid max-w-2xl gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FormRow>
           <Field label={t.projectSettings.general.name} htmlFor="p-name">
             <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </Field>
@@ -83,15 +83,15 @@ function GeneralSettings({ project }: { project: Project }) {
           <Field label={t.projectSettings.general.snapshotInterval} htmlFor="p-interval" hint={t.projectSettings.general.snapshotIntervalHint}>
             <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" className="font-mono" />
           </Field>
-        </div>
+        </FormRow>
         {error && <Alert>{error}</Alert>}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
+        <FormActions>
+          {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
           <Button type="submit" size="sm" disabled={busy}>
             {busy && <Spinner />}
             {t.common.actions.save}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </Section>
   );
@@ -146,7 +146,7 @@ function SharedEnv({ project }: { project: Project }) {
       description={t.projectSettings.sharedEnv.description}
       help={t.projectSettings.sharedEnv.help}
     >
-      <div className="grid gap-4">
+      <FormBody>
         <Field label={t.projectSettings.sharedEnv.vars} htmlFor="shared-env" hint={t.projectSettings.sharedEnv.varsHint}>
           <Textarea id="shared-env" value={sharedEnv} onChange={(e) => setSharedEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
         </Field>
@@ -163,7 +163,7 @@ function SharedEnv({ project }: { project: Project }) {
         )}
         {error && <Alert>{error}</Alert>}
         {output}
-        <div className="flex justify-end gap-2 pt-2">
+        <FormActions>
           {project.hasSharedEnvDraft && (
             <Button
               size="sm"
@@ -184,8 +184,8 @@ function SharedEnv({ project }: { project: Project }) {
               {t.projectSettings.sharedEnv.deploy}
             </Button>
           )}
-        </div>
-      </div>
+        </FormActions>
+      </FormBody>
     </Section>
   );
 }
@@ -218,7 +218,7 @@ function Deployments({ project }: { project: Project }) {
       ) : list.data?.deployments.length === 0 ? (
         <EmptyRow>{t.projectSettings.deployments.empty}</EmptyRow>
       ) : (
-        <Table>
+        <Table compact>
           <thead>
             <tr>
               <Th>{t.projectSettings.deployments.columns.id}</Th>

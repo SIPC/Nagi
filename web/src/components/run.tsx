@@ -32,7 +32,9 @@ export function useRun(projectId: string) {
     }
   };
   const output = <RunOutput lines={lines} result={result} />;
-  return { run, busy, output, setLines };
+  // hasOutput：有没有要显示的输出，调用方据此决定要不要给输出留位置。
+  const hasOutput = lines.length > 0 || result !== undefined;
+  return { run, busy, output, hasOutput, setLines };
 }
 
 // 拉取镜像时每一层的进度（"1fdd0614a47e Downloading 11.5MB"）原地更新，不是每次都加一行。

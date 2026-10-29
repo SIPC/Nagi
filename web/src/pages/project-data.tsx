@@ -12,6 +12,9 @@ import {
   Check,
   EmptyRow,
   Field,
+  FormActions,
+  FormBody,
+  FormRow,
   Input,
   Notice,
   Section,
@@ -60,7 +63,7 @@ export function ContainerData({
 }) {
   const run = useRun(project.id);
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       <Snapshots project={project} container={container} run={run} />
       <Failover project={project} container={container} />
@@ -151,7 +154,7 @@ function SnapshotTable({
   const shown = all ? snapshots : snapshots.slice(0, 6);
   return (
     <>
-      <Table>
+      <Table compact>
         <thead>
           <tr>
             <Th>{t.projectData.snapshots.kind}</Th>
@@ -322,7 +325,7 @@ function Backup({
       description={t.projectData.backup.description}
       help={t.projectData.backup.help}
     >
-      <div className="grid gap-4">
+      <FormBody>
         {container.backupNodeId ? (
           <>
             <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
@@ -350,7 +353,7 @@ function Backup({
             </dl>
             {backup?.lastError && <Alert>{backup.lastError}</Alert>}
             {error && <Alert>{error}</Alert>}
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+            <FormActions>
               {!sourceOnline && container.deployedVersion > 0n && (
                 <Button
                   size="sm"
@@ -388,7 +391,7 @@ function Backup({
                 {busy && <Spinner />}
                 {t.projectData.backup.syncNow}
               </Button>
-            </div>
+            </FormActions>
             {restoring && (
               <RestoreFromBackup
                 project={project}
@@ -436,7 +439,7 @@ function Backup({
             {error && <Alert>{error}</Alert>}
           </>
         )}
-      </div>
+      </FormBody>
     </Section>
   );
 }
@@ -737,8 +740,8 @@ function Failover({
             {t.projectData.failover.noCandidates}
           </p>
         ) : (
-          <div className="grid gap-4">
-            <div className="flex flex-wrap items-end gap-3">
+          <FormBody>
+            <FormRow>
               <Field label={t.projectData.failover.standbyNode} htmlFor="fo-standby">
                 <Select
                   id="fo-standby"
@@ -746,7 +749,6 @@ function Failover({
                   onChange={(e) =>
                     setForm({ ...form, standby: e.target.value })
                   }
-                  className="min-w-44"
                 >
                   {standbys.map((n) => (
                     <option key={n.id} value={n.id}>
@@ -770,8 +772,8 @@ function Failover({
                   onDefault={setDefDir}
                 />
               </Field>
-            </div>
-            <div className="flex flex-wrap items-end gap-3">
+            </FormRow>
+            <FormRow>
               <Field
                 label={t.projectData.failover.witness}
                 htmlFor="fo-witness"
@@ -783,7 +785,6 @@ function Failover({
                   onChange={(e) =>
                     setForm({ ...form, witness: e.target.value })
                   }
-                  className="min-w-44"
                 >
                   <option value="">{t.projectData.thisPanel}</option>
                   {witnesses.map((n) => (
@@ -803,11 +804,10 @@ function Failover({
                   value={form.lease}
                   onChange={(e) => setForm({ ...form, lease: e.target.value })}
                   placeholder="30"
-                  className="w-28"
                   inputMode="numeric"
                 />
               </Field>
-            </div>
+            </FormRow>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               <Check
                 checked={form.autoFailback}
@@ -827,7 +827,7 @@ function Failover({
               )}
             </div>
             {error && <Alert>{error}</Alert>}
-            <div className="flex justify-end pt-2">
+            <FormActions>
               <Button
                 size="sm"
                 disabled={busy || !standbyId}
@@ -848,8 +848,8 @@ function Failover({
                 {busy && <Spinner />}
                 {t.projectData.failover.set}
               </Button>
-            </div>
-          </div>
+            </FormActions>
+          </FormBody>
         )}
       </Section>
     );
@@ -982,7 +982,7 @@ function Failover({
           <Alert>{holder?.lastError || standby?.lastError}</Alert>
         )}
         {error && <Alert>{error}</Alert>}
-        <div className="flex flex-wrap items-end gap-2 border-t pt-4">
+        <div className="flex flex-wrap items-end gap-3 border-t pt-4">
           <Field
             label={t.projectData.failover.changeWitness}
             htmlFor="fo-change-witness"
@@ -1067,7 +1067,7 @@ function DirInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={def}
-      className="min-w-80 font-mono"
+      className="w-full min-w-80 font-mono"
     />
   );
 }

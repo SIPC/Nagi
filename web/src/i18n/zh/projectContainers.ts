@@ -47,7 +47,6 @@ export default {
   table: {
     title: "容器",
     descriptionNarrow: "选择容器查看详情；勾选多个可批量部署。",
-    descriptionWide: "在左侧项目栏中选择容器查看详情。",
     help: "批量部署按依赖顺序依次部署所选容器，并生成一条部署记录。",
     addContainer: "添加容器",
     changedTitle: (names: string) => `存在草稿、共享变量已变更或尚未部署的容器：${names}`,
@@ -93,6 +92,7 @@ export default {
     hostNetworkBody: (names: string) => `容器 ${names} 不经过 Caddy，不在项目内网中，端口对外开放，需自行配置防火墙。`,
     volumeBody: (names: string) => `${names} 为 external 或使用自定义 driver，快照、迁移和顶替均不包含其数据。`,
     notDeployed: "尚未部署",
+    servicesTitle: "运行状态",
     gitTitle: "git 仓库",
     gitRepo: "仓库",
     gitCommit: "当前提交",

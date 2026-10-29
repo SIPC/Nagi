@@ -27,6 +27,7 @@ export default {
     failover: "Failover",
     containers: (n) => (n === 1 ? "1 container" : `${n} containers`),
     portMappings: (n) => (n === 1 ? "1 port mapping" : `${n} port mappings`),
+    moreContainers: (n) => `${n} more`,
     rebuiltAt: (date) => `Rebuilt ${date}`,
     createdAt: (date) => `Created ${date}`,
   },

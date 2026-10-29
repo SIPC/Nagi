@@ -9,7 +9,26 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeMetrics, NodeUsageBars, fmtBytes, fmtBytesShort } from "@/components/metrics";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
-import { Alert, Badge, Button, CodeBlock, Dialog, Empty, Field, Input, Loading, Menu, Notice, Status, Tabs } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  CardBody,
+  cardClass,
+  CardFooter,
+  CardGrid,
+  CardHeader,
+  CodeBlock,
+  Dialog,
+  Empty,
+  Field,
+  Input,
+  Loading,
+  Menu,
+  Notice,
+  Status,
+  Tabs,
+} from "@/components/ui";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo } from "@/gen/nagi/v1/common_pb";
 
@@ -108,11 +127,11 @@ export function NodesPage() {
           {t.nodes.addNodeDescription}
         </Empty>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+        <CardGrid>
           {list.map((n) => (
             <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} onApproved={() => nodes.refetch()} />
           ))}
-        </div>
+        </CardGrid>
       )}
       <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} description={t.nodes.addNodeDescription}>
         <AddNode />
@@ -127,20 +146,19 @@ export function NodesPage() {
 function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean; onApproved: () => void }) {
   const u = n.online && !n.pending ? n.usage : undefined;
   return (
-    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className="group flex flex-col rounded-lg border bg-card transition-colors hover:border-foreground/25">
-      <div className="flex items-start justify-between gap-2 px-3.5 pt-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[13px] font-medium group-hover:underline">{n.name}</span>
+    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className={cardClass}>
+      <CardHeader
+        title={
+          <>
+            <span className="truncate">{n.name}</span>
             {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
             {canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>}
-          </div>
-          <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{n.address || n.id}</div>
-
-        </div>
-        <NodeStatus n={n} />
-      </div>
-      <div className="grid flex-1 content-start gap-1.5 px-3.5 py-2.5">
+          </>
+        }
+        subtitle={<span className="truncate font-mono">{n.address || n.id}</span>}
+        aside={<NodeStatus n={n} />}
+      />
+      <CardBody>
         {n.pending ? (
           <div className="flex items-center justify-between gap-3">
             <span className="text-[13px] text-muted-foreground">{t.nodes.pendingHint}</span>
@@ -160,13 +178,11 @@ function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean;
         ) : (
           <span className="text-[13px] text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>
         )}
-      </div>
-      <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
+      </CardBody>
+      <CardFooter>
         <span>{t.nodes.containers(n.containers)}</span>
-        <span className="truncate font-mono">
-          {n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}
-        </span>
-      </div>
+        <span className="truncate font-mono">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
+      </CardFooter>
     </Link>
   );
 }

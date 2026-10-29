@@ -61,7 +61,7 @@ export function ContainersTab({
   const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       {imageUpdates.length > 0 && (
         <Notice tone="info" title={t.projectContainers.imageUpdates.title}>
           {t.projectContainers.imageUpdates.body(
@@ -107,7 +107,7 @@ function ContainersTable({
   onOpen: (name: string) => void;
   onAdd: () => void;
 }) {
-  const { run, busy, output } = useRun(project.id);
+  const { run, busy, output, hasOutput } = useRun(project.id);
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const nodeOffline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
@@ -128,13 +128,11 @@ function ContainersTable({
   return (
     <Section
       flush
+      // 宽屏时下面的表格不显示，标题行下面不留空（部署输出自己带上边距）。
+      className="xl:[&>header]:mb-0"
       title={t.projectContainers.table.title}
-      description={
-        <>
-          <span className="xl:hidden">{t.projectContainers.table.descriptionNarrow}</span>
-          <span className="hidden xl:inline">{t.projectContainers.table.descriptionWide}</span>
-        </>
-      }
+      // 宽屏时容器列在左边的项目栏里，这里只剩标题和操作一行。
+      description={<span className="xl:hidden">{t.projectContainers.table.descriptionNarrow}</span>}
       help={t.projectContainers.table.help}
       actions={
         <>
@@ -176,9 +174,10 @@ function ContainersTable({
               <Th>{t.projectContainers.columns.name}</Th>
               <Th>{t.projectContainers.columns.node}</Th>
               <Th>{t.projectContainers.columns.status}</Th>
-              <Th>{t.projectContainers.columns.usage}</Th>
-              <Th>{t.projectContainers.columns.version}</Th>
-              <Th>{t.projectContainers.columns.address}</Th>
+              {/* 窄屏只留名称、节点、状态，不用横向滚动。 */}
+              <Th className="hidden sm:table-cell">{t.projectContainers.columns.usage}</Th>
+              <Th className="hidden md:table-cell">{t.projectContainers.columns.version}</Th>
+              <Th className="hidden md:table-cell">{t.projectContainers.columns.address}</Th>
             </tr>
           </thead>
           <tbody>
@@ -215,14 +214,14 @@ function ContainersTable({
                   <Td>
                     {nodeOffline(m.nodeId) ? <Status tone="warning">{t.projectContainers.nodeOffline}</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
                   </Td>
-                  <Td>
+                  <Td className="hidden sm:table-cell">
                     <UsageBars usage={u} memFallback={memFallback} className="w-36" />
                   </Td>
-                  <Td className="font-mono text-xs">
+                  <Td className="hidden font-mono text-xs md:table-cell">
                     {m.deployedVersion > 0n ? `v${m.deployedVersion}` : <span className="text-muted-foreground">—</span>}
                     {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground">{t.projectContainers.table.latest(String(m.latestVersion))}</span>}
                   </Td>
-                  <Td className="font-mono text-xs text-muted-foreground">
+                  <Td className="hidden font-mono text-xs text-muted-foreground md:table-cell">
                     {m.kind !== "group"
                       ? m.name
                       : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") || "—"}
@@ -233,7 +232,7 @@ function ContainersTable({
           </tbody>
         </Table>
       )}
-      {output && <div className="pt-3 empty:hidden">{output}</div>}
+      {hasOutput && <div className="pt-3 xl:pt-4">{output}</div>}
     </Section>
   );
 }
@@ -456,7 +455,7 @@ function Overview({ project, container, services }: { project: Project; containe
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
       {node && !node.online && (
         <Notice tone="warning" title={t.projectContainers.nodeOffline}>
@@ -473,7 +472,7 @@ function Overview({ project, container, services }: { project: Project; containe
           {t.projectContainers.overview.volumeBody(container.unmanagedVolumes.join(t.projectContainers.listSeparator))}
         </Notice>
       )}
-      <div>
+      <Section title={t.projectContainers.overview.servicesTitle} flush>
         <Table>
           <thead>
             <tr>
@@ -506,10 +505,9 @@ function Overview({ project, container, services }: { project: Project; containe
             )}
           </tbody>
         </Table>
-      </div>
+      </Section>
       {cfg?.source?.gitUrl && (
-        <div className="grid gap-3">
-          <h3 className="text-[13px] font-semibold">{t.projectContainers.overview.gitTitle}</h3>
+        <Section title={t.projectContainers.overview.gitTitle}>
           <KeyValue
             items={[
               [
@@ -536,7 +534,7 @@ function Overview({ project, container, services }: { project: Project; containe
               ],
             ]}
           />
-        </div>
+        </Section>
       )}
       <Section title={t.projectContainers.monitoring} description={t.projectContainers.overview.metricsDescription} actions={picker}>
         <ContainerMetrics projectId={project.id} nodeIds={project.containers.map((c) => c.nodeId)} container={container.name} range={range} />
@@ -800,7 +798,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
       </div>
       {output}
       <div>
-        <Table>
+        <Table compact>
           <thead>
             <tr>
               <Th>{t.projectContainers.columns.version}</Th>

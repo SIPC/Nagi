@@ -7,6 +7,7 @@ export default {
     "7d": "7 天",
     "30d": "30 天",
   },
+  resourceUsage: "资源占用",
   memory: "内存",
   disk: "磁盘",
   netRx: "下行",

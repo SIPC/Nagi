@@ -13,6 +13,11 @@ import {
   Alert,
   Badge,
   Button,
+  CardBody,
+  cardClass,
+  CardFooter,
+  CardGrid,
+  CardHeader,
   Check,
   Empty,
   Field,
@@ -66,15 +71,17 @@ function Reminders() {
     });
   }
   if (items.length === 0) return null;
-  // 一项一行的待办提醒，不用大块的提示框。
+  // 一项一行的待办提醒，不用大块的提示框。标题和说明上下两行，窄屏上说明不会被挤成窄窄的一列。
   return (
     <div className="divide-y rounded-lg border">
       {items.map((it) => (
-        <div key={it.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[13px]">
-          <span className="size-1.5 shrink-0 rounded-full bg-warning" />
-          <span className="font-medium">{it.title}</span>
-          <span className="min-w-0 flex-1 text-muted-foreground">{it.text}</span>
-          <Button size="xs" variant="ghost" onClick={() => hide(it.key, it.storage)}>
+        <div key={it.key} className="flex items-start gap-3 px-4 py-3 text-[13px]">
+          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning" />
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <span className="font-medium">{it.title}</span>
+            <span className="text-pretty break-words text-muted-foreground">{it.text}</span>
+          </div>
+          <Button size="xs" variant="ghost" className="-my-0.5 -mr-2" onClick={() => hide(it.key, it.storage)}>
             {t.projects.reminders.dismiss}
           </Button>
         </div>
@@ -83,6 +90,9 @@ function Reminders() {
   );
 }
 
+
+// 卡片里最多列几个容器（超过时最后一行显示“还有 N 个”）。
+const cardContainers = 5;
 
 const dot = {
   success: "bg-success",
@@ -124,34 +134,31 @@ export function ProjectsPage() {
             {t.projects.empty.text}
           </Empty>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+          <CardGrid>
             {projects.data.projects.map((summary) => {
               const p = summary.project;
               if (!p) return null;
               const services = summary.status?.services ?? [];
               const deployed = p.containers.some((m) => m.deployedVersion > 0n);
+              // 容器多时只列前几个，免得同一行的卡片高低悬殊。
+              const shown = p.containers.length > cardContainers ? p.containers.slice(0, cardContainers - 1) : p.containers;
               return (
-                <Link
-                  key={p.id}
-                  to="/projects/$projectId"
-                  params={{ projectId: p.id }}
-                  className="group flex flex-col rounded-lg border bg-card transition-colors hover:border-foreground/25"
-                >
-                  <div className="flex items-start justify-between gap-2 px-3.5 pt-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium group-hover:underline">{p.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2">
-                        <span className="truncate font-mono text-xs text-muted-foreground">{p.networkName}</span>
+                <Link key={p.id} to="/projects/$projectId" params={{ projectId: p.id }} className={cardClass}>
+                  <CardHeader
+                    title={<span className="truncate">{p.name}</span>}
+                    subtitle={
+                      <>
+                        <span className="truncate font-mono">{p.networkName}</span>
                         {p.stateful && <Badge>{t.projects.card.stateful}</Badge>}
-                      </div>
-                    </div>
-                    <ProjectState services={services} deployed={deployed} />
-                  </div>
-                  <div className="grid flex-1 content-start gap-1 px-3.5 py-2.5">
+                      </>
+                    }
+                    aside={<ProjectState services={services} deployed={deployed} />}
+                  />
+                  <CardBody className="gap-1.5">
                     {p.containers.length === 0 ? (
                       <span className="text-[13px] text-muted-foreground">{t.projects.card.noContainers}</span>
                     ) : (
-                      p.containers.map((c) => {
+                      shown.map((c) => {
                         const st = offline(c.nodeId)
                           ? { tone: "warning" as const, label: t.projects.card.nodeOffline }
                           : stateOf(
@@ -169,8 +176,11 @@ export function ProjectsPage() {
                         );
                       })
                     )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-t px-3.5 py-2 text-xs text-muted-foreground">
+                    {shown.length < p.containers.length && (
+                      <span className="pl-4 text-xs text-muted-foreground">{t.projects.card.moreContainers(p.containers.length - shown.length)}</span>
+                    )}
+                  </CardBody>
+                  <CardFooter>
                     <span>
                       {t.projects.card.containers(p.containers.length)}
                       {p.routes.length > 0 && ` · ${t.projects.card.portMappings(p.routes.length)}`}
@@ -180,11 +190,11 @@ export function ProjectsPage() {
                                               ? t.projects.card.rebuiltAt(formatDate(toDate(p.rebuiltAt)) ?? "—")
                                               : t.projects.card.createdAt(formatDate(toDate(p.createdAt)) ?? "—")}
                     </span>
-                  </div>
+                  </CardFooter>
                 </Link>
               );
             })}
-          </div>
+          </CardGrid>
         )}
       </div>
     </>

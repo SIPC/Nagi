@@ -4,7 +4,7 @@ import { Cpu, HardDrive, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { Alert, EmptyRow, Loading, Segmented } from "@/components/ui";
+import { Alert, EmptyRow, Loading, Section, Segmented, Tile, TileGrid } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
@@ -67,9 +67,9 @@ function Metric({
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   return (
-    <div className="grid gap-1 rounded-md bg-subtle px-3 py-2.5">
+    <Tile>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-mono text-sm font-medium">{points.length ? format(points[points.length - 1][1]) : "—"}</div>
+      <div className="font-mono text-sm font-medium tabular-nums">{points.length ? format(points[points.length - 1][1]) : "—"}</div>
       <TimeChart
         series={[{ label, points, className: "text-info" }]}
         from={now - r.seconds}
@@ -80,20 +80,19 @@ function Metric({
         axis={false}
         minMax={minMax}
       />
-    </div>
+    </Tile>
   );
 }
 
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 
-// NodeMetrics：节点页的监控，右上角选时间范围。
+// NodeMetrics：节点页的监控，时间范围在区块标题右侧。
 export function NodeMetrics({ nodeId }: { nodeId: string }) {
   const { range, picker } = useRange();
   return (
-    <div className="grid gap-3">
-      <div className="flex justify-end">{picker}</div>
+    <Section title={m.resourceUsage} actions={picker}>
       <NodeMetricCards nodeId={nodeId} range={range} />
-    </div>
+    </Section>
   );
 }
 
@@ -112,13 +111,13 @@ function NodeMetricCards({ nodeId, range }: { nodeId: string; range: MetricRange
     <Metric key={name} label={label} points={toPoints(series.get(name))} format={format} range={range} minMax={minMax} />
   );
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <TileGrid>
       {metric("CPU", "node:cpu", fmtCpu, cpuMinMax)}
       {metric(m.memory, "node:mem", fmtCpu)}
       {metric(m.disk, "node:disk", fmtCpu)}
       {metric(m.netRx, "node:net_rx", fmtRate)}
       {metric(m.netTx, "node:net_tx", fmtRate)}
-    </div>
+    </TileGrid>
   );
 }
 
@@ -299,7 +298,7 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
   return (
     <span
       className={cn(
-        "grid grid-cols-[auto_1fr_auto] items-center gap-x-1.5 gap-y-1.5 font-mono text-[11px] leading-4 tabular-nums text-muted-foreground",
+        "grid grid-cols-[auto_1fr_auto] items-center gap-x-1.5 gap-y-2 font-mono text-xs leading-4 tabular-nums text-muted-foreground",
         className,
       )}
     >
@@ -333,7 +332,7 @@ function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]
       {groups.map(([name, series]) => (
         <div key={name} className="grid gap-2">
           {name && <div className="font-mono text-xs text-muted-foreground">{name}</div>}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <TileGrid>
             {[...series.entries()].map(([metric, points]) => (
               <Metric
                 key={metric}
@@ -344,7 +343,7 @@ function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]
                 minMax={metric === "cpu" ? cpuMinMax : undefined}
               />
             ))}
-          </div>
+          </TileGrid>
         </div>
       ))}
     </div>
@@ -372,7 +371,7 @@ export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[
   const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
   if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       {total.size > 0 && <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />}
       {[...routes.entries()].map(([name, data]) => (
         <RouteMetrics key={name} name={name} data={data} range={range} />
@@ -440,13 +439,13 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
     defs.filter((d) => data.has(d.metric)).map((d) => ({ label: d.label, className: d.className, points: conv(d.metric) }));
   const chart = (title: string, series: ChartSeries[], format: (v: number) => string, stacked = false) =>
     series.length > 0 && (
-      <div className="grid min-w-0 gap-2 rounded-md bg-subtle px-3 py-2.5">
+      <Tile className="gap-2">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-xs text-muted-foreground">{title}</span>
           {series.length > 1 && <Legend series={series} />}
         </div>
         <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} stacked={stacked} height={88} />
-      </div>
+      </Tile>
     );
 
   return (
@@ -460,7 +459,7 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
           </div>
         ))}
       </dl>
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3">
         {chart(
           hasClasses ? m.requestCountByStatus : m.requestCount,
           hasClasses ? pick(statusSeries, counts) : [{ label: m.requests, className: "text-info", points: counts("req") }],

@@ -25,6 +25,7 @@ export default {
     failover: "顶替",
     containers: (n: number) => `${n} 个容器`,
     portMappings: (n: number) => `${n} 个端口映射`,
+    moreContainers: (n: number) => `还有 ${n} 个`,
     rebuiltAt: (date: string) => `重建于 ${date}`,
     createdAt: (date: string) => `创建于 ${date}`,
   },
