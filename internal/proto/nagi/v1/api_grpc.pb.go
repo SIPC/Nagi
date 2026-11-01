@@ -2108,6 +2108,8 @@ const (
 	ProjectService_StreamLogs_FullMethodName            = "/nagi.v1.ProjectService/StreamLogs"
 	ProjectService_SaveRoute_FullMethodName             = "/nagi.v1.ProjectService/SaveRoute"
 	ProjectService_DeleteRoute_FullMethodName           = "/nagi.v1.ProjectService/DeleteRoute"
+	ProjectService_CheckDomains_FullMethodName          = "/nagi.v1.ProjectService/CheckDomains"
+	ProjectService_RetryDomainCert_FullMethodName       = "/nagi.v1.ProjectService/RetryDomainCert"
 	ProjectService_SetBackupNode_FullMethodName         = "/nagi.v1.ProjectService/SetBackupNode"
 	ProjectService_SyncBackup_FullMethodName            = "/nagi.v1.ProjectService/SyncBackup"
 	ProjectService_ListBackupSnapshots_FullMethodName   = "/nagi.v1.ProjectService/ListBackupSnapshots"
@@ -2164,6 +2166,10 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(ctx context.Context, in *SaveRouteRequest, opts ...grpc.CallOption) (*Project, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*Project, error)
+	// 检查映射绑定的域名：是否解析到入口节点、证书状态。映射可以还没保存（编辑时用）。
+	CheckDomains(ctx context.Context, in *CheckDomainsRequest, opts ...grpc.CallOption) (*CheckDomainsResponse, error)
+	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
+	RetryDomainCert(ctx context.Context, in *RetryDomainCertRequest, opts ...grpc.CallOption) (*RetryDomainCertResponse, error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error)
@@ -2430,6 +2436,26 @@ func (c *projectServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_DeleteRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) CheckDomains(ctx context.Context, in *CheckDomainsRequest, opts ...grpc.CallOption) (*CheckDomainsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckDomainsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_CheckDomains_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RetryDomainCert(ctx context.Context, in *RetryDomainCertRequest, opts ...grpc.CallOption) (*RetryDomainCertResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryDomainCertResponse)
+	err := c.cc.Invoke(ctx, ProjectService_RetryDomainCert_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2715,6 +2741,10 @@ type ProjectServiceServer interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *SaveRouteRequest) (*Project, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error)
+	// 检查映射绑定的域名：是否解析到入口节点、证书状态。映射可以还没保存（编辑时用）。
+	CheckDomains(context.Context, *CheckDomainsRequest) (*CheckDomainsResponse, error)
+	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
+	RetryDomainCert(context.Context, *RetryDomainCertRequest) (*RetryDomainCertResponse, error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error)
@@ -2817,6 +2847,12 @@ func (UnimplementedProjectServiceServer) SaveRoute(context.Context, *SaveRouteRe
 }
 func (UnimplementedProjectServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
+}
+func (UnimplementedProjectServiceServer) CheckDomains(context.Context, *CheckDomainsRequest) (*CheckDomainsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckDomains not implemented")
+}
+func (UnimplementedProjectServiceServer) RetryDomainCert(context.Context, *RetryDomainCertRequest) (*RetryDomainCertResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryDomainCert not implemented")
 }
 func (UnimplementedProjectServiceServer) SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetBackupNode not implemented")
@@ -3213,6 +3249,42 @@ func _ProjectService_DeleteRoute_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_CheckDomains_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckDomainsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).CheckDomains(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_CheckDomains_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).CheckDomains(ctx, req.(*CheckDomainsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RetryDomainCert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryDomainCertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).RetryDomainCert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_RetryDomainCert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).RetryDomainCert(ctx, req.(*RetryDomainCertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_SetBackupNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetBackupNodeRequest)
 	if err := dec(in); err != nil {
@@ -3604,6 +3676,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRoute",
 			Handler:    _ProjectService_DeleteRoute_Handler,
+		},
+		{
+			MethodName: "CheckDomains",
+			Handler:    _ProjectService_CheckDomains_Handler,
+		},
+		{
+			MethodName: "RetryDomainCert",
+			Handler:    _ProjectService_RetryDomainCert_Handler,
 		},
 		{
 			MethodName: "SetBackupNode",

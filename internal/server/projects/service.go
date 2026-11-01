@@ -299,7 +299,7 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 		return nil, err
 	}
 	for _, r := range routes {
-		proj.Routes = append(proj.Routes, routeProto(r))
+		proj.Routes = append(proj.Routes, RouteProto(r))
 	}
 	if proj.Links, err = s.linkedProjects(ctx, p.ID); err != nil {
 		return nil, err

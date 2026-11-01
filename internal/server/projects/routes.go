@@ -78,7 +78,7 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 	if err := s.push(ctx, projectID, c.Name); err != nil {
 		// 节点检查端口失败（被其他程序占用）时撤销。
 		if old != nil {
-			_ = s.upsertRoute(ctx, projectID, routeProto(*old))
+			_ = s.upsertRoute(ctx, projectID, RouteProto(*old))
 		} else {
 			_ = s.Q.DeleteRoute(ctx, store.DeleteRouteParams{ProjectID: projectID, Name: r.GetName()})
 		}
@@ -110,7 +110,7 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 func (s *Service) checkEntries(ctx context.Context, c store.Container, old *store.Route, r *nagiv1.Exposure) error {
 	var before *nagiv1.Exposure
 	if old != nil {
-		before = routeProto(*old)
+		before = RouteProto(*old)
 	}
 	samePorts := before != nil && slices.Equal(spec.ListenPorts(before), spec.ListenPorts(r))
 	// 容器所在节点上的域名：80 和 443 被其他程序占着时，那里的 Caddy 整个起不来。旧版本和没有 Caddy 的节点不查；不在线的等下发配置时报错。
@@ -167,7 +167,7 @@ func (s *Service) ForgetEntryNode(ctx context.Context, nodeID string) {
 		return
 	}
 	for _, row := range all {
-		r := routeProto(row)
+		r := RouteProto(row)
 		if !slices.Contains(r.GetEntryNodes(), nodeID) {
 			continue
 		}
@@ -275,7 +275,7 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 			}
 			names[other.ProjectID] = name
 		}
-		o := routeProto(other)
+		o := RouteProto(other)
 		for _, d := range o.GetDomains() {
 			for _, mine := range r.GetDomains() {
 				if d == mine {

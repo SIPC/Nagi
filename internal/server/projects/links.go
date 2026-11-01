@@ -245,7 +245,7 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 		containers[c.ProjectID+"/"+c.Name] = c
 	}
 	for _, row := range routes {
-		r := routeProto(row)
+		r := RouteProto(row)
 		c, ok := containers[row.ProjectID+"/"+row.Container]
 		if !ok || r.GetError() != "" || len(r.GetEntryNodes()) == 0 {
 			continue

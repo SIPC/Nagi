@@ -223,6 +223,12 @@ const (
 	// ProjectServiceDeleteRouteProcedure is the fully-qualified name of the ProjectService's
 	// DeleteRoute RPC.
 	ProjectServiceDeleteRouteProcedure = "/nagi.v1.ProjectService/DeleteRoute"
+	// ProjectServiceCheckDomainsProcedure is the fully-qualified name of the ProjectService's
+	// CheckDomains RPC.
+	ProjectServiceCheckDomainsProcedure = "/nagi.v1.ProjectService/CheckDomains"
+	// ProjectServiceRetryDomainCertProcedure is the fully-qualified name of the ProjectService's
+	// RetryDomainCert RPC.
+	ProjectServiceRetryDomainCertProcedure = "/nagi.v1.ProjectService/RetryDomainCert"
 	// ProjectServiceSetBackupNodeProcedure is the fully-qualified name of the ProjectService's
 	// SetBackupNode RPC.
 	ProjectServiceSetBackupNodeProcedure = "/nagi.v1.ProjectService/SetBackupNode"
@@ -1755,6 +1761,10 @@ type ProjectServiceClient interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 检查映射绑定的域名：是否解析到入口节点、证书状态。映射可以还没保存（编辑时用）。
+	CheckDomains(context.Context, *connect.Request[v1.CheckDomainsRequest]) (*connect.Response[v1.CheckDomainsResponse], error)
+	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
+	RetryDomainCert(context.Context, *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
@@ -1918,6 +1928,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
 			connect.WithClientOptions(opts...),
 		),
+		checkDomains: connect.NewClient[v1.CheckDomainsRequest, v1.CheckDomainsResponse](
+			httpClient,
+			baseURL+ProjectServiceCheckDomainsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CheckDomains")),
+			connect.WithClientOptions(opts...),
+		),
+		retryDomainCert: connect.NewClient[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse](
+			httpClient,
+			baseURL+ProjectServiceRetryDomainCertProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RetryDomainCert")),
+			connect.WithClientOptions(opts...),
+		),
 		setBackupNode: connect.NewClient[v1.SetBackupNodeRequest, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceSetBackupNodeProcedure,
@@ -2062,6 +2084,8 @@ type projectServiceClient struct {
 	streamLogs            *connect.Client[v1.StreamLogsApiRequest, v1.LogLine]
 	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.Project]
 	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.Project]
+	checkDomains          *connect.Client[v1.CheckDomainsRequest, v1.CheckDomainsResponse]
+	retryDomainCert       *connect.Client[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse]
 	setBackupNode         *connect.Client[v1.SetBackupNodeRequest, v1.Project]
 	syncBackup            *connect.Client[v1.ContainerRef, v1.Project]
 	listBackupSnapshots   *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
@@ -2177,6 +2201,16 @@ func (c *projectServiceClient) SaveRoute(ctx context.Context, req *connect.Reque
 // DeleteRoute calls nagi.v1.ProjectService.DeleteRoute.
 func (c *projectServiceClient) DeleteRoute(ctx context.Context, req *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error) {
 	return c.deleteRoute.CallUnary(ctx, req)
+}
+
+// CheckDomains calls nagi.v1.ProjectService.CheckDomains.
+func (c *projectServiceClient) CheckDomains(ctx context.Context, req *connect.Request[v1.CheckDomainsRequest]) (*connect.Response[v1.CheckDomainsResponse], error) {
+	return c.checkDomains.CallUnary(ctx, req)
+}
+
+// RetryDomainCert calls nagi.v1.ProjectService.RetryDomainCert.
+func (c *projectServiceClient) RetryDomainCert(ctx context.Context, req *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error) {
+	return c.retryDomainCert.CallUnary(ctx, req)
 }
 
 // SetBackupNode calls nagi.v1.ProjectService.SetBackupNode.
@@ -2311,6 +2345,10 @@ type ProjectServiceHandler interface {
 	// 端口映射，立即生效。
 	SaveRoute(context.Context, *connect.Request[v1.SaveRouteRequest]) (*connect.Response[v1.Project], error)
 	DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error)
+	// 检查映射绑定的域名：是否解析到入口节点、证书状态。映射可以还没保存（编辑时用）。
+	CheckDomains(context.Context, *connect.Request[v1.CheckDomainsRequest]) (*connect.Response[v1.CheckDomainsResponse], error)
+	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
+	RetryDomainCert(context.Context, *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
@@ -2468,6 +2506,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceDeleteRouteProcedure,
 		svc.DeleteRoute,
 		connect.WithSchema(projectServiceMethods.ByName("DeleteRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCheckDomainsHandler := connect.NewUnaryHandler(
+		ProjectServiceCheckDomainsProcedure,
+		svc.CheckDomains,
+		connect.WithSchema(projectServiceMethods.ByName("CheckDomains")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRetryDomainCertHandler := connect.NewUnaryHandler(
+		ProjectServiceRetryDomainCertProcedure,
+		svc.RetryDomainCert,
+		connect.WithSchema(projectServiceMethods.ByName("RetryDomainCert")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSetBackupNodeHandler := connect.NewUnaryHandler(
@@ -2630,6 +2680,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSaveRouteHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteRouteProcedure:
 			projectServiceDeleteRouteHandler.ServeHTTP(w, r)
+		case ProjectServiceCheckDomainsProcedure:
+			projectServiceCheckDomainsHandler.ServeHTTP(w, r)
+		case ProjectServiceRetryDomainCertProcedure:
+			projectServiceRetryDomainCertHandler.ServeHTTP(w, r)
 		case ProjectServiceSetBackupNodeProcedure:
 			projectServiceSetBackupNodeHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncBackupProcedure:
@@ -2753,6 +2807,14 @@ func (UnimplementedProjectServiceHandler) SaveRoute(context.Context, *connect.Re
 
 func (UnimplementedProjectServiceHandler) DeleteRoute(context.Context, *connect.Request[v1.DeleteRouteRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteRoute is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CheckDomains(context.Context, *connect.Request[v1.CheckDomainsRequest]) (*connect.Response[v1.CheckDomainsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CheckDomains is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RetryDomainCert(context.Context, *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RetryDomainCert is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {

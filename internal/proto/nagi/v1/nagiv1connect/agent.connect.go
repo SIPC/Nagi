@@ -98,6 +98,8 @@ const (
 	AgentServiceSetLinksProcedure = "/nagi.v1.AgentService/SetLinks"
 	// AgentServiceCheckPortsProcedure is the fully-qualified name of the AgentService's CheckPorts RPC.
 	AgentServiceCheckPortsProcedure = "/nagi.v1.AgentService/CheckPorts"
+	// AgentServiceRetryCertsProcedure is the fully-qualified name of the AgentService's RetryCerts RPC.
+	AgentServiceRetryCertsProcedure = "/nagi.v1.AgentService/RetryCerts"
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
 	// SetAlertConfig RPC.
 	AgentServiceSetAlertConfigProcedure = "/nagi.v1.AgentService/SetAlertConfig"
@@ -178,6 +180,8 @@ type AgentServiceClient interface {
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
 	CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error)
+	// 让 Caddy 立刻重新申请还没拿到的证书，并清掉 domains 的失败记录。
+	RetryCerts(context.Context, *connect.Request[v1.RetryCertsRequest]) (*connect.Response[v1.RetryCertsResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -359,6 +363,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("CheckPorts")),
 			connect.WithClientOptions(opts...),
 		),
+		retryCerts: connect.NewClient[v1.RetryCertsRequest, v1.RetryCertsResponse](
+			httpClient,
+			baseURL+AgentServiceRetryCertsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RetryCerts")),
+			connect.WithClientOptions(opts...),
+		),
 		setAlertConfig: connect.NewClient[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse](
 			httpClient,
 			baseURL+AgentServiceSetAlertConfigProcedure,
@@ -460,6 +470,7 @@ type agentServiceClient struct {
 	getCache             *connect.Client[v1.GetCacheRequest, v1.NodeCache]
 	setLinks             *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
 	checkPorts           *connect.Client[v1.CheckPortsRequest, v1.CheckPortsResponse]
+	retryCerts           *connect.Client[v1.RetryCertsRequest, v1.RetryCertsResponse]
 	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
 	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	setProjectsRoot      *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
@@ -594,6 +605,11 @@ func (c *agentServiceClient) CheckPorts(ctx context.Context, req *connect.Reques
 	return c.checkPorts.CallUnary(ctx, req)
 }
 
+// RetryCerts calls nagi.v1.AgentService.RetryCerts.
+func (c *agentServiceClient) RetryCerts(ctx context.Context, req *connect.Request[v1.RetryCertsRequest]) (*connect.Response[v1.RetryCertsResponse], error) {
+	return c.retryCerts.CallUnary(ctx, req)
+}
+
 // SetAlertConfig calls nagi.v1.AgentService.SetAlertConfig.
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, req *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
 	return c.setAlertConfig.CallUnary(ctx, req)
@@ -702,6 +718,8 @@ type AgentServiceHandler interface {
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
 	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
 	CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error)
+	// 让 Caddy 立刻重新申请还没拿到的证书，并清掉 domains 的失败记录。
+	RetryCerts(context.Context, *connect.Request[v1.RetryCertsRequest]) (*connect.Response[v1.RetryCertsResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -879,6 +897,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("CheckPorts")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceRetryCertsHandler := connect.NewUnaryHandler(
+		AgentServiceRetryCertsProcedure,
+		svc.RetryCerts,
+		connect.WithSchema(agentServiceMethods.ByName("RetryCerts")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetAlertConfigHandler := connect.NewUnaryHandler(
 		AgentServiceSetAlertConfigProcedure,
 		svc.SetAlertConfig,
@@ -1001,6 +1025,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetLinksHandler.ServeHTTP(w, r)
 		case AgentServiceCheckPortsProcedure:
 			agentServiceCheckPortsHandler.ServeHTTP(w, r)
+		case AgentServiceRetryCertsProcedure:
+			agentServiceRetryCertsHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
 			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
 		case AgentServiceQueryMetricsProcedure:
@@ -1128,6 +1154,10 @@ func (UnimplementedAgentServiceHandler) SetLinks(context.Context, *connect.Reque
 
 func (UnimplementedAgentServiceHandler) CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckPorts is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RetryCerts(context.Context, *connect.Request[v1.RetryCertsRequest]) (*connect.Response[v1.RetryCertsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RetryCerts is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {

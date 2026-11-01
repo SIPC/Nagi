@@ -70,6 +70,8 @@ message ReportRequest {
   string primary_address = 8;
   // 节点信任的所有面板的公钥指纹。面板据此判断写节点缓存的另一个面板是不是还在管这个节点（见 docs/panel.md#项目数据）。
   repeated string panels = 9;
+  // 本节点开放的域名（只开 HTTP 的除外）的证书状态。
+  repeated DomainCert certs = 10;
 }
 
 message ReportResponse {

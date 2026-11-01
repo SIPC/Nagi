@@ -212,11 +212,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
-			if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !n.Info.GetEmbedded() {
-				n.Address = ip.String()
-			} else {
-				n.Address = s.Panel.PublicAddress(ctx)
-			}
+			n.Address = s.nodeAddress(ctx, conn)
 		} else if len(row.Info) > 0 {
 			info := &nagiv1.NodeInfo{}
 			if proto.Unmarshal(row.Info, info) == nil {
@@ -275,6 +271,14 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 		return nil, fromGRPC(err)
 	}
 	return connect.NewResponse(resp), nil
+}
+
+// nodeAddress 返回在线节点的地址：面板看到的来源 IP，面板自带的节点用面板的对外地址。
+func (a *API) nodeAddress(ctx context.Context, conn *nodes.Conn) string {
+	if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !conn.LastReport().GetNode().GetEmbedded() {
+		return ip.String()
+	}
+	return a.Panel.PublicAddress(ctx)
 }
 
 // RemoveNode 移除节点：标记为已移除（之后拒绝它连接），断开当前连接。节点上还有容器时拒绝。

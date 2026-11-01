@@ -60,6 +60,8 @@ service AgentService {
   rpc SetLinks(LinkPlan) returns (SetLinksResponse);
   // 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
   rpc CheckPorts(CheckPortsRequest) returns (CheckPortsResponse);
+  // 让 Caddy 立刻重新申请还没拿到的证书，并清掉 domains 的失败记录。
+  rpc RetryCerts(RetryCertsRequest) returns (RetryCertsResponse);
 
   // ---- 节点 ----
   // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
@@ -94,6 +96,12 @@ message CheckPortsRequest {
 }
 
 message CheckPortsResponse {}
+
+message RetryCertsRequest {
+  repeated string domains = 1;
+}
+
+message RetryCertsResponse {}
 
 message GetCacheRequest {}
 

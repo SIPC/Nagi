@@ -211,6 +211,8 @@ func Run(ctx context.Context, cfg Config) error {
 		a.startFailover(ctx, id)
 	}
 	proxy.OnCertEvent(func(domain string, err error) {
+		a.certFails.set(domain, err)
+		go a.changed()
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
 			go a.alerts.Resolve(ctx, "cert_failed:"+domain)
@@ -244,6 +246,7 @@ type agent struct {
 
 	proxy     *proxy.Proxy
 	proxyKick chan struct{}
+	certFails certFailures
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
 	mesh      *meshNode
@@ -427,6 +430,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 
 		CrossNodeEntry: true,
 		ProxyDisabled:  a.cfg.DisableProxy,
+		ReportsCerts:   true,
 	}
 	info.MemoryBytes, info.DiskBytes = metrics.Capacity(a.cfg.DataDir)
 	if v, err := a.docker.Version(ctx); err == nil {
@@ -578,7 +582,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 		primaryAddr = pp.Address
 	}
 	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
-		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels())})
+		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels()), Certs: a.certStatuses(ctx)})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

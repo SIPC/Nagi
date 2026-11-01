@@ -395,6 +395,19 @@ message NodeInfo {
   bool cross_node_entry = 12;
   // 节点没有启动 Caddy（--no-proxy），不能作为入口节点。
   bool proxy_disabled = 13;
+  // 节点上报域名的证书状态（旧版本的节点不报，这时状态未知）。
+  bool reports_certs = 14;
+}
+
+// DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
+message DomainCert {
+  string domain = 1;
+  // obtained（已签发）、pending（申请中）或 failed（最近一次申请失败，Caddy 会自动重试）。
+  string state = 2;
+  // 最近一次申请失败的原因。已有证书、续期失败时也有。
+  string error = 3;
+  // 证书到期时间。Caddy 本地 CA 签的内部域名没有。
+  google.protobuf.Timestamp not_after = 4;
 }
 
 message LogLine {

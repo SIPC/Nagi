@@ -169,6 +169,8 @@ var en = map[string]string{
 	"开放方式只能是 http、tcp 或 udp":           "Protocol must be http, tcp, or udp",
 	"容器 %s 需要填写节点上对外的端口":               "Container %s needs a published port on the node",
 	"端口 80 和 443 留给域名访问，请换一个端口，或者绑定域名": "Ports 80 and 443 are reserved for domain access. Use another port or bind a domain",
+	"映射不存在":                            "Mapping not found",
+	"这个节点上的这个域名不需要申请证书":                "This domain doesn't need a certificate on this node",
 	"至少要留一个入口节点":                       "Keep at least one entry node",
 	"节点 %s 的版本不支持跨节点入口，请先升级":           "Node %s doesn't support cross-node entries. Upgrade it first",
 	"节点 %s 没有启动 Caddy，不能作为入口节点":        "Node %s isn't running Caddy, so it can't be an entry node",

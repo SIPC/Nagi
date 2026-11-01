@@ -43,6 +43,7 @@ const (
 	AgentService_GetCache_FullMethodName             = "/nagi.v1.AgentService/GetCache"
 	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
 	AgentService_CheckPorts_FullMethodName           = "/nagi.v1.AgentService/CheckPorts"
+	AgentService_RetryCerts_FullMethodName           = "/nagi.v1.AgentService/RetryCerts"
 	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
 	AgentService_SetProjectsRoot_FullMethodName      = "/nagi.v1.AgentService/SetProjectsRoot"
@@ -110,6 +111,8 @@ type AgentServiceClient interface {
 	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
 	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
 	CheckPorts(ctx context.Context, in *CheckPortsRequest, opts ...grpc.CallOption) (*CheckPortsResponse, error)
+	// 让 Caddy 立刻重新申请还没拿到的证书，并清掉 domains 的失败记录。
+	RetryCerts(ctx context.Context, in *RetryCertsRequest, opts ...grpc.CallOption) (*RetryCertsResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
@@ -450,6 +453,16 @@ func (c *agentServiceClient) CheckPorts(ctx context.Context, in *CheckPortsReque
 	return out, nil
 }
 
+func (c *agentServiceClient) RetryCerts(ctx context.Context, in *RetryCertsRequest, opts ...grpc.CallOption) (*RetryCertsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryCertsResponse)
+	err := c.cc.Invoke(ctx, AgentService_RetryCerts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAlertConfigResponse)
@@ -623,6 +636,8 @@ type AgentServiceServer interface {
 	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
 	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
 	CheckPorts(context.Context, *CheckPortsRequest) (*CheckPortsResponse, error)
+	// 让 Caddy 立刻重新申请还没拿到的证书，并清掉 domains 的失败记录。
+	RetryCerts(context.Context, *RetryCertsRequest) (*RetryCertsResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
@@ -728,6 +743,9 @@ func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*Se
 }
 func (UnimplementedAgentServiceServer) CheckPorts(context.Context, *CheckPortsRequest) (*CheckPortsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckPorts not implemented")
+}
+func (UnimplementedAgentServiceServer) RetryCerts(context.Context, *RetryCertsRequest) (*RetryCertsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryCerts not implemented")
 }
 func (UnimplementedAgentServiceServer) SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAlertConfig not implemented")
@@ -1158,6 +1176,24 @@ func _AgentService_CheckPorts_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_RetryCerts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryCertsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RetryCerts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_RetryCerts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RetryCerts(ctx, req.(*RetryCertsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetAlertConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetAlertConfigRequest)
 	if err := dec(in); err != nil {
@@ -1444,6 +1480,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckPorts",
 			Handler:    _AgentService_CheckPorts_Handler,
+		},
+		{
+			MethodName: "RetryCerts",
+			Handler:    _AgentService_RetryCerts_Handler,
 		},
 		{
 			MethodName: "SetAlertConfig",

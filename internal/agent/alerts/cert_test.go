@@ -33,7 +33,7 @@ func TestCertExpiries(t *testing.T) {
 	write("acme-v02.api.letsencrypt.org-directory", "old.com")
 	write("local", "web.localhost")
 	e := &Engine{certDir: dir, Domains: func() map[string]bool { return map[string]bool{"a.com": true, "web.localhost": true} }}
-	got := e.certExpiries()
+	got := e.CertExpiries()
 	if len(got) != 1 || got["a.com"].IsZero() {
 		t.Fatalf("got %v", got)
 	}

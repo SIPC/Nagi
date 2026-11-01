@@ -57,6 +57,9 @@ func NormalizeDomains(list []string) []string {
 	return out
 }
 
+// ValidDomain 检查域名的格式（要先转成小写）。
+func ValidDomain(d string) bool { return domainRe.MatchString(d) }
+
 // normalizeEntryNodes 去掉空的和重复的入口节点，按 ID 排序（生成的代理计划才稳定）。
 func normalizeEntryNodes(list []string) []string {
 	var out []string

@@ -83,7 +83,7 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 	}
 	for _, r := range routes {
 		if r.Container == c.Name {
-			sp.Routes = append(sp.Routes, routeProto(r))
+			sp.Routes = append(sp.Routes, RouteProto(r))
 		}
 	}
 	sp.Stateful = s.stateful(ctx, sp.GetConfig(), c, sp.GetSharedEnv())
@@ -267,7 +267,8 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 
 // ---- 转换 ----
 
-func routeProto(r store.Route) *nagiv1.Exposure {
+// RouteProto 把数据库里的映射转成 proto。
+func RouteProto(r store.Route) *nagiv1.Exposure {
 	e := &nagiv1.Exposure{
 		Name: r.Name, Container: r.Container, Service: r.Service, Target: uint32(r.Target), Protocol: r.Protocol,
 		Published: uint32(r.Published), HttpOnly: r.HttpOnly != 0, NoLocalEntry: r.NoLocalEntry != 0,

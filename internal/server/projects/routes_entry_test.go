@@ -89,7 +89,7 @@ func TestRouteProtoEntries(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows %v err %v", rows, err)
 	}
-	got := routeProto(rows[0])
+	got := RouteProto(rows[0])
 	if !got.GetNoLocalEntry() || strings.Join(got.GetEntryNodes(), ",") != "n3" || got.GetError() != "" {
 		t.Fatalf("读回来不对: %+v", got)
 	}
@@ -98,7 +98,7 @@ func TestRouteProtoEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _ = s.Q.ListRoutes(ctx, project)
-	if routeProto(rows[0]).GetError() == "" {
+	if RouteProto(rows[0]).GetError() == "" {
 		t.Fatal("没有入口的映射应该标为无效")
 	}
 }

@@ -537,7 +537,7 @@ func (s *Service) RelatedNodes(ctx context.Context, projectID string) (map[strin
 		return nil, err
 	}
 	for _, r := range routes {
-		for _, n := range routeProto(r).GetEntryNodes() {
+		for _, n := range RouteProto(r).GetEntryNodes() {
 			out[n] = true
 		}
 	}

@@ -75,7 +75,7 @@ func New(storage string, log *slog.Logger) *Proxy {
 
 // Apply 按给定的规则重新加载 Caddy。配置没变时什么都不做。
 func (p *Proxy) Apply(routes []Route) error {
-	cfg, err := json.Marshal(build(routes, p.storage, p.hasCert))
+	cfg, err := json.Marshal(build(routes, p.storage, p.HasCert))
 	if err != nil {
 		return err
 	}
@@ -90,6 +90,20 @@ func (p *Proxy) Apply(routes []Route) error {
 	p.last = cfg
 	p.ports = domainPorts(routes)
 	p.log.Info("已更新对外访问规则", "routes", len(routes))
+	return nil
+}
+
+// Reload 强制重新加载当前配置：旧配置的申请任务随之取消，还没拿到证书的域名立刻重新申请，退避从头算。
+// 已有证书的域名不受影响，连接和配置变化时的重载一样平滑。
+func (p *Proxy) Reload() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.last == nil {
+		return nil
+	}
+	if err := caddy.Load(p.last, true); err != nil {
+		return fmt.Errorf("加载 Caddy 配置: %w", err)
+	}
 	return nil
 }
 
@@ -129,8 +143,8 @@ func domainPorts(routes []Route) []spec.PortKey {
 
 type obj = map[string]any
 
-// hasCert 判断某个域名是否已经拿到证书（Caddy 把证书存在 certificates/<签发机构>/<域名>/ 下）。
-func (p *Proxy) hasCert(domain string) bool {
+// HasCert 判断某个域名是否已经拿到证书（Caddy 把证书存在 certificates/<签发机构>/<域名>/ 下）。
+func (p *Proxy) HasCert(domain string) bool {
 	matches, _ := filepath.Glob(filepath.Join(p.storage, "certificates", "*", domain, domain+".crt"))
 	return len(matches) > 0
 }

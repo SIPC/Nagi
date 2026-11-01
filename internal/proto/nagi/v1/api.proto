@@ -448,6 +448,10 @@ service ProjectService {
   // 端口映射，立即生效。
   rpc SaveRoute(SaveRouteRequest) returns (Project);
   rpc DeleteRoute(DeleteRouteRequest) returns (Project);
+  // 检查映射绑定的域名：是否解析到入口节点、证书状态。映射可以还没保存（编辑时用）。
+  rpc CheckDomains(CheckDomainsRequest) returns (CheckDomainsResponse);
+  // 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
+  rpc RetryDomainCert(RetryDomainCertRequest) returns (RetryDomainCertResponse);
 
   // 备份节点、迁移（按容器，见 docs/failover.md）。
   // 设置或取消备份节点（node_id 为空表示取消）。
@@ -758,6 +762,49 @@ message SaveRouteRequest {
 message DeleteRouteRequest {
   string project_id = 1;
   string name = 2;
+}
+
+message RetryDomainCertRequest {
+  string project_id = 1;
+  string route = 2;
+  string domain = 3;
+  string node_id = 4;
+}
+
+message RetryDomainCertResponse {}
+
+message CheckDomainsRequest {
+  string project_id = 1;
+  repeated Exposure routes = 2;
+}
+
+message CheckDomainsResponse {
+  repeated DomainCheck domains = 1;
+}
+
+// DomainCheck 是映射上一个域名的检查结果。
+message DomainCheck {
+  // 映射名，还没保存的映射为空。
+  string route = 1;
+  string domain = 2;
+  // 域名解析到的地址（面板上查的）。
+  repeated string addresses = 3;
+  repeated DomainEntryCheck entries = 4;
+}
+
+// DomainEntryCheck 是域名在一个入口节点上的情况。
+message DomainEntryCheck {
+  string node_id = 1;
+  string node_name = 2;
+  // 节点地址，不知道时为空。
+  string address = 3;
+  // ok（解析到了这台节点）、mismatch（解析到了别的地址，例如前面有 CDN）、unresolved（解析不到）、
+  // unknown（节点离线或者是内网地址，没法比对）。
+  string dns = 4;
+  // obtained、pending、failed，或者 not_needed（只开 HTTP）、unknown（节点离线、版本较旧或没有 Caddy）。
+  string cert = 5;
+  string cert_error = 6;
+  google.protobuf.Timestamp cert_not_after = 7;
 }
 
 message GetBackupKeyResponse {

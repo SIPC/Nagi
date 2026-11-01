@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
-import type { Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
+import type { Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 
 // 「网络」标签页：端口映射与域名、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
@@ -61,8 +65,32 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
   const crossNode = (r: (typeof project.routes)[number]) => r.noLocalEntry || r.entryNodes.length > 0;
   const toggleEntry = (id: string, on: boolean) =>
     setForm({ ...form, entryNodes: on ? [...form.entryNodes, id] : form.entryNodes.filter((n) => n !== id) });
-  const hasDomains = form.domains.split(/[\s,]+/).some(Boolean);
+  // 只有 http 能绑域名；绑了域名经 80/443 访问，不用节点端口。
+  const isHTTP = form.protocol === "http";
+  const domainList = isHTTP ? form.domains.split(/[\s,]+/).filter(Boolean) : [];
+  const hasDomains = domainList.length > 0;
   const multipleEntries = (form.localEntry ? 1 : 0) + form.entryNodes.length > 1;
+  const draftRoute = {
+    name: form.name,
+    container,
+    service: form.service || containerServices[0] || "",
+    target: Number(form.target),
+    protocol: form.protocol,
+    published: hasDomains ? 0 : Number(form.published || 0),
+    domains: domainList,
+    httpOnly: hasDomains && form.httpOnly,
+    entryNodes: form.entryNodes,
+    noLocalEntry: !form.localEntry,
+  };
+  // 已保存的映射定时检查域名的解析和证书；编辑时停下来再查，只用解析结果。
+  const savedDomains = useDomainChecks(project.id, project.routes.filter((r) => r.domains.length > 0), 15_000);
+  const draftKey = JSON.stringify([domainList, container, form.entryNodes, form.localEntry]);
+  const [settledKey, setSettledKey] = useState(draftKey);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledKey(draftKey), 600);
+    return () => clearTimeout(timer);
+  }, [draftKey]);
+  const draftDomains = useDomainChecks(project.id, open && hasDomains && settledKey === draftKey ? [draftRoute] : []);
 
   const save = async () => {
     setError("");
@@ -70,18 +98,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
     try {
       await projectClient.saveRoute({
         projectId: project.id,
-        route: {
-          name: form.name,
-          container,
-          service: form.service || containerServices[0] || "",
-          target: Number(form.target),
-          protocol: form.protocol,
-          published: Number(form.published || 0),
-          domains: form.domains.split(/[\s,]+/).filter(Boolean),
-          httpOnly: form.httpOnly,
-          entryNodes: form.entryNodes,
-          noLocalEntry: !form.localEntry,
-        },
+        route: draftRoute,
       });
       setForm(empty);
       setOpen(false);
@@ -170,6 +187,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                             {t.projectNetwork.routes.entriesLabel(entriesOf(r).map(nodeName).join(", "))}
                           </div>
                         )}
+                        <DomainChecks projectId={project.id} checks={savedDomains.filter((c) => c.route === r.name)} />
                       </Td>
                       <Td className="font-mono text-xs">
                         {domainURL ? (
@@ -268,31 +286,37 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                 <option value="udp">UDP</option>
               </Select>
             </Field>
-            <Field label={t.projectNetwork.routes.nodePort} htmlFor="route-published" help={t.projectNetwork.routes.nodePortHelp}>
-              <Input
-                id="route-published"
-                inputMode="numeric"
-                className="font-mono"
-                placeholder="8080"
-                value={form.published}
-                onChange={(e) => setForm({ ...form, published: e.target.value })}
-              />
-            </Field>
-            <Field
-              label={t.projectNetwork.routes.domains}
-              htmlFor="route-domains"
-              className={isGroup ? "" : "lg:col-span-2"}
-              help={t.projectNetwork.routes.domainsHelp}
-            >
-              <Input
-                id="route-domains"
-                className="font-mono"
-                placeholder="app.example.com"
-                value={form.domains}
-                onChange={(e) => setForm({ ...form, domains: e.target.value })}
-              />
-            </Field>
+            {isHTTP && (
+              <Field
+                label={t.projectNetwork.routes.domains}
+                htmlFor="route-domains"
+                className={isGroup ? "" : "lg:col-span-2"}
+                help={t.projectNetwork.routes.domainsHelp}
+              >
+                <Input
+                  id="route-domains"
+                  className="font-mono"
+                  placeholder="app.example.com"
+                  value={form.domains}
+                  onChange={(e) => setForm({ ...form, domains: e.target.value })}
+                />
+              </Field>
+            )}
+            {!hasDomains && (
+              <Field label={t.projectNetwork.routes.nodePort} htmlFor="route-published" help={t.projectNetwork.routes.nodePortHelp}>
+                <Input
+                  id="route-published"
+                  required
+                  inputMode="numeric"
+                  className="font-mono"
+                  placeholder="8080"
+                  value={form.published}
+                  onChange={(e) => setForm({ ...form, published: e.target.value })}
+                />
+              </Field>
+            )}
           </div>
+          {hasDomains && <DomainChecks projectId={project.id} checks={draftDomains} dnsOnly />}
           <Field label={t.projectNetwork.routes.entryNodes} help={t.projectNetwork.routes.entryNodesHelp}>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               <Check checked={form.localEntry} onChange={(v) => setForm({ ...form, localEntry: v })}>
@@ -313,9 +337,13 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
           </Field>
           {error && <Alert>{error}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })}>
-              <span className="text-[13px]">{t.projectNetwork.routes.httpOnly}</span>
-            </Check>
+            {hasDomains ? (
+              <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })}>
+                <span className="text-[13px]">{t.projectNetwork.routes.httpOnly}</span>
+              </Check>
+            ) : (
+              <span />
+            )}
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 {t.common.actions.cancel}
@@ -329,6 +357,86 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
         </form>
       )}
     </Section>
+  );
+}
+
+// useDomainChecks 检查映射绑定的域名：是否解析到入口节点、证书状态。没有要查的映射时返回空。
+function useDomainChecks(projectId: string, routes: Exposure[] | MessageInitShape<typeof ExposureSchema>[], refetchInterval?: number) {
+  const key = routes.map((r) => [r.name, r.container, r.domains, r.entryNodes, r.noLocalEntry, r.httpOnly]);
+  const q = useQuery({
+    queryKey: ["domain-checks", projectId, key],
+    queryFn: () => projectClient.checkDomains({ projectId, routes }),
+    enabled: routes.length > 0,
+    refetchInterval,
+    placeholderData: (prev) => prev,
+  });
+  return routes.length > 0 ? (q.data?.domains ?? []) : [];
+}
+
+const dnsTone: Record<string, string> = { ok: "text-success", mismatch: "text-warning", unresolved: "text-destructive" };
+const certTone: Record<string, string> = { obtained: "text-success", failed: "text-destructive" };
+
+// DomainChecks 列出每个域名在各入口节点上的解析和证书情况。dnsOnly：映射还没保存，证书无从谈起，只看解析。
+function DomainChecks({ projectId, checks, dnsOnly }: { projectId: string; checks: DomainCheck[]; dnsOnly?: boolean }) {
+  const queryClient = useQueryClient();
+  const m = t.projectNetwork.routes.check;
+  const multiple = checks.length > 1;
+  const [retrying, setRetrying] = useState("");
+  const [error, setError] = useState("");
+  const retry = async (c: DomainCheck, nodeId: string) => {
+    setRetrying(`${c.domain}/${nodeId}`);
+    setError("");
+    try {
+      await projectClient.retryDomainCert({ projectId, route: c.route, domain: c.domain, nodeId });
+      await queryClient.invalidateQueries({ queryKey: ["domain-checks", projectId] });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setRetrying("");
+    }
+  };
+  return (
+    <>
+      {error && <div className="mt-1 font-sans text-[12px] text-destructive">{error}</div>}
+      {checks.map((c) => (
+        <div key={c.domain} className="mt-1 grid gap-0.5 font-sans text-[12px] text-muted-foreground">
+          {multiple && <div className="font-mono">{c.domain}</div>}
+          {c.entries.map((e) => {
+            const expires = e.certNotAfter ? formatDate(timestampDate(e.certNotAfter)) : undefined;
+            const dns = e.dns === "mismatch" ? m.dnsMismatch(c.addresses.join(", ")) : e.dns === "ok" ? m.dnsOk : e.dns === "unresolved" ? m.dnsUnresolved : m.dnsUnknown;
+            const cert = e.cert === "obtained" ? m.certObtained(expires) : e.cert === "failed" ? m.certFailed : e.cert === "pending" ? m.certPending : e.cert === "not_needed" ? "" : m.certUnknown;
+            return (
+              <div key={e.nodeId}>
+                <span>{e.nodeName}: </span>
+                <span className={dnsTone[e.dns]}>{dns}</span>
+                {!dnsOnly && cert && (
+                  <>
+                    <span> · </span>
+                    <span className={certTone[e.cert]}>{cert}</span>
+                  </>
+                )}
+                {!dnsOnly && e.cert === "failed" && (
+                  <button
+                    type="button"
+                    className="ml-2 underline hover:text-foreground disabled:opacity-50"
+                    disabled={retrying === `${c.domain}/${e.nodeId}`}
+                    onClick={() => retry(c, e.nodeId)}
+                  >
+                    {retrying === `${c.domain}/${e.nodeId}` ? m.certRetrying : m.certRetry}
+                  </button>
+                )}
+                {!dnsOnly && e.certError && (
+                  <details className="mt-0.5">
+                    <summary className="cursor-pointer">{m.certErrorDetail}</summary>
+                    <div className="mt-0.5 break-words text-destructive">{e.certError}</div>
+                  </details>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </>
   );
 }
 

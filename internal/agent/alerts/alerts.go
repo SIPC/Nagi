@@ -298,7 +298,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 	}
 
 	// 证书快过期。
-	for domain, notAfter := range e.certExpiries() {
+	for domain, notAfter := range e.CertExpiries() {
 		if left := time.Until(notAfter); left < time.Duration(rules.CertDays)*24*time.Hour {
 			active["cert:"+domain] = &nagiv1.Alert{
 				Title: fmt.Sprintf("域名 %s 的证书将在 %d 天内过期", domain, int(left.Hours()/24)),
@@ -381,10 +381,10 @@ func splitContainer(name string) (project, service string) {
 	return project, service
 }
 
-// certExpiries 读取 Caddy 已经拿到的证书的过期时间。跳过两种：
+// CertExpiries 读取 Caddy 已经拿到的证书的过期时间。跳过两种：
 //   - Caddy 本地 CA 签的（.localhost 等内部域名，certificates/local/ 下），有效期本来就只有几小时，Caddy 自动续；
 //   - 已经不用的域名（解绑以后旧证书还留在存储里，不会再续）。
-func (e *Engine) certExpiries() map[string]time.Time {
+func (e *Engine) CertExpiries() map[string]time.Time {
 	out := map[string]time.Time{}
 	var inUse map[string]bool
 	if e.Domains != nil {
