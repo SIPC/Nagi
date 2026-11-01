@@ -2,6 +2,7 @@ import type zh from "../zh/nodes";
 
 export default {
   tabs: {
+    containers: "Containers",
     metrics: "Monitoring",
     settings: "Settings",
     replicas: "Replicas",
@@ -72,6 +73,8 @@ export default {
   },
   pendingNotice: "This node joined with an invite code. Approve it once you've confirmed it's your machine. Until then it can't be viewed or managed.",
   offlineTitle: "Node offline",
+  noContainers: "No containers on this node",
+  containerColumns: { container: "Container", project: "Project", status: "Status", version: "Version" },
   offlineNotice: "Monitoring, replicas and mesh status are unavailable while the node is offline.",
   upgrade: {
     badge: "Upgrade available",

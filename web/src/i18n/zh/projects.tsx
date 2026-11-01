@@ -28,6 +28,11 @@ export default {
     body: "节点上的容器状态未知，容器可能仍在运行。",
     action: "查看节点",
   },
+  standbyOffline: {
+    title: (names: string) => `备用面板 ${names} 未连接`,
+    body: "备用面板没有同步本面板的数据，主面板故障时无法接管。",
+    action: "查看备用面板",
+  },
   card: {
     stateful: "有状态",
     noContainers: "暂无容器",

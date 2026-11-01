@@ -30,6 +30,11 @@ export default {
     body: "The state of containers on the node is unknown. They may still be running.",
     action: "View nodes",
   },
+  standbyOffline: {
+    title: (names) => `Standby panel ${names} is disconnected`,
+    body: "The standby panel is not syncing this panel's data and cannot take over if the primary fails.",
+    action: "View standby panels",
+  },
   card: {
     stateful: "Stateful",
     noContainers: "No containers",

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
 import { checkName } from "@/lib/config";
+import { useStandbys } from "@/pages/standby";
 
 // Reminders：首页提醒开启两步验证、单独备份面板主密钥。可以"不再提醒"（只记在这个浏览器里）。
 function Reminders() {
@@ -115,6 +116,7 @@ export function ProjectsPage() {
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
   const offlineNodes = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).map((n) => n.name);
+  const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => !s.connected).map((s) => s.name);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "created">("created");
   const all = projects.data?.projects ?? [];
@@ -150,6 +152,21 @@ export function ProjectsPage() {
             }
           >
             {t.projects.offline.body}
+          </Notice>
+        )}
+        {offlineStandbys.length > 0 && (
+          <Notice
+            tone="warning"
+            title={t.projects.standbyOffline.title(offlineStandbys.join(", "))}
+            actions={
+              <Link to="/settings" search={{ tab: "standby" }}>
+                <Button size="sm" variant="outline">
+                  {t.projects.standbyOffline.action}
+                </Button>
+              </Link>
+            }
+          >
+            {t.projects.standbyOffline.body}
           </Notice>
         )}
         <Reminders />

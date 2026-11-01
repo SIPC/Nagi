@@ -67,16 +67,37 @@ export function ContainersTab({
   const { range, picker } = useRange();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
+  const updates = useRun(project.id);
+  const updateImages = async () => {
+    const names = [...new Set(imageUpdates.map((u) => u.container))];
+    const label = t.projectContainers.imageUpdates.action(names.length);
+    if (!(await confirmAction(t.projectContainers.imageUpdates.confirm(names.join(t.projectContainers.listSeparator)), { action: label }))) return;
+    updates.run(() =>
+      projectClient.deploy({
+        projectId: project.id,
+        pullImages: true,
+        targets: project.containers.filter((c) => names.includes(c.name)).map((c) => ({ container: c.name, baseRevision: c.revision })),
+      }),
+    );
+  };
 
   return (
     <div className="grid gap-6">
       {imageUpdates.length > 0 && (
-        <Notice tone="info" title={t.projectContainers.imageUpdates.title}>
-          {t.projectContainers.imageUpdates.body(
-            imageUpdates.map((u) => t.projectContainers.imageUpdates.item(u.container, u.service, u.image)).join(t.projectContainers.listSeparator),
-          )}
+        <Notice
+          tone="info"
+          title={t.projectContainers.imageUpdates.title}
+          actions={
+            <Button size="sm" variant="outline" disabled={updates.busy} onClick={updateImages}>
+              {updates.busy && <Spinner />}
+              {t.projectContainers.imageUpdates.action(new Set(imageUpdates.map((u) => u.container)).size)}
+            </Button>
+          }
+        >
+          {imageUpdates.map((u) => t.projectContainers.imageUpdates.item(u.container, u.service, u.image)).join(t.projectContainers.listSeparator)}
         </Notice>
       )}
+      {updates.output}
       <ContainersTable project={project} services={services} onOpen={open} onAdd={() => setAdding(true)} />
       {adding && <AddContainer project={project} onClose={() => setAdding(false)} onAdded={open} />}
       <Section
@@ -93,8 +114,8 @@ export function ContainersTab({
 
 // shortImage 把固定了摘要的镜像（回滚、迁移、顶替后会固定到当时的摘要）缩短显示，例如 redis@sha256:858f009f9709。
 function shortImage(image: string) {
-  const i = image.indexOf("@sha256:");
-  return i < 0 ? image : image.slice(0, i + 8 + 12);
+  const i = image.indexOf("sha256:");
+  return i < 0 ? image : image.slice(0, i + 7 + 12);
 }
 
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。

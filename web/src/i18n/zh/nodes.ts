@@ -1,6 +1,7 @@
 // 节点列表、节点详情、添加节点、节点设置、副本和未识别的容器。
 export default {
   tabs: {
+    containers: "容器",
     metrics: "监控",
     settings: "设置",
     replicas: "副本",
@@ -70,6 +71,8 @@ export default {
   },
   pendingNotice: "该节点通过接入码加入。请确认为自有机器后批准；批准前无法查看和操作。",
   offlineTitle: "节点离线",
+  noContainers: "节点上没有容器",
+  containerColumns: { container: "容器", project: "项目", status: "状态", version: "版本" },
   offlineNotice: "节点离线时无法查询监控、副本和 mesh 状态。",
   upgrade: {
     badge: "可升级",

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus, Server } from "lucide-react";
-import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
+import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
@@ -44,11 +44,13 @@ import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { confirmAction, notify } from "@/components/confirm";
 import { toast } from "sonner";
+import { stateOf } from "@/components/status";
 
-export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
+export type NodeTab = "metrics" | "containers" | "panels" | "mesh" | "settings" | "replicas";
 
 export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: t.nodes.tabs.metrics },
+  { value: "containers", label: t.nodes.tabs.containers },
   { value: "settings", label: t.nodes.tabs.settings },
   { value: "replicas", label: t.nodes.tabs.replicas },
   { value: "panels", label: t.nodes.tabs.panels },
@@ -102,6 +104,50 @@ function NodeStatus({ n }: { n: Node }) {
   if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
   if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
   return <Status tone="danger">{t.common.status.offline}</Status>;
+}
+
+// NodeContainers：运行在这个节点上的容器。节点离线时状态未知，但列表来自面板，仍然可以看。
+function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean }) {
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: 5000 });
+  if (projects.isPending) return <Loading />;
+  if (projects.error) return <Alert>{errorMessage(projects.error)}</Alert>;
+  const rows = projects.data.projects.flatMap((s) =>
+    (s.project?.containers ?? [])
+      .filter((c) => c.nodeId === nodeId)
+      .map((c) => ({ project: s.project!, container: c, services: (s.status?.services ?? []).filter((v) => v.container === c.name) })),
+  );
+  if (rows.length === 0) return <EmptyRow>{t.nodes.noContainers}</EmptyRow>;
+  return (
+    <Table>
+      <thead>
+        <tr>
+          <Th>{t.nodes.containerColumns.container}</Th>
+          <Th>{t.nodes.containerColumns.project}</Th>
+          <Th>{t.nodes.containerColumns.status}</Th>
+          <Th className="hidden sm:table-cell">{t.nodes.containerColumns.version}</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ project, container, services }) => {
+          const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "warning" as const, label: t.common.status.unknown };
+          return (
+            <tr key={project.id + container.name}>
+              <Td className="font-medium">
+                <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} className="underline-offset-2 hover:underline">
+                  {container.name}
+                </Link>
+              </Td>
+              <Td className="text-[13px] text-muted-foreground">{project.name}</Td>
+              <Td>
+                <Status tone={st.tone}>{st.label}</Status>
+              </Td>
+              <Td className="hidden font-mono text-xs text-muted-foreground sm:table-cell">{container.deployedVersion > 0n ? `v${container.deployedVersion}` : "—"}</Td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </Table>
+  );
 }
 
 // approve 批准用接入码加入的节点。
@@ -280,7 +326,9 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                 <span className="font-mono">Nagi {n.info.version || "?"}</span>
               </>
             )}
-            <span>{t.nodes.containers(n.containers)}</span>
+            <button type="button" className="cursor-pointer underline-offset-2 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
+              {t.nodes.containers(n.containers)}
+            </button>
             {!n.online && <span>{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>}
           </>
         }
@@ -316,7 +364,9 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       ) : (
         <>
           <Tabs value={tab} onChange={onTab} items={nodeTabs} className="mb-6" />
-          {!n.online ? (
+          {tab === "containers" ? (
+            <NodeContainers nodeId={n.id} online={n.online} />
+          ) : !n.online ? (
             <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
           ) : tab === "metrics" ? (
             <NodeMetrics nodeId={n.id} />

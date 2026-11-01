@@ -29,6 +29,7 @@ export default {
     address: "Address",
     status: "Status",
   },
+  disconnectedHint: "The standby panel is not connected. Check that it is running and reachable.",
   removeConfirm: (name) =>
     `Remove standby panel ${name}? It will no longer be able to sync data from this panel. Its data directory must be deleted manually.`,
   dialog: {

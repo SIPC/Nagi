@@ -38,8 +38,9 @@ export default {
   monitoring: "Monitoring",
   imageUpdates: {
     title: "New image versions available",
-    item: (container, service, image) => `${container}/${service} (${image})`,
-    body: (list) => `${list}. Choose "Update image" on the container page to pull and deploy.`,
+    item: (container, service, image) => `${container === service ? container : `${container}/${service}`} (${image})`,
+    action: (n) => (n > 1 ? `Update ${n} containers` : "Update image"),
+    confirm: (names) => `Update the image of ${names}? The new image is pulled and containers are recreated. The service is briefly interrupted and new versions are created.`,
   },
   projectMetrics: {
     description: "Combined resource usage of all containers and requests to port mappings.",

@@ -116,7 +116,15 @@ export function StandbyCard() {
               <tr key={s.id}>
                 <Td className="font-medium">{s.name}</Td>
                 <Td className="font-mono text-xs text-muted-foreground">{s.address}</Td>
-                <Td>{s.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status>{t.standby.disconnected}</Status>}</Td>
+                <Td>
+                  {s.connected ? (
+                    <Status tone="success">{t.standby.connected}</Status>
+                  ) : (
+                    <span title={t.standby.disconnectedHint}>
+                      <Status tone="warning">{t.standby.disconnected}</Status>
+                    </span>
+                  )}
+                </Td>
                 <Td className="text-[13px] text-muted-foreground" title={formatDateTime(toDate(s.lastSync))}>
                   {s.lastSync ? timeAgo(toDate(s.lastSync)) : "—"}
                 </Td>

@@ -7,7 +7,7 @@ import { timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Th } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
 import { EnvEditor } from "@/components/env-editor";

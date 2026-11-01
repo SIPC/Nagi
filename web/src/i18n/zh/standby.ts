@@ -29,6 +29,7 @@ export default {
     status: "状态",
   },
   removeConfirm: (name: string) => `移除备用面板 ${name}？该备用面板将无法再同步本面板数据，其数据目录须手动删除。`,
+  disconnectedHint: "备用面板没有连接到本面板。检查备用面板是否在运行、网络是否可达。",
   dialog: {
     title: "添加备用面板",
     description: "在新机器上使用配对码启动备用面板。",

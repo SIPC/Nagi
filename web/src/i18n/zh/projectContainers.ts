@@ -37,8 +37,9 @@ export default {
   monitoring: "监控",
   imageUpdates: {
     title: "镜像有新版本",
-    item: (container: string, service: string, image: string) => `${container}/${service}（${image}）`,
-    body: (list: string) => `${list}。在容器页选择「更新镜像」拉取并部署。`,
+    item: (container: string, service: string, image: string) => `${container === service ? container : `${container}/${service}`}（${image}）`,
+    action: (n: number) => (n > 1 ? `更新 ${n} 个容器` : "更新镜像"),
+    confirm: (names: string) => `更新 ${names} 的镜像？将拉取新镜像并重建容器，服务短暂中断，并生成新版本。`,
   },
   projectMetrics: {
     description: "所有容器的资源占用合计及端口映射的请求情况。",
