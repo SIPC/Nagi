@@ -305,6 +305,12 @@ function ContainerDetail({
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) =>
     run(() => projectClient.deploy({ projectId: project.id, targets: target, ...opts }), keep);
 
+  // 更新镜像也是一次部署，有草稿时草稿会一起生效，先问一下。
+  const updateImage = () => {
+    if (container.hasDraft && !confirm(t.projectContainers.detail.updateImageDraftConfirm(container.name))) return;
+    deploy({ pullImages: true });
+  };
+
   // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换容器的 data/。
   const upload = async (file: File) => {
     onView("overview");
@@ -386,7 +392,7 @@ function ContainerDetail({
               </Button>
             )}
             {hasImageUpdate && (
-              <Button variant="outline" size="sm" onClick={() => deploy({ pullImages: true })} disabled={busy}>
+              <Button variant="outline" size="sm" onClick={updateImage} disabled={busy}>
                 {t.projectContainers.detail.updateImage}
               </Button>
             )}
@@ -402,6 +408,8 @@ function ContainerDetail({
             </Button>
             <Menu
               items={[
+                // 检查到新版本时标题旁已有按钮；没检查到（还没检查、从未部署成功）时从这里手动更新。
+                ...(hasImageUpdate ? [] : [{ label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy }]),
                 {
                   label: t.projectContainers.detail.deleteKind(isGroup),
                   danger: true,

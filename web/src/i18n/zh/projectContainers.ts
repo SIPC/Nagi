@@ -81,6 +81,7 @@ export default {
     uploadDeploy: "上传并部署",
     pullDeploy: "拉取并部署",
     updateImage: "更新镜像",
+    updateImageDraftConfirm: (name: string) => `更新镜像会重新部署 ${name}，未部署的草稿也会一起生效。继续？`,
     deploying: "部署中",
     deployDraft: "部署草稿",
     redeploy: "重新部署",

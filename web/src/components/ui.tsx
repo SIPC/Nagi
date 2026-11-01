@@ -624,7 +624,7 @@ export function Dialog({
 }
 
 // Menu：「更多」按钮和下拉菜单。
-export function Menu({ items, label = t.common.actions.more }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean }[]; label?: string }) {
+export function Menu({ items, label = t.common.actions.more }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean }[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -644,7 +644,8 @@ export function Menu({ items, label = t.common.actions.more }: { items: { label:
             <button
               key={i}
               role="menuitem"
-              className={cn("block w-full px-3 py-1.5 text-left text-[13px] hover:bg-accent", it.danger && "text-destructive")}
+              disabled={it.disabled}
+              className={cn("block w-full px-3 py-1.5 text-left text-[13px] hover:bg-accent disabled:pointer-events-none disabled:opacity-50", it.danger && "text-destructive")}
               onClick={() => {
                 setOpen(false);
                 it.onSelect();
