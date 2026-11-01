@@ -43,6 +43,7 @@ import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { confirmAction, notify } from "@/components/confirm";
+import { toast } from "sonner";
 
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
@@ -490,15 +491,13 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
   const queryClient = useQueryClient();
   const [value, setValue] = useState(root);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
       await nodeClient.setNodeProjectsRoot({ nodeId, root: value });
-      setSaved(true);
+      toast.success(t.common.feedback.saved);
       queryClient.invalidateQueries({ queryKey: ["nodes"] });
     } catch (err) {
       setError(errorMessage(err));
@@ -520,7 +519,6 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
         </Field>
         {error && <Alert>{error}</Alert>}
         <FormActions>
-          {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
           <Button type="submit" size="sm" disabled={busy || !value.trim()}>
             {busy && <Spinner />}
             {t.common.actions.save}
@@ -560,12 +558,10 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
   const queryClient = useQueryClient();
   const [value, setValue] = useState(mirrors.mirrors.join("\n"));
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
       const list = value
         .split("\n")
@@ -574,7 +570,7 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
       const res = await nodeClient.setNodeMirrors({ nodeId, mirrors: list });
       queryClient.setQueryData(["node-mirrors", nodeId], res);
       setValue(res.mirrors.join("\n"));
-      setSaved(true);
+      toast.success(t.common.feedback.saved);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -608,7 +604,6 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
       </Field>
       {error && <Alert>{error}</Alert>}
       <FormActions>
-        {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
         <Button type="submit" size="sm" disabled={busy}>
           {busy && <Spinner />}
           {t.common.actions.save}

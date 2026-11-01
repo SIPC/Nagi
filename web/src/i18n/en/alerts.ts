@@ -16,6 +16,7 @@ export default {
   chatId: "Chat ID",
   webhookUrl: "Webhook URL",
   test: "Test",
+  defaultValue: (v) => `Default ${v}`,
   rules: "Trigger rules",
   rulesHelp: "Leave a field empty to use its default value, shown in gray.",
   rule: {

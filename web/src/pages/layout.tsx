@@ -4,7 +4,7 @@ import { Link, Outlet, useMatch, useNavigate } from "@tanstack/react-router";
 import { Boxes, ChevronRight, LogOut, Moon, Server, Settings, Sun } from "lucide-react";
 import { authClient, nodeClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
-import { Button, ReadOnlyContext, Waves } from "@/components/ui";
+import { Button, Empty, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot } from "@/pages/update";
 import { LanguageButton } from "@/components/language";
@@ -140,6 +140,21 @@ export function AppLayout() {
           </ReadOnlyContext.Provider>
         </main>
       </div>
+    </div>
+  );
+}
+
+// NotFound：地址不存在时的页面。
+export function NotFound() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <Empty title={t.app.notFound.title} action={
+        <Link to="/projects">
+          <Button size="sm" variant="outline">{t.app.notFound.back}</Button>
+        </Link>
+      }>
+        {t.app.notFound.body}
+      </Empty>
     </div>
   );
 }

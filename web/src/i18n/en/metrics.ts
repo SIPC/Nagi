@@ -18,6 +18,7 @@ export default {
   memTitle: (usage) => `Memory ${usage}`,
   noData: "No data",
   allContainersTotal: "All containers",
+  offlineExcluded: (nodes) => `Totals exclude containers on offline nodes: ${nodes}`,
   average: "Avg",
   inbound: "In",
   outbound: "Out",

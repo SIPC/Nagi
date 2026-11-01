@@ -134,6 +134,8 @@ export default {
     serviceEnv: (service: string) => `环境变量：${service}`,
     serviceEnvHelp: "仅注入此容器。",
     savedDraft: "已保存为草稿",
+    discardConfirm: (name: string) => `放弃 ${name} 的草稿？未部署的修改将丢失。`,
+    discarded: "已放弃草稿",
     discardDraft: "放弃草稿",
     saveDraft: "保存草稿",
   },

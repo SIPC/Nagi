@@ -10,6 +10,7 @@ import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, In
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
+import { toast } from "sonner";
 
 // 「网络」标签页：端口映射与域名、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
@@ -474,14 +475,12 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const [ports, setPorts] = useState((project.settings?.internalPorts ?? []).join("\n"));
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const addresses = intranetAddresses(project, services);
 
   const save = async () => {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
       await projectClient.updateProjectSettings({
         projectId: project.id,
@@ -496,7 +495,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
             .filter(Boolean),
         },
       });
-      setSaved(true);
+      toast.success(t.common.feedback.saved);
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     } catch (err) {
       setError(errorMessage(err));
@@ -551,7 +550,6 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
           </Field>
           {error && <Alert>{error}</Alert>}
           <FormActions>
-            {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
             <Button size="sm" onClick={save} disabled={busy}>
               {busy && <Spinner />}
               {t.common.actions.save}

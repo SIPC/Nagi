@@ -25,6 +25,7 @@ import {
   Th,
 } from "@/components/ui";
 import { t } from "@/i18n";
+import { toast } from "sonner";
 
 // ---- 告警设置：通知渠道和触发规则，一起保存 ----
 
@@ -35,7 +36,6 @@ export function AlertSettings() {
   });
   const [channels, setChannels] = useState<AlertChannel[]>([]);
   const [rules, setRules] = useState<AlertRules>(create(AlertRulesSchema));
-  const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -54,13 +54,12 @@ export function AlertSettings() {
 
   const save = async () => {
     setError("");
-    setMsg("");
     try {
       const res = await settingsClient.updateAlertConfig({
         config: create(AlertConfigSchema, { channels, rules }),
       });
       setChannels(res.config?.channels ?? []);
-      setMsg(t.alerts.savedAndPushed);
+      toast.success(t.alerts.savedAndPushed);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -68,10 +67,9 @@ export function AlertSettings() {
 
   const test = async (c: AlertChannel) => {
     setError("");
-    setMsg("");
     try {
       await settingsClient.testAlertChannel({ channel: c });
-      setMsg(t.alerts.testSent(c.name || c.type));
+      toast.success(t.alerts.testSent(c.name || c.type));
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -86,7 +84,7 @@ export function AlertSettings() {
       <Input
         id={`rule-${key}`}
         type="number"
-        placeholder={String(placeholder)}
+        placeholder={t.alerts.defaultValue(placeholder)}
         value={(rules[key] as number) || ""}
         onChange={(e) =>
           setRules(
@@ -236,7 +234,6 @@ export function AlertSettings() {
 
       {/* 一次保存渠道和规则，所以按钮在两个区块下面。 */}
       <FormActions className="border-t pt-6">
-        {msg && <span className="text-[13px] text-success">{msg}</span>}
         <Button size="sm" onClick={save}>
           {t.common.actions.save}
         </Button>

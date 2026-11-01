@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "@/lib/api";
 import { Alert, LogBox, Notice } from "@/components/ui";
 import { t } from "@/i18n";
+import { toast } from "sonner";
 
 // 执行一个会输出过程的操作（部署、回滚、快照……），显示输出和结果。
 
@@ -18,13 +19,18 @@ export function useRun(projectId: string) {
     setBusy(true);
     setResult(undefined);
     if (!keep) setLines([]);
+    const finish = (r: RunResult) => {
+      setResult(r);
+      if (r.success) toast.success(t.common.feedback.done);
+      else toast.error(r.error || t.common.feedback.failed);
+    };
     try {
       for await (const ev of start()) {
         if (ev.event.case === "output") setLines((l) => appendLine(l, ev.event.value as string));
-        if (ev.event.case === "result") setResult(ev.event.value as RunResult);
+        if (ev.event.case === "result") finish(ev.event.value as RunResult);
       }
     } catch (err) {
-      setResult({ success: false, error: errorMessage(err) });
+      finish({ success: false, error: errorMessage(err) });
     } finally {
       setBusy(false);
       const refresh = () => {

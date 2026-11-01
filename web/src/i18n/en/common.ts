@@ -44,6 +44,14 @@ export default {
     done: "Done",
     failed: "Operation failed",
   },
+  errors: {
+    http: (status) => `The panel did not handle this request (HTTP ${status}). It may be restarting or on a different version. Try again later`,
+    unreachable: "Cannot reach the panel. Check the network and whether the panel is running",
+  },
+  unsaved: {
+    confirm: "Leave this page? Unsaved changes will be lost.",
+    leave: "Leave",
+  },
   time: {
     never: "Never",
     justNow: "Just now",

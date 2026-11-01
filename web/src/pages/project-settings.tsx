@@ -10,6 +10,7 @@ import { useRun } from "@/components/run";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
+import { toast } from "sonner";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
@@ -32,13 +33,11 @@ function GeneralSettings({ project }: { project: Project }) {
   const [network, setNetwork] = useState(project.networkName);
   const [interval, setInterval] = useState(s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
       await projectClient.updateProjectSettings({
         projectId: project.id,
@@ -50,7 +49,7 @@ function GeneralSettings({ project }: { project: Project }) {
           snapshotIntervalMinutes: Number(interval) || 0,
         },
       });
-      setSaved(true);
+      toast.success(t.common.feedback.saved);
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (err) {
@@ -87,7 +86,6 @@ function GeneralSettings({ project }: { project: Project }) {
         </FormRow>
         {error && <Alert>{error}</Alert>}
         <FormActions>
-          {saved && <span className="text-[13px] text-muted-foreground">{t.common.feedback.saved}</span>}
           <Button type="submit" size="sm" disabled={busy}>
             {busy && <Spinner />}
             {t.common.actions.save}

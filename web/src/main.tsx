@@ -10,9 +10,9 @@ import {
   RouterProvider,
   useMatch,
 } from "@tanstack/react-router";
-import { authClient, isUnauthenticated, setupClient } from "@/lib/api";
+import { authClient, isNotFound, isUnauthenticated, setupClient } from "@/lib/api";
 import { LoginPage, SetupPage } from "@/pages/auth";
-import { AppLayout } from "@/pages/layout";
+import { AppLayout, NotFound } from "@/pages/layout";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages/project";
 import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
@@ -21,6 +21,7 @@ import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
 import { ConfirmHost } from "@/components/confirm";
+import { Toaster } from "@/components/ui/sonner";
 
 // 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
 // 它由 appRoute 处理，未初始化时要去初始化页而不是登录页。
@@ -34,7 +35,7 @@ const onError = (err: unknown) => {
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (err, query) => query.queryKey[0] !== "me" && onError(err) }),
   mutationCache: new MutationCache({ onError }),
-  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && count < 2 } },
+  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !isNotFound(err) && count < 2 } },
 });
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -190,7 +191,7 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute]), nodesRoute, nodeRoute, settingsRoute]),
 ]);
 
-const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });
+const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent", defaultNotFoundComponent: NotFound });
 
 declare module "@tanstack/react-router" {
   interface Register {
@@ -203,6 +204,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
       <ConfirmHost />
+      <Toaster />
     </QueryClientProvider>
   </StrictMode>,
 );

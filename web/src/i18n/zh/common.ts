@@ -41,6 +41,14 @@ export default {
     done: "已完成",
     failed: "操作失败",
   },
+  errors: {
+    http: (status: string) => `面板没有响应这个请求（HTTP ${status}），可能正在重启或版本不一致，请稍后重试`,
+    unreachable: "无法连接面板，请检查网络或面板是否在运行",
+  },
+  unsaved: {
+    confirm: "离开此页？未保存的修改将丢失。",
+    leave: "离开",
+  },
   time: {
     never: "从未",
     justNow: "刚刚",

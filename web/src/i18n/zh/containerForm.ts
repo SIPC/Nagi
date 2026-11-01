@@ -1,6 +1,7 @@
 // 容器表单：镜像表单（单个容器）和容器组（compose）。
 export default {
   image: "镜像",
+  imagePlaceholder: "例如 nginx:alpine",
   command: "启动命令",
   commandHint: "留空则使用镜像的默认命令",
   ports: "对外端口",

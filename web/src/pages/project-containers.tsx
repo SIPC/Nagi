@@ -5,7 +5,7 @@ import { Plus, Play, Rocket, RotateCw } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
-import { envToText, lines, textToEnv } from "@/lib/config";
+import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { ContainerMetrics, containerUsage, ProjectMetrics, projectMetricNodes, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
 import { offlineNodeNames, ProjectState, serviceDetail, ServiceState } from "@/components/status";
@@ -41,6 +41,8 @@ import {
   Th,
 } from "@/components/ui";
 import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { toast } from "sonner";
+import { useUnsaved } from "@/components/unsaved";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
@@ -61,6 +63,7 @@ export function ContainersTab({
   const [adding, setAdding] = useState(project.containers.length === 0);
   const navigate = useNavigate();
   const { range, picker } = useRange();
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
 
   return (
@@ -80,7 +83,7 @@ export function ContainersTab({
         help={t.projectContainers.projectMetrics.help}
         actions={picker}
       >
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} />
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, nodes.data?.nodes)} />
       </Section>
     </div>
   );
@@ -714,7 +717,6 @@ function ContainerConfig({ project, container, services }: { project: Project; c
   const [preserve, setPreserve] = useState((base?.preserve ?? []).join("\n"));
   const [dependsOn, setDependsOn] = useState((base?.dependsOn ?? []).join(", "));
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const refresh = () => {
@@ -722,13 +724,12 @@ function ContainerConfig({ project, container, services }: { project: Project; c
     queryClient.invalidateQueries({ queryKey: ["projects"] });
   };
 
-  const call = async (fn: () => Promise<unknown>, ok = false) => {
+  const call = async (fn: () => Promise<unknown>, ok = "") => {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
       await fn();
-      setSaved(ok);
+      if (ok) toast.success(ok);
       refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -737,7 +738,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
     }
   };
 
-  const save = () => {
+  const buildConfig = () => {
     const common = {
       source: { gitUrl, gitRef },
       preserve: lines(preserve),
@@ -745,29 +746,30 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       dependsOn: dependsOn.split(/[\s,]+/).filter(Boolean),
       stateful: base?.stateful,
     };
-    return call(
-      () =>
-        projectClient.saveDraft({
-          projectId: project.id,
-          container: container.name,
-          baseRevision: container.revision,
-          config: isForm
-            ? { ...common, form: imageForm.build() }
-            : {
-                ...common,
-                compose,
-                serviceEnv: Object.fromEntries(
-                  Object.entries(serviceEnv)
-                    .map(([s, t]) => [s, { vars: textToEnv(t) }] as const)
-                    .filter(([, l]) => l.vars.length > 0),
-                ),
-              },
-        }),
-      true,
-    );
+    return isForm
+      ? { ...common, form: imageForm.build() }
+      : {
+          ...common,
+          compose,
+          serviceEnv: Object.fromEntries(
+            Object.entries(serviceEnv)
+              .map(([s, t]) => [s, { vars: textToEnv(t) }] as const)
+              .filter(([, l]) => l.vars.length > 0),
+          ),
+        };
   };
+  useUnsaved(buildConfig());
 
-  const discard = () => call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }));
+  const save = () =>
+    call(
+      () => projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() }),
+      t.projectContainers.config.savedDraft,
+    );
+
+  const discard = async () => {
+    if (!(await confirmAction(t.projectContainers.config.discardConfirm(container.name), { action: t.projectContainers.config.discardDraft, danger: true }))) return;
+    call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }), t.projectContainers.config.discarded);
+  };
 
   return (
     <form
@@ -836,7 +838,6 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       )}
       {error && <Alert>{error}</Alert>}
       <div className="flex items-center justify-end gap-2 pt-2">
-        {saved && <span className="mr-auto text-[13px] text-muted-foreground">{t.projectContainers.config.savedDraft}</span>}
         {container.hasDraft && (
           <Button variant="ghost" size="sm" onClick={discard} disabled={busy}>
             {t.projectContainers.config.discardDraft}
@@ -947,6 +948,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContainerForm(project.containers.length === 0);
+  useUnsaved({ name, config: form.build() });
   const node = useNodeChoice({ projectId: project.id, projectName: project.name, container: name || "api", preferNodes: project.containers.map((m) => m.nodeId) });
 
   const add = async () => {
@@ -978,8 +980,17 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
           htmlFor="new-container"
           hint={t.projectContainers.add.nameHint}
           help={t.projectContainers.add.nameHelp}
+          error={checkName(name)}
+          required
         >
-          <Input id="new-container" value={name} onChange={(e) => setName(e.target.value)} required className="max-w-80 font-mono" placeholder="api" />
+          <Input
+            id="new-container"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              e.target.setCustomValidity(checkName(e.target.value));
+            }}
+            required className="max-w-80 font-mono" placeholder="api" />
         </Field>
         {node.fields}
         {form.fields}

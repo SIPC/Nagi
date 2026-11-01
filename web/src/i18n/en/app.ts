@@ -6,6 +6,15 @@ export default {
     nodes: "Nodes",
     settings: "Settings",
   },
+  notFound: {
+    title: "Page not found",
+    body: "The address may be wrong, or the page has been removed.",
+    back: "Back to projects",
+  },
+  names: {
+    invalid: "Use lowercase letters, digits and -. It cannot start or end with - and must be at most 32 characters",
+    invalidEnv: (key) => `Invalid variable name "${key}": use letters, digits and underscores, and do not start with a digit`,
+  },
   nodesOffline: (n) => (n === 1 ? "1 node offline" : `${n} nodes offline`),
   theme: {
     toLight: "Switch to light mode",

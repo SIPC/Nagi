@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { Field, Input, Segmented, Textarea } from "@/components/ui";
-import { checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
+import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
 import type { ImageForm, ImageFormSchema, ContainerConfigSchema } from "@/gen/nagi/v1/common_pb";
 
@@ -48,8 +48,8 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
   const fields = (
     <div className="grid gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t.containerForm.image} htmlFor={prefix + "image"}>
-          <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" placeholder="nginx:alpine" />
+        <Field label={t.containerForm.image} htmlFor={prefix + "image"} required>
+          <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required className="font-mono" placeholder={t.containerForm.imagePlaceholder} />
         </Field>
         <Field label={t.containerForm.command} htmlFor={prefix + "command"} hint={t.containerForm.commandHint}>
           <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} className="font-mono" />
@@ -81,8 +81,17 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
         <Field label={t.containerForm.volumes} htmlFor={prefix + "volumes"} hint={t.containerForm.volumesHint} help={t.containerForm.volumesHelp}>
           <Textarea id={prefix + "volumes"} value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono text-[13px]" placeholder="/data" />
         </Field>
-        <Field label={t.containerForm.env} htmlFor={prefix + "env"} hint={t.containerForm.envHint}>
-          <Textarea id={prefix + "env"} value={env} onChange={(e) => setEnv(e.target.value)} className="font-mono" />
+        <Field label={t.containerForm.env} htmlFor={prefix + "env"} hint={t.containerForm.envHint} error={checkEnv(env)}>
+          <Textarea
+            id={prefix + "env"}
+            value={env}
+            onChange={(e) => {
+              setEnv(e.target.value);
+              e.target.setCustomValidity(checkEnv(e.target.value));
+            }}
+            spellCheck={false}
+            className="font-mono"
+          />
         </Field>
       </div>
       <details open={advanced} className="group rounded-md border">
@@ -139,7 +148,7 @@ export function useContainerForm(first = false): { fields: ReactNode; build: () 
         </div>
       </Field>
       {mode === "compose" ? (
-        <Field label="compose" htmlFor="compose" help={t.containerForm.composeHelp}>
+        <Field label="compose" htmlFor="compose" help={t.containerForm.composeHelp} required>
           <Textarea
             id="compose"
             value={compose}

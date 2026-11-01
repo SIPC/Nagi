@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
@@ -28,6 +28,8 @@ import {
   Select,
   Spinner,
 } from "@/components/ui";
+import { useUnsaved } from "@/components/unsaved";
+import { checkName } from "@/lib/config";
 
 // Reminders：首页提醒开启两步验证、单独备份面板主密钥。可以"不再提醒"（只记在这个浏览器里）。
 function Reminders() {
@@ -260,7 +262,7 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
   const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const fields = (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label={t.projects.nodeChoice.node} htmlFor="container-node" help={t.projects.nodeChoice.nodeHelp}>
+      <Field label={t.projects.nodeChoice.node} htmlFor="container-node" help={t.projects.nodeChoice.nodeHelp} required>
         <Select id="container-node" value={selected} onChange={(e) => setNodeId(e.target.value)} required>
           {onlineNodes.length === 0 && <option value="">{t.projects.nodeChoice.noOnlineNodes}</option>}
           {onlineNodes.map((n) => (
@@ -290,6 +292,8 @@ export function NewProjectPage() {
   const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
   const node = useNodeChoice({ projectName: name || "shop", container: containerName || "web" });
+  useUnsaved({ name, network, withContainer, containerName, container: container.build() });
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const create = useMutation({
     mutationFn: () =>
@@ -299,8 +303,10 @@ export function NewProjectPage() {
         ...(withContainer ? { containerName, container: container.build(), nodeId: node.nodeId, dir: node.dir } : {}),
       }),
     onSuccess: (p) => {
-      navigate({ to: "/projects/$projectId", params: { projectId: p.id } });
+      navigate({ to: "/projects/$projectId", params: { projectId: p.id }, ignoreBlocker: true });
     },
+    // 错误在表单底部，表单长的时候要滚过去才看得到。
+    onError: () => setTimeout(() => errorRef.current?.scrollIntoView({ block: "center" })),
   });
 
   return (
@@ -316,7 +322,7 @@ export function NewProjectPage() {
       >
         <Section title={t.projects.create.basics}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t.projects.create.name} htmlFor="name">
+            <Field label={t.projects.create.name} htmlFor="name" required>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} required maxLength={64} />
             </Field>
             <Field
@@ -324,11 +330,15 @@ export function NewProjectPage() {
               htmlFor="network"
               hint={t.projects.create.slugHint}
               help={t.projects.create.networkHelp}
+              error={checkName(network)}
             >
               <Input
                 id="network"
                 value={network}
-                onChange={(e) => setNetwork(e.target.value)}
+                onChange={(e) => {
+                  setNetwork(e.target.value);
+                  e.target.setCustomValidity(checkName(e.target.value));
+                }}
                 placeholder={slugName(name, "shop")}
                 className="font-mono"
               />
@@ -352,8 +362,20 @@ export function NewProjectPage() {
                 htmlFor="container"
                 hint={t.projects.create.slugHint}
                 help={t.projects.create.containerNameHelp}
+                error={checkName(containerName)}
+                required
               >
-                <Input id="container" value={containerName} onChange={(e) => setContainerName(e.target.value)} required className="font-mono" placeholder="web" />
+                <Input
+                  id="container"
+                  value={containerName}
+                  onChange={(e) => {
+                    setContainerName(e.target.value);
+                    e.target.setCustomValidity(checkName(e.target.value));
+                  }}
+                  required
+                  className="font-mono"
+                  placeholder="web"
+                />
               </Field>
               {node.fields}
               {container.fields}
@@ -361,7 +383,7 @@ export function NewProjectPage() {
           )}
         </Section>
 
-        {create.error && <Alert>{errorMessage(create.error)}</Alert>}
+        {create.error && <div ref={errorRef}><Alert>{errorMessage(create.error)}</Alert></div>}
         <div className="flex justify-end gap-2">
           <Link to="/projects">
             <Button type="button" variant="ghost">

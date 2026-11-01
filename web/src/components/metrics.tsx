@@ -4,7 +4,7 @@ import { Cpu, HardDrive, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { Alert, EmptyRow, Loading, Section, Segmented, Tile, TileGrid } from "@/components/ui";
+import { Alert, EmptyRow, Loading, Notice, Section, Segmented, Tile, TileGrid } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
@@ -174,8 +174,21 @@ function parseName(name: string) {
 // sumSeries 把几条序列加成一条。节点按同一步长聚合，窗口起点对齐，所以直接按时刻相加。
 function sumSeries(list: MetricSeries[]): Pt[] {
   const total = new Map<number, number>();
-  for (const s of list) for (const [t, v] of toPoints(s)) total.set(t, (total.get(t) ?? 0) + v);
-  return [...total.entries()].sort((a, b) => a[0] - b[0]);
+  const count = new Map<number, number>();
+  for (const s of list) {
+    for (const [t, v] of toPoints(s)) {
+      total.set(t, (total.get(t) ?? 0) + v);
+      count.set(t, (count.get(t) ?? 0) + 1);
+    }
+  }
+  const points = [...total.entries()].sort((a, b) => a[0] - b[0]);
+  // 最后一个时段可能只有部分节点上报了，合计会突然变小，当作还没有数据。
+  if (points.length > 1) {
+    const last = points[points.length - 1][0];
+    const prev = points[points.length - 2][0];
+    if ((count.get(last) ?? 0) < (count.get(prev) ?? 0)) points.pop();
+  }
+  return points;
 }
 
 // maxSeries 按时刻取几条序列里最大的值（耗时不能相加）。
@@ -373,7 +386,7 @@ function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]
 }
 
 // ProjectMetrics：项目概览里的监控。各容器的占用在项目栏和容器页里看，这里只给所有容器的合计和各端口映射的请求情况。
-export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[]; projectId: string; range: MetricRange }) {
+export function ProjectMetrics({ nodeIds, projectId, range, offline = [] }: { nodeIds: string[]; projectId: string; range: MetricRange; offline?: string[] }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
   if (nodeIds.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   if (q.isPending) return <Loading />;
@@ -402,6 +415,7 @@ export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[
   if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
     <div className="grid gap-6">
+      {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(offline.join(m.seriesSeparator))}</Notice>}
       {total.size > 0 && <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />}
       {[...routes.entries()].map(([name, data]) => (
         <RouteMetrics key={name} name={name} data={data} range={range} />

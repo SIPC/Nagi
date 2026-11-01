@@ -139,6 +139,8 @@ export default {
     serviceEnv: (service) => `Environment variables: ${service}`,
     serviceEnvHelp: "Injected into this container only.",
     savedDraft: "Saved as draft",
+    discardConfirm: (name) => `Discard the draft of ${name}? Undeployed changes will be lost.`,
+    discarded: "Draft discarded",
     discardDraft: "Discard draft",
     saveDraft: "Save draft",
   },

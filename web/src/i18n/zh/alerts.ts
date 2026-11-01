@@ -15,6 +15,7 @@ export default {
   chatId: "聊天 ID",
   webhookUrl: "Webhook 地址",
   test: "测试",
+  defaultValue: (v: number) => `默认 ${v}`,
   rules: "触发规则",
   rulesHelp: "留空时使用默认值，即输入框中的灰色数字。",
   rule: {

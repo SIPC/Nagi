@@ -1,6 +1,6 @@
 // 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
-import { Children, createContext, isValidElement, useContext, useState } from "react";
+import { Children, cloneElement, createContext, isValidElement, useContext, useState } from "react";
 import type * as React from "react";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -65,7 +65,7 @@ export function Button({
 }
 
 const control =
-  "w-full rounded-md border border-input bg-card px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-md border border-input bg-card px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 aria-[invalid=true]:border-destructive focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60";
 
 export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return <input className={cn(control, "h-9", className)} {...props} />;
@@ -154,6 +154,7 @@ export function Field({
   htmlFor,
   className,
   error,
+  required,
   children,
 }: {
   label: React.ReactNode;
@@ -163,16 +164,24 @@ export function Field({
   className?: string;
   // error：填写有误时的说明，显示在格式说明的位置。
   error?: string;
+  // required：必填，标签后面显示星号。
+  required?: boolean;
   children: React.ReactNode;
 }) {
+  const errorId = error && htmlFor ? `${htmlFor}-error` : undefined;
   return (
     <div className={cn("grid content-start gap-1.5", className)}>
       <div className="flex items-center gap-1.5">
-        <Label htmlFor={htmlFor}>{label}</Label>
+        <Label htmlFor={htmlFor}>
+          {label}
+          {required && <span aria-hidden className="ml-0.5 text-destructive">*</span>}
+        </Label>
         {help && <HelpTip>{help}</HelpTip>}
       </div>
-      {children}
-      {error ? <p className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && isValidElement<{ "aria-invalid"?: boolean; "aria-describedby"?: string }>(children)
+        ? cloneElement(children, { "aria-invalid": true, "aria-describedby": errorId })
+        : children}
+      {error ? <p id={errorId} className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

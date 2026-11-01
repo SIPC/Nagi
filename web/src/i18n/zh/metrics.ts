@@ -17,6 +17,7 @@ export default {
   memTitle: (usage: string) => `内存 ${usage}`,
   noData: "暂无数据",
   allContainersTotal: "全部容器合计",
+  offlineExcluded: (nodes: string) => `合计未包含离线节点 ${nodes} 上的容器`,
   average: "平均",
   inbound: "入站",
   outbound: "出站",

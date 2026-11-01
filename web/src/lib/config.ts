@@ -44,6 +44,19 @@ export function checkPorts(text: string): string {
   return "";
 }
 
+// checkName 检查容器名、网络名的写法，和面板的规则一致。空值不报错（必填由表单检查）。
+export function checkName(v: string): string {
+  return !v || /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(v) ? "" : t.app.names.invalid;
+}
+
+// checkEnv 检查 KEY=VALUE 文本里的变量名，返回第一个问题的说明。
+export function checkEnv(text: string): string {
+  for (const v of textToEnv(text)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(v.key)) return t.app.names.invalidEnv(v.key);
+  }
+  return "";
+}
+
 export function lines(text: string): string[] {
   return text
     .split("\n")

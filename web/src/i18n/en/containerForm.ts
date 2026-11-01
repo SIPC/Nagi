@@ -2,6 +2,7 @@ import type zh from "../zh/containerForm";
 
 export default {
   image: "Image",
+  imagePlaceholder: "e.g. nginx:alpine",
   command: "Command",
   commandHint: "Leave empty to use the image's default command",
   ports: "Published ports",
