@@ -20,6 +20,7 @@ import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/p
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
+import { ConfirmHost } from "@/components/confirm";
 
 // 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
 // 它由 appRoute 处理，未初始化时要去初始化页而不是登录页。
@@ -201,6 +202,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <ConfirmHost />
     </QueryClientProvider>
   </StrictMode>,
 );

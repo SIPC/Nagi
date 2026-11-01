@@ -2098,6 +2098,7 @@ const (
 	ProjectService_DeleteProject_FullMethodName         = "/nagi.v1.ProjectService/DeleteProject"
 	ProjectService_AddContainer_FullMethodName          = "/nagi.v1.ProjectService/AddContainer"
 	ProjectService_DeleteContainer_FullMethodName       = "/nagi.v1.ProjectService/DeleteContainer"
+	ProjectService_ControlContainer_FullMethodName      = "/nagi.v1.ProjectService/ControlContainer"
 	ProjectService_SaveDraft_FullMethodName             = "/nagi.v1.ProjectService/SaveDraft"
 	ProjectService_DiscardDraft_FullMethodName          = "/nagi.v1.ProjectService/DiscardDraft"
 	ProjectService_Deploy_FullMethodName                = "/nagi.v1.ProjectService/Deploy"
@@ -2151,6 +2152,8 @@ type ProjectServiceClient interface {
 	AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*Project, error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(ctx context.Context, in *DeleteContainerApiRequest, opts ...grpc.CallOption) (*Project, error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
+	ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*Project, error)
 	DiscardDraft(ctx context.Context, in *ContainerRevisionRef, opts ...grpc.CallOption) (*Project, error)
 	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
@@ -2306,6 +2309,25 @@ func (c *projectServiceClient) DeleteContainer(ctx context.Context, in *DeleteCo
 	return out, nil
 }
 
+func (c *projectServiceClient) ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_ControlContainer_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ControlContainerRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_ControlContainerClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *projectServiceClient) SaveDraft(ctx context.Context, in *SaveDraftRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -2328,7 +2350,7 @@ func (c *projectServiceClient) DiscardDraft(ctx context.Context, in *ContainerRe
 
 func (c *projectServiceClient) Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_Deploy_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_Deploy_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2357,7 +2379,7 @@ func (c *projectServiceClient) ListVersions(ctx context.Context, in *ContainerRe
 
 func (c *projectServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_Rollback_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_Rollback_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2386,7 +2408,7 @@ func (c *projectServiceClient) ListDeployments(ctx context.Context, in *ProjectR
 
 func (c *projectServiceClient) RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2405,7 +2427,7 @@ type ProjectService_RestoreDeploymentClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) StreamLogs(ctx context.Context, in *StreamLogsApiRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2494,7 +2516,7 @@ func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *Cont
 
 func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2513,7 +2535,7 @@ type ProjectService_RestoreFromBackupClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_MigrateContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_MigrateContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2532,7 +2554,7 @@ type ProjectService_MigrateContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2621,7 +2643,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2640,7 +2662,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2726,6 +2748,8 @@ type ProjectServiceServer interface {
 	AddContainer(context.Context, *AddContainerRequest) (*Project, error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
+	ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	SaveDraft(context.Context, *SaveDraftRequest) (*Project, error)
 	DiscardDraft(context.Context, *ContainerRevisionRef) (*Project, error)
 	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
@@ -2817,6 +2841,9 @@ func (UnimplementedProjectServiceServer) AddContainer(context.Context, *AddConta
 }
 func (UnimplementedProjectServiceServer) DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteContainer not implemented")
+}
+func (UnimplementedProjectServiceServer) ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method ControlContainer not implemented")
 }
 func (UnimplementedProjectServiceServer) SaveDraft(context.Context, *SaveDraftRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveDraft not implemented")
@@ -3096,6 +3123,17 @@ func _ProjectService_DeleteContainer_Handler(srv interface{}, ctx context.Contex
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _ProjectService_ControlContainer_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ControlContainerRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).ControlContainer(m, &grpc.GenericServerStream[ControlContainerRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_ControlContainerServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _ProjectService_SaveDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SaveDraftRequest)
@@ -3747,6 +3785,11 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ControlContainer",
+			Handler:       _ProjectService_ControlContainer_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Deploy",
 			Handler:       _ProjectService_Deploy_Handler,

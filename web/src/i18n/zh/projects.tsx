@@ -17,6 +17,10 @@ export default {
     title: "暂无项目",
     text: "新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。",
   },
+  offline: {
+    body: "节点上的容器状态未知，容器可能仍在运行。",
+    action: "查看节点",
+  },
   card: {
     stateful: "有状态",
     noContainers: "暂无容器",

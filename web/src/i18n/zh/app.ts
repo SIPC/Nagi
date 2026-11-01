@@ -5,6 +5,7 @@ export default {
     nodes: "节点",
     settings: "设置",
   },
+  nodesOffline: (n: number) => `${n} 个节点离线`,
   theme: {
     toLight: "切换为浅色",
     toDark: "切换为深色",

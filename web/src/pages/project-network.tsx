@@ -9,6 +9,7 @@ import { t } from "@/i18n";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { confirmAction } from "@/components/confirm";
 
 // 「网络」标签页：端口映射与域名、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
@@ -111,7 +112,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
   };
 
   const remove = async (name: string) => {
-    if (!confirm(t.projectNetwork.routes.deleteConfirm(name))) return;
+    if (!(await confirmAction(t.projectNetwork.routes.deleteConfirm(name), { action: t.common.actions.delete, danger: true }))) return;
     setError("");
     try {
       await projectClient.deleteRoute({ projectId: project.id, name });
@@ -603,7 +604,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
   };
 
   const disconnect = async (id: string, name: string) => {
-    if (!confirm(t.projectNetwork.links.disconnectConfirm(name))) return;
+    if (!(await confirmAction(t.projectNetwork.links.disconnectConfirm(name), { action: t.projectNetwork.links.disconnect, danger: true }))) return;
     setError("");
     try {
       await projectClient.disconnectProject({

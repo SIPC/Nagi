@@ -252,10 +252,15 @@ var en = map[string]string{
 	"没有连接这个项目":   "Not linked to this project",
 
 	// ---- 快照 ----
-	"项目还没有部署过的容器":     "The project has no deployed containers yet",
-	"==== 容器 %s ====": "==== Container %s ====",
-	"容器 %s 快照失败：%v":   "Snapshot of container %s failed: %v",
-	"这些容器快照失败：%s":     "Snapshots failed for these containers: %s",
+	"项目还没有部署过的容器":              "The project has no deployed containers yet",
+	"==== 容器 %s ====":          "==== Container %s ====",
+	"容器 %s 快照失败：%v":            "Snapshot of container %s failed: %v",
+	"容器还没有部署":                  "The container has not been deployed",
+	"容器已设置顶替，停止前须取消顶替":         "The container has failover configured. Remove failover before stopping it",
+	"节点现在没有持有容器的顶替租约，不能启动或重启":  "The node does not hold the failover lease for this container, so it cannot start or restart it",
+	"不支持的操作":                   "Unsupported action",
+	"节点版本过旧，升级节点后才能启动、停止或重启容器": "The node is out of date. Upgrade it to start, stop, or restart containers",
+	"这些容器快照失败：%s":              "Snapshots failed for these containers: %s",
 
 	// ---- 上传、webhook ----
 	"缺少 X-Nagi-Upload 请求头": "Missing X-Nagi-Upload request header",

@@ -15,6 +15,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/lease"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -103,6 +104,25 @@ func leaseOf(cfg *nagiv1.FailoverConfig) time.Duration {
 
 func participants(cfg *nagiv1.FailoverConfig) [][]byte {
 	return [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
+}
+
+// checkControl 判断能不能手动操作容器。设置了顶替的容器：停止了会被代管重启或另一个节点拉起，所以不能停止；
+// 启动和重启只能在持有租约时做，否则可能和另一个节点上的容器同时运行。
+func (a *agent) checkControl(projectID, container string, action nagiv1.ContainerAction) error {
+	st := a.failovers.get(projectID + "-" + container)
+	if st == nil {
+		return nil
+	}
+	if action == nagiv1.ContainerAction_CONTAINER_ACTION_STOP {
+		return spec.Invalid("容器已设置顶替，停止前须取消顶替")
+	}
+	f := a.failovers
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !bytes.Equal(st.holder, a.selfKey()) || st.fenced || st.restoring || st.failingBack {
+		return spec.Invalid("节点现在没有持有容器的顶替租约，不能启动或重启")
+	}
+	return nil
 }
 
 func (f *failovers) file(id string) string { return filepath.Join(f.dir, id+".json") }

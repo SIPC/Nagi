@@ -4,6 +4,7 @@ import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Button, CodeBlock, Dialog, EmptyRow, Field, Notice, Section, Spinner, Status, Table, Td, Th } from "@/components/ui";
+import { confirmAction, notify } from "@/components/confirm";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
 
@@ -15,17 +16,14 @@ export function useStandbys() {
 export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
   const [busy, setBusy] = useState(false);
   const promote = async () => {
-    if (
-      !confirm(t.standby.promote.confirm)
-    )
-      return;
+    if (!(await confirmAction(t.standby.promote.confirm, { action: t.standby.promote.button, danger: true }))) return;
     setBusy(true);
     try {
       const res = await settingsClient.promoteStandby({});
-      alert(t.standby.promote.done(res.term));
+      await notify(t.standby.promote.done(res.term));
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
-      alert(errorMessage(err));
+      await notify(errorMessage(err));
       setBusy(false);
     }
   };
@@ -77,7 +75,7 @@ export function StandbyCard() {
     }
   };
   const remove = async (id: string, name: string) => {
-    if (!confirm(t.standby.removeConfirm(name))) return;
+    if (!(await confirmAction(t.standby.removeConfirm(name), { action: t.common.actions.remove, danger: true }))) return;
     setError("");
     try {
       await settingsClient.removeStandby({ id });

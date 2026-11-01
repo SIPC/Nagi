@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus, Rocket } from "lucide-react";
+import { Plus, Play, Rocket, RotateCw } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { ContainerMetrics, containerUsage, ProjectMetrics, projectMetricNodes, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
-import { ProjectState, ServiceState } from "@/components/status";
+import { offlineNodeNames, ProjectState, serviceDetail, ServiceState } from "@/components/status";
+import { ask, confirmAction } from "@/components/confirm";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ContainerAction } from "@/gen/nagi/v1/agent_pb";
 import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
@@ -118,12 +121,15 @@ function ContainersTable({
   const usage = containerUsage(useProjectMetrics(project.id, projectMetricNodes(project)).data);
   const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
 
-  const deploy = (containers: Container[]) =>
+  const deploy = async (containers: Container[]) => {
+    const running = containers.filter((m) => m.deployedVersion > 0n).map((m) => m.name);
+    if (running.length > 0 && !(await confirmAction(t.projectContainers.table.deployConfirm(running.join(t.projectContainers.listSeparator)), { action: t.projectContainers.detail.deploy }))) return;
     run(() =>
       projectClient.deploy({ projectId: project.id,
         targets: containers.map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
+  };
 
   return (
     <Section
@@ -187,11 +193,10 @@ function ContainersTable({
               return (
                 <tr key={m.name} className="group cursor-pointer transition-colors hover:bg-subtle" onClick={() => onOpen(m.name)}>
                   <Td onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={t.projectContainers.table.select(m.name)}
                       checked={!!checked[m.name]}
-                      onChange={(e) => setChecked({ ...checked, [m.name]: e.target.checked })}
+                      onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })}
                     />
                   </Td>
                   <Td>
@@ -302,13 +307,30 @@ function ContainerDetail({
   const isGroup = container.kind === "group";
   const serviceNames = [...new Set(services.map((s) => s.name))];
 
-  const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) =>
-    run(() => projectClient.deploy({ projectId: project.id, targets: target, ...opts }), keep);
+  // 「数据」标签不显示操作输出，开始操作时回到概览，否则看不到进度和结果。
+  const showOutput = () => {
+    if (view === "data") onView("overview");
+  };
+  const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) => {
+    showOutput();
+    return run(() => projectClient.deploy({ projectId: project.id, targets: target, ...opts }), keep);
+  };
 
-  // 更新镜像也是一次部署，有草稿时草稿会一起生效，先问一下。
-  const updateImage = () => {
-    if (container.hasDraft && !confirm(t.projectContainers.detail.updateImageDraftConfirm(container.name))) return;
-    deploy({ pullImages: true });
+  // 已部署的容器重新部署会重建容器、中断服务并生成新版本，先确认。
+  const confirmDeploy = async (message: string, action: string, opts: { pull?: boolean; pullImages?: boolean }) => {
+    if (container.deployedVersion > 0n && !(await confirmAction(message, { action }))) return;
+    deploy(opts);
+  };
+  const d = t.projectContainers.detail;
+  const updateImage = () =>
+    confirmDeploy((container.hasDraft ? d.updateImageDraftConfirm : d.updateImageConfirm)(container.name), d.updateImage, { pullImages: true });
+
+  const running = services.some((s) => s.state === "running" || s.state === "paused" || s.state === "restarting");
+  const stopped = services.some((s) => s.state !== "running" && s.state !== "paused" && s.state !== "restarting");
+  const deployed = container.deployedVersion > 0n;
+  const control = (action: ContainerAction) => {
+    showOutput();
+    return run(() => projectClient.controlContainer({ projectId: project.id, container: container.name, action }));
   };
 
   // 上传压缩包：浏览器 → 面板 → mesh → 节点暂存，然后部署时替换容器的 data/。
@@ -327,10 +349,15 @@ function ContainerDetail({
   };
 
   const remove = async (): Promise<boolean> => {
-    const deleteDir = confirm(t.projectContainers.detail.deleteConfirm(isGroup, container.name));
-    if (!deleteDir && !confirm(t.projectContainers.detail.deleteContainersOnlyConfirm(isGroup, container.name))) return false;
+    const answer = await ask(d.deleteConfirm(isGroup, container.name), {
+      action: d.deleteKind(isGroup),
+      danger: true,
+      check: d.deleteDirCheck(isGroup),
+      typeToConfirm: { label: d.deleteTypeName(isGroup, container.name), value: container.name },
+    });
+    if (!answer) return false;
     try {
-      await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir });
+      await projectClient.deleteContainer({ projectId: project.id, container: container.name, baseRevision: container.revision, deleteDir: answer.checked });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       return true;
     } catch (err) {
@@ -347,6 +374,7 @@ function ContainerDetail({
 
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
+  const nodeOnline = node?.online !== false;
   const navigate = useNavigate();
 
   return (
@@ -355,7 +383,7 @@ function ContainerDetail({
         title={
           <>
             {container.name}
-            <ProjectState services={services} deployed={container.deployedVersion > 0n} />
+            <ProjectState services={services} deployed={container.deployedVersion > 0n} offline={offlineNodeNames([container], nodes.data?.nodes)} />
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
           </>
@@ -387,7 +415,7 @@ function ContainerDetail({
               </Button>
             )}
             {cfg?.source?.gitUrl && (
-              <Button variant="outline" size="sm" onClick={() => deploy({ pull: true })} disabled={busy}>
+              <Button variant="outline" size="sm" onClick={() => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true })} disabled={busy}>
                 {t.projectContainers.detail.pullDeploy}
               </Button>
             )}
@@ -396,7 +424,31 @@ function ContainerDetail({
                 {t.projectContainers.detail.updateImage}
               </Button>
             )}
-            <Button size="sm" onClick={() => deploy({})} disabled={busy}>
+            {deployed && (running || !nodeOnline ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || !nodeOnline}
+                onClick={async () => (await confirmAction(d.restartConfirm(isGroup, container.name), { action: d.restart })) && control(ContainerAction.RESTART)}
+              >
+                <RotateCw />
+                {d.restart}
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled={busy || !nodeOnline} onClick={() => control(ContainerAction.START)}>
+                <Play />
+                {d.start}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              onClick={() =>
+                container.hasDraft
+                  ? confirmDeploy(d.deployDraftConfirm(container.name), d.deployDraft, {})
+                  : confirmDeploy(d.redeployConfirm(container.name), d.redeploy, {})
+              }
+              disabled={busy || !nodeOnline}
+            >
               {busy ? <Spinner /> : <Rocket />}
               {busy
                 ? t.projectContainers.detail.deploying
@@ -408,6 +460,21 @@ function ContainerDetail({
             </Button>
             <Menu
               items={[
+                // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
+                ...(deployed && running && stopped ? [{ label: d.start, onSelect: () => control(ContainerAction.START), disabled: busy || !nodeOnline }] : []),
+                // 设置了顶替的容器停止后会被代管重启或另一个节点拉起，须先取消顶替（见 docs/failover.md）。
+                ...(deployed && running
+                  ? [
+                      {
+                        label: d.stop,
+                        hint: container.failover ? d.stopFailoverHint : undefined,
+                        disabled: busy || !nodeOnline || !!container.failover,
+                        onSelect: async () => {
+                          if (await confirmAction(d.stopConfirm(isGroup, container.name), { action: d.stop, danger: true })) control(ContainerAction.STOP);
+                        },
+                      },
+                    ]
+                  : []),
                 // 检查到新版本时标题旁已有按钮；没检查到（还没检查、从未部署成功）时从这里手动更新。
                 ...(hasImageUpdate ? [] : [{ label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy }]),
                 {
@@ -502,12 +569,12 @@ function Overview({ project, container, services }: { project: Project; containe
                 <tr key={s.name + s.containerId}>
                   <Td className="font-medium">{s.name}</Td>
                   <Td>
-                    <ServiceState service={s} />
+                    {node && !node.online ? <Status tone="warning">{t.common.status.unknown}</Status> : <ServiceState service={s} />}
                   </Td>
                   <Td className="font-mono text-xs text-muted-foreground" title={s.image}>
                     {shortImage(s.image)}
                   </Td>
-                  <Td className="text-xs text-muted-foreground">{s.status}</Td>
+                  <Td className="text-xs text-muted-foreground">{serviceDetail(s.status)}</Td>
                 </tr>
               ))
             )}
@@ -853,8 +920,8 @@ function Versions({ project, container, onRun }: { project: Project; container: 
                         size="xs"
                         variant="ghost"
                         disabled={busy}
-                        onClick={() =>
-                          confirm(t.projectContainers.versions.rollbackConfirm(container.name, String(v.version), restoreData)) &&
+                        onClick={async () =>
+                          (await confirmAction(t.projectContainers.versions.rollbackConfirm(container.name, String(v.version), restoreData), { action: t.projectContainers.versions.rollback, danger: restoreData })) &&
                           (onRun(), run(() => projectClient.rollback({ ...ref, version: v.version, restoreData })))
                         }
                       >

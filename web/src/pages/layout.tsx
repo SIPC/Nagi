@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useMatch, useNavigate } from "@tanstack/react-router";
 import { Boxes, ChevronRight, LogOut, Moon, Server, Settings, Sun } from "lucide-react";
-import { authClient, toDate } from "@/lib/api";
+import { authClient, nodeClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { Button, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
@@ -41,6 +41,9 @@ export function AppLayout() {
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
   const standby = useStandbys().data;
+  // 所有页面共用这份节点列表，定时刷新后状态才能及时更新。
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 10000 });
+  const offlineCount = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).length;
   const readOnly = standby?.isStandby ?? false;
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
@@ -62,6 +65,11 @@ export function AppLayout() {
       <it.icon />
       {it.label}
       {it.to === "/settings" && <UpdateDot />}
+      {it.to === "/nodes" && offlineCount > 0 && (
+        <span className="ml-auto rounded-full bg-destructive px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums" title={t.app.nodesOffline(offlineCount)}>
+          {offlineCount}
+        </span>
+      )}
     </Link>
   ));
   const actions = (

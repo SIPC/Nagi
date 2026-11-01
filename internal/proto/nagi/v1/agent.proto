@@ -17,6 +17,8 @@ service AgentService {
   rpc DeployContainer(DeployContainerRequest) returns (stream DeployEvent);
   // 删除容器：停止并删除它的容器，删除缓存；目录默认保留。
   rpc DeleteContainer(DeleteContainerRequest) returns (DeleteContainerResponse);
+  // 手动启动、停止或重启容器：不改配置，不生成版本。
+  rpc ControlContainer(ControlContainerRequest) returns (stream DeployEvent);
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
   rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
   // 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -191,6 +193,20 @@ message DeleteContainerRequest {
 }
 
 message DeleteContainerResponse {}
+
+// ContainerAction 是对容器的手动操作。
+enum ContainerAction {
+  CONTAINER_ACTION_UNSPECIFIED = 0;
+  CONTAINER_ACTION_START = 1;
+  CONTAINER_ACTION_STOP = 2;
+  CONTAINER_ACTION_RESTART = 3;
+}
+
+message ControlContainerRequest {
+  string project_id = 1;
+  string container = 2;
+  ContainerAction action = 3;
+}
 
 message RestoreSnapshotRequest {
   string project_id = 1;

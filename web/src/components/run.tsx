@@ -27,8 +27,13 @@ export function useRun(projectId: string) {
       setResult({ success: false, error: errorMessage(err) });
     } finally {
       setBusy(false);
-      for (const key of ["project", "deployments", "versions", "snapshots"]) queryClient.invalidateQueries({ queryKey: [key, projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      const refresh = () => {
+        for (const key of ["project", "deployments", "versions", "snapshots"]) queryClient.invalidateQueries({ queryKey: [key, projectId] });
+        queryClient.invalidateQueries({ queryKey: ["projects"] });
+      };
+      refresh();
+      // 节点攒一下事件才上报状态，过一会再取一次，免得显示「已完成」时状态还是旧的。
+      setTimeout(refresh, 2000);
     }
   };
   const output = <RunOutput lines={lines} result={result} />;

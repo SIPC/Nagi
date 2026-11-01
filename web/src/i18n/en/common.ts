@@ -17,6 +17,8 @@ export default {
     partial: (running, total) => `Partially running ${running}/${total}`,
     online: "Online",
     offline: "Offline",
+    unknown: "Unknown",
+    nodesOffline: (names) => (names.length === 1 ? `Node ${names[0]} offline` : `${names.length} nodes offline`),
     syncing: "Syncing",
     pendingApproval: "Pending approval",
   },

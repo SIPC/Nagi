@@ -42,6 +42,9 @@ const (
 	// AgentServiceDeleteContainerProcedure is the fully-qualified name of the AgentService's
 	// DeleteContainer RPC.
 	AgentServiceDeleteContainerProcedure = "/nagi.v1.AgentService/DeleteContainer"
+	// AgentServiceControlContainerProcedure is the fully-qualified name of the AgentService's
+	// ControlContainer RPC.
+	AgentServiceControlContainerProcedure = "/nagi.v1.AgentService/ControlContainer"
 	// AgentServiceListSnapshotsProcedure is the fully-qualified name of the AgentService's
 	// ListSnapshots RPC.
 	AgentServiceListSnapshotsProcedure = "/nagi.v1.AgentService/ListSnapshots"
@@ -141,6 +144,8 @@ type AgentServiceClient interface {
 	DeployContainer(context.Context, *connect.Request[v1.DeployContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 删除容器：停止并删除它的容器，删除缓存；目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。
+	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -235,6 +240,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceDeleteContainerProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("DeleteContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		controlContainer: connect.NewClient[v1.ControlContainerRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceControlContainerProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
 			connect.WithClientOptions(opts...),
 		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
@@ -449,6 +460,7 @@ type agentServiceClient struct {
 	putContainer         *connect.Client[v1.PutContainerRequest, v1.PutContainerResponse]
 	deployContainer      *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
 	deleteContainer      *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
+	controlContainer     *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
 	listSnapshots        *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot       *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -498,6 +510,11 @@ func (c *agentServiceClient) DeployContainer(ctx context.Context, req *connect.R
 // DeleteContainer calls nagi.v1.AgentService.DeleteContainer.
 func (c *agentServiceClient) DeleteContainer(ctx context.Context, req *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error) {
 	return c.deleteContainer.CallUnary(ctx, req)
+}
+
+// ControlContainer calls nagi.v1.AgentService.ControlContainer.
+func (c *agentServiceClient) ControlContainer(ctx context.Context, req *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.controlContainer.CallServerStream(ctx, req)
 }
 
 // ListSnapshots calls nagi.v1.AgentService.ListSnapshots.
@@ -679,6 +696,8 @@ type AgentServiceHandler interface {
 	DeployContainer(context.Context, *connect.Request[v1.DeployContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 删除容器：停止并删除它的容器，删除缓存；目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。
+	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -769,6 +788,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceDeleteContainerProcedure,
 		svc.DeleteContainer,
 		connect.WithSchema(agentServiceMethods.ByName("DeleteContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceControlContainerHandler := connect.NewServerStreamHandler(
+		AgentServiceControlContainerProcedure,
+		svc.ControlContainer,
+		connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceListSnapshotsHandler := connect.NewUnaryHandler(
@@ -983,6 +1008,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceDeployContainerHandler.ServeHTTP(w, r)
 		case AgentServiceDeleteContainerProcedure:
 			agentServiceDeleteContainerHandler.ServeHTTP(w, r)
+		case AgentServiceControlContainerProcedure:
+			agentServiceControlContainerHandler.ServeHTTP(w, r)
 		case AgentServiceListSnapshotsProcedure:
 			agentServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case AgentServiceCreateSnapshotProcedure:
@@ -1070,6 +1097,10 @@ func (UnimplementedAgentServiceHandler) DeployContainer(context.Context, *connec
 
 func (UnimplementedAgentServiceHandler) DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteContainer is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ControlContainer is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {

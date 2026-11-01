@@ -42,6 +42,7 @@ import {
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
+import { confirmAction, notify } from "@/components/confirm";
 
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
@@ -99,12 +100,12 @@ function nodeSpec(info?: NodeInfo, usage?: NodeUsage) {
 function NodeStatus({ n }: { n: Node }) {
   if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
   if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
-  return <Status>{t.common.status.offline}</Status>;
+  return <Status tone="danger">{t.common.status.offline}</Status>;
 }
 
 // approve 批准用接入码加入的节点。
 async function approve(n: Node) {
-  if (!confirm(t.nodes.approveConfirm(n.name, n.address || n.id))) return false;
+  if (!(await confirmAction(t.nodes.approveConfirm(n.name, n.address || n.id), { action: t.nodes.approve }))) return false;
   await nodeClient.approveNode({ nodeId: n.id });
   return true;
 }
@@ -244,12 +245,12 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   }
   const target = upgradeTarget(n, panelVersion);
   const remove = async () => {
-    if (!confirm(t.nodes.removeConfirm(n.name))) return;
+    if (!(await confirmAction(t.nodes.removeConfirm(n.name), { action: t.common.actions.remove, danger: true }))) return;
     try {
       await nodeClient.removeNode({ nodeId: n.id });
       navigate({ to: "/nodes" });
     } catch (err) {
-      alert(errorMessage(err));
+      await notify(errorMessage(err));
     }
   };
   return (
@@ -388,7 +389,7 @@ function NodeUpgrade({ n, target, onDone }: { n: Node; target: string; onDone: (
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const upgrade = async () => {
-    if (!confirm(t.nodes.upgrade.confirm(n.name, target))) return;
+    if (!(await confirmAction(t.nodes.upgrade.confirm(n.name, target), { action: t.nodes.upgrade.action }))) return;
     setError("");
     setBusy(true);
     try {
@@ -623,7 +624,7 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
   const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
   const [error, setError] = useState("");
   const remove = async (projectId: string, container: string, label: string) => {
-    if (!confirm(t.nodes.replicas.deleteConfirm(label))) return;
+    if (!(await confirmAction(t.nodes.replicas.deleteConfirm(label), { action: t.common.actions.delete, danger: true }))) return;
     setError("");
     try {
       await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
@@ -689,7 +690,7 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
 function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: UnknownContainer[]; onDone: () => void }) {
   const [error, setError] = useState("");
   const adopt = async (u: UnknownContainer) => {
-    if (!confirm(t.nodes.unknown.adoptConfirm(u.container, u.projectName))) return;
+    if (!(await confirmAction(t.nodes.unknown.adoptConfirm(u.container, u.projectName), { action: t.nodes.unknown.adopt }))) return;
     setError("");
     try {
       await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
