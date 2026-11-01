@@ -5,6 +5,7 @@ import { PanelMeshCard } from "@/pages/mesh";
 import { InviteCard } from "@/pages/invite";
 import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
+import { UpdateCard, UpdateDot } from "@/pages/update";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -17,6 +18,7 @@ export const settingsTabs = [
   { value: "standby", label: t.settings.tabs.standby.label, description: t.settings.tabs.standby.description },
   { value: "invite", label: t.settings.tabs.invite.label, description: t.settings.tabs.invite.description },
   { value: "mesh", label: t.settings.tabs.mesh.label, description: t.settings.tabs.mesh.description },
+  { value: "update", label: t.settings.tabs.update.label, description: t.settings.tabs.update.description },
 ] as const;
 
 export type SettingsTab = (typeof settingsTabs)[number]["value"];
@@ -39,6 +41,7 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
               )}
             >
               {t.label}
+              {t.value === "update" && <UpdateDot />}
             </button>
           ))}
         </nav>
@@ -53,6 +56,7 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
           {cur.value === "standby" && <StandbyCard />}
           {cur.value === "invite" && <InviteCard />}
           {cur.value === "mesh" && <PanelMeshCard />}
+          {cur.value === "update" && <UpdateCard />}
         </div>
       </div>
     </>

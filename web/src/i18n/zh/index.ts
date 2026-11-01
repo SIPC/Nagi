@@ -11,6 +11,7 @@ import mesh from "./mesh";
 import panels from "./panels";
 import security from "./security";
 import standby from "./standby";
+import update from "./update";
 import projects from "./projects";
 import nodes from "./nodes";
 import project from "./project";
@@ -33,6 +34,7 @@ export default {
   panels,
   security,
   standby,
+  update,
   projects,
   nodes,
   project,

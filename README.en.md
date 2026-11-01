@@ -85,7 +85,7 @@ If the primary panel fails, promote the standby panel to primary.
 
 ### Upgrade
 
-Run the install script again to upgrade the panel; its port, data directory and other settings stay the same. Nodes can be upgraded with one click on the **Nodes** page.
+Update the panel with one click under **Settings → Updates**, or run the install script again; its port, data directory and other settings stay the same. Nodes can be upgraded with one click on the **Nodes** page.
 
 ### Uninstall
 

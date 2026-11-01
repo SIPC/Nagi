@@ -250,6 +250,10 @@ service SettingsService {
   rpc RemoveStandby(RemoveStandbyRequest) returns (RemoveStandbyResponse);
   // 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
   rpc PromoteStandby(PromoteStandbyRequest) returns (PromoteStandbyResponse);
+  // 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
+  rpc CheckPanelUpdate(CheckPanelUpdateRequest) returns (CheckPanelUpdateResponse);
+  // 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+  rpc UpdatePanel(UpdatePanelRequest) returns (UpdatePanelResponse);
   // 账号安全：两步验证和安全入口。
   rpc GetSecurity(GetSecurityRequest) returns (Security);
   // 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -573,6 +577,31 @@ message PromoteStandbyRequest {}
 
 message PromoteStandbyResponse {
   uint64 term = 1;
+}
+
+message CheckPanelUpdateRequest {
+  // 不用缓存的结果（默认缓存 1 小时），用户点"检查更新"时用。
+  bool force = 1;
+}
+
+message CheckPanelUpdateResponse {
+  // 本面板的版本。
+  string current = 1;
+  // 最新发布的版本。
+  string latest = 2;
+  // 最新版本比本面板新，可以更新。
+  bool available = 3;
+  // 最新版本的发布页面（有更新说明）。
+  string release_url = 4;
+  // 本面板不能一键更新的原因（例如本地编译的版本），能更新时为空。
+  string unsupported = 5;
+}
+
+message UpdatePanelRequest {}
+
+message UpdatePanelResponse {
+  // 更新到的版本。面板正在重启，版本变成它就是重启好了。
+  string version = 1;
 }
 
 message ConnectProjectRequest {
