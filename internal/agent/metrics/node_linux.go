@@ -90,23 +90,14 @@ func mountOf(path string) string {
 	return best
 }
 
-// unescapeMount 还原 mountinfo 里转义的字符（例如空格写成 \040）。
-func unescapeMount(s string) string {
-	if !strings.Contains(s, `\`) {
-		return s
+// readMounts 返回当前的挂载列表。
+func readMounts() []mountEntry {
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return nil
 	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' && i+3 < len(s) {
-			if n, err := strconv.ParseUint(s[i+1:i+4], 8, 8); err == nil {
-				b.WriteByte(byte(n))
-				i += 3
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-	}
-	return b.String()
+	defer f.Close()
+	return parseMountInfo(f)
 }
 
 // readNet 返回物理网卡累计收发的字节数，不算回环、Docker 网桥、容器虚拟网卡和 WireGuard。

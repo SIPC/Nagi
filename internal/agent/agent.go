@@ -558,6 +558,9 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 	info.ProjectsRoot = a.projectsRoot()
 	latest := a.metrics.Latest()
 	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
+	for _, d := range a.metrics.Disks() {
+		usage.Disks = append(usage.Disks, &nagiv1.DiskUsage{Mount: d.Mount, TotalBytes: d.Total, UsedBytes: d.Used})
+	}
 	st := a.clusterOf(p)
 	var primaryAddr string
 	if pp, ok := a.id.panel(st.Primary); ok {

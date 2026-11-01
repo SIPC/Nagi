@@ -269,12 +269,13 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
   };
 
   // 每行：图标、条、「已用 / 总量」。数值是一列、靠左，几行从同一处开始；已用是重点，「/ 总量」淡一些。
-  const row = (icon: ReactNode, label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt) => {
+  const row = (icon: ReactNode, label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt, detail?: string) => {
     const ratio = percent === undefined ? 0 : percent / 100;
     const used = percent !== undefined && total ? ratio * total : undefined;
     const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
-    const title =
+    const summary =
       percent === undefined ? `${label} —` : used !== undefined ? `${label} ${fmt(used)} / ${fmtTotal(total!)} (${fmtPct(percent)})` : `${label} ${fmtPct(percent)}`;
+    const title = detail ? `${summary}\n${detail}` : summary;
     return (
       <span className="contents">
         <span className="opacity-70 [&_svg]:size-3" title={title}>
@@ -295,6 +296,11 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
   };
   // CPU 和容器一样按每核 100% 算：12 核的机器总量是 1200%。
   const cpuTotal = info?.cpus ? info.cpus * 100 : undefined;
+  // 磁盘是所有盘加起来，每块盘的用量在悬停提示里。旧版本的节点不报各盘，退回数据目录所在的盘。
+  const disks = usage?.disks ?? [];
+  const diskTotal = disks.reduce((sum, d) => sum + Number(d.totalBytes), 0);
+  const diskUsed = disks.reduce((sum, d) => sum + Number(d.usedBytes), 0);
+  const diskDetail = disks.length > 1 ? disks.map((d) => `${d.mount}  ${size(Number(d.usedBytes))} / ${size(Number(d.totalBytes))}`).join("\n") : undefined;
   return (
     <span
       className={cn(
@@ -304,7 +310,9 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
     >
       {row(<Cpu />, "CPU", usage?.cpu, cpuTotal, fmtCpuShort)}
       {row(<MemoryStick />, m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
-      {row(<HardDrive />, m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
+      {diskTotal > 0
+        ? row(<HardDrive />, m.disk, (100 * diskUsed) / diskTotal, diskTotal, size, size, diskDetail)
+        : row(<HardDrive />, m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
     </span>
   );
 }

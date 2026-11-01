@@ -360,6 +360,16 @@ message NodeUsage {
   double memory = 2;
   // 数据目录所在的磁盘。
   double disk = 3;
+  // 节点上的所有本地磁盘，同一块盘的多个挂载点只算一次。旧版本的节点不报。
+  repeated DiskUsage disks = 4;
+}
+
+// DiskUsage 是一块磁盘的容量和用量（字节）。
+message DiskUsage {
+  // 挂载点。
+  string mount = 1;
+  uint64 total_bytes = 2;
+  uint64 used_bytes = 3;
 }
 
 message NodeInfo {

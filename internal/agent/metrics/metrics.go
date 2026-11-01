@@ -51,6 +51,7 @@ type Collector struct {
 
 	mu     sync.RWMutex
 	latest map[string]float64
+	disks  []Disk
 
 	prevTime          time.Time
 	prevCPUTotal      uint64
@@ -91,6 +92,28 @@ func (c *Collector) projectDisks() map[string]float64 {
 		}
 	}
 	return out
+}
+
+// readDisks 读取节点上所有本地磁盘的容量和用量，节点目录和项目目录所在的盘一定包含在内。
+func (c *Collector) readDisks() []Disk {
+	paths := []string{c.diskPath}
+	if c.ProjectDirs != nil {
+		paths = append(paths, c.ProjectDirs()...)
+	}
+	var out []Disk
+	for _, mount := range selectDisks(readMounts(), paths) {
+		if total, free, ok := readDisk(mount); ok && total > 0 {
+			out = append(out, Disk{Mount: mount, Total: total, Used: total - free})
+		}
+	}
+	return out
+}
+
+// Disks 返回最近一次采样的各磁盘容量和用量。
+func (c *Collector) Disks() []Disk {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.disks
 }
 
 // DiskFree 返回 path 所在的挂载点和剩余空间（字节）。不支持的系统上 ok 为 false。
@@ -172,6 +195,10 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	for mount, pct := range c.projectDisks() {
 		v["node:disk@"+mount] = pct
 	}
+	disks := c.readDisks()
+	c.mu.Lock()
+	c.disks = disks
+	c.mu.Unlock()
 	if rx, tx, ok := readNet(); ok {
 		if !first && elapsed > 0 && rx >= c.prevNetRx && tx >= c.prevNetTx {
 			v["node:net_rx"] = float64(rx-c.prevNetRx) / elapsed

@@ -41,7 +41,7 @@ import {
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
-import type { NodeInfo } from "@/gen/nagi/v1/common_pb";
+import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 
 export type NodeTab = "metrics" | "panels" | "mesh" | "settings" | "replicas";
 
@@ -85,12 +85,14 @@ function upgradeTarget(n: Node, panelVersion: string) {
 }
 
 // nodeSpec：节点的配置，例如「2 核 · 内存 3.8GB · 磁盘 39GB」。旧版本的节点不报配置，返回空串。
-function nodeSpec(info?: NodeInfo) {
+// 磁盘是所有盘加起来；旧版本的节点不报各盘，用数据目录所在的盘。
+function nodeSpec(info?: NodeInfo, usage?: NodeUsage) {
   if (!info) return "";
   const parts: string[] = [];
   if (info.cpus) parts.push(t.nodes.cores(info.cpus));
   if (info.memoryBytes) parts.push(`${t.nodes.memory} ${fmtBytesShort(Number(info.memoryBytes))}`);
-  if (info.diskBytes) parts.push(`${t.nodes.disk} ${fmtBytesShort(Number(info.diskBytes))}`);
+  const disk = usage?.disks.reduce((sum, d) => sum + Number(d.totalBytes), 0) || Number(info.diskBytes);
+  if (disk) parts.push(`${t.nodes.disk} ${fmtBytesShort(disk)}`);
   return parts.join(" · ");
 }
 
@@ -269,7 +271,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
                 <span>
                   {n.info.os}/{n.info.arch}
                 </span>
-                {nodeSpec(n.info) && <span>{nodeSpec(n.info)}</span>}
+                {nodeSpec(n.info, n.usage) && <span>{nodeSpec(n.info, n.usage)}</span>}
                 <span className="font-mono">
                   Docker {n.info.dockerVersion || "?"} / Compose {n.info.composeVersion || "?"}
                 </span>
