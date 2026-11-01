@@ -50,7 +50,7 @@ function useTheme() {
 }
 
 // usePageTitle：浏览器标签页显示当前页面，方便在多个标签页之间区分。
-function usePageTitle(nodes: Node[] | undefined) {
+function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   const location = useRouterState({ select: (s) => s.location });
   const parts = location.pathname.split("/").filter(Boolean);
   const projectId = parts[0] === "projects" && parts[1] && parts[1] !== "new" ? parts[1] : "";
@@ -63,7 +63,8 @@ function usePageTitle(nodes: Node[] | undefined) {
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
-    const tab = settingsTabs.find((x) => x.value === (location.search as { tab?: string }).tab) ?? settingsTabs[0];
+    const allowed = isAdmin ? settingsTabs : settingsTabs.filter((x) => x.value === "security");
+    const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed[0];
     title = `${tab.label} · ${t.app.nav.settings}`;
   }
   useEffect(() => {
@@ -120,8 +121,8 @@ export function AppLayout() {
   // 所有页面共用这份节点列表，定时刷新后状态才能及时更新。
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 10000 });
   const offlineCount = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).length;
-  usePageTitle(nodes.data?.nodes);
   const { isAdmin, isViewer } = useRole();
+  usePageTitle(nodes.data?.nodes, isAdmin);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
   const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));

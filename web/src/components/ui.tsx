@@ -111,7 +111,7 @@ export function Select({
   // 必填又没有值（例如没有在线节点）时不给内部值，表单校验才拦得住；空值选项的文字作为占位显示。
   const unset = required && value === "";
   return (
-    <SelectRoot value={unset ? "" : value === "" ? emptyValue : value} onValueChange={(v) => onChange?.({ target: { value: v === emptyValue ? "" : v } })} required={required} disabled={disabled}>
+    <SelectRoot value={unset ? "" : value === "" ? emptyValue : value} onValueChange={(v) => v && onChange?.({ target: { value: v === emptyValue ? "" : v } })} required={required} disabled={disabled}>
       <SelectTrigger id={id} className={className} aria-label={ariaLabel}>
         <SelectValue placeholder={unset ? options.find((o) => o.value === "")?.label : undefined} />
       </SelectTrigger>

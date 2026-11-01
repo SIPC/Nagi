@@ -11,17 +11,11 @@ import { t } from "@/i18n";
 
 const roles = ["admin", "operator", "viewer"] as const;
 
-function RoleOptions() {
-  return (
-    <>
-      {roles.map((r) => (
-        <option key={r} value={r}>
-          {t.members.roles[r]}
-        </option>
-      ))}
-    </>
-  );
-}
+const roleOptions = roles.map((r) => (
+  <option key={r} value={r}>
+    {t.members.roles[r]}
+  </option>
+));
 
 function AddMember({ onDone }: { onDone: () => void }) {
   const [username, setUsername] = useState("");
@@ -50,7 +44,7 @@ function AddMember({ onDone }: { onDone: () => void }) {
       </Field>
       <Field label={t.members.role} htmlFor="member-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
         <Select id="member-role" value={role} onChange={(e) => setRole(e.target.value)}>
-          <RoleOptions />
+          {roleOptions}
         </Select>
       </Field>
       {add.error && <Alert>{errorMessage(add.error)}</Alert>}
@@ -156,7 +150,7 @@ export function MembersCard() {
                     value={u.role}
                     onChange={(e) => call(() => settingsClient.updateUser({ id: u.id, role: e.target.value }), t.common.feedback.saved)}
                   >
-                    <RoleOptions />
+                    {roleOptions}
                   </Select>
                 </Td>
                 <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{u.totpEnabled ? t.members.totpOn : t.members.totpOff}</Td>

@@ -32,6 +32,7 @@ import {
 import { useUnsaved } from "@/components/unsaved";
 import { checkName } from "@/lib/config";
 import { useStandbys } from "@/pages/standby";
+import { useRole } from "@/components/role";
 
 // Reminders：首页提醒开启两步验证、单独备份面板主密钥。可以"不再提醒"（只记在这个浏览器里）。
 function Reminders() {
@@ -116,7 +117,9 @@ export function ProjectsPage() {
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
   const offlineNodes = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).map((n) => n.name);
-  const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => !s.connected).map((s) => s.name);
+  const { isAdmin } = useRole();
+  // 备用面板在设置里，只有管理员能处理。
+  const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "created">("created");
   const all = projects.data?.projects ?? [];

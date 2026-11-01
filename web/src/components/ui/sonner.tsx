@@ -12,7 +12,7 @@ export function Toaster() {
   return (
     <Sonner
       theme={dark ? "dark" : "light"}
-      position="bottom-right"
+      position="top-center"
       duration={3000}
       style={
         {

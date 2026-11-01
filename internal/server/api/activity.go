@@ -26,6 +26,7 @@ const activityKeep = 5000
 // activitySkipped 是不记录的接口：查询以外的、不改变状态或太频繁的调用。
 var activitySkipped = map[string]bool{
 	nagiv1connect.AuthServiceMeProcedure:             true,
+	nagiv1connect.AuthServiceLogoutProcedure:         true,
 	nagiv1connect.AuthServiceSetLanguageProcedure:    true,
 	nagiv1connect.SetupServiceGetSetupStateProcedure: true,
 	nagiv1connect.EnrollServiceEnrollProcedure:       true,
@@ -76,14 +77,23 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 	if actor == "" {
 		actor = activityField(req, "username")
 	}
+	target := activityField(req, "container", "name", "username", "node_id", "id")
+	// 部署的目标是一个列表。
+	if d, ok := req.(*nagiv1.DeployRequest); ok {
+		names := make([]string, 0, len(d.GetTargets()))
+		for _, c := range d.GetTargets() {
+			names = append(names, c.GetContainer())
+		}
+		target = strings.Join(names, ", ")
+	}
 	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
 		CreatedAt: time.Now().Unix(),
 		Kind:      "operation",
-		Actor:     actor,
+		Actor:     clipActivity(actor, 64),
 		Action:    method,
 		ProjectID: activityField(req, "project_id"),
-		Target:    activityField(req, "container", "name", "username", "node_id", "id"),
-		Detail:    failure,
+		Target:    clipActivity(target, 200),
+		Detail:    clipActivity(failure, 500),
 		Failed:    boolInt(failure != ""),
 	})
 	if err != nil {
@@ -91,6 +101,15 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		return
 	}
 	_ = a.Q.PruneActivity(context.WithoutCancel(ctx), activityKeep)
+}
+
+// clipActivity 限制写进记录的长度：登录失败时的用户名、错误信息都可能很长。
+func clipActivity(v string, n int) string {
+	r := []rune(v)
+	if len(r) > n {
+		return string(r[:n])
+	}
+	return v
 }
 
 func boolInt(b bool) int64 {

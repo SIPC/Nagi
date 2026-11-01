@@ -311,7 +311,7 @@ function ContainerDetail({
   container,
   services,
   hasImageUpdate,
-  view,
+  view: viewProp,
   onView,
 }: {
   project: Project;
@@ -324,6 +324,8 @@ function ContainerDetail({
   const { run, busy, output, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
   const { isViewer } = useRole();
+  // 只读角色没有配置和终端，直接打开这些地址时显示概览。
+  const view = isViewer && (viewProp === "config" || viewProp === "terminal") ? "overview" : viewProp;
   const fileRef = useRef<HTMLInputElement>(null);
   // 换了容器时，上一个容器的部署输出不再显示。
   useEffect(() => {

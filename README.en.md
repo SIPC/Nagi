@@ -54,7 +54,7 @@ Also included:
 
 ### Not supported yet
 
-Automatic scheduling, multiple replicas of one container, several panels managing the same node, multiple users, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
+Automatic scheduling, multiple replicas of one container, several panels managing the same node, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
 
 ## Quick start
 

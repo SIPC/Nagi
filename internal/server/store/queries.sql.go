@@ -1471,7 +1471,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpLastStep,
 			&i.Language,
 			&i.Role,
-			&i.Role,
 		); err != nil {
 			return nil, err
 		}
