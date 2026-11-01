@@ -24,8 +24,13 @@ import (
 func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
-		if _, err := a.Auth.Authenticate(r.Context(), auth.SessionToken(r.Header)); err != nil {
+		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "未登录"), http.StatusUnauthorized)
+			return
+		}
+		if !auth.CanOperate(u.Role) {
+			http.Error(w, i18n.Sprintf(lang, "当前账号没有权限执行这个操作"), http.StatusForbidden)
 			return
 		}
 		q := r.URL.Query()

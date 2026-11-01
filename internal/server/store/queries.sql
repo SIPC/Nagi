@@ -24,17 +24,35 @@ DELETE FROM settings WHERE key = ?;
 SELECT count(*) FROM users;
 
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)
+INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)
 RETURNING id;
+
+-- name: SetUserRole :exec
+UPDATE users SET role = ? WHERE id = ?;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?;
+
+-- name: CountAdmins :one
+SELECT count(*) FROM users WHERE role = 'admin';
+
+-- name: ListUserSessions :many
+SELECT token_hash, created_at, expires_at, ip FROM sessions WHERE user_id = ? ORDER BY created_at DESC;
+
+-- name: DeleteUserSession :execrows
+DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?;
+
+-- name: ClearUserTOTP :exec
+UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE id = ?;
 
 -- name: GetUserByUsername :one
 SELECT * FROM users WHERE username = ?;
 
 -- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?);
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?);
 
 -- name: GetSession :one
-SELECT s.user_id, s.expires_at, u.username
+SELECT s.user_id, s.expires_at, u.username, u.role
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?;

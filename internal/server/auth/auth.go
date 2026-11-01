@@ -113,13 +113,13 @@ func (s *Service) HasUsers(ctx context.Context) (bool, error) {
 }
 
 // CreateUser 创建用户。
-func (s *Service) CreateUser(ctx context.Context, username, password string) (int64, error) {
+func (s *Service) CreateUser(ctx context.Context, username, password, role string) (int64, error) {
 	hash, err := HashPassword(password)
 	if err != nil {
 		return 0, err
 	}
 	return s.q.CreateUser(ctx, store.CreateUserParams{
-		Username: username, PasswordHash: hash, CreatedAt: time.Now().Unix(),
+		Username: username, PasswordHash: hash, CreatedAt: time.Now().Unix(), Role: role,
 	})
 }
 
@@ -167,7 +167,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		}
 	}
 	failed = false
-	return s.NewSession(ctx, user.ID)
+	return s.NewSession(ctx, user.ID, ip)
 }
 
 // verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。
@@ -189,7 +189,7 @@ var dummyHash = sync.OnceValue(func() string {
 })
 
 // NewSession 为用户创建会话，返回要设置的 cookie。
-func (s *Service) NewSession(ctx context.Context, userID int64) (*http.Cookie, error) {
+func (s *Service) NewSession(ctx context.Context, userID int64, ip string) (*http.Cookie, error) {
 	token, err := RandomToken()
 	if err != nil {
 		return nil, err
@@ -200,6 +200,7 @@ func (s *Service) NewSession(ctx context.Context, userID int64) (*http.Cookie, e
 		UserID:    userID,
 		CreatedAt: now.Unix(),
 		ExpiresAt: now.Add(sessionTTL).Unix(),
+		Ip:        ip,
 	}); err != nil {
 		return nil, err
 	}
@@ -232,6 +233,12 @@ func (s *Service) Authenticate(ctx context.Context, token string) (string, error
 type User struct {
 	ID   int64
 	Name string
+	Role string
+}
+
+// SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
+func (s *Service) SessionUser(ctx context.Context, token string) (User, error) {
+	return s.session(ctx, token)
 }
 
 func (s *Service) session(ctx context.Context, token string) (User, error) {
@@ -246,7 +253,7 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
 		return User{}, i18n.New("登录已过期")
 	}
-	return User{ID: row.UserID, Name: row.Username}, nil
+	return User{ID: row.UserID, Name: row.Username, Role: row.Role}, nil
 }
 
 // CleanupLoop 定期清理过期会话，直到 ctx 取消。

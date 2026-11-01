@@ -30,8 +30,13 @@ func (a *API) UploadHandler() http.Handler {
 			}
 			reply(code, map[string]string{"message": msg})
 		}
-		if _, err := a.Auth.Authenticate(r.Context(), auth.SessionToken(r.Header)); err != nil {
+		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		if err != nil {
 			fail(http.StatusUnauthorized, i18n.New("未登录"))
+			return
+		}
+		if !auth.CanOperate(u.Role) {
+			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
 			return
 		}
 		if r.Header.Get("X-Nagi-Upload") != "1" {

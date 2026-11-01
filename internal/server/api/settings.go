@@ -201,7 +201,13 @@ func randomID() string {
 // ---- 账号安全 ----
 
 func (s *settingsService) security(ctx context.Context) *nagiv1.Security {
-	return &nagiv1.Security{TotpEnabled: s.Auth.TOTPEnabled(ctx, auth.CurrentUser(ctx).ID), Entrance: s.Auth.Entrance(ctx)}
+	u := auth.CurrentUser(ctx)
+	sec := &nagiv1.Security{TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID)}
+	// 安全入口的路径本身是秘密，只给管理员看。
+	if u.Role == auth.RoleAdmin {
+		sec.Entrance = s.Auth.Entrance(ctx)
+	}
+	return sec
 }
 
 func (s *settingsService) GetSecurity(ctx context.Context, _ *connect.Request[nagiv1.GetSecurityRequest]) (*connect.Response[nagiv1.Security], error) {

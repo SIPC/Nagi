@@ -110,6 +110,7 @@ type Session struct {
 	UserID    int64
 	CreatedAt int64
 	ExpiresAt int64
+	Ip        string
 }
 
 type Setting struct {
@@ -139,6 +140,7 @@ type User struct {
 	TotpSecret   string
 	TotpLastStep int64
 	Language     string
+	Role         string
 }
 
 type Version struct {

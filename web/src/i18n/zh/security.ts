@@ -1,5 +1,6 @@
 // 设置页「账号安全」：主密钥、登录密码、两步验证、安全入口。
 export default {
+  sessions: { label: "登录设备", description: "当前账号已登录的设备，可以让其他设备退出。" },
   masterKey: {
     label: "面板主密钥",
     description: "用于加密配置备份密钥、两步验证密钥和告警令牌，请单独备份。",

@@ -66,7 +66,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	if a.Panel.Standby != nil {
 		chain = append(chain, readOnly{a})
 	}
-	chain = append(chain, activityLog{a})
+	chain = append(chain, activityLog{a}, roleCheck{})
 	interceptors := connect.WithHandlerOptions(
 		connect.WithInterceptors(chain...),
 		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。
@@ -125,12 +125,12 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 	if utf8.RuneCountInString(req.Msg.GetPassword()) < 8 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("密码至少 8 个字符"))
 	}
-	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword())
+	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword(), auth.RoleAdmin)
 	if err != nil {
 		return nil, err
 	}
 	_ = s.Q.DeleteSetting(ctx, SettingSetupToken)
-	cookie, err := s.Auth.NewSession(ctx, userID)
+	cookie, err := s.Auth.NewSession(ctx, userID, auth.RequestIP(req.Peer().Addr, req.Header()))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
 	u := auth.CurrentUser(ctx)
-	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID)}
+	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		resp.Language = row.Language
 	}

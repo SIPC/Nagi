@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
+import { useRole } from "@/components/role";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
@@ -322,6 +323,7 @@ function ContainerDetail({
 }) {
   const { run, busy, output, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
+  const { isViewer } = useRole();
   const fileRef = useRef<HTMLInputElement>(null);
   // 换了容器时，上一个容器的部署输出不再显示。
   useEffect(() => {
@@ -521,17 +523,17 @@ function ContainerDetail({
         onChange={onView}
         items={[
           { value: "overview", label: t.projectContainers.tabs.overview },
-          { value: "config", label: t.projectContainers.tabs.config },
+          ...(isViewer ? [] : [{ value: "config" as const, label: t.projectContainers.tabs.config }]),
           { value: "versions", label: t.projectContainers.tabs.versions },
           { value: "logs", label: t.projectContainers.tabs.logs },
-          { value: "terminal", label: t.projectContainers.tabs.terminal },
+          ...(isViewer ? [] : [{ value: "terminal" as const, label: t.projectContainers.tabs.terminal }]),
           { value: "data", label: t.projectContainers.tabs.data },
         ]}
       />
       <div key={view} className="grid animate-fade-in gap-6">
         {view !== "data" && output}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
-        {view === "config" && <ContainerConfig
+        {view === "config" && !isViewer && <ContainerConfig
             key={`cfg-${container.revision}`}
             project={project}
             container={container}
@@ -548,7 +550,7 @@ function ContainerDetail({
             containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
           />
         )}
-        {view === "terminal" && (
+        {view === "terminal" && !isViewer && (
           <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         )}
         {view === "data" && <ContainerData project={project} container={container} />}

@@ -13,6 +13,7 @@ import { CommandPalette, SearchButton } from "@/components/command-palette";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { settingsTabs } from "@/pages/settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
+import { useRole } from "@/components/role";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -120,7 +121,10 @@ export function AppLayout() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 10000 });
   const offlineCount = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).length;
   usePageTitle(nodes.data?.nodes);
-  const readOnly = standby?.isStandby ?? false;
+  const { isAdmin, isViewer } = useRole();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
+  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
 

@@ -5,6 +5,7 @@ export default {
   tabs: {
     access: { label: "Panel access", description: "Addresses nodes and browsers use to reach this panel." },
     security: { label: "Account security", description: "Sign-in password, two-factor authentication and secure entry." },
+    members: { label: "Members", description: "Accounts that can sign in to this panel, and their roles." },
     alerts: { label: "Alerts", description: "Notification channels and trigger rules for node and container issues." },
     activity: { label: "Activity", description: "Operations on this panel and alerts sent. The latest 5,000 entries are kept." },
     standby: {

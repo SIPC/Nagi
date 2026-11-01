@@ -171,6 +171,24 @@ const (
 	// SettingsServiceListActivityProcedure is the fully-qualified name of the SettingsService's
 	// ListActivity RPC.
 	SettingsServiceListActivityProcedure = "/nagi.v1.SettingsService/ListActivity"
+	// SettingsServiceListUsersProcedure is the fully-qualified name of the SettingsService's ListUsers
+	// RPC.
+	SettingsServiceListUsersProcedure = "/nagi.v1.SettingsService/ListUsers"
+	// SettingsServiceCreateUserProcedure is the fully-qualified name of the SettingsService's
+	// CreateUser RPC.
+	SettingsServiceCreateUserProcedure = "/nagi.v1.SettingsService/CreateUser"
+	// SettingsServiceUpdateUserProcedure is the fully-qualified name of the SettingsService's
+	// UpdateUser RPC.
+	SettingsServiceUpdateUserProcedure = "/nagi.v1.SettingsService/UpdateUser"
+	// SettingsServiceDeleteUserProcedure is the fully-qualified name of the SettingsService's
+	// DeleteUser RPC.
+	SettingsServiceDeleteUserProcedure = "/nagi.v1.SettingsService/DeleteUser"
+	// SettingsServiceListSessionsProcedure is the fully-qualified name of the SettingsService's
+	// ListSessions RPC.
+	SettingsServiceListSessionsProcedure = "/nagi.v1.SettingsService/ListSessions"
+	// SettingsServiceRevokeSessionProcedure is the fully-qualified name of the SettingsService's
+	// RevokeSession RPC.
+	SettingsServiceRevokeSessionProcedure = "/nagi.v1.SettingsService/RevokeSession"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -1182,6 +1200,15 @@ type SettingsServiceClient interface {
 	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
 	// 活动记录：用户的操作和告警，新的在前。
 	ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error)
+	// 成员（只有管理员能用）。
+	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
+	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error)
+	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	UpdateUser(context.Context, *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error)
+	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
+	// 当前用户自己的登录会话。
+	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
+	RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -1321,6 +1348,42 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("ListActivity")),
 			connect.WithClientOptions(opts...),
 		),
+		listUsers: connect.NewClient[v1.ListUsersRequest, v1.ListUsersResponse](
+			httpClient,
+			baseURL+SettingsServiceListUsersProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListUsers")),
+			connect.WithClientOptions(opts...),
+		),
+		createUser: connect.NewClient[v1.CreateUserRequest, v1.PanelUser](
+			httpClient,
+			baseURL+SettingsServiceCreateUserProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CreateUser")),
+			connect.WithClientOptions(opts...),
+		),
+		updateUser: connect.NewClient[v1.UpdateUserRequest, v1.UpdateUserResponse](
+			httpClient,
+			baseURL+SettingsServiceUpdateUserProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("UpdateUser")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteUser: connect.NewClient[v1.DeleteUserRequest, v1.DeleteUserResponse](
+			httpClient,
+			baseURL+SettingsServiceDeleteUserProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("DeleteUser")),
+			connect.WithClientOptions(opts...),
+		),
+		listSessions: connect.NewClient[v1.ListSessionsRequest, v1.ListSessionsResponse](
+			httpClient,
+			baseURL+SettingsServiceListSessionsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListSessions")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeSession: connect.NewClient[v1.RevokeSessionRequest, v1.RevokeSessionResponse](
+			httpClient,
+			baseURL+SettingsServiceRevokeSessionProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("RevokeSession")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1347,6 +1410,12 @@ type settingsServiceClient struct {
 	disableTOTP       *connect.Client[v1.DisableTOTPRequest, v1.Security]
 	setEntrance       *connect.Client[v1.SetEntranceRequest, v1.Security]
 	listActivity      *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
+	listUsers         *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
+	createUser        *connect.Client[v1.CreateUserRequest, v1.PanelUser]
+	updateUser        *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
+	deleteUser        *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
+	listSessions      *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
+	revokeSession     *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -1454,6 +1523,36 @@ func (c *settingsServiceClient) ListActivity(ctx context.Context, req *connect.R
 	return c.listActivity.CallUnary(ctx, req)
 }
 
+// ListUsers calls nagi.v1.SettingsService.ListUsers.
+func (c *settingsServiceClient) ListUsers(ctx context.Context, req *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error) {
+	return c.listUsers.CallUnary(ctx, req)
+}
+
+// CreateUser calls nagi.v1.SettingsService.CreateUser.
+func (c *settingsServiceClient) CreateUser(ctx context.Context, req *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error) {
+	return c.createUser.CallUnary(ctx, req)
+}
+
+// UpdateUser calls nagi.v1.SettingsService.UpdateUser.
+func (c *settingsServiceClient) UpdateUser(ctx context.Context, req *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error) {
+	return c.updateUser.CallUnary(ctx, req)
+}
+
+// DeleteUser calls nagi.v1.SettingsService.DeleteUser.
+func (c *settingsServiceClient) DeleteUser(ctx context.Context, req *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error) {
+	return c.deleteUser.CallUnary(ctx, req)
+}
+
+// ListSessions calls nagi.v1.SettingsService.ListSessions.
+func (c *settingsServiceClient) ListSessions(ctx context.Context, req *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error) {
+	return c.listSessions.CallUnary(ctx, req)
+}
+
+// RevokeSession calls nagi.v1.SettingsService.RevokeSession.
+func (c *settingsServiceClient) RevokeSession(ctx context.Context, req *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error) {
+	return c.revokeSession.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -1491,6 +1590,15 @@ type SettingsServiceHandler interface {
 	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
 	// 活动记录：用户的操作和告警，新的在前。
 	ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error)
+	// 成员（只有管理员能用）。
+	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
+	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error)
+	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	UpdateUser(context.Context, *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error)
+	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
+	// 当前用户自己的登录会话。
+	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
+	RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1626,6 +1734,42 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("ListActivity")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListUsersHandler := connect.NewUnaryHandler(
+		SettingsServiceListUsersProcedure,
+		svc.ListUsers,
+		connect.WithSchema(settingsServiceMethods.ByName("ListUsers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceCreateUserHandler := connect.NewUnaryHandler(
+		SettingsServiceCreateUserProcedure,
+		svc.CreateUser,
+		connect.WithSchema(settingsServiceMethods.ByName("CreateUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceUpdateUserHandler := connect.NewUnaryHandler(
+		SettingsServiceUpdateUserProcedure,
+		svc.UpdateUser,
+		connect.WithSchema(settingsServiceMethods.ByName("UpdateUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceDeleteUserHandler := connect.NewUnaryHandler(
+		SettingsServiceDeleteUserProcedure,
+		svc.DeleteUser,
+		connect.WithSchema(settingsServiceMethods.ByName("DeleteUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceListSessionsHandler := connect.NewUnaryHandler(
+		SettingsServiceListSessionsProcedure,
+		svc.ListSessions,
+		connect.WithSchema(settingsServiceMethods.ByName("ListSessions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceRevokeSessionHandler := connect.NewUnaryHandler(
+		SettingsServiceRevokeSessionProcedure,
+		svc.RevokeSession,
+		connect.WithSchema(settingsServiceMethods.ByName("RevokeSession")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -1670,6 +1814,18 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceSetEntranceHandler.ServeHTTP(w, r)
 		case SettingsServiceListActivityProcedure:
 			settingsServiceListActivityHandler.ServeHTTP(w, r)
+		case SettingsServiceListUsersProcedure:
+			settingsServiceListUsersHandler.ServeHTTP(w, r)
+		case SettingsServiceCreateUserProcedure:
+			settingsServiceCreateUserHandler.ServeHTTP(w, r)
+		case SettingsServiceUpdateUserProcedure:
+			settingsServiceUpdateUserHandler.ServeHTTP(w, r)
+		case SettingsServiceDeleteUserProcedure:
+			settingsServiceDeleteUserHandler.ServeHTTP(w, r)
+		case SettingsServiceListSessionsProcedure:
+			settingsServiceListSessionsHandler.ServeHTTP(w, r)
+		case SettingsServiceRevokeSessionProcedure:
+			settingsServiceRevokeSessionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1761,6 +1917,30 @@ func (UnimplementedSettingsServiceHandler) SetEntrance(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListActivity is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListUsers is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CreateUser is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) UpdateUser(context.Context, *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdateUser is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.DeleteUser is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListSessions is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeSession is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

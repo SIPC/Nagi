@@ -57,7 +57,7 @@ export default {
     hours: (n: number) => `${n} 小时`,
     days: (n: number) => `${n} 天`,
   },
-  readOnlyHint: "备用面板只能查看，修改请到主面板",
+  readOnlyHint: "当前只能查看：这是备用面板，或账号没有修改权限",
   language: "语言",
   switchLanguage: "切换语言",
 };

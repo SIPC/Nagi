@@ -15,6 +15,10 @@ export default {
   resolved: "已恢复",
   more: "加载更多",
   actions: {
+    CreateUser: "添加成员",
+    UpdateUser: "修改成员",
+    DeleteUser: "删除成员",
+    RevokeSession: "退出其他设备",
     Login: "登录",
     Logout: "退出登录",
     ChangePassword: "修改密码",

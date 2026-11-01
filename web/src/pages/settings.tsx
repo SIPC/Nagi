@@ -9,12 +9,15 @@ import { UpdateCard, UpdateDot } from "@/pages/update";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { ActivityCard } from "@/pages/activity";
+import { MembersCard } from "@/pages/members";
+import { useRole } from "@/components/role";
 
 // 设置页：左边二级菜单，右边只显示选中的一组（参照 OpenAI 平台、Render 的设置页）。选中的一组记在地址的 tab 参数里。
 
 export const settingsTabs = [
   { value: "access", label: t.settings.tabs.access.label, description: t.settings.tabs.access.description },
   { value: "security", label: t.settings.tabs.security.label, description: t.settings.tabs.security.description },
+  { value: "members", label: t.settings.tabs.members.label, description: t.settings.tabs.members.description },
   { value: "alerts", label: t.settings.tabs.alerts.label, description: t.settings.tabs.alerts.description },
   { value: "activity", label: t.settings.tabs.activity.label, description: t.settings.tabs.activity.description },
   { value: "standby", label: t.settings.tabs.standby.label, description: t.settings.tabs.standby.description },
@@ -26,13 +29,16 @@ export const settingsTabs = [
 export type SettingsTab = (typeof settingsTabs)[number]["value"];
 
 export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: SettingsTab) => void }) {
-  const cur = settingsTabs.find((t) => t.value === tab) ?? settingsTabs[0];
+  const { isAdmin } = useRole();
+  // 不是管理员时只有自己的账号。面板设置的接口也会拒绝。
+  const tabs = isAdmin ? [...settingsTabs] : settingsTabs.filter((x) => x.value === "security");
+  const cur = tabs.find((t) => t.value === tab) ?? tabs[0];
   return (
     <>
       <PageHeader title={t.settings.title} />
       <div className="grid gap-8 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-12">
         <nav className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
-          {settingsTabs.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.value}
               type="button"
@@ -54,6 +60,7 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
           </div>
           {cur.value === "access" && <PanelAccessCard />}
           {cur.value === "security" && <SecurityCard />}
+          {cur.value === "members" && <MembersCard />}
           {cur.value === "alerts" && <AlertSettings />}
           {cur.value === "activity" && <ActivityCard />}
           {cur.value === "standby" && <StandbyCard />}

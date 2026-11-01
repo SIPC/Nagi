@@ -60,7 +60,7 @@ export default {
     hours: (n) => plural(n, "hour"),
     days: (n) => plural(n, "day"),
   },
-  readOnlyHint: "This is a standby panel and is read-only. Make changes on the primary panel",
+  readOnlyHint: "View only: this is a standby panel, or your account cannot make changes",
   language: "Language",
   switchLanguage: "Switch language",
 } satisfies typeof zh;

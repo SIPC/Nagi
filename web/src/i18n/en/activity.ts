@@ -16,6 +16,10 @@ export default {
   resolved: "Resolved",
   more: "Load more",
   actions: {
+    CreateUser: "Add member",
+    UpdateUser: "Update member",
+    DeleteUser: "Delete member",
+    RevokeSession: "Sign out another device",
     Login: "Sign in",
     Logout: "Sign out",
     ChangePassword: "Change password",

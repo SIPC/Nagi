@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,9 +53,17 @@ func activityField(m proto.Message, names ...string) string {
 	r := m.ProtoReflect()
 	for _, name := range names {
 		f := r.Descriptor().Fields().ByName(protoreflect.Name(name))
-		if f != nil && f.Kind() == protoreflect.StringKind && !f.IsList() && !f.IsMap() {
+		if f == nil || f.IsList() || f.IsMap() {
+			continue
+		}
+		switch f.Kind() {
+		case protoreflect.StringKind:
 			if v := r.Get(f).String(); v != "" {
 				return v
+			}
+		case protoreflect.Int64Kind:
+			if v := r.Get(f).Int(); v != 0 {
+				return strconv.FormatInt(v, 10)
 			}
 		}
 	}
@@ -73,7 +82,7 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		Actor:     actor,
 		Action:    method,
 		ProjectID: activityField(req, "project_id"),
-		Target:    activityField(req, "container", "name", "node_id", "id"),
+		Target:    activityField(req, "container", "name", "username", "node_id", "id"),
 		Detail:    failure,
 		Failed:    boolInt(failure != ""),
 	})

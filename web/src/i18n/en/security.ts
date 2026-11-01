@@ -1,6 +1,7 @@
 import type zh from "../zh/security";
 
 export default {
+  sessions: { label: "Signed-in devices", description: "Devices signed in to this account. You can sign out the others." },
   masterKey: {
     label: "Panel master key",
     description: "Encrypts config backup keys, 2FA secrets and alert tokens. Back it up separately.",

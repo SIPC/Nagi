@@ -4,6 +4,8 @@ import { renderSVG } from "uqr";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { Alert, Badge, Button, CodeBlock, Field, Input, SettingRow, SettingRows } from "@/components/ui";
 import { t } from "@/i18n";
+import { SessionList } from "@/pages/members";
+import { useRole } from "@/components/role";
 
 type Scope = "password" | "totp" | "entrance";
 
@@ -43,6 +45,7 @@ export function SecurityCard() {
   const s = sec.data;
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
   const keyPath = settings.data?.settings?.masterKeyPath;
+  const { isAdmin } = useRole();
 
   return (
     <SettingRows>
@@ -184,7 +187,11 @@ export function SecurityCard() {
         </div>
       </SettingRow>
 
-      <SettingRow label={t.security.entrance.label} description={t.security.entrance.description} help={t.security.entrance.help}>
+      <SettingRow label={t.security.sessions.label} description={t.security.sessions.description}>
+        <SessionList />
+      </SettingRow>
+
+      {isAdmin && <SettingRow label={t.security.entrance.label} description={t.security.entrance.description} help={t.security.entrance.help}>
         <div className="grid gap-3">
           {feedback("entrance")}
           {s?.entrance && <CodeBlock copy>{`${window.location.origin}/${s.entrance}`}</CodeBlock>}
@@ -200,7 +207,7 @@ export function SecurityCard() {
             )}
           </div>
         </div>
-      </SettingRow>
+      </SettingRow>}
     </SettingRows>
   );
 }

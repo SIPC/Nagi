@@ -196,7 +196,7 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) error {
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateSessionParams struct {
@@ -204,6 +204,7 @@ type CreateSessionParams struct {
 	UserID    int64
 	CreatedAt int64
 	ExpiresAt int64
+	Ip        string
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -212,12 +213,13 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.UserID,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+		arg.Ip,
 	)
 	return err
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)
+INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)
 RETURNING id
 `
 
@@ -225,10 +227,16 @@ type CreateUserParams struct {
 	Username     string
 	PasswordHash string
 	CreatedAt    int64
+	Role         string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Username, arg.PasswordHash, arg.CreatedAt)
+	row := q.db.QueryRowContext(ctx, createUser,
+		arg.Username,
+		arg.PasswordHash,
+		arg.CreatedAt,
+		arg.Role,
+	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -491,7 +499,7 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.user_id, s.expires_at, u.username
+SELECT s.user_id, s.expires_at, u.username, u.role
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?
@@ -501,13 +509,118 @@ type GetSessionRow struct {
 	UserID    int64
 	ExpiresAt int64
 	Username  string
+	Role      string
 }
 
 func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionRow, error) {
 	row := q.db.QueryRowContext(ctx, getSession, tokenHash)
 	var i GetSessionRow
-	err := row.Scan(&i.UserID, &i.ExpiresAt, &i.Username)
+	err := row.Scan(
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.Username,
+		&i.Role,
+	)
 	return i, err
+}
+
+const setUserRole = `-- name: SetUserRole :exec
+UPDATE users SET role = ? WHERE id = ?
+`
+
+type SetUserRoleParams struct {
+	Role string
+	ID   int64
+}
+
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, setUserRole, arg.Role, arg.ID)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
+const countAdmins = `-- name: CountAdmins :one
+SELECT count(*) FROM users WHERE role = 'admin'
+`
+
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT token_hash, created_at, expires_at, ip FROM sessions WHERE user_id = ? ORDER BY created_at DESC
+`
+
+type ListUserSessionsRow struct {
+	TokenHash string
+	CreatedAt int64
+	ExpiresAt int64
+	Ip        string
+}
+
+func (q *Queries) ListUserSessions(ctx context.Context, userID int64) ([]ListUserSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserSessions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserSessionsRow{}
+	for rows.Next() {
+		var i ListUserSessionsRow
+		if err := rows.Scan(
+			&i.TokenHash,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.Ip,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteUserSession = `-- name: DeleteUserSession :execrows
+DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?
+`
+
+type DeleteUserSessionParams struct {
+	UserID int64
+	Substr string
+}
+
+func (q *Queries) DeleteUserSession(ctx context.Context, arg DeleteUserSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUserSession, arg.UserID, arg.Substr)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const clearUserTOTP = `-- name: ClearUserTOTP :exec
+UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE id = ?
+`
+
+func (q *Queries) ClearUserTOTP(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, clearUserTOTP, id)
+	return err
 }
 
 const insertActivity = `-- name: InsertActivity :exec
@@ -640,7 +753,7 @@ func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users WHERE id = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -654,12 +767,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.TotpSecret,
 		&i.TotpLastStep,
 		&i.Language,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -673,6 +787,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.TotpSecret,
 		&i.TotpLastStep,
 		&i.Language,
+		&i.Role,
 	)
 	return i, err
 }
@@ -1335,7 +1450,7 @@ func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error)
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language FROM users ORDER BY id
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -1355,6 +1470,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpSecret,
 			&i.TotpLastStep,
 			&i.Language,
+			&i.Role,
+			&i.Role,
 		); err != nil {
 			return nil, err
 		}

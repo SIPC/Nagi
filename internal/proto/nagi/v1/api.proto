@@ -68,6 +68,8 @@ message MeResponse {
   bool totp_enabled = 2;
   // 保存的界面语言（"zh-CN"、"en"），空表示没有选过。
   string language = 3;
+  // admin、operator、viewer。
+  string role = 4;
 }
 
 message SetLanguageRequest {
@@ -265,6 +267,15 @@ service SettingsService {
   rpc SetEntrance(SetEntranceRequest) returns (Security);
   // 活动记录：用户的操作和告警，新的在前。
   rpc ListActivity(ListActivityRequest) returns (ListActivityResponse);
+  // 成员（只有管理员能用）。
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc CreateUser(CreateUserRequest) returns (PanelUser);
+  // 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+  // 当前用户自己的登录会话。
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
 }
 
 message GetSecurityRequest {}
@@ -574,6 +585,67 @@ message StandbyPanel {
   bool connected = 5;
   google.protobuf.Timestamp last_sync = 6;
 }
+
+message PanelUser {
+  int64 id = 1;
+  string username = 2;
+  // admin、operator、viewer。
+  string role = 3;
+  bool totp_enabled = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // 是不是当前登录的用户。
+  bool is_self = 6;
+}
+
+message ListUsersRequest {}
+
+message ListUsersResponse {
+  repeated PanelUser users = 1;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string password = 2;
+  string role = 3;
+}
+
+message UpdateUserRequest {
+  int64 id = 1;
+  // 空表示不改。
+  string role = 2;
+  // 空表示不改。
+  string password = 3;
+  bool clear_totp = 4;
+}
+
+message UpdateUserResponse {}
+
+message DeleteUserRequest {
+  int64 id = 1;
+}
+
+message DeleteUserResponse {}
+
+message LoginSession {
+  string id = 1;
+  string ip = 2;
+  // 是不是发起这次请求的会话。
+  bool current = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated LoginSession sessions = 1;
+}
+
+message RevokeSessionRequest {
+  string id = 1;
+}
+
+message RevokeSessionResponse {}
 
 message ListActivityRequest {
   // operation、alert，空表示全部。
