@@ -152,7 +152,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
   const idle = "text-muted-foreground hover:bg-accent/50 hover:text-foreground";
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <div className="px-2.5">
         <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }]} />
         <h2 className="truncate text-lg font-semibold tracking-tight">{p.name}</h2>

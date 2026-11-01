@@ -69,7 +69,7 @@ export function ContainerStorage({
 }) {
   const run = useRun(project.id);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       <Volumes project={project} container={container} />
       <Snapshots project={project} container={container} run={run} />
@@ -87,7 +87,7 @@ export function ContainerHA({
 }) {
   const run = useRun(project.id);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       <Failover project={project} container={container} />
       <Backup project={project} container={container} run={run} />

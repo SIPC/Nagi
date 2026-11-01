@@ -108,7 +108,7 @@ export function AlertSettings() {
   const addChannel = () =>
     setChannels([...channels, create(AlertChannelSchema, { type: "webhook" })]);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {(error || cfg.data?.lost) && (
         <div className="grid gap-3">
           {error && <Alert>{error}</Alert>}

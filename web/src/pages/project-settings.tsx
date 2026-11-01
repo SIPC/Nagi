@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 export function SettingsTab({ project }: { project: Project }) {
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <GeneralSettings project={project} />
       <SharedEnv project={project} />
       <Deployments project={project} />

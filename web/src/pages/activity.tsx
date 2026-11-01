@@ -79,7 +79,14 @@ export function ActivityCard() {
                       <Status tone="danger">{t.activity.failed}</Status>
                     </span>
                   ) : (
-                    <Status tone="success">{t.activity.succeeded}</Status>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Status tone="success">{t.activity.succeeded}</Status>
+                      {e.detail && (
+                        <span className="truncate font-mono text-xs text-muted-foreground" title={e.detail}>
+                          {e.detail}
+                        </span>
+                      )}
+                    </span>
                   )}
                 </Td>
               </tr>

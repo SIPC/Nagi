@@ -379,7 +379,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
           ) : tab === "replicas" ? (
             <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
           ) : tab === "settings" ? (
-            <div className="grid gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
               <NodeMirrors nodeId={n.id} />
             </div>

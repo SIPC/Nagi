@@ -141,7 +141,7 @@ export function ProjectsPage() {
   return (
     <>
       <PageHeader title={t.projects.title} description={t.projects.description} actions={newButton} />
-      <div className="grid gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {offlineNodes.length > 0 && (
           <Notice
             tone="warning"
@@ -353,7 +353,7 @@ export function NewProjectPage() {
       <Breadcrumb items={[{ label: t.projects.title, to: "/projects" }, { label: t.projects.newProject }]} />
       <PageHeader title={t.projects.newProject} description={t.projects.create.description} />
       <form
-        className="grid gap-6"
+        className="grid grid-cols-1 gap-6"
         onSubmit={(e) => {
           e.preventDefault();
           create.mutate();

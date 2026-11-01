@@ -78,7 +78,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 			}
 			head, err := stream.Recv()
 			if err != nil {
-				a.recordOperation(ctx, "/DownloadVolumeFile", ref, err.Error())
+				a.recordOperation(ctx, "/DownloadVolumeFile", ref, activityFailure(err))
 				fail(http.StatusBadRequest, err)
 				return
 			}
@@ -131,14 +131,14 @@ func (a *API) VolumeFileHandler() http.Handler {
 				break
 			}
 			if rerr != nil {
-				a.recordOperation(ctx, "/UploadVolumeFile", ref, rerr.Error())
+				a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(rerr))
 				fail(http.StatusBadRequest, rerr)
 				return
 			}
 		}
 		res, err := stream.CloseAndRecv()
 		if err != nil {
-			a.recordOperation(ctx, "/UploadVolumeFile", ref, err.Error())
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
 			fail(http.StatusBadRequest, err)
 			return
 		}

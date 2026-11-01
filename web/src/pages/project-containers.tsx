@@ -85,7 +85,7 @@ export function ContainersTab({
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {imageUpdates.length > 0 && (
         <Notice
           tone="info"
@@ -573,7 +573,7 @@ function Overview({ project, container, services }: { project: Project; containe
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
       {node && !node.online && (
         <Notice tone="warning" title={t.projectContainers.nodeOffline}>

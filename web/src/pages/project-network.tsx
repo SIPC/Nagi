@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 export function NetworkTab({ project, services }: { project: Project; services: ServiceStatus[] }) {
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <RoutesOverview project={project} />
       <Intranet project={project} services={services} />
       <Links project={project} services={services} />
@@ -31,7 +31,7 @@ export function ContainerNetwork({ project, container, services }: { project: Pr
   const { range, picker } = useRange();
   const names = project.routes.filter((r) => r.container === container.name).map((r) => r.name);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <RoutesSection project={project} services={services} container={container.name} />
       <InternalAccess project={project} container={container} services={services} />
       {names.length > 0 && (
@@ -594,7 +594,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
       description={t.projectNetwork.intranet.description}
       help={t.projectNetwork.intranet.help}
     >
-      <div className="grid gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {addresses.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">{t.projectNetwork.intranet.empty}</p>
         ) : (

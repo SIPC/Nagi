@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -86,10 +88,13 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		}
 		target = strings.Join(names, ", ")
 	}
-	// 文件操作成功时记下动的是哪个文件。
+	// 文件操作记下动的是哪个文件，失败的也记，这样能看出有人试过什么路径。
 	detail := failure
-	if detail == "" {
-		detail = activityField(req, "path")
+	if path := activityField(req, "path"); path != "" {
+		detail = path
+		if failure != "" {
+			detail = path + ": " + failure
+		}
 	}
 	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
 		CreatedAt: time.Now().Unix(),
@@ -106,6 +111,18 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		return
 	}
 	_ = a.Q.PruneActivity(context.WithoutCancel(ctx), activityKeep)
+}
+
+// activityFailure 取错误本身的说明，去掉 RPC 错误码的前缀。
+func activityFailure(err error) string {
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		return ce.Message()
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Message()
+	}
+	return err.Error()
 }
 
 // clipActivity 限制写进记录的长度：登录失败时的用户名、错误信息都可能很长。
@@ -134,7 +151,7 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			msg, _ := req.Any().(proto.Message)
 			failure := ""
 			if err != nil {
-				failure = err.Error()
+				failure = activityFailure(err)
 			}
 			l.a.recordOperation(ctx, procedure, msg, failure)
 		}
@@ -155,7 +172,7 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 		err := next(ctx, w)
 		failure := w.failure
 		if err != nil {
-			failure = err.Error()
+			failure = activityFailure(err)
 		}
 		l.a.recordOperation(ctx, conn.Spec().Procedure, w.req, failure)
 		return err

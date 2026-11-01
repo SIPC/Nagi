@@ -402,7 +402,7 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [] }: { no
   const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
   if (total.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(offline.join(m.seriesSeparator))}</Notice>}
       <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />
     </div>
@@ -425,7 +425,7 @@ export function RoutesMetrics({ projectId, nodeIds, routes, range }: { projectId
   }
   if (series.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {[...series].map(([name, byName]) => (
         <RouteMetrics
           key={name}
