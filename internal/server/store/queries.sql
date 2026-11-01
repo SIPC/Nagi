@@ -10,6 +10,12 @@ SELECT * FROM activity
 WHERE (?1 = '' OR kind = ?1) AND (?2 = 0 OR id < ?2)
 ORDER BY id DESC LIMIT ?3;
 
+-- name: ListContainerActivity :many
+-- 部署的目标可能是逗号分隔的几个容器。
+SELECT * FROM activity
+WHERE project_id = ?1 AND (target = ?2 OR ',' || replace(target, ' ', '') || ',' LIKE '%,' || ?2 || ',%')
+ORDER BY id DESC LIMIT ?3;
+
 -- name: GetSetting :one
 SELECT value FROM settings WHERE key = ?;
 

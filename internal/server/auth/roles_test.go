@@ -7,6 +7,7 @@ func TestAllowed(t *testing.T) {
 		deploy   = "/nagi.v1.ProjectService/Deploy"
 		list     = "/nagi.v1.ProjectService/ListProjects"
 		key      = "/nagi.v1.ProjectService/GetBackupKey"
+		events   = "/nagi.v1.ProjectService/ListContainerEvents"
 		settings = "/nagi.v1.SettingsService/UpdateSettings"
 		users    = "/nagi.v1.SettingsService/ListUsers"
 		alerts   = "/nagi.v1.SettingsService/GetAlertConfig"
@@ -24,6 +25,7 @@ func TestAllowed(t *testing.T) {
 		{RoleOperator, deploy, true}, {RoleOperator, list, true}, {RoleOperator, key, true}, {RoleOperator, nodes, true},
 		{RoleOperator, settings, false}, {RoleOperator, users, false}, {RoleOperator, alerts, false}, {RoleOperator, removeN, false}, {RoleOperator, unknown, false},
 		{RoleOperator, password, true}, {RoleOperator, sessions, true},
+		{RoleOperator, events, true}, {RoleViewer, events, true},
 		{RoleViewer, list, true}, {RoleViewer, nodes, true}, {RoleViewer, password, true}, {RoleViewer, sessions, true},
 		{RoleViewer, deploy, false}, {RoleViewer, key, false}, {RoleViewer, settings, false}, {RoleViewer, users, false}, {RoleViewer, alerts, false}, {RoleViewer, removeN, false}, {RoleViewer, unknown, false},
 		{"", list, false}, {"root", list, false},

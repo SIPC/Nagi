@@ -92,6 +92,29 @@ func TestSessions(t *testing.T) {
 	}
 }
 
+func TestContainerActivity(t *testing.T) {
+	ctx := context.Background()
+	q := open(t)
+	for _, target := range []string{"web", "api, web", "webapp", "cache"} {
+		if err := q.InsertActivity(ctx, store.InsertActivityParams{CreatedAt: 1, Kind: "operation", Action: "Deploy", ProjectID: "p", Target: target}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := q.InsertActivity(ctx, store.InsertActivityParams{CreatedAt: 1, Kind: "operation", Action: "Deploy", ProjectID: "other", Target: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.ListContainerActivity(ctx, store.ListContainerActivityParams{ProjectID: "p", Target: "web", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].Target != "api, web" || rows[1].Target != "web" {
+		t.Fatalf("web 的事件 = %+v", rows)
+	}
+	if rows, _ := q.ListContainerActivity(ctx, store.ListContainerActivityParams{ProjectID: "p", Target: "web", Limit: 1}); len(rows) != 1 {
+		t.Fatalf("Limit 没生效：%+v", rows)
+	}
+}
+
 func TestActivity(t *testing.T) {
 	ctx := context.Background()
 	q := open(t)

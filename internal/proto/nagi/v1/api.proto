@@ -453,6 +453,8 @@ service ProjectService {
   // 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
   rpc Deploy(DeployRequest) returns (stream DeployEvent);
   rpc ListVersions(ContainerRef) returns (ListVersionsResponse);
+  // 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
+  rpc ListContainerEvents(ContainerRef) returns (ListActivityResponse);
   // 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
   rpc Rollback(RollbackRequest) returns (stream DeployEvent);
   rpc ListDeployments(ProjectRef) returns (ListDeploymentsResponse);

@@ -10,7 +10,7 @@ import { t } from "@/i18n";
 const pageSize = 50;
 
 // 接口方法名换成给人看的动作；没有登记的显示方法名。
-function actionLabel(e: ActivityEntry) {
+export function actionLabel(e: ActivityEntry) {
   if (e.kind === "alert") return e.action === "resolved" ? t.activity.resolved : t.activity.firing;
   return (t.activity.actions as Record<string, string>)[e.action] ?? e.action;
 }

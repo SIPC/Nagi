@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Download, Pause, Plus, Play, Rocket, RotateCw } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
-import { cn, formatTime, timeAgo } from "@/lib/utils";
+import { cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
@@ -47,6 +47,7 @@ import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
 import { useRole } from "@/components/role";
+import { actionLabel } from "@/pages/activity";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
@@ -653,10 +654,51 @@ function Overview({ project, container, services }: { project: Project; containe
           />
         </Section>
       )}
+      <ContainerEvents project={project} container={container} />
       <Section title={t.projectContainers.monitoring} description={t.projectContainers.overview.metricsDescription} actions={picker}>
         <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} container={container.name} range={range} />
       </Section>
     </div>
+  );
+}
+
+// ContainerEvents：这个容器最近的操作和告警。
+function ContainerEvents({ project, container }: { project: Project; container: Container }) {
+  const events = useQuery({
+    queryKey: ["container-events", project.id, container.name],
+    queryFn: () => projectClient.listContainerEvents({ projectId: project.id, container: container.name }),
+    refetchInterval: 15000,
+  });
+  const list = (events.data?.entries ?? []).slice(0, 8);
+  return (
+    <Section title={t.projectContainers.events.title} description={t.projectContainers.events.description} flush>
+      {events.error ? (
+        <Alert>{errorMessage(events.error)}</Alert>
+      ) : list.length === 0 ? (
+        <EmptyRow>{t.projectContainers.events.empty}</EmptyRow>
+      ) : (
+        <Table compact>
+          <tbody>
+            {list.map((e) => {
+              const tone = e.kind === "alert" ? (e.action === "resolved" ? "success" : "warning") : e.failed ? "danger" : "success";
+              return (
+                <tr key={String(e.id)}>
+                  <Td className="w-28 text-[13px] whitespace-nowrap text-muted-foreground" title={formatDateTime(toDate(e.time))}>
+                    {timeAgo(toDate(e.time))}
+                  </Td>
+                  <Td className="text-[13px]" title={e.detail || undefined}>
+                    <Status tone={tone}>
+                      <span className="whitespace-normal">{e.kind === "alert" ? e.detail : actionLabel(e)}</span>
+                    </Status>
+                  </Td>
+                  <Td className="hidden text-right text-[13px] text-muted-foreground sm:table-cell">{e.actor}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      )}
+    </Section>
   );
 }
 

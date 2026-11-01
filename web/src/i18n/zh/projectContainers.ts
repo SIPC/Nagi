@@ -1,5 +1,6 @@
 // 项目概览的容器列表、批量部署、添加容器，以及容器页（概览、配置、版本、日志）。
 export default {
+  events: { title: "事件", description: "这个容器最近的操作和告警。", empty: "暂无事件" },
   kind: {
     container: "容器",
     group: "容器组",

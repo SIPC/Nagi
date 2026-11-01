@@ -707,6 +707,52 @@ func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]A
 	return items, nil
 }
 
+const listContainerActivity = `-- name: ListContainerActivity :many
+SELECT id, created_at, kind, actor, action, project_id, target, detail, failed FROM activity
+WHERE project_id = ?1 AND (target = ?2 OR ',' || replace(target, ' ', '') || ',' LIKE '%,' || ?2 || ',%')
+ORDER BY id DESC LIMIT ?3
+`
+
+type ListContainerActivityParams struct {
+	ProjectID string
+	Target    string
+	Limit     int64
+}
+
+// 部署的目标可能是逗号分隔的几个容器。
+func (q *Queries) ListContainerActivity(ctx context.Context, arg ListContainerActivityParams) ([]Activity, error) {
+	rows, err := q.db.QueryContext(ctx, listContainerActivity, arg.ProjectID, arg.Target, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Activity{}
+	for rows.Next() {
+		var i Activity
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Actor,
+			&i.Action,
+			&i.ProjectID,
+			&i.Target,
+			&i.Detail,
+			&i.Failed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSetting = `-- name: GetSetting :one
 SELECT value FROM settings WHERE key = ?
 `

@@ -181,6 +181,37 @@ func (c *activityConn) Send(m any) error {
 	return c.StreamingHandlerConn.Send(m)
 }
 
+// activityEntry 把一条记录转成接口返回的格式。
+func activityEntry(r store.Activity) *nagiv1.ActivityEntry {
+	return &nagiv1.ActivityEntry{
+		Id: r.ID, Time: timestamppb.New(time.Unix(r.CreatedAt, 0)), Kind: r.Kind, Actor: r.Actor, Action: r.Action,
+		ProjectId: r.ProjectID, Target: r.Target, Detail: r.Detail, Failed: r.Failed != 0,
+	}
+}
+
+// containerEventsLimit 是容器事件一次返回的条数。
+const containerEventsLimit = 20
+
+func (s *projectService) ListContainerEvents(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListActivityResponse], error) {
+	rows, err := s.Q.ListContainerActivity(ctx, store.ListContainerActivityParams{
+		ProjectID: req.Msg.GetProjectId(), Target: req.Msg.GetContainer(), Limit: containerEventsLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	viewer := auth.CurrentUser(ctx).Role == auth.RoleViewer
+	out := &nagiv1.ListActivityResponse{}
+	for _, r := range rows {
+		e := activityEntry(r)
+		// 操作失败的详情可能带着配置里的内容（compose 报错等），只读角色只看结果。
+		if viewer && e.Kind == "operation" {
+			e.Detail = ""
+		}
+		out.Entries = append(out.Entries, e)
+	}
+	return connect.NewResponse(out), nil
+}
+
 func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request[nagiv1.ListActivityRequest]) (*connect.Response[nagiv1.ListActivityResponse], error) {
 	limit := int64(req.Msg.GetLimit())
 	if limit <= 0 || limit > 200 {
@@ -192,10 +223,7 @@ func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request
 	}
 	out := &nagiv1.ListActivityResponse{}
 	for _, r := range rows {
-		out.Entries = append(out.Entries, &nagiv1.ActivityEntry{
-			Id: r.ID, Time: timestamppb.New(time.Unix(r.CreatedAt, 0)), Kind: r.Kind, Actor: r.Actor, Action: r.Action,
-			ProjectId: r.ProjectID, Target: r.Target, Detail: r.Detail, Failed: r.Failed != 0,
-		})
+		out.Entries = append(out.Entries, activityEntry(r))
 	}
 	return connect.NewResponse(out), nil
 }

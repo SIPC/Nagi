@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 	"unicode"
 
@@ -187,13 +188,37 @@ func (p *panelService) ReportAlert(ctx context.Context, req *nagiv1.ReportAlertR
 	if node, err := p.r.q.GetNode(ctx, p.conn.NodeID); err == nil && node.Name != "" {
 		name = node.Name
 	}
-	a := req.GetAlert()
-	p.r.recordAlert(ctx, name, a)
+	p.r.recordAlert(ctx, name, p.conn.NodeID, req.GetAlert())
 	return &nagiv1.ReportAlertResponse{}, nil
 }
 
+// alertContainer 从告警的 key 里取出它属于哪个容器：health:<项目>/<容器>/<服务>、lease:<项目>-<容器> 等。
+// 没有对应的容器时返回空。
+func alertContainer(key string) (project, container string) {
+	kind, rest, ok := strings.Cut(key, ":")
+	if !ok {
+		return "", ""
+	}
+	if kind == "lease" {
+		project, container, _ = strings.Cut(rest, "-")
+		return project, container
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
+}
+
 // recordAlert 把告警写进活动记录。
-func (r *Registry) recordAlert(ctx context.Context, node string, a *nagiv1.Alert) {
+// nodeID 不为空时，告警里的容器要确实在这个节点上才关联，节点不能往别的项目写记录。
+func (r *Registry) recordAlert(ctx context.Context, node, nodeID string, a *nagiv1.Alert) {
+	projectID, target := "", clipText(a.GetProject(), 64)
+	if p, c := alertContainer(a.GetKey()); nodeID != "" && c != "" {
+		if row, err := r.q.GetContainer(ctx, store.GetContainerParams{ProjectID: p, Name: c}); err == nil && row.NodeID == nodeID {
+			projectID, target = p, c
+		}
+	}
 	action := "firing"
 	if a.GetStatus() == "resolved" {
 		action = "resolved"
@@ -203,7 +228,8 @@ func (r *Registry) recordAlert(ctx context.Context, node string, a *nagiv1.Alert
 		Kind:      "alert",
 		Actor:     clipText(node, 64),
 		Action:    action,
-		Target:    clipText(a.GetProject(), 64),
+		ProjectID: projectID,
+		Target:    target,
 		Detail:    clipText(a.GetTitle(), 120),
 	})
 	if err != nil {
@@ -302,7 +328,7 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 
 func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
 	r.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle(), "node", a.GetNode())
-	r.recordAlert(ctx, a.GetNode(), a)
+	r.recordAlert(ctx, a.GetNode(), "", a)
 	if err := r.SendAlert(ctx, a, nil); err != nil {
 		r.log.Warn("发送告警失败", "err", err)
 	}

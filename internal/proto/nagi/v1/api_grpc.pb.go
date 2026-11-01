@@ -2377,6 +2377,7 @@ const (
 	ProjectService_DiscardDraft_FullMethodName          = "/nagi.v1.ProjectService/DiscardDraft"
 	ProjectService_Deploy_FullMethodName                = "/nagi.v1.ProjectService/Deploy"
 	ProjectService_ListVersions_FullMethodName          = "/nagi.v1.ProjectService/ListVersions"
+	ProjectService_ListContainerEvents_FullMethodName   = "/nagi.v1.ProjectService/ListContainerEvents"
 	ProjectService_Rollback_FullMethodName              = "/nagi.v1.ProjectService/Rollback"
 	ProjectService_ListDeployments_FullMethodName       = "/nagi.v1.ProjectService/ListDeployments"
 	ProjectService_RestoreDeployment_FullMethodName     = "/nagi.v1.ProjectService/RestoreDeployment"
@@ -2434,6 +2435,8 @@ type ProjectServiceClient interface {
 	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
 	Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListVersions(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
+	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
+	ListContainerEvents(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListActivityResponse, error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListDeployments(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
@@ -2645,6 +2648,16 @@ func (c *projectServiceClient) ListVersions(ctx context.Context, in *ContainerRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVersionsResponse)
 	err := c.cc.Invoke(ctx, ProjectService_ListVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ListContainerEvents(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListActivityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListActivityResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListContainerEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3030,6 +3043,8 @@ type ProjectServiceServer interface {
 	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
 	Deploy(*DeployRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListVersions(context.Context, *ContainerRef) (*ListVersionsResponse, error)
+	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
+	ListContainerEvents(context.Context, *ContainerRef) (*ListActivityResponse, error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListDeployments(context.Context, *ProjectRef) (*ListDeploymentsResponse, error)
@@ -3130,6 +3145,9 @@ func (UnimplementedProjectServiceServer) Deploy(*DeployRequest, grpc.ServerStrea
 }
 func (UnimplementedProjectServiceServer) ListVersions(context.Context, *ContainerRef) (*ListVersionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVersions not implemented")
+}
+func (UnimplementedProjectServiceServer) ListContainerEvents(context.Context, *ContainerRef) (*ListActivityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListContainerEvents not implemented")
 }
 func (UnimplementedProjectServiceServer) Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method Rollback not implemented")
@@ -3470,6 +3488,24 @@ func _ProjectService_ListVersions_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).ListVersions(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ListContainerEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListContainerEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListContainerEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListContainerEvents(ctx, req.(*ContainerRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3976,6 +4012,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListVersions",
 			Handler:    _ProjectService_ListVersions_Handler,
+		},
+		{
+			MethodName: "ListContainerEvents",
+			Handler:    _ProjectService_ListContainerEvents_Handler,
 		},
 		{
 			MethodName: "ListDeployments",

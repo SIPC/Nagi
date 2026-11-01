@@ -1,6 +1,7 @@
 import type zh from "../zh/projectContainers";
 
 export default {
+  events: { title: "Events", description: "Recent operations and alerts for this container.", empty: "No events yet" },
   kind: {
     container: "Container",
     group: "Container group",

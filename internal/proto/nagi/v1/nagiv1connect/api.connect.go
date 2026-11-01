@@ -230,6 +230,9 @@ const (
 	// ProjectServiceListVersionsProcedure is the fully-qualified name of the ProjectService's
 	// ListVersions RPC.
 	ProjectServiceListVersionsProcedure = "/nagi.v1.ProjectService/ListVersions"
+	// ProjectServiceListContainerEventsProcedure is the fully-qualified name of the ProjectService's
+	// ListContainerEvents RPC.
+	ProjectServiceListContainerEventsProcedure = "/nagi.v1.ProjectService/ListContainerEvents"
 	// ProjectServiceRollbackProcedure is the fully-qualified name of the ProjectService's Rollback RPC.
 	ProjectServiceRollbackProcedure = "/nagi.v1.ProjectService/Rollback"
 	// ProjectServiceListDeploymentsProcedure is the fully-qualified name of the ProjectService's
@@ -1968,6 +1971,8 @@ type ProjectServiceClient interface {
 	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
 	Deploy(context.Context, *connect.Request[v1.DeployRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListVersions(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
+	ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListDeployments(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -2112,6 +2117,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceListVersionsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListVersions")),
+			connect.WithClientOptions(opts...),
+		),
+		listContainerEvents: connect.NewClient[v1.ContainerRef, v1.ListActivityResponse](
+			httpClient,
+			baseURL+ProjectServiceListContainerEventsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListContainerEvents")),
 			connect.WithClientOptions(opts...),
 		),
 		rollback: connect.NewClient[v1.RollbackRequest, v1.DeployEvent](
@@ -2301,6 +2312,7 @@ type projectServiceClient struct {
 	discardDraft          *connect.Client[v1.ContainerRevisionRef, v1.Project]
 	deploy                *connect.Client[v1.DeployRequest, v1.DeployEvent]
 	listVersions          *connect.Client[v1.ContainerRef, v1.ListVersionsResponse]
+	listContainerEvents   *connect.Client[v1.ContainerRef, v1.ListActivityResponse]
 	rollback              *connect.Client[v1.RollbackRequest, v1.DeployEvent]
 	listDeployments       *connect.Client[v1.ProjectRef, v1.ListDeploymentsResponse]
 	restoreDeployment     *connect.Client[v1.RestoreDeploymentRequest, v1.DeployEvent]
@@ -2399,6 +2411,11 @@ func (c *projectServiceClient) Deploy(ctx context.Context, req *connect.Request[
 // ListVersions calls nagi.v1.ProjectService.ListVersions.
 func (c *projectServiceClient) ListVersions(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error) {
 	return c.listVersions.CallUnary(ctx, req)
+}
+
+// ListContainerEvents calls nagi.v1.ProjectService.ListContainerEvents.
+func (c *projectServiceClient) ListContainerEvents(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error) {
+	return c.listContainerEvents.CallUnary(ctx, req)
 }
 
 // Rollback calls nagi.v1.ProjectService.Rollback.
@@ -2566,6 +2583,8 @@ type ProjectServiceHandler interface {
 	// 按依赖顺序逐个部署，某个失败就停下。整次部署记一条部署记录。
 	Deploy(context.Context, *connect.Request[v1.DeployRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListVersions(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error)
+	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
+	ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListDeployments(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -2706,6 +2725,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceListVersionsProcedure,
 		svc.ListVersions,
 		connect.WithSchema(projectServiceMethods.ByName("ListVersions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListContainerEventsHandler := connect.NewUnaryHandler(
+		ProjectServiceListContainerEventsProcedure,
+		svc.ListContainerEvents,
+		connect.WithSchema(projectServiceMethods.ByName("ListContainerEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceRollbackHandler := connect.NewServerStreamHandler(
@@ -2906,6 +2931,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceDeployHandler.ServeHTTP(w, r)
 		case ProjectServiceListVersionsProcedure:
 			projectServiceListVersionsHandler.ServeHTTP(w, r)
+		case ProjectServiceListContainerEventsProcedure:
+			projectServiceListContainerEventsHandler.ServeHTTP(w, r)
 		case ProjectServiceRollbackProcedure:
 			projectServiceRollbackHandler.ServeHTTP(w, r)
 		case ProjectServiceListDeploymentsProcedure:
@@ -3025,6 +3052,10 @@ func (UnimplementedProjectServiceHandler) Deploy(context.Context, *connect.Reque
 
 func (UnimplementedProjectServiceHandler) ListVersions(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListVersions is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListContainerEvents is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error {
