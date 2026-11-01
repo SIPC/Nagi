@@ -496,6 +496,14 @@ service ProjectService {
   rpc ConnectProject(ConnectProjectRequest) returns (Project);
   rpc DisconnectProject(ConnectProjectRequest) returns (Project);
 
+  // 容器的存储：data/、命名 volume，大小和挂载位置。
+  rpc ListVolumes(ContainerRef) returns (ListVolumesResponse);
+  // 卷里的文件。只读角色不能用；下载和上传走 /api/volume-file。
+  rpc ListVolumeFiles(VolumeFileRef) returns (ListVolumeFilesResponse);
+  rpc DeleteVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
+  rpc CreateVolumeDir(VolumeFileRef) returns (VolumeFileOpResponse);
+  rpc RestoreVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
+
   // 快照（按容器）。
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
   // 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。

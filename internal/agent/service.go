@@ -150,6 +150,57 @@ func (s *agentService) ControlContainer(req *nagiv1.ControlContainerRequest, str
 	})
 }
 
+func (s *agentService) ListVolumes(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListVolumesResponse, error) {
+	out, err := s.projects.ListVolumes(ctx, req.GetProjectId(), req.GetContainer())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return out, nil
+}
+
+func (s *agentService) ListVolumeFiles(ctx context.Context, req *nagiv1.VolumeFileRef) (*nagiv1.ListVolumeFilesResponse, error) {
+	out, err := s.projects.ListVolumeFiles(ctx, req)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return out, nil
+}
+
+// checkVolumeWrite：有顶替的容器只在持有租约时能改文件，规则和启动、重启一样。
+func (s *agentService) checkVolumeWrite(ref *nagiv1.VolumeFileRef) error {
+	return s.node.checkControl(ref.GetProjectId(), ref.GetContainer(), nagiv1.ContainerAction_CONTAINER_ACTION_RESTART)
+}
+
+func (s *agentService) DeleteVolumeFile(ctx context.Context, req *nagiv1.VolumeFileRef) (*nagiv1.VolumeFileOpResponse, error) {
+	if err := s.checkVolumeWrite(req); err != nil {
+		return nil, toStatus(err)
+	}
+	if err := s.projects.DeleteVolumeFile(ctx, req); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.VolumeFileOpResponse{}, nil
+}
+
+func (s *agentService) CreateVolumeDir(ctx context.Context, req *nagiv1.VolumeFileRef) (*nagiv1.VolumeFileOpResponse, error) {
+	if err := s.checkVolumeWrite(req); err != nil {
+		return nil, toStatus(err)
+	}
+	if err := s.projects.CreateVolumeDir(ctx, req); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.VolumeFileOpResponse{}, nil
+}
+
+func (s *agentService) RestoreVolumeFile(ctx context.Context, req *nagiv1.VolumeFileRef) (*nagiv1.VolumeFileOpResponse, error) {
+	if err := s.checkVolumeWrite(req); err != nil {
+		return nil, toStatus(err)
+	}
+	if err := s.projects.RestoreVolumeFile(ctx, req); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.VolumeFileOpResponse{}, nil
+}
+
 func (s *agentService) ListSnapshots(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListSnapshotsResponse, error) {
 	list, err := s.projects.Snapshots(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {

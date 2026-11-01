@@ -37,6 +37,12 @@ const (
 	MeshServicePingProcedure = "/nagi.v1.MeshService/Ping"
 	// MeshServiceUploadProcedure is the fully-qualified name of the MeshService's Upload RPC.
 	MeshServiceUploadProcedure = "/nagi.v1.MeshService/Upload"
+	// MeshServiceVolumeDownloadProcedure is the fully-qualified name of the MeshService's
+	// VolumeDownload RPC.
+	MeshServiceVolumeDownloadProcedure = "/nagi.v1.MeshService/VolumeDownload"
+	// MeshServiceVolumeUploadProcedure is the fully-qualified name of the MeshService's VolumeUpload
+	// RPC.
+	MeshServiceVolumeUploadProcedure = "/nagi.v1.MeshService/VolumeUpload"
 	// MeshServiceReplicaManifestProcedure is the fully-qualified name of the MeshService's
 	// ReplicaManifest RPC.
 	MeshServiceReplicaManifestProcedure = "/nagi.v1.MeshService/ReplicaManifest"
@@ -55,6 +61,10 @@ type MeshServiceClient interface {
 	// 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带项目和容器。
 	Upload(context.Context) *connect.ClientStreamForClient[v1.UploadChunk, v1.UploadResponse]
+	// 面板下载卷里（或快照里）的文件。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受节点信任的面板。
+	VolumeDownload(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.ServerStreamForClient[v1.VolumeFileChunk], error)
+	// 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
+	VolumeUpload(context.Context) *connect.ClientStreamForClient[v1.VolumeUploadChunk, v1.VolumeUploadResponse]
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
@@ -88,6 +98,18 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("Upload")),
 			connect.WithClientOptions(opts...),
 		),
+		volumeDownload: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileChunk](
+			httpClient,
+			baseURL+MeshServiceVolumeDownloadProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeDownload")),
+			connect.WithClientOptions(opts...),
+		),
+		volumeUpload: connect.NewClient[v1.VolumeUploadChunk, v1.VolumeUploadResponse](
+			httpClient,
+			baseURL+MeshServiceVolumeUploadProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeUpload")),
+			connect.WithClientOptions(opts...),
+		),
 		replicaManifest: connect.NewClient[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse](
 			httpClient,
 			baseURL+MeshServiceReplicaManifestProcedure,
@@ -119,6 +141,8 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type meshServiceClient struct {
 	ping            *connect.Client[v1.PingRequest, v1.PingResponse]
 	upload          *connect.Client[v1.UploadChunk, v1.UploadResponse]
+	volumeDownload  *connect.Client[v1.VolumeFileRef, v1.VolumeFileChunk]
+	volumeUpload    *connect.Client[v1.VolumeUploadChunk, v1.VolumeUploadResponse]
 	replicaManifest *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
 	replicaPut      *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
 	replicaCommit   *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
@@ -133,6 +157,16 @@ func (c *meshServiceClient) Ping(ctx context.Context, req *connect.Request[v1.Pi
 // Upload calls nagi.v1.MeshService.Upload.
 func (c *meshServiceClient) Upload(ctx context.Context) *connect.ClientStreamForClient[v1.UploadChunk, v1.UploadResponse] {
 	return c.upload.CallClientStream(ctx)
+}
+
+// VolumeDownload calls nagi.v1.MeshService.VolumeDownload.
+func (c *meshServiceClient) VolumeDownload(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.ServerStreamForClient[v1.VolumeFileChunk], error) {
+	return c.volumeDownload.CallServerStream(ctx, req)
+}
+
+// VolumeUpload calls nagi.v1.MeshService.VolumeUpload.
+func (c *meshServiceClient) VolumeUpload(ctx context.Context) *connect.ClientStreamForClient[v1.VolumeUploadChunk, v1.VolumeUploadResponse] {
+	return c.volumeUpload.CallClientStream(ctx)
 }
 
 // ReplicaManifest calls nagi.v1.MeshService.ReplicaManifest.
@@ -161,6 +195,10 @@ type MeshServiceHandler interface {
 	// 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
 	// 只接受节点信任的面板。第一条消息带项目和容器。
 	Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error)
+	// 面板下载卷里（或快照里）的文件。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受节点信任的面板。
+	VolumeDownload(context.Context, *connect.Request[v1.VolumeFileRef], *connect.ServerStream[v1.VolumeFileChunk]) error
+	// 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
+	VolumeUpload(context.Context, *connect.ClientStream[v1.VolumeUploadChunk]) (*connect.Response[v1.VolumeUploadResponse], error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
@@ -188,6 +226,18 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		MeshServiceUploadProcedure,
 		svc.Upload,
 		connect.WithSchema(meshServiceMethods.ByName("Upload")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceVolumeDownloadHandler := connect.NewServerStreamHandler(
+		MeshServiceVolumeDownloadProcedure,
+		svc.VolumeDownload,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeDownload")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceVolumeUploadHandler := connect.NewClientStreamHandler(
+		MeshServiceVolumeUploadProcedure,
+		svc.VolumeUpload,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeUpload")),
 		connect.WithHandlerOptions(opts...),
 	)
 	meshServiceReplicaManifestHandler := connect.NewUnaryHandler(
@@ -220,6 +270,10 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 			meshServicePingHandler.ServeHTTP(w, r)
 		case MeshServiceUploadProcedure:
 			meshServiceUploadHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeDownloadProcedure:
+			meshServiceVolumeDownloadHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeUploadProcedure:
+			meshServiceVolumeUploadHandler.ServeHTTP(w, r)
 		case MeshServiceReplicaManifestProcedure:
 			meshServiceReplicaManifestHandler.ServeHTTP(w, r)
 		case MeshServiceReplicaPutProcedure:
@@ -243,6 +297,14 @@ func (UnimplementedMeshServiceHandler) Ping(context.Context, *connect.Request[v1
 
 func (UnimplementedMeshServiceHandler) Upload(context.Context, *connect.ClientStream[v1.UploadChunk]) (*connect.Response[v1.UploadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.Upload is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeDownload(context.Context, *connect.Request[v1.VolumeFileRef], *connect.ServerStream[v1.VolumeFileChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeDownload is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeUpload(context.Context, *connect.ClientStream[v1.VolumeUploadChunk]) (*connect.Response[v1.VolumeUploadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeUpload is not implemented"))
 }
 
 func (UnimplementedMeshServiceHandler) ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error) {

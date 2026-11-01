@@ -6,8 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	stdfs "io/fs"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -228,27 +231,113 @@ func (r *Repo) List(ctx context.Context, kinds ...Kind) ([]Info, error) {
 	return out, nil
 }
 
-// Restore 把快照里的目录 name 恢复到 target。name 是顶层目录名，也可以用 / 指向里面的子目录
-// （例如 container.web/data）。target 里多余的文件会被删除，
-// 所以调用方要先决定好恢复到哪里（例如先恢复到临时目录，再按保留路径合并）。
-func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
+// FileInfo 是快照里的一个文件或目录。
+type FileInfo struct {
+	Name      string
+	IsDir     bool
+	IsSymlink bool
+	Size      int64
+	Modified  time.Time
+	Mode      stdfs.FileMode
+	UID, GID  int
+}
+
+func fileInfo(e fs.Entry) FileInfo {
+	mode := e.Mode()
+	owner := e.Owner()
+	return FileInfo{
+		Name: e.Name(), IsDir: mode.IsDir(), IsSymlink: mode&stdfs.ModeSymlink != 0, Size: e.Size(), Modified: e.ModTime(),
+		Mode: mode, UID: int(owner.UserID), GID: int(owner.GroupID),
+	}
+}
+
+// entry 找到快照里 name 指向的文件或目录，name 用 / 分隔。
+func (r *Repo) entry(ctx context.Context, id, name string) (fs.Entry, error) {
 	man, err := snapshot.LoadSnapshot(ctx, r.rep, manifest.ID(id))
 	if err != nil {
-		return fmt.Errorf("读取快照: %w", err)
+		return nil, fmt.Errorf("读取快照: %w", err)
 	}
 	root, err := snapshotfs.SnapshotRoot(r.rep, man)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var child fs.Entry = root
 	for _, part := range strings.Split(name, "/") {
 		dir, ok := child.(fs.Directory)
 		if !ok {
-			return fmt.Errorf("快照里没有 %s", name)
+			return nil, fmt.Errorf("快照里没有 %s", name)
 		}
 		if child, err = dir.Child(ctx, part); err != nil {
-			return fmt.Errorf("快照里没有 %s: %w", name, err)
+			return nil, fmt.Errorf("快照里没有 %s: %w", name, err)
 		}
+	}
+	return child, nil
+}
+
+// Stat 返回快照里一个文件或目录的信息。
+func (r *Repo) Stat(ctx context.Context, id, name string) (FileInfo, error) {
+	e, err := r.entry(ctx, id, name)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return fileInfo(e), nil
+}
+
+// ListDir 列出快照里的一个目录。
+func (r *Repo) ListDir(ctx context.Context, id, name string) ([]FileInfo, error) {
+	e, err := r.entry(ctx, id, name)
+	if err != nil {
+		return nil, err
+	}
+	dir, ok := e.(fs.Directory)
+	if !ok {
+		return nil, fmt.Errorf("%s 不是目录", name)
+	}
+	entries, err := fs.GetAllEntries(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]FileInfo, 0, len(entries))
+	for _, c := range entries {
+		out = append(out, fileInfo(c))
+	}
+	return out, nil
+}
+
+// WalkFiles 遍历快照里 name 下面的所有文件和目录（包括 name 本身，sub 为空），sub 是相对 name 的路径。
+// 普通文件的 open 用来读内容，其他的 open 是 nil。
+func (r *Repo) WalkFiles(ctx context.Context, id, name string, fn func(sub string, f FileInfo, open func() (io.ReadCloser, error)) error) error {
+	e, err := r.entry(ctx, id, name)
+	if err != nil {
+		return err
+	}
+	return walkEntry(ctx, e, "", fn)
+}
+
+func walkEntry(ctx context.Context, e fs.Entry, sub string, fn func(string, FileInfo, func() (io.ReadCloser, error)) error) error {
+	var open func() (io.ReadCloser, error)
+	if f, ok := e.(fs.File); ok && e.Mode().IsRegular() {
+		open = func() (io.ReadCloser, error) { return f.Open(ctx) }
+	}
+	if err := fn(sub, fileInfo(e), open); err != nil {
+		return err
+	}
+	dir, ok := e.(fs.Directory)
+	if !ok {
+		return nil
+	}
+	return fs.IterateEntries(ctx, dir, func(ctx context.Context, c fs.Entry) error {
+		return walkEntry(ctx, c, path.Join(sub, c.Name()), fn)
+	})
+}
+
+// Restore 把快照里的目录 name 恢复到 target。name 是顶层目录名，也可以用 / 指向里面的子目录
+// （例如 container.web/data）。target 里多余的文件会被删除，
+// 所以调用方要先决定好恢复到哪里（例如先恢复到临时目录，再按保留路径合并）。
+func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
+	child, err := r.entry(ctx, id, name)
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err

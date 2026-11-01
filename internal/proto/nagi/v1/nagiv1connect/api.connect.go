@@ -292,6 +292,21 @@ const (
 	// ProjectServiceDisconnectProjectProcedure is the fully-qualified name of the ProjectService's
 	// DisconnectProject RPC.
 	ProjectServiceDisconnectProjectProcedure = "/nagi.v1.ProjectService/DisconnectProject"
+	// ProjectServiceListVolumesProcedure is the fully-qualified name of the ProjectService's
+	// ListVolumes RPC.
+	ProjectServiceListVolumesProcedure = "/nagi.v1.ProjectService/ListVolumes"
+	// ProjectServiceListVolumeFilesProcedure is the fully-qualified name of the ProjectService's
+	// ListVolumeFiles RPC.
+	ProjectServiceListVolumeFilesProcedure = "/nagi.v1.ProjectService/ListVolumeFiles"
+	// ProjectServiceDeleteVolumeFileProcedure is the fully-qualified name of the ProjectService's
+	// DeleteVolumeFile RPC.
+	ProjectServiceDeleteVolumeFileProcedure = "/nagi.v1.ProjectService/DeleteVolumeFile"
+	// ProjectServiceCreateVolumeDirProcedure is the fully-qualified name of the ProjectService's
+	// CreateVolumeDir RPC.
+	ProjectServiceCreateVolumeDirProcedure = "/nagi.v1.ProjectService/CreateVolumeDir"
+	// ProjectServiceRestoreVolumeFileProcedure is the fully-qualified name of the ProjectService's
+	// RestoreVolumeFile RPC.
+	ProjectServiceRestoreVolumeFileProcedure = "/nagi.v1.ProjectService/RestoreVolumeFile"
 	// ProjectServiceListSnapshotsProcedure is the fully-qualified name of the ProjectService's
 	// ListSnapshots RPC.
 	ProjectServiceListSnapshotsProcedure = "/nagi.v1.ProjectService/ListSnapshots"
@@ -2009,6 +2024,13 @@ type ProjectServiceClient interface {
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
+	// 卷里的文件。只读角色不能用；下载和上传走 /api/volume-file。
+	ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error)
+	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -2245,6 +2267,36 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("DisconnectProject")),
 			connect.WithClientOptions(opts...),
 		),
+		listVolumes: connect.NewClient[v1.ContainerRef, v1.ListVolumesResponse](
+			httpClient,
+			baseURL+ProjectServiceListVolumesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListVolumes")),
+			connect.WithClientOptions(opts...),
+		),
+		listVolumeFiles: connect.NewClient[v1.VolumeFileRef, v1.ListVolumeFilesResponse](
+			httpClient,
+			baseURL+ProjectServiceListVolumeFilesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteVolumeFile: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteVolumeFileProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		createVolumeDir: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+ProjectServiceCreateVolumeDirProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CreateVolumeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreVolumeFile: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+ProjectServiceRestoreVolumeFileProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RestoreVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+ProjectServiceListSnapshotsProcedure,
@@ -2333,6 +2385,11 @@ type projectServiceClient struct {
 	confirmTakeover       *connect.Client[v1.ContainerRef, v1.Project]
 	connectProject        *connect.Client[v1.ConnectProjectRequest, v1.Project]
 	disconnectProject     *connect.Client[v1.ConnectProjectRequest, v1.Project]
+	listVolumes           *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
+	listVolumeFiles       *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
+	deleteVolumeFile      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	createVolumeDir       *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	restoreVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -2518,6 +2575,31 @@ func (c *projectServiceClient) DisconnectProject(ctx context.Context, req *conne
 	return c.disconnectProject.CallUnary(ctx, req)
 }
 
+// ListVolumes calls nagi.v1.ProjectService.ListVolumes.
+func (c *projectServiceClient) ListVolumes(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error) {
+	return c.listVolumes.CallUnary(ctx, req)
+}
+
+// ListVolumeFiles calls nagi.v1.ProjectService.ListVolumeFiles.
+func (c *projectServiceClient) ListVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error) {
+	return c.listVolumeFiles.CallUnary(ctx, req)
+}
+
+// DeleteVolumeFile calls nagi.v1.ProjectService.DeleteVolumeFile.
+func (c *projectServiceClient) DeleteVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.deleteVolumeFile.CallUnary(ctx, req)
+}
+
+// CreateVolumeDir calls nagi.v1.ProjectService.CreateVolumeDir.
+func (c *projectServiceClient) CreateVolumeDir(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.createVolumeDir.CallUnary(ctx, req)
+}
+
+// RestoreVolumeFile calls nagi.v1.ProjectService.RestoreVolumeFile.
+func (c *projectServiceClient) RestoreVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.restoreVolumeFile.CallUnary(ctx, req)
+}
+
 // ListSnapshots calls nagi.v1.ProjectService.ListSnapshots.
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return c.listSnapshots.CallUnary(ctx, req)
@@ -2621,6 +2703,13 @@ type ProjectServiceHandler interface {
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
 	DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
+	// 卷里的文件。只读角色不能用；下载和上传走 /api/volume-file。
+	ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error)
+	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -2853,6 +2942,36 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("DisconnectProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceListVolumesHandler := connect.NewUnaryHandler(
+		ProjectServiceListVolumesProcedure,
+		svc.ListVolumes,
+		connect.WithSchema(projectServiceMethods.ByName("ListVolumes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListVolumeFilesHandler := connect.NewUnaryHandler(
+		ProjectServiceListVolumeFilesProcedure,
+		svc.ListVolumeFiles,
+		connect.WithSchema(projectServiceMethods.ByName("ListVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDeleteVolumeFileHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteVolumeFileProcedure,
+		svc.DeleteVolumeFile,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCreateVolumeDirHandler := connect.NewUnaryHandler(
+		ProjectServiceCreateVolumeDirProcedure,
+		svc.CreateVolumeDir,
+		connect.WithSchema(projectServiceMethods.ByName("CreateVolumeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRestoreVolumeFileHandler := connect.NewUnaryHandler(
+		ProjectServiceRestoreVolumeFileProcedure,
+		svc.RestoreVolumeFile,
+		connect.WithSchema(projectServiceMethods.ByName("RestoreVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceListSnapshotsHandler := connect.NewUnaryHandler(
 		ProjectServiceListSnapshotsProcedure,
 		svc.ListSnapshots,
@@ -2973,6 +3092,16 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceConnectProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceDisconnectProjectProcedure:
 			projectServiceDisconnectProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceListVolumesProcedure:
+			projectServiceListVolumesHandler.ServeHTTP(w, r)
+		case ProjectServiceListVolumeFilesProcedure:
+			projectServiceListVolumeFilesHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteVolumeFileProcedure:
+			projectServiceDeleteVolumeFileHandler.ServeHTTP(w, r)
+		case ProjectServiceCreateVolumeDirProcedure:
+			projectServiceCreateVolumeDirHandler.ServeHTTP(w, r)
+		case ProjectServiceRestoreVolumeFileProcedure:
+			projectServiceRestoreVolumeFileHandler.ServeHTTP(w, r)
 		case ProjectServiceListSnapshotsProcedure:
 			projectServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateSnapshotProcedure:
@@ -3136,6 +3265,26 @@ func (UnimplementedProjectServiceHandler) ConnectProject(context.Context, *conne
 
 func (UnimplementedProjectServiceHandler) DisconnectProject(context.Context, *connect.Request[v1.ConnectProjectRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DisconnectProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListVolumes is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListVolumeFiles is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteVolumeFile is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CreateVolumeDir is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreVolumeFile is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {

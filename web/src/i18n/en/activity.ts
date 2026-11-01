@@ -16,6 +16,11 @@ export default {
   resolved: "Resolved",
   more: "Load more",
   actions: {
+    UploadVolumeFile: "Upload file",
+    DownloadVolumeFile: "Download file",
+    DeleteVolumeFile: "Delete file",
+    CreateVolumeDir: "Create directory",
+    RestoreVolumeFile: "Restore file from snapshot",
     CreateUser: "Add member",
     UpdateUser: "Update member",
     DeleteUser: "Delete member",

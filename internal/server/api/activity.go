@@ -86,6 +86,11 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		}
 		target = strings.Join(names, ", ")
 	}
+	// 文件操作成功时记下动的是哪个文件。
+	detail := failure
+	if detail == "" {
+		detail = activityField(req, "path")
+	}
 	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
 		CreatedAt: time.Now().Unix(),
 		Kind:      "operation",
@@ -93,7 +98,7 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		Action:    method,
 		ProjectID: activityField(req, "project_id"),
 		Target:    clipActivity(target, 200),
-		Detail:    clipActivity(failure, 500),
+		Detail:    clipActivity(detail, 500),
 		Failed:    boolInt(failure != ""),
 	})
 	if err != nil {

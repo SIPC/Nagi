@@ -274,6 +274,11 @@ func (s *Service) CleanupLoop(ctx context.Context) {
 
 type userKey struct{}
 
+// WithUser 把用户放进 ctx，给不走 Connect 拦截器的入口用。
+func WithUser(ctx context.Context, u User) context.Context {
+	return context.WithValue(ctx, userKey{}, u)
+}
+
 // Username 返回当前请求的登录用户名。
 func Username(ctx context.Context) string { return CurrentUser(ctx).Name }
 

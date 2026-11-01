@@ -33,6 +33,32 @@ func (s *Service) Snapshots(ctx context.Context, projectID, name string) ([]*nag
 	return resp.GetSnapshots(), nil
 }
 
+// ContainerAgent 返回容器所在节点的连接。
+func (s *Service) ContainerAgent(ctx context.Context, projectID, name string) (nagiv1.AgentServiceClient, error) {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	return s.agent(ctx, c.NodeID)
+}
+
+// ListVolumes 列出容器的存储。
+func (s *Service) ListVolumes(ctx context.Context, projectID, name string) (*nagiv1.ListVolumesResponse, error) {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	agent, err := s.agent(ctx, c.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	out, err := agent.ListVolumes(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
+	if status.Code(err) == codes.Unimplemented {
+		return nil, i18n.New("节点版本过旧，升级节点后才能查看存储")
+	}
+	return out, err
+}
+
 // CreateSnapshot 给容器做一份手动快照；name 为空时给项目里所有部署过的容器各做一份。
 func (s *Service) CreateSnapshot(ctx context.Context, projectID, name string, out Output) error {
 	ctx = context.WithoutCancel(ctx)

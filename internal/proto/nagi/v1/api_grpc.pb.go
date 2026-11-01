@@ -2398,6 +2398,11 @@ const (
 	ProjectService_ConfirmTakeover_FullMethodName       = "/nagi.v1.ProjectService/ConfirmTakeover"
 	ProjectService_ConnectProject_FullMethodName        = "/nagi.v1.ProjectService/ConnectProject"
 	ProjectService_DisconnectProject_FullMethodName     = "/nagi.v1.ProjectService/DisconnectProject"
+	ProjectService_ListVolumes_FullMethodName           = "/nagi.v1.ProjectService/ListVolumes"
+	ProjectService_ListVolumeFiles_FullMethodName       = "/nagi.v1.ProjectService/ListVolumeFiles"
+	ProjectService_DeleteVolumeFile_FullMethodName      = "/nagi.v1.ProjectService/DeleteVolumeFile"
+	ProjectService_CreateVolumeDir_FullMethodName       = "/nagi.v1.ProjectService/CreateVolumeDir"
+	ProjectService_RestoreVolumeFile_FullMethodName     = "/nagi.v1.ProjectService/RestoreVolumeFile"
 	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
 	ProjectService_CreateSnapshot_FullMethodName        = "/nagi.v1.ProjectService/CreateSnapshot"
 	ProjectService_RestoreSnapshot_FullMethodName       = "/nagi.v1.ProjectService/RestoreSnapshot"
@@ -2473,6 +2478,13 @@ type ProjectServiceClient interface {
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	DisconnectProject(ctx context.Context, in *ConnectProjectRequest, opts ...grpc.CallOption) (*Project, error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error)
+	// 卷里的文件。只读角色不能用；下载和上传走 /api/volume-file。
+	ListVolumeFiles(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*ListVolumeFilesResponse, error)
+	DeleteVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	// 快照（按容器）。
 	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -2918,6 +2930,56 @@ func (c *projectServiceClient) DisconnectProject(ctx context.Context, in *Connec
 	return out, nil
 }
 
+func (c *projectServiceClient) ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVolumesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListVolumes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ListVolumeFiles(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*ListVolumeFilesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVolumeFilesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListVolumeFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) DeleteVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteVolumeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, ProjectService_CreateVolumeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, ProjectService_RestoreVolumeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
@@ -3081,6 +3143,13 @@ type ProjectServiceServer interface {
 	// 项目连接（双向，立即生效）：连上以后两个项目的容器用"容器.网络名"访问对方。
 	ConnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
 	DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error)
+	// 卷里的文件。只读角色不能用；下载和上传走 /api/volume-file。
+	ListVolumeFiles(context.Context, *VolumeFileRef) (*ListVolumeFilesResponse, error)
+	DeleteVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -3208,6 +3277,21 @@ func (UnimplementedProjectServiceServer) ConnectProject(context.Context, *Connec
 }
 func (UnimplementedProjectServiceServer) DisconnectProject(context.Context, *ConnectProjectRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DisconnectProject not implemented")
+}
+func (UnimplementedProjectServiceServer) ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumes not implemented")
+}
+func (UnimplementedProjectServiceServer) ListVolumeFiles(context.Context, *VolumeFileRef) (*ListVolumeFilesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumeFiles not implemented")
+}
+func (UnimplementedProjectServiceServer) DeleteVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteVolumeFile not implemented")
+}
+func (UnimplementedProjectServiceServer) CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateVolumeDir not implemented")
+}
+func (UnimplementedProjectServiceServer) RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreVolumeFile not implemented")
 }
 func (UnimplementedProjectServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
@@ -3828,6 +3912,96 @@ func _ProjectService_DisconnectProject_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_ListVolumes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListVolumes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListVolumes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListVolumes(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ListVolumeFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListVolumeFiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListVolumeFiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListVolumeFiles(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_DeleteVolumeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DeleteVolumeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DeleteVolumeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DeleteVolumeFile(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_CreateVolumeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).CreateVolumeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_CreateVolumeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).CreateVolumeDir(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RestoreVolumeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).RestoreVolumeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_RestoreVolumeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).RestoreVolumeFile(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -4072,6 +4246,26 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DisconnectProject",
 			Handler:    _ProjectService_DisconnectProject_Handler,
+		},
+		{
+			MethodName: "ListVolumes",
+			Handler:    _ProjectService_ListVolumes_Handler,
+		},
+		{
+			MethodName: "ListVolumeFiles",
+			Handler:    _ProjectService_ListVolumeFiles_Handler,
+		},
+		{
+			MethodName: "DeleteVolumeFile",
+			Handler:    _ProjectService_DeleteVolumeFile_Handler,
+		},
+		{
+			MethodName: "CreateVolumeDir",
+			Handler:    _ProjectService_CreateVolumeDir_Handler,
+		},
+		{
+			MethodName: "RestoreVolumeFile",
+			Handler:    _ProjectService_RestoreVolumeFile_Handler,
 		},
 		{
 			MethodName: "ListSnapshots",

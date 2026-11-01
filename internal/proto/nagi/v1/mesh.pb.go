@@ -806,7 +806,7 @@ var File_nagi_v1_mesh_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/mesh.proto\x12\anagi.v1\"\x86\x01\n" +
+	"\x12nagi/v1/mesh.proto\x12\anagi.v1\x1a\x13nagi/v1/agent.proto\"\x86\x01\n" +
 	"\x10LeaseVoteRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
@@ -856,10 +856,12 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\bstripped\x18\x03 \x01(\tR\bstripped\"\r\n" +
 	"\vPingRequest\"&\n" +
 	"\fPingResponse\x12\x16\n" +
-	"\x06caller\x18\x01 \x01(\fR\x06caller2\xae\x03\n" +
+	"\x06caller\x18\x01 \x01(\fR\x06caller2\xc1\x04\n" +
 	"\vMeshService\x123\n" +
 	"\x04Ping\x12\x14.nagi.v1.PingRequest\x1a\x15.nagi.v1.PingResponse\x129\n" +
-	"\x06Upload\x12\x14.nagi.v1.UploadChunk\x1a\x17.nagi.v1.UploadResponse(\x01\x12T\n" +
+	"\x06Upload\x12\x14.nagi.v1.UploadChunk\x1a\x17.nagi.v1.UploadResponse(\x01\x12D\n" +
+	"\x0eVolumeDownload\x12\x16.nagi.v1.VolumeFileRef\x1a\x18.nagi.v1.VolumeFileChunk0\x01\x12K\n" +
+	"\fVolumeUpload\x12\x1a.nagi.v1.VolumeUploadChunk\x1a\x1d.nagi.v1.VolumeUploadResponse(\x01\x12T\n" +
 	"\x0fReplicaManifest\x12\x1f.nagi.v1.ReplicaManifestRequest\x1a .nagi.v1.ReplicaManifestResponse\x12B\n" +
 	"\n" +
 	"ReplicaPut\x12\x15.nagi.v1.ReplicaChunk\x1a\x1b.nagi.v1.ReplicaPutResponse(\x01\x12N\n" +
@@ -896,6 +898,10 @@ var file_nagi_v1_mesh_proto_goTypes = []any{
 	(*UploadResponse)(nil),          // 12: nagi.v1.UploadResponse
 	(*PingRequest)(nil),             // 13: nagi.v1.PingRequest
 	(*PingResponse)(nil),            // 14: nagi.v1.PingResponse
+	(*VolumeFileRef)(nil),           // 15: nagi.v1.VolumeFileRef
+	(*VolumeUploadChunk)(nil),       // 16: nagi.v1.VolumeUploadChunk
+	(*VolumeFileChunk)(nil),         // 17: nagi.v1.VolumeFileChunk
+	(*VolumeUploadResponse)(nil),    // 18: nagi.v1.VolumeUploadResponse
 }
 var file_nagi_v1_mesh_proto_depIdxs = []int32{
 	0,  // 0: nagi.v1.LeaseVotesRequest.votes:type_name -> nagi.v1.LeaseVoteRequest
@@ -903,18 +909,22 @@ var file_nagi_v1_mesh_proto_depIdxs = []int32{
 	5,  // 2: nagi.v1.ReplicaManifestResponse.files:type_name -> nagi.v1.ReplicaFile
 	13, // 3: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
 	11, // 4: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
-	4,  // 5: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
-	7,  // 6: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
-	9,  // 7: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
-	1,  // 8: nagi.v1.MeshService.LeaseVotes:input_type -> nagi.v1.LeaseVotesRequest
-	14, // 9: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
-	12, // 10: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
-	6,  // 11: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
-	8,  // 12: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
-	10, // 13: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
-	2,  // 14: nagi.v1.MeshService.LeaseVotes:output_type -> nagi.v1.LeaseVotesResponse
-	9,  // [9:15] is the sub-list for method output_type
-	3,  // [3:9] is the sub-list for method input_type
+	15, // 5: nagi.v1.MeshService.VolumeDownload:input_type -> nagi.v1.VolumeFileRef
+	16, // 6: nagi.v1.MeshService.VolumeUpload:input_type -> nagi.v1.VolumeUploadChunk
+	4,  // 7: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
+	7,  // 8: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
+	9,  // 9: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
+	1,  // 10: nagi.v1.MeshService.LeaseVotes:input_type -> nagi.v1.LeaseVotesRequest
+	14, // 11: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
+	12, // 12: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
+	17, // 13: nagi.v1.MeshService.VolumeDownload:output_type -> nagi.v1.VolumeFileChunk
+	18, // 14: nagi.v1.MeshService.VolumeUpload:output_type -> nagi.v1.VolumeUploadResponse
+	6,  // 15: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
+	8,  // 16: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
+	10, // 17: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
+	2,  // 18: nagi.v1.MeshService.LeaseVotes:output_type -> nagi.v1.LeaseVotesResponse
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -925,6 +935,7 @@ func file_nagi_v1_mesh_proto_init() {
 	if File_nagi_v1_mesh_proto != nil {
 		return
 	}
+	file_nagi_v1_agent_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

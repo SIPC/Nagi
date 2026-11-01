@@ -45,6 +45,7 @@ mesh 坏了只影响数据传输和投票，不影响管理。
 
 - `Ping`：连通测试。面板上可以查看每个节点的 mesh 状态（到 mesh 里每个节点和面板走哪条路径、握手时间、收发字节）并测试连通。
 - `Upload`：面板把容器文件上传到节点（客户端流）。
+- `VolumeDownload` / `VolumeUpload`：存储标签的文件下载和上传，面板转发浏览器的请求（见 [agent.md](agent.md#存储)）。
 - `ReplicaManifest` / `ReplicaPut` / `ReplicaCommit`：把容器的快照仓库同步给顶替节点或备份节点（见 [snapshot.md](snapshot.md#备份节点的实现)）。
 - `LeaseVotes`：顶替的租约投票，按容器，同一对成员之间的多个容器合并成一次请求（见 [failover.md](failover.md#实现)）。
 

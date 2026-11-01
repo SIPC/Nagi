@@ -27,7 +27,7 @@ var adminReads = map[string]bool{
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。
 var operatorReads = map[string]bool{
-	"GetBackupKey": true, "ListRegistries": true,
+	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true,
 }
 
 var readPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}

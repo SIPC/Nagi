@@ -4,12 +4,18 @@ package nagi.v1;
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
+import "nagi/v1/agent.proto";
+
 // MeshService：mesh 成员之间直接调用，走 WireGuard。调用方身份由 WireGuard 公钥确定。
 service MeshService {
   rpc Ping(PingRequest) returns (PingResponse);
   // 面板把容器文件的压缩包（zip、tar.gz）传给节点。节点解压后暂存，下次部署（use_upload）时替换 data/。
   // 只接受节点信任的面板。第一条消息带项目和容器。
   rpc Upload(stream UploadChunk) returns (UploadResponse);
+  // 面板下载卷里（或快照里）的文件。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受节点信任的面板。
+  rpc VolumeDownload(VolumeFileRef) returns (stream VolumeFileChunk);
+  // 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
+  rpc VolumeUpload(stream VolumeUploadChunk) returns (VolumeUploadResponse);
   // 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
   // 只接受备份节点登记过的源节点。
   rpc ReplicaManifest(ReplicaManifestRequest) returns (ReplicaManifestResponse);

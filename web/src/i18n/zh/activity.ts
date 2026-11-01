@@ -15,6 +15,11 @@ export default {
   resolved: "已恢复",
   more: "加载更多",
   actions: {
+    UploadVolumeFile: "上传文件",
+    DownloadVolumeFile: "下载文件",
+    DeleteVolumeFile: "删除文件",
+    CreateVolumeDir: "新建目录",
+    RestoreVolumeFile: "从快照恢复文件",
     CreateUser: "添加成员",
     UpdateUser: "修改成员",
     DeleteUser: "删除成员",

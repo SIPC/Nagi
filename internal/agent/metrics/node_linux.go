@@ -59,6 +59,12 @@ func readMem() (total, available uint64, ok bool) {
 	return total, available, total > 0
 }
 
+// DiskSpace 返回 path 所在文件系统的总量和可用量（字节），读不到时都是 0。
+func DiskSpace(path string) (total, free int64) {
+	t, f, _ := readDisk(path)
+	return int64(t), int64(f)
+}
+
 // readDisk 返回 path 所在文件系统的总量和可用量（字节）。
 func readDisk(path string) (total, free uint64, ok bool) {
 	var st syscall.Statfs_t

@@ -23,6 +23,11 @@ const (
 	AgentService_DeployContainer_FullMethodName      = "/nagi.v1.AgentService/DeployContainer"
 	AgentService_DeleteContainer_FullMethodName      = "/nagi.v1.AgentService/DeleteContainer"
 	AgentService_ControlContainer_FullMethodName     = "/nagi.v1.AgentService/ControlContainer"
+	AgentService_ListVolumes_FullMethodName          = "/nagi.v1.AgentService/ListVolumes"
+	AgentService_ListVolumeFiles_FullMethodName      = "/nagi.v1.AgentService/ListVolumeFiles"
+	AgentService_DeleteVolumeFile_FullMethodName     = "/nagi.v1.AgentService/DeleteVolumeFile"
+	AgentService_CreateVolumeDir_FullMethodName      = "/nagi.v1.AgentService/CreateVolumeDir"
+	AgentService_RestoreVolumeFile_FullMethodName    = "/nagi.v1.AgentService/RestoreVolumeFile"
 	AgentService_ListSnapshots_FullMethodName        = "/nagi.v1.AgentService/ListSnapshots"
 	AgentService_CreateSnapshot_FullMethodName       = "/nagi.v1.AgentService/CreateSnapshot"
 	AgentService_RestoreSnapshot_FullMethodName      = "/nagi.v1.AgentService/RestoreSnapshot"
@@ -75,6 +80,15 @@ type AgentServiceClient interface {
 	DeleteContainer(ctx context.Context, in *DeleteContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error)
+	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
+	ListVolumeFiles(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*ListVolumeFilesResponse, error)
+	// 下载和上传走 MeshService，大文件不占用控制连接。写操作要持有顶替租约（有顶替时）。
+	DeleteVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
+	RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -207,6 +221,56 @@ func (c *agentServiceClient) ControlContainer(ctx context.Context, in *ControlCo
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ControlContainerClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVolumesResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListVolumes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListVolumeFiles(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*ListVolumeFilesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVolumeFilesResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListVolumeFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteVolumeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_CreateVolumeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_RestoreVolumeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -621,6 +685,15 @@ type AgentServiceServer interface {
 	DeleteContainer(context.Context, *DeleteContainerRequest) (*DeleteContainerResponse, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error)
+	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
+	ListVolumeFiles(context.Context, *VolumeFileRef) (*ListVolumeFilesResponse, error)
+	// 下载和上传走 MeshService，大文件不占用控制连接。写操作要持有顶替租约（有顶替时）。
+	DeleteVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
+	RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
 	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
 	CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -707,6 +780,21 @@ func (UnimplementedAgentServiceServer) DeleteContainer(context.Context, *DeleteC
 }
 func (UnimplementedAgentServiceServer) ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method ControlContainer not implemented")
+}
+func (UnimplementedAgentServiceServer) ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumes not implemented")
+}
+func (UnimplementedAgentServiceServer) ListVolumeFiles(context.Context, *VolumeFileRef) (*ListVolumeFilesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumeFiles not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteVolumeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateVolumeDir not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreVolumeFile not implemented")
 }
 func (UnimplementedAgentServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
@@ -888,6 +976,96 @@ func _AgentService_ControlContainer_Handler(srv interface{}, stream grpc.ServerS
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ControlContainerServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_ListVolumes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListVolumes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListVolumes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListVolumes(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListVolumeFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListVolumeFiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListVolumeFiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListVolumeFiles(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteVolumeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteVolumeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteVolumeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteVolumeFile(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CreateVolumeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CreateVolumeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CreateVolumeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CreateVolumeDir(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestoreVolumeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RestoreVolumeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_RestoreVolumeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RestoreVolumeFile(ctx, req.(*VolumeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _AgentService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
@@ -1462,6 +1640,26 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteContainer",
 			Handler:    _AgentService_DeleteContainer_Handler,
+		},
+		{
+			MethodName: "ListVolumes",
+			Handler:    _AgentService_ListVolumes_Handler,
+		},
+		{
+			MethodName: "ListVolumeFiles",
+			Handler:    _AgentService_ListVolumeFiles_Handler,
+		},
+		{
+			MethodName: "DeleteVolumeFile",
+			Handler:    _AgentService_DeleteVolumeFile_Handler,
+		},
+		{
+			MethodName: "CreateVolumeDir",
+			Handler:    _AgentService_CreateVolumeDir_Handler,
+		},
+		{
+			MethodName: "RestoreVolumeFile",
+			Handler:    _AgentService_RestoreVolumeFile_Handler,
 		},
 		{
 			MethodName: "ListSnapshots",

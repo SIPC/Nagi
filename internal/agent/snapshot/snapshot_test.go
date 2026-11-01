@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -85,5 +86,84 @@ func TestCreateListRestore(t *testing.T) {
 	all, err := r2.List(ctx)
 	if err != nil || len(all) != 21 {
 		t.Fatalf("all snapshots = %d %v", len(all), err)
+	}
+}
+
+func TestListAndWalkFiles(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	r, err := Open(ctx, "p1", filepath.Join(root, "backups"), "test-password", filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(ctx)
+	data, vols := filepath.Join(root, "data"), filepath.Join(root, "volumes")
+	write(t, filepath.Join(vols, "db", "sub", "x"), "hello")
+	write(t, filepath.Join(vols, "db", "y"), "y")
+	write(t, filepath.Join(data, "app"), "app")
+	id, err := r.Create(ctx, Manual, []Dir{{"data", data}, {"volumes", vols}}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := r.ListDir(ctx, id, "volumes/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, f := range list {
+		names[f.Name] = f.IsDir
+	}
+	if isDir, ok := names["sub"]; !ok || !isDir {
+		t.Errorf("sub 应该是目录：%v", names)
+	}
+	if isDir, ok := names["y"]; !ok || isDir {
+		t.Errorf("y 应该是文件：%v", names)
+	}
+	if f, err := r.Stat(ctx, id, "volumes/db/y"); err != nil || f.IsDir || f.Size != 1 {
+		t.Errorf("Stat = %+v, %v", f, err)
+	}
+	if _, err := r.ListDir(ctx, id, "volumes/db/y"); err == nil {
+		t.Error("文件不能当目录列")
+	}
+	if _, err := r.Stat(ctx, id, "volumes/none"); err == nil {
+		t.Error("不存在的路径应该报错")
+	}
+
+	content := map[string]string{}
+	err = r.WalkFiles(ctx, id, "volumes/db", func(sub string, f FileInfo, open func() (io.ReadCloser, error)) error {
+		if open == nil {
+			return nil
+		}
+		rc, err := open()
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		b, err := io.ReadAll(rc)
+		content[sub] = string(b)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content["sub/x"] != "hello" || content["y"] != "y" || len(content) != 2 {
+		t.Errorf("遍历结果 = %v", content)
+	}
+
+	// 单个文件：sub 为空，能读内容。
+	single := ""
+	err = r.WalkFiles(ctx, id, "volumes/db/y", func(sub string, _ FileInfo, open func() (io.ReadCloser, error)) error {
+		rc, err := open()
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		b, err := io.ReadAll(rc)
+		single = sub + "=" + string(b)
+		return err
+	})
+	if err != nil || single != "=y" {
+		t.Errorf("单个文件 = %q, %v", single, err)
 	}
 }

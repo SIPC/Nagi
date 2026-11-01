@@ -45,6 +45,21 @@ const (
 	// AgentServiceControlContainerProcedure is the fully-qualified name of the AgentService's
 	// ControlContainer RPC.
 	AgentServiceControlContainerProcedure = "/nagi.v1.AgentService/ControlContainer"
+	// AgentServiceListVolumesProcedure is the fully-qualified name of the AgentService's ListVolumes
+	// RPC.
+	AgentServiceListVolumesProcedure = "/nagi.v1.AgentService/ListVolumes"
+	// AgentServiceListVolumeFilesProcedure is the fully-qualified name of the AgentService's
+	// ListVolumeFiles RPC.
+	AgentServiceListVolumeFilesProcedure = "/nagi.v1.AgentService/ListVolumeFiles"
+	// AgentServiceDeleteVolumeFileProcedure is the fully-qualified name of the AgentService's
+	// DeleteVolumeFile RPC.
+	AgentServiceDeleteVolumeFileProcedure = "/nagi.v1.AgentService/DeleteVolumeFile"
+	// AgentServiceCreateVolumeDirProcedure is the fully-qualified name of the AgentService's
+	// CreateVolumeDir RPC.
+	AgentServiceCreateVolumeDirProcedure = "/nagi.v1.AgentService/CreateVolumeDir"
+	// AgentServiceRestoreVolumeFileProcedure is the fully-qualified name of the AgentService's
+	// RestoreVolumeFile RPC.
+	AgentServiceRestoreVolumeFileProcedure = "/nagi.v1.AgentService/RestoreVolumeFile"
 	// AgentServiceListSnapshotsProcedure is the fully-qualified name of the AgentService's
 	// ListSnapshots RPC.
 	AgentServiceListSnapshotsProcedure = "/nagi.v1.AgentService/ListSnapshots"
@@ -146,6 +161,15 @@ type AgentServiceClient interface {
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
+	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
+	ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error)
+	// 下载和上传走 MeshService，大文件不占用控制连接。写操作要持有顶替租约（有顶替时）。
+	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
+	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -246,6 +270,36 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceControlContainerProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		listVolumes: connect.NewClient[v1.ContainerRef, v1.ListVolumesResponse](
+			httpClient,
+			baseURL+AgentServiceListVolumesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListVolumes")),
+			connect.WithClientOptions(opts...),
+		),
+		listVolumeFiles: connect.NewClient[v1.VolumeFileRef, v1.ListVolumeFilesResponse](
+			httpClient,
+			baseURL+AgentServiceListVolumeFilesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteVolumeFile: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteVolumeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		createVolumeDir: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceCreateVolumeDirProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CreateVolumeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreVolumeFile: connect.NewClient[v1.VolumeFileRef, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceRestoreVolumeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreVolumeFile")),
 			connect.WithClientOptions(opts...),
 		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
@@ -461,6 +515,11 @@ type agentServiceClient struct {
 	deployContainer      *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
 	deleteContainer      *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
 	controlContainer     *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
+	listVolumes          *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
+	listVolumeFiles      *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
+	deleteVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	createVolumeDir      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	restoreVolumeFile    *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	listSnapshots        *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot       *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -515,6 +574,31 @@ func (c *agentServiceClient) DeleteContainer(ctx context.Context, req *connect.R
 // ControlContainer calls nagi.v1.AgentService.ControlContainer.
 func (c *agentServiceClient) ControlContainer(ctx context.Context, req *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.controlContainer.CallServerStream(ctx, req)
+}
+
+// ListVolumes calls nagi.v1.AgentService.ListVolumes.
+func (c *agentServiceClient) ListVolumes(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error) {
+	return c.listVolumes.CallUnary(ctx, req)
+}
+
+// ListVolumeFiles calls nagi.v1.AgentService.ListVolumeFiles.
+func (c *agentServiceClient) ListVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error) {
+	return c.listVolumeFiles.CallUnary(ctx, req)
+}
+
+// DeleteVolumeFile calls nagi.v1.AgentService.DeleteVolumeFile.
+func (c *agentServiceClient) DeleteVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.deleteVolumeFile.CallUnary(ctx, req)
+}
+
+// CreateVolumeDir calls nagi.v1.AgentService.CreateVolumeDir.
+func (c *agentServiceClient) CreateVolumeDir(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.createVolumeDir.CallUnary(ctx, req)
+}
+
+// RestoreVolumeFile calls nagi.v1.AgentService.RestoreVolumeFile.
+func (c *agentServiceClient) RestoreVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.restoreVolumeFile.CallUnary(ctx, req)
 }
 
 // ListSnapshots calls nagi.v1.AgentService.ListSnapshots.
@@ -698,6 +782,15 @@ type AgentServiceHandler interface {
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 容器的存储：data/、命名 volume，大小和挂载位置。
+	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
+	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
+	ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error)
+	// 下载和上传走 MeshService，大文件不占用控制连接。写操作要持有顶替租约（有顶替时）。
+	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
+	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -794,6 +887,36 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceControlContainerProcedure,
 		svc.ControlContainer,
 		connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListVolumesHandler := connect.NewUnaryHandler(
+		AgentServiceListVolumesProcedure,
+		svc.ListVolumes,
+		connect.WithSchema(agentServiceMethods.ByName("ListVolumes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListVolumeFilesHandler := connect.NewUnaryHandler(
+		AgentServiceListVolumeFilesProcedure,
+		svc.ListVolumeFiles,
+		connect.WithSchema(agentServiceMethods.ByName("ListVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteVolumeFileHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteVolumeFileProcedure,
+		svc.DeleteVolumeFile,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCreateVolumeDirHandler := connect.NewUnaryHandler(
+		AgentServiceCreateVolumeDirProcedure,
+		svc.CreateVolumeDir,
+		connect.WithSchema(agentServiceMethods.ByName("CreateVolumeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreVolumeFileHandler := connect.NewUnaryHandler(
+		AgentServiceRestoreVolumeFileProcedure,
+		svc.RestoreVolumeFile,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreVolumeFile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceListSnapshotsHandler := connect.NewUnaryHandler(
@@ -1010,6 +1133,16 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceDeleteContainerHandler.ServeHTTP(w, r)
 		case AgentServiceControlContainerProcedure:
 			agentServiceControlContainerHandler.ServeHTTP(w, r)
+		case AgentServiceListVolumesProcedure:
+			agentServiceListVolumesHandler.ServeHTTP(w, r)
+		case AgentServiceListVolumeFilesProcedure:
+			agentServiceListVolumeFilesHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteVolumeFileProcedure:
+			agentServiceDeleteVolumeFileHandler.ServeHTTP(w, r)
+		case AgentServiceCreateVolumeDirProcedure:
+			agentServiceCreateVolumeDirHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreVolumeFileProcedure:
+			agentServiceRestoreVolumeFileHandler.ServeHTTP(w, r)
 		case AgentServiceListSnapshotsProcedure:
 			agentServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case AgentServiceCreateSnapshotProcedure:
@@ -1101,6 +1234,26 @@ func (UnimplementedAgentServiceHandler) DeleteContainer(context.Context, *connec
 
 func (UnimplementedAgentServiceHandler) ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ControlContainer is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListVolumes is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListVolumeFiles(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.ListVolumeFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListVolumeFiles is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteVolumeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CreateVolumeDir is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreVolumeFile is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {

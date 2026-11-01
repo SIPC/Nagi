@@ -19,6 +19,15 @@ service AgentService {
   rpc DeleteContainer(DeleteContainerRequest) returns (DeleteContainerResponse);
   // 手动启动、停止或重启容器：不改配置，不生成版本。
   rpc ControlContainer(ControlContainerRequest) returns (stream DeployEvent);
+  // 容器的存储：data/、命名 volume，大小和挂载位置。
+  rpc ListVolumes(ContainerRef) returns (ListVolumesResponse);
+  // 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
+  rpc ListVolumeFiles(VolumeFileRef) returns (ListVolumeFilesResponse);
+  // 下载和上传走 MeshService，大文件不占用控制连接。写操作要持有顶替租约（有顶替时）。
+  rpc DeleteVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
+  rpc CreateVolumeDir(VolumeFileRef) returns (VolumeFileOpResponse);
+  // 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
+  rpc RestoreVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
   rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
   // 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -207,6 +216,80 @@ message ControlContainerRequest {
   string container = 2;
   ContainerAction action = 3;
 }
+
+message VolumeMount {
+  // 哪个容器（compose 服务）。
+  string service = 1;
+  // 容器内的路径。
+  string target = 2;
+}
+
+message VolumeInfo {
+  string name = 1;
+  // data：容器的 data/；managed：Nagi 管理的命名 volume；unmanaged：不在快照范围（external 或自定义 driver）；
+  // orphan：配置里已经没有，目录还在。
+  string kind = 2;
+  // 节点上的目录，unmanaged 没有。
+  string host_path = 3;
+  int64 size_bytes = 4;
+  int64 files = 5;
+  google.protobuf.Timestamp modified = 6;
+  repeated VolumeMount mounts = 7;
+  // 文件太多或太慢，大小和文件数只统计了一部分。
+  bool partial = 8;
+}
+
+message ListVolumesResponse {
+  repeated VolumeInfo volumes = 1;
+  // 容器目录所在磁盘的总量和可用量。
+  int64 disk_total_bytes = 2;
+  int64 disk_free_bytes = 3;
+}
+
+message VolumeFileRef {
+  string project_id = 1;
+  string container = 2;
+  // 卷名，.data 表示容器的 data/ 目录。
+  string volume = 3;
+  // 相对卷根目录的路径，/ 分隔，空表示根目录。
+  string path = 4;
+  string snapshot_id = 5;
+}
+
+message VolumeFileEntry {
+  string name = 1;
+  bool is_dir = 2;
+  bool is_symlink = 3;
+  int64 size = 4;
+  google.protobuf.Timestamp modified = 5;
+  string mode = 6;
+}
+
+message ListVolumeFilesResponse {
+  repeated VolumeFileEntry entries = 1;
+  // 目录里的文件太多，只列了一部分。
+  bool truncated = 2;
+}
+
+message VolumeFileChunk {
+  bytes data = 1;
+  // 下面几个只在第一条里有。
+  string name = 2;
+  int64 size = 3;
+  // 目录打包成了 tar.gz，大小事先不知道。
+  bool archive = 4;
+}
+
+message VolumeUploadChunk {
+  VolumeFileRef ref = 1;
+  bytes data = 2;
+}
+
+message VolumeUploadResponse {
+  int64 size = 1;
+}
+
+message VolumeFileOpResponse {}
 
 message RestoreSnapshotRequest {
   string project_id = 1;

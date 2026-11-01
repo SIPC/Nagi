@@ -65,6 +65,7 @@
 | `ConfigDiff` | 草稿相对当前版本的改动 |
 | `useUnsaved` | 表单有未保存的修改时，离开前确认 |
 | `toast`（sonner） | 操作结果的轻提示，显示在顶部中间 |
+| `VolumeFiles` | 卷的文件管理对话框（`pages/volume-files.tsx`） |
 | `Notice` | 提示条：`tone` 为 `info`、`warning`、`danger`、`success`，可带 `title` 和 `actions` |
 | `Alert` | 错误提示（`Notice tone="danger"` 的简写） |
 | `Empty` / `EmptyRow` | 页面级 / 区块内的空状态 |

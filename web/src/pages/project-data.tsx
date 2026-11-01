@@ -29,6 +29,9 @@ import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { confirmAction } from "@/components/confirm";
 import { Link } from "@tanstack/react-router";
+import { useRole } from "@/components/role";
+import { toast } from "sonner";
+import { VolumeFiles } from "@/pages/volume-files";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -68,6 +71,7 @@ export function ContainerStorage({
   return (
     <div className="grid gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
+      <Volumes project={project} container={container} />
       <Snapshots project={project} container={container} run={run} />
     </div>
   );
@@ -93,6 +97,191 @@ export function ContainerHA({
 }
 
 type Run = ReturnType<typeof useRun>;
+
+// ---- 卷 ----
+
+// Volumes：容器的存储。数据在节点上，所以每次打开都去节点统计一次。
+function Volumes({ project, container }: { project: Project; container: Container }) {
+  const nodes = useNodes();
+  const queryClient = useQueryClient();
+  const { isViewer } = useRole();
+  const m = t.projectData.volumes;
+  const online = nodes.online(container.nodeId);
+  const deployed = container.deployedVersion > 0n;
+  const volumes = useQuery({
+    queryKey: ["volumes", project.id, container.name],
+    queryFn: () => projectClient.listVolumes({ projectId: project.id, container: container.name }),
+    enabled: online && deployed,
+    refetchInterval: 30000,
+  });
+  const [adding, setAdding] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [browsing, setBrowsing] = useState<{ volume: string; label: string } | null>(null);
+
+  // 单个容器的持久化目录可以在这里改，走草稿；容器组由 compose 定义。
+  const cfg = container.draft ?? container.config;
+  const form = cfg?.form;
+  const targets = form?.volumes ?? [];
+  const deployedTargets = new Set((volumes.data?.volumes ?? []).flatMap((v) => v.mounts.map((x) => x.target)));
+  const pendingAdd = targets.filter((x) => !deployedTargets.has(x));
+  const saveTargets = async (next: string[]) => {
+    if (!cfg || !form) return;
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.saveDraft({
+        projectId: project.id,
+        container: container.name,
+        baseRevision: container.revision,
+        config: { ...cfg, form: { ...form, volumes: next } },
+      });
+      toast.success(m.savedDraft);
+      setAdding("");
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (target: string) => {
+    if (await confirmAction(m.removeConfirm(target), { action: m.remove, danger: true })) saveTargets(targets.filter((x) => x !== target));
+  };
+  const disk = volumes.data;
+
+  return (
+    <Section
+      flush
+      title={m.title}
+      description={disk && disk.diskTotalBytes > 0n ? m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes))) : m.description}
+      help={m.help}
+    >
+      {error && <Alert className="mb-3">{error}</Alert>}
+      {container.kind === "group" && <p className="mb-3 text-[13px] text-muted-foreground">{m.composeHint}</p>}
+      {!deployed ? (
+        <EmptyRow>{m.notDeployed}</EmptyRow>
+      ) : !online ? (
+        <EmptyRow>{m.nodeOffline}</EmptyRow>
+      ) : volumes.isPending ? (
+        <EmptyRow>
+          <Spinner />
+        </EmptyRow>
+      ) : volumes.error ? (
+        <Alert>{errorMessage(volumes.error)}</Alert>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th>{m.columns.name}</Th>
+              <Th>{m.columns.mounts}</Th>
+              <Th>{m.columns.size}</Th>
+              <Th className="hidden md:table-cell">{m.columns.modified}</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {volumes.data.volumes.map((v) => {
+              const removable = form && v.mounts.find((x) => targets.includes(x.target));
+              const removing = form && v.kind === "managed" && v.mounts.length > 0 && !removable;
+              const label = v.kind === "data" ? "data/" : v.name;
+              return (
+                <tr key={v.name}>
+                  <Td>
+                    <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs" title={v.hostPath}>
+                      {label}
+                      {v.kind === "unmanaged" && (
+                        <Badge tone="warning" className="font-sans" title={m.kinds.unmanagedHint}>
+                          {m.kinds.unmanaged}
+                        </Badge>
+                      )}
+                      {v.kind === "orphan" && (
+                        <Badge className="font-sans" title={m.kinds.orphanHint}>
+                          {m.kinds.orphan}
+                        </Badge>
+                      )}
+                      {removing && <Badge tone="warning" className="font-sans">{m.pendingRemove}</Badge>}
+                    </div>
+                  </Td>
+                  <Td className="font-mono text-xs text-muted-foreground">
+                    {v.mounts.length === 0
+                      ? "—"
+                      : v.mounts.map((x) => (
+                          <div key={x.service + x.target}>
+                            {container.kind === "group" && `${x.service}: `}
+                            {x.target}
+                          </div>
+                        ))}
+                  </Td>
+                  <Td className="text-[13px] whitespace-nowrap">
+                    {v.kind === "unmanaged" ? "—" : `${v.partial ? ">" : ""}${fmtBytes(Number(v.sizeBytes))}`}
+                    {v.kind !== "unmanaged" && <span className="ml-1.5 text-xs text-muted-foreground">{m.files(Number(v.files))}</span>}
+                  </Td>
+                  <Td className="hidden text-[13px] text-muted-foreground md:table-cell" title={formatDateTime(toDate(v.modified))}>
+                    {v.modified ? timeAgo(toDate(v.modified)) : "—"}
+                  </Td>
+                  <Td className="text-right whitespace-nowrap">
+                    {v.kind !== "unmanaged" && !isViewer && (
+                      <Button size="xs" variant="ghost" onClick={() => setBrowsing({ volume: v.name, label })}>
+                        {m.browse}
+                      </Button>
+                    )}
+                    {removable && !isViewer && (
+                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => remove(removable.target)}>
+                        {m.remove}
+                      </Button>
+                    )}
+                  </Td>
+                </tr>
+              );
+            })}
+            {pendingAdd.map((target) => (
+              <tr key={target}>
+                <Td className="text-xs text-muted-foreground">—</Td>
+                <Td className="font-mono text-xs">
+                  {target}
+                  <Badge tone="warning" className="ml-1.5 font-sans">{m.pendingAdd}</Badge>
+                </Td>
+                <Td className="text-[13px]">—</Td>
+                <Td className="hidden md:table-cell" />
+                <Td className="text-right">
+                  <Button size="xs" variant="ghost" disabled={busy} onClick={() => saveTargets(targets.filter((x) => x !== target))}>
+                    {t.common.actions.cancel}
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      {form && !isViewer && (
+        <form
+          className="mt-3 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (adding.trim()) saveTargets([...targets, adding.trim()]);
+          }}
+        >
+          <Input
+            value={adding}
+            onChange={(e) => setAdding(e.target.value)}
+            placeholder={m.addPlaceholder}
+            aria-label={m.addLabel}
+            pattern="/.*"
+            title={m.addTitle}
+            className="h-8 max-w-64 font-mono text-[13px]"
+          />
+          <Button type="submit" size="sm" variant="outline" disabled={busy || !adding.trim()}>
+            {busy && <Spinner />}
+            {m.add}
+          </Button>
+          {container.hasDraft && <span className="text-xs text-muted-foreground">{m.deployHint}</span>}
+        </form>
+      )}
+      {browsing && <VolumeFiles project={project} container={container} volume={browsing.volume} label={browsing.label} onClose={() => setBrowsing(null)} />}
+    </Section>
+  );
+}
 
 // ---- 快照 ----
 

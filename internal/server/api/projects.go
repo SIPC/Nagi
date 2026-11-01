@@ -298,6 +298,57 @@ func (s *projectService) DisconnectProject(ctx context.Context, req *connect.Req
 	return reply(s.Projects.Disconnect(ctx, req.Msg.GetProjectId(), req.Msg.GetOtherProjectId()))
 }
 
+func (s *projectService) ListVolumes(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListVolumesResponse], error) {
+	out, err := s.Projects.ListVolumes(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *projectService) ListVolumeFiles(ctx context.Context, req *connect.Request[nagiv1.VolumeFileRef]) (*connect.Response[nagiv1.ListVolumeFilesResponse], error) {
+	agent, err := s.Projects.ContainerAgent(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out, err := agent.ListVolumeFiles(ctx, req.Msg)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(out), nil
+}
+
+// volumeFileOp 把卷的写操作转给容器所在的节点。
+func (s *projectService) volumeFileOp(ctx context.Context, ref *nagiv1.VolumeFileRef, op func(nagiv1.AgentServiceClient) (*nagiv1.VolumeFileOpResponse, error)) (*connect.Response[nagiv1.VolumeFileOpResponse], error) {
+	agent, err := s.Projects.ContainerAgent(ctx, ref.GetProjectId(), ref.GetContainer())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out, err := op(agent)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *projectService) DeleteVolumeFile(ctx context.Context, req *connect.Request[nagiv1.VolumeFileRef]) (*connect.Response[nagiv1.VolumeFileOpResponse], error) {
+	return s.volumeFileOp(ctx, req.Msg, func(a nagiv1.AgentServiceClient) (*nagiv1.VolumeFileOpResponse, error) {
+		return a.DeleteVolumeFile(ctx, req.Msg)
+	})
+}
+
+func (s *projectService) CreateVolumeDir(ctx context.Context, req *connect.Request[nagiv1.VolumeFileRef]) (*connect.Response[nagiv1.VolumeFileOpResponse], error) {
+	return s.volumeFileOp(ctx, req.Msg, func(a nagiv1.AgentServiceClient) (*nagiv1.VolumeFileOpResponse, error) {
+		return a.CreateVolumeDir(ctx, req.Msg)
+	})
+}
+
+func (s *projectService) RestoreVolumeFile(ctx context.Context, req *connect.Request[nagiv1.VolumeFileRef]) (*connect.Response[nagiv1.VolumeFileOpResponse], error) {
+	return s.volumeFileOp(ctx, req.Msg, func(a nagiv1.AgentServiceClient) (*nagiv1.VolumeFileOpResponse, error) {
+		return a.RestoreVolumeFile(ctx, req.Msg)
+	})
+}
+
 func (s *projectService) ListSnapshots(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
 	list, err := s.Projects.Snapshots(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
 	return reply(&nagiv1.ListSnapshotsResponse{Snapshots: list}, err)

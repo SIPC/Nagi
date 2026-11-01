@@ -267,12 +267,14 @@ var en = map[string]string{
 	"节点现在没有持有容器的顶替租约，不能启动或重启":  "The node does not hold the failover lease for this container, so it cannot start or restart it",
 	"不支持的操作":                   "Unsupported action",
 	"节点版本过旧，升级节点后才能启动、停止或重启容器": "The node is out of date. Upgrade it to start, stop, or restart containers",
+	"节点版本过旧，升级节点后才能查看存储":       "The node is out of date. Upgrade it to view storage",
 	"这些容器快照失败：%s":              "Snapshots failed for these containers: %s",
 
 	// ---- 上传、webhook ----
 	"缺少 X-Nagi-Upload 请求头": "Missing X-Nagi-Upload request header",
 	"面板的 mesh 没有启动，无法上传":   "The panel's mesh is not running, so files cannot be uploaded",
-	"只接受 POST":             "Only POST is accepted",
-	"已排队：当前部署完成后再部署一次":     "Queued: will deploy again after the current deployment finishes",
-	"已开始拉取并部署":             "Started pulling and deploying",
+	"面板的 mesh 没有启动，无法传输文件": "The panel's mesh is not running, so files cannot be transferred",
+	"只接受 POST": "Only POST is accepted",
+	"已排队：当前部署完成后再部署一次": "Queued: will deploy again after the current deployment finishes",
+	"已开始拉取并部署":         "Started pulling and deploying",
 }

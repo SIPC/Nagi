@@ -82,6 +82,8 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("/hooks/", a.standbyBlock(a.WebhookHandler()))
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
 	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
+	mux.Handle("GET /api/volume-file", a.VolumeFileHandler())
+	mux.Handle("POST /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
 	mux.Handle("GET /install.sh", a.InstallHandler())
 	// 节点从 GitHub Release 或镜像下载 nagi。/download/ 只为 v0.1.0 的节点一键升级保留（见 download.go），
 	// 其余情况明确返回 404，免得落到前端路由拿到 index.html。
