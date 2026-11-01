@@ -17,6 +17,13 @@ export default {
     title: "暂无项目",
     text: "新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。",
   },
+  filter: {
+    placeholder: "筛选项目或容器",
+    sort: "排序",
+    byCreated: "最近创建",
+    byName: "按名称",
+    empty: "没有匹配的项目",
+  },
   offline: {
     body: "节点上的容器状态未知，容器可能仍在运行。",
     action: "查看节点",

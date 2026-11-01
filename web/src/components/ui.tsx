@@ -96,8 +96,10 @@ export function Select({
   disabled,
   className,
   children,
+  "aria-label": ariaLabel,
 }: {
   id?: string;
+  "aria-label"?: string;
   value: string;
   onChange?: (e: { target: { value: string } }) => void;
   required?: boolean;
@@ -110,7 +112,7 @@ export function Select({
   const unset = required && value === "";
   return (
     <SelectRoot value={unset ? "" : value === "" ? emptyValue : value} onValueChange={(v) => onChange?.({ target: { value: v === emptyValue ? "" : v } })} required={required} disabled={disabled}>
-      <SelectTrigger id={id} className={className}>
+      <SelectTrigger id={id} className={className} aria-label={ariaLabel}>
         <SelectValue placeholder={unset ? options.find((o) => o.value === "")?.label : undefined} />
       </SelectTrigger>
       <SelectContent>

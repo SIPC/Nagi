@@ -19,6 +19,13 @@ export default {
     title: "No projects",
     text: "Create a project, then add containers or container groups (a compose file) and choose a node for each container.",
   },
+  filter: {
+    placeholder: "Filter projects or containers",
+    sort: "Sort",
+    byCreated: "Newest",
+    byName: "Name",
+    empty: "No matching projects",
+  },
   offline: {
     body: "The state of containers on the node is unknown. They may still be running.",
     action: "View nodes",

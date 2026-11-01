@@ -20,6 +20,7 @@ import {
   CardHeader,
   Check,
   Empty,
+  EmptyRow,
   Field,
   Input,
   Loading,
@@ -114,6 +115,14 @@ export function ProjectsPage() {
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
   const offlineNodes = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).map((n) => n.name);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"name" | "created">("created");
+  const all = projects.data?.projects ?? [];
+  const q = query.trim().toLowerCase();
+  const shownProjects = all
+    .filter(({ project: p }) => !q || [p?.name, p?.networkName, ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
+    .slice()
+    .sort((a, b) => (sort === "name" ? (a.project?.name ?? "").localeCompare(b.project?.name ?? "") : Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)));
 
   const newButton = (
     <Link to="/projects/new">
@@ -153,8 +162,17 @@ export function ProjectsPage() {
             {t.projects.empty.text}
           </Empty>
         ) : (
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.placeholder} className="h-8 max-w-64 text-[13px]" />
+              <Select value={sort} onChange={(e) => setSort(e.target.value as "name" | "created")} aria-label={t.projects.filter.sort} className="h-8 w-32 text-[13px]">
+                <option value="created">{t.projects.filter.byCreated}</option>
+                <option value="name">{t.projects.filter.byName}</option>
+              </Select>
+            </div>
+            {shownProjects.length === 0 && <EmptyRow>{t.projects.filter.empty}</EmptyRow>}
           <CardGrid>
-            {projects.data.projects.map((summary) => {
+            {shownProjects.map((summary) => {
               const p = summary.project;
               if (!p) return null;
               const services = summary.status?.services ?? [];
@@ -214,6 +232,7 @@ export function ProjectsPage() {
               );
             })}
           </CardGrid>
+          </div>
         )}
       </div>
     </>
