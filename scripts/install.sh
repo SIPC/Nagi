@@ -228,18 +228,39 @@ trap 'rm -rf "$TMP"' EXIT
 
 # ---- 下载并校验 ----
 
+OLD_VERSION=""
+[ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)
+
+# 下载前先说清楚这次装哪个版本。latest 跟随 GitHub 的重定向得到版本号，并按它下载，免得显示的和下载的不一致；
+# 查不到时仍从 latest 下载。镜像不分版本，要下载后才知道。
+TARGET=""
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
 elif [ "$VERSION" = latest ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
+  TARGET=$(curl -sI --retry 3 -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" || true)
+  TARGET=${TARGET##*/}
+  case "$TARGET" in
+    v[0-9]*) BASE="https://github.com/$REPO/releases/download/$TARGET" ;;
+    *) TARGET="" ;;
+  esac
 else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
+  TARGET=$VERSION
+fi
+
+if [ -z "$TARGET" ]; then
+  [ -z "$OLD_VERSION" ] || say "当前版本：$OLD_VERSION"
+elif [ -z "$OLD_VERSION" ]; then
+  say "本次安装 nagi $TARGET"
+elif [ "$OLD_VERSION" = "$TARGET" ]; then
+  say "当前已是 $TARGET，重新安装一遍"
+else
+  say "当前版本 $OLD_VERSION，本次更新到 $TARGET"
 fi
 
 download_nagi
 
-OLD_VERSION=""
-[ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)
 install -m 0755 "$TMP/nagi" "$BIN"
 link_command
 # 用了镜像时记下来，面板上一键更新时也从这里下载（见 internal/pkg/release/install.go）。
