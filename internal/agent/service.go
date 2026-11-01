@@ -139,6 +139,17 @@ func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteCo
 	return &nagiv1.DeleteContainerResponse{}, nil
 }
 
+func (s *agentService) ControlContainer(req *nagiv1.ControlContainerRequest, stream nagiv1.AgentService_ControlContainerServer) error {
+	return runStream(stream.Send, func(onLine func(string)) error {
+		if err := s.node.checkControl(req.GetProjectId(), req.GetContainer(), req.GetAction()); err != nil {
+			return err
+		}
+		// 先通知上报再返回结果，页面拿到结果时状态已在更新。
+		defer s.changed()
+		return s.projects.Control(stream.Context(), req.GetProjectId(), req.GetContainer(), req.GetAction(), onLine)
+	})
+}
+
 func (s *agentService) ListSnapshots(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListSnapshotsResponse, error) {
 	list, err := s.projects.Snapshots(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {

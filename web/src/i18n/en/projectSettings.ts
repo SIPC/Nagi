@@ -12,6 +12,7 @@ export default {
     snapshotIntervalHint: "Defaults to 60 minutes if empty",
   },
   sharedEnv: {
+    deployConfirm: (n) => `Deploy the ${n === 1 ? "affected container" : `${n} affected containers`}? They are recreated. The service is briefly interrupted and new versions are created.`,
     title: "Shared variables",
     draft: "Draft",
     description: "Reference them as ${VAR} in any container's compose.",

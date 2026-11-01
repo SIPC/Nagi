@@ -4,6 +4,7 @@ import { errorMessage, settingsClient } from "@/lib/api";
 import { Alert, Button, Notice, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
+import { confirmAction } from "@/components/confirm";
 
 // 「版本更新」区块（见 docs/panel.md#更新面板）：检查有没有新版本，一键更新本面板。
 
@@ -76,7 +77,7 @@ export function UpdateCard() {
   };
 
   const update = async (version: string) => {
-    if (!confirm(t.update.confirm(version))) return;
+    if (!(await confirmAction(t.update.confirm(version), { action: t.update.action }))) return;
     setUpdating(true);
     setError("");
     try {

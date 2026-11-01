@@ -48,9 +48,19 @@ func Recreate(ctx context.Context, f Files, services []string, onLine func(strin
 	return run(ctx, f.DockerConfig, f.args(append([]string{"up", "-d", "--force-recreate", "--no-deps"}, services...)...), onLine)
 }
 
+// Start 启动项目已有的容器（不重建）。
+func Start(ctx context.Context, f Files, onLine func(string)) error {
+	return run(ctx, f.DockerConfig, f.args("start"), onLine)
+}
+
 // Stop 停止项目的所有容器（不删除）。
 func Stop(ctx context.Context, f Files, onLine func(string)) error {
 	return run(ctx, f.DockerConfig, f.args("stop"), onLine)
+}
+
+// Restart 重启项目的所有容器（不重建）。
+func Restart(ctx context.Context, f Files, onLine func(string)) error {
+	return run(ctx, f.DockerConfig, f.args("restart"), onLine)
 }
 
 // Down 停止并删除项目的容器和网络。removeVolumes 时一并删除命名 volume。

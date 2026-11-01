@@ -6,7 +6,7 @@ import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { ProjectState, stateOf } from "@/components/status";
+import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { containerUsage, projectMetricNodes, UsageBars, useProjectMetrics } from "@/components/metrics";
 import { Alert, Badge, dotColor, Loading, Tabs } from "@/components/ui";
 import { containerKind, ContainersTab, type DetailView } from "@/pages/project-containers";
@@ -56,7 +56,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
           title={
             <>
               {p.name}
-              <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} />
+              <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
               {p.stateful && <Badge>{t.project.stateful}</Badge>}
             </>
           }
@@ -154,7 +154,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
         <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }]} />
         <h2 className="truncate text-lg font-semibold tracking-tight">{p.name}</h2>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
-          <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} />
+          <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
           <span className="font-mono text-xs">{p.networkName}</span>
         </div>
       </div>

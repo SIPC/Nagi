@@ -11,6 +11,7 @@ export default {
   },
   sharedEnv: {
     title: "共享变量",
+    deployConfirm: (n: number) => `部署受影响的 ${n} 个容器？这些容器将被重建，服务短暂中断，并生成新版本。`,
     draft: "草稿",
     description: "所有容器的 compose 中可通过 ${变量} 引用。",
     help: "与容器自身变量同名时，以容器变量为准。修改保存为草稿，部署后生效。",

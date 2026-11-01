@@ -14,6 +14,8 @@ export default {
     partial: (running: number, total: number) => `部分运行 ${running}/${total}`,
     online: "在线",
     offline: "离线",
+    unknown: "状态未知",
+    nodesOffline: (names: string[]): string => (names.length === 1 ? `节点 ${names[0]} 离线` : `${names.length} 个节点离线`),
     syncing: "同步中",
     pendingApproval: "待批准",
   },

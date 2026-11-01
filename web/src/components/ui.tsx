@@ -1,10 +1,19 @@
 // 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Children, createContext, isValidElement, useContext, useState } from "react";
 import type * as React from "react";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog as DialogRoot, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Select as SelectRoot, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs as TabsRoot, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
+
+export { Label };
 
 // ---- 按钮与输入 ----
 
@@ -66,42 +75,74 @@ export function Textarea({ className, ...props }: React.ComponentProps<"textarea
   return <textarea className={cn(control, "min-h-20 py-2 leading-relaxed", className)} {...props} />;
 }
 
-export function Select({ className, ...props }: React.ComponentProps<"select">) {
-  return <select className={cn(control, "h-9 pr-8", className)} {...props} />;
+// Select 的空值：shadcn 的选项不能用空字符串作值，内部换成这个。
+const emptyValue = "__empty__";
+
+// 把调用方写的 <option> 展开成选项列表（可能包在 Fragment 或数组里）。
+function selectOptions(children: React.ReactNode): { value: string; label: React.ReactNode; disabled?: boolean }[] {
+  return Children.toArray(children).flatMap((c) => {
+    if (!isValidElement<{ value?: string; children?: React.ReactNode; disabled?: boolean }>(c)) return [];
+    if (c.type !== "option") return selectOptions(c.props.children);
+    return [{ value: c.props.value ?? String(c.props.children), label: c.props.children, disabled: c.props.disabled }];
+  });
 }
 
-export function Label({ className, ...props }: React.ComponentProps<"label">) {
-  return <label className={cn("text-[13px] font-medium", className)} {...props} />;
-}
-
-// HelpTip：字段或标题旁的问号，悬停或聚焦时显示详细说明。
-// 说明框不显示时不占位置；靠近窗口边缘时改为向内对齐，不会撑出横向滚动条。
-export function HelpTip({ children, className }: { children: React.ReactNode; className?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [align, setAlign] = useState<"center" | "left" | "right">("center");
-  const place = () => {
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
-    const half = 150; // 说明框最宽 18rem 的一半左右
-    const mid = r.left + r.width / 2;
-    setAlign(mid - half < 8 ? "left" : mid + half > window.innerWidth - 8 ? "right" : "center");
-  };
-  const pos = align === "left" ? "left-0" : align === "right" ? "right-0" : "left-1/2 -translate-x-1/2";
+// Select：下拉选择。写法和原生 select 一样（<option> 作子元素、onChange 读 e.target.value），外观和交互用 shadcn。
+export function Select({
+  id,
+  value,
+  onChange,
+  required,
+  disabled,
+  className,
+  children,
+}: {
+  id?: string;
+  value: string;
+  onChange?: (e: { target: { value: string } }) => void;
+  required?: boolean;
+  disabled?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const options = selectOptions(children);
+  // 必填又没有值（例如没有在线节点）时不给内部值，表单校验才拦得住；空值选项的文字作为占位显示。
+  const unset = required && value === "";
   return (
-    <span ref={ref} className={cn("group/help relative inline-flex align-middle", className)} onMouseEnter={place} onFocus={place}>
-      <span tabIndex={0} className="inline-flex cursor-help text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground">
-        <CircleHelp className="size-3.5" />
-      </span>
-      <span
-        role="tooltip"
-        className={cn(
-          "pointer-events-none absolute bottom-full z-50 mb-2 hidden w-max max-w-72 rounded-md border bg-card px-2.5 py-1.5 text-xs leading-relaxed font-normal text-foreground shadow-lg group-hover/help:block group-focus-within/help:block",
-          pos,
-        )}
-      >
-        {children}
-      </span>
-    </span>
+    <SelectRoot value={unset ? "" : value === "" ? emptyValue : value} onValueChange={(v) => onChange?.({ target: { value: v === emptyValue ? "" : v } })} required={required} disabled={disabled}>
+      <SelectTrigger id={id} className={className}>
+        <SelectValue placeholder={unset ? options.find((o) => o.value === "")?.label : undefined} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value === "" ? emptyValue : o.value} disabled={o.disabled}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </SelectRoot>
+  );
+}
+
+// HelpTip：字段或标题旁的问号，悬停或聚焦时显示详细说明；触屏上点一下显示。靠近窗口边缘时自动向内避让。
+export function HelpTip({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger
+          type="button"
+          className={cn("inline-flex cursor-help align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground", className)}
+          onClick={(e) => {
+            e.preventDefault();
+            setOpen(true);
+          }}
+        >
+          <CircleHelp className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipContent>{children}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -155,7 +196,7 @@ export function Check({
   return (
     <span className={cn("inline-flex items-center gap-1.5", className)}>
       <label className={cn("inline-flex cursor-pointer items-center gap-2 text-sm", disabled && "cursor-not-allowed opacity-60")}>
-        <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        <Checkbox checked={checked} disabled={disabled} onCheckedChange={(v) => onChange(v === true)} />
         {children}
       </label>
       {help && <HelpTip>{help}</HelpTip>}
@@ -526,45 +567,39 @@ export function Tabs<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="tablist" className={cn("flex gap-5 overflow-x-auto border-b [scrollbar-width:none]", className)}>
-      {items.map((it) => (
-        <button
-          key={it.value}
-          role="tab"
-          type="button"
-          aria-selected={value === it.value}
-          onClick={() => onChange(it.value)}
-          className={cn(
-            "inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-            value === it.value && "font-medium text-foreground shadow-[inset_0_-2px_0_var(--foreground)]",
-          )}
-        >
-          {it.label}
-          {it.count !== undefined && it.count > 0 && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{it.count}</span>}
-        </button>
-      ))}
-    </div>
+    <TabsRoot value={value} onValueChange={(v) => onChange(v as T)} activationMode="manual">
+      <TabsList className={cn("flex gap-5 overflow-x-auto border-b [scrollbar-width:none]", className)}>
+        {items.map((it) => (
+          <TabsTrigger
+            key={it.value}
+            value={it.value}
+            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_var(--foreground)]"
+          >
+            {it.label}
+            {it.count !== undefined && it.count > 0 && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{it.count}</span>}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </TabsRoot>
   );
 }
 
 // SegmentedControl：两三个选项之间切换（例如"容器 / 容器组"）。
 export function Segmented<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[] }) {
   return (
-    <div className="inline-flex rounded-md border bg-muted p-0.5">
-      {items.map((it) => (
-        <button
-          key={it.value}
-          type="button"
-          onClick={() => onChange(it.value)}
-          className={cn(
-            "h-7 cursor-pointer rounded-[5px] px-3 text-[13px] text-muted-foreground transition-colors",
-            value === it.value && "bg-card font-medium text-foreground shadow-xs",
-          )}
-        >
-          {it.label}
-        </button>
-      ))}
-    </div>
+    <TabsRoot value={value} onValueChange={(v) => onChange(v as T)} activationMode="manual">
+      <TabsList className="inline-flex rounded-md border bg-muted p-0.5">
+        {items.map((it) => (
+          <TabsTrigger
+            key={it.value}
+            value={it.value}
+            className="h-7 cursor-pointer rounded-[5px] px-3 text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=active]:bg-card data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          >
+            {it.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </TabsRoot>
   );
 }
 
@@ -582,7 +617,7 @@ export function Waves({ className, ...props }: React.ComponentProps<"svg">) {
 
 // ---- 对话框、菜单、占用条 ----
 
-// Dialog：居中的对话框。点遮罩或按 Esc 关闭。
+// Dialog：对话框（shadcn）。点遮罩或按 Esc 关闭，焦点限制在框内。
 export function Dialog({
   open,
   onClose,
@@ -598,65 +633,44 @@ export function Dialog({
   children: React.ReactNode;
   className?: string;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 px-4 py-16" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal className={cn("w-full max-w-lg rounded-lg border bg-card shadow-xl", className)}>
+    <DialogRoot open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className={className} {...(description ? {} : { "aria-describedby": undefined })}>
         <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold">{title}</h2>
-            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
+            <DialogTitle>{title}</DialogTitle>
+            {description && <DialogDescription className="mt-0.5">{description}</DialogDescription>}
           </div>
-          <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" onClick={onClose} aria-label={t.common.actions.close} readOnlyOk>
-            <X />
-          </Button>
+          <DialogClose asChild>
+            <Button size="icon" variant="ghost" className="-mr-2 -mt-1 size-7" aria-label={t.common.actions.close} readOnlyOk>
+              <X />
+            </Button>
+          </DialogClose>
         </div>
         <div className="px-5 pb-5">{children}</div>
-      </div>
-    </div>
+      </DialogContent>
+    </DialogRoot>
   );
 }
 
-// Menu：「更多」按钮和下拉菜单。
-export function Menu({ items, label = t.common.actions.more }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean }[]; label?: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
+// Menu：「更多」按钮和下拉菜单（shadcn）。不用模态模式：选中后常常接着打开确认框，模态菜单会和它争焦点。
+export function Menu({ items, label = t.common.actions.more }: { items: { label: React.ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean; hint?: string }[]; label?: string }) {
   return (
-    <div ref={ref} className="relative">
-      <Button variant="outline" size="icon" aria-label={label} aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Ellipsis />
-      </Button>
-      {open && (
-        <div role="menu" className="absolute right-0 z-40 mt-1 min-w-40 rounded-md border bg-card py-1 shadow-lg">
-          {items.map((it, i) => (
-            <button
-              key={i}
-              role="menuitem"
-              disabled={it.disabled}
-              className={cn("block w-full px-3 py-1.5 text-left text-[13px] hover:bg-accent disabled:pointer-events-none disabled:opacity-50", it.danger && "text-destructive")}
-              onClick={() => {
-                setOpen(false);
-                it.onSelect();
-              }}
-            >
-              {it.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" aria-label={label}>
+          <Ellipsis />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {items.map((it, i) => (
+          <DropdownMenuItem key={i} disabled={it.disabled} variant={it.danger ? "destructive" : undefined} onSelect={() => setTimeout(it.onSelect)}>
+            {it.label}
+            {it.hint && <span className="mt-0.5 block text-xs text-muted-foreground">{it.hint}</span>}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

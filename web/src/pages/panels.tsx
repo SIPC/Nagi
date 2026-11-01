@@ -4,6 +4,7 @@ import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { Alert, Badge, Button, Check, EmptyRow, Field, Section, Spinner, Status, Table, Td, Textarea, Th } from "@/components/ui";
 import { t } from "@/i18n";
+import { confirmAction } from "@/components/confirm";
 
 // ---- 移交给其他面板 ----
 
@@ -37,7 +38,7 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
   };
 
   const run = async () => {
-    if (!confirm(t.panels.handover.confirm(selected.length))) return;
+    if (!(await confirmAction(t.panels.handover.confirm(selected.length), { action: t.panels.handover.submit, danger: true }))) return;
     setBusy(true);
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
     try {
@@ -166,7 +167,7 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
                       const msg = p.isSelf
                         ? t.panels.nodePanels.removeSelfConfirm
                         : t.panels.nodePanels.removeConfirm(p.address, p.fingerprint.replace("sha256//", "").slice(0, 12));
-                      if (!confirm(msg)) return;
+                      if (!(await confirmAction(msg, { action: t.common.actions.remove, danger: true }))) return;
                       setError("");
                       try {
                         await nodeClient.removeNodePanel({ nodeId, fingerprint: p.fingerprint });

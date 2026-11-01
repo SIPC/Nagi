@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"sort"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -101,6 +104,34 @@ func (s *Service) RestoreSnapshot(ctx context.Context, projectID, name, snapshot
 		return err
 	}
 	_, err = recvResult(stream.Recv, out)
+	return err
+}
+
+// ControlContainer 手动启动、停止或重启容器。不改配置，不生成版本。
+func (s *Service) ControlContainer(ctx context.Context, projectID, name string, action nagiv1.ContainerAction, out Output) error {
+	ctx = context.WithoutCancel(ctx)
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return err
+	}
+	if c.DeployedVersion == 0 {
+		return invalid("容器还没有部署")
+	}
+	if action == nagiv1.ContainerAction_CONTAINER_ACTION_STOP && len(c.Failover) > 0 {
+		return invalid("容器已设置顶替，停止前须取消顶替")
+	}
+	agent, err := s.agent(ctx, c.NodeID)
+	if err != nil {
+		return err
+	}
+	stream, err := agent.ControlContainer(ctx, &nagiv1.ControlContainerRequest{ProjectId: projectID, Container: name, Action: action})
+	if err != nil {
+		return err
+	}
+	_, err = recvResult(stream.Recv, out)
+	if status.Code(err) == codes.Unimplemented {
+		return i18n.New("节点版本过旧，升级节点后才能启动、停止或重启容器")
+	}
 	return err
 }
 

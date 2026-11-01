@@ -46,6 +46,7 @@ export default {
   },
   table: {
     title: "容器",
+    deployConfirm: (names: string) => `部署 ${names}？这些容器将被重建，服务短暂中断，并生成新版本。`,
     descriptionNarrow: "选择容器查看详情；勾选多个可批量部署。",
     help: "批量部署按依赖顺序依次部署所选容器，并生成一条部署记录。",
     addContainer: "添加容器",
@@ -66,12 +67,10 @@ export default {
     uploaded: (files: number, stripped: string) => `已上传 ${files} 个文件${stripped ? `（已去除顶层目录 ${stripped}/）` : ""}`,
     deleteConfirm: (group: boolean, name: string) => {
       const kind = group ? "容器组" : "容器";
-      return `删除${kind} ${name}？${group ? "组内的容器" : "容器"}将被停止并删除。\n\n选择「确定」同时删除${kind}目录及其中的数据；选择「取消」仅删除容器并保留目录。`;
+      return `删除${kind} ${name}？${group ? "组内的容器" : "容器"}将被停止并删除，${kind}目录默认保留。`;
     },
-    deleteContainersOnlyConfirm: (group: boolean, name: string) => {
-      const kind = group ? "容器组" : "容器";
-      return `仅删除${kind} ${name} 的容器？${kind}目录及其中的数据将保留。`;
-    },
+    deleteDirCheck: (group: boolean) => `同时删除${group ? "容器组" : "容器"}目录（数据和快照将无法恢复）`,
+    deleteTypeName: (group: boolean, name: string) => `输入${group ? "容器组" : "容器"}名称 ${name} 以确认`,
     deleteFailed: (msg: string) => `删除失败：${msg}`,
     deleteKind: (group: boolean): string => (group ? "删除容器组" : "删除容器"),
     summaryDraft: "存在未部署的草稿，部署时保存为新版本。",
@@ -81,7 +80,17 @@ export default {
     uploadDeploy: "上传并部署",
     pullDeploy: "拉取并部署",
     updateImage: "更新镜像",
-    updateImageDraftConfirm: (name: string) => `更新镜像会重新部署 ${name}，未部署的草稿也会一起生效。继续？`,
+    updateImageConfirm: (name: string) => `更新 ${name} 的镜像？将拉取新镜像并重建容器，服务短暂中断，并生成新版本。`,
+    updateImageDraftConfirm: (name: string) => `更新 ${name} 的镜像？将拉取新镜像并重建容器，未部署的草稿也会一起生效。`,
+    redeployConfirm: (name: string) => `重新部署 ${name}？容器将被重建，服务短暂中断，并生成新版本。`,
+    deployDraftConfirm: (name: string) => `部署 ${name} 的草稿？容器将按草稿重建，服务短暂中断，并生成新版本。`,
+    pullDeployConfirm: (name: string) => `拉取并部署 ${name}？将从 git 仓库拉取代码并重建容器，服务短暂中断，并生成新版本。`,
+    start: "启动",
+    stop: "停止",
+    restart: "重启",
+    stopConfirm: (group: boolean, name: string) => `停止${group ? "容器组" : "容器"} ${name}？服务将不可访问，数据保留，可随时重新启动。`,
+    restartConfirm: (group: boolean, name: string) => `重启${group ? "容器组" : "容器"} ${name}？服务短暂中断，不生成新版本。`,
+    stopFailoverHint: "已设置顶替，须先取消顶替",
     deploying: "部署中",
     deployDraft: "部署草稿",
     redeploy: "重新部署",

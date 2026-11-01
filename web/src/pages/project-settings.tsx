@@ -9,6 +9,7 @@ import { envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
+import { confirmAction } from "@/components/confirm";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
@@ -126,7 +127,9 @@ function SharedEnv({ project }: { project: Project }) {
       setAffected(Object.fromEntries(res.affected.map((m) => [m, true])));
     });
 
-  const deploy = () =>
+  const deploy = async () => {
+    const n = project.containers.filter((m) => affected[m.name] && m.deployedVersion > 0n).length;
+    if (n > 0 && !(await confirmAction(t.projectSettings.sharedEnv.deployConfirm(n), { action: t.projectContainers.detail.deploy }))) return;
     run(() =>
       projectClient.deploy({ projectId: project.id,
         applySharedEnv: true,
@@ -134,6 +137,7 @@ function SharedEnv({ project }: { project: Project }) {
         targets: project.containers.filter((m) => affected[m.name]).map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
+  };
 
   return (
     <Section
@@ -257,8 +261,8 @@ function Deployments({ project }: { project: Project }) {
                       size="xs"
                       variant="ghost"
                       disabled={busy}
-                      onClick={() =>
-                        confirm(t.projectSettings.deployments.restoreConfirm(d.id)) &&
+                      onClick={async () =>
+                        (await confirmAction(t.projectSettings.deployments.restoreConfirm(d.id), { action: t.projectSettings.deployments.restore })) &&
                         run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))
                       }
                     >
@@ -285,7 +289,7 @@ function DeleteProject({ project }: { project: Project }) {
   const [error, setError] = useState("");
 
   const remove = async () => {
-    if (!deleteDir && !confirm(t.projectSettings.delete.confirm(project.name))) return;
+    if (!deleteDir && !(await confirmAction(t.projectSettings.delete.confirm(project.name), { action: t.projectSettings.delete.submit, danger: true }))) return;
     setError("");
     try {
       await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName });

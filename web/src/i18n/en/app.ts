@@ -6,6 +6,7 @@ export default {
     nodes: "Nodes",
     settings: "Settings",
   },
+  nodesOffline: (n) => (n === 1 ? "1 node offline" : `${n} nodes offline`),
   theme: {
     toLight: "Switch to light mode",
     toDark: "Switch to dark mode",

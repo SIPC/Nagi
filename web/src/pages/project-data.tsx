@@ -27,6 +27,7 @@ import {
 } from "@/components/ui";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { useDefaultDir } from "@/pages/projects";
+import { confirmAction } from "@/components/confirm";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -245,8 +246,8 @@ function SnapshotList({
             size="xs"
             variant="ghost"
             disabled={busy}
-            onClick={() =>
-              confirm(t.projectData.snapshots.restoreConfirm(container)) &&
+            onClick={async () =>
+              (await confirmAction(t.projectData.snapshots.restoreConfirm(container), { action: t.projectData.snapshots.restore, danger: true })) &&
               run(() =>
                 projectClient.restoreSnapshot({
                   projectId: project.id,
@@ -369,8 +370,8 @@ function Backup({
                 size="sm"
                 variant="ghost"
                 disabled={busy}
-                onClick={() =>
-                  confirm(t.projectData.backup.removeConfirm(container.name)) &&
+                onClick={async () =>
+                  (await confirmAction(t.projectData.backup.removeConfirm(container.name), { action: t.projectData.backup.remove, danger: true })) &&
                   setBackup("", true)
                 }
               >
@@ -465,13 +466,14 @@ function RestoreFromBackup({
         container: container.name,
       }),
   });
-  const restore = (snapshotId: string) =>
-    confirm(
+  const restore = async (snapshotId: string) =>
+    (await confirmAction(
       t.projectData.restore.confirm(
         nodes.name(container.backupNodeId),
         container.name,
       ),
-    ) &&
+      { action: t.projectData.restore.fromSnapshot, danger: true },
+    )) &&
     run.run(() =>
       projectClient.restoreFromBackup({
         projectId: project.id,
@@ -555,8 +557,8 @@ function Placement({
   const online = nodes.online(container.nodeId);
   const target = nodes.name(choice);
 
-  const migrate = () =>
-    confirm(t.projectData.placement.migrateConfirm(container.name, target)) &&
+  const migrate = async () =>
+    (await confirmAction(t.projectData.placement.migrateConfirm(container.name, target), { action: t.projectData.placement.migrate })) &&
     run.run(() =>
       projectClient.migrateContainer({
         projectId: project.id,
@@ -565,8 +567,8 @@ function Placement({
         dir: dir.trim() || defDir,
       }),
     );
-  const redeploy = () =>
-    confirm(t.projectData.placement.redeployConfirm(container.name, target)) &&
+  const redeploy = async () =>
+    (await confirmAction(t.projectData.placement.redeployConfirm(container.name, target), { action: t.projectData.placement.redeploy, danger: true })) &&
     run.run(() =>
       projectClient.redeployElsewhere({
         projectId: project.id,
@@ -963,13 +965,14 @@ function Failover({
                 size="sm"
                 variant="destructive"
                 disabled={busy}
-                onClick={() =>
-                  confirm(
+                onClick={async () =>
+                  (await confirmAction(
                     t.projectData.failover.confirmTakeoverPrompt(
                       standbyNode ? nodes.name(standbyNode.nodeId, standbyNode.name) : "",
                       container.name,
                     ),
-                  ) && call(() => projectClient.confirmTakeover(ref))
+                    { action: t.projectData.failover.confirmTakeover, danger: true },
+                  )) && call(() => projectClient.confirmTakeover(ref))
                 }
               >
                 {t.projectData.failover.confirmTakeover}
@@ -1024,13 +1027,14 @@ function Failover({
             variant="ghost"
             className="ml-auto"
             disabled={busy}
-            onClick={() =>
-              confirm(
+            onClick={async () =>
+              (await confirmAction(
                 t.projectData.failover.clearConfirm(
                   container.name,
                   nodes.name(container.nodeId),
                 ),
-              ) && call(() => projectClient.clearFailover(ref))
+                { action: t.projectData.failover.clear, danger: true },
+              )) && call(() => projectClient.clearFailover(ref))
             }
           >
             {t.projectData.failover.clear}

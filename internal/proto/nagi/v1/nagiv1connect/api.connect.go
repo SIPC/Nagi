@@ -195,6 +195,9 @@ const (
 	// ProjectServiceDeleteContainerProcedure is the fully-qualified name of the ProjectService's
 	// DeleteContainer RPC.
 	ProjectServiceDeleteContainerProcedure = "/nagi.v1.ProjectService/DeleteContainer"
+	// ProjectServiceControlContainerProcedure is the fully-qualified name of the ProjectService's
+	// ControlContainer RPC.
+	ProjectServiceControlContainerProcedure = "/nagi.v1.ProjectService/ControlContainer"
 	// ProjectServiceSaveDraftProcedure is the fully-qualified name of the ProjectService's SaveDraft
 	// RPC.
 	ProjectServiceSaveDraftProcedure = "/nagi.v1.ProjectService/SaveDraft"
@@ -1746,6 +1749,8 @@ type ProjectServiceClient interface {
 	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
+	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.Project], error)
 	DiscardDraft(context.Context, *connect.Request[v1.ContainerRevisionRef]) (*connect.Response[v1.Project], error)
 	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
@@ -1866,6 +1871,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceDeleteContainerProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("DeleteContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		controlContainer: connect.NewClient[v1.ControlContainerRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceControlContainerProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ControlContainer")),
 			connect.WithClientOptions(opts...),
 		),
 		saveDraft: connect.NewClient[v1.SaveDraftRequest, v1.Project](
@@ -2074,6 +2085,7 @@ type projectServiceClient struct {
 	deleteProject         *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	addContainer          *connect.Client[v1.AddContainerRequest, v1.Project]
 	deleteContainer       *connect.Client[v1.DeleteContainerApiRequest, v1.Project]
+	controlContainer      *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
 	saveDraft             *connect.Client[v1.SaveDraftRequest, v1.Project]
 	discardDraft          *connect.Client[v1.ContainerRevisionRef, v1.Project]
 	deploy                *connect.Client[v1.DeployRequest, v1.DeployEvent]
@@ -2151,6 +2163,11 @@ func (c *projectServiceClient) AddContainer(ctx context.Context, req *connect.Re
 // DeleteContainer calls nagi.v1.ProjectService.DeleteContainer.
 func (c *projectServiceClient) DeleteContainer(ctx context.Context, req *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error) {
 	return c.deleteContainer.CallUnary(ctx, req)
+}
+
+// ControlContainer calls nagi.v1.ProjectService.ControlContainer.
+func (c *projectServiceClient) ControlContainer(ctx context.Context, req *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.controlContainer.CallServerStream(ctx, req)
 }
 
 // SaveDraft calls nagi.v1.ProjectService.SaveDraft.
@@ -2330,6 +2347,8 @@ type ProjectServiceHandler interface {
 	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error)
+	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
+	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
 	SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.Project], error)
 	DiscardDraft(context.Context, *connect.Request[v1.ContainerRevisionRef]) (*connect.Response[v1.Project], error)
 	// 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。
@@ -2446,6 +2465,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceDeleteContainerProcedure,
 		svc.DeleteContainer,
 		connect.WithSchema(projectServiceMethods.ByName("DeleteContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceControlContainerHandler := connect.NewServerStreamHandler(
+		ProjectServiceControlContainerProcedure,
+		svc.ControlContainer,
+		connect.WithSchema(projectServiceMethods.ByName("ControlContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSaveDraftHandler := connect.NewUnaryHandler(
@@ -2660,6 +2685,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceAddContainerHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteContainerProcedure:
 			projectServiceDeleteContainerHandler.ServeHTTP(w, r)
+		case ProjectServiceControlContainerProcedure:
+			projectServiceControlContainerHandler.ServeHTTP(w, r)
 		case ProjectServiceSaveDraftProcedure:
 			projectServiceSaveDraftHandler.ServeHTTP(w, r)
 		case ProjectServiceDiscardDraftProcedure:
@@ -2767,6 +2794,10 @@ func (UnimplementedProjectServiceHandler) AddContainer(context.Context, *connect
 
 func (UnimplementedProjectServiceHandler) DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteContainer is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ControlContainer is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SaveDraft(context.Context, *connect.Request[v1.SaveDraftRequest]) (*connect.Response[v1.Project], error) {

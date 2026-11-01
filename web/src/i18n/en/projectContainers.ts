@@ -46,6 +46,7 @@ export default {
     help: "Per-container metrics are on each container page. In latency charts, P95 and P99 show the maximum within each interval; other metrics show the average.",
   },
   table: {
+    deployConfirm: (names) => `Deploy ${names}? These containers are recreated. The service is briefly interrupted and new versions are created.`,
     title: "Containers",
     descriptionNarrow: "Select a container to view details. Check several to deploy them together.",
     help: "Batch deployment deploys the selected containers in dependency order and creates a single deployment history entry.",
@@ -68,12 +69,10 @@ export default {
       `Uploaded ${files === 1 ? "1 file" : `${files} files`}${stripped ? ` (removed top-level directory ${stripped}/)` : ""}`,
     deleteConfirm: (group, name) => {
       const kind = group ? "container group" : "container";
-      return `Delete ${kind} ${name}? ${group ? "Its containers" : "The container"} will be stopped and removed.\n\nChoose OK to also delete the ${kind} directory and its data. Choose Cancel to remove only the containers and keep the directory.`;
+      return `Delete ${kind} ${name}? ${group ? "Its containers" : "The container"} will be stopped and removed. The ${kind} directory is kept by default.`;
     },
-    deleteContainersOnlyConfirm: (group, name) => {
-      const kind = group ? "container group" : "container";
-      return `Remove only the containers of ${kind} ${name}? The ${kind} directory and its data will be kept.`;
-    },
+    deleteDirCheck: (group) => `Also delete the ${group ? "container group" : "container"} directory (data and snapshots cannot be recovered)`,
+    deleteTypeName: (group, name) => `Enter the ${group ? "container group" : "container"} name ${name} to confirm`,
     deleteFailed: (msg) => `Delete failed: ${msg}`,
     deleteKind: (group) => (group ? "Delete container group" : "Delete container"),
     summaryDraft: "Has an undeployed draft, saved as a new version on deploy.",
@@ -83,7 +82,17 @@ export default {
     uploadDeploy: "Upload and deploy",
     pullDeploy: "Pull and deploy",
     updateImage: "Update image",
-    updateImageDraftConfirm: (name) => `Updating the image redeploys ${name}, and its undeployed draft takes effect too. Continue?`,
+    updateImageConfirm: (name) => `Update the image of ${name}? The new image is pulled and the container is recreated. The service is briefly interrupted and a new version is created.`,
+    updateImageDraftConfirm: (name) => `Update the image of ${name}? The new image is pulled and the container is recreated. The undeployed draft takes effect too.`,
+    redeployConfirm: (name) => `Redeploy ${name}? The container is recreated. The service is briefly interrupted and a new version is created.`,
+    deployDraftConfirm: (name) => `Deploy the draft of ${name}? The container is recreated from the draft. The service is briefly interrupted and a new version is created.`,
+    pullDeployConfirm: (name) => `Pull and deploy ${name}? Code is pulled from the git repository and the container is recreated. The service is briefly interrupted and a new version is created.`,
+    start: "Start",
+    stop: "Stop",
+    restart: "Restart",
+    stopConfirm: (group, name) => `Stop ${group ? "container group" : "container"} ${name}? The service becomes unavailable. Data is kept and it can be started again at any time.`,
+    restartConfirm: (group, name) => `Restart ${group ? "container group" : "container"} ${name}? The service is briefly interrupted. No new version is created.`,
+    stopFailoverHint: "Failover is configured. Remove it first",
     deploying: "Deploying",
     deployDraft: "Deploy draft",
     redeploy: "Redeploy",

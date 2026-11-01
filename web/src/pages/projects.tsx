@@ -6,7 +6,7 @@ import { authClient, errorMessage, nodeClient, projectClient, settingsClient, to
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
 import { t } from "@/i18n";
-import { ProjectState, stateOf } from "@/components/status";
+import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { useContainerForm } from "@/components/container-form";
 import {
@@ -23,6 +23,7 @@ import {
   Field,
   Input,
   Loading,
+  Notice,
   Section,
   Select,
   Spinner,
@@ -110,6 +111,7 @@ export function ProjectsPage() {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
+  const offlineNodes = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).map((n) => n.name);
 
   const newButton = (
     <Link to="/projects/new">
@@ -124,6 +126,21 @@ export function ProjectsPage() {
     <>
       <PageHeader title={t.projects.title} description={t.projects.description} actions={newButton} />
       <div className="grid gap-6">
+        {offlineNodes.length > 0 && (
+          <Notice
+            tone="warning"
+            title={t.common.status.nodesOffline(offlineNodes)}
+            actions={
+              <Link to="/nodes">
+                <Button size="sm" variant="outline">
+                  {t.projects.offline.action}
+                </Button>
+              </Link>
+            }
+          >
+            {t.projects.offline.body}
+          </Notice>
+        )}
         <Reminders />
         {projects.isPending ? (
           <Loading />
@@ -152,7 +169,7 @@ export function ProjectsPage() {
                         {p.stateful && <Badge>{t.projects.card.stateful}</Badge>}
                       </>
                     }
-                    aside={<ProjectState services={services} deployed={deployed} />}
+                    aside={<ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />}
                   />
                   <CardBody className="gap-1.5">
                     {p.containers.length === 0 ? (

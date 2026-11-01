@@ -282,6 +282,43 @@ func (m *Manager) Start(ctx context.Context, s *nagiv1.ContainerSpec, onLine fun
 	return m.SyncNetworks(ctx, s.GetProjectId())
 }
 
+// Control 手动启动、停止或重启容器，不重建容器，配置和版本都不变。容器被删掉时，启动会按当前配置建回来。
+func (m *Manager) Control(ctx context.Context, projectID, container string, action nagiv1.ContainerAction, onLine func(string)) error {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
+	c, err := m.Get(ctx, projectID, container)
+	if err != nil {
+		return err
+	}
+	if c.Spec.GetVersion() == 0 {
+		return invalid("容器还没有部署")
+	}
+	files := composeFiles(c.Spec)
+	switch action {
+	case nagiv1.ContainerAction_CONTAINER_ACTION_START:
+		instances, ierr := m.docker.Instances(ctx, containerLabel(projectID, container))
+		if ierr != nil {
+			return ierr
+		}
+		if len(instances) > 0 {
+			err = compose.Start(ctx, files, onLine)
+		} else {
+			err = compose.Up(ctx, files, onLine)
+		}
+	case nagiv1.ContainerAction_CONTAINER_ACTION_STOP:
+		return compose.Stop(ctx, files, onLine)
+	case nagiv1.ContainerAction_CONTAINER_ACTION_RESTART:
+		err = compose.Restart(ctx, files, onLine)
+	default:
+		return invalid("不支持的操作")
+	}
+	if err != nil {
+		return err
+	}
+	return m.SyncNetworks(ctx, projectID)
+}
+
 // findVersionFiles 找到某个版本保存的文件（版本文件快照）。
 func findVersionFiles(ctx context.Context, rep *snapshot.Repo, version int64) (string, error) {
 	list, err := rep.List(ctx, snapshot.Version)
