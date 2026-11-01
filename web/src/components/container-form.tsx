@@ -4,6 +4,7 @@ import { Field, Input, Segmented, Textarea } from "@/components/ui";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
 import type { ImageForm, ImageFormSchema, ContainerConfigSchema } from "@/gen/nagi/v1/common_pb";
+import { EnvEditor } from "@/components/env-editor";
 
 const exampleCompose = `services:
   web:
@@ -81,17 +82,8 @@ export function useImageForm(initial?: ImageForm, prefix = ""): { fields: ReactN
         <Field label={t.containerForm.volumes} htmlFor={prefix + "volumes"} hint={t.containerForm.volumesHint} help={t.containerForm.volumesHelp}>
           <Textarea id={prefix + "volumes"} value={volumes} onChange={(e) => setVolumes(e.target.value)} className="font-mono text-[13px]" placeholder="/data" />
         </Field>
-        <Field label={t.containerForm.env} htmlFor={prefix + "env"} hint={t.containerForm.envHint} error={checkEnv(env)}>
-          <Textarea
-            id={prefix + "env"}
-            value={env}
-            onChange={(e) => {
-              setEnv(e.target.value);
-              e.target.setCustomValidity(checkEnv(e.target.value));
-            }}
-            spellCheck={false}
-            className="font-mono"
-          />
+        <Field label={t.containerForm.env} htmlFor={prefix + "env"} error={checkEnv(env)}>
+          <EnvEditor id={prefix + "env"} value={env} onChange={setEnv} />
         </Field>
       </div>
       <details open={advanced} className="group rounded-md border">

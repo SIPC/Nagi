@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus, Play, Rocket, RotateCw } from "lucide-react";
+import { Download, Pause, Plus, Play, Rocket, RotateCw } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
@@ -43,6 +43,8 @@ import {
 import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { toast } from "sonner";
 import { useUnsaved } from "@/components/unsaved";
+import { EnvEditor } from "@/components/env-editor";
+import { ConfigDiff } from "@/components/config-diff";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
@@ -508,7 +510,14 @@ function ContainerDetail({
       <div key={view} className="grid animate-fade-in gap-6">
         {view !== "data" && output}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
-        {view === "config" && <ContainerConfig key={`cfg-${container.revision}`} project={project} container={container} services={serviceNames} />}
+        {view === "config" && <ContainerConfig
+            key={`cfg-${container.revision}`}
+            project={project}
+            container={container}
+            services={serviceNames}
+            deploying={busy}
+            onDeploy={(baseRevision) => run(() => projectClient.deploy({ projectId: project.id, targets: [{ container: container.name, baseRevision }] }))}
+          />}
         {view === "versions" && <Versions project={project} container={container} onRun={() => !busy && setLines([])} />}
         {view === "logs" && (
           <Logs
@@ -623,7 +632,7 @@ function Overview({ project, container, services }: { project: Project; containe
 
 // ---- 日志 ----
 
-type Line = { key: number; service: string; stream: string; text: string };
+type Line = { key: number; service: string; stream: string; text: string; time?: Date };
 
 const maxLines = 2000;
 
@@ -631,8 +640,25 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
   const [service, setService] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [stderrOnly, setStderrOnly] = useState(false);
+  const [showTime, setShowTime] = useState(false);
+  // 暂停时继续接收，只是显示停在暂停那一刻。
+  const [frozen, setFrozen] = useState<Line[] | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const source = frozen ?? lines;
+  const q = query.trim().toLowerCase();
+  const visible = source.filter((l) => (!stderrOnly || l.stream === "stderr") && (!q || l.text.toLowerCase().includes(q)));
+  const download = () => {
+    const text = lines.map((l) => `${l.time ? l.time.toISOString() + " " : ""}${l.service ? l.service + " " : ""}${l.text}`).join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${container}${service ? "-" + service : ""}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const abort = new AbortController();
@@ -643,7 +669,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
       try {
         const stream = projectClient.streamLogs({ projectId, container, service, tail: 200, follow: true }, { signal: abort.signal });
         for await (const l of stream) {
-          const line = { key: n++, service: l.service, stream: l.stream, text: l.text };
+          const line = { key: n++, service: l.service, stream: l.stream, text: l.text, time: toDate(l.time) };
           setLines((prev) => {
             const next = prev.length >= maxLines ? prev.slice(prev.length - maxLines + 1) : prev.slice();
             next.push(line);
@@ -660,15 +686,21 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
 
   useEffect(() => {
     const box = boxRef.current;
-    if (box && stick.current) box.scrollTop = box.scrollHeight;
-  }, [lines]);
+    if (box && stick.current && !frozen) box.scrollTop = box.scrollHeight;
+  }, [lines, frozen]);
 
   return (
     <div className="grid gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">{t.projectContainers.logs.live(maxLines)}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t.projectContainers.logs.search}
+          aria-label={t.projectContainers.logs.search}
+          className="h-8 max-w-56 text-[13px]"
+        />
         {services.length > 1 && (
-          <Select value={service} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]">
+          <Select value={service} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]" aria-label={t.projectContainers.logs.allContainers}>
             <option value="">{t.projectContainers.logs.allContainers}</option>
             {services.map((s) => (
               <option key={s} value={s}>
@@ -677,7 +709,27 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
             ))}
           </Select>
         )}
+        <Check checked={stderrOnly} onChange={setStderrOnly}>
+          <span className="text-[13px]">{t.projectContainers.logs.stderrOnly}</span>
+        </Check>
+        <Check checked={showTime} onChange={setShowTime}>
+          <span className="text-[13px]">{t.projectContainers.logs.showTime}</span>
+        </Check>
+        <div className="ml-auto flex items-center gap-1">
+          <Button size="sm" variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
+            {frozen ? <Play /> : <Pause />}
+            {frozen ? t.projectContainers.logs.resume : t.projectContainers.logs.pause}
+          </Button>
+          <Button size="sm" variant="outline" readOnlyOk onClick={download} disabled={lines.length === 0}>
+            <Download />
+            {t.projectContainers.logs.download}
+          </Button>
+        </div>
       </div>
+      <span className="text-xs text-muted-foreground">
+        {frozen ? t.projectContainers.logs.paused : t.projectContainers.logs.live(maxLines)}
+        {(q || stderrOnly) && ` · ${t.projectContainers.logs.matched(visible.length, source.length)}`}
+      </span>
       {error && <Alert>{error}</Alert>}
       <div
         ref={boxRef}
@@ -687,11 +739,12 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         }}
         className="h-96 overflow-auto rounded-md bg-log p-3.5 font-mono text-xs leading-relaxed text-log-foreground"
       >
-        {lines.length === 0 ? (
-          <span className="opacity-50">{t.projectContainers.logs.empty}</span>
+        {visible.length === 0 ? (
+          <span className="opacity-50">{lines.length === 0 ? t.projectContainers.logs.empty : t.projectContainers.logs.noMatch}</span>
         ) : (
-          lines.map((l) => (
+          visible.map((l) => (
             <div key={l.key} className="break-all whitespace-pre-wrap">
+              {showTime && l.time && <span className="mr-2 opacity-50">{formatTime(l.time)}</span>}
               {!service && services.length > 1 && <span className="mr-2 text-info">{l.service}</span>}
               <span className={cn(l.stream === "stderr" && "text-warning")}>{l.text}</span>
             </div>
@@ -704,7 +757,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
 
 // ---- 配置 ----
 
-function ContainerConfig({ project, container, services }: { project: Project; container: Container; services: string[] }) {
+function ContainerConfig({ project, container, services, onDeploy, deploying }: { project: Project; container: Container; services: string[]; onDeploy: (revision: bigint) => void; deploying: boolean }) {
   const queryClient = useQueryClient();
   const base = container.draft ?? container.config;
   const isForm = !!base?.form;
@@ -718,6 +771,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
   const [dependsOn, setDependsOn] = useState((base?.dependsOn ?? []).join(", "));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["project", project.id] });
@@ -766,6 +820,18 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       t.projectContainers.config.savedDraft,
     );
 
+  // 保存为草稿后立即部署。已部署的容器会被重建，先确认。
+  const saveAndDeploy = async () => {
+    const form = formRef.current;
+    if (form && !form.reportValidity()) return;
+    if (container.deployedVersion > 0n && !(await confirmAction(t.projectContainers.detail.deployDraftConfirm(container.name), { action: t.projectContainers.config.saveAndDeploy }))) return;
+    await call(async () => {
+      const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
+      const revision = res.containers.find((c) => c.name === container.name)?.revision;
+      if (revision !== undefined) onDeploy(revision);
+    });
+  };
+
   const discard = async () => {
     if (!(await confirmAction(t.projectContainers.config.discardConfirm(container.name), { action: t.projectContainers.config.discardDraft, danger: true }))) return;
     call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }), t.projectContainers.config.discarded);
@@ -773,6 +839,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
 
   return (
     <form
+      ref={formRef}
       className="grid gap-5"
       onSubmit={(e) => {
         e.preventDefault();
@@ -780,6 +847,7 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       }}
     >
       <Notice>{t.projectContainers.config.notice}</Notice>
+      {container.hasDraft && <ConfigDiff deployed={container.config} draft={container.draft} />}
       {isForm ? (
         imageForm.fields
       ) : (
@@ -814,24 +882,17 @@ function ContainerConfig({ project, container, services }: { project: Project; c
       </div>
       {!isForm && (
         <div className="grid gap-4 border-t pt-5">
-          <Field label={t.projectContainers.config.groupEnv} htmlFor="edit-env" hint={t.projectContainers.config.envHint} help={t.projectContainers.config.groupEnvHelp}>
-            <Textarea id="edit-env" value={env} onChange={(e) => setEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
+          <Field label={t.projectContainers.config.groupEnv} htmlFor="edit-env" help={t.projectContainers.config.groupEnvHelp}>
+            <EnvEditor id="edit-env" value={env} onChange={setEnv} />
           </Field>
           {services.map((s) => (
             <Field
                           key={s}
                           label={t.projectContainers.config.serviceEnv(s)}
                           htmlFor={`edit-env-${s}`}
-                          hint={t.projectContainers.config.envHint}
                           help={t.projectContainers.config.serviceEnvHelp}
                         >
-              <Textarea
-                id={`edit-env-${s}`}
-                value={serviceEnv[s] ?? ""}
-                onChange={(e) => setServiceEnv((prev) => ({ ...prev, [s]: e.target.value }))}
-                spellCheck={false}
-                className="font-mono text-[13px]"
-              />
+              <EnvEditor id={`edit-env-${s}`} value={serviceEnv[s] ?? ""} onChange={(v) => setServiceEnv((prev) => ({ ...prev, [s]: v }))} />
             </Field>
           ))}
         </div>
@@ -843,9 +904,13 @@ function ContainerConfig({ project, container, services }: { project: Project; c
             {t.projectContainers.config.discardDraft}
           </Button>
         )}
-        <Button type="submit" size="sm" disabled={busy}>
+        <Button type="submit" size="sm" variant="outline" disabled={busy || deploying}>
           {busy && <Spinner />}
           {t.projectContainers.config.saveDraft}
+        </Button>
+        <Button size="sm" disabled={busy || deploying} onClick={saveAndDeploy}>
+          <Rocket />
+          {t.projectContainers.config.saveAndDeploy}
         </Button>
       </div>
     </form>

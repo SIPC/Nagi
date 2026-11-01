@@ -10,6 +10,7 @@ import { useRun } from "@/components/run";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
+import { EnvEditor } from "@/components/env-editor";
 import { toast } from "sonner";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
@@ -149,8 +150,8 @@ function SharedEnv({ project }: { project: Project }) {
       help={t.projectSettings.sharedEnv.help}
     >
       <FormBody>
-        <Field label={t.projectSettings.sharedEnv.vars} htmlFor="shared-env" hint={t.projectSettings.sharedEnv.varsHint}>
-          <Textarea id="shared-env" value={sharedEnv} onChange={(e) => setSharedEnv(e.target.value)} spellCheck={false} className="font-mono text-[13px]" />
+        <Field label={t.projectSettings.sharedEnv.vars} htmlFor="shared-env">
+          <EnvEditor id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
         </Field>
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
           <Field label={t.projectSettings.sharedEnv.scope} help={t.projectSettings.sharedEnv.scopeHelp}>

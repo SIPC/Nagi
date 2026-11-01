@@ -1,6 +1,13 @@
 import type zh from "../zh/containerForm";
 
 export default {
+  envKey: "Name",
+  envValue: "Value",
+  envAdd: "Add variable",
+  envBulk: "Edit as text",
+  envRows: "Edit as rows",
+  envShow: "Show value",
+  envHide: "Hide value",
   image: "Image",
   imagePlaceholder: "e.g. nginx:alpine",
   command: "Command",

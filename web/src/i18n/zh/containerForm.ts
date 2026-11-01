@@ -1,5 +1,12 @@
 // 容器表单：镜像表单（单个容器）和容器组（compose）。
 export default {
+  envKey: "变量名",
+  envValue: "值",
+  envAdd: "添加变量",
+  envBulk: "批量编辑",
+  envRows: "按行编辑",
+  envShow: "显示值",
+  envHide: "隐藏值",
   image: "镜像",
   imagePlaceholder: "例如 nginx:alpine",
   command: "启动命令",
