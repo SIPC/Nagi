@@ -45,6 +45,7 @@
 | 面板调用 agent | **反向 gRPC，底层 yamux 复用一条 TLS 连接** | 每个操作都是独立的强类型接口，日志、终端是普通流式接口，加功能只需加方法 | [control-plane.md](control-plane.md#接口设计) |
 | 浏览器接口 | **Connect-RPC，终端用 WebSocket** | 和节点共用 proto，自动生成 TypeScript 类型；支持普通 JSON，可用 curl 调用 | [control-plane.md](control-plane.md#接口设计) |
 | 版本兼容 | **面板兼容旧一个大版本的节点，可一键升级节点** | 升级时不用所有机器同时停；proto 只加字段不改删 | [control-plane.md](control-plane.md#接口设计) |
+| 更新面板 | **面板上一键更新，只能到最新发布的版本，原地重启** | 和节点升级走同一段下载、核对、替换的代码；版本由面板决定，只升不降；失败不影响运行中的面板 | [panel.md](panel.md#更新面板) |
 | WireGuard 实现 | **全部用用户态 wireguard-go，自己实现直连 / UDP 中转 / TLS 中转** | 一套代码路径；内核版做不到套 TLS 中转 | [mesh.md](mesh.md#实现全部使用用户态-wireguard-go) |
 | mesh 地址 | **由 WireGuard 公钥推导的 IPv6** | 不用分配，mesh 合并不冲突，无法冒用他人地址 | [mesh.md](mesh.md#地址) |
 | 容器网段 | **节点本地分配，默认 `10.200.0.0/16`，项目内网 /24、容器组 /26** | 不需要全局协调；项目内网里还要放代理，留大一点 | [mesh.md](mesh.md#容器网段只在节点内分配) |

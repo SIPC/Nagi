@@ -41,7 +41,7 @@ Also included:
 - Image update notices and registry mirrors for nodes in mainland China
 - Projects are isolated by default and can be linked to each other on demand
 - Primary and standby panels, and handing nodes over between panels
-- Panel security: optional two-factor authentication, login rate limiting and a secure entry path; one-click node upgrades from the panel
+- Panel security: optional two-factor authentication, login rate limiting and a secure entry path; one-click panel updates and node upgrades
 
 Not supported yet: automatic scheduling, multiple replicas of one container, several panels managing the same node, multiple users, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
 
@@ -64,7 +64,7 @@ Common options (append to the command, for example `| sudo sh -s -- --port 28443
 | `--port <port>` | Panel port; picked at random on first start by default |
 | `--no-agent` | Run only the panel without an embedded node, e.g. on a dedicated machine |
 | `--docker-mirror <name>` | Package mirror for installing Docker: `Aliyun` or `AzureChinaCloud`, for servers in mainland China |
-| `--download-url <url>` | Download nagi from a mirror or internal address when GitHub is unreachable |
+| `--download-url <url>` | Download nagi from a mirror or internal address when GitHub is unreachable; one-click panel updates then use it too |
 | `--version <version>` | Install a specific version; the latest by default |
 
 ### Add a node

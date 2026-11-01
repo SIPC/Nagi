@@ -13,6 +13,7 @@
 - 加入 WireGuard mesh：把上传的项目文件传给节点，直连不通时替节点中转 mesh 流量（见 [mesh.md](mesh.md)）
 - 可以担任顶替机制中的见证人（见 [failover.md](failover.md)）
 - 发现节点失联时发送告警（见 [monitoring.md](monitoring.md)）
+- 一键更新自己（见[更新面板](#更新面板)）
 
 ## 项目数据
 
