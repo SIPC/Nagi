@@ -125,6 +125,14 @@ func (a *agent) checkControl(projectID, container string, action nagiv1.Containe
 	return nil
 }
 
+// checkFileWrite 判断现在能不能改容器的文件：有顶替的容器只有持有租约的节点能写，否则改动会被下一次同步盖掉。
+func (a *agent) checkFileWrite(projectID, container string) error {
+	if err := a.checkControl(projectID, container, nagiv1.ContainerAction_CONTAINER_ACTION_RESTART); err != nil {
+		return spec.Invalid("节点现在没有持有容器的顶替租约，不能修改文件")
+	}
+	return nil
+}
+
 func (f *failovers) file(id string) string { return filepath.Join(f.dir, id+".json") }
 
 // save 保存设置和已知的持有者。调用方持有 f.mu。

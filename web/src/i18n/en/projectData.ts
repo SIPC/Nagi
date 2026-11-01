@@ -16,6 +16,7 @@ export default {
     downloadDir: "Download this directory",
     upload: "Upload",
     uploaded: (n) => (n === 1 ? "Uploaded 1 file" : `Uploaded ${n} files`),
+    tooLarge: (names) => `A single file cannot be larger than 8 GB: ${names}`,
     newDir: "New directory",
     dirName: "Directory name",
     created: "Created",

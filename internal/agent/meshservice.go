@@ -48,7 +48,8 @@ func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer)
 		return err
 	}
 	ref := first.GetRef()
-	if err := s.a.checkControl(ref.GetProjectId(), ref.GetContainer(), nagiv1.ContainerAction_CONTAINER_ACTION_RESTART); err != nil {
+	check := func() error { return s.a.checkFileWrite(ref.GetProjectId(), ref.GetContainer()) }
+	if err := check(); err != nil {
 		return toStatus(err)
 	}
 	pr, pw := io.Pipe()
@@ -67,7 +68,7 @@ func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer)
 			}
 		}
 	}()
-	n, err := s.a.projects.UploadVolumeFile(stream.Context(), ref, pr)
+	n, err := s.a.projects.UploadVolumeFile(stream.Context(), ref, pr, check)
 	pr.Close()
 	if err != nil {
 		return toStatus(err)

@@ -15,6 +15,7 @@ export default {
     downloadDir: "下载此目录",
     upload: "上传",
     uploaded: (n: number) => `已上传 ${n} 个文件`,
+    tooLarge: (names: string) => `单个文件不能超过 8 GB：${names}`,
     newDir: "新建目录",
     dirName: "目录名",
     created: "已创建",

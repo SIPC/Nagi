@@ -12,6 +12,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -28,6 +29,12 @@ func (a *API) VolumeFileHandler() http.Handler {
 			msg := i18n.Localize(lang, err)
 			if st, ok := status.FromError(err); ok && err != nil {
 				msg = st.Message()
+				switch st.Code() {
+				case codes.Unavailable, codes.DeadlineExceeded:
+					msg = i18n.Localize(lang, i18n.New("连不上容器所在的节点，稍后再试"))
+				case codes.Unimplemented:
+					msg = i18n.Localize(lang, i18n.New("节点版本过旧，升级节点后才能管理文件"))
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(code)
@@ -73,6 +80,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 		if r.Method == http.MethodGet {
 			stream, err := client.VolumeDownload(ctx, ref)
 			if err != nil {
+				a.recordOperation(ctx, "/DownloadVolumeFile", ref, activityFailure(err))
 				fail(http.StatusBadGateway, err)
 				return
 			}
@@ -80,6 +88,11 @@ func (a *API) VolumeFileHandler() http.Handler {
 			if err != nil {
 				a.recordOperation(ctx, "/DownloadVolumeFile", ref, activityFailure(err))
 				fail(http.StatusBadRequest, err)
+				return
+			}
+			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
+			if q.Get("check") == "1" {
+				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 			a.recordOperation(ctx, "/DownloadVolumeFile", ref, "")
@@ -109,12 +122,20 @@ func (a *API) VolumeFileHandler() http.Handler {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return
 		}
+		// 浏览器也会先拦下；这里先看长度，免得白传一遍才报错。
+		if r.ContentLength > maxVolumeUpload {
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, "file too large")
+			fail(http.StatusRequestEntityTooLarge, i18n.New("单个文件不能超过 8 GB"))
+			return
+		}
 		stream, err := client.VolumeUpload(ctx)
 		if err != nil {
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
 			fail(http.StatusBadGateway, err)
 			return
 		}
 		if err := stream.Send(&nagiv1.VolumeUploadChunk{Ref: ref}); err != nil {
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
 			fail(http.StatusBadGateway, err)
 			return
 		}
@@ -131,6 +152,12 @@ func (a *API) VolumeFileHandler() http.Handler {
 				break
 			}
 			if rerr != nil {
+				var tooBig *http.MaxBytesError
+				if errors.As(rerr, &tooBig) {
+					a.recordOperation(ctx, "/UploadVolumeFile", ref, "file too large")
+					fail(http.StatusRequestEntityTooLarge, i18n.New("单个文件不能超过 8 GB"))
+					return
+				}
 				a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(rerr))
 				fail(http.StatusBadRequest, rerr)
 				return

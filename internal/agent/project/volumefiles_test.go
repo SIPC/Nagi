@@ -4,11 +4,15 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"testing/iotest"
+	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
@@ -99,6 +103,43 @@ func TestWriteRootFileDoesNotFollowSymlinks(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outside, "x")); err == nil {
 		t.Error("文件写到外面了")
+	}
+}
+
+func TestStageUpload(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "staging")
+
+	// 传到一半断开：不留文件。
+	broken := io.MultiReader(strings.NewReader("part"), iotest.ErrReader(errors.New("断开")))
+	if _, err := stageUpload(dir, broken); err == nil {
+		t.Fatal("读取失败时应该报错")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("不应该留下文件：%v", entries)
+	}
+
+	// 节点重启留下的旧文件被清掉，新传的还在。
+	stale := filepath.Join(dir, "upload-stale")
+	if err := os.WriteFile(stale, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * uploadStagingKeep)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	staged, err := stageUpload(dir, strings.NewReader("new"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("旧文件应该被清掉：%v", err)
+	}
+	if b, err := os.ReadFile(staged); err != nil || string(b) != "new" {
+		t.Fatalf("内容不对：%q %v", b, err)
 	}
 }
 

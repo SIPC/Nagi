@@ -168,7 +168,7 @@ func (s *agentService) ListVolumeFiles(ctx context.Context, req *nagiv1.VolumeFi
 
 // checkVolumeWrite：有顶替的容器只在持有租约时能改文件，规则和启动、重启一样。
 func (s *agentService) checkVolumeWrite(ref *nagiv1.VolumeFileRef) error {
-	return s.node.checkControl(ref.GetProjectId(), ref.GetContainer(), nagiv1.ContainerAction_CONTAINER_ACTION_RESTART)
+	return s.node.checkFileWrite(ref.GetProjectId(), ref.GetContainer())
 }
 
 func (s *agentService) DeleteVolumeFile(ctx context.Context, req *nagiv1.VolumeFileRef) (*nagiv1.VolumeFileOpResponse, error) {

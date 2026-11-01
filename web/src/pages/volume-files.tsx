@@ -14,6 +14,7 @@ import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 
 const maxEditBytes = 1 << 20;
+const maxUploadBytes = 8 * 1024 ** 3;
 
 type Props = {
   project: Project;
@@ -58,11 +59,17 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
     if (snapshot) q.set("snapshot", snapshot);
     return `/api/volume-file?${q}`;
   };
+  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。
   const download = (p: string) => {
-    const a = document.createElement("a");
-    a.href = fileURL(p);
-    a.rel = "noopener";
-    a.click();
+    run(`download:${p}`, async () => {
+      const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+      const a = document.createElement("a");
+      a.href = fileURL(p);
+      a.rel = "noopener";
+      a.download = "";
+      a.click();
+    });
   };
 
   // 操作前可选先做一份快照，改错了能找回来。
@@ -92,9 +99,14 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
     if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   };
 
-  const upload = async (list: FileList) => {
+  const upload = async (list: File[]) => {
+    const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
+    if (tooLarge.length > 0) {
+      setError(m.tooLarge(tooLarge.join(", ")));
+      return;
+    }
     const existing = new Set((files.data?.entries ?? []).map((e) => e.name));
-    const clash = [...list].filter((f) => existing.has(f.name)).map((f) => f.name);
+    const clash = list.filter((f) => existing.has(f.name)).map((f) => f.name);
     let first = false;
     if (clash.length > 0) {
       const answer = await ask(m.overwriteConfirm(clash.join(", ")), { action: m.overwrite, danger: true, check: m.snapshotFirst });
@@ -181,8 +193,10 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
                   multiple
                   hidden
                   onChange={(e) => {
-                    if (e.target.files?.length) upload(e.target.files);
+                    // 先复制一份：清空 value 会让 FileList 也变空。
+                    const list = [...(e.target.files ?? [])];
                     e.target.value = "";
+                    if (list.length > 0) upload(list);
                   }}
                 />
               </>

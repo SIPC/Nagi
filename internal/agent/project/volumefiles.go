@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -27,7 +28,11 @@ import (
 const (
 	maxVolumeEntries = 5000
 	fileChunkSize    = 256 << 10
+	// uploadStagingKeep：暂存目录里超过这么久的文件是节点中途重启留下的。上传不会传这么久。
+	uploadStagingKeep = 7 * 24 * time.Hour
 )
+
+func (p containerPaths) stagingDir() string { return filepath.Join(p.root, ".staging") }
 
 // volumeDir 返回卷在节点上的目录。不在快照范围的卷不在容器目录里，这里管不了。
 func volumeDir(s *nagiv1.ContainerSpec, volume string) (string, error) {
@@ -401,6 +406,7 @@ func (m *Manager) lockForWrite(projectID, container string) (func(), error) {
 }
 
 // writeRootFile 原子地写一个文件：先写临时文件，再改名。目标是符号链接时替换链接本身，不写到它指向的地方。
+// 调用方持有容器的锁，所以快照里不会有这个临时文件。
 func writeRootFile(root *os.Root, rel string, r io.Reader, mode fs.FileMode, uid, gid int) (int64, error) {
 	dir := filepath.Dir(rel)
 	if dir != "." {
@@ -421,7 +427,7 @@ func writeRootFile(root *os.Root, rel string, r io.Reader, mode fs.FileMode, uid
 	}
 	if err != nil {
 		_ = root.Remove(tmp)
-		return 0, err
+		return 0, fileErr(err) // 例如磁盘写满。
 	}
 	_ = root.Chmod(tmp, mode)
 	if uid >= 0 {
@@ -432,6 +438,34 @@ func writeRootFile(root *os.Root, rel string, r io.Reader, mode fs.FileMode, uid
 		return 0, fileErr(err)
 	}
 	return n, nil
+}
+
+// stageUpload 把上传的内容写进卷外面的暂存目录，返回暂存文件。没传完的内容不能放进卷：容器看得见，快照也会带上。
+// 失败时不留下文件。节点中途重启留下的旧文件顺便清掉。
+func stageUpload(dir string, r io.Reader) (string, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	if old, err := os.ReadDir(dir); err == nil {
+		for _, e := range old {
+			if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > uploadStagingKeep {
+				_ = os.Remove(filepath.Join(dir, e.Name()))
+			}
+		}
+	}
+	f, err := os.CreateTemp(dir, "upload-")
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(f, r)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // inheritedOwner 决定新文件的权限和属主：覆盖时沿用原文件，新建时跟随所在目录（容器常以非 root 运行）。
@@ -452,7 +486,9 @@ func inheritedOwner(root *os.Root, rel string) (fs.FileMode, int, int) {
 }
 
 // UploadVolumeFile 把 r 写到卷里的 ref.path，已有的文件被覆盖。
-func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, r io.Reader) (int64, error) {
+// 传输可能很慢甚至卡住，所以传输时不占容器的锁，先写到暂存目录，传完拿到锁才写进卷，不挡部署和快照。
+// beforeCommit 在拿到锁后调用：传输期间容器可能已经被切走，这时要放弃，否则文件写在了不再用的副本上。
+func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, r io.Reader, beforeCommit func() error) (int64, error) {
 	rel, err := cleanVolumePath(ref.GetPath())
 	if err != nil {
 		return 0, err
@@ -464,8 +500,8 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	if err != nil {
 		return 0, err
 	}
-	defer unlock()
-	root, _, err := m.volumeRoot(ctx, ref)
+	unlock()
+	root, s, err := m.volumeRoot(ctx, ref)
 	if err != nil {
 		return 0, err
 	}
@@ -473,8 +509,27 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	if info, err := root.Lstat(rel); err == nil && info.IsDir() {
 		return 0, invalid("这里已经有一个同名目录")
 	}
+	staged, err := stageUpload(containerPaths{root: s.GetDir()}.stagingDir(), r)
+	if err != nil {
+		return 0, err
+	}
+	defer os.Remove(staged)
+
+	unlock, err = m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	if err := beforeCommit(); err != nil {
+		return 0, err
+	}
+	f, err := os.Open(staged)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
 	mode, uid, gid := inheritedOwner(root, rel)
-	return writeRootFile(root, rel, r, mode, uid, gid)
+	return writeRootFile(root, rel, f, mode, uid, gid)
 }
 
 // DeleteVolumeFile 删除卷里的文件或目录。不能删卷的根目录。符号链接只删链接本身。
