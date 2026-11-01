@@ -69,6 +69,8 @@ type Manager struct {
 	BackupStatus func(s *nagiv1.ContainerSpec) *nagiv1.BackupStatus
 	// EntryPorts 返回本节点作为入口节点已经在用的端口（Caddy 正在监听）。
 	EntryPorts func() []spec.PortKey
+	// ProxyPorts 返回 Caddy 实际监听着的 80 和 443（配置加载成功才算：只看映射的话，分不清是它自己还是别的程序占着）。
+	ProxyPorts func() []spec.PortKey
 
 	restarts managedRestarts
 	images   imageUpdates

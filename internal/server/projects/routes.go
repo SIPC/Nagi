@@ -108,6 +108,24 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 // checkEntries 检查映射的入口节点：入口节点在线、版本支持、没有关掉 Caddy，端口没被节点上的其他程序占用；
 // 容器所在节点和顶替节点也要支持（要由它们放行入口节点的连接）。old 是修改前的映射：入口和端口都没变的节点不用再查，它不在线也能改别的。
 func (s *Service) checkEntries(ctx context.Context, c store.Container, old *store.Route, r *nagiv1.Exposure) error {
+	var before *nagiv1.Exposure
+	if old != nil {
+		before = routeProto(*old)
+	}
+	samePorts := before != nil && slices.Equal(spec.ListenPorts(before), spec.ListenPorts(r))
+	// 容器所在节点上的域名：80 和 443 被其他程序占着时，那里的 Caddy 整个起不来。旧版本和没有 Caddy 的节点不查；不在线的等下发配置时报错。
+	if !r.GetNoLocalEntry() && !(samePorts && !before.GetNoLocalEntry()) && len(r.GetDomains()) > 0 {
+		if conn, err := s.Nodes.Get(c.NodeID); err == nil {
+			if info := conn.LastReport().GetNode(); info.GetCrossNodeEntry() && !info.GetProxyDisabled() {
+				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				_, err := conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: []*nagiv1.Exposure{r}})
+				cancel()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if len(r.GetEntryNodes()) == 0 {
 		return nil
 	}
@@ -116,12 +134,8 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 			return invalid("节点 %s 的版本不支持跨节点入口，请先升级", s.NodeName(ctx, id))
 		}
 	}
-	var before *nagiv1.Exposure
-	if old != nil {
-		before = routeProto(*old)
-	}
 	for _, id := range r.GetEntryNodes() {
-		if before != nil && slices.Contains(before.GetEntryNodes(), id) && slices.Equal(spec.UsedPorts(before), spec.UsedPorts(r)) {
+		if samePorts && slices.Contains(before.GetEntryNodes(), id) {
 			continue
 		}
 		conn, n, err := s.targetNode(ctx, id)

@@ -13,10 +13,13 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/spec"
 
 	"github.com/caddyserver/caddy/v2"
 )
@@ -136,6 +139,27 @@ func TestPercentile(t *testing.T) {
 	for q, want := range map[float64]float64{0.5: 50, 0.95: 95, 0.99: 99, 1: 100} {
 		if got := s.Percentile(q); got != want {
 			t.Errorf("第 %v 分位是 %v，应为 %v", q, got, want)
+		}
+	}
+}
+
+// 80 和 443 只在有域名时才监听，只开 HTTP 的域名不用 443。
+func TestDomainPorts(t *testing.T) {
+	http80 := spec.PortKey{Proto: spec.ProtoTCP, Port: 80}
+	https443 := spec.PortKey{Proto: spec.ProtoTCP, Port: 443}
+	cases := []struct {
+		name   string
+		routes []Route
+		want   []spec.PortKey
+	}{
+		{"没有域名", []Route{{Protocol: "http", Published: 8080}, {Protocol: "tcp", Published: 5432}}, nil},
+		{"只开 HTTP", []Route{{Protocol: "http", Domains: []string{"a.example.com"}, HTTPOnly: true}}, []spec.PortKey{http80}},
+		{"有证书的域名", []Route{{Protocol: "http", Domains: []string{"a.example.com"}}}, []spec.PortKey{http80, https443}},
+		{"不重复", []Route{{Protocol: "http", Domains: []string{"a.example.com"}}, {Protocol: "http", Domains: []string{"b.example.com"}}}, []spec.PortKey{http80, https443}},
+	}
+	for _, c := range cases {
+		if got := domainPorts(c.routes); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
 }

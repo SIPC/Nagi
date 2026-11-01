@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
 
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/caddyserver/caddy/v2"
 	// 只引入生成的配置用到的模块（见 build），不用 modules/standard：后者还会带进让 Caddy 充当证书机构的
 	// ACME 服务端、模板（markdown、语法高亮）、tracing、brotli/zstd 等用不到的模块。
@@ -61,8 +63,9 @@ type Proxy struct {
 	storage string
 	log     *slog.Logger
 
-	mu   sync.Mutex
-	last []byte
+	mu    sync.Mutex
+	last  []byte
+	ports []spec.PortKey // 加载成功的配置里监听的 80 和 443
 }
 
 // New 创建代理。storage 是证书等数据的存放目录。
@@ -85,6 +88,7 @@ func (p *Proxy) Apply(routes []Route) error {
 		return fmt.Errorf("加载 Caddy 配置: %w", err)
 	}
 	p.last = cfg
+	p.ports = domainPorts(routes)
 	p.log.Info("已更新对外访问规则", "routes", len(routes))
 	return nil
 }
@@ -93,8 +97,34 @@ func (p *Proxy) Apply(routes []Route) error {
 func (p *Proxy) Stop() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.last = nil
+	p.last, p.ports = nil, nil
 	return caddy.Stop()
+}
+
+// DomainPorts 返回 Caddy 实际监听着的 80 和 443。配置没加载成功时（例如端口被别的程序占着）不算。
+func (p *Proxy) DomainPorts() []spec.PortKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.ports)
+}
+
+// domainPorts 返回这些规则要监听的 80 和 443，和 build 里的一致。
+func domainPorts(routes []Route) []spec.PortKey {
+	var out []spec.PortKey
+	add := func(port uint32) {
+		if k := (spec.PortKey{Proto: spec.ProtoTCP, Port: port}); !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	for _, r := range routes {
+		if r.Protocol == spec.ProtoHTTP && len(r.Domains) > 0 {
+			add(80)
+			if !r.HTTPOnly {
+				add(443)
+			}
+		}
+	}
+	return out
 }
 
 type obj = map[string]any

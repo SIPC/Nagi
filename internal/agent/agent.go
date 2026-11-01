@@ -26,6 +26,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -141,6 +142,12 @@ func Run(ctx context.Context, cfg Config) error {
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
 	projects.EntryPorts = a.intranet.entryPorts
+	projects.ProxyPorts = func() []spec.PortKey {
+		if a.proxy == nil {
+			return nil
+		}
+		return a.proxy.DomainPorts()
+	}
 	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.status

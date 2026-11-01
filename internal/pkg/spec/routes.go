@@ -168,6 +168,19 @@ func UsedPorts(r *nagiv1.Exposure) []PortKey {
 	return nil
 }
 
+// ListenPorts 返回 Caddy 开这条映射时要监听的端口：UsedPorts 加上域名用的 80 和 443（只开 HTTP 时不用 443）。
+// 域名可以共用这两个端口，不算映射之间的冲突，但它们被节点上的其他程序占着时 Caddy 整个起不来。
+func ListenPorts(r *nagiv1.Exposure) []PortKey {
+	out := UsedPorts(r)
+	if r.GetProtocol() == ProtoHTTP && len(r.GetDomains()) > 0 {
+		out = append(out, PortKey{ProtoTCP, 80})
+		if !r.GetHttpOnly() {
+			out = append(out, PortKey{ProtoTCP, 443})
+		}
+	}
+	return out
+}
+
 // httpPorts 是常见的网站端口（容器内）。9000（php-fpm 等）、443（容器内一般是 HTTPS）不算。
 var httpPorts = map[uint32]bool{80: true, 8000: true, 8080: true, 8081: true, 8888: true, 3000: true, 3001: true,
 	4000: true, 5000: true, 5173: true, 8096: true}

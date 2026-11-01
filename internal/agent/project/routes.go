@@ -68,11 +68,17 @@ func (m *Manager) checkNewPorts(ctx context.Context, s *nagiv1.ContainerSpec) er
 			routes = append(routes, r)
 		}
 	}
-	return m.CheckPorts(ctx, routes)
+	return m.checkPorts(ctx, routes, spec.UsedPorts)
 }
 
-// CheckPorts 检查映射要用的端口：还没在用的（Caddy 还没监听）尝试监听一下，确认没有被节点上的其他程序占用。
+// CheckPorts 检查保存映射时要用的端口，包括域名用的 80 和 443。部署和补推配置时不查这两个端口（checkNewPorts）：
+// 它们被占着时域名本来就打不开，不能因此连容器也部署不了。
 func (m *Manager) CheckPorts(ctx context.Context, routes []*nagiv1.Exposure) error {
+	return m.checkPorts(ctx, routes, spec.ListenPorts)
+}
+
+// checkPorts 检查 ports 列出的端口：还没在用的（Caddy 还没监听）尝试监听一下，确认没有被节点上的其他程序占用。
+func (m *Manager) checkPorts(ctx context.Context, routes []*nagiv1.Exposure, ports func(*nagiv1.Exposure) []spec.PortKey) error {
 	inUse := map[spec.PortKey]bool{}
 	for _, c := range m.List(ctx) {
 		for _, r := range c.Spec.GetRoutes() {
@@ -89,8 +95,13 @@ func (m *Manager) CheckPorts(ctx context.Context, routes []*nagiv1.Exposure) err
 			inUse[k] = true
 		}
 	}
+	if m.ProxyPorts != nil {
+		for _, k := range m.ProxyPorts() {
+			inUse[k] = true
+		}
+	}
 	for _, r := range routes {
-		for _, k := range spec.UsedPorts(r) {
+		for _, k := range ports(r) {
 			if !inUse[k] && !portFree(k) {
 				return invalid("%s 端口 %d 已被节点上的其他程序占用", k.Proto, k.Port)
 			}
