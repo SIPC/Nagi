@@ -1,3 +1,15 @@
+-- name: InsertActivity :exec
+INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: PruneActivity :exec
+DELETE FROM activity WHERE id <= (SELECT MAX(id) FROM activity) - ?;
+
+-- name: ListActivity :many
+SELECT * FROM activity
+WHERE (?1 = '' OR kind = ?1) AND (?2 = 0 OR id < ?2)
+ORDER BY id DESC LIMIT ?3;
+
 -- name: GetSetting :one
 SELECT value FROM settings WHERE key = ?;
 

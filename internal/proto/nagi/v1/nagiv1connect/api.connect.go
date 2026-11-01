@@ -168,6 +168,9 @@ const (
 	// SettingsServiceSetEntranceProcedure is the fully-qualified name of the SettingsService's
 	// SetEntrance RPC.
 	SettingsServiceSetEntranceProcedure = "/nagi.v1.SettingsService/SetEntrance"
+	// SettingsServiceListActivityProcedure is the fully-qualified name of the SettingsService's
+	// ListActivity RPC.
+	SettingsServiceListActivityProcedure = "/nagi.v1.SettingsService/ListActivity"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -1177,6 +1180,8 @@ type SettingsServiceClient interface {
 	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error)
 	// 开启（生成新的随机路径）或关闭安全入口。
 	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
+	// 活动记录：用户的操作和告警，新的在前。
+	ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -1310,6 +1315,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("SetEntrance")),
 			connect.WithClientOptions(opts...),
 		),
+		listActivity: connect.NewClient[v1.ListActivityRequest, v1.ListActivityResponse](
+			httpClient,
+			baseURL+SettingsServiceListActivityProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListActivity")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1335,6 +1346,7 @@ type settingsServiceClient struct {
 	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
 	disableTOTP       *connect.Client[v1.DisableTOTPRequest, v1.Security]
 	setEntrance       *connect.Client[v1.SetEntranceRequest, v1.Security]
+	listActivity      *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -1437,6 +1449,11 @@ func (c *settingsServiceClient) SetEntrance(ctx context.Context, req *connect.Re
 	return c.setEntrance.CallUnary(ctx, req)
 }
 
+// ListActivity calls nagi.v1.SettingsService.ListActivity.
+func (c *settingsServiceClient) ListActivity(ctx context.Context, req *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error) {
+	return c.listActivity.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -1472,6 +1489,8 @@ type SettingsServiceHandler interface {
 	DisableTOTP(context.Context, *connect.Request[v1.DisableTOTPRequest]) (*connect.Response[v1.Security], error)
 	// 开启（生成新的随机路径）或关闭安全入口。
 	SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error)
+	// 活动记录：用户的操作和告警，新的在前。
+	ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1601,6 +1620,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("SetEntrance")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListActivityHandler := connect.NewUnaryHandler(
+		SettingsServiceListActivityProcedure,
+		svc.ListActivity,
+		connect.WithSchema(settingsServiceMethods.ByName("ListActivity")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -1643,6 +1668,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceDisableTOTPHandler.ServeHTTP(w, r)
 		case SettingsServiceSetEntranceProcedure:
 			settingsServiceSetEntranceHandler.ServeHTTP(w, r)
+		case SettingsServiceListActivityProcedure:
+			settingsServiceListActivityHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1730,6 +1757,10 @@ func (UnimplementedSettingsServiceHandler) DisableTOTP(context.Context, *connect
 
 func (UnimplementedSettingsServiceHandler) SetEntrance(context.Context, *connect.Request[v1.SetEntranceRequest]) (*connect.Response[v1.Security], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetEntrance is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListActivity(context.Context, *connect.Request[v1.ListActivityRequest]) (*connect.Response[v1.ListActivityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListActivity is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

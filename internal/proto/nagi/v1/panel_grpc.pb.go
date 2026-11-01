@@ -22,6 +22,7 @@ const (
 	PanelService_Report_FullMethodName           = "/nagi.v1.PanelService/Report"
 	PanelService_RenewCertificate_FullMethodName = "/nagi.v1.PanelService/RenewCertificate"
 	PanelService_RelayAlert_FullMethodName       = "/nagi.v1.PanelService/RelayAlert"
+	PanelService_ReportAlert_FullMethodName      = "/nagi.v1.PanelService/ReportAlert"
 	PanelService_MeshRelay_FullMethodName        = "/nagi.v1.PanelService/MeshRelay"
 )
 
@@ -37,6 +38,8 @@ type PanelServiceClient interface {
 	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(ctx context.Context, in *RelayAlertRequest, opts ...grpc.CallOption) (*RelayAlertResponse, error)
+	// 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+	ReportAlert(ctx context.Context, in *ReportAlertRequest, opts ...grpc.CallOption) (*ReportAlertResponse, error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MeshPacket, MeshPacket], error)
 }
@@ -79,6 +82,16 @@ func (c *panelServiceClient) RelayAlert(ctx context.Context, in *RelayAlertReque
 	return out, nil
 }
 
+func (c *panelServiceClient) ReportAlert(ctx context.Context, in *ReportAlertRequest, opts ...grpc.CallOption) (*ReportAlertResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportAlertResponse)
+	err := c.cc.Invoke(ctx, PanelService_ReportAlert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *panelServiceClient) MeshRelay(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MeshPacket, MeshPacket], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &PanelService_ServiceDesc.Streams[0], PanelService_MeshRelay_FullMethodName, cOpts...)
@@ -104,6 +117,8 @@ type PanelServiceServer interface {
 	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(context.Context, *RelayAlertRequest) (*RelayAlertResponse, error)
+	// 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+	ReportAlert(context.Context, *ReportAlertRequest) (*ReportAlertResponse, error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error
 	mustEmbedUnimplementedPanelServiceServer()
@@ -124,6 +139,9 @@ func (UnimplementedPanelServiceServer) RenewCertificate(context.Context, *RenewC
 }
 func (UnimplementedPanelServiceServer) RelayAlert(context.Context, *RelayAlertRequest) (*RelayAlertResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RelayAlert not implemented")
+}
+func (UnimplementedPanelServiceServer) ReportAlert(context.Context, *ReportAlertRequest) (*ReportAlertResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportAlert not implemented")
 }
 func (UnimplementedPanelServiceServer) MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error {
 	return status.Error(codes.Unimplemented, "method MeshRelay not implemented")
@@ -203,6 +221,24 @@ func _PanelService_RelayAlert_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PanelService_ReportAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportAlertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PanelServiceServer).ReportAlert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PanelService_ReportAlert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PanelServiceServer).ReportAlert(ctx, req.(*ReportAlertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PanelService_MeshRelay_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(PanelServiceServer).MeshRelay(&grpc.GenericServerStream[MeshPacket, MeshPacket]{ServerStream: stream})
 }
@@ -228,6 +264,10 @@ var PanelService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RelayAlert",
 			Handler:    _PanelService_RelayAlert_Handler,
+		},
+		{
+			MethodName: "ReportAlert",
+			Handler:    _PanelService_ReportAlert_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

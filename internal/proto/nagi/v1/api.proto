@@ -263,6 +263,8 @@ service SettingsService {
   rpc DisableTOTP(DisableTOTPRequest) returns (Security);
   // 开启（生成新的随机路径）或关闭安全入口。
   rpc SetEntrance(SetEntranceRequest) returns (Security);
+  // 活动记录：用户的操作和告警，新的在前。
+  rpc ListActivity(ListActivityRequest) returns (ListActivityResponse);
 }
 
 message GetSecurityRequest {}
@@ -571,6 +573,33 @@ message StandbyPanel {
   google.protobuf.Timestamp created_at = 4;
   bool connected = 5;
   google.protobuf.Timestamp last_sync = 6;
+}
+
+message ListActivityRequest {
+  // operation、alert，空表示全部。
+  string kind = 1;
+  // 只返回 ID 小于它的记录（翻页），0 表示从最新的开始。
+  int64 before = 2;
+  int32 limit = 3;
+}
+
+message ActivityEntry {
+  int64 id = 1;
+  google.protobuf.Timestamp time = 2;
+  string kind = 3;
+  // 操作的用户，或发出告警的节点。
+  string actor = 4;
+  // 操作是接口方法名（例如 Deploy），告警是 firing 或 resolved。
+  string action = 5;
+  string project_id = 6;
+  string target = 7;
+  // 告警的标题；操作失败时的错误信息。
+  string detail = 8;
+  bool failed = 9;
+}
+
+message ListActivityResponse {
+  repeated ActivityEntry entries = 1;
 }
 
 message RemoveStandbyRequest {

@@ -40,6 +40,9 @@ const (
 	PanelServiceRenewCertificateProcedure = "/nagi.v1.PanelService/RenewCertificate"
 	// PanelServiceRelayAlertProcedure is the fully-qualified name of the PanelService's RelayAlert RPC.
 	PanelServiceRelayAlertProcedure = "/nagi.v1.PanelService/RelayAlert"
+	// PanelServiceReportAlertProcedure is the fully-qualified name of the PanelService's ReportAlert
+	// RPC.
+	PanelServiceReportAlertProcedure = "/nagi.v1.PanelService/ReportAlert"
 	// PanelServiceMeshRelayProcedure is the fully-qualified name of the PanelService's MeshRelay RPC.
 	PanelServiceMeshRelayProcedure = "/nagi.v1.PanelService/MeshRelay"
 )
@@ -52,6 +55,8 @@ type PanelServiceClient interface {
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error)
+	// 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+	ReportAlert(context.Context, *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(context.Context) *connect.BidiStreamForClient[v1.MeshPacket, v1.MeshPacket]
 }
@@ -85,6 +90,12 @@ func NewPanelServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(panelServiceMethods.ByName("RelayAlert")),
 			connect.WithClientOptions(opts...),
 		),
+		reportAlert: connect.NewClient[v1.ReportAlertRequest, v1.ReportAlertResponse](
+			httpClient,
+			baseURL+PanelServiceReportAlertProcedure,
+			connect.WithSchema(panelServiceMethods.ByName("ReportAlert")),
+			connect.WithClientOptions(opts...),
+		),
 		meshRelay: connect.NewClient[v1.MeshPacket, v1.MeshPacket](
 			httpClient,
 			baseURL+PanelServiceMeshRelayProcedure,
@@ -99,6 +110,7 @@ type panelServiceClient struct {
 	report           *connect.Client[v1.ReportRequest, v1.ReportResponse]
 	renewCertificate *connect.Client[v1.RenewCertificateRequest, v1.RenewCertificateResponse]
 	relayAlert       *connect.Client[v1.RelayAlertRequest, v1.RelayAlertResponse]
+	reportAlert      *connect.Client[v1.ReportAlertRequest, v1.ReportAlertResponse]
 	meshRelay        *connect.Client[v1.MeshPacket, v1.MeshPacket]
 }
 
@@ -117,6 +129,11 @@ func (c *panelServiceClient) RelayAlert(ctx context.Context, req *connect.Reques
 	return c.relayAlert.CallUnary(ctx, req)
 }
 
+// ReportAlert calls nagi.v1.PanelService.ReportAlert.
+func (c *panelServiceClient) ReportAlert(ctx context.Context, req *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error) {
+	return c.reportAlert.CallUnary(ctx, req)
+}
+
 // MeshRelay calls nagi.v1.PanelService.MeshRelay.
 func (c *panelServiceClient) MeshRelay(ctx context.Context) *connect.BidiStreamForClient[v1.MeshPacket, v1.MeshPacket] {
 	return c.meshRelay.CallBidiStream(ctx)
@@ -130,6 +147,8 @@ type PanelServiceHandler interface {
 	RenewCertificate(context.Context, *connect.Request[v1.RenewCertificateRequest]) (*connect.Response[v1.RenewCertificateResponse], error)
 	// 节点直接发送告警失败时，请面板代发到指定的渠道。
 	RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error)
+	// 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+	ReportAlert(context.Context, *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(context.Context, *connect.BidiStream[v1.MeshPacket, v1.MeshPacket]) error
 }
@@ -159,6 +178,12 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(panelServiceMethods.ByName("RelayAlert")),
 		connect.WithHandlerOptions(opts...),
 	)
+	panelServiceReportAlertHandler := connect.NewUnaryHandler(
+		PanelServiceReportAlertProcedure,
+		svc.ReportAlert,
+		connect.WithSchema(panelServiceMethods.ByName("ReportAlert")),
+		connect.WithHandlerOptions(opts...),
+	)
 	panelServiceMeshRelayHandler := connect.NewBidiStreamHandler(
 		PanelServiceMeshRelayProcedure,
 		svc.MeshRelay,
@@ -173,6 +198,8 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 			panelServiceRenewCertificateHandler.ServeHTTP(w, r)
 		case PanelServiceRelayAlertProcedure:
 			panelServiceRelayAlertHandler.ServeHTTP(w, r)
+		case PanelServiceReportAlertProcedure:
+			panelServiceReportAlertHandler.ServeHTTP(w, r)
 		case PanelServiceMeshRelayProcedure:
 			panelServiceMeshRelayHandler.ServeHTTP(w, r)
 		default:
@@ -194,6 +221,10 @@ func (UnimplementedPanelServiceHandler) RenewCertificate(context.Context, *conne
 
 func (UnimplementedPanelServiceHandler) RelayAlert(context.Context, *connect.Request[v1.RelayAlertRequest]) (*connect.Response[v1.RelayAlertResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.RelayAlert is not implemented"))
+}
+
+func (UnimplementedPanelServiceHandler) ReportAlert(context.Context, *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.ReportAlert is not implemented"))
 }
 
 func (UnimplementedPanelServiceHandler) MeshRelay(context.Context, *connect.BidiStream[v1.MeshPacket, v1.MeshPacket]) error {

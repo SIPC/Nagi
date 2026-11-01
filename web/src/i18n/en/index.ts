@@ -4,6 +4,7 @@ import app from "./app";
 import auth from "./auth";
 import settings from "./settings";
 import access from "./access";
+import activity from "./activity";
 import alerts from "./alerts";
 import invite from "./invite";
 import mesh from "./mesh";
@@ -27,6 +28,7 @@ export default {
   auth,
   settings,
   access,
+  activity,
   alerts,
   invite,
   mesh,

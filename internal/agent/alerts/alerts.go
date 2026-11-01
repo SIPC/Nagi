@@ -38,6 +38,8 @@ type Engine struct {
 	docker      *docker.Client
 	projectName func(id string) string
 	relay       Relay
+	// Report 告诉面板发出了一条告警，记入活动记录。发送结果不影响告警本身。
+	Report func(context.Context, *nagiv1.Alert)
 	// Domains 返回现在还在用的域名（项目映射和面板域名），只检查这些域名的证书。为 nil 时检查全部。
 	Domains func() map[string]bool
 
@@ -508,6 +510,9 @@ func (e *Engine) setResolved(key string) *nagiv1.Alert {
 // 发送时不持有 e.mu，避免网络慢的时候卡住配置下发。
 func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 	e.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle())
+	if e.Report != nil {
+		go e.Report(context.WithoutCancel(ctx), a)
+	}
 	e.mu.Lock()
 	chans := e.channels()
 	e.mu.Unlock()

@@ -510,6 +510,90 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionR
 	return i, err
 }
 
+const insertActivity = `-- name: InsertActivity :exec
+INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertActivityParams struct {
+	CreatedAt int64
+	Kind      string
+	Actor     string
+	Action    string
+	ProjectID string
+	Target    string
+	Detail    string
+	Failed    int64
+}
+
+func (q *Queries) InsertActivity(ctx context.Context, arg InsertActivityParams) error {
+	_, err := q.db.ExecContext(ctx, insertActivity,
+		arg.CreatedAt,
+		arg.Kind,
+		arg.Actor,
+		arg.Action,
+		arg.ProjectID,
+		arg.Target,
+		arg.Detail,
+		arg.Failed,
+	)
+	return err
+}
+
+const pruneActivity = `-- name: PruneActivity :exec
+DELETE FROM activity WHERE id <= (SELECT MAX(id) FROM activity) - ?
+`
+
+func (q *Queries) PruneActivity(ctx context.Context, keep interface{}) error {
+	_, err := q.db.ExecContext(ctx, pruneActivity, keep)
+	return err
+}
+
+const listActivity = `-- name: ListActivity :many
+SELECT id, created_at, kind, actor, action, project_id, target, detail, failed FROM activity
+WHERE (?1 = '' OR kind = ?1) AND (?2 = 0 OR id < ?2)
+ORDER BY id DESC LIMIT ?3
+`
+
+type ListActivityParams struct {
+	Kind   interface{}
+	Before interface{}
+	Limit  int64
+}
+
+func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]Activity, error) {
+	rows, err := q.db.QueryContext(ctx, listActivity, arg.Kind, arg.Before, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Activity{}
+	for rows.Next() {
+		var i Activity
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Actor,
+			&i.Action,
+			&i.ProjectID,
+			&i.Target,
+			&i.Detail,
+			&i.Failed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSetting = `-- name: GetSetting :one
 SELECT value FROM settings WHERE key = ?
 `

@@ -14,6 +14,8 @@ service PanelService {
   rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
   // 节点直接发送告警失败时，请面板代发到指定的渠道。
   rpc RelayAlert(RelayAlertRequest) returns (RelayAlertResponse);
+  // 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+  rpc ReportAlert(ReportAlertRequest) returns (ReportAlertResponse);
   // mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
   rpc MeshRelay(stream MeshPacket) returns (stream MeshPacket);
 }
@@ -44,6 +46,12 @@ message RelayAlertRequest {
 }
 
 message RelayAlertResponse {}
+
+message ReportAlertRequest {
+  Alert alert = 1;
+}
+
+message ReportAlertResponse {}
 
 message RenewCertificateRequest {
   bytes csr = 1;

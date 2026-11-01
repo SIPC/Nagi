@@ -1259,6 +1259,7 @@ const (
 	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
 	SettingsService_DisableTOTP_FullMethodName       = "/nagi.v1.SettingsService/DisableTOTP"
 	SettingsService_SetEntrance_FullMethodName       = "/nagi.v1.SettingsService/SetEntrance"
+	SettingsService_ListActivity_FullMethodName      = "/nagi.v1.SettingsService/ListActivity"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -1298,6 +1299,8 @@ type SettingsServiceClient interface {
 	DisableTOTP(ctx context.Context, in *DisableTOTPRequest, opts ...grpc.CallOption) (*Security, error)
 	// 开启（生成新的随机路径）或关闭安全入口。
 	SetEntrance(ctx context.Context, in *SetEntranceRequest, opts ...grpc.CallOption) (*Security, error)
+	// 活动记录：用户的操作和告警，新的在前。
+	ListActivity(ctx context.Context, in *ListActivityRequest, opts ...grpc.CallOption) (*ListActivityResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -1508,6 +1511,16 @@ func (c *settingsServiceClient) SetEntrance(ctx context.Context, in *SetEntrance
 	return out, nil
 }
 
+func (c *settingsServiceClient) ListActivity(ctx context.Context, in *ListActivityRequest, opts ...grpc.CallOption) (*ListActivityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListActivityResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -1545,6 +1558,8 @@ type SettingsServiceServer interface {
 	DisableTOTP(context.Context, *DisableTOTPRequest) (*Security, error)
 	// 开启（生成新的随机路径）或关闭安全入口。
 	SetEntrance(context.Context, *SetEntranceRequest) (*Security, error)
+	// 活动记录：用户的操作和告警，新的在前。
+	ListActivity(context.Context, *ListActivityRequest) (*ListActivityResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -1614,6 +1629,9 @@ func (UnimplementedSettingsServiceServer) DisableTOTP(context.Context, *DisableT
 }
 func (UnimplementedSettingsServiceServer) SetEntrance(context.Context, *SetEntranceRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetEntrance not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListActivity(context.Context, *ListActivityRequest) (*ListActivityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListActivity not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -1996,6 +2014,24 @@ func _SettingsService_SetEntrance_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_ListActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListActivity(ctx, req.(*ListActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2082,6 +2118,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetEntrance",
 			Handler:    _SettingsService_SetEntrance_Handler,
+		},
+		{
+			MethodName: "ListActivity",
+			Handler:    _SettingsService_ListActivity_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

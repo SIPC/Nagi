@@ -189,6 +189,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
+	a.alerts.Report = a.reportAlert
 	a.alerts.Domains = func() map[string]bool {
 		routes, err := a.allRoutes(context.Background())
 		if err != nil {
@@ -347,6 +348,21 @@ func (a *agent) relayAlert(ctx context.Context, panel string, al *nagiv1.Alert, 
 	defer cancel()
 	_, err := c.RelayAlert(ctx, &nagiv1.RelayAlertRequest{Alert: al, ChannelIds: channelIDs})
 	return err
+}
+
+// reportAlert 把发出的告警告诉所有连着的面板。旧版面板没有这个接口，失败就算了。
+func (a *agent) reportAlert(ctx context.Context, al *nagiv1.Alert) {
+	a.mu.Lock()
+	list := make([]nagiv1.PanelServiceClient, 0, len(a.panels))
+	for _, c := range a.panels {
+		list = append(list, c)
+	}
+	a.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	for _, c := range list {
+		_, _ = c.ReportAlert(ctx, &nagiv1.ReportAlertRequest{Alert: al})
+	}
 }
 
 // proxyLoop 在项目或容器变化时重新生成 Caddy 配置；另外每 15 秒检查一次，及时发现新拿到的证书。

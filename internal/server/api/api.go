@@ -66,6 +66,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	if a.Panel.Standby != nil {
 		chain = append(chain, readOnly{a})
 	}
+	chain = append(chain, activityLog{a})
 	interceptors := connect.WithHandlerOptions(
 		connect.WithInterceptors(chain...),
 		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。

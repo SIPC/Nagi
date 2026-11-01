@@ -146,19 +146,69 @@ func (r *Registry) allowRelay(nodeID string) bool {
 	if r.relayed == nil {
 		r.relayed = map[string][]time.Time{}
 	}
+	return allowWithin(r.relayed, nodeID, relayLimit)
+}
+
+func (r *Registry) allowReport(nodeID string) bool {
+	r.relayMu.Lock()
+	defer r.relayMu.Unlock()
+	if r.reported == nil {
+		r.reported = map[string][]time.Time{}
+	}
+	return allowWithin(r.reported, nodeID, 2*relayLimit)
+}
+
+// allowWithin 判断 relayWindow 内的次数有没有到上限，没到就记一次。调用方持有 relayMu。
+func allowWithin(seen map[string][]time.Time, nodeID string, limit int) bool {
 	now := time.Now()
-	recent := r.relayed[nodeID][:0]
-	for _, t := range r.relayed[nodeID] {
+	recent := seen[nodeID][:0]
+	for _, t := range seen[nodeID] {
 		if now.Sub(t) < relayWindow {
 			recent = append(recent, t)
 		}
 	}
-	if len(recent) >= relayLimit {
-		r.relayed[nodeID] = recent
+	if len(recent) >= limit {
+		seen[nodeID] = recent
 		return false
 	}
-	r.relayed[nodeID] = append(recent, now)
+	seen[nodeID] = append(recent, now)
 	return true
+}
+
+// ReportAlert 把节点发出的告警记入活动记录。限制频率和长度：节点不一定可信。
+func (p *panelService) ReportAlert(ctx context.Context, req *nagiv1.ReportAlertRequest) (*nagiv1.ReportAlertResponse, error) {
+	if p.conn.Pending() {
+		return nil, status.Error(codes.PermissionDenied, "节点还没有批准")
+	}
+	if !p.r.allowReport(p.conn.NodeID) {
+		return nil, status.Error(codes.ResourceExhausted, "上报的告警太多，稍后再试")
+	}
+	name := p.conn.NodeID
+	if node, err := p.r.q.GetNode(ctx, p.conn.NodeID); err == nil && node.Name != "" {
+		name = node.Name
+	}
+	a := req.GetAlert()
+	p.r.recordAlert(ctx, name, a)
+	return &nagiv1.ReportAlertResponse{}, nil
+}
+
+// recordAlert 把告警写进活动记录。
+func (r *Registry) recordAlert(ctx context.Context, node string, a *nagiv1.Alert) {
+	action := "firing"
+	if a.GetStatus() == "resolved" {
+		action = "resolved"
+	}
+	err := r.q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
+		CreatedAt: time.Now().Unix(),
+		Kind:      "alert",
+		Actor:     clipText(node, 64),
+		Action:    action,
+		Target:    clipText(a.GetProject(), 64),
+		Detail:    clipText(a.GetTitle(), 120),
+	})
+	if err != nil {
+		r.log.Warn("写入活动记录失败", "err", err)
+	}
 }
 
 func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertRequest) (*nagiv1.RelayAlertResponse, error) {
@@ -252,6 +302,7 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 
 func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
 	r.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle(), "node", a.GetNode())
+	r.recordAlert(ctx, a.GetNode(), a)
 	if err := r.SendAlert(ctx, a, nil); err != nil {
 		r.log.Warn("发送告警失败", "err", err)
 	}

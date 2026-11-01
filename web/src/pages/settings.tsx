@@ -8,6 +8,7 @@ import { PanelAccessCard } from "@/pages/access";
 import { UpdateCard, UpdateDot } from "@/pages/update";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
+import { ActivityCard } from "@/pages/activity";
 
 // 设置页：左边二级菜单，右边只显示选中的一组（参照 OpenAI 平台、Render 的设置页）。选中的一组记在地址的 tab 参数里。
 
@@ -15,6 +16,7 @@ export const settingsTabs = [
   { value: "access", label: t.settings.tabs.access.label, description: t.settings.tabs.access.description },
   { value: "security", label: t.settings.tabs.security.label, description: t.settings.tabs.security.description },
   { value: "alerts", label: t.settings.tabs.alerts.label, description: t.settings.tabs.alerts.description },
+  { value: "activity", label: t.settings.tabs.activity.label, description: t.settings.tabs.activity.description },
   { value: "standby", label: t.settings.tabs.standby.label, description: t.settings.tabs.standby.description },
   { value: "invite", label: t.settings.tabs.invite.label, description: t.settings.tabs.invite.description },
   { value: "mesh", label: t.settings.tabs.mesh.label, description: t.settings.tabs.mesh.description },
@@ -53,6 +55,7 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
           {cur.value === "access" && <PanelAccessCard />}
           {cur.value === "security" && <SecurityCard />}
           {cur.value === "alerts" && <AlertSettings />}
+          {cur.value === "activity" && <ActivityCard />}
           {cur.value === "standby" && <StandbyCard />}
           {cur.value === "invite" && <InviteCard />}
           {cur.value === "mesh" && <PanelMeshCard />}

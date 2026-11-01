@@ -47,8 +47,9 @@ type Registry struct {
 	meshName string
 	witness  *witness
 
-	relayMu sync.Mutex
-	relayed map[string][]time.Time // 每个节点最近代发告警的时间
+	relayMu  sync.Mutex
+	relayed  map[string][]time.Time // 每个节点最近代发告警的时间
+	reported map[string][]time.Time // 节点上报告警的时间，用于限制频率
 
 	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)

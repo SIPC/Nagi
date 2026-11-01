@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiJgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSCwoDY3NyGAEgASgMIi8KGFJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRITCgtjZXJ0aWZpY2F0ZRgBIAEoDCK6AgoNUmVwb3J0UmVxdWVzdBIfCgRub2RlGAEgASgLMhEubmFnaS52MS5Ob2RlSW5mbxIfCgRtZXNoGAIgASgLMhEubmFnaS52MS5NZXNoSW5mbxIsCgpjb250YWluZXJzGAMgAygLMhgubmFnaS52MS5Db250YWluZXJTdGF0dXMSKgoJZmFpbG92ZXJzGAQgAygLMhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cxIhCgV1c2FnZRgFIAEoCzISLm5hZ2kudjEuTm9kZVVzYWdlEgwKBHRlcm0YBiABKAQSDwoHcHJpbWFyeRgHIAEoCRIXCg9wcmltYXJ5X2FkZHJlc3MYCCABKAkSDgoGcGFuZWxzGAkgAygJEiIKBWNlcnRzGAogAygLMhMubmFnaS52MS5Eb21haW5DZXJ0IlsKDlJlcG9ydFJlc3BvbnNlEiEKBG1lc2gYASABKAsyEy5uYWdpLnYxLk1lc2hDb25maWcSJgoHY2x1c3RlchgCIAEoCzIVLm5hZ2kudjEuUGFuZWxDbHVzdGVyImUKDFBhbmVsQ2x1c3RlchIMCgR0ZXJtGAEgASgEEg8KB3ByaW1hcnkYAiABKAkSJQoGcGFuZWxzGAMgAygLMhUubmFnaS52MS5DbHVzdGVyUGFuZWwSDwoHcmVtb3ZlZBgEIAMoCSI0CgxDbHVzdGVyUGFuZWwSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCTKkAgoMUGFuZWxTZXJ2aWNlEjkKBlJlcG9ydBIWLm5hZ2kudjEuUmVwb3J0UmVxdWVzdBoXLm5hZ2kudjEuUmVwb3J0UmVzcG9uc2USVwoQUmVuZXdDZXJ0aWZpY2F0ZRIgLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QaIS5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRJFCgpSZWxheUFsZXJ0EhoubmFnaS52MS5SZWxheUFsZXJ0UmVxdWVzdBobLm5hZ2kudjEuUmVsYXlBbGVydFJlc3BvbnNlEjkKCU1lc2hSZWxheRITLm5hZ2kudjEuTWVzaFBhY2tldBoTLm5hZ2kudjEuTWVzaFBhY2tldCgBMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiMwoSUmVwb3J0QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydCIVChNSZXBvcnRBbGVydFJlc3BvbnNlIiYKF1JlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0EgsKA2NzchgBIAEoDCIvChhSZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USEwoLY2VydGlmaWNhdGUYASABKAwiugIKDVJlcG9ydFJlcXVlc3QSHwoEbm9kZRgBIAEoCzIRLm5hZ2kudjEuTm9kZUluZm8SHwoEbWVzaBgCIAEoCzIRLm5hZ2kudjEuTWVzaEluZm8SLAoKY29udGFpbmVycxgDIAMoCzIYLm5hZ2kudjEuQ29udGFpbmVyU3RhdHVzEioKCWZhaWxvdmVycxgEIAMoCzIXLm5hZ2kudjEuRmFpbG92ZXJTdGF0dXMSIQoFdXNhZ2UYBSABKAsyEi5uYWdpLnYxLk5vZGVVc2FnZRIMCgR0ZXJtGAYgASgEEg8KB3ByaW1hcnkYByABKAkSFwoPcHJpbWFyeV9hZGRyZXNzGAggASgJEg4KBnBhbmVscxgJIAMoCRIiCgVjZXJ0cxgKIAMoCzITLm5hZ2kudjEuRG9tYWluQ2VydCJbCg5SZXBvcnRSZXNwb25zZRIhCgRtZXNoGAEgASgLMhMubmFnaS52MS5NZXNoQ29uZmlnEiYKB2NsdXN0ZXIYAiABKAsyFS5uYWdpLnYxLlBhbmVsQ2x1c3RlciJlCgxQYW5lbENsdXN0ZXISDAoEdGVybRgBIAEoBBIPCgdwcmltYXJ5GAIgASgJEiUKBnBhbmVscxgDIAMoCzIVLm5hZ2kudjEuQ2x1c3RlclBhbmVsEg8KB3JlbW92ZWQYBCADKAkiNAoMQ2x1c3RlclBhbmVsEg8KB2FkZHJlc3MYASABKAkSEwoLZmluZ2VycHJpbnQYAiABKAky7gIKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USRQoKUmVsYXlBbGVydBIaLm5hZ2kudjEuUmVsYXlBbGVydFJlcXVlc3QaGy5uYWdpLnYxLlJlbGF5QWxlcnRSZXNwb25zZRJICgtSZXBvcnRBbGVydBIbLm5hZ2kudjEuUmVwb3J0QWxlcnRSZXF1ZXN0GhwubmFnaS52MS5SZXBvcnRBbGVydFJlc3BvbnNlEjkKCU1lc2hSZWxheRITLm5hZ2kudjEuTWVzaFBhY2tldBoTLm5hZ2kudjEuTWVzaFBhY2tldCgBMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.MeshPacket
@@ -132,6 +132,36 @@ export const RelayAlertResponseSchema: GenMessage<RelayAlertResponse> = /*@__PUR
   messageDesc(file_nagi_v1_panel, 4);
 
 /**
+ * @generated from message nagi.v1.ReportAlertRequest
+ */
+export type ReportAlertRequest = Message<"nagi.v1.ReportAlertRequest"> & {
+  /**
+   * @generated from field: nagi.v1.Alert alert = 1;
+   */
+  alert?: Alert | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.ReportAlertRequest.
+ * Use `create(ReportAlertRequestSchema)` to create a new message.
+ */
+export const ReportAlertRequestSchema: GenMessage<ReportAlertRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 5);
+
+/**
+ * @generated from message nagi.v1.ReportAlertResponse
+ */
+export type ReportAlertResponse = Message<"nagi.v1.ReportAlertResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.ReportAlertResponse.
+ * Use `create(ReportAlertResponseSchema)` to create a new message.
+ */
+export const ReportAlertResponseSchema: GenMessage<ReportAlertResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 6);
+
+/**
  * @generated from message nagi.v1.RenewCertificateRequest
  */
 export type RenewCertificateRequest = Message<"nagi.v1.RenewCertificateRequest"> & {
@@ -146,7 +176,7 @@ export type RenewCertificateRequest = Message<"nagi.v1.RenewCertificateRequest">
  * Use `create(RenewCertificateRequestSchema)` to create a new message.
  */
 export const RenewCertificateRequestSchema: GenMessage<RenewCertificateRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 5);
+  messageDesc(file_nagi_v1_panel, 7);
 
 /**
  * @generated from message nagi.v1.RenewCertificateResponse
@@ -163,7 +193,7 @@ export type RenewCertificateResponse = Message<"nagi.v1.RenewCertificateResponse
  * Use `create(RenewCertificateResponseSchema)` to create a new message.
  */
 export const RenewCertificateResponseSchema: GenMessage<RenewCertificateResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 6);
+  messageDesc(file_nagi_v1_panel, 8);
 
 /**
  * @generated from message nagi.v1.ReportRequest
@@ -240,7 +270,7 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
  * Use `create(ReportRequestSchema)` to create a new message.
  */
 export const ReportRequestSchema: GenMessage<ReportRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 7);
+  messageDesc(file_nagi_v1_panel, 9);
 
 /**
  * @generated from message nagi.v1.ReportResponse
@@ -264,7 +294,7 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
  * Use `create(ReportResponseSchema)` to create a new message.
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 8);
+  messageDesc(file_nagi_v1_panel, 10);
 
 /**
  * PanelCluster：任期、主面板，以及主面板和所有备用面板。节点只执行主面板的修改，自动连接备用面板。
@@ -302,7 +332,7 @@ export type PanelCluster = Message<"nagi.v1.PanelCluster"> & {
  * Use `create(PanelClusterSchema)` to create a new message.
  */
 export const PanelClusterSchema: GenMessage<PanelCluster> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 9);
+  messageDesc(file_nagi_v1_panel, 11);
 
 /**
  * @generated from message nagi.v1.ClusterPanel
@@ -324,7 +354,7 @@ export type ClusterPanel = Message<"nagi.v1.ClusterPanel"> & {
  * Use `create(ClusterPanelSchema)` to create a new message.
  */
 export const ClusterPanelSchema: GenMessage<ClusterPanel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 10);
+  messageDesc(file_nagi_v1_panel, 12);
 
 /**
  * PanelService：节点调用面板，走控制连接。
@@ -361,6 +391,16 @@ export const PanelService: GenService<{
     methodKind: "unary";
     input: typeof RelayAlertRequestSchema;
     output: typeof RelayAlertResponseSchema;
+  },
+  /**
+   * 告警发出时告诉面板，记入活动记录。只是记录，不发送。
+   *
+   * @generated from rpc nagi.v1.PanelService.ReportAlert
+   */
+  reportAlert: {
+    methodKind: "unary";
+    input: typeof ReportAlertRequestSchema;
+    output: typeof ReportAlertResponseSchema;
   },
   /**
    * mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。

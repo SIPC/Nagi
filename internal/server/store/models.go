@@ -8,6 +8,18 @@ import (
 	"database/sql"
 )
 
+type Activity struct {
+	ID        int64
+	CreatedAt int64
+	Kind      string
+	Actor     string
+	Action    string
+	ProjectID string
+	Target    string
+	Detail    string
+	Failed    int64
+}
+
 type Container struct {
 	ProjectID       string
 	Name            string
