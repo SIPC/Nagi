@@ -257,7 +257,7 @@ export function ProjectsPage() {
 }
 
 // useNodeChoice：选择容器运行的节点和容器目录（留空时显示默认值）。新建项目和添加容器共用。
-// useDefaultDir 返回容器在节点上的默认目录：<节点的项目根目录>/<项目名的拼音>/<容器名>（见 docs/agent.md#容器目录）。
+// useDefaultDir 返回容器在节点上的默认目录：<节点的项目根目录>/<项目网络名>/<容器名>（见 docs/agent.md#容器目录）。
 //   - 项目在这个节点上已经有容器时，沿用它们所在的项目文件夹；
 //   - 项目文件夹被别的项目用了（例如两个项目重名），在后面加 -2、-3……
 // 留空提交时就用这个路径（界面上看到的就是实际用的）。
@@ -327,7 +327,7 @@ export function NewProjectPage() {
   const [withContainer, setWithContainer] = useState(true);
   const [containerName, setContainerName] = useState("");
   const container = useContainerForm(true);
-  const node = useNodeChoice({ projectName: name || "shop", container: containerName || "web" });
+  const node = useNodeChoice({ projectName: network.trim() || name || "shop", container: containerName || "web" });
   useUnsaved({ name, network, withContainer, containerName, container: container.build() });
   const errorRef = useRef<HTMLDivElement>(null);
 

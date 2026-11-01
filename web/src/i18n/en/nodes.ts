@@ -6,8 +6,8 @@ export default {
     metrics: "Monitoring",
     settings: "Settings",
     replicas: "Replicas",
-    panels: "Trusted panels",
-    mesh: "Mesh",
+    panels: "Managing panels",
+    mesh: "Node network",
   },
   approveConfirm: (name, address) =>
     `Approve node ${name} (${address})? The node will join the mesh and can be managed by the panel. It joined with an invite code, which anyone could use if leaked, so make sure it's your machine.`,

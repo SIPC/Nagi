@@ -220,15 +220,17 @@ export function AlertSettings() {
       </Section>
 
       <Section title={t.alerts.rules} help={t.alerts.rulesHelp}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {ruleField(t.alerts.rule.diskPercent, "diskPercent", 90)}
-          {ruleField(t.alerts.rule.memPercent, "memPercent", 90)}
-          {ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)}
-          {ruleField(t.alerts.rule.restartCount, "restartCount", 3)}
-          {ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10)}
-          {ruleField(t.alerts.rule.certDays, "certDays", 7)}
-          {ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60)}
-          {ruleField(t.alerts.rule.errorPercent, "errorPercent", 5)}
+        <div className="grid gap-5">
+          {[
+            { title: t.alerts.ruleGroups.resources, fields: [ruleField(t.alerts.rule.diskPercent, "diskPercent", 90), ruleField(t.alerts.rule.memPercent, "memPercent", 90), ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)] },
+            { title: t.alerts.ruleGroups.containers, fields: [ruleField(t.alerts.rule.restartCount, "restartCount", 3), ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10), ruleField(t.alerts.rule.errorPercent, "errorPercent", 5)] },
+            { title: t.alerts.ruleGroups.availability, fields: [ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60), ruleField(t.alerts.rule.certDays, "certDays", 7)] },
+          ].map((g) => (
+            <div key={g.title} className="grid gap-3">
+              <h3 className="text-[13px] font-medium text-muted-foreground">{g.title}</h3>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{g.fields}</div>
+            </div>
+          ))}
         </div>
       </Section>
 

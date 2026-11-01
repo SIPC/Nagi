@@ -197,7 +197,11 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
               <Plus />
               {t.nodes.addNode}
             </Button>
-            {list.length > 0 && <Menu items={[{ label: t.nodes.handover, onSelect: () => setDialog("handover") }]} />}
+            {list.length > 0 && (
+              <Button variant="outline" onClick={() => setDialog("handover")}>
+                {t.nodes.handover}
+              </Button>
+            )}
           </>
         }
       />

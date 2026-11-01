@@ -2,7 +2,7 @@
 export default {
   routes: {
     title: "端口映射",
-    description: "经 Caddy 对外开放容器端口或绑定域名，保存后立即生效。",
+    description: "对外开放容器端口或绑定域名，保存后立即生效。",
     help: "无需重新部署。映射默认位于容器所在节点，容器迁移或由其他节点顶替时随之转移；也可以选择其他入口节点，外部请求从那里转发到容器。compose 中新增的 ports 在部署时自动导入。",
     add: "添加映射",
     edit: (name: string) => `编辑映射 ${name}`,

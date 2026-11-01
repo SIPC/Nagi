@@ -55,8 +55,11 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
         <PageHeader
           title={
             <>
-              {p.name}
-              <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
+              <span className="hidden xl:inline">{t.project.sections.overview}</span>
+              <span className="xl:hidden">{p.name}</span>
+              <span className="flex items-center gap-3 xl:hidden">
+                <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
+              </span>
               {p.stateful && <Badge>{t.project.stateful}</Badge>}
             </>
           }

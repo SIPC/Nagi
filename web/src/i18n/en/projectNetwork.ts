@@ -3,7 +3,7 @@ import type zh from "../zh/projectNetwork";
 export default {
   routes: {
     title: "Port mappings",
-    description: "Expose container ports or bind domains through Caddy. Changes apply on save.",
+    description: "Expose container ports or bind domains. Changes apply on save.",
     help: "No redeployment needed. By default a mapping lives on the container's node and moves with it on migration or failover. You can also pick other entry nodes that forward external requests to the container. New ports in compose are imported on deploy.",
     add: "Add mapping",
     edit: (name) => `Edit mapping ${name}`,

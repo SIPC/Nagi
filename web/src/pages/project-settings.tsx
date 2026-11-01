@@ -212,7 +212,7 @@ function Deployments({ project }: { project: Project }) {
   });
 
   return (
-    <Section flush title={t.projectSettings.deployments.title} description={t.projectSettings.deployments.description}>
+    <Section flush title={t.projectSettings.deployments.title} description={t.projectSettings.deployments.description} help={t.projectSettings.deployments.numberHelp}>
       {output && <div className="pb-3 empty:hidden">{output}</div>}
       {list.isPending ? (
         <EmptyRow>

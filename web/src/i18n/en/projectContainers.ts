@@ -103,7 +103,7 @@ export default {
     nodeOfflineBody: (node) => `Node ${node} hosting this container is offline. Status may be out of date.`,
     hostNetworkTitle: "Uses host network",
     hostNetworkBody: (names) =>
-      `Not routed through Caddy and not on the project network: ${names}. Their ports are publicly exposed; configure a firewall yourself.`,
+      `Not routed through the panel proxy and not on the project network: ${names}. Their ports are publicly exposed; configure a firewall yourself.`,
     volumeBody: (names) =>
       `External or custom-driver volumes: ${names}. Snapshots, migration, and failover do not include their data.`,
     notDeployed: "Not deployed yet",
@@ -131,6 +131,7 @@ export default {
   },
   config: {
     notice: "Changes are saved as a draft and take effect after deployment.",
+    portsLink: "Port mappings are configured under Network on the project",
     composeHelp:
       "ports are imported as port mappings only when they first appear. Change existing published ports and domains in the Network tab; editing ports here has no effect.",
     git: "Git repository",
@@ -159,7 +160,7 @@ export default {
     saveDraft: "Save draft",
   },
   versions: {
-    intro: "Each deployment creates a version.",
+    intro: "Each deployment creates a version, with images pinned to their digests at deploy time.",
     restoreData: "Restore data on rollback",
     restoreDataHelp: "Also restores data/ and volumes/ to the snapshot taken before this version was deployed.",
     empty: "No versions",

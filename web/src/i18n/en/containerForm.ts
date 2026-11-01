@@ -15,7 +15,7 @@ export default {
   ports: "Published ports",
   portsHint: "Format: node port:container port, separated by spaces",
   portsHelp:
-    "For example 8080:80 53:53/udp. Converted to port mappings on first deployment and exposed via Caddy. Afterwards, edit them or bind domains on the Network tab.",
+    "For example 8080:80 53:53/udp. Converted to port mappings on first deployment and exposed. Afterwards, edit them or bind domains on the Network tab.",
   workdir: "Working directory",
   workdirHelp:
     "Mount path inside the container for the container's data/ directory (uploaded files or files pulled from Git). Leave empty to skip mounting.",

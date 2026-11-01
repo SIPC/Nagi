@@ -26,6 +26,7 @@ export default {
     deploy: "Deploy",
   },
   deployments: {
+    numberHelp: "Numbers are shared by all projects on the panel, so they may not be consecutive within a project.",
     title: "Deployment history",
     description: "Each deployment records every container's version. Restore the project to any past deployment.",
     empty: "No deployments yet",

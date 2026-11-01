@@ -24,6 +24,7 @@ export default {
     deploy: "部署",
   },
   deployments: {
+    numberHelp: "编号由面板内的所有项目共用，所以同一项目的编号可能不连续。",
     title: "部署记录",
     description: "每次部署记录所有容器的版本，可将项目恢复到任一次部署时的状态。",
     empty: "暂无部署记录",

@@ -7,8 +7,8 @@ export default {
     alerts: { label: "告警", description: "节点和容器异常时的通知渠道和触发规则。" },
     activity: { label: "活动记录", description: "面板上的操作和发出的告警，保留最近 5000 条。" },
     standby: { label: "备用面板", description: "实时同步本面板数据的备用面板，主面板故障时提升为主面板。" },
-    invite: { label: "接收移交", description: "其他面板向本面板移交节点时使用的接入码。" },
-    mesh: { label: "Mesh", description: "面板在 mesh 网络中的地址及与各节点的连接。" },
+    invite: { label: "接收节点", description: "其他面板向本面板移交节点时使用的接入码。" },
+    mesh: { label: "节点网络", description: "面板在节点专用网络中的地址及与各节点的连接。" },
     update: { label: "版本更新", description: "查看面板版本，一键更新到最新发布的版本。" },
   },
 };

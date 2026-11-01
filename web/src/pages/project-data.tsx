@@ -28,6 +28,7 @@ import {
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { confirmAction } from "@/components/confirm";
+import { Link } from "@tanstack/react-router";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -95,7 +96,14 @@ function Snapshots({
     <Section
       flush
       title={t.projectData.snapshots.title}
-      description={t.projectData.snapshots.description}
+      description={
+        <>
+          {t.projectData.snapshots.description} {t.projectData.snapshots.schedule(project.settings?.snapshotIntervalMinutes || 60)}{" "}
+          <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="underline underline-offset-2">
+            {t.projectData.snapshots.scheduleLink}
+          </Link>
+        </>
+      }
       help={t.projectData.snapshots.help}
       actions={
         deployed &&
@@ -241,7 +249,11 @@ function SnapshotList({
     <SnapshotTable
       snapshots={snapshots.data.snapshots}
       action={(id, kind) =>
-        (kind === "scheduled" || kind === "manual") && (
+        kind !== "scheduled" && kind !== "manual" ? (
+          <span className="text-xs text-muted-foreground" title={t.projectData.snapshots.viaVersionHint}>
+            {t.projectData.snapshots.viaVersion}
+          </span>
+        ) : (
           <Button
             size="xs"
             variant="ghost"
@@ -937,8 +949,7 @@ function Failover({
           </dd>
           <dt className="text-muted-foreground">{t.projectData.failover.lease}</dt>
           <dd>
-            {t.common.time.seconds(cfg.leaseSeconds || 30)}
-            {holder?.epoch ? t.projectData.failover.epoch(holder.epoch) : ""}
+            <span title={holder?.epoch ? t.projectData.failover.epoch(holder.epoch).trim() : undefined}>{t.common.time.seconds(cfg.leaseSeconds || 30)}</span>
           </dd>
           <dt className="text-muted-foreground">
             {t.projectData.failover.autoFailbackLabel}
@@ -1045,7 +1056,7 @@ function Failover({
   );
 }
 
-// DirInput：目标节点上的容器目录。占位文字是默认目录（项目根目录/项目名拼音/容器名），onDefault 告诉调用方，
+// DirInput：目标节点上的容器目录。占位文字是默认目录（项目根目录/网络名/容器名），onDefault 告诉调用方，
 // 不填时提交这个默认目录。
 function DirInput({
   id,
@@ -1064,7 +1075,7 @@ function DirInput({
   onChange: (v: string) => void;
   onDefault: (v: string) => void;
 }) {
-  const def = useDefaultDir(nodeId, project.id, project.name, container);
+  const def = useDefaultDir(nodeId, project.id, project.networkName, container);
   useEffect(() => onDefault(def), [def, onDefault]);
   return (
     <Input

@@ -16,6 +16,7 @@ export default {
   webhookUrl: "Webhook 地址",
   test: "测试",
   defaultValue: (v: number) => `默认 ${v}`,
+  ruleGroups: { resources: "资源占用", containers: "容器和请求", availability: "节点和证书" },
   rules: "触发规则",
   rulesHelp: "留空时使用默认值，即输入框中的灰色数字。",
   rule: {

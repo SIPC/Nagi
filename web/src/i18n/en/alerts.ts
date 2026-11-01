@@ -17,6 +17,7 @@ export default {
   webhookUrl: "Webhook URL",
   test: "Test",
   defaultValue: (v) => `Default ${v}`,
+  ruleGroups: { resources: "Resource usage", containers: "Containers and requests", availability: "Nodes and certificates" },
   rules: "Trigger rules",
   rulesHelp: "Leave a field empty to use its default value, shown in gray.",
   rule: {

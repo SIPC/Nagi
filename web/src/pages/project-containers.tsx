@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Download, Pause, Plus, Play, Rocket, RotateCw } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, formatTime, timeAgo } from "@/lib/utils";
@@ -161,8 +161,8 @@ function ContainersTable({
     <Section
       flush
       // 宽屏时下面的表格不显示，标题行下面不留空（部署输出自己带上边距）。
-      className="xl:[&>header]:mb-0"
-      title={t.projectContainers.table.title}
+      className="xl:[&>header]:mb-0 xl:[&>header_h2_button]:hidden"
+      title={<span className="xl:hidden">{t.projectContainers.table.title}</span>}
       // 宽屏时容器列在左边的项目栏里，这里只剩标题和操作一行。
       description={<span className="xl:hidden">{t.projectContainers.table.descriptionNarrow}</span>}
       help={t.projectContainers.table.help}
@@ -867,7 +867,12 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         save();
       }}
     >
-      <Notice>{t.projectContainers.config.notice}</Notice>
+      <Notice>
+        {t.projectContainers.config.notice}{" "}
+        <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "network" }} className="underline underline-offset-2">
+          {t.projectContainers.config.portsLink}
+        </Link>
+      </Notice>
       {container.hasDraft && <ConfigDiff deployed={container.config} draft={container.draft} />}
       {isForm ? (
         imageForm.fields
@@ -919,7 +924,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         </div>
       )}
       {error && <Alert>{error}</Alert>}
-      <div className="flex items-center justify-end gap-2 pt-2">
+      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t bg-background px-1 py-3">
         {container.hasDraft && (
           <Button variant="ghost" size="sm" onClick={discard} disabled={busy}>
             {t.projectContainers.config.discardDraft}
@@ -1035,7 +1040,7 @@ function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded
   const [busy, setBusy] = useState(false);
   const form = useContainerForm(project.containers.length === 0);
   useUnsaved({ name, config: form.build() });
-  const node = useNodeChoice({ projectId: project.id, projectName: project.name, container: name || "api", preferNodes: project.containers.map((m) => m.nodeId) });
+  const node = useNodeChoice({ projectId: project.id, projectName: project.networkName, container: name || "api", preferNodes: project.containers.map((m) => m.nodeId) });
 
   const add = async () => {
     setBusy(true);

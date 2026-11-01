@@ -100,7 +100,7 @@ export default {
   overview: {
     nodeOfflineBody: (node: string) => `容器所在节点 ${node} 离线，状态可能未及时更新。`,
     hostNetworkTitle: "使用 host 网络",
-    hostNetworkBody: (names: string) => `容器 ${names} 不经过 Caddy，不在项目内网中，端口对外开放，需自行配置防火墙。`,
+    hostNetworkBody: (names: string) => `容器 ${names} 不经过面板的代理，不在项目内网中，端口对外开放，需自行配置防火墙。`,
     volumeBody: (names: string) => `${names} 为 external 或使用自定义 driver，快照、迁移和顶替均不包含其数据。`,
     notDeployed: "尚未部署",
     servicesTitle: "运行状态",
@@ -127,6 +127,7 @@ export default {
   },
   config: {
     notice: "修改保存为草稿，部署后生效。",
+    portsLink: "端口映射在项目的「网络」中配置",
     composeHelp: "ports 仅在首次出现时导入为端口映射；已有的对外端口和域名在「网络」标签页修改，此处修改 ports 不生效。",
     git: "git 仓库",
     gitHelp: "SSH 地址使用 deploy key 拉取；HTTPS 仅支持公开仓库。留空则由上传的文件提供 data/ 目录。",
@@ -154,7 +155,7 @@ export default {
     saveDraft: "保存草稿",
   },
   versions: {
-    intro: "每次部署生成一个版本。",
+    intro: "每次部署生成一个版本，镜像按部署时的摘要固定。",
     restoreData: "回滚时恢复数据",
     restoreDataHelp: "同时将 data/ 和 volumes/ 恢复为该版本部署前的快照。",
     empty: "暂无版本",
