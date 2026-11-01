@@ -50,7 +50,7 @@ Also included:
 - Environment variables at three levels (project, container group, container), secrets, private registry credentials, health checks and resource limits
 - Image update notices and registry mirrors for nodes in mainland China
 - Projects are isolated by default and can be linked to each other on demand
-- Panel security: optional two-factor authentication, login rate limiting and a secure entry path; one-click node upgrades from the panel
+- Panel security: optional two-factor authentication, login rate limiting and a secure entry path; one-click panel updates and node upgrades
 
 ### Not supported yet
 
@@ -75,7 +75,7 @@ Common options (append to the command, for example `| sudo sh -s -- --port 28443
 | `--port <port>` | Panel port; picked at random on first start by default |
 | `--no-agent` | Run only the panel without an embedded node, e.g. on a dedicated machine |
 | `--docker-mirror <name>` | Package mirror for installing Docker: `Aliyun` or `AzureChinaCloud`, for servers in mainland China |
-| `--download-url <url>` | Download nagi from a mirror or internal address when GitHub is unreachable |
+| `--download-url <url>` | Download nagi from a mirror or internal address when GitHub is unreachable; one-click panel updates then use it too |
 | `--version <version>` | Install a specific version; the latest by default |
 
 ### Add a node
@@ -96,7 +96,7 @@ If the primary panel fails, promote the standby panel to primary.
 
 ### Upgrade
 
-Run the install script again to upgrade the panel; its port, data directory and other settings stay the same. Nodes can be upgraded with one click on the **Nodes** page.
+Update the panel with one click under **Settings → Updates**, or run the install script again; its port, data directory and other settings stay the same. Nodes can be upgraded with one click on the **Nodes** page.
 
 ### Uninstall
 

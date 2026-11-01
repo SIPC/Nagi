@@ -1252,6 +1252,8 @@ const (
 	SettingsService_GetStandbys_FullMethodName       = "/nagi.v1.SettingsService/GetStandbys"
 	SettingsService_RemoveStandby_FullMethodName     = "/nagi.v1.SettingsService/RemoveStandby"
 	SettingsService_PromoteStandby_FullMethodName    = "/nagi.v1.SettingsService/PromoteStandby"
+	SettingsService_CheckPanelUpdate_FullMethodName  = "/nagi.v1.SettingsService/CheckPanelUpdate"
+	SettingsService_UpdatePanel_FullMethodName       = "/nagi.v1.SettingsService/UpdatePanel"
 	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
 	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
 	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
@@ -1283,6 +1285,10 @@ type SettingsServiceClient interface {
 	RemoveStandby(ctx context.Context, in *RemoveStandbyRequest, opts ...grpc.CallOption) (*RemoveStandbyResponse, error)
 	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
 	PromoteStandby(ctx context.Context, in *PromoteStandbyRequest, opts ...grpc.CallOption) (*PromoteStandbyResponse, error)
+	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
+	CheckPanelUpdate(ctx context.Context, in *CheckPanelUpdateRequest, opts ...grpc.CallOption) (*CheckPanelUpdateResponse, error)
+	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	UpdatePanel(ctx context.Context, in *UpdatePanelRequest, opts ...grpc.CallOption) (*UpdatePanelResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1432,6 +1438,26 @@ func (c *settingsServiceClient) PromoteStandby(ctx context.Context, in *PromoteS
 	return out, nil
 }
 
+func (c *settingsServiceClient) CheckPanelUpdate(ctx context.Context, in *CheckPanelUpdateRequest, opts ...grpc.CallOption) (*CheckPanelUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckPanelUpdateResponse)
+	err := c.cc.Invoke(ctx, SettingsService_CheckPanelUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) UpdatePanel(ctx context.Context, in *UpdatePanelRequest, opts ...grpc.CallOption) (*UpdatePanelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdatePanelResponse)
+	err := c.cc.Invoke(ctx, SettingsService_UpdatePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Security)
@@ -1506,6 +1532,10 @@ type SettingsServiceServer interface {
 	RemoveStandby(context.Context, *RemoveStandbyRequest) (*RemoveStandbyResponse, error)
 	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
 	PromoteStandby(context.Context, *PromoteStandbyRequest) (*PromoteStandbyResponse, error)
+	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
+	CheckPanelUpdate(context.Context, *CheckPanelUpdateRequest) (*CheckPanelUpdateResponse, error)
+	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *GetSecurityRequest) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1563,6 +1593,12 @@ func (UnimplementedSettingsServiceServer) RemoveStandby(context.Context, *Remove
 }
 func (UnimplementedSettingsServiceServer) PromoteStandby(context.Context, *PromoteStandbyRequest) (*PromoteStandbyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteStandby not implemented")
+}
+func (UnimplementedSettingsServiceServer) CheckPanelUpdate(context.Context, *CheckPanelUpdateRequest) (*CheckPanelUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckPanelUpdate not implemented")
+}
+func (UnimplementedSettingsServiceServer) UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePanel not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetSecurity(context.Context, *GetSecurityRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecurity not implemented")
@@ -1834,6 +1870,42 @@ func _SettingsService_PromoteStandby_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_CheckPanelUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckPanelUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).CheckPanelUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_CheckPanelUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).CheckPanelUpdate(ctx, req.(*CheckPanelUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_UpdatePanel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePanelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).UpdatePanel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_UpdatePanel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).UpdatePanel(ctx, req.(*UpdatePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SettingsService_GetSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSecurityRequest)
 	if err := dec(in); err != nil {
@@ -1982,6 +2054,14 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PromoteStandby",
 			Handler:    _SettingsService_PromoteStandby_Handler,
+		},
+		{
+			MethodName: "CheckPanelUpdate",
+			Handler:    _SettingsService_CheckPanelUpdate_Handler,
+		},
+		{
+			MethodName: "UpdatePanel",
+			Handler:    _SettingsService_UpdatePanel_Handler,
 		},
 		{
 			MethodName: "GetSecurity",

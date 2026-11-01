@@ -50,6 +50,8 @@ type API struct {
 	Sealer   *sealer.Sealer
 	Panel    *PanelInfo
 	Log      *slog.Logger
+
+	updates panelUpdates
 }
 
 // Mount 把所有接口挂到 mux 上。

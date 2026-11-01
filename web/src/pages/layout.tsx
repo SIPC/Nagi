@@ -6,6 +6,7 @@ import { authClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { Button, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
+import { UpdateDot } from "@/pages/update";
 import { LanguageButton } from "@/components/language";
 import { t } from "@/i18n";
 
@@ -60,6 +61,7 @@ export function AppLayout() {
     <Link key={it.to} to={it.to} className={navLink}>
       <it.icon />
       {it.label}
+      {it.to === "/settings" && <UpdateDot />}
     </Link>
   ));
   const actions = (

@@ -120,10 +120,11 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 
 `scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。
 
-节点安装脚本（面板生成的 `/install.sh`）和面板上的一键升级也从 GitHub Release 下载同样的文件（和面板同一版本，地址见 `internal/pkg/release`），面板不提供二进制。本地编译的面板（`dev`）加入的节点会装上最新发布的版本；要在测试环境里用本地编译的 nagi，把 `nagi-linux-<架构>` 和对应的 `SHA256SUMS` 放到一个 HTTP 目录下，安装命令加 `--download-url <该地址>`。
+节点安装脚本（面板生成的 `/install.sh`）和面板上节点的一键升级也从 GitHub Release 下载同样的文件（和面板同一版本，地址见 `internal/pkg/release`），面板不提供二进制。本地编译的面板（`dev`）加入的节点会装上最新发布的版本；要在测试环境里用本地编译的 nagi，把 `nagi-linux-<架构>` 和对应的 `SHA256SUMS` 放到一个 HTTP 目录下，安装命令加 `--download-url <该地址>`。
 
 面板安装脚本的其他要点：
 
+- 用了 `--download-url` 时把地址记在 `<数据目录>/panel/download-url`，面板一键更新时也从这里下载（见 [panel.md](panel.md#更新面板)）。
 - 已安装时再次执行即为升级，只更换二进制并重启；端口、数据目录、是否带内嵌节点不允许在升级时修改（已加入的节点按原端口连接面板）。
 - `--standby <配对码>` 安装备用面板：首次启动带上配对码，配对成功（数据目录出现 `panel/paired`）后从服务配置中去掉。
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。

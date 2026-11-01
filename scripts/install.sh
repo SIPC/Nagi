@@ -228,20 +228,46 @@ trap 'rm -rf "$TMP"' EXIT
 
 # ---- 下载并校验 ----
 
+OLD_VERSION=""
+[ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)
+
+# 下载前先说清楚这次装哪个版本。latest 跟随 GitHub 的重定向得到版本号，并按它下载，免得显示的和下载的不一致；
+# 查不到时仍从 latest 下载。镜像不分版本，要下载后才知道。
+TARGET=""
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
 elif [ "$VERSION" = latest ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
+  TARGET=$(curl -sI --retry 3 -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" || true)
+  TARGET=${TARGET##*/}
+  case "$TARGET" in
+    v[0-9]*) BASE="https://github.com/$REPO/releases/download/$TARGET" ;;
+    *) TARGET="" ;;
+  esac
 else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
+  TARGET=$VERSION
+fi
+
+if [ -z "$TARGET" ]; then
+  [ -z "$OLD_VERSION" ] || say "当前版本：$OLD_VERSION"
+elif [ -z "$OLD_VERSION" ]; then
+  say "本次安装 nagi $TARGET"
+elif [ "$OLD_VERSION" = "$TARGET" ]; then
+  say "当前已是 $TARGET，重新安装一遍"
+else
+  say "当前版本 $OLD_VERSION，本次更新到 $TARGET"
 fi
 
 download_nagi
 
-OLD_VERSION=""
-[ -x "$BIN" ] && OLD_VERSION=$("$BIN" version 2>/dev/null || true)
 install -m 0755 "$TMP/nagi" "$BIN"
 link_command
+# 用了镜像时记下来，面板上一键更新时也从这里下载（见 internal/pkg/release/install.go）。
+if [ -n "$DOWNLOAD_URL" ]; then
+  mkdir -p "$DATA_DIR/panel"
+  printf '%s\n' "$DOWNLOAD_URL" >"$DATA_DIR/panel/download-url"
+fi
 if [ -n "$OLD_VERSION" ] && [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
   say "已安装 nagi $NEW_VERSION（原版本 $OLD_VERSION）：$BIN"
 else
@@ -348,4 +374,4 @@ say "  防火墙需放行面板端口 $PANEL_PORT 的 TCP 和 UDP（UDP 用于�
 [ -n "$NO_AGENT" ] || say "  项目通过域名对外访问时，还需放行 80 和 443 端口。"
 say "  查看日志：journalctl -u $SERVICE -f"
 say "  重置管理员密码：nagi reset password --data-dir $DATA_DIR（更多命令：nagi --help）"
-say "  升级：再次执行本脚本；节点在面板的节点页一键升级。"
+say "  升级：在面板的「设置 → 版本更新」一键更新，或再次执行本脚本；节点在面板的节点页一键升级。"

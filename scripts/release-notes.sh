@@ -28,5 +28,5 @@ cat <<'EOF'
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-面板升级后，在面板的「节点」页一键升级各节点。完整的更新日志见 [CHANGELOG.md](https://github.com/SIPC/Nagi/blob/main/CHANGELOG.md)。
+v0.6.0 及以后的面板也可以在「设置 → 版本更新」一键更新。面板升级后，在面板的「节点」页一键升级各节点。完整的更新日志见 [CHANGELOG.md](https://github.com/SIPC/Nagi/blob/main/CHANGELOG.md)。
 EOF

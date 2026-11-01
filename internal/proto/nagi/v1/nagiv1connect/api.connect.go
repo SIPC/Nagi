@@ -147,6 +147,12 @@ const (
 	// SettingsServicePromoteStandbyProcedure is the fully-qualified name of the SettingsService's
 	// PromoteStandby RPC.
 	SettingsServicePromoteStandbyProcedure = "/nagi.v1.SettingsService/PromoteStandby"
+	// SettingsServiceCheckPanelUpdateProcedure is the fully-qualified name of the SettingsService's
+	// CheckPanelUpdate RPC.
+	SettingsServiceCheckPanelUpdateProcedure = "/nagi.v1.SettingsService/CheckPanelUpdate"
+	// SettingsServiceUpdatePanelProcedure is the fully-qualified name of the SettingsService's
+	// UpdatePanel RPC.
+	SettingsServiceUpdatePanelProcedure = "/nagi.v1.SettingsService/UpdatePanel"
 	// SettingsServiceGetSecurityProcedure is the fully-qualified name of the SettingsService's
 	// GetSecurity RPC.
 	SettingsServiceGetSecurityProcedure = "/nagi.v1.SettingsService/GetSecurity"
@@ -1149,6 +1155,10 @@ type SettingsServiceClient interface {
 	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
 	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
 	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
+	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
+	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
+	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1249,6 +1259,18 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("PromoteStandby")),
 			connect.WithClientOptions(opts...),
 		),
+		checkPanelUpdate: connect.NewClient[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse](
+			httpClient,
+			baseURL+SettingsServiceCheckPanelUpdateProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CheckPanelUpdate")),
+			connect.WithClientOptions(opts...),
+		),
+		updatePanel: connect.NewClient[v1.UpdatePanelRequest, v1.UpdatePanelResponse](
+			httpClient,
+			baseURL+SettingsServiceUpdatePanelProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
+			connect.WithClientOptions(opts...),
+		),
 		getSecurity: connect.NewClient[v1.GetSecurityRequest, v1.Security](
 			httpClient,
 			baseURL+SettingsServiceGetSecurityProcedure,
@@ -1297,6 +1319,8 @@ type settingsServiceClient struct {
 	getStandbys       *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
 	removeStandby     *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
 	promoteStandby    *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
+	checkPanelUpdate  *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
+	updatePanel       *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
 	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
 	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
 	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
@@ -1369,6 +1393,16 @@ func (c *settingsServiceClient) PromoteStandby(ctx context.Context, req *connect
 	return c.promoteStandby.CallUnary(ctx, req)
 }
 
+// CheckPanelUpdate calls nagi.v1.SettingsService.CheckPanelUpdate.
+func (c *settingsServiceClient) CheckPanelUpdate(ctx context.Context, req *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error) {
+	return c.checkPanelUpdate.CallUnary(ctx, req)
+}
+
+// UpdatePanel calls nagi.v1.SettingsService.UpdatePanel.
+func (c *settingsServiceClient) UpdatePanel(ctx context.Context, req *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error) {
+	return c.updatePanel.CallUnary(ctx, req)
+}
+
 // GetSecurity calls nagi.v1.SettingsService.GetSecurity.
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, req *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
 	return c.getSecurity.CallUnary(ctx, req)
@@ -1416,6 +1450,10 @@ type SettingsServiceHandler interface {
 	RemoveStandby(context.Context, *connect.Request[v1.RemoveStandbyRequest]) (*connect.Response[v1.RemoveStandbyResponse], error)
 	// 把本面板（备用面板）提升为主面板：任期加一，面板按主面板重新启动（见 docs/standby.md#提升）。
 	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
+	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
+	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
+	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1512,6 +1550,18 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("PromoteStandby")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceCheckPanelUpdateHandler := connect.NewUnaryHandler(
+		SettingsServiceCheckPanelUpdateProcedure,
+		svc.CheckPanelUpdate,
+		connect.WithSchema(settingsServiceMethods.ByName("CheckPanelUpdate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceUpdatePanelHandler := connect.NewUnaryHandler(
+		SettingsServiceUpdatePanelProcedure,
+		svc.UpdatePanel,
+		connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
 	settingsServiceGetSecurityHandler := connect.NewUnaryHandler(
 		SettingsServiceGetSecurityProcedure,
 		svc.GetSecurity,
@@ -1570,6 +1620,10 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceRemoveStandbyHandler.ServeHTTP(w, r)
 		case SettingsServicePromoteStandbyProcedure:
 			settingsServicePromoteStandbyHandler.ServeHTTP(w, r)
+		case SettingsServiceCheckPanelUpdateProcedure:
+			settingsServiceCheckPanelUpdateHandler.ServeHTTP(w, r)
+		case SettingsServiceUpdatePanelProcedure:
+			settingsServiceUpdatePanelHandler.ServeHTTP(w, r)
 		case SettingsServiceGetSecurityProcedure:
 			settingsServiceGetSecurityHandler.ServeHTTP(w, r)
 		case SettingsServiceBeginTOTPProcedure:
@@ -1639,6 +1693,14 @@ func (UnimplementedSettingsServiceHandler) RemoveStandby(context.Context, *conne
 
 func (UnimplementedSettingsServiceHandler) PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.PromoteStandby is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CheckPanelUpdate is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdatePanel is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
