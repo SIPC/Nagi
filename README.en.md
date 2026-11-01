@@ -19,31 +19,42 @@ The panel UI is available in English and Chinese. The [design docs](docs/README.
 
 ## Features
 
+### Multi-node and high availability
+
 ![One panel, many nodes](docs/assets/architecture.en.png)
 
 ![Reach containers by name across nodes](docs/assets/intranet.en.png)
+
+![Many entry points, one container](docs/assets/entry.en.png)
 
 ![Automatic failover when a node goes down](docs/assets/failover.en.png)
 
 ![Panel down, services stay up](docs/assets/recovery.en.png)
 
+Also included:
+
+- Snapshots: scheduled per-container backup and restore, with an optional backup node as an off-site replica; move containers between nodes without losing data; redeploy containers to another node if a node is lost for good
+- Primary and standby panels, and handing nodes over between panels
+
+### Basics
+
 ![A project is a group of containers](docs/assets/model.en.png)
 
-![One entry point with automatic HTTPS](docs/assets/exposure.en.png)
-
 ![Every deployment is a version](docs/assets/versions.en.png)
+
+![One entry point with automatic HTTPS](docs/assets/exposure.en.png)
 
 Also included:
 
 - Logs, terminal, monitoring and alerts (webhook, Telegram); alerts are still sent while the panel is offline
-- Snapshots: scheduled per-container backup and restore, with an optional backup node as an off-site replica; move containers between nodes without losing data; redeploy containers to another node if a node is lost for good
 - Environment variables at three levels (project, container group, container), secrets, private registry credentials, health checks and resource limits
 - Image update notices and registry mirrors for nodes in mainland China
 - Projects are isolated by default and can be linked to each other on demand
-- Primary and standby panels, and handing nodes over between panels
 - Panel security: optional two-factor authentication, login rate limiting and a secure entry path; one-click node upgrades from the panel
 
-Not supported yet: automatic scheduling, multiple replicas of one container, several panels managing the same node, multiple users, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
+### Not supported yet
+
+Automatic scheduling, multiple replicas of one container, several panels managing the same node, multiple users, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
 
 ## Quick start
 

@@ -169,6 +169,24 @@ const t = {
     ["<b>原节点恢复</b>稳定后自动切回", "<b>Original returns</b> moves back once stable"],
     ['label: "投票"', 'label: "vote"'],
   ],
+  entry: [
+    ["跨节点入口，一个容器多个地址", "Many entry points, one container"],
+    ["端口映射可以多选入口节点，外部请求经加密通道转发到容器，支持 HTTP、TCP 和 UDP。", "Pick several entry nodes on a port mapping. Requests reach the container over an encrypted tunnel, for HTTP, TCP and UDP."],
+    ["外部访问", "External access"],
+    ["入口节点", "Entry node"],
+    ["节点 B", "Node B"],
+    ["节点 C", "Node C"],
+    ["节点 A · 容器所在", "Node A · current host"],
+    ["节点 D · 顶替节点", "Node D · takeover node"],
+    ["顶替后自动转发到这里", "Follows after a takeover"],
+    ["容器不用动", "Container stays put"],
+    ["在端口映射上勾选入口节点即可，也可以只从别的节点进入。", "Just tick entry nodes on the mapping. You can also accept traffic only through other nodes."],
+    ["面板离线照常", "Works without the panel"],
+    ["入口节点缓存配置，面板不在时继续转发。", "Entry nodes cache their config and keep forwarding while the panel is offline."],
+    ["权限最小", "Least privilege"],
+    ["入口节点只能访问映射指向的端口，访问不到项目里的其他容器。", "An entry node reaches only the mapped port, not the project's other containers."],
+    ['label: "加密通道"', 'label: "encrypted"'],
+  ],
 };
 
 const han = /[\u4e00-\u9fff]/;

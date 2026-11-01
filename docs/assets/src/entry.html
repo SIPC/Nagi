@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .flow {
+        display: grid;
+        grid-template-columns: 220px 1fr 210px 1fr 210px;
+      }
+      .list {
+        display: grid;
+        gap: 44px;
+      }
+      .list .box {
+        min-height: 88px;
+      }
+      .list.mid {
+        grid-column: 3;
+      }
+      .list.dst {
+        grid-column: 5;
+      }
+      .stage > .list > .box {
+        position: relative;
+      }
+      .addr {
+        font-family: var(--mono);
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="mark">
+        <svg viewBox="4 9 24 14" aria-hidden="true"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" /><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="#e2e8f0" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55" /></svg>
+        Nagi
+      </div>
+      <h1>跨节点入口，一个容器多个地址</h1>
+      <p class="lead">端口映射可以多选入口节点，外部请求经加密通道转发到容器，支持 HTTP、TCP 和 UDP。</p>
+
+      <div class="stage flow">
+        <div class="list">
+          <div class="box ghost" id="s1">
+            <div class="addr">203.0.113.20:8080</div>
+            <div class="s">外部访问</div>
+          </div>
+          <div class="box ghost" id="s2">
+            <div class="addr">198.51.100.7:8080</div>
+            <div class="s">外部访问</div>
+          </div>
+        </div>
+
+        <div class="list mid">
+          <div class="box" id="e1">
+            <div class="k">入口节点</div>
+            <div class="t"><i class="dot"></i>节点 B</div>
+          </div>
+          <div class="box" id="e2">
+            <div class="k">入口节点</div>
+            <div class="t"><i class="dot"></i>节点 C</div>
+          </div>
+        </div>
+
+        <div class="list dst">
+          <div class="box" id="a">
+            <div class="k">节点 A · 容器所在</div>
+            <div class="t"><i class="dot"></i>app</div>
+          </div>
+          <div class="box ghost" id="d">
+            <div class="k">节点 D · 顶替节点</div>
+            <div class="s">顶替后自动转发到这里</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div>
+          <div class="nt">容器不用动</div>
+          <div class="nd">在端口映射上勾选入口节点即可，也可以只从别的节点进入。</div>
+        </div>
+        <div>
+          <div class="nt">面板离线照常</div>
+          <div class="nd">入口节点缓存配置，面板不在时继续转发。</div>
+        </div>
+        <div>
+          <div class="nt">权限最小</div>
+          <div class="nd">入口节点只能访问映射指向的端口，访问不到项目里的其他容器。</div>
+        </div>
+      </div>
+    </div>
+    <script src="wires.js"></script>
+    <script>
+      draw(({ wire }) => {
+        wire("#s1", "r", "#e1", "l", { align: "a", arrow: true });
+        wire("#s2", "r", "#e2", "l", { align: "a", arrow: true });
+        wire("#e1", "r", "#a", "l", { align: "a", arrow: true, cls: "wave", label: "加密通道", labelCls: "wave" });
+        wire("#e2", "r", "#a", "l", { fb: 0.75, arrow: true, cls: "wave" });
+        wire("#a", "b", "#d", "t", { arrow: true, cls: "dash", align: "a" });
+      });
+    </script>
+  </body>
+</html>
