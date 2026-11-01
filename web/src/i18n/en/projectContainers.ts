@@ -83,6 +83,7 @@ export default {
     uploadDeploy: "Upload and deploy",
     pullDeploy: "Pull and deploy",
     updateImage: "Update image",
+    updateImageDraftConfirm: (name) => `Updating the image redeploys ${name}, and its undeployed draft takes effect too. Continue?`,
     deploying: "Deploying",
     deployDraft: "Deploy draft",
     redeploy: "Redeploy",
