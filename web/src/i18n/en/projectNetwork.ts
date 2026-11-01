@@ -1,11 +1,19 @@
 import type zh from "../zh/projectNetwork";
 
 export default {
+  access: {
+    title: "Internal access",
+    description: "Containers in the same project reach it at these addresses, on any node.",
+    help: (network) => `Connected projects add the network name: container.${network}.`,
+  },
   routes: {
     title: "Port mappings",
     description: "Expose container ports or bind domains. Changes apply on save.",
     help: "No redeployment needed. By default a mapping lives on the container's node and moves with it on migration or failover. You can also pick other entry nodes that forward external requests to the container. New ports in compose are imported on deploy.",
     add: "Add mapping",
+    emptyContainer: "This container has no port mappings",
+    overviewDescription: "All port mappings in this project. Select one to view or change it on the container page.",
+    metricsTitle: "Requests",
     edit: (name) => `Edit mapping ${name}`,
     empty: "No port mappings",
     deleteConfirm: (name) => `Delete port mapping ${name}? Its ports and domains will stop serving traffic immediately.`,

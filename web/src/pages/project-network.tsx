@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Badge, Button, Check, CopyButton, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
-import type { Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { projectMetricNodes, RoutesMetrics, useRange } from "@/components/metrics";
 import { confirmAction } from "@/components/confirm";
 import { toast } from "sonner";
 
@@ -17,20 +19,112 @@ import { toast } from "sonner";
 export function NetworkTab({ project, services }: { project: Project; services: ServiceStatus[] }) {
   return (
     <div className="grid gap-6">
-      <RoutesSection project={project} services={services} />
+      <RoutesOverview project={project} />
       <Intranet project={project} services={services} />
       <Links project={project} services={services} />
     </div>
   );
 }
 
+// ContainerNetwork：容器页的「网络」标签：这个容器的端口映射、请求监控，以及别的容器怎么访问它。
+export function ContainerNetwork({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
+  const { range, picker } = useRange();
+  const names = project.routes.filter((r) => r.container === container.name).map((r) => r.name);
+  return (
+    <div className="grid gap-6">
+      <RoutesSection project={project} services={services} container={container.name} />
+      <InternalAccess project={project} container={container} services={services} />
+      {names.length > 0 && (
+        <Section title={t.projectNetwork.routes.metricsTitle} actions={picker}>
+          <RoutesMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} routes={names} range={range} />
+        </Section>
+      )}
+    </div>
+  );
+}
+
+// InternalAccess：项目内的容器访问这个容器用的地址，连接的项目再加上网络名。
+function InternalAccess({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
+  const own = services.filter((s) => s.container === container.name);
+  const names = intranetAddresses(project, services)
+    .filter((a) => (container.kind === "group" ? a.name.endsWith(`.${container.name}`) : a.name === container.name))
+    .map((a) => a.name);
+  const ports = (name: string) => {
+    const service = container.kind === "group" ? name.slice(0, name.lastIndexOf(".")) : name;
+    const list = own.filter((s) => container.kind !== "group" || s.name === service);
+    const declared = [...list.flatMap((s) => s.ports.map(String)), ...list.flatMap((s) => s.udpPorts.map((p) => `${p}/udp`))];
+    const internal = (project.settings?.internalPorts ?? []).flatMap((p) => (p.startsWith(`${name}:`) ? [p.slice(name.length + 1)] : []));
+    return [...new Set([...declared, ...internal])];
+  };
+  const addresses = names.flatMap((name) => {
+    const list = ports(name);
+    return list.length > 0 ? list.map((p) => ({ address: `${name}:${p.replace(/\/udp$/, "")}`, udp: p.endsWith("/udp") })) : [{ address: name, udp: false }];
+  });
+  return (
+    <Section title={t.projectNetwork.access.title} description={t.projectNetwork.access.description} help={t.projectNetwork.access.help(project.networkName)}>
+      <div className="grid gap-2">
+        {addresses.map((a) => (
+          <div key={a.address + a.udp} className="flex items-center gap-2 font-mono text-[13px]">
+            <span className="min-w-0 break-all">{a.address}</span>
+            {a.udp && <Badge className="font-sans">UDP</Badge>}
+            <CopyButton text={a.address} />
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+// RoutesOverview：项目页上全部端口映射的总览。修改在容器页，点一行跳过去。
+function RoutesOverview({ project }: { project: Project }) {
+  const navigate = useNavigate();
+  const m = t.projectNetwork.routes;
+  return (
+    <Section flush title={m.title} description={m.overviewDescription}>
+      {project.routes.length === 0 ? (
+        <EmptyRow>{m.empty}</EmptyRow>
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <Th>{m.columns.name}</Th>
+              <Th>{m.columns.target}</Th>
+              <Th>{m.columns.published}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {project.routes.map((r) => (
+              <tr
+                key={r.name}
+                tabIndex={0}
+                className="cursor-pointer transition-colors outline-none hover:bg-subtle focus-visible:bg-subtle"
+                onClick={() => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: r.container }, search: { view: "network" } })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: r.container }, search: { view: "network" } });
+                }}
+              >
+                <Td className="font-mono text-xs">{r.name}</Td>
+                <Td className="font-mono text-xs">
+                  {r.container}
+                  {r.service !== r.container && `/${r.service}`}:{r.target}
+                </Td>
+                <Td className="font-mono text-xs">{r.domains.length ? r.domains.join(", ") : `${r.protocol}/${r.published}`}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Section>
+  );
+}
+
 // ---- 端口映射 ----
 
-function RoutesSection({ project, services }: { project: Project; services: ServiceStatus[] }) {
+function RoutesSection({ project, services, container }: { project: Project; services: ServiceStatus[]; container: string }) {
   const queryClient = useQueryClient();
+  const routes = project.routes.filter((r) => r.container === container);
   const empty = {
     name: "",
-    container: "",
     service: "",
     target: "",
     protocol: "http",
@@ -45,7 +139,6 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-  const container = form.container || project.containers[0]?.name || "";
   const containerServices = [...new Set(services.filter((s) => s.container === container).map((s) => s.name))];
   const isGroup = project.containers.find((c) => c.name === container)?.kind === "group";
   const nodes = useQuery({
@@ -85,7 +178,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
     noLocalEntry: !form.localEntry,
   };
   // 已保存的映射定时检查域名的解析和证书；编辑时停下来再查，只用解析结果。
-  const savedDomains = useDomainChecks(project.id, project.routes.filter((r) => r.domains.length > 0), 15_000);
+  const savedDomains = useDomainChecks(project.id, routes.filter((r) => r.domains.length > 0), 15_000);
   const draftKey = JSON.stringify([domainList, container, form.entryNodes, form.localEntry]);
   const [settledKey, setSettledKey] = useState(draftKey);
   useEffect(() => {
@@ -134,7 +227,6 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
           <Button
             size="sm"
             variant="outline"
-            disabled={project.containers.length === 0}
             onClick={() => {
               setForm(empty);
               setOpen(true);
@@ -146,8 +238,8 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
       }
     >
       {error && !open && <Alert className="mb-3">{error}</Alert>}
-      {project.routes.length === 0 ? (
-        <EmptyRow>{t.projectNetwork.routes.empty}</EmptyRow>
+      {routes.length === 0 ? (
+        <EmptyRow>{t.projectNetwork.routes.emptyContainer}</EmptyRow>
       ) : (
         <Table>
           <thead>
@@ -160,7 +252,7 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
             </tr>
           </thead>
           <tbody>
-            {project.routes.map((r) => {
+            {routes.map((r) => {
               // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
               const domainURL = r.domains.length ? `${r.httpOnly ? "http" : "https"}://${r.domains[0]}` : "";
               const addresses = !domainURL && r.published ? addressesOf(r) : [];
@@ -219,7 +311,6 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                       onClick={() => {
                         setForm({
                           name: r.name,
-                          container: r.container,
                           service: r.service,
                           target: String(r.target),
                           protocol: r.protocol || "http",
@@ -254,13 +345,6 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
         >
           <div className="text-[13px] font-medium">{form.name ? t.projectNetwork.routes.edit(form.name) : t.projectNetwork.routes.add}</div>
           <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            <Field label={t.projectNetwork.routes.container} htmlFor="route-container">
-              <Select id="route-container" value={container} onChange={(e) => setForm({ ...form, container: e.target.value, service: "" })}>
-                {project.containers.map((m) => (
-                  <option key={m.name}>{m.name}</option>
-                ))}
-              </Select>
-            </Field>
             {isGroup && (
               <Field label={t.projectNetwork.routes.groupService} htmlFor="route-service">
                 <Select id="route-service" value={form.service || containerServices[0] || ""} onChange={(e) => setForm({ ...form, service: e.target.value })}>

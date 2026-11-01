@@ -12,7 +12,9 @@ export default {
     versions: "版本",
     logs: "日志",
     terminal: "终端",
-    data: "数据",
+    network: "网络",
+    storage: "存储",
+    ha: "高可用",
   },
   columns: {
     name: "名称",
@@ -42,7 +44,7 @@ export default {
     confirm: (names: string) => `更新 ${names} 的镜像？将拉取新镜像并重建容器，服务短暂中断，并生成新版本。`,
   },
   projectMetrics: {
-    description: "所有容器的资源占用合计及端口映射的请求情况。",
+    description: "所有容器的资源占用合计。",
     help: "各容器的监控见容器页。耗时图中每个时段的 P95、P99 取该时段内的最大值，其余指标取平均值。",
   },
   table: {
@@ -127,7 +129,7 @@ export default {
   },
   config: {
     notice: "修改保存为草稿，部署后生效。",
-    portsLink: "端口映射在项目的「网络」中配置",
+    portsLink: "端口映射在「网络」标签中配置",
     composeHelp: "ports 仅在首次出现时导入为端口映射；已有的对外端口和域名在「网络」标签页修改，此处修改 ports 不生效。",
     git: "git 仓库",
     gitHelp: "SSH 地址使用 deploy key 拉取；HTTPS 仅支持公开仓库。留空则由上传的文件提供 data/ 目录。",

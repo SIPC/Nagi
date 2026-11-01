@@ -56,8 +56,8 @@ function useNodes() {
   };
 }
 
-// ContainerData：容器页的「数据」标签：快照、顶替、备份节点、更换节点。
-export function ContainerData({
+// ContainerStorage：容器页的「存储」标签：卷和快照。
+export function ContainerStorage({
   project,
   container,
 }: {
@@ -69,6 +69,22 @@ export function ContainerData({
     <div className="grid gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       <Snapshots project={project} container={container} run={run} />
+    </div>
+  );
+}
+
+// ContainerHA：容器页的「高可用」标签：顶替、备份节点、更换节点。
+export function ContainerHA({
+  project,
+  container,
+}: {
+  project: Project;
+  container: Container;
+}) {
+  const run = useRun(project.id);
+  return (
+    <div className="grid gap-6">
+      {run.output && <div className="empty:hidden">{run.output}</div>}
       <Failover project={project} container={container} />
       <Backup project={project} container={container} run={run} />
       <Placement project={project} container={container} run={run} />

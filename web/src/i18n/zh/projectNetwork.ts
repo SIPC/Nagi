@@ -1,10 +1,18 @@
 // 项目的「网络」标签页：端口映射与域名、项目内网、项目连接。
 export default {
+  access: {
+    title: "内部访问",
+    description: "同一项目的容器用这些地址访问它，无论是否在同一节点。",
+    help: (network: string) => `已连接的项目在名称后加网络名：容器.${network}。`,
+  },
   routes: {
     title: "端口映射",
     description: "对外开放容器端口或绑定域名，保存后立即生效。",
     help: "无需重新部署。映射默认位于容器所在节点，容器迁移或由其他节点顶替时随之转移；也可以选择其他入口节点，外部请求从那里转发到容器。compose 中新增的 ports 在部署时自动导入。",
     add: "添加映射",
+    emptyContainer: "这个容器还没有端口映射",
+    overviewDescription: "项目内全部端口映射，点一行到容器页查看和修改。",
+    metricsTitle: "请求监控",
     edit: (name: string) => `编辑映射 ${name}`,
     empty: "暂无端口映射",
     deleteConfirm: (name: string) => `删除端口映射 ${name}？对应的端口和域名将立即停止对外提供访问。`,

@@ -392,33 +392,47 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [] }: { no
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const byMetric = new Map<string, MetricSeries[]>();
-  const routeSeries = new Map<string, Map<string, MetricSeries[]>>();
   for (const s of q.data) {
-    const { kind, path, metric } = parseName(s.name);
+    const { kind, metric } = parseName(s.name);
     if (kind === "c") {
       if (metric !== "restarts") byMetric.set(metric, [...(byMetric.get(metric) ?? []), s]);
-    } else if (kind === "r") {
-      if (!routeSeries.has(path)) routeSeries.set(path, new Map());
-      const byName = routeSeries.get(path)!;
-      byName.set(metric, [...(byName.get(metric) ?? []), s]);
     }
   }
-  // 一条映射可能有多个入口节点：请求数和流量相加，耗时取最慢的那个入口。
-  const routes = new Map(
-    [...routeSeries].map(([path, byName]) => [
-      path,
-      new Map([...byName].map(([metric, list]) => [metric, routeLatencyMetrics.has(metric) ? maxSeries(list) : sumSeries(list)])),
-    ]),
-  );
   const order = ["cpu", "mem", "net_rx", "net_tx"];
   const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
-  if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
+  if (total.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
     <div className="grid gap-6">
       {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(offline.join(m.seriesSeparator))}</Notice>}
-      {total.size > 0 && <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />}
-      {[...routes.entries()].map(([name, data]) => (
-        <RouteMetrics key={name} name={name} data={data} range={range} />
+      <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />
+    </div>
+  );
+}
+
+// RoutesMetrics：几条端口映射的请求情况，容器页的「网络」标签用。
+// 一条映射可能有多个入口节点：请求数和流量相加，耗时取最慢的那个入口。
+export function RoutesMetrics({ projectId, nodeIds, routes, range }: { projectId: string; nodeIds: string[]; routes: string[]; range: MetricRange }) {
+  const q = useProjectMetrics(projectId, nodeIds, range);
+  if (q.isPending) return <Loading />;
+  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  const series = new Map<string, Map<string, MetricSeries[]>>();
+  for (const s of q.data) {
+    const { kind, path, metric } = parseName(s.name);
+    if (kind !== "r" || !routes.includes(path)) continue;
+    if (!series.has(path)) series.set(path, new Map());
+    const byName = series.get(path)!;
+    byName.set(metric, [...(byName.get(metric) ?? []), s]);
+  }
+  if (series.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
+  return (
+    <div className="grid gap-6">
+      {[...series].map(([name, byName]) => (
+        <RouteMetrics
+          key={name}
+          name={name}
+          data={new Map([...byName].map(([metric, list]) => [metric, routeLatencyMetrics.has(metric) ? maxSeries(list) : sumSeries(list)]))}
+          range={range}
+        />
       ))}
     </div>
   );

@@ -16,7 +16,8 @@ import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { ContainerData } from "@/pages/project-data";
+import { ContainerHA, ContainerStorage } from "@/pages/project-data";
+import { ContainerNetwork } from "@/pages/project-network";
 import {
   Alert,
   Badge,
@@ -51,7 +52,7 @@ import { useRole } from "@/components/role";
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
 
 type ImageUpdate = { container: string; service: string; image: string };
-export const containerTabs = ["overview", "config", "versions", "logs", "terminal", "data"] as const;
+export const containerTabs = ["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha"] as const;
 export type DetailView = (typeof containerTabs)[number];
 
 export function ContainersTab({
@@ -337,9 +338,9 @@ function ContainerDetail({
   const isGroup = container.kind === "group";
   const serviceNames = [...new Set(services.map((s) => s.name))];
 
-  // 「数据」标签不显示操作输出，开始操作时回到概览，否则看不到进度和结果。
+  // 存储和高可用标签有自己的操作输出，不显示这里的；开始部署时回到概览，否则看不到进度和结果。
   const showOutput = () => {
-    if (view === "data") onView("overview");
+    if (view === "storage" || view === "ha") onView("overview");
   };
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) => {
     showOutput();
@@ -525,15 +526,17 @@ function ContainerDetail({
         onChange={onView}
         items={[
           { value: "overview", label: t.projectContainers.tabs.overview },
-          ...(isViewer ? [] : [{ value: "config" as const, label: t.projectContainers.tabs.config }]),
-          { value: "versions", label: t.projectContainers.tabs.versions },
           { value: "logs", label: t.projectContainers.tabs.logs },
           ...(isViewer ? [] : [{ value: "terminal" as const, label: t.projectContainers.tabs.terminal }]),
-          { value: "data", label: t.projectContainers.tabs.data },
+          ...(isViewer ? [] : [{ value: "config" as const, label: t.projectContainers.tabs.config }]),
+          { value: "versions", label: t.projectContainers.tabs.versions },
+          { value: "network", label: t.projectContainers.tabs.network },
+          { value: "storage", label: t.projectContainers.tabs.storage },
+          { value: "ha", label: t.projectContainers.tabs.ha },
         ]}
       />
       <div key={view} className="grid animate-fade-in gap-6">
-        {view !== "data" && output}
+        {view !== "storage" && view !== "ha" && output}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
         {view === "config" && !isViewer && <ContainerConfig
             key={`cfg-${container.revision}`}
@@ -555,7 +558,9 @@ function ContainerDetail({
         {view === "terminal" && !isViewer && (
           <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
         )}
-        {view === "data" && <ContainerData project={project} container={container} />}
+        {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
+        {view === "storage" && <ContainerStorage project={project} container={container} />}
+        {view === "ha" && <ContainerHA project={project} container={container} />}
       </div>
     </>
   );
@@ -873,7 +878,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     >
       <Notice>
         {t.projectContainers.config.notice}{" "}
-        <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "network" }} className="underline underline-offset-2">
+        <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline underline-offset-2">
           {t.projectContainers.config.portsLink}
         </Link>
       </Notice>

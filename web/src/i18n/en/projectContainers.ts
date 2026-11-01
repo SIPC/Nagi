@@ -13,7 +13,9 @@ export default {
     versions: "Versions",
     logs: "Logs",
     terminal: "Terminal",
-    data: "Data",
+    network: "Network",
+    storage: "Storage",
+    ha: "High availability",
   },
   columns: {
     name: "Name",
@@ -43,7 +45,7 @@ export default {
     confirm: (names) => `Update the image of ${names}? The new image is pulled and containers are recreated. The service is briefly interrupted and new versions are created.`,
   },
   projectMetrics: {
-    description: "Combined resource usage of all containers and requests to port mappings.",
+    description: "Combined resource usage of all containers.",
     help: "Per-container metrics are on each container page. In latency charts, P95 and P99 show the maximum within each interval; other metrics show the average.",
   },
   table: {
@@ -131,7 +133,7 @@ export default {
   },
   config: {
     notice: "Changes are saved as a draft and take effect after deployment.",
-    portsLink: "Port mappings are configured under Network on the project",
+    portsLink: "Port mappings are configured on the Network tab",
     composeHelp:
       "ports are imported as port mappings only when they first appear. Change existing published ports and domains in the Network tab; editing ports here has no effect.",
     git: "Git repository",

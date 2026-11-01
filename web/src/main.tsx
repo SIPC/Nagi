@@ -120,7 +120,8 @@ const containerRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "c/$container",
   validateSearch: (search: Record<string, unknown>): { view?: DetailView } => ({
-    view: containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
+    // 旧地址的「数据」标签拆成了存储和高可用，快照在存储里。
+    view: search.view === "data" ? "storage" : containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
   }),
   component: function ContainerRoute() {
     const { projectId, container } = containerRoute.useParams();
