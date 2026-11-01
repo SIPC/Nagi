@@ -6,7 +6,7 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
 import { Alert, EmptyRow, Loading, Section, Segmented, Tile, TileGrid } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
-import type { MetricSeries, NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
+import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 
 const m = t.metrics;
@@ -133,8 +133,13 @@ const containerMetricFormat: Record<string, [string, (v: number) => string]> = {
   restarts: [m.restarts, (v) => String(v)],
 };
 
-// useProjectMetrics 取项目在时间范围内的容器、容器资源上限和端口映射（http）监控。监控数据存在容器所在的节点上，逐个节点查询。
-// 同一时间范围的项目栏、项目概览和容器页用同一份缓存：nodeIds 传项目里所有容器的节点。
+// projectMetricNodes 是存着项目监控数据的节点：容器所在的节点，以及端口映射的其他入口节点（请求统计记在收到请求的节点上）。
+export function projectMetricNodes(project: Project | undefined) {
+  return [...(project?.containers.map((c) => c.nodeId) ?? []), ...(project?.routes.flatMap((r) => r.entryNodes) ?? [])];
+}
+
+// useProjectMetrics 取项目在时间范围内的容器、容器资源上限和端口映射（http）监控。监控数据存在节点上，逐个节点查询。
+// 同一时间范围的项目栏、项目概览和容器页用同一份缓存：nodeIds 传 projectMetricNodes。
 export function useProjectMetrics(projectId: string, nodeIds: string[], range: MetricRange = "1h") {
   const ids = [...new Set(nodeIds)].sort();
   const r = rangeOf(range);
@@ -172,6 +177,15 @@ function sumSeries(list: MetricSeries[]): Pt[] {
   for (const s of list) for (const [t, v] of toPoints(s)) total.set(t, (total.get(t) ?? 0) + v);
   return [...total.entries()].sort((a, b) => a[0] - b[0]);
 }
+
+// maxSeries 按时刻取几条序列里最大的值（耗时不能相加）。
+function maxSeries(list: MetricSeries[]): Pt[] {
+  const top = new Map<number, number>();
+  for (const s of list) for (const [t, v] of toPoints(s)) top.set(t, Math.max(top.get(t) ?? v, v));
+  return [...top.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+const routeLatencyMetrics = new Set(["lat", "p50", "p95", "p99"]);
 
 // Usage 是一个容器当前的占用和上限。CPU 是百分比（每核 100），内存是字节。
 // 上限：设了限制按限制，没设按主机（节点算好了报上来）；旧版本的节点不报，没有这两项。
@@ -365,16 +379,24 @@ export function ProjectMetrics({ nodeIds, projectId, range }: { nodeIds: string[
   if (q.isPending) return <Loading />;
   if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
   const byMetric = new Map<string, MetricSeries[]>();
-  const routes = new Map<string, Map<string, Pt[]>>();
+  const routeSeries = new Map<string, Map<string, MetricSeries[]>>();
   for (const s of q.data) {
     const { kind, path, metric } = parseName(s.name);
     if (kind === "c") {
       if (metric !== "restarts") byMetric.set(metric, [...(byMetric.get(metric) ?? []), s]);
     } else if (kind === "r") {
-      if (!routes.has(path)) routes.set(path, new Map());
-      routes.get(path)!.set(metric, toPoints(s));
+      if (!routeSeries.has(path)) routeSeries.set(path, new Map());
+      const byName = routeSeries.get(path)!;
+      byName.set(metric, [...(byName.get(metric) ?? []), s]);
     }
   }
+  // 一条映射可能有多个入口节点：请求数和流量相加，耗时取最慢的那个入口。
+  const routes = new Map(
+    [...routeSeries].map(([path, byName]) => [
+      path,
+      new Map([...byName].map(([metric, list]) => [metric, routeLatencyMetrics.has(metric) ? maxSeries(list) : sumSeries(list)])),
+    ]),
+  );
   const order = ["cpu", "mem", "net_rx", "net_tx"];
   const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
   if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;

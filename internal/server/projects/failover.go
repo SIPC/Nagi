@@ -512,7 +512,7 @@ func failoverNodes(c store.Container) []string {
 	return out
 }
 
-// RelatedNodes 返回和项目有关的节点：容器所在的节点、顶替节点、作为见证人的节点、备份节点。
+// RelatedNodes 返回和项目有关的节点：容器所在的节点、顶替节点、作为见证人的节点、备份节点、映射的入口节点。
 func (s *Service) RelatedNodes(ctx context.Context, projectID string) (map[string]bool, error) {
 	rows, err := s.Q.ListContainers(ctx, projectID)
 	if err != nil {
@@ -530,6 +530,15 @@ func (s *Service) RelatedNodes(ctx context.Context, projectID string) (map[strin
 					out[n] = true
 				}
 			}
+		}
+	}
+	routes, err := s.Q.ListRoutes(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range routes {
+		for _, n := range routeProto(r).GetEntryNodes() {
+			out[n] = true
 		}
 	}
 	return out, nil

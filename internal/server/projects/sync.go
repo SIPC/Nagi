@@ -270,9 +270,14 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 func routeProto(r store.Route) *nagiv1.Exposure {
 	e := &nagiv1.Exposure{
 		Name: r.Name, Container: r.Container, Service: r.Service, Target: uint32(r.Target), Protocol: r.Protocol,
-		Published: uint32(r.Published), HttpOnly: r.HttpOnly != 0,
+		Published: uint32(r.Published), HttpOnly: r.HttpOnly != 0, NoLocalEntry: r.NoLocalEntry != 0,
 	}
 	_ = json.Unmarshal([]byte(r.Domains), &e.Domains)
+	_ = json.Unmarshal([]byte(r.EntryNodes), &e.EntryNodes)
+	// 入口节点都被移除了：映射留着让用户重新选，但不生效。
+	if e.NoLocalEntry && len(e.EntryNodes) == 0 {
+		e.Error = "没有入口节点，请编辑映射重新选择"
+	}
 	return e
 }
 

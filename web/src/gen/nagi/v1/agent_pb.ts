@@ -6,7 +6,7 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { AlertConfig, BackupStatusSchema, BackupTarget, ContainerSpec, DeployEventSchema, FailoverConfig, FailoverStatus, FailoverStatusSchema, ImageUpdate, LinkPlan, LinkPlanSchema, LogLineSchema, MeshPingRequestSchema, MeshPingResponseSchema, MeshStatusSchema, MetricSeries, Replica, Snapshot, TrustedPanel } from "./common_pb";
+import type { AlertConfig, BackupStatusSchema, BackupTarget, ContainerSpec, DeployEventSchema, Exposure, FailoverConfig, FailoverStatus, FailoverStatusSchema, ImageUpdate, LinkPlan, LinkPlanSchema, LogLineSchema, MeshPingRequestSchema, MeshPingResponseSchema, MeshStatusSchema, MetricSeries, Replica, Snapshot, TrustedPanel } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/agent.proto.
  */
 export const file_nagi_v1_agent: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIhIKEFNldExpbmtzUmVzcG9uc2UiEQoPR2V0Q2FjaGVSZXF1ZXN0IoUBCglOb2RlQ2FjaGUSKgoKY29udGFpbmVycxgBIAMoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYxIqCglmYWlsb3ZlcnMYAiADKAsyFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEiAKBWxpbmtzGAMgASgLMhEubmFnaS52MS5MaW5rUGxhbiKcAQoSU2V0RmFpbG92ZXJSZXF1ZXN0EicKBmNvbmZpZxgBIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJDb25maWcSDQoFY2xlYXIYAiABKAgSEgoKcHJvamVjdF9pZBgDIAEoCRIRCgljb250YWluZXIYBiABKAkSEwoLc2VlZF9ob2xkZXIYBCABKAwSEgoKc2VlZF9lcG9jaBgFIAEoBCJ9ChRBY2NlcHRSZXBsaWNhUmVxdWVzdBIkCgRzcGVjGAEgASgLMhYubmFnaS52MS5Db250YWluZXJTcGVjEhIKCnNvdXJjZV9rZXkYAiABKAwSFgoOc291cmNlX25vZGVfaWQYAyABKAkSEwoLc291cmNlX25hbWUYBCABKAkiFwoVQWNjZXB0UmVwbGljYVJlc3BvbnNlIhUKE0xpc3RSZXBsaWNhc1JlcXVlc3QiOgoUTGlzdFJlcGxpY2FzUmVzcG9uc2USIgoIcmVwbGljYXMYASADKAsyEC5uYWdpLnYxLlJlcGxpY2EiGAoWQ2hlY2tDb250YWluZXJSZXNwb25zZSJSChVSZXN0b3JlUmVwbGljYVJlcXVlc3QSJAoEc3BlYxgBIAEoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYxITCgtzbmFwc2hvdF9pZBgCIAEoCSIXChVEZWxldGVSZXBsaWNhUmVzcG9uc2UiYQoRTWlncmF0ZU91dFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkSJQoGdGFyZ2V0GAMgASgLMhUubmFnaS52MS5CYWNrdXBUYXJnZXQiNQoMQ29udGFpbmVyUmVmEhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJIjsKE1B1dENvbnRhaW5lclJlcXVlc3QSJAoEc3BlYxgBIAEoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYyIWChRQdXRDb250YWluZXJSZXNwb25zZSK+AQoWRGVwbG95Q29udGFpbmVyUmVxdWVzdBIkCgRzcGVjGAEgASgLMhYubmFnaS52MS5Db250YWluZXJTcGVjEgwKBHB1bGwYAiABKAgSEgoKdXNlX3VwbG9hZBgDIAEoCBITCgtwdWxsX2ltYWdlcxgEIAEoCBISCgpmaWxlc19mcm9tGAUgASgDEhkKEXJlc3RvcmVfZGF0YV9mcm9tGAYgASgDEhgKEHByZXZpb3VzX3ZlcnNpb24YByABKAMiYwoWRGVsZXRlQ29udGFpbmVyUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgCIAEoCRISCgpkZWxldGVfZGlyGAMgASgIEg4KBnJldGlyZRgEIAEoCCIZChdEZWxldGVDb250YWluZXJSZXNwb25zZSJUChZSZXN0b3JlU25hcHNob3RSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEhMKC3NuYXBzaG90X2lkGAMgASgJIj0KFUxpc3RTbmFwc2hvdHNSZXNwb25zZRIkCglzbmFwc2hvdHMYASADKAsyES5uYWdpLnYxLlNuYXBzaG90ImkKEVN0cmVhbUxvZ3NSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSDAoEdGFpbBgEIAEoBRIOCgZmb2xsb3cYBSABKAgiPAoTQ2hlY2tJbWFnZXNSZXNwb25zZRIlCgd1cGRhdGVzGAEgAygLMhQubmFnaS52MS5JbWFnZVVwZGF0ZSJMChRMb2dpblJlZ2lzdHJ5UmVxdWVzdBIQCghyZWdpc3RyeRgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIQCghwYXNzd29yZBgDIAEoCSIuChVMb2dpblJlZ2lzdHJ5UmVzcG9uc2USFQoNZG9ja2VyX2NvbmZpZxgBIAEoDCImChZTZXRQcm9qZWN0c1Jvb3RSZXF1ZXN0EgwKBHJvb3QYASABKAkiGQoXU2V0UHJvamVjdHNSb290UmVzcG9uc2UiPQoVU2V0UGFuZWxEb21haW5SZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRIUCgxwcm94eV9zZWNyZXQYAiABKAkiGAoWU2V0UGFuZWxEb21haW5SZXNwb25zZSIxCg5VcGdyYWRlUmVxdWVzdBIOCgZzaGEyNTYYASABKAkSDwoHdmVyc2lvbhgCIAEoCSIiCg9VcGdyYWRlUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCSITChFHZXRNaXJyb3JzUmVxdWVzdCIqCgdNaXJyb3JzEg8KB21pcnJvcnMYASADKAkSDgoGYWN0aXZlGAIgAygJIhMKEU1lc2hTdGF0dXNSZXF1ZXN0IhMKEUxpc3RQYW5lbHNSZXF1ZXN0IjsKEkxpc3RQYW5lbHNSZXNwb25zZRIlCgZwYW5lbHMYASADKAsyFS5uYWdpLnYxLlRydXN0ZWRQYW5lbCJGCg9BZGRQYW5lbFJlcXVlc3QSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCRINCgV0b2tlbhgDIAEoCSISChBBZGRQYW5lbFJlc3BvbnNlIikKElJlbW92ZVBhbmVsUmVxdWVzdBITCgtmaW5nZXJwcmludBgBIAEoCSIVChNSZW1vdmVQYW5lbFJlc3BvbnNlInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0InkKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSEQoJY29udGFpbmVyGAUgASgJEg8KB2NvbW1hbmQYAyADKAkSIwoEc2l6ZRgEIAEoCzIVLm5hZ2kudjEuVGVybWluYWxTaXplIioKDFRlcm1pbmFsU2l6ZRIMCgRjb2xzGAEgASgNEgwKBHJvd3MYAiABKA0iPQoKRXhlY091dHB1dBIQCgZzdGRvdXQYASABKAxIABITCglleGl0X2NvZGUYAiABKAVIAEIICgZvdXRwdXQiPQoVU2V0QWxlcnRDb25maWdSZXF1ZXN0EiQKBmNvbmZpZxgBIAEoCzIULm5hZ2kudjEuQWxlcnRDb25maWciGAoWU2V0QWxlcnRDb25maWdSZXNwb25zZSKFAQoTUXVlcnlNZXRyaWNzUmVxdWVzdBIOCgZwcmVmaXgYASABKAkSKAoEZnJvbRgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJgoCdG8YAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBHN0ZXAYBCABKAMiPQoUUXVlcnlNZXRyaWNzUmVzcG9uc2USJQoGc2VyaWVzGAEgAygLMhUubmFnaS52MS5NZXRyaWNTZXJpZXMyrBMKDEFnZW50U2VydmljZRJLCgxQdXRDb250YWluZXISHC5uYWdpLnYxLlB1dENvbnRhaW5lclJlcXVlc3QaHS5uYWdpLnYxLlB1dENvbnRhaW5lclJlc3BvbnNlEkoKD0RlcGxveUNvbnRhaW5lchIfLm5hZ2kudjEuRGVwbG95Q29udGFpbmVyUmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJUCg9EZWxldGVDb250YWluZXISHy5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlcXVlc3QaIC5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlc3BvbnNlEkYKDUxpc3RTbmFwc2hvdHMSFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoeLm5hZ2kudjEuTGlzdFNuYXBzaG90c1Jlc3BvbnNlEj8KDkNyZWF0ZVNuYXBzaG90EhUubmFnaS52MS5Db250YWluZXJSZWYaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESSgoPUmVzdG9yZVNuYXBzaG90Eh8ubmFnaS52MS5SZXN0b3JlU25hcHNob3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAESMwoERXhlYxISLm5hZ2kudjEuRXhlY0lucHV0GhMubmFnaS52MS5FeGVjT3V0cHV0KAEwARJCCgtDaGVja0ltYWdlcxIVLm5hZ2kudjEuQ29udGFpbmVyUmVmGhwubmFnaS52MS5DaGVja0ltYWdlc1Jlc3BvbnNlEk4KDUxvZ2luUmVnaXN0cnkSHS5uYWdpLnYxLkxvZ2luUmVnaXN0cnlSZXF1ZXN0Gh4ubmFnaS52MS5Mb2dpblJlZ2lzdHJ5UmVzcG9uc2USOgoKU3luY0JhY2t1cBIVLm5hZ2kudjEuQ29udGFpbmVyUmVmGhUubmFnaS52MS5CYWNrdXBTdGF0dXMSTgoNQWNjZXB0UmVwbGljYRIdLm5hZ2kudjEuQWNjZXB0UmVwbGljYVJlcXVlc3QaHi5uYWdpLnYxLkFjY2VwdFJlcGxpY2FSZXNwb25zZRJLCgxMaXN0UmVwbGljYXMSHC5uYWdpLnYxLkxpc3RSZXBsaWNhc1JlcXVlc3QaHS5uYWdpLnYxLkxpc3RSZXBsaWNhc1Jlc3BvbnNlEk0KFExpc3RSZXBsaWNhU25hcHNob3RzEhUubmFnaS52MS5Db250YWluZXJSZWYaHi5uYWdpLnYxLkxpc3RTbmFwc2hvdHNSZXNwb25zZRJPCg5DaGVja0NvbnRhaW5lchIcLm5hZ2kudjEuUHV0Q29udGFpbmVyUmVxdWVzdBofLm5hZ2kudjEuQ2hlY2tDb250YWluZXJSZXNwb25zZRJICg5SZXN0b3JlUmVwbGljYRIeLm5hZ2kudjEuUmVzdG9yZVJlcGxpY2FSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEkYKDURlbGV0ZVJlcGxpY2ESFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoeLm5hZ2kudjEuRGVsZXRlUmVwbGljYVJlc3BvbnNlEkAKCk1pZ3JhdGVPdXQSGi5uYWdpLnYxLk1pZ3JhdGVPdXRSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEj4KDU1pZ3JhdGVSZXN1bWUSFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJDCgtTZXRGYWlsb3ZlchIbLm5hZ2kudjEuU2V0RmFpbG92ZXJSZXF1ZXN0GhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cxJBCg9Db25maXJtVGFrZW92ZXISFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoXLm5hZ2kudjEuRmFpbG92ZXJTdGF0dXMSOAoIR2V0Q2FjaGUSGC5uYWdpLnYxLkdldENhY2hlUmVxdWVzdBoSLm5hZ2kudjEuTm9kZUNhY2hlEjgKCFNldExpbmtzEhEubmFnaS52MS5MaW5rUGxhbhoZLm5hZ2kudjEuU2V0TGlua3NSZXNwb25zZRJRCg5TZXRBbGVydENvbmZpZxIeLm5hZ2kudjEuU2V0QWxlcnRDb25maWdSZXF1ZXN0Gh8ubmFnaS52MS5TZXRBbGVydENvbmZpZ1Jlc3BvbnNlEksKDFF1ZXJ5TWV0cmljcxIcLm5hZ2kudjEuUXVlcnlNZXRyaWNzUmVxdWVzdBodLm5hZ2kudjEuUXVlcnlNZXRyaWNzUmVzcG9uc2USVAoPU2V0UHJvamVjdHNSb290Eh8ubmFnaS52MS5TZXRQcm9qZWN0c1Jvb3RSZXF1ZXN0GiAubmFnaS52MS5TZXRQcm9qZWN0c1Jvb3RSZXNwb25zZRJFCgpMaXN0UGFuZWxzEhoubmFnaS52MS5MaXN0UGFuZWxzUmVxdWVzdBobLm5hZ2kudjEuTGlzdFBhbmVsc1Jlc3BvbnNlEj8KCEFkZFBhbmVsEhgubmFnaS52MS5BZGRQYW5lbFJlcXVlc3QaGS5uYWdpLnYxLkFkZFBhbmVsUmVzcG9uc2USSAoLUmVtb3ZlUGFuZWwSGy5uYWdpLnYxLlJlbW92ZVBhbmVsUmVxdWVzdBocLm5hZ2kudjEuUmVtb3ZlUGFuZWxSZXNwb25zZRJACg1HZXRNZXNoU3RhdHVzEhoubmFnaS52MS5NZXNoU3RhdHVzUmVxdWVzdBoTLm5hZ2kudjEuTWVzaFN0YXR1cxI/CghNZXNoUGluZxIYLm5hZ2kudjEuTWVzaFBpbmdSZXF1ZXN0GhkubmFnaS52MS5NZXNoUGluZ1Jlc3BvbnNlEjoKCkdldE1pcnJvcnMSGi5uYWdpLnYxLkdldE1pcnJvcnNSZXF1ZXN0GhAubmFnaS52MS5NaXJyb3JzEjAKClNldE1pcnJvcnMSEC5uYWdpLnYxLk1pcnJvcnMaEC5uYWdpLnYxLk1pcnJvcnMSUQoOU2V0UGFuZWxEb21haW4SHi5uYWdpLnYxLlNldFBhbmVsRG9tYWluUmVxdWVzdBofLm5hZ2kudjEuU2V0UGFuZWxEb21haW5SZXNwb25zZRI8CgdVcGdyYWRlEhcubmFnaS52MS5VcGdyYWRlUmVxdWVzdBoYLm5hZ2kudjEuVXBncmFkZVJlc3BvbnNlQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL2FnZW50LnByb3RvEgduYWdpLnYxIhIKEFNldExpbmtzUmVzcG9uc2UiNgoRQ2hlY2tQb3J0c1JlcXVlc3QSIQoGcm91dGVzGAEgAygLMhEubmFnaS52MS5FeHBvc3VyZSIUChJDaGVja1BvcnRzUmVzcG9uc2UiEQoPR2V0Q2FjaGVSZXF1ZXN0IoUBCglOb2RlQ2FjaGUSKgoKY29udGFpbmVycxgBIAMoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYxIqCglmYWlsb3ZlcnMYAiADKAsyFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEiAKBWxpbmtzGAMgASgLMhEubmFnaS52MS5MaW5rUGxhbiKcAQoSU2V0RmFpbG92ZXJSZXF1ZXN0EicKBmNvbmZpZxgBIAEoCzIXLm5hZ2kudjEuRmFpbG92ZXJDb25maWcSDQoFY2xlYXIYAiABKAgSEgoKcHJvamVjdF9pZBgDIAEoCRIRCgljb250YWluZXIYBiABKAkSEwoLc2VlZF9ob2xkZXIYBCABKAwSEgoKc2VlZF9lcG9jaBgFIAEoBCJ9ChRBY2NlcHRSZXBsaWNhUmVxdWVzdBIkCgRzcGVjGAEgASgLMhYubmFnaS52MS5Db250YWluZXJTcGVjEhIKCnNvdXJjZV9rZXkYAiABKAwSFgoOc291cmNlX25vZGVfaWQYAyABKAkSEwoLc291cmNlX25hbWUYBCABKAkiFwoVQWNjZXB0UmVwbGljYVJlc3BvbnNlIhUKE0xpc3RSZXBsaWNhc1JlcXVlc3QiOgoUTGlzdFJlcGxpY2FzUmVzcG9uc2USIgoIcmVwbGljYXMYASADKAsyEC5uYWdpLnYxLlJlcGxpY2EiGAoWQ2hlY2tDb250YWluZXJSZXNwb25zZSJSChVSZXN0b3JlUmVwbGljYVJlcXVlc3QSJAoEc3BlYxgBIAEoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYxITCgtzbmFwc2hvdF9pZBgCIAEoCSIXChVEZWxldGVSZXBsaWNhUmVzcG9uc2UiYQoRTWlncmF0ZU91dFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkSJQoGdGFyZ2V0GAMgASgLMhUubmFnaS52MS5CYWNrdXBUYXJnZXQiNQoMQ29udGFpbmVyUmVmEhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJIjsKE1B1dENvbnRhaW5lclJlcXVlc3QSJAoEc3BlYxgBIAEoCzIWLm5hZ2kudjEuQ29udGFpbmVyU3BlYyIWChRQdXRDb250YWluZXJSZXNwb25zZSK+AQoWRGVwbG95Q29udGFpbmVyUmVxdWVzdBIkCgRzcGVjGAEgASgLMhYubmFnaS52MS5Db250YWluZXJTcGVjEgwKBHB1bGwYAiABKAgSEgoKdXNlX3VwbG9hZBgDIAEoCBITCgtwdWxsX2ltYWdlcxgEIAEoCBISCgpmaWxlc19mcm9tGAUgASgDEhkKEXJlc3RvcmVfZGF0YV9mcm9tGAYgASgDEhgKEHByZXZpb3VzX3ZlcnNpb24YByABKAMiYwoWRGVsZXRlQ29udGFpbmVyUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgCIAEoCRISCgpkZWxldGVfZGlyGAMgASgIEg4KBnJldGlyZRgEIAEoCCIZChdEZWxldGVDb250YWluZXJSZXNwb25zZSJUChZSZXN0b3JlU25hcHNob3RSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEhMKC3NuYXBzaG90X2lkGAMgASgJIj0KFUxpc3RTbmFwc2hvdHNSZXNwb25zZRIkCglzbmFwc2hvdHMYASADKAsyES5uYWdpLnYxLlNuYXBzaG90ImkKEVN0cmVhbUxvZ3NSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEQoJY29udGFpbmVyGAIgASgJEg8KB3NlcnZpY2UYAyABKAkSDAoEdGFpbBgEIAEoBRIOCgZmb2xsb3cYBSABKAgiPAoTQ2hlY2tJbWFnZXNSZXNwb25zZRIlCgd1cGRhdGVzGAEgAygLMhQubmFnaS52MS5JbWFnZVVwZGF0ZSJMChRMb2dpblJlZ2lzdHJ5UmVxdWVzdBIQCghyZWdpc3RyeRgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIQCghwYXNzd29yZBgDIAEoCSIuChVMb2dpblJlZ2lzdHJ5UmVzcG9uc2USFQoNZG9ja2VyX2NvbmZpZxgBIAEoDCImChZTZXRQcm9qZWN0c1Jvb3RSZXF1ZXN0EgwKBHJvb3QYASABKAkiGQoXU2V0UHJvamVjdHNSb290UmVzcG9uc2UiPQoVU2V0UGFuZWxEb21haW5SZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRIUCgxwcm94eV9zZWNyZXQYAiABKAkiGAoWU2V0UGFuZWxEb21haW5SZXNwb25zZSIxCg5VcGdyYWRlUmVxdWVzdBIOCgZzaGEyNTYYASABKAkSDwoHdmVyc2lvbhgCIAEoCSIiCg9VcGdyYWRlUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCSITChFHZXRNaXJyb3JzUmVxdWVzdCIqCgdNaXJyb3JzEg8KB21pcnJvcnMYASADKAkSDgoGYWN0aXZlGAIgAygJIhMKEU1lc2hTdGF0dXNSZXF1ZXN0IhMKEUxpc3RQYW5lbHNSZXF1ZXN0IjsKEkxpc3RQYW5lbHNSZXNwb25zZRIlCgZwYW5lbHMYASADKAsyFS5uYWdpLnYxLlRydXN0ZWRQYW5lbCJGCg9BZGRQYW5lbFJlcXVlc3QSDwoHYWRkcmVzcxgBIAEoCRITCgtmaW5nZXJwcmludBgCIAEoCRINCgV0b2tlbhgDIAEoCSISChBBZGRQYW5lbFJlc3BvbnNlIikKElJlbW92ZVBhbmVsUmVxdWVzdBITCgtmaW5nZXJwcmludBgBIAEoCSIVChNSZW1vdmVQYW5lbFJlc3BvbnNlInMKCUV4ZWNJbnB1dBIjCgVzdGFydBgBIAEoCzISLm5hZ2kudjEuRXhlY1N0YXJ0SAASDwoFc3RkaW4YAiABKAxIABInCgZyZXNpemUYAyABKAsyFS5uYWdpLnYxLlRlcm1pbmFsU2l6ZUgAQgcKBWlucHV0InkKCUV4ZWNTdGFydBISCgpwcm9qZWN0X2lkGAEgASgJEg8KB3NlcnZpY2UYAiABKAkSEQoJY29udGFpbmVyGAUgASgJEg8KB2NvbW1hbmQYAyADKAkSIwoEc2l6ZRgEIAEoCzIVLm5hZ2kudjEuVGVybWluYWxTaXplIioKDFRlcm1pbmFsU2l6ZRIMCgRjb2xzGAEgASgNEgwKBHJvd3MYAiABKA0iPQoKRXhlY091dHB1dBIQCgZzdGRvdXQYASABKAxIABITCglleGl0X2NvZGUYAiABKAVIAEIICgZvdXRwdXQiPQoVU2V0QWxlcnRDb25maWdSZXF1ZXN0EiQKBmNvbmZpZxgBIAEoCzIULm5hZ2kudjEuQWxlcnRDb25maWciGAoWU2V0QWxlcnRDb25maWdSZXNwb25zZSKFAQoTUXVlcnlNZXRyaWNzUmVxdWVzdBIOCgZwcmVmaXgYASABKAkSKAoEZnJvbRgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJgoCdG8YAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBHN0ZXAYBCABKAMiPQoUUXVlcnlNZXRyaWNzUmVzcG9uc2USJQoGc2VyaWVzGAEgAygLMhUubmFnaS52MS5NZXRyaWNTZXJpZXMy8xMKDEFnZW50U2VydmljZRJLCgxQdXRDb250YWluZXISHC5uYWdpLnYxLlB1dENvbnRhaW5lclJlcXVlc3QaHS5uYWdpLnYxLlB1dENvbnRhaW5lclJlc3BvbnNlEkoKD0RlcGxveUNvbnRhaW5lchIfLm5hZ2kudjEuRGVwbG95Q29udGFpbmVyUmVxdWVzdBoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJUCg9EZWxldGVDb250YWluZXISHy5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlcXVlc3QaIC5uYWdpLnYxLkRlbGV0ZUNvbnRhaW5lclJlc3BvbnNlEkYKDUxpc3RTbmFwc2hvdHMSFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoeLm5hZ2kudjEuTGlzdFNuYXBzaG90c1Jlc3BvbnNlEj8KDkNyZWF0ZVNuYXBzaG90EhUubmFnaS52MS5Db250YWluZXJSZWYaFC5uYWdpLnYxLkRlcGxveUV2ZW50MAESSgoPUmVzdG9yZVNuYXBzaG90Eh8ubmFnaS52MS5SZXN0b3JlU25hcHNob3RSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEjwKClN0cmVhbUxvZ3MSGi5uYWdpLnYxLlN0cmVhbUxvZ3NSZXF1ZXN0GhAubmFnaS52MS5Mb2dMaW5lMAESMwoERXhlYxISLm5hZ2kudjEuRXhlY0lucHV0GhMubmFnaS52MS5FeGVjT3V0cHV0KAEwARJCCgtDaGVja0ltYWdlcxIVLm5hZ2kudjEuQ29udGFpbmVyUmVmGhwubmFnaS52MS5DaGVja0ltYWdlc1Jlc3BvbnNlEk4KDUxvZ2luUmVnaXN0cnkSHS5uYWdpLnYxLkxvZ2luUmVnaXN0cnlSZXF1ZXN0Gh4ubmFnaS52MS5Mb2dpblJlZ2lzdHJ5UmVzcG9uc2USOgoKU3luY0JhY2t1cBIVLm5hZ2kudjEuQ29udGFpbmVyUmVmGhUubmFnaS52MS5CYWNrdXBTdGF0dXMSTgoNQWNjZXB0UmVwbGljYRIdLm5hZ2kudjEuQWNjZXB0UmVwbGljYVJlcXVlc3QaHi5uYWdpLnYxLkFjY2VwdFJlcGxpY2FSZXNwb25zZRJLCgxMaXN0UmVwbGljYXMSHC5uYWdpLnYxLkxpc3RSZXBsaWNhc1JlcXVlc3QaHS5uYWdpLnYxLkxpc3RSZXBsaWNhc1Jlc3BvbnNlEk0KFExpc3RSZXBsaWNhU25hcHNob3RzEhUubmFnaS52MS5Db250YWluZXJSZWYaHi5uYWdpLnYxLkxpc3RTbmFwc2hvdHNSZXNwb25zZRJPCg5DaGVja0NvbnRhaW5lchIcLm5hZ2kudjEuUHV0Q29udGFpbmVyUmVxdWVzdBofLm5hZ2kudjEuQ2hlY2tDb250YWluZXJSZXNwb25zZRJICg5SZXN0b3JlUmVwbGljYRIeLm5hZ2kudjEuUmVzdG9yZVJlcGxpY2FSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEkYKDURlbGV0ZVJlcGxpY2ESFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoeLm5hZ2kudjEuRGVsZXRlUmVwbGljYVJlc3BvbnNlEkAKCk1pZ3JhdGVPdXQSGi5uYWdpLnYxLk1pZ3JhdGVPdXRSZXF1ZXN0GhQubmFnaS52MS5EZXBsb3lFdmVudDABEj4KDU1pZ3JhdGVSZXN1bWUSFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoULm5hZ2kudjEuRGVwbG95RXZlbnQwARJDCgtTZXRGYWlsb3ZlchIbLm5hZ2kudjEuU2V0RmFpbG92ZXJSZXF1ZXN0GhcubmFnaS52MS5GYWlsb3ZlclN0YXR1cxJBCg9Db25maXJtVGFrZW92ZXISFS5uYWdpLnYxLkNvbnRhaW5lclJlZhoXLm5hZ2kudjEuRmFpbG92ZXJTdGF0dXMSOAoIR2V0Q2FjaGUSGC5uYWdpLnYxLkdldENhY2hlUmVxdWVzdBoSLm5hZ2kudjEuTm9kZUNhY2hlEjgKCFNldExpbmtzEhEubmFnaS52MS5MaW5rUGxhbhoZLm5hZ2kudjEuU2V0TGlua3NSZXNwb25zZRJFCgpDaGVja1BvcnRzEhoubmFnaS52MS5DaGVja1BvcnRzUmVxdWVzdBobLm5hZ2kudjEuQ2hlY2tQb3J0c1Jlc3BvbnNlElEKDlNldEFsZXJ0Q29uZmlnEh4ubmFnaS52MS5TZXRBbGVydENvbmZpZ1JlcXVlc3QaHy5uYWdpLnYxLlNldEFsZXJ0Q29uZmlnUmVzcG9uc2USSwoMUXVlcnlNZXRyaWNzEhwubmFnaS52MS5RdWVyeU1ldHJpY3NSZXF1ZXN0Gh0ubmFnaS52MS5RdWVyeU1ldHJpY3NSZXNwb25zZRJUCg9TZXRQcm9qZWN0c1Jvb3QSHy5uYWdpLnYxLlNldFByb2plY3RzUm9vdFJlcXVlc3QaIC5uYWdpLnYxLlNldFByb2plY3RzUm9vdFJlc3BvbnNlEkUKCkxpc3RQYW5lbHMSGi5uYWdpLnYxLkxpc3RQYW5lbHNSZXF1ZXN0GhsubmFnaS52MS5MaXN0UGFuZWxzUmVzcG9uc2USPwoIQWRkUGFuZWwSGC5uYWdpLnYxLkFkZFBhbmVsUmVxdWVzdBoZLm5hZ2kudjEuQWRkUGFuZWxSZXNwb25zZRJICgtSZW1vdmVQYW5lbBIbLm5hZ2kudjEuUmVtb3ZlUGFuZWxSZXF1ZXN0GhwubmFnaS52MS5SZW1vdmVQYW5lbFJlc3BvbnNlEkAKDUdldE1lc2hTdGF0dXMSGi5uYWdpLnYxLk1lc2hTdGF0dXNSZXF1ZXN0GhMubmFnaS52MS5NZXNoU3RhdHVzEj8KCE1lc2hQaW5nEhgubmFnaS52MS5NZXNoUGluZ1JlcXVlc3QaGS5uYWdpLnYxLk1lc2hQaW5nUmVzcG9uc2USOgoKR2V0TWlycm9ycxIaLm5hZ2kudjEuR2V0TWlycm9yc1JlcXVlc3QaEC5uYWdpLnYxLk1pcnJvcnMSMAoKU2V0TWlycm9ycxIQLm5hZ2kudjEuTWlycm9ycxoQLm5hZ2kudjEuTWlycm9ycxJRCg5TZXRQYW5lbERvbWFpbhIeLm5hZ2kudjEuU2V0UGFuZWxEb21haW5SZXF1ZXN0Gh8ubmFnaS52MS5TZXRQYW5lbERvbWFpblJlc3BvbnNlEjwKB1VwZ3JhZGUSFy5uYWdpLnYxLlVwZ3JhZGVSZXF1ZXN0GhgubmFnaS52MS5VcGdyYWRlUmVzcG9uc2VCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.SetLinksResponse
@@ -30,6 +30,36 @@ export const SetLinksResponseSchema: GenMessage<SetLinksResponse> = /*@__PURE__*
   messageDesc(file_nagi_v1_agent, 0);
 
 /**
+ * @generated from message nagi.v1.CheckPortsRequest
+ */
+export type CheckPortsRequest = Message<"nagi.v1.CheckPortsRequest"> & {
+  /**
+   * @generated from field: repeated nagi.v1.Exposure routes = 1;
+   */
+  routes: Exposure[];
+};
+
+/**
+ * Describes the message nagi.v1.CheckPortsRequest.
+ * Use `create(CheckPortsRequestSchema)` to create a new message.
+ */
+export const CheckPortsRequestSchema: GenMessage<CheckPortsRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 1);
+
+/**
+ * @generated from message nagi.v1.CheckPortsResponse
+ */
+export type CheckPortsResponse = Message<"nagi.v1.CheckPortsResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.CheckPortsResponse.
+ * Use `create(CheckPortsResponseSchema)` to create a new message.
+ */
+export const CheckPortsResponseSchema: GenMessage<CheckPortsResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_agent, 2);
+
+/**
  * @generated from message nagi.v1.GetCacheRequest
  */
 export type GetCacheRequest = Message<"nagi.v1.GetCacheRequest"> & {
@@ -40,7 +70,7 @@ export type GetCacheRequest = Message<"nagi.v1.GetCacheRequest"> & {
  * Use `create(GetCacheRequestSchema)` to create a new message.
  */
 export const GetCacheRequestSchema: GenMessage<GetCacheRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 1);
+  messageDesc(file_nagi_v1_agent, 3);
 
 /**
  * @generated from message nagi.v1.NodeCache
@@ -67,7 +97,7 @@ export type NodeCache = Message<"nagi.v1.NodeCache"> & {
  * Use `create(NodeCacheSchema)` to create a new message.
  */
 export const NodeCacheSchema: GenMessage<NodeCache> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 2);
+  messageDesc(file_nagi_v1_agent, 4);
 
 /**
  * @generated from message nagi.v1.SetFailoverRequest
@@ -114,7 +144,7 @@ export type SetFailoverRequest = Message<"nagi.v1.SetFailoverRequest"> & {
  * Use `create(SetFailoverRequestSchema)` to create a new message.
  */
 export const SetFailoverRequestSchema: GenMessage<SetFailoverRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 3);
+  messageDesc(file_nagi_v1_agent, 5);
 
 /**
  * @generated from message nagi.v1.AcceptReplicaRequest
@@ -146,7 +176,7 @@ export type AcceptReplicaRequest = Message<"nagi.v1.AcceptReplicaRequest"> & {
  * Use `create(AcceptReplicaRequestSchema)` to create a new message.
  */
 export const AcceptReplicaRequestSchema: GenMessage<AcceptReplicaRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 4);
+  messageDesc(file_nagi_v1_agent, 6);
 
 /**
  * @generated from message nagi.v1.AcceptReplicaResponse
@@ -159,7 +189,7 @@ export type AcceptReplicaResponse = Message<"nagi.v1.AcceptReplicaResponse"> & {
  * Use `create(AcceptReplicaResponseSchema)` to create a new message.
  */
 export const AcceptReplicaResponseSchema: GenMessage<AcceptReplicaResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 5);
+  messageDesc(file_nagi_v1_agent, 7);
 
 /**
  * @generated from message nagi.v1.ListReplicasRequest
@@ -172,7 +202,7 @@ export type ListReplicasRequest = Message<"nagi.v1.ListReplicasRequest"> & {
  * Use `create(ListReplicasRequestSchema)` to create a new message.
  */
 export const ListReplicasRequestSchema: GenMessage<ListReplicasRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 6);
+  messageDesc(file_nagi_v1_agent, 8);
 
 /**
  * @generated from message nagi.v1.ListReplicasResponse
@@ -189,7 +219,7 @@ export type ListReplicasResponse = Message<"nagi.v1.ListReplicasResponse"> & {
  * Use `create(ListReplicasResponseSchema)` to create a new message.
  */
 export const ListReplicasResponseSchema: GenMessage<ListReplicasResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 7);
+  messageDesc(file_nagi_v1_agent, 9);
 
 /**
  * @generated from message nagi.v1.CheckContainerResponse
@@ -202,7 +232,7 @@ export type CheckContainerResponse = Message<"nagi.v1.CheckContainerResponse"> &
  * Use `create(CheckContainerResponseSchema)` to create a new message.
  */
 export const CheckContainerResponseSchema: GenMessage<CheckContainerResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 8);
+  messageDesc(file_nagi_v1_agent, 10);
 
 /**
  * @generated from message nagi.v1.RestoreReplicaRequest
@@ -224,7 +254,7 @@ export type RestoreReplicaRequest = Message<"nagi.v1.RestoreReplicaRequest"> & {
  * Use `create(RestoreReplicaRequestSchema)` to create a new message.
  */
 export const RestoreReplicaRequestSchema: GenMessage<RestoreReplicaRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 9);
+  messageDesc(file_nagi_v1_agent, 11);
 
 /**
  * @generated from message nagi.v1.DeleteReplicaResponse
@@ -237,7 +267,7 @@ export type DeleteReplicaResponse = Message<"nagi.v1.DeleteReplicaResponse"> & {
  * Use `create(DeleteReplicaResponseSchema)` to create a new message.
  */
 export const DeleteReplicaResponseSchema: GenMessage<DeleteReplicaResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 10);
+  messageDesc(file_nagi_v1_agent, 12);
 
 /**
  * @generated from message nagi.v1.MigrateOutRequest
@@ -264,7 +294,7 @@ export type MigrateOutRequest = Message<"nagi.v1.MigrateOutRequest"> & {
  * Use `create(MigrateOutRequestSchema)` to create a new message.
  */
 export const MigrateOutRequestSchema: GenMessage<MigrateOutRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 11);
+  messageDesc(file_nagi_v1_agent, 13);
 
 /**
  * @generated from message nagi.v1.ContainerRef
@@ -286,7 +316,7 @@ export type ContainerRef = Message<"nagi.v1.ContainerRef"> & {
  * Use `create(ContainerRefSchema)` to create a new message.
  */
 export const ContainerRefSchema: GenMessage<ContainerRef> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 12);
+  messageDesc(file_nagi_v1_agent, 14);
 
 /**
  * @generated from message nagi.v1.PutContainerRequest
@@ -303,7 +333,7 @@ export type PutContainerRequest = Message<"nagi.v1.PutContainerRequest"> & {
  * Use `create(PutContainerRequestSchema)` to create a new message.
  */
 export const PutContainerRequestSchema: GenMessage<PutContainerRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 13);
+  messageDesc(file_nagi_v1_agent, 15);
 
 /**
  * @generated from message nagi.v1.PutContainerResponse
@@ -316,7 +346,7 @@ export type PutContainerResponse = Message<"nagi.v1.PutContainerResponse"> & {
  * Use `create(PutContainerResponseSchema)` to create a new message.
  */
 export const PutContainerResponseSchema: GenMessage<PutContainerResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 14);
+  messageDesc(file_nagi_v1_agent, 16);
 
 /**
  * @generated from message nagi.v1.DeployContainerRequest
@@ -377,7 +407,7 @@ export type DeployContainerRequest = Message<"nagi.v1.DeployContainerRequest"> &
  * Use `create(DeployContainerRequestSchema)` to create a new message.
  */
 export const DeployContainerRequestSchema: GenMessage<DeployContainerRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 15);
+  messageDesc(file_nagi_v1_agent, 17);
 
 /**
  * @generated from message nagi.v1.DeleteContainerRequest
@@ -413,7 +443,7 @@ export type DeleteContainerRequest = Message<"nagi.v1.DeleteContainerRequest"> &
  * Use `create(DeleteContainerRequestSchema)` to create a new message.
  */
 export const DeleteContainerRequestSchema: GenMessage<DeleteContainerRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 16);
+  messageDesc(file_nagi_v1_agent, 18);
 
 /**
  * @generated from message nagi.v1.DeleteContainerResponse
@@ -426,7 +456,7 @@ export type DeleteContainerResponse = Message<"nagi.v1.DeleteContainerResponse">
  * Use `create(DeleteContainerResponseSchema)` to create a new message.
  */
 export const DeleteContainerResponseSchema: GenMessage<DeleteContainerResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 17);
+  messageDesc(file_nagi_v1_agent, 19);
 
 /**
  * @generated from message nagi.v1.RestoreSnapshotRequest
@@ -453,7 +483,7 @@ export type RestoreSnapshotRequest = Message<"nagi.v1.RestoreSnapshotRequest"> &
  * Use `create(RestoreSnapshotRequestSchema)` to create a new message.
  */
 export const RestoreSnapshotRequestSchema: GenMessage<RestoreSnapshotRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 18);
+  messageDesc(file_nagi_v1_agent, 20);
 
 /**
  * @generated from message nagi.v1.ListSnapshotsResponse
@@ -470,7 +500,7 @@ export type ListSnapshotsResponse = Message<"nagi.v1.ListSnapshotsResponse"> & {
  * Use `create(ListSnapshotsResponseSchema)` to create a new message.
  */
 export const ListSnapshotsResponseSchema: GenMessage<ListSnapshotsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 19);
+  messageDesc(file_nagi_v1_agent, 21);
 
 /**
  * @generated from message nagi.v1.StreamLogsRequest
@@ -511,7 +541,7 @@ export type StreamLogsRequest = Message<"nagi.v1.StreamLogsRequest"> & {
  * Use `create(StreamLogsRequestSchema)` to create a new message.
  */
 export const StreamLogsRequestSchema: GenMessage<StreamLogsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 20);
+  messageDesc(file_nagi_v1_agent, 22);
 
 /**
  * @generated from message nagi.v1.CheckImagesResponse
@@ -528,7 +558,7 @@ export type CheckImagesResponse = Message<"nagi.v1.CheckImagesResponse"> & {
  * Use `create(CheckImagesResponseSchema)` to create a new message.
  */
 export const CheckImagesResponseSchema: GenMessage<CheckImagesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 21);
+  messageDesc(file_nagi_v1_agent, 23);
 
 /**
  * @generated from message nagi.v1.LoginRegistryRequest
@@ -555,7 +585,7 @@ export type LoginRegistryRequest = Message<"nagi.v1.LoginRegistryRequest"> & {
  * Use `create(LoginRegistryRequestSchema)` to create a new message.
  */
 export const LoginRegistryRequestSchema: GenMessage<LoginRegistryRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 22);
+  messageDesc(file_nagi_v1_agent, 24);
 
 /**
  * @generated from message nagi.v1.LoginRegistryResponse
@@ -574,7 +604,7 @@ export type LoginRegistryResponse = Message<"nagi.v1.LoginRegistryResponse"> & {
  * Use `create(LoginRegistryResponseSchema)` to create a new message.
  */
 export const LoginRegistryResponseSchema: GenMessage<LoginRegistryResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 23);
+  messageDesc(file_nagi_v1_agent, 25);
 
 /**
  * @generated from message nagi.v1.SetProjectsRootRequest
@@ -591,7 +621,7 @@ export type SetProjectsRootRequest = Message<"nagi.v1.SetProjectsRootRequest"> &
  * Use `create(SetProjectsRootRequestSchema)` to create a new message.
  */
 export const SetProjectsRootRequestSchema: GenMessage<SetProjectsRootRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 24);
+  messageDesc(file_nagi_v1_agent, 26);
 
 /**
  * @generated from message nagi.v1.SetProjectsRootResponse
@@ -604,7 +634,7 @@ export type SetProjectsRootResponse = Message<"nagi.v1.SetProjectsRootResponse">
  * Use `create(SetProjectsRootResponseSchema)` to create a new message.
  */
 export const SetProjectsRootResponseSchema: GenMessage<SetProjectsRootResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 25);
+  messageDesc(file_nagi_v1_agent, 27);
 
 /**
  * @generated from message nagi.v1.SetPanelDomainRequest
@@ -629,7 +659,7 @@ export type SetPanelDomainRequest = Message<"nagi.v1.SetPanelDomainRequest"> & {
  * Use `create(SetPanelDomainRequestSchema)` to create a new message.
  */
 export const SetPanelDomainRequestSchema: GenMessage<SetPanelDomainRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 26);
+  messageDesc(file_nagi_v1_agent, 28);
 
 /**
  * @generated from message nagi.v1.SetPanelDomainResponse
@@ -642,7 +672,7 @@ export type SetPanelDomainResponse = Message<"nagi.v1.SetPanelDomainResponse"> &
  * Use `create(SetPanelDomainResponseSchema)` to create a new message.
  */
 export const SetPanelDomainResponseSchema: GenMessage<SetPanelDomainResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 27);
+  messageDesc(file_nagi_v1_agent, 29);
 
 /**
  * @generated from message nagi.v1.UpgradeRequest
@@ -669,7 +699,7 @@ export type UpgradeRequest = Message<"nagi.v1.UpgradeRequest"> & {
  * Use `create(UpgradeRequestSchema)` to create a new message.
  */
 export const UpgradeRequestSchema: GenMessage<UpgradeRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 28);
+  messageDesc(file_nagi_v1_agent, 30);
 
 /**
  * @generated from message nagi.v1.UpgradeResponse
@@ -688,7 +718,7 @@ export type UpgradeResponse = Message<"nagi.v1.UpgradeResponse"> & {
  * Use `create(UpgradeResponseSchema)` to create a new message.
  */
 export const UpgradeResponseSchema: GenMessage<UpgradeResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 29);
+  messageDesc(file_nagi_v1_agent, 31);
 
 /**
  * @generated from message nagi.v1.GetMirrorsRequest
@@ -701,7 +731,7 @@ export type GetMirrorsRequest = Message<"nagi.v1.GetMirrorsRequest"> & {
  * Use `create(GetMirrorsRequestSchema)` to create a new message.
  */
 export const GetMirrorsRequestSchema: GenMessage<GetMirrorsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 30);
+  messageDesc(file_nagi_v1_agent, 32);
 
 /**
  * @generated from message nagi.v1.Mirrors
@@ -727,7 +757,7 @@ export type Mirrors = Message<"nagi.v1.Mirrors"> & {
  * Use `create(MirrorsSchema)` to create a new message.
  */
 export const MirrorsSchema: GenMessage<Mirrors> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 31);
+  messageDesc(file_nagi_v1_agent, 33);
 
 /**
  * @generated from message nagi.v1.MeshStatusRequest
@@ -740,7 +770,7 @@ export type MeshStatusRequest = Message<"nagi.v1.MeshStatusRequest"> & {
  * Use `create(MeshStatusRequestSchema)` to create a new message.
  */
 export const MeshStatusRequestSchema: GenMessage<MeshStatusRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 32);
+  messageDesc(file_nagi_v1_agent, 34);
 
 /**
  * @generated from message nagi.v1.ListPanelsRequest
@@ -753,7 +783,7 @@ export type ListPanelsRequest = Message<"nagi.v1.ListPanelsRequest"> & {
  * Use `create(ListPanelsRequestSchema)` to create a new message.
  */
 export const ListPanelsRequestSchema: GenMessage<ListPanelsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 33);
+  messageDesc(file_nagi_v1_agent, 35);
 
 /**
  * @generated from message nagi.v1.ListPanelsResponse
@@ -770,7 +800,7 @@ export type ListPanelsResponse = Message<"nagi.v1.ListPanelsResponse"> & {
  * Use `create(ListPanelsResponseSchema)` to create a new message.
  */
 export const ListPanelsResponseSchema: GenMessage<ListPanelsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 34);
+  messageDesc(file_nagi_v1_agent, 36);
 
 /**
  * @generated from message nagi.v1.AddPanelRequest
@@ -797,7 +827,7 @@ export type AddPanelRequest = Message<"nagi.v1.AddPanelRequest"> & {
  * Use `create(AddPanelRequestSchema)` to create a new message.
  */
 export const AddPanelRequestSchema: GenMessage<AddPanelRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 35);
+  messageDesc(file_nagi_v1_agent, 37);
 
 /**
  * @generated from message nagi.v1.AddPanelResponse
@@ -810,7 +840,7 @@ export type AddPanelResponse = Message<"nagi.v1.AddPanelResponse"> & {
  * Use `create(AddPanelResponseSchema)` to create a new message.
  */
 export const AddPanelResponseSchema: GenMessage<AddPanelResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 36);
+  messageDesc(file_nagi_v1_agent, 38);
 
 /**
  * @generated from message nagi.v1.RemovePanelRequest
@@ -827,7 +857,7 @@ export type RemovePanelRequest = Message<"nagi.v1.RemovePanelRequest"> & {
  * Use `create(RemovePanelRequestSchema)` to create a new message.
  */
 export const RemovePanelRequestSchema: GenMessage<RemovePanelRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 37);
+  messageDesc(file_nagi_v1_agent, 39);
 
 /**
  * @generated from message nagi.v1.RemovePanelResponse
@@ -840,7 +870,7 @@ export type RemovePanelResponse = Message<"nagi.v1.RemovePanelResponse"> & {
  * Use `create(RemovePanelResponseSchema)` to create a new message.
  */
 export const RemovePanelResponseSchema: GenMessage<RemovePanelResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 38);
+  messageDesc(file_nagi_v1_agent, 40);
 
 /**
  * @generated from message nagi.v1.ExecInput
@@ -875,7 +905,7 @@ export type ExecInput = Message<"nagi.v1.ExecInput"> & {
  * Use `create(ExecInputSchema)` to create a new message.
  */
 export const ExecInputSchema: GenMessage<ExecInput> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 39);
+  messageDesc(file_nagi_v1_agent, 41);
 
 /**
  * @generated from message nagi.v1.ExecStart
@@ -914,7 +944,7 @@ export type ExecStart = Message<"nagi.v1.ExecStart"> & {
  * Use `create(ExecStartSchema)` to create a new message.
  */
 export const ExecStartSchema: GenMessage<ExecStart> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 40);
+  messageDesc(file_nagi_v1_agent, 42);
 
 /**
  * @generated from message nagi.v1.TerminalSize
@@ -936,7 +966,7 @@ export type TerminalSize = Message<"nagi.v1.TerminalSize"> & {
  * Use `create(TerminalSizeSchema)` to create a new message.
  */
 export const TerminalSizeSchema: GenMessage<TerminalSize> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 41);
+  messageDesc(file_nagi_v1_agent, 43);
 
 /**
  * @generated from message nagi.v1.ExecOutput
@@ -967,7 +997,7 @@ export type ExecOutput = Message<"nagi.v1.ExecOutput"> & {
  * Use `create(ExecOutputSchema)` to create a new message.
  */
 export const ExecOutputSchema: GenMessage<ExecOutput> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 42);
+  messageDesc(file_nagi_v1_agent, 44);
 
 /**
  * @generated from message nagi.v1.SetAlertConfigRequest
@@ -984,7 +1014,7 @@ export type SetAlertConfigRequest = Message<"nagi.v1.SetAlertConfigRequest"> & {
  * Use `create(SetAlertConfigRequestSchema)` to create a new message.
  */
 export const SetAlertConfigRequestSchema: GenMessage<SetAlertConfigRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 43);
+  messageDesc(file_nagi_v1_agent, 45);
 
 /**
  * @generated from message nagi.v1.SetAlertConfigResponse
@@ -997,7 +1027,7 @@ export type SetAlertConfigResponse = Message<"nagi.v1.SetAlertConfigResponse"> &
  * Use `create(SetAlertConfigResponseSchema)` to create a new message.
  */
 export const SetAlertConfigResponseSchema: GenMessage<SetAlertConfigResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 44);
+  messageDesc(file_nagi_v1_agent, 46);
 
 /**
  * @generated from message nagi.v1.QueryMetricsRequest
@@ -1034,7 +1064,7 @@ export type QueryMetricsRequest = Message<"nagi.v1.QueryMetricsRequest"> & {
  * Use `create(QueryMetricsRequestSchema)` to create a new message.
  */
 export const QueryMetricsRequestSchema: GenMessage<QueryMetricsRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 45);
+  messageDesc(file_nagi_v1_agent, 47);
 
 /**
  * @generated from message nagi.v1.QueryMetricsResponse
@@ -1051,7 +1081,7 @@ export type QueryMetricsResponse = Message<"nagi.v1.QueryMetricsResponse"> & {
  * Use `create(QueryMetricsResponseSchema)` to create a new message.
  */
 export const QueryMetricsResponseSchema: GenMessage<QueryMetricsResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_agent, 46);
+  messageDesc(file_nagi_v1_agent, 48);
 
 /**
  * AgentService：面板调用节点（反向 gRPC），走控制连接。
@@ -1281,6 +1311,16 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof LinkPlanSchema;
     output: typeof SetLinksResponseSchema;
+  },
+  /**
+   * 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+   *
+   * @generated from rpc nagi.v1.AgentService.CheckPorts
+   */
+  checkPorts: {
+    methodKind: "unary";
+    input: typeof CheckPortsRequestSchema;
+    output: typeof CheckPortsResponseSchema;
   },
   /**
    * ---- 节点 ----

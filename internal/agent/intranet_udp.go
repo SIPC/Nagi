@@ -246,6 +246,19 @@ func (n *intranet) handleLocalUDP(projectID string, c net.Conn) {
 		return
 	}
 	_ = c.SetReadDeadline(time.Time{})
+	n.forwardUDP(c, func() (*nagiv1.LinkProxy, uint16) {
+		p := n.proxyFor(projectID, alias)
+		if p == nil || !slices.Contains(p.GetUdpPorts(), uint32(port)) {
+			return nil, 0
+		}
+		return p, port
+	})
+}
+
+// forwardUDP 在连接 c（每条消息是带流 ID 的数据报）和目标之间维持 UDP 通道，断了就重新建。
+// lookup 返回当前的目标和端口，返回 nil 时（已经不在计划里了）关掉连接。
+func (n *intranet) forwardUDP(c net.Conn, lookup func() (*nagiv1.LinkProxy, uint16)) {
+	buf := make([]byte, udpBufSize)
 	reply := func(msg []byte) { _, _ = c.Write(msg) }
 
 	var mu sync.Mutex
@@ -267,8 +280,8 @@ func (n *intranet) handleLocalUDP(projectID string, c net.Conn) {
 		}
 		short := 0 // 连续几条通道刚建好就断了
 		for {
-			p := n.proxyFor(projectID, alias)
-			if p == nil || !slices.Contains(p.GetUdpPorts(), uint32(port)) {
+			p, port := lookup()
+			if p == nil {
 				return
 			}
 			t := n.openUDP(p, port, reply)
@@ -511,8 +524,9 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		reply("ERR 请求格式不对")
 		return
 	}
-	ok, internal := n.allowed(projectID, caller)
-	if !ok {
+	member, internal := n.allowed(projectID, caller)
+	entry := n.entryAllowed(projectID, name, port, spec.ProtoUDP, caller)
+	if !member && !entry {
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -521,8 +535,8 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		reply("ERR 不在这里")
 		return
 	}
-	// 只转发开放的 UDP 端口（容器声明的和项目设置里补的），理由同 TCP。
-	if !slices.Contains(e.UDPPorts, uint32(port)) && !slices.Contains(spec.InternalUDPPortMap(internal)[name], uint32(port)) {
+	// 只转发开放的 UDP 端口（容器声明的和项目设置里补的，以及入口节点的映射指向的端口），理由同 TCP。
+	if !entry && !(member && (slices.Contains(e.UDPPorts, uint32(port)) || slices.Contains(spec.InternalUDPPortMap(internal)[name], uint32(port)))) {
 		reply(fmt.Sprintf("ERR %s 没有开放 UDP 端口 %d", name, port))
 		return
 	}
@@ -557,6 +571,10 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		}
 	}()
 	// 容器不在了或者换了地址（重建、被顶替走）时拆掉通道，调用方重新找。
+	// 只靠入口放行连进来的，放行被撤销时也拆掉，和 TCP 一样（见 watchEntry）。
+	if !member {
+		defer n.watchEntry(func() { c.Close() }, projectID, name, port, spec.ProtoUDP, caller)()
+	}
 	keepAlive(c, br, flows.done(), func() bool {
 		cur, ok := n.endpoint(ctx, projectID, name)
 		return ok && cur.IP == e.IP

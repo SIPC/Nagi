@@ -227,7 +227,71 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 			plan.Allows = append(plan.Allows, allow)
 		}
 	}
+	if err := s.planEntries(ctx, nodeID, all, keys, names, plan); err != nil {
+		return nil, err
+	}
 	return plan, nil
+}
+
+// planEntries 算出节点 nodeID 上跨节点入口的部分（见 docs/exposure.md#跨节点入口）：它作为入口节点要开哪些映射，
+// 以及它上面的容器放行哪些入口节点。还没接入的入口节点（keys 里没有公钥）跳过，接入后自动恢复。
+func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Container, keys map[string][]byte, names map[string]string, plan *nagiv1.LinkPlan) error {
+	routes, err := s.Q.ListAllRoutes(ctx)
+	if err != nil {
+		return err
+	}
+	containers := map[string]store.Container{}
+	for _, c := range all {
+		containers[c.ProjectID+"/"+c.Name] = c
+	}
+	for _, row := range routes {
+		r := routeProto(row)
+		c, ok := containers[row.ProjectID+"/"+row.Container]
+		if !ok || r.GetError() != "" || len(r.GetEntryNodes()) == 0 {
+			continue
+		}
+		isEntry, isTarget := slices.Contains(r.GetEntryNodes(), nodeID), slices.Contains(failoverNodes(c), nodeID)
+		if !isEntry && !isTarget {
+			continue
+		}
+		cfg, err := s.runningConfig(ctx, c)
+		if err != nil {
+			continue
+		}
+		name := c.Name
+		if !spec.IsSingle(cfg) {
+			name = r.GetService() + "." + c.Name
+		}
+		if isEntry {
+			e := &nagiv1.LinkEntry{
+				ProjectId: row.ProjectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Protocol: r.GetProtocol(),
+				Published: r.GetPublished(), Domains: r.GetDomains(), HttpOnly: r.GetHttpOnly(), TargetName: name, TargetPort: r.GetTarget(),
+			}
+			for _, n := range failoverNodes(c) {
+				if len(keys[n]) > 0 {
+					e.Nodes = append(e.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
+				}
+			}
+			if len(e.GetNodes()) > 0 {
+				plan.Entries = append(plan.Entries, e)
+			}
+		}
+		if isTarget {
+			a := &nagiv1.LinkEntryAllow{ProjectId: row.ProjectID, TargetName: name, Port: r.GetTarget(), Protocol: spec.ProtoTCP}
+			if r.GetProtocol() == spec.ProtoUDP {
+				a.Protocol = spec.ProtoUDP
+			}
+			for _, n := range r.GetEntryNodes() {
+				if n != nodeID && len(keys[n]) > 0 {
+					a.Callers = append(a.Callers, keys[n])
+				}
+			}
+			if len(a.GetCallers()) > 0 {
+				plan.EntryAllows = append(plan.EntryAllows, a)
+			}
+		}
+	}
+	return nil
 }
 
 func containsKey(list [][]byte, k []byte) bool {
@@ -271,7 +335,7 @@ func (s *Service) pushLinks(ctx context.Context, conn *nodes.Conn) {
 	s.mu.Lock()
 	s.linkSent[conn.NodeID] = linkSent{conn, sum}
 	s.mu.Unlock()
-	s.Log.Info("已下发代理计划", "node", conn.NodeID, "proxies", len(plan.GetProxies()), "allows", len(plan.GetAllows()))
+	s.Log.Info("已下发代理计划", "node", conn.NodeID, "proxies", len(plan.GetProxies()), "allows", len(plan.GetAllows()), "entries", len(plan.GetEntries()))
 }
 
 // pushAllLinks 给所有在线节点重新算一遍代理计划，变了的才下发。

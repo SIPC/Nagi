@@ -96,6 +96,8 @@ const (
 	AgentServiceGetCacheProcedure = "/nagi.v1.AgentService/GetCache"
 	// AgentServiceSetLinksProcedure is the fully-qualified name of the AgentService's SetLinks RPC.
 	AgentServiceSetLinksProcedure = "/nagi.v1.AgentService/SetLinks"
+	// AgentServiceCheckPortsProcedure is the fully-qualified name of the AgentService's CheckPorts RPC.
+	AgentServiceCheckPortsProcedure = "/nagi.v1.AgentService/CheckPorts"
 	// AgentServiceSetAlertConfigProcedure is the fully-qualified name of the AgentService's
 	// SetAlertConfig RPC.
 	AgentServiceSetAlertConfigProcedure = "/nagi.v1.AgentService/SetAlertConfig"
@@ -174,6 +176,8 @@ type AgentServiceClient interface {
 	GetCache(context.Context, *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
+	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+	CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -349,6 +353,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetLinks")),
 			connect.WithClientOptions(opts...),
 		),
+		checkPorts: connect.NewClient[v1.CheckPortsRequest, v1.CheckPortsResponse](
+			httpClient,
+			baseURL+AgentServiceCheckPortsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CheckPorts")),
+			connect.WithClientOptions(opts...),
+		),
 		setAlertConfig: connect.NewClient[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse](
 			httpClient,
 			baseURL+AgentServiceSetAlertConfigProcedure,
@@ -449,6 +459,7 @@ type agentServiceClient struct {
 	confirmTakeover      *connect.Client[v1.ContainerRef, v1.FailoverStatus]
 	getCache             *connect.Client[v1.GetCacheRequest, v1.NodeCache]
 	setLinks             *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
+	checkPorts           *connect.Client[v1.CheckPortsRequest, v1.CheckPortsResponse]
 	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
 	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 	setProjectsRoot      *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
@@ -578,6 +589,11 @@ func (c *agentServiceClient) SetLinks(ctx context.Context, req *connect.Request[
 	return c.setLinks.CallUnary(ctx, req)
 }
 
+// CheckPorts calls nagi.v1.AgentService.CheckPorts.
+func (c *agentServiceClient) CheckPorts(ctx context.Context, req *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error) {
+	return c.checkPorts.CallUnary(ctx, req)
+}
+
 // SetAlertConfig calls nagi.v1.AgentService.SetAlertConfig.
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, req *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {
 	return c.setAlertConfig.CallUnary(ctx, req)
@@ -684,6 +700,8 @@ type AgentServiceHandler interface {
 	GetCache(context.Context, *connect.Request[v1.GetCacheRequest]) (*connect.Response[v1.NodeCache], error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error)
+	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+	CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
@@ -855,6 +873,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetLinks")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCheckPortsHandler := connect.NewUnaryHandler(
+		AgentServiceCheckPortsProcedure,
+		svc.CheckPorts,
+		connect.WithSchema(agentServiceMethods.ByName("CheckPorts")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetAlertConfigHandler := connect.NewUnaryHandler(
 		AgentServiceSetAlertConfigProcedure,
 		svc.SetAlertConfig,
@@ -975,6 +999,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetCacheHandler.ServeHTTP(w, r)
 		case AgentServiceSetLinksProcedure:
 			agentServiceSetLinksHandler.ServeHTTP(w, r)
+		case AgentServiceCheckPortsProcedure:
+			agentServiceCheckPortsHandler.ServeHTTP(w, r)
 		case AgentServiceSetAlertConfigProcedure:
 			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
 		case AgentServiceQueryMetricsProcedure:
@@ -1098,6 +1124,10 @@ func (UnimplementedAgentServiceHandler) GetCache(context.Context, *connect.Reque
 
 func (UnimplementedAgentServiceHandler) SetLinks(context.Context, *connect.Request[v1.LinkPlan]) (*connect.Response[v1.SetLinksResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetLinks is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CheckPorts(context.Context, *connect.Request[v1.CheckPortsRequest]) (*connect.Response[v1.CheckPortsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CheckPorts is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error) {

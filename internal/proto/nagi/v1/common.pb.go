@@ -1084,7 +1084,11 @@ type Exposure struct {
 	// 映射无效时的原因（例如容器已经删除），这条映射不会生效。只读。
 	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
 	// 容器名。
-	Container     string `protobuf:"bytes,9,opt,name=container,proto3" json:"container,omitempty"`
+	Container string `protobuf:"bytes,9,opt,name=container,proto3" json:"container,omitempty"`
+	// 跨节点入口：除容器所在节点外，还从这些节点进来（节点 ID，见 docs/exposure.md#跨节点入口）。
+	EntryNodes []string `protobuf:"bytes,10,rep,name=entry_nodes,json=entryNodes,proto3" json:"entry_nodes,omitempty"`
+	// 不从容器所在节点进来，只走 entry_nodes。
+	NoLocalEntry  bool `protobuf:"varint,11,opt,name=no_local_entry,json=noLocalEntry,proto3" json:"no_local_entry,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1180,6 +1184,20 @@ func (x *Exposure) GetContainer() string {
 		return x.Container
 	}
 	return ""
+}
+
+func (x *Exposure) GetEntryNodes() []string {
+	if x != nil {
+		return x.EntryNodes
+	}
+	return nil
+}
+
+func (x *Exposure) GetNoLocalEntry() bool {
+	if x != nil {
+		return x.NoLocalEntry
+	}
+	return false
 }
 
 type EnvVar struct {
@@ -2328,9 +2346,13 @@ type NodeInfo struct {
 	// 项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	ProjectsRoot string `protobuf:"bytes,8,opt,name=projects_root,json=projectsRoot,proto3" json:"projects_root,omitempty"`
 	// 配置：CPU 核数、内存总量、数据目录所在磁盘的总容量（字节）。旧版本的节点不报，读不到时为 0。
-	Cpus          int32  `protobuf:"varint,9,opt,name=cpus,proto3" json:"cpus,omitempty"`
-	MemoryBytes   uint64 `protobuf:"varint,10,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
-	DiskBytes     uint64 `protobuf:"varint,11,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
+	Cpus        int32  `protobuf:"varint,9,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryBytes uint64 `protobuf:"varint,10,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DiskBytes   uint64 `protobuf:"varint,11,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
+	// 节点的版本支持跨节点入口（旧版本的节点不报）。
+	CrossNodeEntry bool `protobuf:"varint,12,opt,name=cross_node_entry,json=crossNodeEntry,proto3" json:"cross_node_entry,omitempty"`
+	// 节点没有启动 Caddy（--no-proxy），不能作为入口节点。
+	ProxyDisabled bool `protobuf:"varint,13,opt,name=proxy_disabled,json=proxyDisabled,proto3" json:"proxy_disabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2440,6 +2462,20 @@ func (x *NodeInfo) GetDiskBytes() uint64 {
 		return x.DiskBytes
 	}
 	return 0
+}
+
+func (x *NodeInfo) GetCrossNodeEntry() bool {
+	if x != nil {
+		return x.CrossNodeEntry
+	}
+	return false
+}
+
+func (x *NodeInfo) GetProxyDisabled() bool {
+	if x != nil {
+		return x.ProxyDisabled
+	}
+	return false
 }
 
 type LogLine struct {
@@ -4090,9 +4126,13 @@ func (x *FailoverStatus) GetSpecProjectRevision() int64 {
 // LinkPlan 是面板告诉一个节点的代理计划（见 docs/agent.md#项目内网）：本节点要在哪些项目内网里放哪些代理，
 // 以及哪些节点可以经 mesh 连进来访问本节点上的容器。节点缓存在本地，面板不在时照旧。
 type LinkPlan struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Proxies       []*LinkProxy           `protobuf:"bytes,1,rep,name=proxies,proto3" json:"proxies,omitempty"`
-	Allows        []*LinkAllow           `protobuf:"bytes,2,rep,name=allows,proto3" json:"allows,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Proxies []*LinkProxy           `protobuf:"bytes,1,rep,name=proxies,proto3" json:"proxies,omitempty"`
+	Allows  []*LinkAllow           `protobuf:"bytes,2,rep,name=allows,proto3" json:"allows,omitempty"`
+	// 本节点作为入口节点要开的映射（见 docs/exposure.md#跨节点入口）。
+	Entries []*LinkEntry `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	// 哪些入口节点可以访问本节点上容器的哪个端口。
+	EntryAllows   []*LinkEntryAllow `protobuf:"bytes,4,rep,name=entry_allows,json=entryAllows,proto3" json:"entry_allows,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4141,6 +4181,228 @@ func (x *LinkPlan) GetAllows() []*LinkAllow {
 	return nil
 }
 
+func (x *LinkPlan) GetEntries() []*LinkEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *LinkPlan) GetEntryAllows() []*LinkEntryAllow {
+	if x != nil {
+		return x.EntryAllows
+	}
+	return nil
+}
+
+// LinkEntry 是入口节点上的一条映射：Caddy 收到的流量经 mesh 转给 target_name 的 target_port。
+// 按 nodes 的顺序找：先找所在节点，对方说"不在这里"再找下一个。
+type LinkEntry struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// 映射名。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 容器名和组里的容器（用于显示）。
+	Container string `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`
+	Service   string `protobuf:"bytes,4,opt,name=service,proto3" json:"service,omitempty"`
+	// http、tcp 或 udp。
+	Protocol  string   `protobuf:"bytes,5,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Published uint32   `protobuf:"varint,6,opt,name=published,proto3" json:"published,omitempty"`
+	Domains   []string `protobuf:"bytes,7,rep,name=domains,proto3" json:"domains,omitempty"`
+	HttpOnly  bool     `protobuf:"varint,8,opt,name=http_only,json=httpOnly,proto3" json:"http_only,omitempty"`
+	// 目标在项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
+	TargetName    string      `protobuf:"bytes,9,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	TargetPort    uint32      `protobuf:"varint,10,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`
+	Nodes         []*LinkNode `protobuf:"bytes,11,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkEntry) Reset() {
+	*x = LinkEntry{}
+	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkEntry) ProtoMessage() {}
+
+func (x *LinkEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkEntry.ProtoReflect.Descriptor instead.
+func (*LinkEntry) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *LinkEntry) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetPublished() uint32 {
+	if x != nil {
+		return x.Published
+	}
+	return 0
+}
+
+func (x *LinkEntry) GetDomains() []string {
+	if x != nil {
+		return x.Domains
+	}
+	return nil
+}
+
+func (x *LinkEntry) GetHttpOnly() bool {
+	if x != nil {
+		return x.HttpOnly
+	}
+	return false
+}
+
+func (x *LinkEntry) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *LinkEntry) GetTargetPort() uint32 {
+	if x != nil {
+		return x.TargetPort
+	}
+	return 0
+}
+
+func (x *LinkEntry) GetNodes() []*LinkNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+// LinkEntryAllow：入口节点只能访问映射指向的这一个端口，不因此能访问项目里的其他容器和端口。
+type LinkEntryAllow struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId  string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	TargetName string                 `protobuf:"bytes,2,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	Port       uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	// tcp 或 udp。
+	Protocol      string   `protobuf:"bytes,4,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Callers       [][]byte `protobuf:"bytes,5,rep,name=callers,proto3" json:"callers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkEntryAllow) Reset() {
+	*x = LinkEntryAllow{}
+	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkEntryAllow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkEntryAllow) ProtoMessage() {}
+
+func (x *LinkEntryAllow) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkEntryAllow.ProtoReflect.Descriptor instead.
+func (*LinkEntryAllow) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *LinkEntryAllow) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *LinkEntryAllow) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *LinkEntryAllow) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *LinkEntryAllow) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *LinkEntryAllow) GetCallers() [][]byte {
+	if x != nil {
+		return x.Callers
+	}
+	return nil
+}
+
 // LinkProxy 是一个代理：放在 project_id 的项目内网里，名字是 alias，代表 target_project 的容器 target_name。
 // 连接时按 nodes 的顺序找：先找所在节点，对方说"不在这里"（例如已经被顶替）再找下一个。
 type LinkProxy struct {
@@ -4161,7 +4423,7 @@ type LinkProxy struct {
 
 func (x *LinkProxy) Reset() {
 	*x = LinkProxy{}
-	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	mi := &file_nagi_v1_common_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4173,7 +4435,7 @@ func (x *LinkProxy) String() string {
 func (*LinkProxy) ProtoMessage() {}
 
 func (x *LinkProxy) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	mi := &file_nagi_v1_common_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4186,7 +4448,7 @@ func (x *LinkProxy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkProxy.ProtoReflect.Descriptor instead.
 func (*LinkProxy) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{44}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *LinkProxy) GetProjectId() string {
@@ -4249,7 +4511,7 @@ type LinkNode struct {
 
 func (x *LinkNode) Reset() {
 	*x = LinkNode{}
-	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	mi := &file_nagi_v1_common_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4261,7 +4523,7 @@ func (x *LinkNode) String() string {
 func (*LinkNode) ProtoMessage() {}
 
 func (x *LinkNode) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	mi := &file_nagi_v1_common_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4274,7 +4536,7 @@ func (x *LinkNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkNode.ProtoReflect.Descriptor instead.
 func (*LinkNode) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{45}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *LinkNode) GetKey() []byte {
@@ -4303,7 +4565,7 @@ type LinkAllow struct {
 
 func (x *LinkAllow) Reset() {
 	*x = LinkAllow{}
-	mi := &file_nagi_v1_common_proto_msgTypes[46]
+	mi := &file_nagi_v1_common_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4315,7 +4577,7 @@ func (x *LinkAllow) String() string {
 func (*LinkAllow) ProtoMessage() {}
 
 func (x *LinkAllow) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[46]
+	mi := &file_nagi_v1_common_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4328,7 +4590,7 @@ func (x *LinkAllow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkAllow.ProtoReflect.Descriptor instead.
 func (*LinkAllow) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{46}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *LinkAllow) GetProjectId() string {
@@ -4471,7 +4733,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x06 \x01(\tR\tcontainer\":\n" +
 	"\x06Source\x12\x17\n" +
 	"\agit_url\x18\x01 \x01(\tR\x06gitUrl\x12\x17\n" +
-	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xf5\x01\n" +
+	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xbc\x02\n" +
 	"\bExposure\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
@@ -4481,7 +4743,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\thttp_only\x18\x06 \x01(\bR\bhttpOnly\x12\x12\n" +
 	"\x04name\x18\a \x01(\tR\x04name\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12\x1c\n" +
-	"\tcontainer\x18\t \x01(\tR\tcontainer\"H\n" +
+	"\tcontainer\x18\t \x01(\tR\tcontainer\x12\x1f\n" +
+	"\ventry_nodes\x18\n" +
+	" \x03(\tR\n" +
+	"entryNodes\x12$\n" +
+	"\x0eno_local_entry\x18\v \x01(\bR\fnoLocalEntry\"H\n" +
 	"\x06EnvVar\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
@@ -4583,7 +4849,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xcb\x02\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\x9c\x03\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -4597,7 +4863,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fmemory_bytes\x18\n" +
 	" \x01(\x04R\vmemoryBytes\x12\x1d\n" +
 	"\n" +
-	"disk_bytes\x18\v \x01(\x04R\tdiskBytes\"\x9d\x01\n" +
+	"disk_bytes\x18\v \x01(\x04R\tdiskBytes\x12(\n" +
+	"\x10cross_node_entry\x18\f \x01(\bR\x0ecrossNodeEntry\x12%\n" +
+	"\x0eproxy_disabled\x18\r \x01(\bR\rproxyDisabled\"\x9d\x01\n" +
 	"\aLogLine\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06stream\x18\x02 \x01(\tR\x06stream\x12\x12\n" +
@@ -4749,10 +5017,36 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0efailback_in_ms\x18\v \x01(\x03R\ffailbackInMs\x12!\n" +
 	"\ffailing_back\x18\f \x01(\bR\vfailingBack\x12#\n" +
 	"\rspec_revision\x18\r \x01(\x03R\fspecRevision\x122\n" +
-	"\x15spec_project_revision\x18\x0e \x01(\x03R\x13specProjectRevision\"d\n" +
+	"\x15spec_project_revision\x18\x0e \x01(\x03R\x13specProjectRevision\"\xce\x01\n" +
 	"\bLinkPlan\x12,\n" +
 	"\aproxies\x18\x01 \x03(\v2\x12.nagi.v1.LinkProxyR\aproxies\x12*\n" +
-	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\"\xe4\x01\n" +
+	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\x12,\n" +
+	"\aentries\x18\x03 \x03(\v2\x12.nagi.v1.LinkEntryR\aentries\x12:\n" +
+	"\fentry_allows\x18\x04 \x03(\v2\x17.nagi.v1.LinkEntryAllowR\ventryAllows\"\xd2\x02\n" +
+	"\tLinkEntry\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\x12\x18\n" +
+	"\aservice\x18\x04 \x01(\tR\aservice\x12\x1a\n" +
+	"\bprotocol\x18\x05 \x01(\tR\bprotocol\x12\x1c\n" +
+	"\tpublished\x18\x06 \x01(\rR\tpublished\x12\x18\n" +
+	"\adomains\x18\a \x03(\tR\adomains\x12\x1b\n" +
+	"\thttp_only\x18\b \x01(\bR\bhttpOnly\x12\x1f\n" +
+	"\vtarget_name\x18\t \x01(\tR\n" +
+	"targetName\x12\x1f\n" +
+	"\vtarget_port\x18\n" +
+	" \x01(\rR\n" +
+	"targetPort\x12'\n" +
+	"\x05nodes\x18\v \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\"\x9a\x01\n" +
+	"\x0eLinkEntryAllow\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
+	"\vtarget_name\x18\x02 \x01(\tR\n" +
+	"targetName\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\rR\x04port\x12\x1a\n" +
+	"\bprotocol\x18\x04 \x01(\tR\bprotocol\x12\x18\n" +
+	"\acallers\x18\x05 \x03(\fR\acallers\"\xe4\x01\n" +
 	"\tLinkProxy\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
@@ -4789,7 +5083,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -4836,26 +5130,28 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*FailoverConfig)(nil),        // 42: nagi.v1.FailoverConfig
 	(*FailoverStatus)(nil),        // 43: nagi.v1.FailoverStatus
 	(*LinkPlan)(nil),              // 44: nagi.v1.LinkPlan
-	(*LinkProxy)(nil),             // 45: nagi.v1.LinkProxy
-	(*LinkNode)(nil),              // 46: nagi.v1.LinkNode
-	(*LinkAllow)(nil),             // 47: nagi.v1.LinkAllow
-	nil,                           // 48: nagi.v1.ContainerConfig.ServiceEnvEntry
-	nil,                           // 49: nagi.v1.Version.ImagesEntry
-	nil,                           // 50: nagi.v1.Deployment.VersionsEntry
-	nil,                           // 51: nagi.v1.ContainerSpec.ImagesEntry
-	nil,                           // 52: nagi.v1.DeployResult.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 53: google.protobuf.Timestamp
+	(*LinkEntry)(nil),             // 45: nagi.v1.LinkEntry
+	(*LinkEntryAllow)(nil),        // 46: nagi.v1.LinkEntryAllow
+	(*LinkProxy)(nil),             // 47: nagi.v1.LinkProxy
+	(*LinkNode)(nil),              // 48: nagi.v1.LinkNode
+	(*LinkAllow)(nil),             // 49: nagi.v1.LinkAllow
+	nil,                           // 50: nagi.v1.ContainerConfig.ServiceEnvEntry
+	nil,                           // 51: nagi.v1.Version.ImagesEntry
+	nil,                           // 52: nagi.v1.Deployment.VersionsEntry
+	nil,                           // 53: nagi.v1.ContainerSpec.ImagesEntry
+	nil,                           // 54: nagi.v1.DeployResult.ImagesEntry
+	(*timestamppb.Timestamp)(nil), // 55: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	53, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	55, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	10, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	4,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
 	3,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
 	11, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
 	2,  // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
-	53, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
+	55, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
 	11, // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
-	53, // 8: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	55, // 8: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
 	5,  // 9: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
 	5,  // 10: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
 	39, // 11: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
@@ -4863,58 +5159,61 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	43, // 13: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
 	43, // 14: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
 	11, // 15: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	48, // 16: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	50, // 16: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
 	13, // 17: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
 	9,  // 18: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
 	0,  // 19: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	53, // 20: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	53, // 21: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	49, // 22: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	53, // 23: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	50, // 24: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	53, // 25: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	55, // 20: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	55, // 21: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	51, // 22: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	55, // 23: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	52, // 24: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	55, // 25: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	11, // 26: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	14, // 27: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	11, // 28: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	15, // 29: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	17, // 30: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	53, // 31: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	55, // 31: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
 	1,  // 32: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	16, // 33: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
 	5,  // 34: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
 	11, // 35: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	51, // 36: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	53, // 36: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
 	10, // 37: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
 	20, // 38: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
 	15, // 39: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
 	17, // 40: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	53, // 41: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	55, // 41: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
 	39, // 42: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
 	23, // 43: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
-	53, // 44: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	55, // 44: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
 	27, // 45: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	52, // 46: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	54, // 46: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
 	29, // 47: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	30, // 48: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	53, // 49: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	53, // 50: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	55, // 49: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	55, // 50: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
 	35, // 51: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	53, // 52: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	53, // 53: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	55, // 52: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	55, // 53: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
 	41, // 54: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
 	41, // 55: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
 	41, // 56: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
 	42, // 57: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	53, // 58: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	45, // 59: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	47, // 60: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	46, // 61: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	12, // 62: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	63, // [63:63] is the sub-list for method output_type
-	63, // [63:63] is the sub-list for method input_type
-	63, // [63:63] is the sub-list for extension type_name
-	63, // [63:63] is the sub-list for extension extendee
-	0,  // [0:63] is the sub-list for field type_name
+	55, // 58: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	47, // 59: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	49, // 60: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	45, // 61: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	46, // 62: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	48, // 63: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	48, // 64: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	12, // 65: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	66, // [66:66] is the sub-list for method output_type
+	66, // [66:66] is the sub-list for method input_type
+	66, // [66:66] is the sub-list for extension type_name
+	66, // [66:66] is the sub-list for extension extendee
+	0,  // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -4932,7 +5231,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   52,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

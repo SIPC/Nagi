@@ -7,7 +7,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { ContainerMetrics, containerUsage, ProjectMetrics, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
+import { ContainerMetrics, containerUsage, ProjectMetrics, projectMetricNodes, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
 import { ProjectState, ServiceState } from "@/components/status";
 import { TerminalView } from "@/components/terminal";
 import { useImageForm, useContainerForm } from "@/components/container-form";
@@ -77,7 +77,7 @@ export function ContainersTab({
         help={t.projectContainers.projectMetrics.help}
         actions={picker}
       >
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(project.containers.map((c) => c.nodeId))]} range={range} />
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} />
       </Section>
     </div>
   );
@@ -115,7 +115,7 @@ function ContainersTable({
   const targets = project.containers.filter((m) => checked[m.name]);
   const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
   const multi = project.containers.length > 1;
-  const usage = containerUsage(useProjectMetrics(project.id, project.containers.map((c) => c.nodeId)).data);
+  const usage = containerUsage(useProjectMetrics(project.id, projectMetricNodes(project)).data);
   const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
 
   const deploy = (containers: Container[]) =>
@@ -537,7 +537,7 @@ function Overview({ project, container, services }: { project: Project; containe
         </Section>
       )}
       <Section title={t.projectContainers.monitoring} description={t.projectContainers.overview.metricsDescription} actions={picker}>
-        <ContainerMetrics projectId={project.id} nodeIds={project.containers.map((c) => c.nodeId)} container={container.name} range={range} />
+        <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} container={container.name} range={range} />
       </Section>
     </div>
   );

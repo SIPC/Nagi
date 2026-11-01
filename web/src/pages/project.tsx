@@ -7,7 +7,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { ProjectState, stateOf } from "@/components/status";
-import { containerUsage, UsageBars, useProjectMetrics } from "@/components/metrics";
+import { containerUsage, projectMetricNodes, UsageBars, useProjectMetrics } from "@/components/metrics";
 import { Alert, Badge, dotColor, Loading, Tabs } from "@/components/ui";
 import { containerKind, ContainersTab, type DetailView } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
@@ -134,7 +134,7 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
     refetchInterval: 5000,
   });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const metrics = useProjectMetrics(projectId, project.data?.project?.containers.map((c) => c.nodeId) ?? []);
+  const metrics = useProjectMetrics(projectId, projectMetricNodes(project.data?.project));
   const usage = containerUsage(metrics.data);
   const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
   const { ref, box } = useActiveBox();

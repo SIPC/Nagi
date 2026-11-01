@@ -3,7 +3,9 @@ package projects
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
+	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -12,7 +14,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-// 端口映射（见 docs/exposure.md）：属于容器，存在面板上，开在容器所在的节点上，改了立即生效（推给节点）。
+// 端口映射（见 docs/exposure.md）：属于容器，存在面板上，开在入口节点（默认是容器所在的节点）上，改了立即生效（推给节点）。
 
 func (s *Service) stateful(ctx context.Context, cfg *nagiv1.ContainerConfig, c store.Container, shared []*nagiv1.EnvVar) bool {
 	cp, err := spec.Load(ctx, cfg, c.Name, shared, checkData(c), spec.ComposeProjectName(c.ProjectID, c.Name))
@@ -61,6 +63,9 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 	if err := s.checkConflicts(ctx, c.NodeID, projectID, r.GetName(), r); err != nil {
 		return nil, err
 	}
+	if err := s.checkEntries(ctx, c, old, r); err != nil {
+		return nil, err
+	}
 	if err := s.upsertRoute(ctx, projectID, r); err != nil {
 		return nil, err
 	}
@@ -80,6 +85,7 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 		_ = s.Q.BumpContainer(ctx, store.BumpContainerParams{ProjectID: projectID, Name: c.Name})
 		return nil, s.nodeErr(ctx, c.NodeID, err)
 	}
+	s.refreshLinks()
 	return s.reload(ctx, projectID)
 }
 
@@ -88,10 +94,83 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 	if r.GetDomains() == nil {
 		domains = []byte("[]")
 	}
+	entries, _ := json.Marshal(r.GetEntryNodes())
+	if r.GetEntryNodes() == nil {
+		entries = []byte("[]")
+	}
 	return s.Q.UpsertRoute(ctx, store.UpsertRouteParams{
 		ProjectID: projectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Target: int64(r.GetTarget()),
 		Protocol: r.GetProtocol(), Published: int64(r.GetPublished()), Domains: string(domains), HttpOnly: boolInt(r.GetHttpOnly()),
+		EntryNodes: string(entries), NoLocalEntry: boolInt(r.GetNoLocalEntry()),
 	})
+}
+
+// checkEntries 检查映射的入口节点：入口节点在线、版本支持、没有关掉 Caddy，端口没被节点上的其他程序占用；
+// 容器所在节点和顶替节点也要支持（要由它们放行入口节点的连接）。old 是修改前的映射：入口和端口都没变的节点不用再查，它不在线也能改别的。
+func (s *Service) checkEntries(ctx context.Context, c store.Container, old *store.Route, r *nagiv1.Exposure) error {
+	if len(r.GetEntryNodes()) == 0 {
+		return nil
+	}
+	for _, id := range failoverNodes(c) {
+		if conn, err := s.Nodes.Peek(id); err == nil && !conn.LastReport().GetNode().GetCrossNodeEntry() {
+			return invalid("节点 %s 的版本不支持跨节点入口，请先升级", s.NodeName(ctx, id))
+		}
+	}
+	var before *nagiv1.Exposure
+	if old != nil {
+		before = routeProto(*old)
+	}
+	for _, id := range r.GetEntryNodes() {
+		if before != nil && slices.Contains(before.GetEntryNodes(), id) && slices.Equal(spec.UsedPorts(before), spec.UsedPorts(r)) {
+			continue
+		}
+		conn, n, err := s.targetNode(ctx, id)
+		if err != nil {
+			return err
+		}
+		info := conn.LastReport().GetNode()
+		if !info.GetCrossNodeEntry() {
+			return invalid("节点 %s 的版本不支持跨节点入口，请先升级", n.Name)
+		}
+		if info.GetProxyDisabled() {
+			return invalid("节点 %s 没有启动 Caddy，不能作为入口节点", n.Name)
+		}
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		_, err = conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: []*nagiv1.Exposure{r}})
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ForgetEntryNode 把节点从所有映射的入口里去掉（节点被移除时）。入口都没了的映射标为无效，不会悄悄改回从容器所在节点开放。
+func (s *Service) ForgetEntryNode(ctx context.Context, nodeID string) {
+	all, err := s.Q.ListAllRoutes(ctx)
+	if err != nil {
+		s.Log.Warn("整理映射的入口节点失败", "node", nodeID, "err", err)
+		return
+	}
+	for _, row := range all {
+		r := routeProto(row)
+		if !slices.Contains(r.GetEntryNodes(), nodeID) {
+			continue
+		}
+		l := s.lock(row.ProjectID)
+		l.Lock()
+		r.EntryNodes = slices.DeleteFunc(r.EntryNodes, func(n string) bool { return n == nodeID })
+		if err := s.upsertRoute(ctx, row.ProjectID, r); err != nil {
+			s.Log.Warn("整理映射的入口节点失败", "project", row.ProjectID, "route", row.Name, "err", err)
+		} else {
+			_ = s.Q.BumpContainer(ctx, store.BumpContainerParams{ProjectID: row.ProjectID, Name: row.Container})
+			if err := s.push(ctx, row.ProjectID, row.Container); err != nil {
+				s.Log.Warn("去掉入口节点后下发配置失败（节点上线后补推）", "project", row.ProjectID, "container", row.Container, "err", err)
+			}
+		}
+		l.Unlock()
+	}
+	s.refreshLinks()
 }
 
 // DeleteRoute 删除一条映射，立即生效。
@@ -114,6 +193,7 @@ func (s *Service) DeleteRoute(ctx context.Context, projectID, name string) (*nag
 		if err := s.push(ctx, projectID, e.Container); err != nil {
 			s.Log.Warn("删除映射后下发配置失败（节点上线后补推）", "project", projectID, "container", e.Container, "err", err)
 		}
+		s.refreshLinks()
 		return s.reload(ctx, projectID)
 	}
 	return nil, invalid("映射 %s 不存在", name)
@@ -144,8 +224,9 @@ func (s *Service) checkService(ctx context.Context, c store.Container, service s
 }
 
 // checkConflicts 检查一条映射和同一节点上所有映射的端口、整个面板上的域名是否冲突。
-// skipProject/skipName 是正在修改的这条映射本身。
+// nodeID 是容器要放的节点；映射占用它所有入口节点上的端口。skipProject/skipName 是正在修改的这条映射本身。
 func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipName string, r *nagiv1.Exposure) error {
+	mine := spec.EntryNodesOf(r, nodeID)
 	for _, d := range r.GetDomains() {
 		if s.ReservedDomain != nil && s.ReservedDomain(d) {
 			return invalid("域名 %s 已经绑定给面板", d)
@@ -188,7 +269,7 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 				}
 			}
 		}
-		if nodeOf[other.ProjectID+"/"+other.Container] != nodeID {
+		if !slices.ContainsFunc(spec.EntryNodesOf(o, nodeOf[other.ProjectID+"/"+other.Container]), func(n string) bool { return slices.Contains(mine, n) }) {
 			continue
 		}
 		for _, k := range spec.UsedPorts(o) {

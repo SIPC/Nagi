@@ -80,15 +80,17 @@ type ProjectLink struct {
 }
 
 type Route struct {
-	ProjectID string
-	Name      string
-	Container string
-	Service   string
-	Target    int64
-	Protocol  string
-	Published int64
-	Domains   string
-	HttpOnly  int64
+	ProjectID    string
+	Name         string
+	Container    string
+	Service      string
+	Target       int64
+	Protocol     string
+	Published    int64
+	Domains      string
+	HttpOnly     int64
+	EntryNodes   string
+	NoLocalEntry int64
 }
 
 type Session struct {

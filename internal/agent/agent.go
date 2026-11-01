@@ -140,6 +140,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.startedAt = time.Now()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
+	projects.EntryPorts = a.intranet.entryPorts
 	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.status
@@ -182,7 +183,7 @@ func Run(ctx context.Context, cfg Config) error {
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
 	a.alerts.Domains = func() map[string]bool {
-		routes, err := projects.Routes(context.Background())
+		routes, err := a.allRoutes(context.Background())
 		if err != nil {
 			return nil
 		}
@@ -343,7 +344,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
-		routes, err := a.projects.Routes(ctx)
+		routes, err := a.allRoutes(ctx)
 		routes = append(routes, a.panelRoutes()...)
 		if err == nil {
 			err = a.proxy.Apply(routes)
@@ -416,6 +417,9 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		Embedded:     a.cfg.Embedded,
 		ProjectsRoot: a.projectsRoot(),
 		Cpus:         int32(runtime.NumCPU()),
+
+		CrossNodeEntry: true,
+		ProxyDisabled:  a.cfg.DisableProxy,
 	}
 	info.MemoryBytes, info.DiskBytes = metrics.Capacity(a.cfg.DataDir)
 	if v, err := a.docker.Version(ctx); err == nil {
@@ -595,7 +599,7 @@ func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClie
 
 // domainProject 返回绑定了这个域名的项目 ID，找不到时返回空。
 func (a *agent) domainProject(ctx context.Context, domain string) string {
-	routes, _ := a.projects.Routes(ctx)
+	routes, _ := a.allRoutes(ctx)
 	for _, r := range routes {
 		if slices.Contains(r.Domains, domain) {
 			return r.Project

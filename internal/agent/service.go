@@ -77,7 +77,16 @@ func (s *agentService) SetLinks(_ context.Context, req *nagiv1.LinkPlan) (*nagiv
 	if err := s.node.intranet.set(req); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	// 计划里的跨节点入口变了，Caddy 也要跟着变。
+	s.changed()
 	return &nagiv1.SetLinksResponse{}, nil
+}
+
+func (s *agentService) CheckPorts(ctx context.Context, req *nagiv1.CheckPortsRequest) (*nagiv1.CheckPortsResponse, error) {
+	if err := s.projects.CheckPorts(ctx, req.GetRoutes()); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.CheckPortsResponse{}, nil
 }
 
 // ---- 容器 ----

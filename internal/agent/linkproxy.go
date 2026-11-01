@@ -111,9 +111,11 @@ const udpMaxClients = 4096
 // 节点回的数据报按流 ID 发回给对应的客户端。
 type udpProxy struct {
 	pc    *net.UDPConn
-	sock  string // 节点的 unixpacket socket
+	dial  func() (net.Conn, error) // 连到节点：默认是节点的 unixpacket socket
 	alias string
 	port  uint16
+	stop  chan struct{}
+	once  sync.Once
 
 	mu      sync.Mutex
 	up      net.Conn // 到节点的连接，断开时为 nil（期间的数据报丢掉）
@@ -123,7 +125,21 @@ type udpProxy struct {
 }
 
 func newUDPProxy(pc *net.UDPConn, sock, alias string, port uint16) *udpProxy {
-	return &udpProxy{pc: pc, sock: sock, alias: alias, port: port, clients: map[netip.AddrPort]*udpClient{}, byID: map[uint32]*udpClient{}}
+	return &udpProxy{pc: pc, dial: func() (net.Conn, error) { return net.Dial("unixpacket", sock) }, alias: alias, port: port,
+		stop: make(chan struct{}), clients: map[netip.AddrPort]*udpClient{}, byID: map[uint32]*udpClient{}}
+}
+
+// close 停止转发。代理容器里不用（进程一直运行到容器停止），入口的转发口不在计划里了才用。
+func (u *udpProxy) close() {
+	u.once.Do(func() {
+		close(u.stop)
+		u.pc.Close()
+		u.mu.Lock()
+		if u.up != nil {
+			u.up.Close()
+		}
+		u.mu.Unlock()
+	})
 }
 
 type udpClient struct {
@@ -196,20 +212,28 @@ func (u *udpProxy) forget(c *udpClient) {
 // connect 维持到节点的 unixpacket 连接：第一条消息是"名字 端口"，之后收节点回的数据报。断了 udpReconnect 后重连。
 func (u *udpProxy) connect() {
 	for {
-		c, err := net.Dial("unixpacket", u.sock)
+		c, err := u.dial()
 		if err == nil {
 			if _, err := fmt.Fprintf(c, "%s %d\n", u.alias, u.port); err == nil {
 				u.mu.Lock()
 				u.up = c
 				u.mu.Unlock()
-				u.recv(c)
+				select {
+				case <-u.stop:
+				default:
+					u.recv(c)
+				}
 				u.mu.Lock()
 				u.up = nil
 				u.mu.Unlock()
 			}
 			c.Close()
 		}
-		time.Sleep(udpReconnect)
+		select {
+		case <-u.stop:
+			return
+		case <-time.After(udpReconnect):
+		}
 	}
 }
 
@@ -239,7 +263,14 @@ func (u *udpProxy) recv(c net.Conn) {
 
 // expire 定时忘掉空闲的客户端，超时和节点那边的流一样。
 func (u *udpProxy) expire() {
-	for range time.Tick(10 * time.Second) {
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-u.stop:
+			return
+		case <-t.C:
+		}
 		now := time.Now()
 		u.mu.Lock()
 		for _, c := range u.clients {

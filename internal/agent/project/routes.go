@@ -21,7 +21,7 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 	for _, c := range m.List(ctx) {
 		s := c.Spec
 		for _, e := range s.GetRoutes() {
-			if e.GetError() != "" {
+			if e.GetError() != "" || e.GetNoLocalEntry() {
 				continue
 			}
 			route := proxy.Route{
@@ -62,15 +62,34 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 // checkNewPorts 检查配置里的映射要用的端口：本节点的映射还没在用的端口（Caddy 还没监听），尝试监听一下，
 // 确认没有被节点上的其他程序（包括面板端口、sshd 等）占用。和其他映射是否冲突由面板检查。
 func (m *Manager) checkNewPorts(ctx context.Context, s *nagiv1.ContainerSpec) error {
+	var routes []*nagiv1.Exposure
+	for _, r := range s.GetRoutes() {
+		if !r.GetNoLocalEntry() {
+			routes = append(routes, r)
+		}
+	}
+	return m.CheckPorts(ctx, routes)
+}
+
+// CheckPorts 检查映射要用的端口：还没在用的（Caddy 还没监听）尝试监听一下，确认没有被节点上的其他程序占用。
+func (m *Manager) CheckPorts(ctx context.Context, routes []*nagiv1.Exposure) error {
 	inUse := map[spec.PortKey]bool{}
 	for _, c := range m.List(ctx) {
 		for _, r := range c.Spec.GetRoutes() {
+			if r.GetNoLocalEntry() {
+				continue
+			}
 			for _, k := range spec.UsedPorts(r) {
 				inUse[k] = true
 			}
 		}
 	}
-	for _, r := range s.GetRoutes() {
+	if m.EntryPorts != nil {
+		for _, k := range m.EntryPorts() {
+			inUse[k] = true
+		}
+	}
+	for _, r := range routes {
 		for _, k := range spec.UsedPorts(r) {
 			if !inUse[k] && !portFree(k) {
 				return invalid("%s 端口 %d 已被节点上的其他程序占用", k.Proto, k.Port)

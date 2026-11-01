@@ -300,6 +300,7 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 	if err := s.Q.RevokeNode(ctx, id); err != nil {
 		return err
 	}
+	s.Projects.ForgetEntryNode(ctx, id)
 	s.Nodes.Disconnect(id)
 	s.Log.Info("节点已移除", "node", id)
 	return nil

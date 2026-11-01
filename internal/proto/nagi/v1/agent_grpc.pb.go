@@ -42,6 +42,7 @@ const (
 	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
 	AgentService_GetCache_FullMethodName             = "/nagi.v1.AgentService/GetCache"
 	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
+	AgentService_CheckPorts_FullMethodName           = "/nagi.v1.AgentService/CheckPorts"
 	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
 	AgentService_SetProjectsRoot_FullMethodName      = "/nagi.v1.AgentService/SetProjectsRoot"
@@ -107,6 +108,8 @@ type AgentServiceClient interface {
 	GetCache(ctx context.Context, in *GetCacheRequest, opts ...grpc.CallOption) (*NodeCache, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(ctx context.Context, in *LinkPlan, opts ...grpc.CallOption) (*SetLinksResponse, error)
+	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+	CheckPorts(ctx context.Context, in *CheckPortsRequest, opts ...grpc.CallOption) (*CheckPortsResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
@@ -437,6 +440,16 @@ func (c *agentServiceClient) SetLinks(ctx context.Context, in *LinkPlan, opts ..
 	return out, nil
 }
 
+func (c *agentServiceClient) CheckPorts(ctx context.Context, in *CheckPortsRequest, opts ...grpc.CallOption) (*CheckPortsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckPortsResponse)
+	err := c.cc.Invoke(ctx, AgentService_CheckPorts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAlertConfigResponse)
@@ -608,6 +621,8 @@ type AgentServiceServer interface {
 	GetCache(context.Context, *GetCacheRequest) (*NodeCache, error)
 	// 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
 	SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error)
+	// 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+	CheckPorts(context.Context, *CheckPortsRequest) (*CheckPortsResponse, error)
 	// ---- 节点 ----
 	// 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
@@ -710,6 +725,9 @@ func (UnimplementedAgentServiceServer) GetCache(context.Context, *GetCacheReques
 }
 func (UnimplementedAgentServiceServer) SetLinks(context.Context, *LinkPlan) (*SetLinksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetLinks not implemented")
+}
+func (UnimplementedAgentServiceServer) CheckPorts(context.Context, *CheckPortsRequest) (*CheckPortsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckPorts not implemented")
 }
 func (UnimplementedAgentServiceServer) SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAlertConfig not implemented")
@@ -1122,6 +1140,24 @@ func _AgentService_SetLinks_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CheckPorts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckPortsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CheckPorts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CheckPorts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CheckPorts(ctx, req.(*CheckPortsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetAlertConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetAlertConfigRequest)
 	if err := dec(in); err != nil {
@@ -1404,6 +1440,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetLinks",
 			Handler:    _AgentService_SetLinks_Handler,
+		},
+		{
+			MethodName: "CheckPorts",
+			Handler:    _AgentService_CheckPorts_Handler,
 		},
 		{
 			MethodName: "SetAlertConfig",

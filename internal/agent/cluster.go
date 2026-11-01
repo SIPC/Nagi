@@ -244,6 +244,7 @@ var readOnlyRPCs = map[string]bool{
 	nagiv1.AgentService_ListReplicas_FullMethodName:         true,
 	nagiv1.AgentService_ListReplicaSnapshots_FullMethodName: true,
 	nagiv1.AgentService_CheckContainer_FullMethodName:       true,
+	nagiv1.AgentService_CheckPorts_FullMethodName:           true,
 	nagiv1.AgentService_GetCache_FullMethodName:             true,
 	nagiv1.AgentService_QueryMetrics_FullMethodName:         true,
 	nagiv1.AgentService_ListPanels_FullMethodName:           true,

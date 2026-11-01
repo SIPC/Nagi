@@ -58,6 +58,8 @@ service AgentService {
 
   // 代理计划（整个替换）：本节点放哪些代理、哪些节点可以连进来。节点缓存在本地。
   rpc SetLinks(LinkPlan) returns (SetLinksResponse);
+  // 入口节点：检查映射要用的端口有没有被节点上的其他程序占用，不做任何改动。
+  rpc CheckPorts(CheckPortsRequest) returns (CheckPortsResponse);
 
   // ---- 节点 ----
   // 面板下发告警配置（渠道和规则）。节点保存在本地，面板挂了也能照常告警。
@@ -86,6 +88,12 @@ service AgentService {
 }
 
 message SetLinksResponse {}
+
+message CheckPortsRequest {
+  repeated Exposure routes = 1;
+}
+
+message CheckPortsResponse {}
 
 message GetCacheRequest {}
 

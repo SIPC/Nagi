@@ -6,7 +6,7 @@
 
 - 按面板下发的配置部署、更新、删除分配给本节点的容器，调用 `docker compose` 执行
 - **缓存自己那部分容器的配置**：面板不可达时照常运行、重启、快照、顶替；面板彻底丢失时，新面板从各节点的缓存把项目拼回来（见 [failover.md](failover.md#面板故障)）
-- 内嵌 Caddy（含 layer4 模块）：本节点上容器的对外出口，占用节点的 80/443（见 [exposure.md](exposure.md)）
+- 内嵌 Caddy（含 layer4 模块）：本节点上容器的对外出口，也可以作为其他节点上容器的入口，占用节点的 80/443（见 [exposure.md](exposure.md)）
 - 项目内网的跨节点部分：为不在本节点上的同项目容器、已连接项目的容器放代理（见下文"网络"）
 - 容器的版本文件、快照与恢复（见本文和 [snapshot.md](snapshot.md)）；把副本同步给顶替节点或备份节点，作为顶替节点时参与租约投票（见 [failover.md](failover.md)）
 - WireGuard 组网（见 [mesh.md](mesh.md)）

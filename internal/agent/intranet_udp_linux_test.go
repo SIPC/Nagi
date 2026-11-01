@@ -74,7 +74,7 @@ func startTestNodeAgent(t *testing.T, ctx context.Context, log *slog.Logger, pri
 	a := &agent{cfg: Config{DataDir: dir}, log: log, ctx: ctx, mesh: &meshNode{m: m}}
 	tn := &testNodeAgent{a: a, m: m, priv: priv}
 	n := &intranet{a: a, kick: make(chan struct{}, 1), file: filepath.Join(dir, "links.pb"),
-		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}, usocks: map[string]net.Listener{}}
+		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}, usocks: map[string]net.Listener{}, entries: map[string]*entryForward{}}
 	n.endpoint = func(_ context.Context, projectID, name string) (project.Endpoint, bool) {
 		if projectID != testProject || name != "dns" || !tn.alive.Load() {
 			return project.Endpoint{}, false

@@ -31,6 +31,8 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
     published: "",
     domains: "",
     httpOnly: false,
+    localEntry: true,
+    entryNodes: [] as string[],
   };
   const [form, setForm] = useState(empty);
   const [open, setOpen] = useState(false);
@@ -44,16 +46,23 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
-  // 映射开在容器所在的节点上，访问地址用那个节点的地址。
-  const nodeOf = (r: (typeof project.routes)[number]) => project.containers.find((c) => c.name === r.container)?.nodeId ?? "";
-  const addressOf = (r: (typeof project.routes)[number]) => nodes.data?.nodes.find((n) => n.id === nodeOf(r))?.address ?? "";
-  // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
-  const accessURL = (r: (typeof project.routes)[number]) => {
-    if (r.domains.length) return `${r.httpOnly ? "http" : "https"}://${r.domains[0]}`;
-    const address = addressOf(r);
-    if (!address || !r.published) return "";
-    return r.protocol === "http" ? `http://${address}:${r.published}` : "";
+  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const containerNode = project.containers.find((c) => c.name === container)?.nodeId ?? "";
+  // 映射开在它的入口节点上（默认是容器所在的节点），访问地址用这些节点的地址。
+  const entriesOf = (r: (typeof project.routes)[number]) => {
+    const own = project.containers.find((c) => c.name === r.container)?.nodeId ?? "";
+    return [...new Set([...(r.noLocalEntry ? [] : [own]), ...r.entryNodes])].filter(Boolean);
   };
+  const addressesOf = (r: (typeof project.routes)[number]) =>
+    entriesOf(r)
+      .map((id) => nodes.data?.nodes.find((n) => n.id === id)?.address ?? "")
+      .filter(Boolean);
+  // 跨节点的入口：有容器所在节点以外的入口节点时，标出都从哪些节点进来。
+  const crossNode = (r: (typeof project.routes)[number]) => r.noLocalEntry || r.entryNodes.length > 0;
+  const toggleEntry = (id: string, on: boolean) =>
+    setForm({ ...form, entryNodes: on ? [...form.entryNodes, id] : form.entryNodes.filter((n) => n !== id) });
+  const hasDomains = form.domains.split(/[\s,]+/).some(Boolean);
+  const multipleEntries = (form.localEntry ? 1 : 0) + form.entryNodes.length > 1;
 
   const save = async () => {
     setError("");
@@ -70,6 +79,8 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
           published: Number(form.published || 0),
           domains: form.domains.split(/[\s,]+/).filter(Boolean),
           httpOnly: form.httpOnly,
+          entryNodes: form.entryNodes,
+          noLocalEntry: !form.localEntry,
         },
       });
       setForm(empty);
@@ -131,11 +142,17 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
           </thead>
           <tbody>
             {project.routes.map((r) => {
-              const url = accessURL(r);
+              // 访问地址：http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
+              const domainURL = r.domains.length ? `${r.httpOnly ? "http" : "https"}://${r.domains[0]}` : "";
+              const addresses = !domainURL && r.published ? addressesOf(r) : [];
               return (
                 <tr key={r.name}>
                   <Td className="font-mono text-xs">{r.name}</Td>
-                  {r.error ? (
+                  {r.noLocalEntry && r.entryNodes.length === 0 ? (
+                    <Td colSpan={3} className="text-[13px] text-destructive">
+                      {t.projectNetwork.routes.noEntries}
+                    </Td>
+                  ) : r.error ? (
                     <Td colSpan={3} className="text-[13px] text-destructive">
                       {r.error}
                     </Td>
@@ -148,19 +165,29 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                       <Td className="font-mono text-xs">
                         {r.domains.length ? r.domains.join(", ") : `${r.protocol}/${r.published}`}
                         {r.httpOnly && <Badge className="ml-2 font-sans">{t.projectNetwork.routes.httpOnlyBadge}</Badge>}
+                        {crossNode(r) && (
+                          <div className="mt-1 font-sans text-[12px] text-muted-foreground">
+                            {t.projectNetwork.routes.entriesLabel(entriesOf(r).map(nodeName).join(", "))}
+                          </div>
+                        )}
                       </Td>
                       <Td className="font-mono text-xs">
-                        {url ? (
-                          <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-                            {url.replace(/^https?:\/\//, "")}
-                            <ExternalLink className="size-3 text-muted-foreground" />
-                          </a>
-                        ) : addressOf(r) && r.published > 0 ? (
-                          <span className="text-muted-foreground">
-                            {addressOf(r)}:{r.published}
-                          </span>
-                        ) : (
+                        {domainURL ? (
+                          <RouteLink url={domainURL} />
+                        ) : addresses.length === 0 ? (
                           <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="grid gap-1">
+                            {addresses.map((address) =>
+                              r.protocol === "http" ? (
+                                <RouteLink key={address} url={`http://${address}:${r.published}`} />
+                              ) : (
+                                <span key={address} className="text-muted-foreground">
+                                  {address}:{r.published}
+                                </span>
+                              ),
+                            )}
+                          </div>
                         )}
                       </Td>
                     </>
@@ -179,6 +206,8 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
                           published: r.published ? String(r.published) : "",
                           domains: r.domains.join(", "),
                           httpOnly: r.httpOnly,
+                          localEntry: !r.noLocalEntry,
+                          entryNodes: r.entryNodes,
                         });
                         setOpen(true);
                       }}
@@ -264,6 +293,24 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
               />
             </Field>
           </div>
+          <Field label={t.projectNetwork.routes.entryNodes} help={t.projectNetwork.routes.entryNodesHelp}>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              <Check checked={form.localEntry} onChange={(v) => setForm({ ...form, localEntry: v })}>
+                <span className="text-[13px]">{t.projectNetwork.routes.localEntry(nodeName(containerNode))}</span>
+              </Check>
+              {(nodes.data?.nodes ?? [])
+                .filter((n) => n.id !== containerNode || form.entryNodes.includes(n.id))
+                .map((n) => (
+                  <Check key={n.id} checked={form.entryNodes.includes(n.id)} onChange={(v) => toggleEntry(n.id, v)}>
+                    <span className="text-[13px]">{n.name}</span>
+                  </Check>
+                ))}
+            </div>
+            {form.entryNodes.length > 0 && <p className="mt-2 text-[12px] text-muted-foreground">{t.projectNetwork.routes.entryNodesNote}</p>}
+            {hasDomains && multipleEntries && !form.httpOnly && (
+              <p className="mt-2 text-[12px] text-warning">{t.projectNetwork.routes.entryDomainWarning}</p>
+            )}
+          </Field>
           {error && <Alert>{error}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })}>
@@ -282,6 +329,15 @@ function RoutesSection({ project, services }: { project: Project; services: Serv
         </form>
       )}
     </Section>
+  );
+}
+
+function RouteLink({ url }: { url: string }) {
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+      {url.replace(/^https?:\/\//, "")}
+      <ExternalLink className="size-3 text-muted-foreground" />
+    </a>
   );
 }
 

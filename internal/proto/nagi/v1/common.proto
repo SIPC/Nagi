@@ -205,6 +205,10 @@ message Exposure {
   string error = 8;
   // 容器名。
   string container = 9;
+  // 跨节点入口：除容器所在节点外，还从这些节点进来（节点 ID，见 docs/exposure.md#跨节点入口）。
+  repeated string entry_nodes = 10;
+  // 不从容器所在节点进来，只走 entry_nodes。
+  bool no_local_entry = 11;
 }
 
 message EnvVar {
@@ -387,6 +391,10 @@ message NodeInfo {
   int32 cpus = 9;
   uint64 memory_bytes = 10;
   uint64 disk_bytes = 11;
+  // 节点的版本支持跨节点入口（旧版本的节点不报）。
+  bool cross_node_entry = 12;
+  // 节点没有启动 Caddy（--no-proxy），不能作为入口节点。
+  bool proxy_disabled = 13;
 }
 
 message LogLine {
@@ -620,6 +628,40 @@ message FailoverStatus {
 message LinkPlan {
   repeated LinkProxy proxies = 1;
   repeated LinkAllow allows = 2;
+  // 本节点作为入口节点要开的映射（见 docs/exposure.md#跨节点入口）。
+  repeated LinkEntry entries = 3;
+  // 哪些入口节点可以访问本节点上容器的哪个端口。
+  repeated LinkEntryAllow entry_allows = 4;
+}
+
+// LinkEntry 是入口节点上的一条映射：Caddy 收到的流量经 mesh 转给 target_name 的 target_port。
+// 按 nodes 的顺序找：先找所在节点，对方说"不在这里"再找下一个。
+message LinkEntry {
+  string project_id = 1;
+  // 映射名。
+  string name = 2;
+  // 容器名和组里的容器（用于显示）。
+  string container = 3;
+  string service = 4;
+  // http、tcp 或 udp。
+  string protocol = 5;
+  uint32 published = 6;
+  repeated string domains = 7;
+  bool http_only = 8;
+  // 目标在项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
+  string target_name = 9;
+  uint32 target_port = 10;
+  repeated LinkNode nodes = 11;
+}
+
+// LinkEntryAllow：入口节点只能访问映射指向的这一个端口，不因此能访问项目里的其他容器和端口。
+message LinkEntryAllow {
+  string project_id = 1;
+  string target_name = 2;
+  uint32 port = 3;
+  // tcp 或 udp。
+  string protocol = 4;
+  repeated bytes callers = 5;
 }
 
 // LinkProxy 是一个代理：放在 project_id 的项目内网里，名字是 alias，代表 target_project 的容器 target_name。

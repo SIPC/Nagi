@@ -3,6 +3,7 @@ package spec
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-// 端口映射（见 docs/exposure.md）：属于容器，存在面板上，开在容器所在的节点上，经 Caddy 对外开放。
+// 端口映射（见 docs/exposure.md）：属于容器，存在面板上，开在入口节点（默认是容器所在的节点）上，经 Caddy 对外开放。
 
 // 对外开放的协议。
 const (
@@ -31,6 +32,7 @@ func NormalizeRoute(r *nagiv1.Exposure) *nagiv1.Exposure {
 		Name: strings.TrimSpace(r.GetName()), Container: strings.TrimSpace(r.GetContainer()), Service: strings.TrimSpace(r.GetService()),
 		Target: r.GetTarget(), Protocol: strings.ToLower(strings.TrimSpace(r.GetProtocol())), Published: r.GetPublished(),
 		Domains: NormalizeDomains(r.GetDomains()), HttpOnly: r.GetHttpOnly(),
+		EntryNodes: normalizeEntryNodes(r.GetEntryNodes()), NoLocalEntry: r.GetNoLocalEntry(),
 	}
 	if out.Protocol == ProtoHTTP && len(out.Domains) > 0 {
 		out.Published = 0
@@ -55,10 +57,39 @@ func NormalizeDomains(list []string) []string {
 	return out
 }
 
+// normalizeEntryNodes 去掉空的和重复的入口节点，按 ID 排序（生成的代理计划才稳定）。
+func normalizeEntryNodes(list []string) []string {
+	var out []string
+	for _, n := range list {
+		if n = strings.TrimSpace(n); n != "" {
+			out = append(out, n)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// EntryNodesOf 返回映射开在哪些节点上（容器在 containerNode 上时）：容器所在的节点（没有取消时）和其他入口节点。
+func EntryNodesOf(r *nagiv1.Exposure, containerNode string) []string {
+	var out []string
+	if !r.GetNoLocalEntry() {
+		out = append(out, containerNode)
+	}
+	for _, n := range r.GetEntryNodes() {
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // CheckRoute 校验一条映射本身的格式。
 func CheckRoute(r *nagiv1.Exposure) error {
 	if r.GetName() != "" && !routeNameRe.MatchString(r.GetName()) {
 		return Invalid("映射名只能包含小写字母、数字、- 和 _")
+	}
+	if r.GetNoLocalEntry() && len(r.GetEntryNodes()) == 0 {
+		return Invalid("至少要留一个入口节点")
 	}
 	if strings.TrimSpace(r.GetContainer()) == "" {
 		return Invalid("需要选择容器")

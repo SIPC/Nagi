@@ -53,14 +53,16 @@ type intranet struct {
 	plan   *nagiv1.LinkPlan
 	socks  map[string]net.Listener // 项目 ID → 代理连进来的 unix socket（TCP 连接）
 	usocks map[string]net.Listener // 项目 ID → 代理连进来的 unixpacket socket（UDP）
-	build  string                  // 代理容器标签：nagi 换了版本就重建
+	// entries 是跨节点入口的本地转发口（见 entry.go）：项目 ID/映射名/tcp 或 udp → 转发口。
+	entries map[string]*entryForward
+	build   string // 代理容器标签：nagi 换了版本就重建
 	// endpoint 找本节点上项目内网里的容器（project.Manager.FindEndpoint），测试时替换。
 	endpoint func(ctx context.Context, projectID, name string) (project.Endpoint, bool)
 }
 
 func newIntranet(a *agent) *intranet {
 	n := &intranet{a: a, kick: make(chan struct{}, 1), file: filepath.Join(a.cfg.DataDir, "links.pb"),
-		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}, usocks: map[string]net.Listener{}}
+		plan: &nagiv1.LinkPlan{}, socks: map[string]net.Listener{}, usocks: map[string]net.Listener{}, entries: map[string]*entryForward{}}
 	n.endpoint = a.projects.FindEndpoint
 	n.build = a.cfg.Version
 	if exe, err := linkExe(); err == nil {
@@ -351,6 +353,11 @@ func (n *intranet) handleLocal(projectID string, c net.Conn) {
 	if p == nil || !slices.Contains(p.GetPorts(), uint32(port)) {
 		return
 	}
+	n.forward(c, br, p, port)
+}
+
+// forward 按计划里的顺序找目标所在的节点，把连接 c（数据从 r 读）转给目标的端口 port。
+func (n *intranet) forward(c net.Conn, r io.Reader, p *nagiv1.LinkProxy, port uint16) {
 	targets := p.GetNodes()
 	if len(targets) > maxProxyTarget {
 		targets = targets[:maxProxyTarget]
@@ -370,7 +377,7 @@ func (n *intranet) handleLocal(projectID string, c net.Conn) {
 			if err != nil {
 				continue
 			}
-			splice(c, br, tc, tc)
+			splice(c, r, tc, tc)
 			tc.Close()
 			return
 		}
@@ -378,7 +385,7 @@ func (n *intranet) handleLocal(projectID string, c net.Conn) {
 		if !ok {
 			continue
 		}
-		splice(c, br, mc, mbr)
+		splice(c, r, mc, mbr)
 		mc.Close()
 		return
 	}
@@ -478,7 +485,8 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		return
 	}
 	ok, internal := n.allowed(projectID, caller)
-	if !ok {
+	entry := n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller)
+	if !ok && !entry {
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -487,8 +495,8 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		reply("ERR 不在这里")
 		return
 	}
-	// 只转发开放的端口（容器声明的和项目设置里补的内部端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
-	open := slices.Contains(e.Ports, uint32(port)) || slices.Contains(spec.InternalPortMap(internal)[name], uint32(port))
+	// 只转发开放的端口（容器声明的和项目设置里补的内部端口，以及入口节点的映射指向的端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
+	open := entry || (ok && (slices.Contains(e.Ports, uint32(port)) || slices.Contains(spec.InternalPortMap(internal)[name], uint32(port))))
 	if !open {
 		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
@@ -501,6 +509,9 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	defer tc.Close()
 	if _, err := io.WriteString(c, "OK\n"); err != nil {
 		return
+	}
+	if !ok {
+		defer n.watchEntry(func() { c.Close(); tc.Close() }, projectID, name, port, spec.ProtoTCP, caller)()
 	}
 	splice(c, br, tc, tc)
 }

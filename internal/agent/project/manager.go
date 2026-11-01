@@ -67,6 +67,8 @@ type Manager struct {
 	FastSnapshot func(projectID, container string) bool
 	// BackupStatus 返回容器同步到备份节点的状态（上报给面板），没有设置备份节点时返回 nil。
 	BackupStatus func(s *nagiv1.ContainerSpec) *nagiv1.BackupStatus
+	// EntryPorts 返回本节点作为入口节点已经在用的端口（Caddy 正在监听）。
+	EntryPorts func() []spec.PortKey
 
 	restarts managedRestarts
 	images   imageUpdates
