@@ -153,7 +153,7 @@ function ImageUpdateIcon() {
   );
 }
 
-const projectCard = "flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
+const projectCard = "flex min-w-0 flex-col gap-3 rounded-lg border bg-background p-4 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
 const projectGrid = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4";
 
 function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[] | undefined }) {
@@ -165,7 +165,7 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
   const updates = summary.status?.imageUpdates ?? [];
   const shown = p.containers.length > cardContainers ? p.containers.slice(0, cardContainers - 1) : p.containers;
   return (
-    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={cn(projectCard, "hover:bg-[color-mix(in_srgb,var(--muted)_50%,var(--card))]")}>
+    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={cn(projectCard, "hover:border-ring")}>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate font-medium">{p.name}</span>
         {p.containers.length === 0 ? <Status>{t.projects.card.noContainers}</Status> : <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}

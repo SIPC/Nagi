@@ -461,7 +461,7 @@ export function SettingRows({ children }: { children: React.ReactNode }) {
 // Card：概览网格里的一项（项目、节点），整张可以是链接。四边内边距 16px，头、内容、底栏之间 12px。
 // 其他地方不用卡片（见 docs/ui.md）；监控数值块用 Tile。
 export const cardClass =
-  "group flex flex-col rounded-lg border bg-card outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
+  "group flex flex-col rounded-lg border bg-background outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
 
 export function Card({ className, ...props }: React.ComponentProps<"div">) {
   return <div className={cn(cardClass, className)} {...props} />;

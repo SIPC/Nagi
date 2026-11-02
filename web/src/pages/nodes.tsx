@@ -339,7 +339,7 @@ function CardsSkeleton() {
     <div role="status" aria-label={t.common.feedback.loading}>
       <CardGrid>
         {[0, 1].map((i) => (
-          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-background p-4">
             <Skeleton className="my-1 h-3 w-3/5" />
             <Skeleton className="my-1 h-3 w-2/5" />
             <Skeleton className="my-1 h-3 w-4/5" />
@@ -385,13 +385,13 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
           </Button>
         </>
       ) : n.online ? (
-        <NodeUsageBars usage={u} info={n.info} className="font-sans text-foreground [&_.truncate>span]:text-muted-foreground" />
+        <NodeUsageBars usage={u} info={n.info} />
       ) : (
         <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</p>
       )}
-      <div className="mt-auto flex items-center justify-between gap-3 text-xs leading-4 text-muted-foreground">
+      <div className="mt-auto flex items-center justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
         <span className="shrink-0">{t.nodes.containers(n.containers)}</span>
-        <span className="truncate font-mono">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
+        <span className="truncate">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
       </div>
     </Link>
   );

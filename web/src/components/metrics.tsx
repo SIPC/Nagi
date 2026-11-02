@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, HardDrive, MemoryStick } from "lucide-react";
+import { Cpu, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
@@ -312,25 +312,30 @@ export function UsageBars({ usage, memFallback, className }: { usage?: Usage; me
   );
 }
 
+// UsageRing：16px 的占用圆环。超过 75% 变黄、90% 变红。
+function UsageRing({ ratio }: { ratio: number }) {
+  const r = Math.min(Math.max(ratio, 0), 1);
+  const color = r >= 0.9 ? "stroke-destructive" : r >= 0.75 ? "stroke-warning" : "stroke-primary";
+  return (
+    <svg viewBox="0 0 100 100" className="size-4 shrink-0 -rotate-90" aria-hidden>
+      <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" className="stroke-primary/12" />
+      <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" strokeLinecap="round" pathLength={100} strokeDasharray={`${Math.max(r * 100, 3)} 100`} className={color} />
+    </svg>
+  );
+}
+
 // UsageRings：项目栏里一个容器的 CPU 和内存：小圆环加数值，一行放下。超过 75% 变黄、90% 变红。
 export function UsageRings({ usage, memFallback, className }: { usage?: Usage; memFallback: number; className?: string }) {
   const cpuMax = usage?.cpuLimit ?? 100;
   const memMax = usage?.memLimit ?? memFallback;
   const cpu = usage ? usage.cpu / cpuMax : 0;
   const mem = usage && memMax > 0 ? usage.mem / memMax : 0;
-  const ring = (ratio: number, value: string, title: string) => {
-    const r = Math.min(Math.max(ratio, 0), 1);
-    const color = r >= 0.9 ? "stroke-destructive" : r >= 0.75 ? "stroke-warning" : "stroke-primary";
-    return (
-      <span className="inline-flex items-center gap-1" title={title}>
-        <svg viewBox="0 0 100 100" className="size-4 shrink-0 -rotate-90" aria-hidden>
-          <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" className="stroke-primary/12" />
-          <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" strokeLinecap="round" pathLength={100} strokeDasharray={`${Math.max(r * 100, 3)} 100`} className={color} />
-        </svg>
-        {value}
-      </span>
-    );
-  };
+  const ring = (ratio: number, value: string, title: string) => (
+    <span className="inline-flex items-center gap-1" title={title}>
+      <UsageRing ratio={ratio} />
+      {value}
+    </span>
+  );
   return (
     <span className={cn("flex items-center gap-3 text-xs text-muted-foreground", className)}>
       {ring(cpu, usage ? `CPU ${usage.cpu.toFixed(1)}%` : "CPU —", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
@@ -339,8 +344,8 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   );
 }
 
-// NodeUsageBars：节点的 CPU、内存、磁盘占用，样式同容器的占用条：图标、条、数值。
-// CPU 显示百分比，内存和磁盘显示「已用 / 总量」（旧版本的节点不报总量，退回百分比）。三行在同一个网格里，条的长度对齐。
+// NodeUsageBars：节点的 CPU、内存、磁盘占用，上下三项：文字加通栏的占用条。
+// 显示「已用 / 总量」（旧版本的节点不报总量，退回百分比）。
 export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; info?: NodeInfo; className?: string }) {
   // 例如 1.4 GB、15.6 GB、512 MB：到 1000 就进位，不到 100 保留一位小数。
   const size = (v: number) => {
@@ -353,28 +358,30 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
     return `${v < 100 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
   };
 
-  // 每行：图标、条、「已用 / 总量」。数值是一列、靠左，几行从同一处开始；已用是重点，「/ 总量」淡一些。
-  const row = (icon: ReactNode, label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt, detail?: string) => {
+  // 每项两层：上面是名称和靠右的「已用 / 总量」，下面是占满整行的占用条。超过阈值时已用和条一起变色。
+  const row = (label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt, detail?: string) => {
     const ratio = percent === undefined ? 0 : percent / 100;
     const used = percent !== undefined && total ? ratio * total : undefined;
-    const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
     const summary =
       percent === undefined ? `${label} —` : used !== undefined ? `${label} ${fmt(used)} / ${fmtTotal(total!)} (${fmtPct(percent)})` : `${label} ${fmtPct(percent)}`;
-    const title = detail ? `${summary}\n${detail}` : summary;
+    const title = detail ? `${summary}
+${detail}` : summary;
+    // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
+    const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
     return (
-      <span className="contents">
-        <span className="opacity-70 [&_svg]:size-3" title={title}>
-          {icon}
+      <span className="grid min-w-0 gap-1.5" title={title}>
+        <span className="flex min-w-0 items-baseline justify-between gap-2 text-[13px] leading-5">
+          <span className="shrink-0 text-muted-foreground">{label}</span>
+          <span className="truncate">
+            <span className={cn("font-medium", ratio >= 0.9 ? "text-destructive" : ratio >= 0.75 ? "text-warning-text" : "text-foreground")}>{percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)}</span>
+            {used !== undefined && <span className="text-muted-foreground"> / {fmtTotal(total!)}</span>}
+          </span>
         </span>
-        <span className="h-1 min-w-0 overflow-hidden rounded-full bg-foreground/10" title={title}>
+        <span className="h-1 overflow-hidden rounded-full bg-primary/12">
           <span
-            className={cn("block h-full origin-left rounded-full transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", tone(ratio))}
+            className={cn("block h-full origin-left rounded-full transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", ratio >= 0.9 ? "bg-destructive" : ratio >= 0.75 ? "bg-warning" : "bg-primary")}
             style={{ transform: `scaleX(${r})` }}
           />
-        </span>
-        <span className="truncate pl-1" title={title}>
-          {percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)}
-          {used !== undefined && <span className="text-muted-foreground/50"> / {fmtTotal(total!)}</span>}
         </span>
       </span>
     );
@@ -390,15 +397,13 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
   return (
     <span
       className={cn(
-        "grid grid-cols-[auto_1fr_auto] items-center gap-x-1.5 gap-y-2 font-mono text-xs leading-4 tabular-nums text-muted-foreground",
+        "grid gap-3 tabular-nums",
         className,
       )}
     >
-      {row(<Cpu />, "CPU", usage?.cpu, cpuTotal, fmtCpuShort, fmtCpuShort, cpuDetail)}
-      {row(<MemoryStick />, m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
-      {diskTotal > 0
-        ? row(<HardDrive />, m.disk, (100 * diskUsed) / diskTotal, diskTotal, size, size, diskDetail)
-        : row(<HardDrive />, m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
+      {row("CPU", usage?.cpu, cpuTotal, fmtCpuShort, fmtCpuShort, cpuDetail)}
+      {row(m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
+      {diskTotal > 0 ? row(m.disk, (100 * diskUsed) / diskTotal, diskTotal, size, size, diskDetail) : row(m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
     </span>
   );
 }
