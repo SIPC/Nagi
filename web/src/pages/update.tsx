@@ -286,8 +286,6 @@ export function UpdateCard() {
           )}
         </SettingRows>
       )}
-      {/* 字体许可要求的署名，不能省。 */}
-      <p className="mt-4 text-xs text-muted-foreground">{t.update.fontCredit}</p>
     </Section>
   );
 }

@@ -2,7 +2,6 @@ import type zh from "../zh/update";
 
 export default {
   badge: "Update available",
-  fontCredit: "Interface font: MiSans by Xiaomi",
   current: "Current version",
   latest: "Latest version",
   check: "Check for updates",

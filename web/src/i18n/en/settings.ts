@@ -16,6 +16,7 @@ export default {
     },
     invite: { label: "Receive nodes", description: "Invite codes other panels use to hand over nodes to this panel." },
     mesh: { label: "Node network", description: "This panel's address in the private node network and its connections to nodes." },
+    about: { label: "About", description: "" },
     update: { label: "Updates", description: "See the panel version and update to the latest release." },
   },
 } satisfies typeof zh;
