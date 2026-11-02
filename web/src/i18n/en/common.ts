@@ -22,6 +22,8 @@ export default {
     syncing: "Syncing",
     pendingApproval: "Pending approval",
   },
+  // 把两句说明接起来时用。
+  sentenceEnd: ". ",
   actions: {
     save: "Save",
     cancel: "Cancel",
@@ -36,6 +38,7 @@ export default {
     refresh: "Refresh",
     retry: "Retry",
     more: "More actions",
+    back: "Back",
   },
   feedback: {
     loading: "Loading",

@@ -12,7 +12,7 @@ export function DropdownMenuContent({ className, sideOffset = 4, align = "end", 
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 w-max max-w-64 min-w-40 rounded-md border bg-card p-1 shadow-lg data-[state=open]:animate-fade-in", className)}
+        className={cn("z-50 w-max max-w-64 min-w-32 rounded-md border bg-card p-1 shadow-lg data-[state=open]:animate-fade-in", className)}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>

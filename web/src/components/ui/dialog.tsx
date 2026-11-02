@@ -12,7 +12,7 @@ export function DialogContent({ className, children, ...props }: React.Component
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-fade-in" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed top-[12vh] left-1/2 z-50 max-h-[80vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 overflow-y-auto rounded-lg border bg-card shadow-xl outline-none data-[state=open]:animate-fade-in",
+          "fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background shadow-lg outline-none data-[state=open]:animate-fade-in max-md:top-auto max-md:bottom-4 max-md:max-h-[calc(100dvh-2rem)] max-md:max-w-none max-md:translate-y-0",
           className,
         )}
         {...props}
@@ -24,9 +24,9 @@ export function DialogContent({ className, children, ...props }: React.Component
 }
 
 export function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("text-sm font-semibold", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("text-base leading-6 font-medium", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  return <DialogPrimitive.Description className={cn("text-[13px] text-muted-foreground", className)} {...props} />;
+  return <DialogPrimitive.Description className={cn("text-muted-foreground", className)} {...props} />;
 }

@@ -1,58 +1,61 @@
 @import "tailwindcss";
+@import "./fonts/misans.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* 灰阶为主的控制台配色：彩色只用于状态（成功、警告、错误）和品牌标识。 */
+/* 配色见 docs/ui.md：shadcn neutral，彩色只用于状态和品牌标识。 */
 :root {
   color-scheme: light;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.2 0.005 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.005 260);
-  --muted: oklch(0.967 0.001 260);
-  --muted-foreground: oklch(0.53 0.008 260);
-  --subtle: oklch(0.982 0.001 260);
-  --sidebar: oklch(0.98 0.001 260);
-  --border: oklch(0.925 0.003 260);
-  --input: oklch(0.885 0.004 260);
-  --primary: oklch(0.21 0.006 260);
-  --primary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.955 0.002 260);
-  --accent-foreground: oklch(0.2 0.005 260);
-  --ring: oklch(0.6 0.01 260);
-  --destructive: oklch(0.577 0.215 27);
-  --success: oklch(0.6 0.15 152);
-  --warning: oklch(0.72 0.16 70);
-  --info: oklch(0.58 0.13 250);
-  --wave: oklch(0.7 0.11 225);
-  --log: oklch(0.18 0.005 260);
-  --log-foreground: oklch(0.88 0.005 260);
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --subtle: #fafafa;
+  --sidebar: #ffffff;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --ring: #a1a1a1;
+  --destructive: #e7000b;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --warning-text: #b45309;
+  --info: #2563eb;
+  --wave: #3f9cc6;
+  --log: #0a0a0a;
+  --log-foreground: #e5e5e5;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.155 0.002 260);
-  --foreground: oklch(0.95 0.002 260);
-  --card: oklch(0.175 0.004 260);
-  --card-foreground: oklch(0.95 0.002 260);
-  --muted: oklch(0.22 0.005 260);
-  --muted-foreground: oklch(0.68 0.008 260);
-  --subtle: oklch(0.19 0.003 260);
-  --sidebar: oklch(0.135 0.002 260);
-  --border: oklch(0.255 0.004 260);
-  --input: oklch(0.3 0.006 260);
-  --primary: oklch(0.95 0.002 260);
-  --primary-foreground: oklch(0.17 0.004 260);
-  --accent: oklch(0.24 0.005 260);
-  --accent-foreground: oklch(0.95 0.002 260);
-  --ring: oklch(0.6 0.01 260);
-  --destructive: oklch(0.66 0.2 25);
-  --success: oklch(0.7 0.15 152);
-  --warning: oklch(0.8 0.15 75);
-  --info: oklch(0.7 0.12 250);
-  --wave: oklch(0.76 0.1 220);
-  --log: oklch(0.12 0.003 260);
-  --log-foreground: oklch(0.88 0.005 260);
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
+  --subtle: #171717;
+  --sidebar: #0a0a0a;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.15);
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --ring: #737373;
+  --destructive: #ff6467;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --warning-text: #fbbf24;
+  --info: #60a5fa;
+  --wave: #6db9dc;
+  --log: #000000;
+  --log-foreground: #e5e5e5;
 }
 
 @theme inline {
@@ -74,16 +77,16 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
   --color-info: var(--info);
   --color-wave: var(--wave);
   --color-log: var(--log);
   --color-log-foreground: var(--log-foreground);
-  /* 系统字体：英文用 SF / Segoe UI，中文用苹方 / 微软雅黑。英文字体要排在中文前面，否则英文会用中文字体里偏大的拉丁字形。 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  --radius-lg: 0.625rem;
-  --radius-md: 0.4375rem;
-  --radius-sm: 0.3125rem;
+  --font-sans: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius-lg: 8px;
+  --radius-md: 6px;
+  --radius-sm: 4px;
 
   /* 切换动画：短、只动 opacity 和 transform。不加 fill-mode，结束后不留 transform（否则里面 fixed 的对话框会错位）。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -110,7 +113,8 @@
     @apply bg-background text-foreground antialiased max-md:scroll-pt-16;
   }
   body {
-    @apply min-h-screen font-sans text-sm;
+    @apply min-h-screen font-sans text-sm leading-5;
+    font-variant-numeric: tabular-nums;
   }
   ::selection {
     background: color-mix(in oklab, var(--info) 25%, transparent);

@@ -19,6 +19,8 @@ export default {
     syncing: "同步中",
     pendingApproval: "待批准",
   },
+  // 把两句说明接起来时用。
+  sentenceEnd: "。",
   actions: {
     save: "保存",
     cancel: "取消",
@@ -33,6 +35,7 @@ export default {
     refresh: "刷新",
     retry: "重试",
     more: "更多操作",
+    back: "返回",
   },
   feedback: {
     loading: "加载中",

@@ -8,13 +8,15 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+const rtfNumeric = new Intl.RelativeTimeFormat(locale, { numeric: "always" });
 
 // 相对时间，例如“3 分钟前”。
 export function timeAgo(date: Date | undefined): string {
   if (!date) return t.common.time.never;
   const seconds = Math.round((date.getTime() - Date.now()) / 1000);
   const abs = Math.abs(seconds);
-  const fmt = (v: number, unit: Intl.RelativeTimeFormatUnit) => rtf.format(v, unit).replace(/(\d)\s*([^\d\s])/, "$1 $2");
+  // 只有「昨天」用词语，其余写数字；中文「秒钟前」写成「秒前」。
+  const fmt = (v: number, unit: Intl.RelativeTimeFormatUnit) => (unit === "day" && v === -1 ? rtf : rtfNumeric).format(v, unit).replace(/(\d)\s*([^\d\s])/, "$1 $2").replace("秒钟", "秒"); // i18n-ignore
   if (abs < 60) return seconds > -10 ? t.common.time.justNow : fmt(seconds, "second");
   if (abs < 3600) return fmt(Math.round(seconds / 60), "minute");
   if (abs < 86400) return fmt(Math.round(seconds / 3600), "hour");

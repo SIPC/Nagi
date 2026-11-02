@@ -1,7 +1,8 @@
 // 确认框：替代浏览器的 confirm / alert。第一句（到第一个问号）是标题，其余是后果说明，主按钮写具体的动作。
 import { useEffect, useRef, useState } from "react";
+import type * as React from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Button, Check, Field, Input } from "@/components/ui";
+import { Button, Check, DialogActions, Field, Input, KeyValue } from "@/components/ui";
 import { t } from "@/i18n";
 
 type Options = {
@@ -10,6 +11,13 @@ type Options = {
   danger?: boolean;
   // 附加的复选框，例如「同时删除容器目录」，默认不勾选。
   check?: string;
+  // 复选框默认勾选，例如「先做一份快照」。
+  checkDefault?: boolean;
+  // 复选框的说明（问号里），勾选后主按钮是否变红。
+  checkHelp?: string;
+  checkDanger?: boolean;
+  // 标题下面的属性，例如回滚时的当前版本和目标版本。
+  details?: [React.ReactNode, React.ReactNode][];
   // 勾选复选框后，要输入这段文字才能确认（数据无法恢复的操作）。
   typeToConfirm?: { label: string; value: string };
 };
@@ -60,7 +68,7 @@ export function ConfirmHost() {
 
   useEffect(() => {
     show = (r) => {
-      setChecked(false);
+      setChecked(!!r.checkDefault);
       setTyped("");
       setReq(r);
     };
@@ -88,10 +96,13 @@ export function ConfirmHost() {
           safeButton.current?.focus();
         }}
       >
-        <AlertDialogTitle>{title}</AlertDialogTitle>
-        {body && <AlertDialogDescription>{body}</AlertDialogDescription>}
+        <div className="grid gap-1">
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {body && <AlertDialogDescription>{body}</AlertDialogDescription>}
+        </div>
+        {req?.details && <KeyValue items={req.details} />}
         {req?.check && (
-          <Check checked={checked} onChange={setChecked}>
+          <Check checked={checked} onChange={setChecked} help={req.checkHelp}>
             {req.check}
           </Check>
         )}
@@ -100,7 +111,7 @@ export function ConfirmHost() {
             <Input id="confirm-type" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoFocus />
           </Field>
         )}
-        <div className="flex justify-end gap-2">
+        <DialogActions>
           {req?.notice ? (
             <AlertDialogAction asChild>
               <Button ref={safeButton} readOnlyOk size="sm" onClick={() => finish({ checked: false })}>
@@ -110,7 +121,7 @@ export function ConfirmHost() {
           ) : (
             <>
               <AlertDialogCancel asChild>
-                <Button ref={req?.danger ? safeButton : undefined} readOnlyOk size="sm" variant="ghost">
+                <Button ref={req?.danger ? safeButton : undefined} readOnlyOk size="sm" variant="outline">
                   {t.common.actions.cancel}
                 </Button>
               </AlertDialogCancel>
@@ -119,7 +130,7 @@ export function ConfirmHost() {
                   ref={req?.danger ? undefined : safeButton}
                   readOnlyOk
                   size="sm"
-                  variant={req?.danger ? "destructive" : "default"}
+                  variant={req?.danger || (req?.checkDanger && checked) ? "destructive" : "default"}
                   disabled={blocked}
                   onClick={() => finish({ checked })}
                 >
@@ -128,7 +139,7 @@ export function ConfirmHost() {
               </AlertDialogAction>
             </>
           )}
-        </div>
+        </DialogActions>
       </AlertDialogContent>
     </AlertDialog>
   );
