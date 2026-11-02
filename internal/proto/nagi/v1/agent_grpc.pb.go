@@ -19,49 +19,57 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_PutContainer_FullMethodName         = "/nagi.v1.AgentService/PutContainer"
-	AgentService_DeployContainer_FullMethodName      = "/nagi.v1.AgentService/DeployContainer"
-	AgentService_DeleteContainer_FullMethodName      = "/nagi.v1.AgentService/DeleteContainer"
-	AgentService_ControlContainer_FullMethodName     = "/nagi.v1.AgentService/ControlContainer"
-	AgentService_ListVolumes_FullMethodName          = "/nagi.v1.AgentService/ListVolumes"
-	AgentService_ListVolumeFiles_FullMethodName      = "/nagi.v1.AgentService/ListVolumeFiles"
-	AgentService_DeleteVolumeFile_FullMethodName     = "/nagi.v1.AgentService/DeleteVolumeFile"
-	AgentService_CreateVolumeDir_FullMethodName      = "/nagi.v1.AgentService/CreateVolumeDir"
-	AgentService_RestoreVolumeFile_FullMethodName    = "/nagi.v1.AgentService/RestoreVolumeFile"
-	AgentService_ListSnapshots_FullMethodName        = "/nagi.v1.AgentService/ListSnapshots"
-	AgentService_CreateSnapshot_FullMethodName       = "/nagi.v1.AgentService/CreateSnapshot"
-	AgentService_RestoreSnapshot_FullMethodName      = "/nagi.v1.AgentService/RestoreSnapshot"
-	AgentService_StreamLogs_FullMethodName           = "/nagi.v1.AgentService/StreamLogs"
-	AgentService_Exec_FullMethodName                 = "/nagi.v1.AgentService/Exec"
-	AgentService_CheckImages_FullMethodName          = "/nagi.v1.AgentService/CheckImages"
-	AgentService_LoginRegistry_FullMethodName        = "/nagi.v1.AgentService/LoginRegistry"
-	AgentService_SyncBackup_FullMethodName           = "/nagi.v1.AgentService/SyncBackup"
-	AgentService_AcceptReplica_FullMethodName        = "/nagi.v1.AgentService/AcceptReplica"
-	AgentService_ListReplicas_FullMethodName         = "/nagi.v1.AgentService/ListReplicas"
-	AgentService_ListReplicaSnapshots_FullMethodName = "/nagi.v1.AgentService/ListReplicaSnapshots"
-	AgentService_CheckContainer_FullMethodName       = "/nagi.v1.AgentService/CheckContainer"
-	AgentService_RestoreReplica_FullMethodName       = "/nagi.v1.AgentService/RestoreReplica"
-	AgentService_DeleteReplica_FullMethodName        = "/nagi.v1.AgentService/DeleteReplica"
-	AgentService_MigrateOut_FullMethodName           = "/nagi.v1.AgentService/MigrateOut"
-	AgentService_MigrateResume_FullMethodName        = "/nagi.v1.AgentService/MigrateResume"
-	AgentService_SetFailover_FullMethodName          = "/nagi.v1.AgentService/SetFailover"
-	AgentService_ConfirmTakeover_FullMethodName      = "/nagi.v1.AgentService/ConfirmTakeover"
-	AgentService_GetCache_FullMethodName             = "/nagi.v1.AgentService/GetCache"
-	AgentService_SetLinks_FullMethodName             = "/nagi.v1.AgentService/SetLinks"
-	AgentService_CheckPorts_FullMethodName           = "/nagi.v1.AgentService/CheckPorts"
-	AgentService_RetryCerts_FullMethodName           = "/nagi.v1.AgentService/RetryCerts"
-	AgentService_SetAlertConfig_FullMethodName       = "/nagi.v1.AgentService/SetAlertConfig"
-	AgentService_QueryMetrics_FullMethodName         = "/nagi.v1.AgentService/QueryMetrics"
-	AgentService_SetProjectsRoot_FullMethodName      = "/nagi.v1.AgentService/SetProjectsRoot"
-	AgentService_ListPanels_FullMethodName           = "/nagi.v1.AgentService/ListPanels"
-	AgentService_AddPanel_FullMethodName             = "/nagi.v1.AgentService/AddPanel"
-	AgentService_RemovePanel_FullMethodName          = "/nagi.v1.AgentService/RemovePanel"
-	AgentService_GetMeshStatus_FullMethodName        = "/nagi.v1.AgentService/GetMeshStatus"
-	AgentService_MeshPing_FullMethodName             = "/nagi.v1.AgentService/MeshPing"
-	AgentService_GetMirrors_FullMethodName           = "/nagi.v1.AgentService/GetMirrors"
-	AgentService_SetMirrors_FullMethodName           = "/nagi.v1.AgentService/SetMirrors"
-	AgentService_SetPanelDomain_FullMethodName       = "/nagi.v1.AgentService/SetPanelDomain"
-	AgentService_Upgrade_FullMethodName              = "/nagi.v1.AgentService/Upgrade"
+	AgentService_PutContainer_FullMethodName          = "/nagi.v1.AgentService/PutContainer"
+	AgentService_DeployContainer_FullMethodName       = "/nagi.v1.AgentService/DeployContainer"
+	AgentService_DeleteContainer_FullMethodName       = "/nagi.v1.AgentService/DeleteContainer"
+	AgentService_ControlContainer_FullMethodName      = "/nagi.v1.AgentService/ControlContainer"
+	AgentService_ListVolumes_FullMethodName           = "/nagi.v1.AgentService/ListVolumes"
+	AgentService_ListVolumeFiles_FullMethodName       = "/nagi.v1.AgentService/ListVolumeFiles"
+	AgentService_DeleteVolumeFile_FullMethodName      = "/nagi.v1.AgentService/DeleteVolumeFile"
+	AgentService_CreateVolumeDir_FullMethodName       = "/nagi.v1.AgentService/CreateVolumeDir"
+	AgentService_RestoreVolumeFile_FullMethodName     = "/nagi.v1.AgentService/RestoreVolumeFile"
+	AgentService_ListSnapshots_FullMethodName         = "/nagi.v1.AgentService/ListSnapshots"
+	AgentService_CreateSnapshot_FullMethodName        = "/nagi.v1.AgentService/CreateSnapshot"
+	AgentService_RestoreSnapshot_FullMethodName       = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_StreamLogs_FullMethodName            = "/nagi.v1.AgentService/StreamLogs"
+	AgentService_Exec_FullMethodName                  = "/nagi.v1.AgentService/Exec"
+	AgentService_NodeShell_FullMethodName             = "/nagi.v1.AgentService/NodeShell"
+	AgentService_ListNodeDir_FullMethodName           = "/nagi.v1.AgentService/ListNodeDir"
+	AgentService_ReadNodeFile_FullMethodName          = "/nagi.v1.AgentService/ReadNodeFile"
+	AgentService_WriteNodeFile_FullMethodName         = "/nagi.v1.AgentService/WriteNodeFile"
+	AgentService_DeleteNodeFile_FullMethodName        = "/nagi.v1.AgentService/DeleteNodeFile"
+	AgentService_CreateNodeDir_FullMethodName         = "/nagi.v1.AgentService/CreateNodeDir"
+	AgentService_ListNodeFileBackups_FullMethodName   = "/nagi.v1.AgentService/ListNodeFileBackups"
+	AgentService_RestoreNodeFileBackup_FullMethodName = "/nagi.v1.AgentService/RestoreNodeFileBackup"
+	AgentService_CheckImages_FullMethodName           = "/nagi.v1.AgentService/CheckImages"
+	AgentService_LoginRegistry_FullMethodName         = "/nagi.v1.AgentService/LoginRegistry"
+	AgentService_SyncBackup_FullMethodName            = "/nagi.v1.AgentService/SyncBackup"
+	AgentService_AcceptReplica_FullMethodName         = "/nagi.v1.AgentService/AcceptReplica"
+	AgentService_ListReplicas_FullMethodName          = "/nagi.v1.AgentService/ListReplicas"
+	AgentService_ListReplicaSnapshots_FullMethodName  = "/nagi.v1.AgentService/ListReplicaSnapshots"
+	AgentService_CheckContainer_FullMethodName        = "/nagi.v1.AgentService/CheckContainer"
+	AgentService_RestoreReplica_FullMethodName        = "/nagi.v1.AgentService/RestoreReplica"
+	AgentService_DeleteReplica_FullMethodName         = "/nagi.v1.AgentService/DeleteReplica"
+	AgentService_MigrateOut_FullMethodName            = "/nagi.v1.AgentService/MigrateOut"
+	AgentService_MigrateResume_FullMethodName         = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_SetFailover_FullMethodName           = "/nagi.v1.AgentService/SetFailover"
+	AgentService_ConfirmTakeover_FullMethodName       = "/nagi.v1.AgentService/ConfirmTakeover"
+	AgentService_GetCache_FullMethodName              = "/nagi.v1.AgentService/GetCache"
+	AgentService_SetLinks_FullMethodName              = "/nagi.v1.AgentService/SetLinks"
+	AgentService_CheckPorts_FullMethodName            = "/nagi.v1.AgentService/CheckPorts"
+	AgentService_RetryCerts_FullMethodName            = "/nagi.v1.AgentService/RetryCerts"
+	AgentService_SetAlertConfig_FullMethodName        = "/nagi.v1.AgentService/SetAlertConfig"
+	AgentService_QueryMetrics_FullMethodName          = "/nagi.v1.AgentService/QueryMetrics"
+	AgentService_SetProjectsRoot_FullMethodName       = "/nagi.v1.AgentService/SetProjectsRoot"
+	AgentService_ListPanels_FullMethodName            = "/nagi.v1.AgentService/ListPanels"
+	AgentService_AddPanel_FullMethodName              = "/nagi.v1.AgentService/AddPanel"
+	AgentService_RemovePanel_FullMethodName           = "/nagi.v1.AgentService/RemovePanel"
+	AgentService_GetMeshStatus_FullMethodName         = "/nagi.v1.AgentService/GetMeshStatus"
+	AgentService_MeshPing_FullMethodName              = "/nagi.v1.AgentService/MeshPing"
+	AgentService_GetMirrors_FullMethodName            = "/nagi.v1.AgentService/GetMirrors"
+	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
+	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
+	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -96,6 +104,15 @@ type AgentServiceClient interface {
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error)
+	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
+	NodeShell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NodeShellInput, ExecOutput], error)
+	ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error)
+	ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error)
+	WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
+	DeleteNodeFile(ctx context.Context, in *DeleteNodeFileRequest, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
+	CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
+	ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error)
+	RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -352,6 +369,89 @@ func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ExecClient = grpc.BidiStreamingClient[ExecInput, ExecOutput]
 
+func (c *agentServiceClient) NodeShell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NodeShellInput, ExecOutput], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_NodeShell_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeShellInput, ExecOutput]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_NodeShellClient = grpc.BidiStreamingClient[NodeShellInput, ExecOutput]
+
+func (c *agentServiceClient) ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeDirResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListNodeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadNodeFileResponse)
+	err := c.cc.Invoke(ctx, AgentService_ReadNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteNodeFileResponse)
+	err := c.cc.Invoke(ctx, AgentService_WriteNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteNodeFile(ctx context.Context, in *DeleteNodeFileRequest, opts ...grpc.CallOption) (*NodeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_CreateNodeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeFileBackupsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListNodeFileBackups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteNodeFileResponse)
+	err := c.cc.Invoke(ctx, AgentService_RestoreNodeFileBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckImagesResponse)
@@ -424,7 +524,7 @@ func (c *agentServiceClient) CheckContainer(ctx context.Context, in *PutContaine
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +553,7 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +572,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -701,6 +801,15 @@ type AgentServiceServer interface {
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error
+	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
+	NodeShell(grpc.BidiStreamingServer[NodeShellInput, ExecOutput]) error
+	ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error)
+	ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error)
+	WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error)
+	DeleteNodeFile(context.Context, *DeleteNodeFileRequest) (*NodeFileOpResponse, error)
+	CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error)
+	ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error)
+	RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -810,6 +919,30 @@ func (UnimplementedAgentServiceServer) StreamLogs(*StreamLogsRequest, grpc.Serve
 }
 func (UnimplementedAgentServiceServer) Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error {
 	return status.Error(codes.Unimplemented, "method Exec not implemented")
+}
+func (UnimplementedAgentServiceServer) NodeShell(grpc.BidiStreamingServer[NodeShellInput, ExecOutput]) error {
+	return status.Error(codes.Unimplemented, "method NodeShell not implemented")
+}
+func (UnimplementedAgentServiceServer) ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeDir not implemented")
+}
+func (UnimplementedAgentServiceServer) ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadNodeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WriteNodeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteNodeFile(context.Context, *DeleteNodeFileRequest) (*NodeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateNodeDir not implemented")
+}
+func (UnimplementedAgentServiceServer) ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeFileBackups not implemented")
+}
+func (UnimplementedAgentServiceServer) RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreNodeFileBackup not implemented")
 }
 func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckImages not implemented")
@@ -1124,6 +1257,139 @@ func _AgentService_Exec_Handler(srv interface{}, stream grpc.ServerStream) error
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ExecServer = grpc.BidiStreamingServer[ExecInput, ExecOutput]
+
+func _AgentService_NodeShell_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AgentServiceServer).NodeShell(&grpc.GenericServerStream[NodeShellInput, ExecOutput]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_NodeShellServer = grpc.BidiStreamingServer[NodeShellInput, ExecOutput]
+
+func _AgentService_ListNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListNodeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListNodeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListNodeDir(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ReadNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReadNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReadNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReadNodeFile(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_WriteNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteNodeFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).WriteNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_WriteNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).WriteNodeFile(ctx, req.(*WriteNodeFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteNodeFile(ctx, req.(*DeleteNodeFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CreateNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CreateNodeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CreateNodeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CreateNodeDir(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ListNodeFileBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListNodeFileBackups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListNodeFileBackups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListNodeFileBackups(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestoreNodeFileBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreNodeFileBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RestoreNodeFileBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_RestoreNodeFileBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RestoreNodeFileBackup(ctx, req.(*RestoreNodeFileBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _AgentService_CheckImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
@@ -1666,6 +1932,34 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_ListSnapshots_Handler,
 		},
 		{
+			MethodName: "ListNodeDir",
+			Handler:    _AgentService_ListNodeDir_Handler,
+		},
+		{
+			MethodName: "ReadNodeFile",
+			Handler:    _AgentService_ReadNodeFile_Handler,
+		},
+		{
+			MethodName: "WriteNodeFile",
+			Handler:    _AgentService_WriteNodeFile_Handler,
+		},
+		{
+			MethodName: "DeleteNodeFile",
+			Handler:    _AgentService_DeleteNodeFile_Handler,
+		},
+		{
+			MethodName: "CreateNodeDir",
+			Handler:    _AgentService_CreateNodeDir_Handler,
+		},
+		{
+			MethodName: "ListNodeFileBackups",
+			Handler:    _AgentService_ListNodeFileBackups_Handler,
+		},
+		{
+			MethodName: "RestoreNodeFileBackup",
+			Handler:    _AgentService_RestoreNodeFileBackup_Handler,
+		},
+		{
 			MethodName: "CheckImages",
 			Handler:    _AgentService_CheckImages_Handler,
 		},
@@ -1799,6 +2093,12 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Exec",
 			Handler:       _AgentService_Exec_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "NodeShell",
+			Handler:       _AgentService_NodeShell_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

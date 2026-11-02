@@ -162,6 +162,7 @@ const (
 	AuthService_Login_FullMethodName          = "/nagi.v1.AuthService/Login"
 	AuthService_Logout_FullMethodName         = "/nagi.v1.AuthService/Logout"
 	AuthService_Me_FullMethodName             = "/nagi.v1.AuthService/Me"
+	AuthService_Elevate_FullMethodName        = "/nagi.v1.AuthService/Elevate"
 	AuthService_ChangePassword_FullMethodName = "/nagi.v1.AuthService/ChangePassword"
 	AuthService_SetLanguage_FullMethodName    = "/nagi.v1.AuthService/SetLanguage"
 	AuthService_UpdateProfile_FullMethodName  = "/nagi.v1.AuthService/UpdateProfile"
@@ -175,6 +176,8 @@ type AuthServiceClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	Me(ctx context.Context, in *MeRequest, opts ...grpc.CallOption) (*MeResponse, error)
+	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
+	Elevate(ctx context.Context, in *ElevateRequest, opts ...grpc.CallOption) (*ElevateResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -221,6 +224,16 @@ func (c *authServiceClient) Me(ctx context.Context, in *MeRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *authServiceClient) Elevate(ctx context.Context, in *ElevateRequest, opts ...grpc.CallOption) (*ElevateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ElevateResponse)
+	err := c.cc.Invoke(ctx, AuthService_Elevate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChangePasswordResponse)
@@ -259,6 +272,8 @@ type AuthServiceServer interface {
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	Me(context.Context, *MeRequest) (*MeResponse, error)
+	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
+	Elevate(context.Context, *ElevateRequest) (*ElevateResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -283,6 +298,9 @@ func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*
 }
 func (UnimplementedAuthServiceServer) Me(context.Context, *MeRequest) (*MeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Me not implemented")
+}
+func (UnimplementedAuthServiceServer) Elevate(context.Context, *ElevateRequest) (*ElevateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Elevate not implemented")
 }
 func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
@@ -368,6 +386,24 @@ func _AuthService_Me_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_Elevate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ElevateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Elevate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Elevate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Elevate(ctx, req.(*ElevateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_ChangePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChangePasswordRequest)
 	if err := dec(in); err != nil {
@@ -442,6 +478,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuthService_Me_Handler,
 		},
 		{
+			MethodName: "Elevate",
+			Handler:    _AuthService_Elevate_Handler,
+		},
+		{
 			MethodName: "ChangePassword",
 			Handler:    _AuthService_ChangePassword_Handler,
 		},
@@ -459,26 +499,33 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	NodeService_ListNodes_FullMethodName           = "/nagi.v1.NodeService/ListNodes"
-	NodeService_ListNodePanels_FullMethodName      = "/nagi.v1.NodeService/ListNodePanels"
-	NodeService_HandoverNodes_FullMethodName       = "/nagi.v1.NodeService/HandoverNodes"
-	NodeService_RemoveNodePanel_FullMethodName     = "/nagi.v1.NodeService/RemoveNodePanel"
-	NodeService_ListNodeReplicas_FullMethodName    = "/nagi.v1.NodeService/ListNodeReplicas"
-	NodeService_DeleteNodeReplica_FullMethodName   = "/nagi.v1.NodeService/DeleteNodeReplica"
-	NodeService_GetNodeMesh_FullMethodName         = "/nagi.v1.NodeService/GetNodeMesh"
-	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
-	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
-	NodeService_UpgradeNode_FullMethodName         = "/nagi.v1.NodeService/UpgradeNode"
-	NodeService_UpgradeAllNodes_FullMethodName     = "/nagi.v1.NodeService/UpgradeAllNodes"
-	NodeService_GetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/GetNodeMirrors"
-	NodeService_SetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/SetNodeMirrors"
-	NodeService_SetNodeProjectsRoot_FullMethodName = "/nagi.v1.NodeService/SetNodeProjectsRoot"
-	NodeService_CreateEnrollCommand_FullMethodName = "/nagi.v1.NodeService/CreateEnrollCommand"
-	NodeService_QueryNodeMetrics_FullMethodName    = "/nagi.v1.NodeService/QueryNodeMetrics"
-	NodeService_RemoveNode_FullMethodName          = "/nagi.v1.NodeService/RemoveNode"
-	NodeService_ApproveNode_FullMethodName         = "/nagi.v1.NodeService/ApproveNode"
-	NodeService_RenameNode_FullMethodName          = "/nagi.v1.NodeService/RenameNode"
-	NodeService_AdoptNodeContainer_FullMethodName  = "/nagi.v1.NodeService/AdoptNodeContainer"
+	NodeService_ListNodes_FullMethodName             = "/nagi.v1.NodeService/ListNodes"
+	NodeService_ListNodeDir_FullMethodName           = "/nagi.v1.NodeService/ListNodeDir"
+	NodeService_ReadNodeFile_FullMethodName          = "/nagi.v1.NodeService/ReadNodeFile"
+	NodeService_WriteNodeFile_FullMethodName         = "/nagi.v1.NodeService/WriteNodeFile"
+	NodeService_DeleteNodeFile_FullMethodName        = "/nagi.v1.NodeService/DeleteNodeFile"
+	NodeService_CreateNodeDir_FullMethodName         = "/nagi.v1.NodeService/CreateNodeDir"
+	NodeService_ListNodeFileBackups_FullMethodName   = "/nagi.v1.NodeService/ListNodeFileBackups"
+	NodeService_RestoreNodeFileBackup_FullMethodName = "/nagi.v1.NodeService/RestoreNodeFileBackup"
+	NodeService_ListNodePanels_FullMethodName        = "/nagi.v1.NodeService/ListNodePanels"
+	NodeService_HandoverNodes_FullMethodName         = "/nagi.v1.NodeService/HandoverNodes"
+	NodeService_RemoveNodePanel_FullMethodName       = "/nagi.v1.NodeService/RemoveNodePanel"
+	NodeService_ListNodeReplicas_FullMethodName      = "/nagi.v1.NodeService/ListNodeReplicas"
+	NodeService_DeleteNodeReplica_FullMethodName     = "/nagi.v1.NodeService/DeleteNodeReplica"
+	NodeService_GetNodeMesh_FullMethodName           = "/nagi.v1.NodeService/GetNodeMesh"
+	NodeService_PingNodeMesh_FullMethodName          = "/nagi.v1.NodeService/PingNodeMesh"
+	NodeService_GetPanelMesh_FullMethodName          = "/nagi.v1.NodeService/GetPanelMesh"
+	NodeService_UpgradeNode_FullMethodName           = "/nagi.v1.NodeService/UpgradeNode"
+	NodeService_UpgradeAllNodes_FullMethodName       = "/nagi.v1.NodeService/UpgradeAllNodes"
+	NodeService_GetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/GetNodeMirrors"
+	NodeService_SetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/SetNodeMirrors"
+	NodeService_SetNodeProjectsRoot_FullMethodName   = "/nagi.v1.NodeService/SetNodeProjectsRoot"
+	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
+	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
+	NodeService_RemoveNode_FullMethodName            = "/nagi.v1.NodeService/RemoveNode"
+	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
+	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
+	NodeService_AdoptNodeContainer_FullMethodName    = "/nagi.v1.NodeService/AdoptNodeContainer"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -486,6 +533,14 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NodeServiceClient interface {
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	// ---- 节点文件（见 docs/node-access.md）：只有管理员，要先做高权限确认 ----
+	ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error)
+	ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error)
+	WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
+	DeleteNodeFile(ctx context.Context, in *DeleteNodeFileRequest, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
+	CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
+	ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error)
+	RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -537,6 +592,76 @@ func (c *nodeServiceClient) ListNodes(ctx context.Context, in *ListNodesRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListNodesResponse)
 	err := c.cc.Invoke(ctx, NodeService_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeDirResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadNodeFileResponse)
+	err := c.cc.Invoke(ctx, NodeService_ReadNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteNodeFileResponse)
+	err := c.cc.Invoke(ctx, NodeService_WriteNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) DeleteNodeFile(ctx context.Context, in *DeleteNodeFileRequest, opts ...grpc.CallOption) (*NodeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeFileOpResponse)
+	err := c.cc.Invoke(ctx, NodeService_DeleteNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeFileOpResponse)
+	err := c.cc.Invoke(ctx, NodeService_CreateNodeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeFileBackupsResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeFileBackups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteNodeFileResponse)
+	err := c.cc.Invoke(ctx, NodeService_RestoreNodeFileBackup_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -738,6 +863,14 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, in *AdoptNod
 // for forward compatibility.
 type NodeServiceServer interface {
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	// ---- 节点文件（见 docs/node-access.md）：只有管理员，要先做高权限确认 ----
+	ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error)
+	ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error)
+	WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error)
+	DeleteNodeFile(context.Context, *DeleteNodeFileRequest) (*NodeFileOpResponse, error)
+	CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error)
+	ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error)
+	RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -787,6 +920,27 @@ type UnimplementedNodeServiceServer struct{}
 
 func (UnimplementedNodeServiceServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeDir not implemented")
+}
+func (UnimplementedNodeServiceServer) ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadNodeFile not implemented")
+}
+func (UnimplementedNodeServiceServer) WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WriteNodeFile not implemented")
+}
+func (UnimplementedNodeServiceServer) DeleteNodeFile(context.Context, *DeleteNodeFileRequest) (*NodeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeFile not implemented")
+}
+func (UnimplementedNodeServiceServer) CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateNodeDir not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeFileBackups not implemented")
+}
+func (UnimplementedNodeServiceServer) RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreNodeFileBackup not implemented")
 }
 func (UnimplementedNodeServiceServer) ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodePanels not implemented")
@@ -880,6 +1034,132 @@ func _NodeService_ListNodes_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServiceServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeDir(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ReadNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ReadNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ReadNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ReadNodeFile(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_WriteNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteNodeFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).WriteNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_WriteNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).WriteNodeFile(ctx, req.(*WriteNodeFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_DeleteNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).DeleteNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_DeleteNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).DeleteNodeFile(ctx, req.(*DeleteNodeFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_CreateNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).CreateNodeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_CreateNodeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).CreateNodeDir(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListNodeFileBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeFileBackups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeFileBackups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeFileBackups(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RestoreNodeFileBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreNodeFileBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RestoreNodeFileBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RestoreNodeFileBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RestoreNodeFileBackup(ctx, req.(*RestoreNodeFileBackupRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1236,6 +1516,34 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListNodes",
 			Handler:    _NodeService_ListNodes_Handler,
+		},
+		{
+			MethodName: "ListNodeDir",
+			Handler:    _NodeService_ListNodeDir_Handler,
+		},
+		{
+			MethodName: "ReadNodeFile",
+			Handler:    _NodeService_ReadNodeFile_Handler,
+		},
+		{
+			MethodName: "WriteNodeFile",
+			Handler:    _NodeService_WriteNodeFile_Handler,
+		},
+		{
+			MethodName: "DeleteNodeFile",
+			Handler:    _NodeService_DeleteNodeFile_Handler,
+		},
+		{
+			MethodName: "CreateNodeDir",
+			Handler:    _NodeService_CreateNodeDir_Handler,
+		},
+		{
+			MethodName: "ListNodeFileBackups",
+			Handler:    _NodeService_ListNodeFileBackups_Handler,
+		},
+		{
+			MethodName: "RestoreNodeFileBackup",
+			Handler:    _NodeService_RestoreNodeFileBackup_Handler,
 		},
 		{
 			MethodName: "ListNodePanels",

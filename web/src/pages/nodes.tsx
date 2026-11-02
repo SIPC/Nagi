@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -44,6 +44,7 @@ import {
   Status,
   Tabs,
   Textarea,
+  ReadOnlyContext,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
@@ -53,12 +54,15 @@ import { updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { toast } from "sonner";
 import { stateOf } from "@/components/status";
+import { NodeFiles, NodeTerminal, nodeAccessBlock } from "@/pages/node-access";
 
-export type NodeTab = "metrics" | "containers" | "panels" | "mesh" | "settings" | "replicas";
+export type NodeTab = "metrics" | "containers" | "terminal" | "files" | "panels" | "mesh" | "settings" | "replicas";
 
 export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: t.nodes.tabs.metrics },
   { value: "containers", label: t.nodes.tabs.containers },
+  { value: "terminal", label: t.nodes.tabs.terminal },
+  { value: "files", label: t.nodes.tabs.files },
   { value: "settings", label: t.nodes.tabs.settings },
   { value: "replicas", label: t.nodes.tabs.replicas },
   { value: "panels", label: t.nodes.tabs.panels },
@@ -394,8 +398,14 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
 }
 
 // NodePage：节点详情页。
-export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab; onTab: (t: NodeTab) => void }) {
+export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal }: { nodeId: string; tab: NodeTab; path?: string; onTab: (t: NodeTab) => void; onFilePath: (p: string) => void; onOpenTerminal: (p: string) => void }) {
   const nodes = useNodeList();
+  const readOnlyPanel = useContext(ReadOnlyContext);
+  // 终端打开过以后留在页面上，切到别的标签再回来，shell 还在。
+  const [shellOpened, setShellOpened] = useState(false);
+  useEffect(() => {
+    if (tab === "terminal") setShellOpened(true);
+  }, [tab]);
   const { isAdmin: canSeeUpgrades } = useRole();
   const status = useUpdateStatus(canSeeUpgrades);
   const panelVersion = usePanelVersion();
@@ -412,6 +422,12 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       </>
     );
   }
+  // 节点访问只给管理员，备用面板上也不能用（见 docs/node-access.md）。
+  const showAccess = canSeeUpgrades && !readOnlyPanel;
+  const tabs = nodeTabs.filter((x) => showAccess || (x.value !== "terminal" && x.value !== "files"));
+  const accessBlock = nodeAccessBlock(n);
+  // 手机上进入文件页后，标题栏换成返回、目录名、更多（docs/ui.md）。
+  const browsing = tab === "files" && showAccess && n.online && !accessBlock;
   const target = upgradeTarget(n, panelVersion);
   const upgradeState = status.data?.nodes[n.id];
   const remove = async () => {
@@ -425,9 +441,9 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   };
   return (
     <>
-      <Breadcrumb className="md:hidden" items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
+      <Breadcrumb className={cn("md:hidden", browsing && "max-md:hidden")} items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
       <PageHeader
-        className="mb-4"
+        className={cn("mb-4", browsing && "max-md:hidden")}
         title={
           <>
             {n.name}
@@ -489,13 +505,17 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       )}
       {!n.pending && (
         <>
-          <Tabs value={tab} onChange={onTab} items={nodeTabs} className="mb-6" />
+          <Tabs value={tab} onChange={onTab} items={tabs} className={cn("mb-6", browsing && "max-md:hidden")} />
           {/* 这一层不能省：区块靠 first: 去掉第一个的分隔线。 */}
           <div>
             {tab === "containers" ? (
               <NodeContainers nodeId={n.id} online={n.online} />
+            ) : (tab === "terminal" || tab === "files") && !showAccess ? (
+              <Notice title={t.nodeAccess.gate.adminOnly} />
             ) : !n.online ? (
               <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
+            ) : tab === "terminal" || tab === "files" ? (
+              accessBlock ?? (tab === "files" ? <NodeFiles node={n} path={path || "/"} onPath={onFilePath} onTerminal={onOpenTerminal} onExit={() => onTab("metrics")} /> : null)
             ) : tab === "metrics" ? (
               <NodeResources n={n} />
             ) : tab === "mesh" ? (
@@ -509,6 +529,12 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
               </>
             ) : (
               <NodePanels nodeId={n.id} />
+            )}
+            {/* 终端不卸载：卸载就断开了。放在后面：区块靠 first: 去掉第一条分隔线。 */}
+            {showAccess && n.online && !accessBlock && shellOpened && (
+              <div className={tab === "terminal" ? undefined : "hidden"}>
+                <NodeTerminal node={n} cwd={path} />
+              </div>
             )}
           </div>
         </>

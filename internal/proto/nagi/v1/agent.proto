@@ -35,6 +35,16 @@ service AgentService {
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
   rpc Exec(stream ExecInput) returns (stream ExecOutput);
+
+  // ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
+  rpc NodeShell(stream NodeShellInput) returns (stream ExecOutput);
+  rpc ListNodeDir(NodeFileRef) returns (ListNodeDirResponse);
+  rpc ReadNodeFile(NodeFileRef) returns (ReadNodeFileResponse);
+  rpc WriteNodeFile(WriteNodeFileRequest) returns (WriteNodeFileResponse);
+  rpc DeleteNodeFile(DeleteNodeFileRequest) returns (NodeFileOpResponse);
+  rpc CreateNodeDir(NodeFileRef) returns (NodeFileOpResponse);
+  rpc ListNodeFileBackups(NodeFileRef) returns (ListNodeFileBackupsResponse);
+  rpc RestoreNodeFileBackup(RestoreNodeFileBackupRequest) returns (WriteNodeFileResponse);
   // 立即检查容器的镜像有没有新版本。
   rpc CheckImages(ContainerRef) returns (CheckImagesResponse);
   // 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -413,6 +423,115 @@ message ExecOutput {
     // 进程退出，终端结束。
     int32 exit_code = 2;
   }
+}
+
+message NodeShellInput {
+  oneof input {
+    NodeShellStart start = 1;
+    bytes stdin = 2;
+    TerminalSize resize = 3;
+  }
+}
+
+message NodeShellStart {
+  TerminalSize size = 1;
+  // 起始目录，不存在时用 root 的主目录。
+  string cwd = 2;
+  // 面板上的用户名，只用于节点本地日志。
+  string actor = 3;
+}
+
+// NodeFileRef 指向节点上的一个路径。path 是绝对路径。node_id 面板用，节点不看。
+message NodeFileRef {
+  string node_id = 1;
+  string path = 2;
+}
+
+message NodeFileEntry {
+  string name = 1;
+  bool is_dir = 2;
+  bool is_symlink = 3;
+  // 符号链接的目标，原样显示。
+  string link_target = 4;
+  int64 size = 5;
+  google.protobuf.Timestamp modified = 6;
+  string mode = 7;
+  string owner = 8;
+  // normal、confirm（保存前要确认）、readonly（容器目录）、denied（禁止访问）。
+  string access = 9;
+}
+
+message ListNodeDirResponse {
+  // 解开符号链接后的真实路径。
+  string path = 1;
+  repeated NodeFileEntry entries = 2;
+  bool truncated = 3;
+  string access = 4;
+}
+
+message ReadNodeFileResponse {
+  string path = 1;
+  bytes content = 2;
+  // 内容的 SHA-256（十六进制），保存时带回来，用来发现文件被别人改过。
+  string sha256 = 3;
+  google.protobuf.Timestamp modified = 4;
+  string mode = 5;
+  string owner = 6;
+  string access = 7;
+  // 不是文本（含 0 字节或不是合法的 UTF-8），这时没有 content。
+  bool binary = 8;
+  int64 size = 9;
+}
+
+message WriteNodeFileRequest {
+  string node_id = 1;
+  string path = 2;
+  bytes content = 3;
+  // 打开时内容的 SHA-256。文件已经变了就拒绝。空表示不检查（用户确认覆盖）。
+  string expected_sha256 = 4;
+  // 新建文件：已经存在就拒绝。
+  bool create = 5;
+  // 用户确认过要改敏感文件。
+  bool confirmed = 6;
+}
+
+message WriteNodeFileResponse {
+  string sha256 = 1;
+  // 没能原子写入（挂载的单个文件），改为原地写入。
+  bool in_place = 2;
+}
+
+message DeleteNodeFileRequest {
+  string node_id = 1;
+  string path = 2;
+  // 删目录时要写目录名。
+  string confirm_name = 3;
+}
+
+message NodeFileOpResponse {}
+
+message NodeFileBackup {
+  string id = 1;
+  google.protobuf.Timestamp time = 2;
+  int64 size = 3;
+}
+
+message ListNodeFileBackupsResponse {
+  repeated NodeFileBackup backups = 1;
+}
+
+message RestoreNodeFileBackupRequest {
+  string node_id = 1;
+  string path = 2;
+  string id = 3;
+  bool confirmed = 4;
+}
+
+// NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。
+message NodeFileUploadChunk {
+  NodeFileRef ref = 1;
+  bytes data = 2;
+  bool confirmed = 3;
 }
 
 message SetAlertConfigRequest {

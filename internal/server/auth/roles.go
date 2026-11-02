@@ -23,6 +23,8 @@ var selfMethods = map[string]bool{
 // adminReads 是只有管理员能用的查询：内容涉及整个面板或者含有密钥。
 var adminReads = map[string]bool{
 	"GetAlertConfig": true, "ListInvites": true, "ListActivity": true, "ListUsers": true, "GetNodeMirrors": true, "GetUpdateStatus": true,
+	// 节点上的文件（见 docs/node-access.md）：看到的是整个节点。
+	"ListNodeDir": true, "ListNodeFileBackups": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

@@ -394,14 +394,14 @@ export function RowMenu(props: React.ComponentProps<typeof Menu>) {
 // RowsSkeleton：区块加载中。比大块留白的转圈更稳，内容出来时版面不跳。
 export function RowsSkeleton({ count = 3 }: { count?: number }) {
   return (
-    <div role="status" aria-label={t.common.feedback.loading} className="grid">
+    <div role="status" aria-label={t.common.feedback.loading} className="grid grid-cols-[minmax(0,1fr)]">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="flex min-h-14 items-center justify-between gap-4">
-          <div className="grid flex-1 gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-2">
             <Skeleton className="h-3 w-40 max-w-full" />
             <Skeleton className="h-3 w-72 max-w-full" />
           </div>
-          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-20 shrink-0" />
         </div>
       ))}
     </div>

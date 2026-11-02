@@ -117,7 +117,7 @@ agent 主动连上面板后，在同一条 TLS 连接上用 yamux 复用出多�
 | --- | --- | --- |
 | EnrollService | agent → 面板（尚无证书时） | `Enroll`：用令牌换证书 |
 | PanelService | agent → 面板 | `Report`：上报节点和容器的最新状态和 mesh 信息（刚连上新面板时也带上配置缓存），响应里带 mesh 成员列表（连上时、有变化时、每 15 秒）；`RenewCertificate`：续期证书；`RelayAlert`：请面板代发告警；`MeshRelay`：mesh 的 TLS 中转通道 |
-| AgentService | 面板 → agent（反向 gRPC） | 容器：同步配置缓存、部署、回滚、快照、迁移、顶替设置、删除；项目内网：代理名单；观察：日志（服务端流）、终端（双向流）、查询历史指标；节点：修改信任列表、项目根目录、镜像加速、告警配置、升级 |
+| AgentService | 面板 → agent（反向 gRPC） | 容器：同步配置缓存、部署、回滚、快照、迁移、顶替设置、删除；项目内网：代理名单；观察：日志（服务端流）、终端（双向流）、查询历史指标；节点访问：节点终端（双向流）、节点文件（见 [node-access.md](node-access.md)）；节点：修改信任列表、项目根目录、镜像加速、告警配置、升级 |
 | MeshService | agent ↔ agent / 面板，经 WireGuard，直接连对方的 mesh 地址 | 连通测试；租约投票；快照同步给顶替节点或备份节点；容器文件上传（面板 → 节点，客户端流）；容器之间的连接另走 7001 端口（见 [mesh.md](mesh.md#mesh-上的服务)） |
 
 文件上传和存储标签的文件下载、上传都走 mesh，大文件不占用控制连接，管理操作不会被上传卡住。mesh 直连不通时，WireGuard 流量会自动经面板中转（UDP 或控制连接）。mesh 上的 gRPC 不再加 TLS：WireGuard 已经加密并认证了对方的公钥，调用方身份由来源 mesh 地址确定，每个调用都要校验调用方是否有权限（见 [mesh.md](mesh.md)）。

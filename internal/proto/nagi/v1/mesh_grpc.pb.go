@@ -19,14 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MeshService_Ping_FullMethodName            = "/nagi.v1.MeshService/Ping"
-	MeshService_Upload_FullMethodName          = "/nagi.v1.MeshService/Upload"
-	MeshService_VolumeDownload_FullMethodName  = "/nagi.v1.MeshService/VolumeDownload"
-	MeshService_VolumeUpload_FullMethodName    = "/nagi.v1.MeshService/VolumeUpload"
-	MeshService_ReplicaManifest_FullMethodName = "/nagi.v1.MeshService/ReplicaManifest"
-	MeshService_ReplicaPut_FullMethodName      = "/nagi.v1.MeshService/ReplicaPut"
-	MeshService_ReplicaCommit_FullMethodName   = "/nagi.v1.MeshService/ReplicaCommit"
-	MeshService_LeaseVotes_FullMethodName      = "/nagi.v1.MeshService/LeaseVotes"
+	MeshService_Ping_FullMethodName             = "/nagi.v1.MeshService/Ping"
+	MeshService_Upload_FullMethodName           = "/nagi.v1.MeshService/Upload"
+	MeshService_VolumeDownload_FullMethodName   = "/nagi.v1.MeshService/VolumeDownload"
+	MeshService_VolumeUpload_FullMethodName     = "/nagi.v1.MeshService/VolumeUpload"
+	MeshService_NodeFileDownload_FullMethodName = "/nagi.v1.MeshService/NodeFileDownload"
+	MeshService_NodeFileUpload_FullMethodName   = "/nagi.v1.MeshService/NodeFileUpload"
+	MeshService_ReplicaManifest_FullMethodName  = "/nagi.v1.MeshService/ReplicaManifest"
+	MeshService_ReplicaPut_FullMethodName       = "/nagi.v1.MeshService/ReplicaPut"
+	MeshService_ReplicaCommit_FullMethodName    = "/nagi.v1.MeshService/ReplicaCommit"
+	MeshService_LeaseVotes_FullMethodName       = "/nagi.v1.MeshService/LeaseVotes"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -43,6 +45,10 @@ type MeshServiceClient interface {
 	VolumeDownload(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VolumeFileChunk], error)
 	// 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
 	VolumeUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[VolumeUploadChunk, VolumeUploadResponse], error)
+	// 面板下载节点上的文件（见 docs/node-access.md）。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受主面板。
+	NodeFileDownload(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VolumeFileChunk], error)
+	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
+	NodeFileUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[NodeFileUploadChunk, VolumeUploadResponse], error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error)
@@ -116,6 +122,38 @@ func (c *meshServiceClient) VolumeUpload(ctx context.Context, opts ...grpc.CallO
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_VolumeUploadClient = grpc.ClientStreamingClient[VolumeUploadChunk, VolumeUploadResponse]
 
+func (c *meshServiceClient) NodeFileDownload(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VolumeFileChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[3], MeshService_NodeFileDownload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeFileRef, VolumeFileChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileDownloadClient = grpc.ServerStreamingClient[VolumeFileChunk]
+
+func (c *meshServiceClient) NodeFileUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[NodeFileUploadChunk, VolumeUploadResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[4], MeshService_NodeFileUpload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeFileUploadChunk, VolumeUploadResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileUploadClient = grpc.ClientStreamingClient[NodeFileUploadChunk, VolumeUploadResponse]
+
 func (c *meshServiceClient) ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReplicaManifestResponse)
@@ -128,7 +166,7 @@ func (c *meshServiceClient) ReplicaManifest(ctx context.Context, in *ReplicaMani
 
 func (c *meshServiceClient) ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[3], MeshService_ReplicaPut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[5], MeshService_ReplicaPut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +211,10 @@ type MeshServiceServer interface {
 	VolumeDownload(*VolumeFileRef, grpc.ServerStreamingServer[VolumeFileChunk]) error
 	// 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
 	VolumeUpload(grpc.ClientStreamingServer[VolumeUploadChunk, VolumeUploadResponse]) error
+	// 面板下载节点上的文件（见 docs/node-access.md）。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受主面板。
+	NodeFileDownload(*NodeFileRef, grpc.ServerStreamingServer[VolumeFileChunk]) error
+	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
+	NodeFileUpload(grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]) error
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error)
@@ -202,6 +244,12 @@ func (UnimplementedMeshServiceServer) VolumeDownload(*VolumeFileRef, grpc.Server
 }
 func (UnimplementedMeshServiceServer) VolumeUpload(grpc.ClientStreamingServer[VolumeUploadChunk, VolumeUploadResponse]) error {
 	return status.Error(codes.Unimplemented, "method VolumeUpload not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileDownload(*NodeFileRef, grpc.ServerStreamingServer[VolumeFileChunk]) error {
+	return status.Error(codes.Unimplemented, "method NodeFileDownload not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileUpload(grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]) error {
+	return status.Error(codes.Unimplemented, "method NodeFileUpload not implemented")
 }
 func (UnimplementedMeshServiceServer) ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReplicaManifest not implemented")
@@ -278,6 +326,24 @@ func _MeshService_VolumeUpload_Handler(srv interface{}, stream grpc.ServerStream
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_VolumeUploadServer = grpc.ClientStreamingServer[VolumeUploadChunk, VolumeUploadResponse]
+
+func _MeshService_NodeFileDownload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeFileRef)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MeshServiceServer).NodeFileDownload(m, &grpc.GenericServerStream[NodeFileRef, VolumeFileChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileDownloadServer = grpc.ServerStreamingServer[VolumeFileChunk]
+
+func _MeshService_NodeFileUpload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MeshServiceServer).NodeFileUpload(&grpc.GenericServerStream[NodeFileUploadChunk, VolumeUploadResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileUploadServer = grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]
 
 func _MeshService_ReplicaManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReplicaManifestRequest)
@@ -378,6 +444,16 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VolumeUpload",
 			Handler:       _MeshService_VolumeUpload_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "NodeFileDownload",
+			Handler:       _MeshService_NodeFileDownload_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "NodeFileUpload",
+			Handler:       _MeshService_NodeFileUpload_Handler,
 			ClientStreams: true,
 		},
 		{

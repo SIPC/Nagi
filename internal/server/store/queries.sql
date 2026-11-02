@@ -58,10 +58,13 @@ SELECT * FROM users WHERE username = ?;
 INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?);
 
 -- name: GetSession :one
-SELECT s.user_id, s.expires_at, u.username, u.role
+SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?;
+
+-- name: SetSessionElevated :exec
+UPDATE sessions SET elevated_until = ? WHERE token_hash = ?;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = ?;

@@ -9,6 +9,21 @@ var en = map[string]string{
 	"参数无效": "Invalid argument",
 	"内部错误": "Internal error",
 
+	// ---- 节点访问 ----
+	"需要身份验证":                 "Verification required",
+	"验证进行中，请稍后重试":            "Verification in progress. Try again shortly",
+	"验证失败次数过多，请 %d 秒后重试":     "Too many failed attempts. Try again in %d seconds",
+	"密码错误":                   "Incorrect password",
+	"节点版本过低，请升级节点":           "Node version too old. Upgrade the node",
+	"与节点的连接已断开":              "Connection to the node lost",
+	"无法连接节点":                 "Can't reach the node",
+	"登录已失效，连接已断开":            "Session ended. Disconnected",
+	"权限已变更，连接已断开":            "Permissions changed. Disconnected",
+	"已达到最长使用时间（12 小时），连接已断开": "Time limit reached (12 hours). Disconnected",
+	"空闲超过 1 小时，连接已断开":        "Idle for over 1 hour. Disconnected",
+	"以下配置仅管理员可保存：%s":         "Only admins can save these settings: %s",
+	"项目根目录以外的容器目录仅管理员可设置":    "Only admins can set a container directory outside the projects root",
+
 	// ---- 账号 ----
 	"不支持的语言：%s": "Unsupported language: %s",
 	"面板已经初始化过了": "The panel has already been set up",

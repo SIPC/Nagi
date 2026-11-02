@@ -69,7 +69,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	if a.Panel.Standby != nil {
 		chain = append(chain, readOnly{a})
 	}
-	chain = append(chain, activityLog{a}, roleCheck{})
+	chain = append(chain, activityLog{a}, roleCheck{}, elevationCheck{})
 	interceptors := connect.WithHandlerOptions(
 		connect.WithInterceptors(chain...),
 		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。
@@ -84,6 +84,8 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
 	mux.Handle("/hooks/", a.standbyBlock(a.WebhookHandler()))
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
+	mux.Handle("/ws/node-shell", a.standbyBlock(a.NodeShellHandler()))
+	mux.Handle("/api/node-file", a.standbyBlock(a.NodeFileHandler()))
 	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
 	mux.Handle("GET /api/volume-file", a.VolumeFileHandler())
 	mux.Handle("POST /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
@@ -169,6 +171,9 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
 	u := auth.CurrentUser(ctx)
 	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role}
+	if u.Elevated() {
+		resp.ElevatedUntil = timestamppb.New(time.Unix(u.ElevatedUntil, 0))
+	}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		resp.Language = row.Language
 		resp.DisplayName = row.DisplayName

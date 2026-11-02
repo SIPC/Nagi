@@ -73,6 +73,29 @@ const (
 	AgentServiceStreamLogsProcedure = "/nagi.v1.AgentService/StreamLogs"
 	// AgentServiceExecProcedure is the fully-qualified name of the AgentService's Exec RPC.
 	AgentServiceExecProcedure = "/nagi.v1.AgentService/Exec"
+	// AgentServiceNodeShellProcedure is the fully-qualified name of the AgentService's NodeShell RPC.
+	AgentServiceNodeShellProcedure = "/nagi.v1.AgentService/NodeShell"
+	// AgentServiceListNodeDirProcedure is the fully-qualified name of the AgentService's ListNodeDir
+	// RPC.
+	AgentServiceListNodeDirProcedure = "/nagi.v1.AgentService/ListNodeDir"
+	// AgentServiceReadNodeFileProcedure is the fully-qualified name of the AgentService's ReadNodeFile
+	// RPC.
+	AgentServiceReadNodeFileProcedure = "/nagi.v1.AgentService/ReadNodeFile"
+	// AgentServiceWriteNodeFileProcedure is the fully-qualified name of the AgentService's
+	// WriteNodeFile RPC.
+	AgentServiceWriteNodeFileProcedure = "/nagi.v1.AgentService/WriteNodeFile"
+	// AgentServiceDeleteNodeFileProcedure is the fully-qualified name of the AgentService's
+	// DeleteNodeFile RPC.
+	AgentServiceDeleteNodeFileProcedure = "/nagi.v1.AgentService/DeleteNodeFile"
+	// AgentServiceCreateNodeDirProcedure is the fully-qualified name of the AgentService's
+	// CreateNodeDir RPC.
+	AgentServiceCreateNodeDirProcedure = "/nagi.v1.AgentService/CreateNodeDir"
+	// AgentServiceListNodeFileBackupsProcedure is the fully-qualified name of the AgentService's
+	// ListNodeFileBackups RPC.
+	AgentServiceListNodeFileBackupsProcedure = "/nagi.v1.AgentService/ListNodeFileBackups"
+	// AgentServiceRestoreNodeFileBackupProcedure is the fully-qualified name of the AgentService's
+	// RestoreNodeFileBackup RPC.
+	AgentServiceRestoreNodeFileBackupProcedure = "/nagi.v1.AgentService/RestoreNodeFileBackup"
 	// AgentServiceCheckImagesProcedure is the fully-qualified name of the AgentService's CheckImages
 	// RPC.
 	AgentServiceCheckImagesProcedure = "/nagi.v1.AgentService/CheckImages"
@@ -177,6 +200,15 @@ type AgentServiceClient interface {
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
+	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
+	NodeShell(context.Context) *connect.BidiStreamForClient[v1.NodeShellInput, v1.ExecOutput]
+	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
+	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
+	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error)
+	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
+	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
+	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -330,6 +362,54 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceExecProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("Exec")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeShell: connect.NewClient[v1.NodeShellInput, v1.ExecOutput](
+			httpClient,
+			baseURL+AgentServiceNodeShellProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("NodeShell")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeDir: connect.NewClient[v1.NodeFileRef, v1.ListNodeDirResponse](
+			httpClient,
+			baseURL+AgentServiceListNodeDirProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListNodeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		readNodeFile: connect.NewClient[v1.NodeFileRef, v1.ReadNodeFileResponse](
+			httpClient,
+			baseURL+AgentServiceReadNodeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ReadNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		writeNodeFile: connect.NewClient[v1.WriteNodeFileRequest, v1.WriteNodeFileResponse](
+			httpClient,
+			baseURL+AgentServiceWriteNodeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("WriteNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeFile: connect.NewClient[v1.DeleteNodeFileRequest, v1.NodeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteNodeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		createNodeDir: connect.NewClient[v1.NodeFileRef, v1.NodeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceCreateNodeDirProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CreateNodeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeFileBackups: connect.NewClient[v1.NodeFileRef, v1.ListNodeFileBackupsResponse](
+			httpClient,
+			baseURL+AgentServiceListNodeFileBackupsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListNodeFileBackups")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreNodeFileBackup: connect.NewClient[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse](
+			httpClient,
+			baseURL+AgentServiceRestoreNodeFileBackupProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("RestoreNodeFileBackup")),
 			connect.WithClientOptions(opts...),
 		),
 		checkImages: connect.NewClient[v1.ContainerRef, v1.CheckImagesResponse](
@@ -511,49 +591,57 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	putContainer         *connect.Client[v1.PutContainerRequest, v1.PutContainerResponse]
-	deployContainer      *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
-	deleteContainer      *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
-	controlContainer     *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
-	listVolumes          *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
-	listVolumeFiles      *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
-	deleteVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	createVolumeDir      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	restoreVolumeFile    *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	listSnapshots        *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
-	createSnapshot       *connect.Client[v1.ContainerRef, v1.DeployEvent]
-	restoreSnapshot      *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
-	streamLogs           *connect.Client[v1.StreamLogsRequest, v1.LogLine]
-	exec                 *connect.Client[v1.ExecInput, v1.ExecOutput]
-	checkImages          *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
-	loginRegistry        *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
-	syncBackup           *connect.Client[v1.ContainerRef, v1.BackupStatus]
-	acceptReplica        *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
-	listReplicas         *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
-	listReplicaSnapshots *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
-	checkContainer       *connect.Client[v1.PutContainerRequest, v1.CheckContainerResponse]
-	restoreReplica       *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
-	deleteReplica        *connect.Client[v1.ContainerRef, v1.DeleteReplicaResponse]
-	migrateOut           *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
-	migrateResume        *connect.Client[v1.ContainerRef, v1.DeployEvent]
-	setFailover          *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
-	confirmTakeover      *connect.Client[v1.ContainerRef, v1.FailoverStatus]
-	getCache             *connect.Client[v1.GetCacheRequest, v1.NodeCache]
-	setLinks             *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
-	checkPorts           *connect.Client[v1.CheckPortsRequest, v1.CheckPortsResponse]
-	retryCerts           *connect.Client[v1.RetryCertsRequest, v1.RetryCertsResponse]
-	setAlertConfig       *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
-	queryMetrics         *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
-	setProjectsRoot      *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
-	listPanels           *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
-	addPanel             *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
-	removePanel          *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
-	getMeshStatus        *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
-	meshPing             *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
-	getMirrors           *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
-	setMirrors           *connect.Client[v1.Mirrors, v1.Mirrors]
-	setPanelDomain       *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
-	upgrade              *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
+	putContainer          *connect.Client[v1.PutContainerRequest, v1.PutContainerResponse]
+	deployContainer       *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
+	deleteContainer       *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
+	controlContainer      *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
+	listVolumes           *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
+	listVolumeFiles       *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
+	deleteVolumeFile      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	createVolumeDir       *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	restoreVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	streamLogs            *connect.Client[v1.StreamLogsRequest, v1.LogLine]
+	exec                  *connect.Client[v1.ExecInput, v1.ExecOutput]
+	nodeShell             *connect.Client[v1.NodeShellInput, v1.ExecOutput]
+	listNodeDir           *connect.Client[v1.NodeFileRef, v1.ListNodeDirResponse]
+	readNodeFile          *connect.Client[v1.NodeFileRef, v1.ReadNodeFileResponse]
+	writeNodeFile         *connect.Client[v1.WriteNodeFileRequest, v1.WriteNodeFileResponse]
+	deleteNodeFile        *connect.Client[v1.DeleteNodeFileRequest, v1.NodeFileOpResponse]
+	createNodeDir         *connect.Client[v1.NodeFileRef, v1.NodeFileOpResponse]
+	listNodeFileBackups   *connect.Client[v1.NodeFileRef, v1.ListNodeFileBackupsResponse]
+	restoreNodeFileBackup *connect.Client[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse]
+	checkImages           *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
+	loginRegistry         *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
+	syncBackup            *connect.Client[v1.ContainerRef, v1.BackupStatus]
+	acceptReplica         *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
+	listReplicas          *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
+	listReplicaSnapshots  *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	checkContainer        *connect.Client[v1.PutContainerRequest, v1.CheckContainerResponse]
+	restoreReplica        *connect.Client[v1.RestoreReplicaRequest, v1.DeployEvent]
+	deleteReplica         *connect.Client[v1.ContainerRef, v1.DeleteReplicaResponse]
+	migrateOut            *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
+	migrateResume         *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	setFailover           *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
+	confirmTakeover       *connect.Client[v1.ContainerRef, v1.FailoverStatus]
+	getCache              *connect.Client[v1.GetCacheRequest, v1.NodeCache]
+	setLinks              *connect.Client[v1.LinkPlan, v1.SetLinksResponse]
+	checkPorts            *connect.Client[v1.CheckPortsRequest, v1.CheckPortsResponse]
+	retryCerts            *connect.Client[v1.RetryCertsRequest, v1.RetryCertsResponse]
+	setAlertConfig        *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
+	queryMetrics          *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	setProjectsRoot       *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
+	listPanels            *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
+	addPanel              *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
+	removePanel           *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
+	getMeshStatus         *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
+	meshPing              *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	getMirrors            *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
+	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
+	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
+	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -624,6 +712,46 @@ func (c *agentServiceClient) StreamLogs(ctx context.Context, req *connect.Reques
 // Exec calls nagi.v1.AgentService.Exec.
 func (c *agentServiceClient) Exec(ctx context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput] {
 	return c.exec.CallBidiStream(ctx)
+}
+
+// NodeShell calls nagi.v1.AgentService.NodeShell.
+func (c *agentServiceClient) NodeShell(ctx context.Context) *connect.BidiStreamForClient[v1.NodeShellInput, v1.ExecOutput] {
+	return c.nodeShell.CallBidiStream(ctx)
+}
+
+// ListNodeDir calls nagi.v1.AgentService.ListNodeDir.
+func (c *agentServiceClient) ListNodeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error) {
+	return c.listNodeDir.CallUnary(ctx, req)
+}
+
+// ReadNodeFile calls nagi.v1.AgentService.ReadNodeFile.
+func (c *agentServiceClient) ReadNodeFile(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error) {
+	return c.readNodeFile.CallUnary(ctx, req)
+}
+
+// WriteNodeFile calls nagi.v1.AgentService.WriteNodeFile.
+func (c *agentServiceClient) WriteNodeFile(ctx context.Context, req *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return c.writeNodeFile.CallUnary(ctx, req)
+}
+
+// DeleteNodeFile calls nagi.v1.AgentService.DeleteNodeFile.
+func (c *agentServiceClient) DeleteNodeFile(ctx context.Context, req *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return c.deleteNodeFile.CallUnary(ctx, req)
+}
+
+// CreateNodeDir calls nagi.v1.AgentService.CreateNodeDir.
+func (c *agentServiceClient) CreateNodeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return c.createNodeDir.CallUnary(ctx, req)
+}
+
+// ListNodeFileBackups calls nagi.v1.AgentService.ListNodeFileBackups.
+func (c *agentServiceClient) ListNodeFileBackups(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error) {
+	return c.listNodeFileBackups.CallUnary(ctx, req)
+}
+
+// RestoreNodeFileBackup calls nagi.v1.AgentService.RestoreNodeFileBackup.
+func (c *agentServiceClient) RestoreNodeFileBackup(ctx context.Context, req *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return c.restoreNodeFileBackup.CallUnary(ctx, req)
 }
 
 // CheckImages calls nagi.v1.AgentService.CheckImages.
@@ -798,6 +926,15 @@ type AgentServiceHandler interface {
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
+	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
+	NodeShell(context.Context, *connect.BidiStream[v1.NodeShellInput, v1.ExecOutput]) error
+	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
+	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
+	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error)
+	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
+	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
+	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -947,6 +1084,54 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceExecProcedure,
 		svc.Exec,
 		connect.WithSchema(agentServiceMethods.ByName("Exec")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceNodeShellHandler := connect.NewBidiStreamHandler(
+		AgentServiceNodeShellProcedure,
+		svc.NodeShell,
+		connect.WithSchema(agentServiceMethods.ByName("NodeShell")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListNodeDirHandler := connect.NewUnaryHandler(
+		AgentServiceListNodeDirProcedure,
+		svc.ListNodeDir,
+		connect.WithSchema(agentServiceMethods.ByName("ListNodeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceReadNodeFileHandler := connect.NewUnaryHandler(
+		AgentServiceReadNodeFileProcedure,
+		svc.ReadNodeFile,
+		connect.WithSchema(agentServiceMethods.ByName("ReadNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceWriteNodeFileHandler := connect.NewUnaryHandler(
+		AgentServiceWriteNodeFileProcedure,
+		svc.WriteNodeFile,
+		connect.WithSchema(agentServiceMethods.ByName("WriteNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteNodeFileHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteNodeFileProcedure,
+		svc.DeleteNodeFile,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCreateNodeDirHandler := connect.NewUnaryHandler(
+		AgentServiceCreateNodeDirProcedure,
+		svc.CreateNodeDir,
+		connect.WithSchema(agentServiceMethods.ByName("CreateNodeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListNodeFileBackupsHandler := connect.NewUnaryHandler(
+		AgentServiceListNodeFileBackupsProcedure,
+		svc.ListNodeFileBackups,
+		connect.WithSchema(agentServiceMethods.ByName("ListNodeFileBackups")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceRestoreNodeFileBackupHandler := connect.NewUnaryHandler(
+		AgentServiceRestoreNodeFileBackupProcedure,
+		svc.RestoreNodeFileBackup,
+		connect.WithSchema(agentServiceMethods.ByName("RestoreNodeFileBackup")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceCheckImagesHandler := connect.NewUnaryHandler(
@@ -1153,6 +1338,22 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceStreamLogsHandler.ServeHTTP(w, r)
 		case AgentServiceExecProcedure:
 			agentServiceExecHandler.ServeHTTP(w, r)
+		case AgentServiceNodeShellProcedure:
+			agentServiceNodeShellHandler.ServeHTTP(w, r)
+		case AgentServiceListNodeDirProcedure:
+			agentServiceListNodeDirHandler.ServeHTTP(w, r)
+		case AgentServiceReadNodeFileProcedure:
+			agentServiceReadNodeFileHandler.ServeHTTP(w, r)
+		case AgentServiceWriteNodeFileProcedure:
+			agentServiceWriteNodeFileHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteNodeFileProcedure:
+			agentServiceDeleteNodeFileHandler.ServeHTTP(w, r)
+		case AgentServiceCreateNodeDirProcedure:
+			agentServiceCreateNodeDirHandler.ServeHTTP(w, r)
+		case AgentServiceListNodeFileBackupsProcedure:
+			agentServiceListNodeFileBackupsHandler.ServeHTTP(w, r)
+		case AgentServiceRestoreNodeFileBackupProcedure:
+			agentServiceRestoreNodeFileBackupHandler.ServeHTTP(w, r)
 		case AgentServiceCheckImagesProcedure:
 			agentServiceCheckImagesHandler.ServeHTTP(w, r)
 		case AgentServiceLoginRegistryProcedure:
@@ -1274,6 +1475,38 @@ func (UnimplementedAgentServiceHandler) StreamLogs(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Exec is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) NodeShell(context.Context, *connect.BidiStream[v1.NodeShellInput, v1.ExecOutput]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.NodeShell is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListNodeDir is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ReadNodeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.WriteNodeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteNodeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CreateNodeDir is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListNodeFileBackups is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreNodeFileBackup is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error) {

@@ -22,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
@@ -139,6 +140,7 @@ func Run(ctx context.Context, cfg Config) error {
 		ctx:      ctx,
 	}
 	a.startedAt = time.Now()
+	a.files = a.newNodeFiles()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
 	projects.EntryPorts = a.intranet.entryPorts
@@ -243,6 +245,7 @@ type agent struct {
 	id       *identity
 	docker   *docker.Client
 	projects *project.Manager
+	files    *nodefiles.Service
 	hostname string
 	info     *nagiv1.NodeInfo
 
@@ -448,6 +451,10 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		CrossNodeEntry: true,
 		ProxyDisabled:  a.cfg.DisableProxy,
 		ReportsCerts:   true,
+
+		NodeAccess:         nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir),
+		NodeAccessDisabled: NodeAccessDisabled(a.cfg.DataDir),
+		InContainer:        inContainer(),
 	}
 	info.MemoryBytes, info.DiskBytes = metrics.Capacity(a.cfg.DataDir)
 	if v, err := a.docker.Version(ctx); err == nil {
@@ -588,6 +595,9 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 	}
 	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
 	info.ProjectsRoot = a.projectsRoot()
+	// 本地命令随时可能改这个开关，界面要跟着变。
+	info.NodeAccess = nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir)
+	info.NodeAccessDisabled = NodeAccessDisabled(a.cfg.DataDir)
 	latest := a.metrics.Latest()
 	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
 	for _, d := range a.metrics.Disks() {

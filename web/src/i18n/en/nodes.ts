@@ -2,6 +2,8 @@ import type zh from "../zh/nodes";
 
 export default {
   tabs: {
+    terminal: "Terminal",
+    files: "Files",
     containers: "Containers",
     metrics: "Monitoring",
     settings: "Settings",

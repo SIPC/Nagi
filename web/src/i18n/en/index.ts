@@ -16,6 +16,7 @@ import standby from "./standby";
 import update from "./update";
 import projects from "./projects";
 import nodes from "./nodes";
+import nodeAccess from "./nodeAccess";
 import project from "./project";
 import projectContainers from "./projectContainers";
 import projectData from "./projectData";
@@ -43,6 +44,7 @@ export default {
   update,
   projects,
   nodes,
+  nodeAccess,
   project,
   projectContainers,
   projectData,

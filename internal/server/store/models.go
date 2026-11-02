@@ -106,11 +106,12 @@ type Route struct {
 }
 
 type Session struct {
-	TokenHash string
-	UserID    int64
-	CreatedAt int64
-	ExpiresAt int64
-	Ip        string
+	TokenHash     string
+	UserID        int64
+	CreatedAt     int64
+	ExpiresAt     int64
+	Ip            string
+	ElevatedUntil int64
 }
 
 type Setting struct {

@@ -58,6 +58,26 @@ function diffLines(a: string[], b: string[]): Op[] {
 // 敏感变量的值不直接显示。
 const maskLine = (text: string) => text.replace(/^(env(?: \S+)?: [^=]*(?:pass|pwd|secret|token|key|credential)[^=]*=).+$/i, "$1••••••");
 
+// LineDiff：两段文本的差异，只列有改动的行。行数太多时不比较（算法是平方的），直接说明。
+const maxDiffLines = 3000;
+
+export function LineDiff({ before, after, none }: { before: string; after: string; none: string }) {
+  const a = before.split("\n");
+  const b = after.split("\n");
+  if (a.length > maxDiffLines || b.length > maxDiffLines) return null;
+  const ops = diffLines(a, b).filter((o) => o.kind !== "same");
+  if (ops.length === 0) return <p className="text-muted-foreground">{none}</p>;
+  return (
+    <div className="max-h-64 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre">
+      {ops.map((o, i) => (
+        <div key={i} className={o.kind === "add" ? "text-success" : "text-destructive"}>
+          {`${o.kind === "add" ? "+" : "-"} ${o.text}`}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ConfigDiff：「相对 vN 的改动」区块的内容：只列有改动的行，新增绿色、删除红色。
 export function ConfigDiff({ deployed, draft }: { deployed: ContainerConfig | undefined; draft: ContainerConfig | undefined }) {
   const ops = diffLines(configLines(deployed), configLines(draft)).filter((o) => o.kind !== "same");

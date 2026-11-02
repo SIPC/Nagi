@@ -7,6 +7,8 @@ export default {
     replicas: "副本",
     panels: "管理面板",
     mesh: "节点网络",
+    terminal: "终端",
+    files: "文件",
   },
   approveConfirm: (name: string, address: string) =>
     `批准节点 ${name}（${address}）？批准后节点加入 mesh 并可由面板操作。该节点通过接入码加入，接入码泄露时他人也可加入，请确认是自有机器。`,

@@ -35,6 +35,7 @@ Also included:
 
 - Snapshots: scheduled per-container backup and restore, with an optional backup node as an off-site replica; move containers between nodes without losing data; redeploy containers to another node if a node is lost for good
 - Primary and standby panels, and handing nodes over between panels
+- Node terminal and files: no SSH needed, admins only, identity verified first, every action logged, can be turned off on the node
 
 ### Basics
 

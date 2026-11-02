@@ -16,6 +16,10 @@ service MeshService {
   rpc VolumeDownload(VolumeFileRef) returns (stream VolumeFileChunk);
   // 面板把文件写进卷里。第一条带 ref，之后是内容。只接受节点信任的面板，有顶替时要持有租约。
   rpc VolumeUpload(stream VolumeUploadChunk) returns (VolumeUploadResponse);
+  // 面板下载节点上的文件（见 docs/node-access.md）。第一条带文件名和大小，之后是内容，目录打包成 tar.gz。只接受主面板。
+  rpc NodeFileDownload(NodeFileRef) returns (stream VolumeFileChunk);
+  // 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
+  rpc NodeFileUpload(stream NodeFileUploadChunk) returns (VolumeUploadResponse);
   // 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
   // 只接受备份节点登记过的源节点。
   rpc ReplicaManifest(ReplicaManifestRequest) returns (ReplicaManifestResponse);

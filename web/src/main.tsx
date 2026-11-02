@@ -23,6 +23,7 @@ import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
 import { ConfirmHost } from "@/components/confirm";
+import { ElevateHost } from "@/components/elevate";
 import { Toaster } from "@/components/ui/sonner";
 
 // 任何接口返回“未登录”时回到登录页。进入页面时的登录检查（["me"]）不算：
@@ -193,19 +194,24 @@ const nodesRoute = createRoute({
 const nodeRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes/$nodeId",
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab; path?: string } => ({
     tab: nodeTabs.some((t) => t.value === search.tab) ? (search.tab as NodeTab) : undefined,
+    path: typeof search.path === "string" && search.path.startsWith("/") ? search.path : undefined,
   }),
   component: function Node() {
     const { nodeId } = nodeRoute.useParams();
-    const { tab } = nodeRoute.useSearch();
+    const { tab, path } = nodeRoute.useSearch();
     const navigate = nodeRoute.useNavigate();
     return (
       <NodePage
         key={nodeId}
         nodeId={nodeId}
         tab={tab ?? "metrics"}
-        onTab={(t) => navigate({ search: { tab: t === "metrics" ? undefined : t }, replace: true })}
+        path={path}
+        onTab={(t) => navigate({ search: { tab: t === "metrics" ? undefined : t, path: t === "files" || t === "terminal" ? path : undefined }, replace: true })}
+        // 进目录是一次导航，浏览器后退能回到上一层。
+        onFilePath={(p) => navigate({ search: { tab: "files", path: p } })}
+        onOpenTerminal={(p) => navigate({ search: { tab: "terminal", path: p } })}
       />
     );
   },
@@ -243,6 +249,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
       <ConfirmHost />
+      <ElevateHost />
       <Toaster />
     </QueryClientProvider>
   </StrictMode>,

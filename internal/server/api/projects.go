@@ -79,6 +79,12 @@ func (s *projectService) CreateProject(ctx context.Context, req *connect.Request
 	m := req.Msg
 	cr := projects.CreateRequest{Name: m.GetName(), NetworkName: m.GetNetworkName(), Settings: m.GetSettings()}
 	if m.GetContainer() != nil {
+		if err := s.checkOperatorConfig(ctx, "", m.GetContainerName(), m.GetContainer()); err != nil {
+			return nil, err
+		}
+		if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+			return nil, err
+		}
 		cr.Container = &projects.AddRequest{Name: m.GetContainerName(), Config: m.GetContainer(), NodeID: m.GetNodeId(), Dir: m.GetDir()}
 	}
 	p, err := s.Projects.Create(ctx, cr)
@@ -106,6 +112,9 @@ func (s *projectService) UpdateProjectSettings(ctx context.Context, req *connect
 }
 
 func (s *projectService) SaveSharedEnv(ctx context.Context, req *connect.Request[nagiv1.SaveSharedEnvRequest]) (*connect.Response[nagiv1.SaveSharedEnvResponse], error) {
+	if err := s.checkOperatorSharedEnv(ctx, req.Msg.GetProjectId()); err != nil {
+		return nil, err
+	}
 	p, affected, err := s.Projects.SaveSharedEnv(ctx, req.Msg.GetProjectId(), req.Msg.GetBaseRevision(), req.Msg.GetVars())
 	return reply(&nagiv1.SaveSharedEnvResponse{Project: p, Affected: affected}, err)
 }
@@ -126,6 +135,12 @@ func (s *projectService) DeleteProject(ctx context.Context, req *connect.Request
 
 func (s *projectService) AddContainer(ctx context.Context, req *connect.Request[nagiv1.AddContainerRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
+	if err := s.checkOperatorConfig(ctx, "", m.GetName(), m.GetConfig()); err != nil {
+		return nil, err
+	}
+	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+		return nil, err
+	}
 	p, err := s.Projects.AddContainer(ctx, projects.AddRequest{ProjectID: m.GetProjectId(), Name: m.GetName(), Config: m.GetConfig(), NodeID: m.GetNodeId(), Dir: m.GetDir()})
 	if err != nil {
 		return nil, toConnect(err)
@@ -144,6 +159,9 @@ func (s *projectService) DeleteContainer(ctx context.Context, req *connect.Reque
 
 func (s *projectService) SaveDraft(ctx context.Context, req *connect.Request[nagiv1.SaveDraftRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
+	if err := s.checkOperatorConfig(ctx, m.GetProjectId(), m.GetContainer(), m.GetConfig()); err != nil {
+		return nil, err
+	}
 	p, err := s.Projects.SaveDraft(ctx, m.GetProjectId(), m.GetContainer(), m.GetBaseRevision(), m.GetConfig())
 	if err != nil {
 		return nil, toConnect(err)
@@ -251,6 +269,9 @@ func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.R
 
 func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Request[nagiv1.RestoreFromBackupRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
+	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+		return err
+	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.RestoreFromBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId(), m.GetDir(), o)
 	})
@@ -258,6 +279,9 @@ func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Req
 
 func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
+	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+		return err
+	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.Migrate(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
 	})
@@ -265,6 +289,9 @@ func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Requ
 
 func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
+	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+		return err
+	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		return 0, s.Projects.RedeployElsewhere(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
 	})
@@ -272,6 +299,9 @@ func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Req
 
 func (s *projectService) SetFailover(ctx context.Context, req *connect.Request[nagiv1.SetFailoverApiRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
+	if err := s.checkOperatorDir(ctx, m.GetStandbyDir()); err != nil {
+		return nil, err
+	}
 	return reply(s.Projects.SetFailover(ctx, projects.SetFailoverRequest{
 		ProjectID: m.GetProjectId(), Container: m.GetContainer(), StandbyNodeID: m.GetStandbyNodeId(), StandbyDir: m.GetStandbyDir(),
 		WitnessNodeID: m.GetWitnessNodeId(), LeaseSeconds: m.GetLeaseSeconds(), AutoStateful: m.GetAutoStateful(), AutoFailback: m.GetAutoFailback(),

@@ -36,9 +36,24 @@ func TestAllowed(t *testing.T) {
 		{RoleViewer, list, true}, {RoleViewer, nodes, true}, {RoleViewer, password, true}, {RoleViewer, sessions, true},
 		{RoleViewer, deploy, false}, {RoleViewer, key, false}, {RoleViewer, settings, false}, {RoleViewer, users, false}, {RoleViewer, alerts, false}, {RoleViewer, removeN, false}, {RoleViewer, unknown, false},
 		{"", list, false}, {"root", list, false},
+		// 节点访问只给管理员，查询也一样：名字以 List 开头的默认会放行。
+		{RoleAdmin, "/nagi.v1.NodeService/ListNodeDir", true}, {RoleAdmin, "/nagi.v1.NodeService/ReadNodeFile", true},
 	} {
 		if got := Allowed(c.role, c.procedure); got != c.want {
 			t.Errorf("Allowed(%q, %s) = %v，应为 %v", c.role, c.procedure, got, c.want)
+		}
+	}
+}
+
+// 新增节点访问接口时加到这里：操作员和只读账号都不能调用。
+func TestNodeAccessAdminOnly(t *testing.T) {
+	for _, method := range []string{
+		"ListNodeDir", "ReadNodeFile", "WriteNodeFile", "DeleteNodeFile", "CreateNodeDir", "ListNodeFileBackups", "RestoreNodeFileBackup",
+	} {
+		for _, role := range []string{RoleOperator, RoleViewer} {
+			if Allowed(role, "/nagi.v1.NodeService/"+method) {
+				t.Errorf("%s 不应该能调用 %s", role, method)
+			}
 		}
 	}
 }

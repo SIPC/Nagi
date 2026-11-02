@@ -9,6 +9,7 @@
 | [panel.md](panel.md) | 面板：职责、项目数据、访问与登录 |
 | [agent.md](agent.md) | 项目与容器、容器目录、网络（项目内网、项目连接）、创建方式、镜像、部署、文件来源、版本与回滚、override |
 | [exposure.md](exposure.md) | 对外访问：Caddy 统一出口 |
+| [node-access.md](node-access.md) | 节点访问：在面板上打开节点的终端、管理节点上的文件 |
 | [control-plane.md](control-plane.md) | 控制面：连接、信任列表、移交、节点加入、接口设计 |
 | [standby.md](standby.md) | 主备面板：配对、同步、任期、提升 |
 | [mesh.md](mesh.md) | WireGuard mesh 与地址规划 |

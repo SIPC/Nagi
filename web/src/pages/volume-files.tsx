@@ -35,7 +35,7 @@ export function snapshotTime(date: Date | undefined): string {
 type Crumb = { label: string; onClick: () => void };
 
 // Crumbs：面包屑。最后一级是当前位置，不能点。
-function Crumbs({ parts, current }: { parts: Crumb[]; current: string }) {
+export function Crumbs({ parts, current }: { parts: Crumb[]; current: string }) {
   return (
     <nav aria-label={t.projectData.files.pathLabel} className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2 wrap-anywhere">
       {parts.map((p, i) => (

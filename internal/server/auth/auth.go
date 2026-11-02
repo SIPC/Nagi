@@ -234,6 +234,8 @@ type User struct {
 	ID   int64
 	Name string
 	Role string
+	// ElevatedUntil 是这个会话的高权限确认的到期时间（Unix 秒）。见 elevation.go。
+	ElevatedUntil int64
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
@@ -253,7 +255,7 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
 		return User{}, i18n.New("登录已过期")
 	}
-	return User{ID: row.UserID, Name: row.Username, Role: row.Role}, nil
+	return User{ID: row.UserID, Name: row.Username, Role: row.Role, ElevatedUntil: row.ElevatedUntil}, nil
 }
 
 // CleanupLoop 定期清理过期会话，直到 ctx 取消。

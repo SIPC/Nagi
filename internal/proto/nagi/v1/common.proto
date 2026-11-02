@@ -397,6 +397,12 @@ message NodeInfo {
   bool proxy_disabled = 13;
   // 节点上报域名的证书状态（旧版本的节点不报，这时状态未知）。
   bool reports_certs = 14;
+  // 节点支持节点访问（终端、文件），而且没有在本地关闭。见 docs/node-access.md。
+  bool node_access = 15;
+  // 节点在本地关闭了节点访问（nagi node access disable）。
+  bool node_access_disabled = 16;
+  // 节点进程跑在容器里：终端进的是这个容器，文件也是容器里的。
+  bool in_container = 17;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。

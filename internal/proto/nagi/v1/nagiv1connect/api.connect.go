@@ -52,6 +52,8 @@ const (
 	AuthServiceLogoutProcedure = "/nagi.v1.AuthService/Logout"
 	// AuthServiceMeProcedure is the fully-qualified name of the AuthService's Me RPC.
 	AuthServiceMeProcedure = "/nagi.v1.AuthService/Me"
+	// AuthServiceElevateProcedure is the fully-qualified name of the AuthService's Elevate RPC.
+	AuthServiceElevateProcedure = "/nagi.v1.AuthService/Elevate"
 	// AuthServiceChangePasswordProcedure is the fully-qualified name of the AuthService's
 	// ChangePassword RPC.
 	AuthServiceChangePasswordProcedure = "/nagi.v1.AuthService/ChangePassword"
@@ -62,6 +64,26 @@ const (
 	AuthServiceUpdateProfileProcedure = "/nagi.v1.AuthService/UpdateProfile"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
+	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
+	NodeServiceListNodeDirProcedure = "/nagi.v1.NodeService/ListNodeDir"
+	// NodeServiceReadNodeFileProcedure is the fully-qualified name of the NodeService's ReadNodeFile
+	// RPC.
+	NodeServiceReadNodeFileProcedure = "/nagi.v1.NodeService/ReadNodeFile"
+	// NodeServiceWriteNodeFileProcedure is the fully-qualified name of the NodeService's WriteNodeFile
+	// RPC.
+	NodeServiceWriteNodeFileProcedure = "/nagi.v1.NodeService/WriteNodeFile"
+	// NodeServiceDeleteNodeFileProcedure is the fully-qualified name of the NodeService's
+	// DeleteNodeFile RPC.
+	NodeServiceDeleteNodeFileProcedure = "/nagi.v1.NodeService/DeleteNodeFile"
+	// NodeServiceCreateNodeDirProcedure is the fully-qualified name of the NodeService's CreateNodeDir
+	// RPC.
+	NodeServiceCreateNodeDirProcedure = "/nagi.v1.NodeService/CreateNodeDir"
+	// NodeServiceListNodeFileBackupsProcedure is the fully-qualified name of the NodeService's
+	// ListNodeFileBackups RPC.
+	NodeServiceListNodeFileBackupsProcedure = "/nagi.v1.NodeService/ListNodeFileBackups"
+	// NodeServiceRestoreNodeFileBackupProcedure is the fully-qualified name of the NodeService's
+	// RestoreNodeFileBackup RPC.
+	NodeServiceRestoreNodeFileBackupProcedure = "/nagi.v1.NodeService/RestoreNodeFileBackup"
 	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
 	// ListNodePanels RPC.
 	NodeServiceListNodePanelsProcedure = "/nagi.v1.NodeService/ListNodePanels"
@@ -444,6 +466,8 @@ type AuthServiceClient interface {
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
+	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
+	Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -481,6 +505,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("Me")),
 			connect.WithClientOptions(opts...),
 		),
+		elevate: connect.NewClient[v1.ElevateRequest, v1.ElevateResponse](
+			httpClient,
+			baseURL+AuthServiceElevateProcedure,
+			connect.WithSchema(authServiceMethods.ByName("Elevate")),
+			connect.WithClientOptions(opts...),
+		),
 		changePassword: connect.NewClient[v1.ChangePasswordRequest, v1.ChangePasswordResponse](
 			httpClient,
 			baseURL+AuthServiceChangePasswordProcedure,
@@ -507,6 +537,7 @@ type authServiceClient struct {
 	login          *connect.Client[v1.LoginRequest, v1.LoginResponse]
 	logout         *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
 	me             *connect.Client[v1.MeRequest, v1.MeResponse]
+	elevate        *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
 	changePassword *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
 	setLanguage    *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
 	updateProfile  *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
@@ -525,6 +556,11 @@ func (c *authServiceClient) Logout(ctx context.Context, req *connect.Request[v1.
 // Me calls nagi.v1.AuthService.Me.
 func (c *authServiceClient) Me(ctx context.Context, req *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error) {
 	return c.me.CallUnary(ctx, req)
+}
+
+// Elevate calls nagi.v1.AuthService.Elevate.
+func (c *authServiceClient) Elevate(ctx context.Context, req *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error) {
+	return c.elevate.CallUnary(ctx, req)
 }
 
 // ChangePassword calls nagi.v1.AuthService.ChangePassword.
@@ -548,6 +584,8 @@ type AuthServiceHandler interface {
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
+	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
+	Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -581,6 +619,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("Me")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceElevateHandler := connect.NewUnaryHandler(
+		AuthServiceElevateProcedure,
+		svc.Elevate,
+		connect.WithSchema(authServiceMethods.ByName("Elevate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceChangePasswordHandler := connect.NewUnaryHandler(
 		AuthServiceChangePasswordProcedure,
 		svc.ChangePassword,
@@ -607,6 +651,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceLogoutHandler.ServeHTTP(w, r)
 		case AuthServiceMeProcedure:
 			authServiceMeHandler.ServeHTTP(w, r)
+		case AuthServiceElevateProcedure:
+			authServiceElevateHandler.ServeHTTP(w, r)
 		case AuthServiceChangePasswordProcedure:
 			authServiceChangePasswordHandler.ServeHTTP(w, r)
 		case AuthServiceSetLanguageProcedure:
@@ -634,6 +680,10 @@ func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.M
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Me is not implemented"))
 }
 
+func (UnimplementedAuthServiceHandler) Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Elevate is not implemented"))
+}
+
 func (UnimplementedAuthServiceHandler) ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ChangePassword is not implemented"))
 }
@@ -649,6 +699,14 @@ func (UnimplementedAuthServiceHandler) UpdateProfile(context.Context, *connect.R
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
 type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// ---- 节点文件（见 docs/node-access.md）：只有管理员，要先做高权限确认 ----
+	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
+	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
+	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error)
+	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
+	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
+	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -703,6 +761,48 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+NodeServiceListNodesProcedure,
 			connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeDir: connect.NewClient[v1.NodeFileRef, v1.ListNodeDirResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeDirProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		readNodeFile: connect.NewClient[v1.NodeFileRef, v1.ReadNodeFileResponse](
+			httpClient,
+			baseURL+NodeServiceReadNodeFileProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ReadNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		writeNodeFile: connect.NewClient[v1.WriteNodeFileRequest, v1.WriteNodeFileResponse](
+			httpClient,
+			baseURL+NodeServiceWriteNodeFileProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("WriteNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeFile: connect.NewClient[v1.DeleteNodeFileRequest, v1.NodeFileOpResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeFileProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		createNodeDir: connect.NewClient[v1.NodeFileRef, v1.NodeFileOpResponse](
+			httpClient,
+			baseURL+NodeServiceCreateNodeDirProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CreateNodeDir")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeFileBackups: connect.NewClient[v1.NodeFileRef, v1.ListNodeFileBackupsResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeFileBackupsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeFileBackups")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreNodeFileBackup: connect.NewClient[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse](
+			httpClient,
+			baseURL+NodeServiceRestoreNodeFileBackupProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeFileBackup")),
 			connect.WithClientOptions(opts...),
 		),
 		listNodePanels: connect.NewClient[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse](
@@ -824,31 +924,73 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	listNodes           *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
-	listNodePanels      *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
-	handoverNodes       *connect.Client[v1.HandoverNodesRequest, v1.HandoverNodesResponse]
-	removeNodePanel     *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
-	listNodeReplicas    *connect.Client[v1.NodeRef, v1.ListNodeReplicasResponse]
-	deleteNodeReplica   *connect.Client[v1.DeleteNodeReplicaRequest, v1.DeleteNodeReplicaResponse]
-	getNodeMesh         *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
-	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
-	getPanelMesh        *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
-	upgradeNode         *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
-	upgradeAllNodes     *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
-	getNodeMirrors      *connect.Client[v1.NodeRef, v1.Mirrors]
-	setNodeMirrors      *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
-	setNodeProjectsRoot *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
-	createEnrollCommand *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
-	queryNodeMetrics    *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
-	removeNode          *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
-	approveNode         *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
-	renameNode          *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
-	adoptNodeContainer  *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
+	listNodes             *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	listNodeDir           *connect.Client[v1.NodeFileRef, v1.ListNodeDirResponse]
+	readNodeFile          *connect.Client[v1.NodeFileRef, v1.ReadNodeFileResponse]
+	writeNodeFile         *connect.Client[v1.WriteNodeFileRequest, v1.WriteNodeFileResponse]
+	deleteNodeFile        *connect.Client[v1.DeleteNodeFileRequest, v1.NodeFileOpResponse]
+	createNodeDir         *connect.Client[v1.NodeFileRef, v1.NodeFileOpResponse]
+	listNodeFileBackups   *connect.Client[v1.NodeFileRef, v1.ListNodeFileBackupsResponse]
+	restoreNodeFileBackup *connect.Client[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse]
+	listNodePanels        *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
+	handoverNodes         *connect.Client[v1.HandoverNodesRequest, v1.HandoverNodesResponse]
+	removeNodePanel       *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
+	listNodeReplicas      *connect.Client[v1.NodeRef, v1.ListNodeReplicasResponse]
+	deleteNodeReplica     *connect.Client[v1.DeleteNodeReplicaRequest, v1.DeleteNodeReplicaResponse]
+	getNodeMesh           *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
+	pingNodeMesh          *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
+	getPanelMesh          *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
+	upgradeNode           *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
+	upgradeAllNodes       *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
+	getNodeMirrors        *connect.Client[v1.NodeRef, v1.Mirrors]
+	setNodeMirrors        *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
+	setNodeProjectsRoot   *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
+	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
+	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
+	removeNode            *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
+	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
+	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
+	adoptNodeContainer    *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
 func (c *nodeServiceClient) ListNodes(ctx context.Context, req *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return c.listNodes.CallUnary(ctx, req)
+}
+
+// ListNodeDir calls nagi.v1.NodeService.ListNodeDir.
+func (c *nodeServiceClient) ListNodeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error) {
+	return c.listNodeDir.CallUnary(ctx, req)
+}
+
+// ReadNodeFile calls nagi.v1.NodeService.ReadNodeFile.
+func (c *nodeServiceClient) ReadNodeFile(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error) {
+	return c.readNodeFile.CallUnary(ctx, req)
+}
+
+// WriteNodeFile calls nagi.v1.NodeService.WriteNodeFile.
+func (c *nodeServiceClient) WriteNodeFile(ctx context.Context, req *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return c.writeNodeFile.CallUnary(ctx, req)
+}
+
+// DeleteNodeFile calls nagi.v1.NodeService.DeleteNodeFile.
+func (c *nodeServiceClient) DeleteNodeFile(ctx context.Context, req *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return c.deleteNodeFile.CallUnary(ctx, req)
+}
+
+// CreateNodeDir calls nagi.v1.NodeService.CreateNodeDir.
+func (c *nodeServiceClient) CreateNodeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return c.createNodeDir.CallUnary(ctx, req)
+}
+
+// ListNodeFileBackups calls nagi.v1.NodeService.ListNodeFileBackups.
+func (c *nodeServiceClient) ListNodeFileBackups(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error) {
+	return c.listNodeFileBackups.CallUnary(ctx, req)
+}
+
+// RestoreNodeFileBackup calls nagi.v1.NodeService.RestoreNodeFileBackup.
+func (c *nodeServiceClient) RestoreNodeFileBackup(ctx context.Context, req *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return c.restoreNodeFileBackup.CallUnary(ctx, req)
 }
 
 // ListNodePanels calls nagi.v1.NodeService.ListNodePanels.
@@ -949,6 +1091,14 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, req *connect
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	// ---- 节点文件（见 docs/node-access.md）：只有管理员，要先做高权限确认 ----
+	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
+	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
+	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error)
+	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
+	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
+	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -999,6 +1149,48 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		NodeServiceListNodesProcedure,
 		svc.ListNodes,
 		connect.WithSchema(nodeServiceMethods.ByName("ListNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodeDirHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeDirProcedure,
+		svc.ListNodeDir,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceReadNodeFileHandler := connect.NewUnaryHandler(
+		NodeServiceReadNodeFileProcedure,
+		svc.ReadNodeFile,
+		connect.WithSchema(nodeServiceMethods.ByName("ReadNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceWriteNodeFileHandler := connect.NewUnaryHandler(
+		NodeServiceWriteNodeFileProcedure,
+		svc.WriteNodeFile,
+		connect.WithSchema(nodeServiceMethods.ByName("WriteNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeFileHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeFileProcedure,
+		svc.DeleteNodeFile,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceCreateNodeDirHandler := connect.NewUnaryHandler(
+		NodeServiceCreateNodeDirProcedure,
+		svc.CreateNodeDir,
+		connect.WithSchema(nodeServiceMethods.ByName("CreateNodeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodeFileBackupsHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeFileBackupsProcedure,
+		svc.ListNodeFileBackups,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeFileBackups")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRestoreNodeFileBackupHandler := connect.NewUnaryHandler(
+		NodeServiceRestoreNodeFileBackupProcedure,
+		svc.RestoreNodeFileBackup,
+		connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeFileBackup")),
 		connect.WithHandlerOptions(opts...),
 	)
 	nodeServiceListNodePanelsHandler := connect.NewUnaryHandler(
@@ -1119,6 +1311,20 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
 			nodeServiceListNodesHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeDirProcedure:
+			nodeServiceListNodeDirHandler.ServeHTTP(w, r)
+		case NodeServiceReadNodeFileProcedure:
+			nodeServiceReadNodeFileHandler.ServeHTTP(w, r)
+		case NodeServiceWriteNodeFileProcedure:
+			nodeServiceWriteNodeFileHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeFileProcedure:
+			nodeServiceDeleteNodeFileHandler.ServeHTTP(w, r)
+		case NodeServiceCreateNodeDirProcedure:
+			nodeServiceCreateNodeDirHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeFileBackupsProcedure:
+			nodeServiceListNodeFileBackupsHandler.ServeHTTP(w, r)
+		case NodeServiceRestoreNodeFileBackupProcedure:
+			nodeServiceRestoreNodeFileBackupHandler.ServeHTTP(w, r)
 		case NodeServiceListNodePanelsProcedure:
 			nodeServiceListNodePanelsHandler.ServeHTTP(w, r)
 		case NodeServiceHandoverNodesProcedure:
@@ -1168,6 +1374,34 @@ type UnimplementedNodeServiceHandler struct{}
 
 func (UnimplementedNodeServiceHandler) ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodes is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeDir is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ReadNodeFile is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.WriteNodeFile is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNodeFile(context.Context, *connect.Request[v1.DeleteNodeFileRequest]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeFile is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CreateNodeDir is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeFileBackups is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RestoreNodeFileBackup is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error) {

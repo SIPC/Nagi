@@ -2354,7 +2354,13 @@ type NodeInfo struct {
 	// 节点没有启动 Caddy（--no-proxy），不能作为入口节点。
 	ProxyDisabled bool `protobuf:"varint,13,opt,name=proxy_disabled,json=proxyDisabled,proto3" json:"proxy_disabled,omitempty"`
 	// 节点上报域名的证书状态（旧版本的节点不报，这时状态未知）。
-	ReportsCerts  bool `protobuf:"varint,14,opt,name=reports_certs,json=reportsCerts,proto3" json:"reports_certs,omitempty"`
+	ReportsCerts bool `protobuf:"varint,14,opt,name=reports_certs,json=reportsCerts,proto3" json:"reports_certs,omitempty"`
+	// 节点支持节点访问（终端、文件），而且没有在本地关闭。见 docs/node-access.md。
+	NodeAccess bool `protobuf:"varint,15,opt,name=node_access,json=nodeAccess,proto3" json:"node_access,omitempty"`
+	// 节点在本地关闭了节点访问（nagi node access disable）。
+	NodeAccessDisabled bool `protobuf:"varint,16,opt,name=node_access_disabled,json=nodeAccessDisabled,proto3" json:"node_access_disabled,omitempty"`
+	// 节点进程跑在容器里：终端进的是这个容器，文件也是容器里的。
+	InContainer   bool `protobuf:"varint,17,opt,name=in_container,json=inContainer,proto3" json:"in_container,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2483,6 +2489,27 @@ func (x *NodeInfo) GetProxyDisabled() bool {
 func (x *NodeInfo) GetReportsCerts() bool {
 	if x != nil {
 		return x.ReportsCerts
+	}
+	return false
+}
+
+func (x *NodeInfo) GetNodeAccess() bool {
+	if x != nil {
+		return x.NodeAccess
+	}
+	return false
+}
+
+func (x *NodeInfo) GetNodeAccessDisabled() bool {
+	if x != nil {
+		return x.NodeAccessDisabled
+	}
+	return false
+}
+
+func (x *NodeInfo) GetInContainer() bool {
+	if x != nil {
+		return x.InContainer
 	}
 	return false
 }
@@ -4930,7 +4957,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xc1\x03\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xb7\x04\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -4947,7 +4974,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"disk_bytes\x18\v \x01(\x04R\tdiskBytes\x12(\n" +
 	"\x10cross_node_entry\x18\f \x01(\bR\x0ecrossNodeEntry\x12%\n" +
 	"\x0eproxy_disabled\x18\r \x01(\bR\rproxyDisabled\x12#\n" +
-	"\rreports_certs\x18\x0e \x01(\bR\freportsCerts\"\x89\x01\n" +
+	"\rreports_certs\x18\x0e \x01(\bR\freportsCerts\x12\x1f\n" +
+	"\vnode_access\x18\x0f \x01(\bR\n" +
+	"nodeAccess\x120\n" +
+	"\x14node_access_disabled\x18\x10 \x01(\bR\x12nodeAccessDisabled\x12!\n" +
+	"\fin_container\x18\x11 \x01(\bR\vinContainer\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +

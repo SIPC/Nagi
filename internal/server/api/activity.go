@@ -80,6 +80,9 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		actor = activityField(req, "username")
 	}
 	target := activityField(req, "container", "name", "username", "node_id", "id")
+	if id := activityField(req, "node_id"); id != "" && target == id {
+		target = a.nodeName(context.WithoutCancel(ctx), id)
+	}
 	// 部署的目标是一个列表。
 	if d, ok := req.(*nagiv1.DeployRequest); ok {
 		names := make([]string, 0, len(d.GetTargets()))

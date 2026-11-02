@@ -29,7 +29,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), resetCmd(), versionCmd(), linkProxyCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), nodeCmd(), resetCmd(), versionCmd(), linkProxyCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -183,6 +183,51 @@ func linkProxyCmd() *cobra.Command {
 			return agent.RunLinkProxy()
 		},
 	}
+}
+
+// nodeCmd 是节点本地命令：打开或关闭节点访问（在面板上打开节点的终端、管理节点上的文件）。
+// 面板没有接口能改这个开关，所以面板被攻破也打不开。立即生效，不用重启节点。
+func nodeCmd() *cobra.Command {
+	var dataDir string
+	cmd := &cobra.Command{Use: "node", Short: "节点本地设置"}
+	access := &cobra.Command{
+		Use:   "access",
+		Short: "打开或关闭节点访问（面板自带的节点用 --data-dir <面板数据目录>/agent）",
+	}
+	access.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "节点数据目录")
+	set := func(use, short string, enabled bool, msg string) *cobra.Command {
+		return &cobra.Command{
+			Use:   use,
+			Short: short,
+			Args:  cobra.NoArgs,
+			RunE: func(*cobra.Command, []string) error {
+				if err := agent.SetNodeAccess(dataDir, enabled); err != nil {
+					return err
+				}
+				fmt.Println(msg)
+				return nil
+			},
+		}
+	}
+	access.AddCommand(
+		set("enable", "打开节点访问", true, "节点访问已打开"),
+		set("disable", "关闭节点访问：面板上不能再打开这个节点的终端和文件", false, "节点访问已关闭"),
+		&cobra.Command{
+			Use:   "status",
+			Short: "查看节点访问是否打开",
+			Args:  cobra.NoArgs,
+			RunE: func(*cobra.Command, []string) error {
+				if agent.NodeAccessDisabled(dataDir) {
+					fmt.Println("节点访问已关闭")
+				} else {
+					fmt.Println("节点访问已打开")
+				}
+				return nil
+			},
+		},
+	)
+	cmd.AddCommand(access)
+	return cmd
 }
 
 // panelCmd 是节点本地命令：查看和修改信任的面板列表。用于旧面板已经挂掉、无法再发指令的情况。

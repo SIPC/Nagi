@@ -499,17 +499,18 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.user_id, s.expires_at, u.username, u.role
+SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?
 `
 
 type GetSessionRow struct {
-	UserID    int64
-	ExpiresAt int64
-	Username  string
-	Role      string
+	UserID        int64
+	ExpiresAt     int64
+	ElevatedUntil int64
+	Username      string
+	Role          string
 }
 
 func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionRow, error) {
@@ -518,6 +519,7 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionR
 	err := row.Scan(
 		&i.UserID,
 		&i.ExpiresAt,
+		&i.ElevatedUntil,
 		&i.Username,
 		&i.Role,
 	)
@@ -2164,4 +2166,18 @@ func (q *Queries) UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setSessionElevated = `-- name: SetSessionElevated :exec
+UPDATE sessions SET elevated_until = ? WHERE token_hash = ?
+`
+
+type SetSessionElevatedParams struct {
+	ElevatedUntil int64
+	TokenHash     string
+}
+
+func (q *Queries) SetSessionElevated(ctx context.Context, arg SetSessionElevatedParams) error {
+	_, err := q.db.ExecContext(ctx, setSessionElevated, arg.ElevatedUntil, arg.TokenHash)
+	return err
 }
