@@ -4,7 +4,7 @@ package agent
 
 import (
 	"bytes"
-	"os"
+	"os/user"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +69,11 @@ func TestShellBadCwdFallsBackToHome(t *testing.T) {
 	if _, err := s.Write([]byte("pwd; echo DO''NE\n")); err != nil {
 		t.Fatal(err)
 	}
-	home, _ := os.UserHomeDir()
+	// 查不到用户时，startShell 用 / 作为主目录。
+	home := "/"
+	if u, err := user.Current(); err == nil {
+		home = u.HomeDir
+	}
 	if out := readUntil(t, s, "DONE"); !strings.Contains(out, home) {
 		t.Errorf("应该回到主目录 %s：%q", home, out)
 	}

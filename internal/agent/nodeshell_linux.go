@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -81,9 +82,10 @@ func systemdScope() []string {
 
 // startShell 启动节点上的 shell。不继承节点进程的环境变量。
 func startShell(cwd string, cols, rows uint16) (*shellSession, error) {
+	// 查不到用户时（容器里没有登记的 uid）照常打开，只是没有用户名和主目录。
 	u, err := user.Current()
 	if err != nil {
-		return nil, err
+		u = &user.User{Username: strconv.Itoa(os.Getuid()), HomeDir: "/"}
 	}
 	shell := loginShell(u)
 	lang := os.Getenv("LANG")
