@@ -161,6 +161,7 @@ Nagi is built on these open-source projects:
 - [kopia](https://github.com/kopia/kopia): snapshots and off-site replicas
 - [yamux](https://github.com/hashicorp/yamux) and [Connect](https://connectrpc.com): control-plane communication
 - [shadcn/ui](https://ui.shadcn.com): UI components
+- [MiSans](https://hyperos.mi.com/font): interface font, by Xiaomi
 
 ## License
 

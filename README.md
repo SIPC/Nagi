@@ -159,6 +159,7 @@ Nagi 构建在以下开源项目之上：
 - [kopia](https://github.com/kopia/kopia)：快照与异地副本
 - [yamux](https://github.com/hashicorp/yamux)、[Connect](https://connectrpc.com)：控制面通信
 - [shadcn/ui](https://ui.shadcn.com)：界面组件
+- [MiSans](https://hyperos.mi.com/font)：界面字体，由小米提供
 
 ## 许可证
 

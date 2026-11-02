@@ -75,6 +75,8 @@
 | Docker 交互 | **部署用 compose 命令，其余用 Docker Engine API** | 部署行为和用户手动操作完全一致；状态、日志、监控需要结构化数据 | [development.md](development.md#依赖库) |
 | 数据库访问 | **sqlc** | 写 SQL 生成强类型代码，没有运行时魔法 | [development.md](development.md#依赖库) |
 | 前端 | **Vite + React + TS + TanStack Router/Query + shadcn/ui** | 纯静态输出可打包进二进制；路由类型安全 | [development.md](development.md#依赖库) |
+| 界面风格 | **组件全部用 shadcn/ui，图表用 shadcn Charts，字体用 MiSans；保留三列结构** | 简约精致、易懂优先；不混用其他设计系统 | [ui.md](ui.md) |
+| 全局流量图 | **桑基图，对外流量 = 网卡流量 − 节点之间的流量** | 一眼看清从哪来到哪去；网卡流量覆盖所有对外流量，代价是估算值 | [monitoring.md](monitoring.md#全局概览) |
 | 许可证 | **Apache-2.0** | 宽松，允许商用，带专利授权条款 | [development.md](development.md) |
 
 ## 待定问题

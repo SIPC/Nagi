@@ -14,7 +14,8 @@
 | [mesh.md](mesh.md) | WireGuard mesh 与地址规划 |
 | [snapshot.md](snapshot.md) | 快照：内容、一致性、频率、保留 |
 | [failover.md](failover.md) | 高可用：面板故障、重新部署到其他节点、顶替节点、手动迁移 |
-| [monitoring.md](monitoring.md) | 监控与告警 |
+| [monitoring.md](monitoring.md) | 监控与告警、全局概览的数据来源 |
+| [ui.md](ui.md) | 界面规范：间距、圆角、字号、组件、页面布局、文案 |
 | [decisions.md](decisions.md) | 技术决策汇总、待定问题 |
 | [development.md](development.md) | 开发规划：仓库结构、依赖库、各步完成标准 |
 | [assets/src](assets/src) | README 配图的源文件。英文配图（`<名字>.en.html`）由 `translate.mjs` 从中文版生成，译文写在该脚本里，不要直接修改。修改后依次执行 `node docs/assets/src/translate.mjs` 和 `node docs/assets/src/render.mjs` 重新生成（需本机安装 Edge 或 Chrome）；改了中文文字而没同步译文时，`translate.mjs` 会报错 |

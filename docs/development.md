@@ -66,7 +66,7 @@ web/                  前端
 
 - Vite + React + TypeScript，纯静态输出，构建产物通过 `embed` 打包进二进制
 - TanStack Router（类型安全路由）+ TanStack Query（接口缓存与刷新）
-- Tailwind + shadcn/ui（源码在 `web/src/components/ui/`，基于 `radix-ui`），支持深浅色，适配移动端
+- Tailwind + shadcn/ui（源码在 `web/src/components/ui/`，基于 `radix-ui`），图表用 shadcn Charts（Recharts），字体用 MiSans（见 [ui.md](ui.md)），支持深浅色，适配移动端
 - 接口客户端由 buf 从 proto 生成
 
 ## 本地开发
