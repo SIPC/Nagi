@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Collapsible } from "radix-ui";
+import { ChevronRight, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -7,31 +11,33 @@ import { useRun } from "@/components/run";
 import { fmtBytes } from "@/components/metrics";
 import {
   Alert,
-  Badge,
   Button,
   Check,
+  Dialog,
+  DialogActions,
   EmptyRow,
   Field,
-  FormActions,
-  FormBody,
   FormRow,
   Input,
+  KeyValue,
+  List,
   Notice,
+  QueryError,
+  Row,
+  RowsSkeleton,
   Section,
   Select,
+  SettingRow,
   Spinner,
   Status,
-  Table,
-  Td,
-  Th,
 } from "@/components/ui";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
+import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { confirmAction } from "@/components/confirm";
-import { Link } from "@tanstack/react-router";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRole } from "@/components/role";
-import { toast } from "sonner";
-import { VolumeFiles } from "@/pages/volume-files";
+import { snapshotTime, VolumeFiles } from "@/pages/volume-files";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -52,6 +58,10 @@ function useNodes() {
   const list = nodes.data?.nodes ?? [];
   return {
     list,
+    // pending、loadError：还不知道节点在不在线，这时不能下「节点离线」的结论。
+    pending: nodes.isPending,
+    loadError: nodes.data ? null : nodes.error,
+    refetch: nodes.refetch,
     // fallback：顶替设置里记的名字。节点改过名时设置里的是旧名字，所以先按 ID 查当前的名字。
     name: (id: string, fallback?: string) => list.find((n) => n.id === id)?.name ?? fallback ?? id,
     online: (id: string) => list.find((n) => n.id === id)?.online === true,
@@ -59,7 +69,31 @@ function useNodes() {
   };
 }
 
-// ContainerStorage：容器页的「存储」标签：卷和快照。
+type Nodes = ReturnType<typeof useNodes>;
+
+// useCall：表单和按钮共用的提交：转圈、错误、成功后刷新项目。返回是否成功。
+function useCall(projectId: string) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const call = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      return true;
+    } catch (err) {
+      setError(errorMessage(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, error, call };
+}
+
+// ContainerStorage：容器页的「存储」标签：卷和快照；地址带 volume 时就地换成这个卷的文件管理。
 export function ContainerStorage({
   project,
   container,
@@ -68,16 +102,29 @@ export function ContainerStorage({
   container: Container;
 }) {
   const run = useRun(project.id);
+  const { isViewer } = useRole();
+  // 这个组件不绑定某条路由，volume 由容器页的路由校验。
+  const { volume } = useSearch({ strict: false }) as { volume?: string };
+  const navigate = useNavigate();
+  const openVolume = (name?: string) => navigate({ to: ".", search: ((prev: Record<string, unknown>) => ({ ...prev, volume: name })) as never });
+  // 只读角色没有文件管理的入口，直接打开链接也回到列表。
+  const browsing = volume && !isViewer ? volume : undefined;
   return (
-    <div className="grid grid-cols-1 gap-6">
+    <div className="grid grid-cols-1 gap-8">
       {run.output && <div className="empty:hidden">{run.output}</div>}
-      <Volumes project={project} container={container} />
-      <Snapshots project={project} container={container} run={run} />
+      {browsing ? (
+        <BrowseVolume key={`${container.name}/${browsing}`} project={project} container={container} volume={browsing} onClose={() => openVolume()} />
+      ) : (
+        <div className="min-w-0">
+          <Volumes project={project} container={container} onBrowse={openVolume} />
+          <Snapshots project={project} container={container} run={run} />
+        </div>
+      )}
     </div>
   );
 }
 
-// ContainerHA：容器页的「高可用」标签：顶替、备份节点、更换节点。
+// ContainerHA：容器页的「高可用」标签：先看状态，设置放进对话框。需要处理的事在最上面。
 export function ContainerHA({
   project,
   container,
@@ -86,12 +133,27 @@ export function ContainerHA({
   container: Container;
 }) {
   const run = useRun(project.id);
+  const nodes = useNodes();
+  if (nodes.pending) return <RowsSkeleton />;
+  if (nodes.loadError) return <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />;
+  const restorable = !!container.backupNodeId && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
   return (
-    <div className="grid grid-cols-1 gap-6">
+    <div className="grid grid-cols-1 gap-8">
       {run.output && <div className="empty:hidden">{run.output}</div>}
-      <Failover project={project} container={container} />
-      <Backup project={project} container={container} run={run} />
-      <Placement project={project} container={container} run={run} />
+      {container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
+      {restorable && <RestoreNotice project={project} container={container} nodes={nodes} run={run} />}
+      <div className="min-w-0">
+        {container.failover && <FailoverDetail project={project} container={container} nodes={nodes} />}
+        {container.backupNodeId && <BackupDetail project={project} container={container} nodes={nodes} />}
+        {restorable && <RestorableSnapshots project={project} container={container} nodes={nodes} run={run} />}
+        <Section>
+          <List>
+            {!container.failover && <FailoverRow project={project} container={container} nodes={nodes} />}
+            {!container.backupNodeId && <BackupRow project={project} container={container} nodes={nodes} />}
+            <PlacementRow project={project} container={container} nodes={nodes} run={run} />
+          </List>
+        </Section>
+      </div>
     </div>
   );
 }
@@ -100,33 +162,27 @@ type Run = ReturnType<typeof useRun>;
 
 // ---- 卷 ----
 
-// Volumes：容器的存储。数据在节点上，所以每次打开都去节点统计一次。
-function Volumes({ project, container }: { project: Project; container: Container }) {
-  const nodes = useNodes();
+const volumeLabel = (v: VolumeInfo) => (v.kind === "data" ? "data/" : v.name);
+
+// useVolumes：卷的统计和持久化目录。数据在节点上，所以每次打开都去节点统计一次。
+function useVolumes(project: Project, container: Container, nodes: Nodes) {
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
   const m = t.projectData.volumes;
-  const online = nodes.online(container.nodeId);
-  const deployed = container.deployedVersion > 0n;
   const volumes = useQuery({
     queryKey: ["volumes", project.id, container.name],
     queryFn: () => projectClient.listVolumes({ projectId: project.id, container: container.name }),
-    enabled: online && deployed,
+    enabled: nodes.online(container.nodeId) && container.deployedVersion > 0n,
     refetchInterval: 30000,
   });
-  const [adding, setAdding] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [browsing, setBrowsing] = useState<{ volume: string; label: string } | null>(null);
 
   // 单个容器的持久化目录可以在这里改，走草稿；容器组由 compose 定义。
   const cfg = container.draft ?? container.config;
   const form = cfg?.form;
   const targets = form?.volumes ?? [];
-  const deployedTargets = new Set((volumes.data?.volumes ?? []).flatMap((v) => v.mounts.map((x) => x.target)));
-  const pendingAdd = targets.filter((x) => !deployedTargets.has(x));
   const saveTargets = async (next: string[]) => {
-    if (!cfg || !form) return;
+    if (!cfg || !form) return false;
     setBusy(true);
     setError("");
     try {
@@ -137,149 +193,177 @@ function Volumes({ project, container }: { project: Project; container: Containe
         config: { ...cfg, form: { ...form, volumes: next } },
       });
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? m.savedDraft : m.noChanges);
-      setAdding("");
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      return true;
     } catch (err) {
       setError(errorMessage(err));
+      return false;
     } finally {
       setBusy(false);
     }
   };
   const remove = async (target: string) => {
-    if (await confirmAction(m.removeConfirm(target), { action: m.remove, danger: true })) saveTargets(targets.filter((x) => x !== target));
+    if (await confirmAction(m.removeConfirm(target), { action: m.remove, danger: true })) await saveTargets(targets.filter((x) => x !== target));
   };
+  // removableMount：这个卷里还在配置中的挂载，取消挂载要的就是它。
+  const removableMount = (v: VolumeInfo) => (form ? v.mounts.find((x) => targets.includes(x.target)) : undefined);
+  return { volumes, form, targets, saveTargets, remove, removableMount, busy, error };
+}
+
+// BrowseVolume：文件管理页。卷名和能否取消挂载从卷列表来，所以直接打开链接也能用。
+function BrowseVolume({ project, container, volume, onClose }: { project: Project; container: Container; volume: string; onClose: () => void }) {
+  const nodes = useNodes();
+  const v = useVolumes(project, container, nodes);
+  const info = v.volumes.data?.volumes.find((x) => x.name === volume);
+  const mount = info && v.removableMount(info);
+  return (
+    <div className="grid min-w-0 gap-4">
+      {!nodes.pending && !nodes.loadError && !nodes.online(container.nodeId) && <Notice tone="warning">{t.projectData.volumes.nodeOffline}</Notice>}
+      {v.error && <Alert>{v.error}</Alert>}
+      <VolumeFiles
+        project={project}
+        container={container}
+        volume={volume}
+        label={info ? volumeLabel(info) : volume}
+        onClose={onClose}
+        unmount={mount && { disabled: v.busy, onSelect: () => v.remove(mount.target) }}
+      />
+    </div>
+  );
+}
+
+function Volumes({ project, container, onBrowse }: { project: Project; container: Container; onBrowse: (volume: string) => void }) {
+  const nodes = useNodes();
+  const { isViewer } = useRole();
+  const m = t.projectData.volumes;
+  const online = nodes.online(container.nodeId);
+  const deployed = container.deployedVersion > 0n;
+  const { volumes, form, targets, saveTargets, removableMount, busy, error } = useVolumes(project, container, nodes);
+  const [adding, setAdding] = useState(false);
+  const [path, setPath] = useState("");
+
+  const deployedTargets = new Set((volumes.data?.volumes ?? []).flatMap((v) => v.mounts.map((x) => x.target)));
+  const pendingAdd = targets.filter((x) => !deployedTargets.has(x));
   const disk = volumes.data;
+  const closeAdd = () => {
+    setAdding(false);
+    setPath("");
+  };
+
+  const sub = (v: VolumeInfo) => {
+    const mounts = v.mounts.map((x) => (container.kind === "group" ? `${x.service}: ${x.target}` : x.target)).join(", ");
+    const files = m.files(Number(v.files));
+    const removing = form && v.kind === "managed" && v.mounts.length > 0 && !removableMount(v);
+    const parts =
+      v.kind === "data"
+        ? [m.appFiles, mounts, files]
+        : v.kind === "unmanaged"
+          ? [mounts, m.kinds.unmanagedSub]
+          : v.kind === "orphan"
+            ? [mounts, m.kinds.orphanSub, files]
+            : [mounts, removing ? m.pendingRemove : "", files];
+    return parts.filter(Boolean).join(" · ");
+  };
 
   return (
     <Section
-      flush
       title={m.title}
-      description={disk && disk.diskTotalBytes > 0n ? m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes))) : m.description}
       help={m.help}
+      actions={
+        <>
+          {container.kind === "group" && <span>{m.composeHint}</span>}
+          {disk && disk.diskTotalBytes > 0n && <span>{m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes)))}</span>}
+          {form && !isViewer && (
+            <Button variant="outline" onClick={() => setAdding(true)}>
+              <Plus />
+              {m.addDir}
+            </Button>
+          )}
+        </>
+      }
     >
-      {error && <Alert className="mb-3">{error}</Alert>}
-      {container.kind === "group" && <p className="mb-3 text-[13px] text-muted-foreground">{m.composeHint}</p>}
-      {!deployed ? (
-        <EmptyRow>{m.notDeployed}</EmptyRow>
-      ) : !online ? (
-        <EmptyRow>{m.nodeOffline}</EmptyRow>
-      ) : volumes.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
-      ) : volumes.error ? (
-        <Alert>{errorMessage(volumes.error)}</Alert>
-      ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{m.columns.name}</Th>
-              <Th>{m.columns.mounts}</Th>
-              <Th>{m.columns.size}</Th>
-              <Th className="hidden md:table-cell">{m.columns.modified}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {volumes.data.volumes.map((v) => {
-              const removable = form && v.mounts.find((x) => targets.includes(x.target));
-              const removing = form && v.kind === "managed" && v.mounts.length > 0 && !removable;
-              const label = v.kind === "data" ? "data/" : v.name;
-              return (
-                <tr key={v.name}>
-                  <Td>
-                    <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs" title={v.hostPath}>
-                      {label}
-                      {v.kind === "unmanaged" && (
-                        <Badge tone="warning" className="font-sans" title={m.kinds.unmanagedHint}>
-                          {m.kinds.unmanaged}
-                        </Badge>
-                      )}
-                      {v.kind === "orphan" && (
-                        <Badge className="font-sans" title={m.kinds.orphanHint}>
-                          {m.kinds.orphan}
-                        </Badge>
-                      )}
-                      {removing && <Badge tone="warning" className="font-sans">{m.pendingRemove}</Badge>}
-                    </div>
-                  </Td>
-                  <Td className="font-mono text-xs text-muted-foreground">
-                    {v.mounts.length === 0
-                      ? "—"
-                      : v.mounts.map((x) => (
-                          <div key={x.service + x.target}>
-                            {container.kind === "group" && `${x.service}: `}
-                            {x.target}
-                          </div>
-                        ))}
-                  </Td>
-                  <Td className="text-[13px] whitespace-nowrap">
-                    {v.kind === "unmanaged" ? "—" : `${v.partial ? ">" : ""}${fmtBytes(Number(v.sizeBytes))}`}
-                    {v.kind !== "unmanaged" && <span className="ml-1.5 text-xs text-muted-foreground">{m.files(Number(v.files))}</span>}
-                  </Td>
-                  <Td className="hidden text-[13px] text-muted-foreground md:table-cell" title={formatDateTime(toDate(v.modified))}>
-                    {v.modified ? timeAgo(toDate(v.modified)) : "—"}
-                  </Td>
-                  <Td className="text-right whitespace-nowrap">
-                    {v.kind !== "unmanaged" && !isViewer && (
-                      <Button size="xs" variant="ghost" onClick={() => setBrowsing({ volume: v.name, label })}>
-                        {m.browse}
-                      </Button>
-                    )}
-                    {removable && !isViewer && (
-                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => remove(removable.target)}>
-                        {m.remove}
-                      </Button>
-                    )}
-                  </Td>
-                </tr>
-              );
-            })}
-            {pendingAdd.map((target) => (
-              <tr key={target}>
-                <Td className="text-xs text-muted-foreground">—</Td>
-                <Td className="font-mono text-xs">
-                  {target}
-                  <Badge tone="warning" className="ml-1.5 font-sans">{m.pendingAdd}</Badge>
-                </Td>
-                <Td className="text-[13px]">—</Td>
-                <Td className="hidden md:table-cell" />
-                <Td className="text-right">
-                  <Button size="xs" variant="ghost" disabled={busy} onClick={() => saveTargets(targets.filter((x) => x !== target))}>
-                    {t.common.actions.cancel}
-                  </Button>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-      {form && !isViewer && (
+      {adding && (
         <form
-          className="mt-3 flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
+          className="grid gap-2"
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (adding.trim()) saveTargets([...targets, adding.trim()]);
+            if (path.trim() && (await saveTargets([...targets, path.trim()]))) closeAdd();
           }}
         >
-          <Input
-            value={adding}
-            onChange={(e) => setAdding(e.target.value)}
-            placeholder={m.addPlaceholder}
-            aria-label={m.addLabel}
-            required
-            pattern="/.*"
-            title={m.addTitle}
-            className="h-8 max-w-64 font-mono text-[13px]"
-          />
-          <Button type="submit" size="sm" variant="outline" disabled={busy}>
-            {busy && <Spinner />}
-            {m.add}
-          </Button>
-          {container.hasDraft && <span className="text-xs text-muted-foreground">{m.deployHint}</span>}
+          <div className="flex items-center gap-2">
+            <Input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder={m.addPlaceholder} aria-label={m.addLabel} required pattern="/.*" title={m.addTitle} className="min-w-0 flex-1" />
+            <Button type="submit" disabled={busy}>
+              {busy && <Spinner />}
+              {t.common.actions.add}
+            </Button>
+            <Button variant="ghost" onClick={closeAdd}>
+              {t.common.actions.cancel}
+            </Button>
+          </div>
+          <p className="text-[13px] leading-5 text-muted-foreground">
+            {m.addHint}
+            {container.hasDraft && ` ${m.deployHint}`}
+          </p>
         </form>
       )}
-      {browsing && <VolumeFiles project={project} container={container} volume={browsing.volume} label={browsing.label} onClose={() => setBrowsing(null)} />}
+      {error && <Alert>{error}</Alert>}
+      {!deployed ? (
+        <p className="text-muted-foreground">{m.notDeployed}</p>
+      ) : nodes.pending ? (
+        <RowsSkeleton />
+      ) : nodes.loadError ? (
+        <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />
+      ) : !online ? (
+        <p className="text-muted-foreground">{m.nodeOffline}</p>
+      ) : volumes.isPending ? (
+        <RowsSkeleton />
+      ) : volumes.error ? (
+        <QueryError error={errorMessage(volumes.error)} onRetry={() => volumes.refetch()} />
+      ) : volumes.data.volumes.length === 0 && pendingAdd.length === 0 ? (
+        <EmptyRow>{m.empty}</EmptyRow>
+      ) : (
+        <List>
+          {volumes.data.volumes.map((v) => (
+            <Row
+              key={v.name}
+              title={
+                <span className="truncate" title={v.hostPath}>
+                  {volumeLabel(v)}
+                </span>
+              }
+              sub={
+                <span title={v.kind === "unmanaged" ? m.kinds.unmanagedHint : v.kind === "orphan" ? m.kinds.orphanHint : undefined}>{sub(v)}</span>
+              }
+              cols={[
+                { content: v.kind === "unmanaged" ? "" : `${v.partial ? ">" : ""}${fmtBytes(Number(v.sizeBytes))}`, num: true },
+                { content: v.kind !== "unmanaged" && v.modified ? <span title={formatDateTime(toDate(v.modified))}>{timeAgo(toDate(v.modified))}</span> : "" },
+              ]}
+              actions={
+                v.kind !== "unmanaged" && !isViewer ? (
+                  <Button variant="ghost" size="row" onClick={() => onBrowse(v.name)}>
+                    {m.browse}
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+          {pendingAdd.map((target) => (
+            <Row
+              key={target}
+              title={<span className="truncate">{target}</span>}
+              sub={<span className="text-warning-text">{m.pendingAdd}</span>}
+              cols={[{ content: "", num: true }, { content: "" }]}
+              actions={
+                !isViewer ? (
+                  <Button variant="ghost" size="row" disabled={busy} onClick={() => saveTargets(targets.filter((x) => x !== target))}>
+                    {t.common.actions.cancel}
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+        </List>
+      )}
     </Section>
   );
 }
@@ -296,27 +380,23 @@ function Snapshots({
   run: Run;
 }) {
   const nodes = useNodes();
+  const s = t.projectData.snapshots;
   const deployed = container.deployedVersion > 0n;
   const online = nodes.online(container.nodeId);
   return (
     <Section
-      flush
-      title={t.projectData.snapshots.title}
-      description={
-        <>
-          {t.projectData.snapshots.description} {t.projectData.snapshots.schedule(project.settings?.snapshotIntervalMinutes || 60)}{" "}
-          <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="underline underline-offset-2">
-            {t.projectData.snapshots.scheduleLink}
-          </Link>
-        </>
-      }
-      help={t.projectData.snapshots.help}
+      title={s.title}
+      help={s.help}
       actions={
-        deployed &&
-        online && (
-          <>
+        <>
+          <span>
+            {s.scheduleShort(project.settings?.snapshotIntervalMinutes || 60)} ·{" "}
+            <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="hover:underline">
+              {s.scheduleEdit}
+            </Link>
+          </span>
+          {deployed && online && (
             <Button
-              size="sm"
               variant="outline"
               disabled={run.busy}
               onClick={() =>
@@ -329,29 +409,29 @@ function Snapshots({
               }
             >
               {run.busy && <Spinner />}
-              {t.projectData.snapshots.create}
+              {s.create}
             </Button>
-          </>
-        )
+          )}
+        </>
       }
     >
       {!deployed ? (
-        <EmptyRow>{t.projectData.snapshots.notDeployed}</EmptyRow>
+        <p className="text-muted-foreground">{s.notDeployed}</p>
+      ) : nodes.pending ? (
+        <RowsSkeleton />
+      ) : nodes.loadError ? (
+        <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />
       ) : !online ? (
-        <EmptyRow>{t.projectData.snapshots.nodeOffline}</EmptyRow>
+        <p className="text-muted-foreground">{s.nodeOffline}</p>
       ) : (
-        <SnapshotList
-          project={project}
-          container={container}
-          busy={run.busy}
-          run={run.run}
-        />
+        <SnapshotList project={project} container={container} busy={run.busy} run={run.run} />
       )}
     </Section>
   );
 }
 
-function SnapshotTable({
+// SnapshotRows：一行是绝对时间加相对时间、类型、大小、版本和操作。卷和快照共用一套列位。
+function SnapshotRows({
   snapshots,
   action,
 }: {
@@ -362,63 +442,50 @@ function SnapshotTable({
     version: bigint;
     size: bigint;
   }[];
-  action: (id: string, kind: string) => React.ReactNode;
+  action: (id: string) => React.ReactNode;
 }) {
+  const s = t.projectData.snapshots;
   // 默认只列最近几份，其余收起。
   const [all, setAll] = useState(false);
-  if (snapshots.length === 0) return <EmptyRow>{t.projectData.snapshots.empty}</EmptyRow>;
+  if (snapshots.length === 0) return <EmptyRow>{s.empty}</EmptyRow>;
   const shown = all ? snapshots : snapshots.slice(0, 6);
   return (
     <>
-      <Table compact>
-        <thead>
-          <tr>
-            <Th>{t.projectData.snapshots.kind}</Th>
-            <Th>{t.projectData.snapshots.time}</Th>
-            <Th>{t.projectData.snapshots.version}</Th>
-            <Th>{t.projectData.snapshots.size}</Th>
-            <Th />
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((sn) => (
-            <tr key={sn.id}>
-              <Td className="text-[13px]">
-                <Badge
-                  tone={
-                    sn.kind === "scheduled" || sn.kind === "manual"
-                      ? "neutral"
-                      : "info"
-                  }
-                >
-                  {snapshotKinds[sn.kind] ?? sn.kind}
-                </Badge>
-              </Td>
-              <Td
-                className="text-[13px] text-muted-foreground"
-                title={formatDateTime(toDate(sn.time))}
-              >
-                {timeAgo(toDate(sn.time))}
-              </Td>
-              <Td className="font-mono text-xs text-muted-foreground">
-                {sn.version > 0n ? `v${sn.version}` : "—"}
-              </Td>
-              <Td className="font-mono text-xs text-muted-foreground">
-                {fmtBytes(Number(sn.size))}
-              </Td>
-              <Td className="text-right">{action(sn.id, sn.kind)}</Td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+      <List>
+        {shown.map((sn) => (
+          <Row
+            key={sn.id}
+            title={
+              <>
+                <span className="shrink-0" title={formatDateTime(toDate(sn.time))}>
+                  {snapshotTime(toDate(sn.time))}
+                </span>
+                <span className="truncate text-muted-foreground">{timeAgo(toDate(sn.time))}</span>
+              </>
+            }
+            cols={[
+              { content: snapshotKinds[sn.kind] ?? sn.kind },
+              { content: fmtBytes(Number(sn.size)), num: true },
+              { content: sn.version > 0n ? `v${sn.version}` : "" },
+            ]}
+            actions={
+              sn.kind === "scheduled" || sn.kind === "manual" ? (
+                action(sn.id)
+              ) : (
+                <span className="text-muted-foreground" title={s.viaVersionHint}>
+                  {s.viaVersion}
+                </span>
+              )
+            }
+          />
+        ))}
+      </List>
       {snapshots.length > shown.length && (
-        <button
-          type="button"
-          className="mt-3 cursor-pointer text-[13px] text-muted-foreground hover:text-foreground"
-          onClick={() => setAll(true)}
-        >
-          {t.projectData.snapshots.showAll(snapshots.length)}
-        </button>
+        <div>
+          <Button readOnlyOk variant="ghost" className="-ml-3" onClick={() => setAll(true)}>
+            {s.showAll(snapshots.length)}
+          </Button>
+        </div>
       )}
     </>
   );
@@ -442,240 +509,193 @@ function SnapshotList({
     queryFn: () =>
       projectClient.listSnapshots({ projectId: project.id, container }),
   });
-  if (snapshots.isPending) {
-    return (
-      <EmptyRow>
-        <Spinner />
-      </EmptyRow>
-    );
-  }
-  if (snapshots.error)
-    return <Alert className="mb-4">{errorMessage(snapshots.error)}</Alert>;
+  if (snapshots.isPending) return <RowsSkeleton />;
+  if (snapshots.error) return <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />;
   return (
-    <SnapshotTable
+    <SnapshotRows
       snapshots={snapshots.data.snapshots}
-      action={(id, kind) =>
-        kind !== "scheduled" && kind !== "manual" ? (
-          <span className="text-xs text-muted-foreground" title={t.projectData.snapshots.viaVersionHint}>
-            {t.projectData.snapshots.viaVersion}
-          </span>
-        ) : (
-          <Button
-            size="xs"
-            variant="ghost"
-            disabled={busy}
-            onClick={async () =>
-              (await confirmAction(t.projectData.snapshots.restoreConfirm(container), { action: t.projectData.snapshots.restore, danger: true })) &&
-              run(() =>
-                projectClient.restoreSnapshot({
-                  projectId: project.id,
-                  container,
-                  snapshotId: id,
-                }),
-              )
-            }
-          >
-            {t.projectData.snapshots.restore}
-          </Button>
-        )
-      }
+      action={(id) => (
+        <Button
+          variant="ghost"
+          size="row"
+          disabled={busy}
+          onClick={async () =>
+            (await confirmAction(t.projectData.snapshots.restoreConfirm(container), { action: t.projectData.snapshots.restore, danger: true })) &&
+            run(() =>
+              projectClient.restoreSnapshot({
+                projectId: project.id,
+                container,
+                snapshotId: id,
+              }),
+            )
+          }
+        >
+          {t.projectData.snapshots.restore}
+        </Button>
+      )}
     />
   );
 }
 
 // ---- 备份节点 ----
 
-function Backup({
-  project,
-  container,
-  run,
-}: {
-  project: Project;
-  container: Container;
-  run: Run;
-}) {
-  const queryClient = useQueryClient();
-  const nodes = useNodes();
-  const [nodeId, setNodeId] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+// BackupRow：还没有备份节点时的一行。
+function BackupRow({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const b = t.projectData.backup;
+  const [open, setOpen] = useState(false);
   const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const available = !container.failover && candidates.length > 0;
+  return (
+    <>
+      <SettingRow label={b.title} help={b.help} description={container.failover ? b.hasFailover : candidates.length === 0 ? b.noCandidates : b.unset}>
+        {available ? (
+          <Button variant="outline" onClick={() => setOpen(true)}>
+            {t.projectData.setUp}
+          </Button>
+        ) : null}
+      </SettingRow>
+      {open && <BackupDialog project={project} container={container} nodes={nodes} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function BackupDialog({ project, container, nodes, onClose }: { project: Project; container: Container; nodes: Nodes; onClose: () => void }) {
+  const b = t.projectData.backup;
+  const { busy, error, call } = useCall(project.id);
+  const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const [nodeId, setNodeId] = useState("");
   const choice = nodeId || candidates[0]?.id || "";
+  return (
+    <Dialog open onClose={onClose} title={b.setTitle} description={b.description}>
+      <form
+        className="grid gap-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (await call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: choice, deleteReplica: false }))) onClose();
+        }}
+      >
+        <Field label={b.node} htmlFor="backup-node">
+          <Select id="backup-node" value={choice} onChange={(e) => setNodeId(e.target.value)}>
+            {candidates.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {error && <Alert>{error}</Alert>}
+        <DialogActions>
+          <Button variant="outline" readOnlyOk onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={busy || !choice}>
+            {busy && <Spinner />}
+            {b.set}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+// BackupDetail：已设置备份节点：标签值列表，同步和取消在标题栏。
+function BackupDetail({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const b = t.projectData.backup;
+  const { busy, error, call } = useCall(project.id);
   const backup = container.backup;
   const sourceOnline = nodes.online(container.nodeId);
 
-  const call = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const setBackup = (id: string, deleteReplica = false) =>
-    call(() =>
-      projectClient.setBackupNode({
-        projectId: project.id,
-        container: container.name,
-        nodeId: id,
-        deleteReplica,
-      }),
-    );
-
-  let state: React.ReactNode = <span className="text-muted-foreground">—</span>;
-  if (backup?.syncing)
+  let state: React.ReactNode = <Status tone="neutral">{b.waitingFirstSync}</Status>;
+  if (!sourceOnline) state = <Status tone="neutral">{b.sourceOffline}</Status>;
+  else if (backup?.syncing)
     state = (
       <Status tone="info" pulse>
         {t.common.status.syncing}
       </Status>
     );
-  else if (backup?.lastError) state = <Status tone="danger">{t.projectData.backup.syncFailed}</Status>;
-  else if (backup?.lastSync) state = <Status tone="success">{t.projectData.backup.healthy}</Status>;
-  else if (container.backupNodeId)
-    state = <Status tone="neutral">{t.projectData.backup.waitingFirstSync}</Status>;
+  else if (backup?.lastError) state = <Status tone="danger">{b.syncFailed}</Status>;
+  else if (backup?.lastSync) state = <Status tone="success">{b.healthy}</Status>;
 
   return (
     <Section
-      title={t.projectData.backup.title}
-      description={t.projectData.backup.description}
-      help={t.projectData.backup.help}
+      title={b.title}
+      help={b.help}
+      actions={
+        <>
+          <Button
+            variant="outline"
+            disabled={busy || !sourceOnline || backup?.syncing}
+            title={sourceOnline ? undefined : b.sourceOffline}
+            onClick={() => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name }))}
+          >
+            {busy && <Spinner />}
+            {b.syncNow}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={async () =>
+              (await confirmAction(b.removeConfirm(container.name), { action: b.remove, danger: true })) &&
+              call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: "", deleteReplica: true }))
+            }
+          >
+            {b.remove}
+          </Button>
+        </>
+      }
     >
-      <FormBody>
-        {container.backupNodeId ? (
-          <>
-            <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-              <dt className="text-muted-foreground">{t.projectData.backup.node}</dt>
-              <dd>
-                {nodes.name(container.backupNodeId)}
-                {!nodes.online(container.backupNodeId) && (
-                  <Badge className="ml-2">{t.common.status.offline}</Badge>
-                )}
-              </dd>
-              <dt className="text-muted-foreground">{t.projectData.state}</dt>
-              <dd>
-                {sourceOnline ? (
-                  state
-                ) : (
-                  <span className="text-muted-foreground">
-                    {t.projectData.backup.sourceOffline}
-                  </span>
-                )}
-              </dd>
-              <dt className="text-muted-foreground">{t.projectData.lastSync}</dt>
-              <dd title={formatDateTime(toDate(backup?.lastSync))}>
-                {backup?.lastSync ? timeAgo(toDate(backup.lastSync)) : "—"}
-              </dd>
-            </dl>
-            {backup?.lastError && <Alert>{backup.lastError}</Alert>}
-            {error && <Alert>{error}</Alert>}
-            <FormActions>
-              {!sourceOnline && container.deployedVersion > 0n && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setRestoring(!restoring)}
-                  disabled={run.busy}
-                >
-                  {t.projectData.backup.restoreFromBackup}
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={async () =>
-                  (await confirmAction(t.projectData.backup.removeConfirm(container.name), { action: t.projectData.backup.remove, danger: true })) &&
-                  setBackup("", true)
-                }
-              >
-                {t.projectData.backup.remove}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy || !sourceOnline || backup?.syncing}
-                onClick={() =>
-                  call(() =>
-                    projectClient.syncBackup({
-                      projectId: project.id,
-                      container: container.name,
-                    }),
-                  )
-                }
-              >
-                {busy && <Spinner />}
-                {t.projectData.backup.syncNow}
-              </Button>
-            </FormActions>
-            {restoring && (
-              <RestoreFromBackup
-                project={project}
-                container={container}
-                run={run}
-              />
-            )}
-          </>
-        ) : container.failover ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t.projectData.backup.hasFailover}
-          </p>
-        ) : (
-          <>
-            {candidates.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground">
-                {t.projectData.backup.noCandidates}
-              </p>
-            ) : (
-              <div className="flex flex-wrap items-end gap-3">
-                <Field label={t.projectData.backup.nodeLabel} htmlFor="backup-node">
-                  <Select
-                    id="backup-node"
-                    value={choice}
-                    onChange={(e) => setNodeId(e.target.value)}
-                    className="min-w-48"
-                  >
-                    {candidates.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Button
-                  size="sm"
-                  disabled={busy || !choice}
-                  onClick={() => setBackup(choice)}
-                >
-                  {busy && <Spinner />}
-                  {t.projectData.backup.set}
-                </Button>
-              </div>
-            )}
-            {error && <Alert>{error}</Alert>}
-          </>
-        )}
-      </FormBody>
+      <KeyValue
+        items={[
+          [
+            b.node,
+            <span>
+              {nodes.name(container.backupNodeId)}
+              {!nodes.online(container.backupNodeId) && <span className="text-muted-foreground"> {t.common.status.offline}</span>}
+            </span>,
+          ],
+          // 所在节点离线时最上面已有提示，这里不再重复状态。
+          ...(sourceOnline || container.deployedVersion === 0n ? ([[t.projectData.state, state]] as [React.ReactNode, React.ReactNode][]) : []),
+          [t.projectData.lastSync, <span title={formatDateTime(toDate(backup?.lastSync))}>{backup?.lastSync ? timeAgo(toDate(backup.lastSync)) : "—"}</span>],
+        ]}
+      />
+      {backup?.lastError && (
+        <Notice tone="danger" title={b.syncFailed}>
+          {backup.lastError}
+        </Notice>
+      )}
+      {error && <Alert>{error}</Alert>}
     </Section>
   );
 }
 
-function RestoreFromBackup({
-  project,
-  container,
-  run,
-}: {
-  project: Project;
-  container: Container;
-  run: Run;
-}) {
-  const nodes = useNodes();
-  const [dir, setDir] = useState("");
-  const [defDir, setDefDir] = useState("");
+// noticeRow：页面最上面带主按钮的提示：一行高 32，文字和按钮上下居中。
+const noticeRow = "md:py-1.5 md:[&>div:last-child]:-my-1.5";
+
+// RestoreNotice：所在节点离线、有备份节点时最上面的提示。
+function RestoreNotice({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
+  const [open, setOpen] = useState(false);
+  const backupName = nodes.name(container.backupNodeId);
+  return (
+    <>
+      <Notice
+        tone="warning"
+        className={noticeRow}
+        title={<span className="text-warning-text">{t.projectData.placement.offline(nodes.name(container.nodeId))}</span>}
+        actions={
+          <Button disabled={run.busy} onClick={() => setOpen(true)}>
+            {t.projectData.restore.latest}
+          </Button>
+        }
+      >
+        {t.projectData.restore.hint(backupName)}
+      </Notice>
+      {open && <RestoreDialog project={project} container={container} nodes={nodes} run={run} snapshotId="" onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function RestorableSnapshots({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
+  const [restoring, setRestoring] = useState<string | null>(null);
   const snapshots = useQuery({
     queryKey: ["backup-snapshots", project.id, container.name],
     queryFn: () =>
@@ -684,86 +704,113 @@ function RestoreFromBackup({
         container: container.name,
       }),
   });
-  const restore = async (snapshotId: string) =>
-    (await confirmAction(
-      t.projectData.restore.confirm(
-        nodes.name(container.backupNodeId),
-        container.name,
-      ),
-      { action: t.projectData.restore.fromSnapshot, danger: true },
-    )) &&
-    run.run(() =>
-      projectClient.restoreFromBackup({
-        projectId: project.id,
-        container: container.name,
-        snapshotId,
-        dir: dir.trim() || defDir,
-      }),
-    );
   return (
-    <div className="grid gap-3 rounded-md bg-subtle">
-      <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
-        <Field
-          label={t.projectData.restore.dir}
-          htmlFor="restore-dir"
-          help={t.projectData.dirHelp}
-        >
-          <DirInput
-            id="restore-dir"
-            nodeId={container.backupNodeId}
-            project={project}
-            container={container.name}
-            value={dir}
-            onChange={setDir}
-            onDefault={setDefDir}
-          />
-        </Field>
-        <Button size="sm" disabled={run.busy} onClick={() => restore("")}>
-          {t.projectData.restore.latest}
-        </Button>
-      </div>
+    <Section title={t.projectData.restore.snapshots}>
       {snapshots.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
+        <RowsSkeleton />
       ) : snapshots.error ? (
-        <Alert className="mx-4 mb-4">{errorMessage(snapshots.error)}</Alert>
+        <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />
       ) : (
-        <SnapshotTable
+        <SnapshotRows
           snapshots={snapshots.data.snapshots}
-          action={(id, kind) =>
-            (kind === "scheduled" || kind === "manual") && (
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={run.busy}
-                onClick={() => restore(id)}
-              >
-                {t.projectData.restore.fromSnapshot}
-              </Button>
-            )
-          }
+          action={(id) => (
+            <Button variant="ghost" size="row" disabled={run.busy} onClick={() => setRestoring(id)}>
+              {t.projectData.snapshots.restore}
+            </Button>
+          )}
         />
       )}
-    </div>
+      {restoring !== null && <RestoreDialog project={project} container={container} nodes={nodes} run={run} snapshotId={restoring} onClose={() => setRestoring(null)} />}
+    </Section>
+  );
+}
+
+// 确认文案的第一句（到第一个问号）作标题，其余作说明，和确认框的写法一致。
+function splitConfirm(message: string): [string, string] {
+  const i = message.search(/[？?]/); // i18n-ignore
+  return i < 0 ? [message, ""] : [message.slice(0, i + 1), message.slice(i + 1).trim()];
+}
+
+// RestoreDialog：在备份节点上恢复的确认框，多一个恢复目录，所以不能用 confirmAction。snapshotId 为空表示最新快照。
+function RestoreDialog({ project, container, nodes, run, snapshotId, onClose }: { project: Project; container: Container; nodes: Nodes; run: Run; snapshotId: string; onClose: () => void }) {
+  const r = t.projectData.restore;
+  const [dir, setDir] = useState("");
+  const def = useDefaultDir(container.backupNodeId, project.id, project.networkName, container.name);
+  const [title, body] = splitConfirm(r.confirm(nodes.name(container.backupNodeId), container.name));
+  return (
+    <AlertDialog open onOpenChange={(v) => !v && onClose()}>
+      <AlertDialogContent>
+        <div className="grid gap-1">
+          <AlertDialogTitle className="text-base">{title}</AlertDialogTitle>
+          <AlertDialogDescription>{body}</AlertDialogDescription>
+        </div>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onClose();
+            run.run(() =>
+              projectClient.restoreFromBackup({
+                projectId: project.id,
+                container: container.name,
+                snapshotId,
+                dir: dir.trim() || def,
+              }),
+            );
+          }}
+        >
+          <Field label={r.dir} htmlFor="restore-dir" help={t.projectData.dirHelp}>
+            <Input id="restore-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} />
+          </Field>
+          <DialogActions>
+            <AlertDialogCancel asChild>
+              <Button variant="outline" readOnlyOk>
+                {t.common.actions.cancel}
+              </Button>
+            </AlertDialogCancel>
+            <Button type="submit" variant="destructive" disabled={run.busy}>
+              {snapshotId ? r.fromSnapshot : r.latest}
+            </Button>
+          </DialogActions>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
 // ---- 更换节点 ----
 
-function Placement({
-  project,
-  container,
-  run,
-}: {
-  project: Project;
-  container: Container;
-  run: Run;
-}) {
-  const nodes = useNodes();
+// PlacementRow：所在节点一行。在线时迁移；离线时只能重新部署（数据不跟过去），红字按钮。
+function PlacementRow({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
+  const p = t.projectData.placement;
+  const [open, setOpen] = useState(false);
+  const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const online = nodes.online(container.nodeId);
+  const name = nodes.name(container.nodeId);
+  const note = container.failover ? p.hasFailover : candidates.length === 0 ? p.noCandidates : online ? "" : p.redeployHint;
+  const available = !container.failover && candidates.length > 0;
+  return (
+    <>
+      <SettingRow
+        label={p.currentNode}
+        help={p.help}
+        description={[online ? name : p.offline(name), container.dir, note].filter(Boolean).join(" · ")}
+      >
+        {available ? (
+          <Button variant={online ? "outline" : "destructive-outline"} disabled={run.busy} onClick={() => setOpen(true)}>
+            {online ? p.migrate : p.redeployShort}
+          </Button>
+        ) : null}
+      </SettingRow>
+      {open && <PlacementDialog project={project} container={container} nodes={nodes} run={run} online={online} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function PlacementDialog({ project, container, nodes, run, online, onClose }: { project: Project; container: Container; nodes: Nodes; run: Run; online: boolean; onClose: () => void }) {
+  const p = t.projectData.placement;
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
-  const [defDir, setDefDir] = useState("");
   const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
   const choice =
     nodeId ||
@@ -772,121 +819,57 @@ function Placement({
       ? container.backupNodeId
       : candidates[0]?.id) ||
     "";
-  const online = nodes.online(container.nodeId);
   const target = nodes.name(choice);
+  const def = useDefaultDir(choice, project.id, project.networkName, container.name);
+  const ref = { projectId: project.id, container: container.name, nodeId: choice, dir: dir.trim() || def };
 
-  const migrate = async () =>
-    (await confirmAction(t.projectData.placement.migrateConfirm(container.name, target), { action: t.projectData.placement.migrate })) &&
-    run.run(() =>
-      projectClient.migrateContainer({
-        projectId: project.id,
-        container: container.name,
-        nodeId: choice,
-        dir: dir.trim() || defDir,
-      }),
-    );
-  const redeploy = async () =>
-    (await confirmAction(t.projectData.placement.redeployConfirm(container.name, target), { action: t.projectData.placement.redeploy, danger: true })) &&
-    run.run(() =>
-      projectClient.redeployElsewhere({
-        projectId: project.id,
-        container: container.name,
-        nodeId: choice,
-        dir: dir.trim() || defDir,
-      }),
-    );
+  const submit = async () => {
+    if (online) {
+      if (!(await confirmAction(p.migrateConfirm(container.name, target), { action: p.migrate }))) return;
+      onClose();
+      run.run(() => projectClient.migrateContainer(ref));
+    } else {
+      if (!(await confirmAction(p.redeployConfirm(container.name, target), { action: p.redeploy, danger: true }))) return;
+      onClose();
+      run.run(() => projectClient.redeployElsewhere(ref));
+    }
+  };
 
   return (
-    <Section
-      title={t.projectData.placement.title}
-      description={
-        online
-          ? t.projectData.placement.description
-          : t.projectData.placement.descriptionOffline
-      }
-      help={t.projectData.placement.help}
-    >
-      <div className="grid gap-4">
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">{t.projectData.placement.currentNode}</dt>
-          <dd>
-            {nodes.name(container.nodeId)}
-            {!online && <Badge className="ml-2">{t.common.status.offline}</Badge>}
-          </dd>
-          <dt className="text-muted-foreground">{t.projectData.placement.dir}</dt>
-          <dd className="font-mono text-xs">{container.dir}</dd>
-        </dl>
-        {!online && container.backupNodeId && (
-          <Notice tone="warning">
-            {t.projectData.placement.backupHint}
-          </Notice>
-        )}
-        {container.failover ? (
-          <p className="border-t pt-4 text-[13px] text-muted-foreground">
-            {t.projectData.placement.hasFailover}
-          </p>
-        ) : candidates.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t.projectData.placement.noCandidates}
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-end gap-3 border-t pt-4">
-            <Field label={t.projectData.placement.target} htmlFor="move-node">
-              <Select
-                id="move-node"
-                value={choice}
-                onChange={(e) => setNodeId(e.target.value)}
-                className="min-w-48"
-              >
-                {candidates.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name}
-                    {n.id === container.backupNodeId
-                                          ? t.projectData.placement.backupSuffix
-                                          : ""}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field
-              label={t.projectData.placement.dir}
-              htmlFor="move-dir"
-              help={t.projectData.dirHelp}
-            >
-              <DirInput
-                id="move-dir"
-                nodeId={choice}
-                project={project}
-                container={container.name}
-                value={dir}
-                onChange={setDir}
-                onDefault={setDefDir}
-              />
-            </Field>
-            {online ? (
-              <Button
-                size="sm"
-                disabled={run.busy || !choice}
-                onClick={migrate}
-              >
-                {run.busy && <Spinner />}
-                {t.projectData.placement.migrate}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={run.busy || !choice}
-                onClick={redeploy}
-              >
-                {run.busy && <Spinner />}
-                {t.projectData.placement.redeploy}
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </Section>
+    <Dialog open onClose={onClose} title={online ? p.migrateTitle : p.redeployTitle} description={online ? p.description : p.redeployBody} className="max-w-[520px]">
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <FormRow>
+          <Field label={p.target} htmlFor="move-node">
+            <Select id="move-node" value={choice} onChange={(e) => setNodeId(e.target.value)}>
+              {candidates.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                  {n.id === container.backupNodeId ? p.backupSuffix : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={p.dir} htmlFor="move-dir" help={t.projectData.dirHelp}>
+            <Input id="move-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} />
+          </Field>
+        </FormRow>
+        <DialogActions>
+          <Button variant="outline" readOnlyOk onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" variant={online ? "default" : "destructive"} disabled={run.busy || !choice}>
+            {run.busy && <Spinner />}
+            {online ? p.migrate : p.redeployShort}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -899,17 +882,33 @@ function duration(ms: bigint) {
     : t.common.time.seconds(s);
 }
 
-function Failover({
-  project,
-  container,
-}: {
-  project: Project;
-  container: Container;
-}) {
-  const queryClient = useQueryClient();
-  const nodes = useNodes();
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+const standbyOf = (container: Container) => (container.failover?.a?.nodeId === container.nodeId ? container.failover?.b : container.failover?.a);
+
+// FailoverRow：还没有顶替时的一行。和备份节点互斥，做不了时写原因，没有按钮。
+function FailoverRow({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const f = t.projectData.failover;
+  const [open, setOpen] = useState(false);
+  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const available = !container.backupNodeId && standbys.length > 0;
+  return (
+    <>
+      <SettingRow label={f.title} help={f.setupHelp} description={container.backupNodeId ? f.hasBackup : standbys.length === 0 ? f.noCandidates : f.unset}>
+        {available ? (
+          <Button variant="outline" onClick={() => setOpen(true)}>
+            {t.projectData.setUp}
+          </Button>
+        ) : null}
+      </SettingRow>
+      {open && <FailoverDialog project={project} container={container} nodes={nodes} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+// FailoverDialog：设置顶替。只露节点、见证人和两个开关，目录和租约时长收在「高级设置」。
+function FailoverDialog({ project, container, nodes, onClose }: { project: Project; container: Container; nodes: Nodes; onClose: () => void }) {
+  const f = t.projectData.failover;
+  const { busy, error, call } = useCall(project.id);
+  const [advanced, setAdvanced] = useState(false);
   const [form, setForm] = useState({
     standby: "",
     dir: "",
@@ -918,378 +917,278 @@ function Failover({
     autoStateful: false,
     autoFailback: true,
   });
-  const [defDir, setDefDir] = useState("");
-  const [witness, setWitness] = useState("-");
-  const cfg = container.failover;
-  const holder = container.failoverHolder;
-  const standby = container.failoverStandby;
-  const ref = { projectId: project.id, container: container.name };
-
-  const call = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-      return true;
-    } catch (err) {
-      setError(errorMessage(err));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!cfg) {
-    const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
-    const standbyId = form.standby || standbys[0]?.id || "";
-    const witnesses = nodes.usable.filter(
-      (n) => n.id !== container.nodeId && n.id !== standbyId,
-    );
-    return (
-      <Section
-        title={t.projectData.failover.title}
-        description={t.projectData.failover.setupDescription}
-        help={t.projectData.failover.setupHelp}
-      >
-        {container.backupNodeId ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t.projectData.failover.hasBackup}
-          </p>
-        ) : standbys.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t.projectData.failover.noCandidates}
-          </p>
-        ) : (
-          <FormBody>
-            <FormRow>
-              <Field label={t.projectData.failover.standbyNode} htmlFor="fo-standby">
-                <Select
-                  id="fo-standby"
-                  value={standbyId}
-                  onChange={(e) =>
-                    setForm({ ...form, standby: e.target.value })
-                  }
-                >
-                  {standbys.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label={t.projectData.failover.standbyDir}
-                htmlFor="fo-dir"
-                help={t.projectData.dirHelp}
-              >
-                <DirInput
-                  id="fo-dir"
-                  nodeId={standbyId}
-                  project={project}
-                  container={container.name}
-                  value={form.dir}
-                  onChange={(v) => setForm({ ...form, dir: v })}
-                  onDefault={setDefDir}
-                />
-              </Field>
-            </FormRow>
-            <FormRow>
-              <Field
-                label={t.projectData.failover.witness}
-                htmlFor="fo-witness"
-                help={t.projectData.failover.witnessHelp}
-              >
-                <Select
-                  id="fo-witness"
-                  value={form.witness}
-                  onChange={(e) =>
-                    setForm({ ...form, witness: e.target.value })
-                  }
-                >
-                  <option value="">{t.projectData.thisPanel}</option>
-                  {witnesses.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label={t.projectData.failover.leaseSeconds}
-                htmlFor="fo-lease"
-                help={t.projectData.failover.leaseHelp}
-              >
-                <Input
-                  id="fo-lease"
-                  value={form.lease}
-                  onChange={(e) => setForm({ ...form, lease: e.target.value })}
-                  placeholder="30"
-                  inputMode="numeric"
-                />
-              </Field>
-            </FormRow>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <Check
-                checked={form.autoFailback}
-                onChange={(v) => setForm({ ...form, autoFailback: v })}
-                help={t.projectData.failover.autoFailbackHelp}
-              >
-                {t.projectData.failover.autoFailback}
-              </Check>
-              {container.stateful && (
-                <Check
-                  checked={form.autoStateful}
-                  onChange={(v) => setForm({ ...form, autoStateful: v })}
-                  help={t.projectData.failover.autoStatefulHelp}
-                >
-                  {t.projectData.failover.autoStateful}
-                </Check>
-              )}
-            </div>
-            {error && <Alert>{error}</Alert>}
-            <FormActions>
-              <Button
-                size="sm"
-                disabled={busy || !standbyId}
-                onClick={() =>
-                  call(() =>
-                    projectClient.setFailover({
-                      ...ref,
-                      standbyNodeId: standbyId,
-                      standbyDir: form.dir.trim() || defDir,
-                      witnessNodeId: form.witness,
-                      leaseSeconds: Number(form.lease || 0),
-                      autoStateful: form.autoStateful,
-                      autoFailback: form.autoFailback,
-                    }),
-                  )
-                }
-              >
-                {busy && <Spinner />}
-                {t.projectData.failover.set}
-              </Button>
-            </FormActions>
-          </FormBody>
-        )}
-      </Section>
-    );
-  }
-
-  const holderOnline = nodes.online(container.nodeId);
-  // 持有者上报的是最近一次同步给热备的时间，持有者离线时用热备记录的最近一次收到同步的时间。
-  const lastSync = holder?.lastSync ?? standby?.lastSync;
-  const standbyNode = cfg.a?.nodeId === container.nodeId ? cfg.b : cfg.a;
-  let state: React.ReactNode = <Status tone="neutral">—</Status>;
-  if (holder?.failingBack)
-    state = (
-      <Status tone="info" pulse>
-        {t.projectData.failover.failingBack}
-      </Status>
-    );
-  else if (holder?.role === "holder" && holder.leaseRemainingMs > 0n)
-    state = <Status tone="success">{t.common.status.running}</Status>;
-  else if (holder?.role === "holder")
-    state = <Status tone="danger">{t.projectData.failover.leaseLost}</Status>;
-  else if (!holderOnline && standby?.pendingConfirm)
-    state = (
-      <Status tone="warning">{t.projectData.failover.awaitingConfirm}</Status>
-    );
-  else if (!holderOnline)
-    state = <Status tone="warning">{t.projectData.failover.holderOffline}</Status>;
-  const witnessOptions = nodes.usable.filter(
-    (n) =>
-      n.id !== cfg.a?.nodeId &&
-      n.id !== cfg.b?.nodeId &&
-      (cfg.witnessIsPanel || n.id !== cfg.witness?.nodeId),
-  );
-
+  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const standbyId = form.standby || standbys[0]?.id || "";
+  const witnesses = nodes.usable.filter((n) => n.id !== container.nodeId && n.id !== standbyId);
+  // 目录收起时也要用默认值，所以在这里算，不放进折叠的内容里。
+  const def = useDefaultDir(standbyId, project.id, project.networkName, container.name);
   return (
-    <Section
-      title={t.projectData.failover.title}
-      description={t.projectData.failover.description}
-      help={t.projectData.failover.help}
-    >
-      <div className="grid gap-4">
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">{t.projectData.state}</dt>
-          <dd>{state}</dd>
-          <dt className="text-muted-foreground">{t.projectData.failover.runningNode}</dt>
-          <dd>
-            {nodes.name(container.nodeId)}
-            {cfg.a?.nodeId === container.nodeId ? (
-              <Badge className="ml-2">{t.projectData.failover.originalNode}</Badge>
-            ) : (
-              <Badge tone="warning" className="ml-2">
-                {t.projectData.failover.failedOver}
-              </Badge>
-            )}
-          </dd>
-          <dt className="text-muted-foreground">{t.projectData.failover.hotStandby}</dt>
-          <dd>
-            {standbyNode && nodes.name(standbyNode.nodeId, standbyNode.name)}
-            {standbyNode && !nodes.online(standbyNode.nodeId) && (
-              <Badge className="ml-2">{t.common.status.offline}</Badge>
-            )}
-          </dd>
-          <dt className="text-muted-foreground">{t.projectData.failover.witness}</dt>
-          <dd>
-            {!cfg.witnessIsPanel ? (
-              cfg.witness && nodes.name(cfg.witness.nodeId, cfg.witness.name)
-            ) : container.failoverWitnessSelf ? (
-              t.projectData.thisPanel
-            ) : (
-              <span
-                className="text-warning"
-                title={t.projectData.failover.oldPanelHint}
-              >
-                {t.projectData.failover.oldPanel}
-              </span>
-            )}
-          </dd>
-          <dt className="text-muted-foreground">{t.projectData.lastSync}</dt>
-          <dd title={formatDateTime(toDate(lastSync))}>
-            {lastSync
-              ? timeAgo(toDate(lastSync))
-              : t.projectData.failover.notSynced}
-          </dd>
-          <dt className="text-muted-foreground">{t.projectData.failover.lease}</dt>
-          <dd>
-            <span title={holder?.epoch ? t.projectData.failover.epoch(holder.epoch).trim() : undefined}>{t.common.time.seconds(cfg.leaseSeconds || 30)}</span>
-          </dd>
-          <dt className="text-muted-foreground">
-            {t.projectData.failover.autoFailbackLabel}
-          </dt>
-          <dd>
-            {cfg.autoFailback
-              ? t.projectData.failover.on
-              : t.projectData.failover.off}
-            {holder && holder.failbackInMs > 0n && (
-              <span className="ml-2 text-muted-foreground">
-                {t.projectData.failover.failbackIn(
-                  duration(holder.failbackInMs),
-                )}
-              </span>
-            )}
-          </dd>
-        </dl>
-        {standby?.pendingConfirm && (
-          <Notice
-            tone="warning"
-            title={t.projectData.failover.pendingTitle}
-            actions={
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={busy}
-                onClick={async () =>
-                  (await confirmAction(
-                    t.projectData.failover.confirmTakeoverPrompt(
-                      standbyNode ? nodes.name(standbyNode.nodeId, standbyNode.name) : "",
-                      container.name,
-                    ),
-                    { action: t.projectData.failover.confirmTakeover, danger: true },
-                  )) && call(() => projectClient.confirmTakeover(ref))
-                }
-              >
-                {t.projectData.failover.confirmTakeover}
-              </Button>
-            }
-          >
-            {t.projectData.failover.pendingBody}
-          </Notice>
-        )}
-        {(holder?.lastError || standby?.lastError) && (
-          <Alert>{holder?.lastError || standby?.lastError}</Alert>
-        )}
-        {error && <Alert>{error}</Alert>}
-        <div className="flex flex-wrap items-end gap-3 border-t pt-4">
-          <Field
-            label={t.projectData.failover.changeWitness}
-            htmlFor="fo-change-witness"
-          >
+    <Dialog open onClose={onClose} title={f.set} className="max-w-[520px]">
+      <form
+        className="grid gap-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const ok = await call(() =>
+            projectClient.setFailover({
+              projectId: project.id,
+              container: container.name,
+              standbyNodeId: standbyId,
+              standbyDir: form.dir.trim() || def,
+              witnessNodeId: form.witness,
+              leaseSeconds: Number(form.lease || 0),
+              autoStateful: form.autoStateful,
+              autoFailback: form.autoFailback,
+            }),
+          );
+          if (ok) onClose();
+        }}
+      >
+        <FormRow>
+          <Field label={f.standbyNode} htmlFor="fo-standby">
             <Select
-              id="fo-change-witness"
-              value={witness}
-              onChange={(e) => setWitness(e.target.value)}
-              className="min-w-40"
+              id="fo-standby"
+              value={standbyId}
+              // 见证人不能和顶替节点相同。
+              onChange={(e) => setForm({ ...form, standby: e.target.value, witness: form.witness === e.target.value ? "" : form.witness })}
             >
-              <option value="-" disabled>
-                {t.projectData.failover.select}
-              </option>
-              {!(cfg.witnessIsPanel && container.failoverWitnessSelf) && (
-                <option value="">{t.projectData.thisPanel}</option>
-              )}
-              {witnessOptions.map((n) => (
+              {standbys.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.name}
                 </option>
               ))}
             </Select>
           </Field>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy || witness === "-"}
-            onClick={() =>
-              call(() =>
-                projectClient.changeWitness({ ...ref, witnessNodeId: witness }),
-              ).then((ok) => ok && setWitness("-"))
-            }
-          >
-            {t.projectData.failover.change}
+          <Field label={f.witness} htmlFor="fo-witness" help={f.witnessHelp}>
+            <Select id="fo-witness" value={form.witness} onChange={(e) => setForm({ ...form, witness: e.target.value })}>
+              <option value="">{t.projectData.thisPanel}</option>
+              {witnesses.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </FormRow>
+        <div className="grid justify-items-start gap-2">
+          <Check checked={form.autoFailback} onChange={(v) => setForm({ ...form, autoFailback: v })} help={f.autoFailbackHelp}>
+            {f.autoFailback}
+          </Check>
+          {container.stateful && (
+            <Check checked={form.autoStateful} onChange={(v) => setForm({ ...form, autoStateful: v })} help={f.autoStatefulHelp}>
+              {f.autoStateful}
+            </Check>
+          )}
+        </div>
+        <Collapsible.Root open={advanced} onOpenChange={setAdvanced} className="grid gap-4">
+          <Collapsible.Trigger className="inline-flex cursor-pointer items-center gap-1 justify-self-start text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
+            <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90" : "size-4"} />
+            {advanced ? f.advanced : f.advancedHint}
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <FormRow>
+              <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
+                <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} />
+              </Field>
+              <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp}>
+                <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
+              </Field>
+            </FormRow>
+          </Collapsible.Content>
+        </Collapsible.Root>
+        {error && <Alert>{error}</Alert>}
+        <DialogActions>
+          <Button variant="outline" readOnlyOk onClick={onClose}>
+            {t.common.actions.cancel}
           </Button>
+          <Button type="submit" disabled={busy || !standbyId}>
+            {busy && <Spinner />}
+            {f.set}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+// TakeoverNotice：有状态容器等待确认顶替，放在页面最上面。
+function TakeoverNotice({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const f = t.projectData.failover;
+  const { busy, error, call } = useCall(project.id);
+  const standby = standbyOf(container);
+  return (
+    <div className="grid gap-2">
+      <Notice
+        tone="warning"
+        className={noticeRow}
+        title={<span className="text-warning-text">{f.pendingTitle}</span>}
+        actions={
           <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto"
             disabled={busy}
             onClick={async () =>
-              (await confirmAction(
-                t.projectData.failover.clearConfirm(
-                  container.name,
-                  nodes.name(container.nodeId),
-                ),
-                { action: t.projectData.failover.clear, danger: true },
-              )) && call(() => projectClient.clearFailover(ref))
+              (await confirmAction(f.confirmTakeoverPrompt(standby ? nodes.name(standby.nodeId, standby.name) : "", container.name), { action: f.confirmTakeover, danger: true })) &&
+              call(() => projectClient.confirmTakeover({ projectId: project.id, container: container.name }))
             }
           >
-            {t.projectData.failover.clear}
+            {busy && <Spinner />}
+            {f.confirmTakeover}
           </Button>
-        </div>
-      </div>
+        }
+      >
+        {f.pendingBody(nodes.name(container.nodeId))}
+      </Notice>
+      {error && <Alert>{error}</Alert>}
+    </div>
+  );
+}
+
+// FailoverDetail：已设置顶替：标签值列表，取消在标题栏，见证人旁边是更换。
+function FailoverDetail({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const f = t.projectData.failover;
+  const { busy, error, call } = useCall(project.id);
+  const [changingWitness, setChangingWitness] = useState(false);
+  const cfg = container.failover!;
+  const holder = container.failoverHolder;
+  const standby = container.failoverStandby;
+  const ref = { projectId: project.id, container: container.name };
+
+  const holderOnline = nodes.online(container.nodeId);
+  // 持有者上报的是最近一次同步给热备的时间，持有者离线时用热备记录的最近一次收到同步的时间。
+  const lastSync = holder?.lastSync ?? standby?.lastSync;
+  const standbyNode = standbyOf(container);
+  let state: React.ReactNode = <Status tone="neutral">—</Status>;
+  if (holder?.failingBack)
+    state = (
+      <Status tone="info" pulse>
+        {f.failingBack}
+      </Status>
+    );
+  else if (holder?.role === "holder" && holder.leaseRemainingMs > 0n)
+    state = <Status tone="success">{t.common.status.running}</Status>;
+  else if (holder?.role === "holder")
+    state = <Status tone="danger">{f.leaseLost}</Status>;
+  else if (!holderOnline && standby?.pendingConfirm)
+    state = <Status tone="warning">{f.awaitingConfirm}</Status>;
+  else if (!holderOnline)
+    state = <Status tone="warning">{f.holderOffline}</Status>;
+
+  return (
+    <Section
+      title={f.title}
+      help={f.setupHelp}
+      actions={
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={async () =>
+            (await confirmAction(f.clearConfirm(container.name, nodes.name(container.nodeId)), { action: f.clear, danger: true })) && call(() => projectClient.clearFailover(ref))
+          }
+        >
+          {f.clear}
+        </Button>
+      }
+    >
+      <KeyValue
+        items={[
+          // 等待确认顶替时最上面已有提示，这里不再重复状态。
+          ...(standby?.pendingConfirm ? [] : ([[t.projectData.state, state]] as [React.ReactNode, React.ReactNode][])),
+          [
+            f.runningNode,
+            <span>
+              {nodes.name(container.nodeId)}{" "}
+              {cfg.a?.nodeId === container.nodeId ? <span className="text-muted-foreground">{holderOnline ? f.originalNode : f.originalNodeLost}</span> : <span className="text-warning-text">{f.failedOver}</span>}
+            </span>,
+          ],
+          [
+            f.standbyNode,
+            <span>
+              {standbyNode && nodes.name(standbyNode.nodeId, standbyNode.name)}
+              {standbyNode && !nodes.online(standbyNode.nodeId) && <span className="text-muted-foreground"> {t.common.status.offline}</span>}
+            </span>,
+          ],
+          [
+            f.witness,
+            <span>
+              {!cfg.witnessIsPanel ? (
+                cfg.witness && nodes.name(cfg.witness.nodeId, cfg.witness.name)
+              ) : container.failoverWitnessSelf ? (
+                t.projectData.thisPanel
+              ) : (
+                <span className="text-warning-text" title={f.oldPanelHint}>
+                  {f.oldPanel}
+                </span>
+              )}
+              {" "}
+              <Button
+                variant="ghost"
+                disabled={busy}
+                className="ml-2 h-auto rounded-none border-0 p-0 align-baseline underline decoration-border underline-offset-4 not-disabled:hover:bg-transparent max-md:h-auto max-md:text-sm"
+                onClick={() => setChangingWitness(true)}
+              >
+                {f.change}
+              </Button>
+            </span>,
+          ],
+          [t.projectData.lastSync, <span title={formatDateTime(toDate(lastSync))}>{lastSync ? timeAgo(toDate(lastSync)) : f.notSynced}</span>],
+          [f.lease, <span title={holder?.epoch ? f.epoch(holder.epoch).trim() : undefined}>{t.common.time.seconds(cfg.leaseSeconds || 30)}</span>],
+          [
+            f.autoFailbackLabel,
+            <span>
+              {cfg.autoFailback ? f.on : f.off}
+              {holder && holder.failbackInMs > 0n && ` · ${f.failbackIn(duration(holder.failbackInMs))}`}
+            </span>,
+          ],
+        ]}
+      />
+      {(holder?.lastError || standby?.lastError) && (
+        <Notice tone="danger" title={t.projectData.backup.syncFailed}>
+          {holder?.lastError || standby?.lastError}
+        </Notice>
+      )}
+      {error && <Alert>{error}</Alert>}
+      {changingWitness && <WitnessDialog project={project} container={container} nodes={nodes} onClose={() => setChangingWitness(false)} />}
     </Section>
   );
 }
 
-// DirInput：目标节点上的容器目录。占位文字是默认目录（项目根目录/网络名/容器名），onDefault 告诉调用方，
-// 不填时提交这个默认目录。
-function DirInput({
-  id,
-  nodeId,
-  project,
-  container,
-  value,
-  onChange,
-  onDefault,
-}: {
-  id: string;
-  nodeId: string;
-  project: Project;
-  container: string;
-  value: string;
-  onChange: (v: string) => void;
-  onDefault: (v: string) => void;
-}) {
-  const def = useDefaultDir(nodeId, project.id, project.networkName, container);
-  useEffect(() => onDefault(def), [def, onDefault]);
+function WitnessDialog({ project, container, nodes, onClose }: { project: Project; container: Container; nodes: Nodes; onClose: () => void }) {
+  const f = t.projectData.failover;
+  const { busy, error, call } = useCall(project.id);
+  const [witness, setWitness] = useState("-");
+  const cfg = container.failover!;
+  const options = nodes.usable.filter((n) => n.id !== cfg.a?.nodeId && n.id !== cfg.b?.nodeId && (cfg.witnessIsPanel || n.id !== cfg.witness?.nodeId));
   return (
-    <Input
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={def}
-      className="w-full min-w-80 font-mono"
-    />
+    <Dialog open onClose={onClose} title={f.changeWitness}>
+      <form
+        className="grid gap-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (await call(() => projectClient.changeWitness({ projectId: project.id, container: container.name, witnessNodeId: witness }))) onClose();
+        }}
+      >
+        <Field label={f.witness} htmlFor="fo-change-witness" help={f.witnessHelp}>
+          <Select id="fo-change-witness" value={witness} onChange={(e) => setWitness(e.target.value)}>
+            <option value="-" disabled>
+              {f.select}
+            </option>
+            {!(cfg.witnessIsPanel && container.failoverWitnessSelf) && <option value="">{t.projectData.thisPanel}</option>}
+            {options.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {error && <Alert>{error}</Alert>}
+        <DialogActions>
+          <Button variant="outline" readOnlyOk onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={busy || witness === "-"}>
+            {busy && <Spinner />}
+            {f.change}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }

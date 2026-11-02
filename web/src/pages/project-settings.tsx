@@ -1,15 +1,16 @@
 import { useState } from "react";
+import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Rocket } from "lucide-react";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, Section, Spinner, Table, Td, Th } from "@/components/ui";
+import { useRole } from "@/components/role";
+import { Alert, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import type { Project } from "@/gen/nagi/v1/common_pb";
-import { confirmAction } from "@/components/confirm";
+import { ask, confirmAction } from "@/components/confirm";
 import { EnvEditor } from "@/components/env-editor";
 import { toast } from "sonner";
 
@@ -17,7 +18,7 @@ import { toast } from "sonner";
 
 export function SettingsTab({ project }: { project: Project }) {
   return (
-    <div className="grid grid-cols-1 gap-6">
+    <div>
       <GeneralSettings project={project} />
       <SharedEnv project={project} />
       <Deployments project={project} />
@@ -26,8 +27,20 @@ export function SettingsTab({ project }: { project: Project }) {
   );
 }
 
+// HelpParts：问号里的几段说明，一段一行。
+function HelpParts({ parts }: { parts: React.ReactNode[] }) {
+  return (
+    <span className="grid gap-1">
+      {parts.map((p, i) => (
+        <span key={i}>{p}</span>
+      ))}
+    </span>
+  );
+}
+
 // GeneralSettings 修改名称、网络名和快照间隔；内部端口照原样提交（接口每次提交完整的设置）。
 function GeneralSettings({ project }: { project: Project }) {
+  const m = t.projectSettings.general;
   const queryClient = useQueryClient();
   const s = project.settings;
   const [name, setName] = useState(project.name);
@@ -61,37 +74,33 @@ function GeneralSettings({ project }: { project: Project }) {
   };
 
   return (
-    <Section title={t.projectSettings.general.title}>
+    <Section title={m.title}>
       <form
-        className="grid max-w-2xl gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
       >
-        <FormRow>
-          <Field label={t.projectSettings.general.name} htmlFor="p-name">
-            <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
-          <Field
-            label={t.projectSettings.general.networkName}
-            htmlFor="p-network"
-            hint={t.projectSettings.general.networkNameHint}
-            help={t.projectSettings.general.networkNameHelp}
-          >
-            <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required className="font-mono" />
-          </Field>
-          <Field label={t.projectSettings.general.snapshotInterval} htmlFor="p-interval" hint={t.projectSettings.general.snapshotIntervalHint}>
-            <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" className="font-mono" />
-          </Field>
-        </FormRow>
-        {error && <Alert>{error}</Alert>}
-        <FormActions>
-          <Button type="submit" size="sm" disabled={busy}>
-            {busy && <Spinner />}
-            {t.common.actions.save}
-          </Button>
-        </FormActions>
+        <FormBody>
+          <FormRow>
+            <Field label={m.name} htmlFor="p-name">
+              <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            </Field>
+            <Field label={m.networkName} htmlFor="p-network" help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />}>
+              <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required />
+            </Field>
+            <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint}>
+              <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder="60" />
+            </Field>
+          </FormRow>
+          {error && <Alert>{error}</Alert>}
+          <FormActions>
+            <Button type="submit" variant="outline" disabled={busy}>
+              {busy && <Spinner />}
+              {t.common.actions.save}
+            </Button>
+          </FormActions>
+        </FormBody>
       </form>
     </Section>
   );
@@ -100,8 +109,12 @@ function GeneralSettings({ project }: { project: Project }) {
 // ---- 共享变量 ----
 
 function SharedEnv({ project }: { project: Project }) {
+  const m = t.projectSettings.sharedEnv;
   const queryClient = useQueryClient();
+  const { isViewer } = useRole();
   const [sharedEnv, setSharedEnv] = useState(envToText(project.hasSharedEnvDraft ? project.sharedEnvDraft : project.settings?.sharedEnv));
+  // 编辑器只在挂载时读一次内容，放弃草稿后换一个 key 让它重新读。
+  const [editorKey, setEditorKey] = useState(0);
   const [affected, setAffected] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -123,42 +136,60 @@ function SharedEnv({ project }: { project: Project }) {
   const save = () =>
     call(async () => {
       const res = await projectClient.saveSharedEnv({ projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) });
-      setAffected(Object.fromEntries(res.affected.map((m) => [m, true])));
+      setAffected(Object.fromEntries(res.affected.map((c) => [c, true])));
     });
 
+  const discard = async () => {
+    if (!(await confirmAction(m.discardConfirm, { action: m.discardDraft, danger: true }))) return;
+    await call(async () => {
+      await projectClient.discardSharedEnv({ projectId: project.id, baseRevision: project.revision });
+      setSharedEnv(envToText(project.settings?.sharedEnv));
+      setEditorKey((k) => k + 1);
+      setAffected({});
+    });
+  };
+
   const deploy = async () => {
-    const n = project.containers.filter((m) => affected[m.name] && m.deployedVersion > 0n).length;
-    if (n > 0 && !(await confirmAction(t.projectSettings.sharedEnv.deployConfirm(n), { action: t.projectContainers.detail.deploy }))) return;
+    const n = project.containers.filter((c) => affected[c.name] && c.deployedVersion > 0n).length;
+    if (n > 0 && !(await confirmAction(m.deployConfirm(n), { action: t.projectContainers.detail.deploy }))) return;
     run(() =>
-      projectClient.deploy({ projectId: project.id,
+      projectClient.deploy({
+        projectId: project.id,
         applySharedEnv: true,
         settingsRevision: project.revision,
-        targets: project.containers.filter((m) => affected[m.name]).map((m) => ({ container: m.name, baseRevision: m.revision })),
+        targets: project.containers.filter((c) => affected[c.name]).map((c) => ({ container: c.name, baseRevision: c.revision })),
       }),
     );
   };
+
+  const help = <HelpParts parts={[m.intro, m.description, m.help]} />;
+  // 只读角色拿到的共享变量是空的（面板去掉了），不能显示成一个空编辑器。
+  if (isViewer) {
+    return (
+      <Section title={m.title} help={help}>
+        <p className="text-muted-foreground">{m.viewerHidden}</p>
+      </Section>
+    );
+  }
 
   return (
     <Section
       title={
         <>
-          {t.projectSettings.sharedEnv.title}
-          {project.hasSharedEnvDraft && <Badge tone="warning">{t.projectSettings.sharedEnv.draft}</Badge>}
+          {m.title}
+          {project.hasSharedEnvDraft && <span className="text-[13px] leading-5 text-muted-foreground">{m.draft}</span>}
         </>
       }
-      description={t.projectSettings.sharedEnv.description}
-      help={t.projectSettings.sharedEnv.help}
+      help={help}
     >
       <FormBody>
-        <Field label={t.projectSettings.sharedEnv.vars} htmlFor="shared-env">
-          <EnvEditor id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
-        </Field>
+        <EnvEditor key={editorKey} id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
-          <Field label={t.projectSettings.sharedEnv.scope} help={t.projectSettings.sharedEnv.scopeHelp}>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              {project.containers.map((m) => (
-                <Check key={m.name} checked={!!affected[m.name]} onChange={(v) => setAffected({ ...affected, [m.name]: v })}>
-                  <span className="font-mono text-[13px]">{m.name}</span>
+          <Field label={m.scope}>
+            <div title={m.scopeHelp} className="flex flex-wrap gap-x-6 gap-y-2 [&_label]:leading-[14px] [&_label]:font-medium">
+              {project.containers.map((c) => (
+                <Check key={c.name} checked={!!affected[c.name]} onChange={(v) => setAffected({ ...affected, [c.name]: v })}>
+                  {c.name}
                 </Check>
               ))}
             </div>
@@ -168,23 +199,18 @@ function SharedEnv({ project }: { project: Project }) {
         {output}
         <FormActions>
           {project.hasSharedEnvDraft && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => call(() => projectClient.discardSharedEnv({ projectId: project.id, baseRevision: project.revision }))}
-              disabled={busy}
-            >
-              {t.projectSettings.sharedEnv.discardDraft}
+            <Button onClick={deploy} disabled={running}>
+              {running && <Spinner />}
+              {m.deploy}
             </Button>
           )}
-          <Button size="sm" variant={project.hasSharedEnvDraft ? "outline" : "default"} onClick={save} disabled={busy}>
+          <Button variant="outline" onClick={save} disabled={busy}>
             {busy && <Spinner />}
-            {t.projectSettings.sharedEnv.saveDraft}
+            {m.saveDraft}
           </Button>
           {project.hasSharedEnvDraft && (
-            <Button size="sm" onClick={deploy} disabled={running}>
-              {running ? <Spinner /> : <Rocket />}
-              {t.projectSettings.sharedEnv.deploy}
+            <Button variant="ghost" onClick={discard} disabled={busy}>
+              {m.discardDraft}
             </Button>
           )}
         </FormActions>
@@ -205,6 +231,7 @@ const sourceLabel: Record<string, string> = {
 };
 
 function Deployments({ project }: { project: Project }) {
+  const m = t.projectSettings.deployments;
   const { run, busy, output } = useRun(project.id);
   const list = useQuery({
     queryKey: ["deployments", project.id],
@@ -212,67 +239,55 @@ function Deployments({ project }: { project: Project }) {
   });
 
   return (
-    <Section flush title={t.projectSettings.deployments.title} description={t.projectSettings.deployments.description} help={t.projectSettings.deployments.numberHelp}>
-      {output && <div className="pb-3 empty:hidden">{output}</div>}
+    <Section title={m.title}>
+      {output}
       {list.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
-      ) : list.data?.deployments.length === 0 ? (
-        <EmptyRow>{t.projectSettings.deployments.empty}</EmptyRow>
+        <RowsSkeleton />
+      ) : list.isError ? (
+        <QueryError error={list.error} onRetry={() => list.refetch()} />
+      ) : list.data.deployments.length === 0 ? (
+        <EmptyRow>{m.empty}</EmptyRow>
       ) : (
-        <Table compact>
-          <thead>
-            <tr>
-              <Th>{t.projectSettings.deployments.columns.id}</Th>
-              <Th>{t.projectSettings.deployments.columns.time}</Th>
-              <Th>{t.projectSettings.deployments.columns.source}</Th>
-              <Th>{t.projectSettings.deployments.columns.versions}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {list.data?.deployments.map((d, i) => (
-              <tr key={String(d.id)}>
-                <Td className="font-mono text-xs">#{String(d.id)}</Td>
-                <Td className="text-[13px] whitespace-nowrap text-muted-foreground">{timeAgo(toDate(d.time))}</Td>
-                <Td className="text-[13px]">
-                  {sourceLabel[d.source] ?? d.source}
-                  {d.restoreOf > 0n && ` #${d.restoreOf}`}
-                  <span className="text-muted-foreground"> · {t.projectSettings.deployments.containerList(d.containers)}</span>
-                  {!d.success && (
-                    <div className="mt-0.5 text-xs text-destructive">
-                      <Badge tone="danger" className="mr-1.5">
-                        {t.projectSettings.deployments.failed}
-                      </Badge>
-                      {d.error}
-                    </div>
-                  )}
-                </Td>
-                <Td className="font-mono text-xs text-muted-foreground">
-                  {Object.entries(d.versions)
-                    .map(([m, v]) => `${m} v${v}`)
-                    .join(" · ")}
-                </Td>
-                <Td className="text-right">
-                  {i > 0 && (
+        <List>
+          {list.data.deployments.map((d, i) => {
+            const source = `${sourceLabel[d.source] ?? d.source}${d.restoreOf > 0n ? ` #${d.restoreOf}` : ""}`;
+            // 第二行写这次动到的容器和它们的版本，所有容器的版本在悬停提示里。
+            const touched = m.containerList(d.containers.map((c) => (d.versions[c] !== undefined ? `${c} v${d.versions[c]}` : c)));
+            const all = Object.entries(d.versions)
+              .map(([c, v]) => `${c} v${v}`)
+              .join(" · ");
+            const time = toDate(d.time);
+            return (
+              <Row
+                key={String(d.id)}
+                title={
+                  <>
+                    <span title={`${m.description} ${m.numberHelp}`}>{`#${d.id}`}</span>
+                    {!d.success && (
+                      <Status tone="danger">
+                        <span className="text-destructive">{m.failed}</span>
+                      </Status>
+                    )}
+                  </>
+                }
+                sub={<span title={all}>{[source, touched, d.success ? "" : d.error].filter(Boolean).join(" · ")}</span>}
+                cols={[{ content: <span title={formatDateTime(time)}>{timeAgo(time)}</span> }]}
+                actions={
+                  i > 0 ? (
                     <Button
-                      size="xs"
+                      size="row"
                       variant="ghost"
                       disabled={busy}
-                      onClick={async () =>
-                        (await confirmAction(t.projectSettings.deployments.restoreConfirm(d.id), { action: t.projectSettings.deployments.restore })) &&
-                        run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))
-                      }
+                      onClick={async () => (await confirmAction(m.restoreConfirm(d.id), { action: m.restore })) && run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))}
                     >
-                      {t.projectSettings.deployments.restore}
+                      {m.restore}
                     </Button>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </List>
       )}
     </Section>
   );
@@ -281,17 +296,21 @@ function Deployments({ project }: { project: Project }) {
 // ---- 删除项目 ----
 
 function DeleteProject({ project }: { project: Project }) {
+  const m = t.projectSettings.delete;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteDir, setDeleteDir] = useState(false);
-  const [confirmName, setConfirmName] = useState("");
   const [error, setError] = useState("");
 
   const remove = async () => {
-    if (!deleteDir && !(await confirmAction(t.projectSettings.delete.confirm(project.name), { action: t.projectSettings.delete.submit, danger: true }))) return;
+    // 同时删除目录时数据无法恢复，确认框里要输入项目名称。
+    const answer = deleteDir
+      ? await ask(m.confirmDir(project.name), { action: m.submit, danger: true, checkDefault: true, typeToConfirm: { label: m.confirmName(project.name), value: project.name } })
+      : await ask(m.confirm(project.name), { action: m.submit, danger: true });
+    if (!answer) return;
     setError("");
     try {
-      await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName });
+      await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName: deleteDir ? project.name : "" });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       navigate({ to: "/projects" });
     } catch (err) {
@@ -300,22 +319,18 @@ function DeleteProject({ project }: { project: Project }) {
   };
 
   return (
-    <Section tone="danger" title={t.projectSettings.delete.title} description={t.projectSettings.delete.description} help={t.projectSettings.delete.help}>
-      <div className="grid gap-4">
+    <Section title={m.title}>
+      <p className="text-muted-foreground">{m.description}</p>
+      <div className="grid justify-items-start gap-2">
         <Check checked={deleteDir} onChange={setDeleteDir}>
-          {t.projectSettings.delete.deleteDir}
+          {m.deleteDir}
         </Check>
-        {deleteDir && (
-          <Field label={t.projectSettings.delete.confirmName(project.name)} htmlFor="confirm-name">
-            <Input id="confirm-name" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} className="max-w-80" />
-          </Field>
-        )}
-        {error && <Alert>{error}</Alert>}
-        <div className="flex justify-end pt-2">
-          <Button variant="destructive" size="sm" onClick={remove} disabled={deleteDir && confirmName !== project.name}>
-            {t.projectSettings.delete.submit}
-          </Button>
-        </div>
+      </div>
+      {error && <Alert>{error}</Alert>}
+      <div>
+        <Button variant="destructive-outline" title={m.help} onClick={remove}>
+          {m.submit}
+        </Button>
       </div>
     </Section>
   );
