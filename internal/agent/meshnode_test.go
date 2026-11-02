@@ -2,6 +2,7 @@ package agent
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -63,5 +64,37 @@ func TestMeshKeepsRecentPeers(t *testing.T) {
 	n.apply()
 	if has(y) {
 		t.Fatal("过了 meshGrace 应该删掉")
+	}
+}
+
+func TestMeshRates(t *testing.T) {
+	a, b := mesh.Key{1}, mesh.Key{2}
+	st := func(k mesh.Key, rx, tx uint64) mesh.Status {
+		s := mesh.Status{RxBytes: rx, TxBytes: tx}
+		s.Key = k
+		return s
+	}
+	name := func(k mesh.Key, dir string) string { return "m:" + hex.EncodeToString(k[:]) + ":" + dir }
+	prev := map[mesh.Key]meshCounter{}
+
+	if got := meshRates(prev, []mesh.Status{st(a, 100, 200)}, 10); len(got) != 0 {
+		t.Fatalf("第一次见到的成员还没有速率：%v", got)
+	}
+	got := meshRates(prev, []mesh.Status{st(a, 200, 500), st(b, 1, 1)}, 10)
+	if got[name(a, "rx")] != 10 || got[name(a, "tx")] != 30 {
+		t.Fatalf("速率不对：%v", got)
+	}
+	if _, ok := got[name(b, "rx")]; ok {
+		t.Fatalf("新成员这一轮不该有速率：%v", got)
+	}
+	if got := meshRates(prev, []mesh.Status{st(a, 5, 5)}, 10); len(got) != 0 {
+		t.Fatalf("计数器变小的这一轮不算：%v", got)
+	}
+	if _, ok := prev[b]; ok {
+		t.Fatal("离开的成员要清掉")
+	}
+	got = meshRates(prev, []mesh.Status{st(a, 15, 25)}, 10)
+	if got[name(a, "rx")] != 1 || got[name(a, "tx")] != 2 {
+		t.Fatalf("计数器重置后从新值算起：%v", got)
 	}
 }

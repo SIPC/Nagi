@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
@@ -419,4 +421,41 @@ func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	return &nagiv1.MeshPingResponse{RttMs: float64(rtt.Microseconds()) / 1000}, nil
+}
+
+// meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。
+// 成员包括面板。历史和其他监控一样存在节点上，刷新页面、面板重启都不丢。
+func (a *agent) meshMetrics() metrics.Source {
+	prev := map[mesh.Key]meshCounter{}
+	return func(elapsed float64) map[string]float64 {
+		if a.mesh == nil {
+			return nil
+		}
+		return meshRates(prev, a.mesh.m.Status(), elapsed)
+	}
+}
+
+type meshCounter struct{ rx, tx uint64 }
+
+// meshRates 算出这一轮的速率并更新 prev。第一次见到的成员还没有差值，计数器变小（对端重启、重新握手）的这一轮不算。
+func meshRates(prev map[mesh.Key]meshCounter, peers []mesh.Status, elapsed float64) map[string]float64 {
+	out := map[string]float64{}
+	seen := make(map[mesh.Key]bool, len(peers))
+	for _, s := range peers {
+		seen[s.Key] = true
+		p, ok := prev[s.Key]
+		prev[s.Key] = meshCounter{s.RxBytes, s.TxBytes}
+		if !ok || s.RxBytes < p.rx || s.TxBytes < p.tx {
+			continue
+		}
+		name := "m:" + hex.EncodeToString(s.Key[:]) + ":"
+		out[name+"rx"] = float64(s.RxBytes-p.rx) / elapsed
+		out[name+"tx"] = float64(s.TxBytes-p.tx) / elapsed
+	}
+	for k := range prev {
+		if !seen[k] {
+			delete(prev, k)
+		}
+	}
+	return out
 }

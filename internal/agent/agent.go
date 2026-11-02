@@ -185,6 +185,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if !cfg.DisableProxy {
 		a.metrics.AddSource(routeMetrics())
 	}
+	a.metrics.AddSource(a.meshMetrics())
 	go a.metrics.Run(ctx)
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,

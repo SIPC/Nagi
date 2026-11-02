@@ -7,17 +7,16 @@ import { PageHeader } from "@/pages/layout";
 import { fmtCpu, metricRanges, RangePicker, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
-import { ButtonLink, Empty, EmptyRow, HelpTip, QueryError, RowsSkeleton, Section, Status } from "@/components/ui";
+import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, Section, Status } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { locale, t } from "@/i18n";
-import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
 
 const o = t.overview;
 
-// 全局概览（docs/ui.md「全局概览」、docs/monitoring.md#全局概览）。数据都来自现有接口：
-// 节点网卡速率来自 node:net_rx、node:net_tx；节点之间的速率由各节点 mesh 对端的累计字节两次差值算出，只取发送方的数；
-// 对外 = 网卡 − 所有对端的速率（不小于 0），是估算值。
+// 全局概览（docs/ui.md「全局概览」、docs/monitoring.md#全局概览）。数据都是节点存的监控序列：
+// 网卡速率 node:net_rx、node:net_tx；和每个 mesh 成员之间的速率 m:<公钥>:rx、:tx，节点之间只取发送方的数；
+// 对外 = 网卡 − 所有成员的速率（不小于 0），是估算值。
 
 const refresh = 10_000;
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
@@ -53,71 +52,23 @@ function fmtUsed(used: number, total: number) {
   return uUnit === aUnit ? `${u} / ${a} ${aUnit}` : `${u} ${uUnit} / ${a} ${aUnit}`;
 }
 
-// ---- 节点之间的采样 ----
+// ---- 节点之间的流量 ----
 
-// 一次采样：各方向的速率。pairs 是 "发送节点|接收节点" → 字节/秒（只取发送方的数），rx、tx 是节点和所有对端（含面板）之间的合计。
-type MeshSample = { at: number; pairs: Map<string, number>; rx: Map<string, number>; tx: Map<string, number> };
+// 一组速率。pairs 是 "发送节点|接收节点" → 字节/秒（只取发送方的数），rx、tx 是节点和所有成员（含面板）之间的合计。
+type MeshRates = { pairs: Map<string, number>; rx: Map<string, number>; tx: Map<string, number> };
 
-// 放在模块里：切到别的页面再回来，已经累积的采样还在；刷新页面才重新开始。
-const meshCounters = new Map<string, { at: number; rx: number; tx: number }>();
-const meshSamples: MeshSample[] = [];
-const keepSamples = 8640; // 10 秒一次，留 24 小时。
-const maxSampleGap = 60; // 隔太久（标签页在后台）的两次差值是一段长时间的平均，不当作当前速率。
-
+const newRates = (): MeshRates => ({ pairs: new Map(), rx: new Map(), tx: new Map() });
 const inc = <K,>(m: Map<K, number>, k: K, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
-async function sampleMesh(nodes: Node[]): Promise<MeshSample | null> {
-  const statuses = await Promise.all(nodes.map((n) => nodeClient.getNodeMesh({ nodeId: n.id }).catch(() => null)));
-  const byAddr = new Map<string, string>();
-  statuses.forEach((s, i) => s && byAddr.set(s.address, nodes[i].id));
-  const byName = new Map(nodes.map((n) => [n.name, n.id]));
-  const at = Date.now() / 1000;
-  const sample: MeshSample = { at, pairs: new Map(), rx: new Map(), tx: new Map() };
-  let peers = 0;
-  let known = false;
-  statuses.forEach((s, i) => {
-    if (!s) return;
-    const id = nodes[i].id;
-    for (const p of s.peers) {
-      peers++;
-      const key = `${id}|${p.address}`;
-      const prev = meshCounters.get(key);
-      const dt = prev ? at - prev.at : 0;
-      if (prev && dt < 1) continue;
-      const rx = Number(p.rxBytes);
-      const tx = Number(p.txBytes);
-      meshCounters.set(key, { at, rx, tx });
-      // 计数器变小说明对端重启过，这一轮不算。
-      if (!prev || dt > maxSampleGap || rx < prev.rx || tx < prev.tx) continue;
-      known = true;
-      const rxRate = (rx - prev.rx) / dt;
-      const txRate = (tx - prev.tx) / dt;
-      inc(sample.rx, id, rxRate);
-      inc(sample.tx, id, txRate);
-      const peer = byAddr.get(p.address) ?? byName.get(p.name);
-      if (peer && peer !== id) inc(sample.pairs, `${id}|${peer}`, txRate);
-    }
-  });
-  // 有对端却都还算不出速率（第一次采样）时等下一次。只有一个节点、没有对端时节点之间就是 0，不用等。
-  if (peers > 0 && !known) return null;
-  meshSamples.push(sample);
-  if (meshSamples.length > keepSamples) meshSamples.splice(0, meshSamples.length - keepSamples);
-  return sample;
-}
-
-// meshBuckets：把采样按图表步长取平均，和节点按步长聚合的时刻对齐。
-function meshBuckets(step: number) {
-  const buckets = new Map<number, { n: number; pairs: Map<string, number>; rx: Map<string, number>; tx: Map<string, number> }>();
-  for (const s of meshSamples) {
-    const key = Math.floor(s.at / step) * step;
-    let b = buckets.get(key);
-    if (!b) buckets.set(key, (b = { n: 0, pairs: new Map(), rx: new Map(), tx: new Map() }));
-    b.n++;
-    for (const [k, v] of s.pairs) inc(b.pairs, k, v);
-    for (const [k, v] of s.rx) inc(b.rx, k, v);
-    for (const [k, v] of s.tx) inc(b.tx, k, v);
-  }
-  return buckets;
+// addRate：把节点 node 上的一条 m: 序列的值记进 rates。keys 是成员公钥 → 节点 ID，面板不在里面。
+function addRate(rates: MeshRates, node: string, name: string, value: number, keys: Map<string, string>) {
+  const m = /^m:([0-9a-f]+):(rx|tx)$/.exec(name);
+  if (!m) return;
+  const dir = m[2] as "rx" | "tx";
+  inc(rates[dir], node, value);
+  const peer = keys.get(m[1]);
+  if (dir === "tx" && peer && peer !== node) inc(rates.pairs, `${node}|${peer}`, value);
 }
 
 // ---- 桑基图 ----
@@ -404,6 +355,19 @@ const pairColors = ["text-foreground", "text-muted-foreground", "text-wave", "te
 // 节点上一条序列最新的值。
 const latest = (s: MetricSeries | undefined) => (s && s.values.length > 0 ? s.values[s.values.length - 1] : undefined);
 
+// liveRates：各节点 m: 序列最新的值合成当前速率。公钥对应还没取到时返回 undefined。
+function liveRates(ids: string[], parts: ({ series: MetricSeries[] } | null)[] | undefined, keys: Map<string, string> | undefined) {
+  if (!parts || !keys) return undefined;
+  const rates = newRates();
+  parts.forEach((part, i) => {
+    for (const series of part?.series ?? []) {
+      const v = latest(series);
+      if (v !== undefined && ids[i]) addRate(rates, ids[i], series.name, v, keys);
+    }
+  });
+  return rates;
+}
+
 export function OverviewPage() {
   const search = useSearch({ strict: false }) as { flow?: "ext" | "mesh"; range?: MetricRange };
   const navigate = useNavigate();
@@ -430,12 +394,34 @@ export function OverviewPage() {
     placeholderData: (prev) => prev,
   });
 
-  // 第一次只拿到累计值，算不出速率；隔几秒再取一次，不用等满 10 秒。
-  const mesh = useQuery({
-    queryKey: ["overview-mesh", onlineKey],
-    queryFn: () => sampleMesh(online),
+  // 成员公钥 → 节点 ID，把 m: 序列对应到节点。
+  const meshKeys = useQuery({
+    queryKey: ["overview-mesh-keys", onlineKey],
+    queryFn: async () => {
+      const statuses = await Promise.all(online.map((n) => nodeClient.getNodeMesh({ nodeId: n.id }).catch(() => null)));
+      return new Map(statuses.flatMap((s, i) => (s ? [[toHex(s.publicKey), online[i].id] as const] : [])));
+    },
     enabled: online.length > 0,
-    refetchInterval: (q) => (q.state.data ? refresh : 3000),
+    refetchInterval: 60_000,
+    placeholderData: (prev) => prev,
+  });
+  const keys = meshKeys.data;
+
+  // 当前的节点之间速率：最近 1 分钟最新的一个点。旧版本的节点没有 m: 序列。
+  const liveMesh = useQuery({
+    queryKey: ["overview-mesh", onlineKey],
+    queryFn: async () => Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(60) }).catch(() => null))),
+    enabled: online.length > 0,
+    refetchInterval: refresh,
+    placeholderData: (prev) => prev,
+  });
+
+  // 节点之间的历史，和网卡历史同样的时间范围和步长，时刻对齐。
+  const meshHistory = useQuery({
+    queryKey: ["overview-mesh-history", onlineKey, range],
+    queryFn: async () => Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(r.seconds), step: BigInt(r.step) }).catch(() => null))),
+    enabled: online.length > 0,
+    refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
 
@@ -477,8 +463,10 @@ export function OverviewPage() {
   const abnormal = containers.filter((c) => c.tone === "danger").length;
   const offlineNames = all.filter((n) => !n.online).map((n) => n.name);
 
-  const sample = mesh.data ?? undefined;
+  const sample = liveRates(online.map((n) => n.id), liveMesh.data, keys);
   const ready = !!sample && !!live.data;
+  // 要升级才有节点之间的数据：查询成功但没有 m: 序列。
+  const outdated = online.filter((_, i) => liveMesh.data?.[i]?.series.length === 0).map((n) => n.name);
   const extRate = (id: string, dir: "rx" | "tx") => Math.max(0, (live.data?.get(id)?.[dir] ?? 0) - (sample?.[dir].get(id) ?? 0));
   const extIn = online.reduce((sum, n) => sum + extRate(n.id, "rx"), 0);
   const extOut = online.reduce((sum, n) => sum + extRate(n.id, "tx"), 0);
@@ -503,7 +491,21 @@ export function OverviewPage() {
   // ---- 趋势 ----
 
   const now = Date.now() / 1000;
-  const buckets = meshBuckets(r.step);
+  const buckets = new Map<number, MeshRates>();
+  if (keys) {
+    (meshHistory.data ?? []).forEach((part, i) => {
+      const id = online[i]?.id;
+      if (!part || !id) return;
+      for (const series of part.series) {
+        series.values.forEach((v, j) => {
+          const at = Number(series.times[j]);
+          let b = buckets.get(at);
+          if (!b) buckets.set(at, (b = newRates()));
+          addRate(b, id, series.name, v, keys);
+        });
+      }
+    });
+  }
   const extSeries = (name: string, dir: "rx" | "tx"): Pt[] => {
     const total = new Map<number, number>();
     const count = new Map<number, number>();
@@ -513,7 +515,7 @@ export function OverviewPage() {
       s.values.forEach((v, i) => {
         const at = Number(s.times[i]);
         const b = buckets.get(at);
-        inc(total, at, Math.max(0, v - (b ? (b[dir].get(part.id) ?? 0) / b.n : 0)));
+        inc(total, at, Math.max(0, v - (b?.[dir].get(part.id) ?? 0)));
         inc(count, at, 1);
       });
     }
@@ -524,19 +526,19 @@ export function OverviewPage() {
   };
   const nameOf = (id: string) => all.find((n) => n.id === id)?.name ?? id;
   const pairTotals = new Map<string, number>();
-  for (const b of buckets.values()) for (const [k, v] of b.pairs) inc(pairTotals, k, v / b.n);
+  for (const b of buckets.values()) for (const [k, v] of b.pairs) inc(pairTotals, k, v);
   const pairKeys = [...pairTotals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
   const topPairs = pairKeys.slice(0, pairColors.length);
   const pairSeries: ChartSeries[] = topPairs.map((k, i) => {
     const [a, b] = k.split("|");
-    return { label: `${nameOf(a)} → ${nameOf(b)}`, className: pairColors[i], points: [...buckets.entries()].sort((x, y) => x[0] - y[0]).map(([at, v]): Pt => [at, (v.pairs.get(k) ?? 0) / v.n]) };
+    return { label: `${nameOf(a)} → ${nameOf(b)}`, className: pairColors[i], points: [...buckets.entries()].sort((x, y) => x[0] - y[0]).map(([at, v]): Pt => [at, v.pairs.get(k) ?? 0]) };
   });
   if (pairKeys.length > topPairs.length) {
     const rest = new Set(pairKeys.slice(topPairs.length));
     pairSeries.push({
       label: o.trend.other,
       className: "text-muted-foreground/50",
-      points: [...buckets.entries()].sort((x, y) => x[0] - y[0]).map(([at, v]): Pt => [at, [...v.pairs.entries()].reduce((sum, [k, x]) => (rest.has(k) ? sum + x : sum), 0) / v.n]),
+      points: [...buckets.entries()].sort((x, y) => x[0] - y[0]).map(([at, v]): Pt => [at, [...v.pairs.entries()].reduce((sum, [k, x]) => (rest.has(k) ? sum + x : sum), 0)]),
     });
   }
 
@@ -625,14 +627,13 @@ export function OverviewPage() {
               />
             }
           >
+            {outdated.length > 0 && <Notice tone="warning">{o.flow.outdated(outdated.join(o.flow.separator))}</Notice>}
             {nodes.isPending ? (
               <RowsSkeleton />
             ) : online.length === 0 ? (
               <EmptyRow>{o.flow.empty}</EmptyRow>
             ) : !ready ? (
-              <p role="status" className="py-4 text-center text-muted-foreground">
-                {o.flow.sampling}
-              </p>
+              <RowsSkeleton />
             ) : shownFlows.length === 0 ? (
               <EmptyRow>{o.flow.empty}</EmptyRow>
             ) : (
