@@ -4,6 +4,7 @@
 
 /* 灰阶为主的控制台配色：彩色只用于状态（成功、警告、错误）和品牌标识。 */
 :root {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.005 260);
   --card: oklch(1 0 0);
@@ -29,6 +30,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.155 0.002 260);
   --foreground: oklch(0.95 0.002 260);
   --card: oklch(0.175 0.004 260);
@@ -105,7 +107,7 @@
     @apply border-border;
   }
   html {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased max-md:scroll-pt-16;
   }
   body {
     @apply min-h-screen font-sans text-sm;

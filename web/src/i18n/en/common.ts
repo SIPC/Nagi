@@ -41,6 +41,7 @@ export default {
     loading: "Loading",
     saved: "Saved",
     copied: "Copied",
+    copyFailed: "Couldn't copy. Select the text and copy it manually.",
     done: "Done",
     failed: "Operation failed",
   },

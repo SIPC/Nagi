@@ -4,7 +4,7 @@ import { Link, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/r
 import { Boxes, ChevronRight, Server, Settings } from "lucide-react";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
-import { Button, Empty, ReadOnlyContext, Waves } from "@/components/ui";
+import { ButtonLink, Empty, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot, UpdateTips } from "@/pages/update";
 import { UserMenu, type ThemeMode } from "@/components/account";
@@ -28,7 +28,11 @@ function useTheme() {
   const [mode, setMode] = useState<ThemeMode>(readTheme);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => document.documentElement.classList.toggle("dark", mode === "dark" || (mode === "system" && media.matches));
+    const apply = () => {
+      const dark = mode === "dark" || (mode === "system" && media.matches);
+      document.documentElement.classList.toggle("dark", dark);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b0c0d" : "#ffffff");
+    };
     apply();
     if (mode !== "system") return;
     media.addEventListener("change", apply);
@@ -195,9 +199,9 @@ export function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Empty title={t.app.notFound.title} action={
-        <Link to="/projects">
-          <Button size="sm" variant="outline">{t.app.notFound.back}</Button>
-        </Link>
+        <ButtonLink to="/projects" size="sm" variant="outline" readOnlyOk>
+          {t.app.notFound.back}
+        </ButtonLink>
       }>
         {t.app.notFound.body}
       </Empty>

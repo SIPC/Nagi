@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
 import { authClient, errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
@@ -13,6 +13,7 @@ import {
   Alert,
   Badge,
   Button,
+  ButtonLink,
   CardBody,
   cardClass,
   CardFooter,
@@ -120,8 +121,15 @@ export function ProjectsPage() {
   const { isAdmin } = useRole();
   // 备用面板在设置里，只有管理员能处理。
   const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"name" | "created">("created");
+  const search = useSearch({ from: "/app/projects" });
+  const navigateList = useNavigate({ from: "/projects" });
+  const sort = search.sort ?? "created";
+  // 输入框用本地状态，再同步到地址：直接绑地址会打断中文输入法。
+  const [query, setQuery] = useState(search.q ?? "");
+  useEffect(() => {
+    if ((query || undefined) !== search.q) navigateList({ search: (s) => ({ ...s, q: query || undefined }), replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
   const all = projects.data?.projects ?? [];
   const q = query.trim().toLowerCase();
   const shownProjects = all
@@ -130,12 +138,10 @@ export function ProjectsPage() {
     .sort((a, b) => (sort === "name" ? (a.project?.name ?? "").localeCompare(b.project?.name ?? "") : Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)));
 
   const newButton = (
-    <Link to="/projects/new">
-      <Button>
-        <Plus />
-        {t.projects.newProject}
-      </Button>
-    </Link>
+    <ButtonLink to="/projects/new">
+      <Plus />
+      {t.projects.newProject}
+    </ButtonLink>
   );
 
   return (
@@ -147,11 +153,9 @@ export function ProjectsPage() {
             tone="warning"
             title={t.common.status.nodesOffline(offlineNodes)}
             actions={
-              <Link to="/nodes">
-                <Button size="sm" variant="outline">
-                  {t.projects.offline.action}
-                </Button>
-              </Link>
+              <ButtonLink to="/nodes" size="sm" variant="outline" readOnlyOk>
+                {t.projects.offline.action}
+              </ButtonLink>
             }
           >
             {t.projects.offline.body}
@@ -162,11 +166,9 @@ export function ProjectsPage() {
             tone="warning"
             title={t.projects.standbyOffline.title(offlineStandbys.join(", "))}
             actions={
-              <Link to="/settings" search={{ tab: "standby" }}>
-                <Button size="sm" variant="outline">
-                  {t.projects.standbyOffline.action}
-                </Button>
-              </Link>
+              <ButtonLink to="/settings" search={{ tab: "standby" }} size="sm" variant="outline" readOnlyOk>
+                {t.projects.standbyOffline.action}
+              </ButtonLink>
             }
           >
             {t.projects.standbyOffline.body}
@@ -185,7 +187,7 @@ export function ProjectsPage() {
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.placeholder} className="h-8 max-w-64 text-[13px]" />
-              <Select value={sort} onChange={(e) => setSort(e.target.value as "name" | "created")} aria-label={t.projects.filter.sort} className="h-8 w-32 text-[13px]">
+              <Select value={sort} onChange={(e) => navigateList({ search: (s) => ({ ...s, sort: e.target.value === "name" ? "name" : undefined }), replace: true })} aria-label={t.projects.filter.sort} className="h-8 w-32 text-[13px]">
                 <option value="created">{t.projects.filter.byCreated}</option>
                 <option value="name">{t.projects.filter.byName}</option>
               </Select>
@@ -332,7 +334,6 @@ export function NewProjectPage() {
   const container = useContainerForm(true);
   const node = useNodeChoice({ projectName: network.trim() || name || "shop", container: containerName || "web" });
   useUnsaved({ name, network, withContainer, containerName, container: container.build() });
-  const errorRef = useRef<HTMLDivElement>(null);
 
   const create = useMutation({
     mutationFn: () =>
@@ -344,8 +345,6 @@ export function NewProjectPage() {
     onSuccess: (p) => {
       navigate({ to: "/projects/$projectId", params: { projectId: p.id }, ignoreBlocker: true });
     },
-    // 错误在表单底部，表单长的时候要滚过去才看得到。
-    onError: () => setTimeout(() => errorRef.current?.scrollIntoView({ block: "center" })),
   });
 
   return (
@@ -422,13 +421,11 @@ export function NewProjectPage() {
           )}
         </Section>
 
-        {create.error && <div ref={errorRef}><Alert>{errorMessage(create.error)}</Alert></div>}
+        {create.error && <Alert>{errorMessage(create.error)}</Alert>}
         <div className="flex justify-end gap-2">
-          <Link to="/projects">
-            <Button type="button" variant="ghost">
-              {t.common.actions.cancel}
-            </Button>
-          </Link>
+          <ButtonLink to="/projects" variant="ghost" readOnlyOk>
+            {t.common.actions.cancel}
+          </ButtonLink>
           <Button type="submit" disabled={create.isPending || (withContainer && !node.nodeId)}>
             {create.isPending && <Spinner />}
             {t.projects.create.submit}

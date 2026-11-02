@@ -83,7 +83,15 @@ const indexRoute = createRoute({
   },
 });
 
-const projectsRoute = createRoute({ getParentRoute: () => appRoute, path: "/projects", component: ProjectsPage });
+const projectsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/projects",
+  validateSearch: (search: Record<string, unknown>): { q?: string; sort?: "name" } => ({
+    q: typeof search.q === "string" && search.q ? search.q : undefined,
+    sort: search.sort === "name" ? "name" : undefined,
+  }),
+  component: ProjectsPage,
+});
 
 const newProjectRoute = createRoute({ getParentRoute: () => appRoute, path: "/projects/new", component: NewProjectPage });
 
@@ -176,13 +184,13 @@ const nodeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/settings",
-  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab; kind?: "operation" | "alert" } => ({
     tab: settingsTabs.some((t) => t.value === search.tab) ? (search.tab as SettingsTab) : undefined,
+    kind: search.kind === "operation" || search.kind === "alert" ? search.kind : undefined,
   }),
   component: function Settings() {
     const { tab } = settingsRoute.useSearch();
-    const navigate = settingsRoute.useNavigate();
-    return <SettingsPage tab={tab ?? "access"} onTab={(t) => navigate({ search: { tab: t === "access" ? undefined : t }, replace: true })} />;
+    return <SettingsPage tab={tab ?? "access"} />;
   },
 });
 

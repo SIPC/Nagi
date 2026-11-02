@@ -38,6 +38,7 @@ export default {
     loading: "加载中",
     saved: "已保存",
     copied: "已复制",
+    copyFailed: "无法复制，请手动选中后复制",
     done: "已完成",
     failed: "操作失败",
   },

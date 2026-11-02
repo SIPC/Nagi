@@ -191,7 +191,7 @@ export function LoginPage() {
               />
             </Field>
           )}
-          {login.error && !(needCode && !totpCode) && <Alert>{errorMessage(login.error)}</Alert>}
+          {login.error && !(needCode && !totpCode) && <Alert keepFocus>{errorMessage(login.error)}</Alert>}
           <Button type="submit" className="mt-1 w-full" disabled={login.isPending}>
             {login.isPending && <Spinner />}
             {needCode ? t.auth.login.verifySubmit : t.auth.login.submit}

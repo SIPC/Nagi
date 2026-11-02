@@ -1,8 +1,10 @@
 // 基础组件：灰阶、细边框、紧凑的控制台风格（参照 shadcn/ui）。
 import { cva, type VariantProps } from "class-variance-authority";
-import { Children, cloneElement, createContext, isValidElement, useContext, useState } from "react";
+import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useRef, useState } from "react";
 import type * as React from "react";
+import { createLink } from "@tanstack/react-router";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, Inbox, X } from "lucide-react";
+import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog as DialogRoot, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,15 +20,15 @@ export { Label };
 // ---- 按钮与输入 ----
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/88",
-        outline: "border border-input bg-card hover:bg-accent",
-        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
-        destructive: "bg-destructive text-white hover:bg-destructive/90",
-        "destructive-outline": "border border-destructive/40 bg-card text-destructive hover:bg-destructive/8",
+        default: "bg-primary text-primary-foreground not-disabled:hover:bg-primary/88",
+        outline: "border border-input bg-card not-disabled:hover:bg-accent",
+        ghost: "text-muted-foreground not-disabled:hover:bg-accent not-disabled:hover:text-foreground",
+        destructive: "bg-destructive text-white not-disabled:hover:bg-destructive/90",
+        "destructive-outline": "border border-destructive/40 bg-card text-destructive not-disabled:hover:bg-destructive/8",
       },
       size: {
         default: "h-9 px-3.5",
@@ -63,6 +65,30 @@ export function Button({
     />
   );
 }
+
+// ButtonLink：外观是按钮的链接，不要在 Link 里再套 Button。只读时显示成置灰的按钮；只是跳转页面的加 readOnlyOk。
+export const ButtonLink = createLink(function ButtonLink({
+  className,
+  variant,
+  size,
+  readOnlyOk,
+  children,
+  ...props
+}: React.ComponentProps<"a"> & VariantProps<typeof buttonVariants> & { readOnlyOk?: boolean }) {
+  const readOnly = useContext(ReadOnlyContext) && !readOnlyOk;
+  if (readOnly) {
+    return (
+      <Button variant={variant} size={size} className={className}>
+        {children}
+      </Button>
+    );
+  }
+  return (
+    <a className={cn(buttonVariants({ variant, size }), className)} {...props}>
+      {children}
+    </a>
+  );
+});
 
 const control =
   "w-full rounded-md border border-input bg-card px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70 aria-[invalid=true]:border-destructive focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60";
@@ -134,7 +160,7 @@ export function HelpTip({ children, className }: { children: React.ReactNode; cl
       <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger
           type="button"
-          className={cn("inline-flex cursor-help align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground", className)}
+          className={cn("inline-flex cursor-help rounded-full align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40", className)}
           onClick={(e) => {
             e.preventDefault();
             setOpen(true);
@@ -183,7 +209,7 @@ export function Field({
       {error && isValidElement<{ "aria-invalid"?: boolean; "aria-describedby"?: string }>(children)
         ? cloneElement(children, { "aria-invalid": true, "aria-describedby": errorId })
         : children}
-      {error ? <p id={errorId} className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error ? <p id={errorId} role="alert" className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -468,23 +494,31 @@ export function Notice({
   );
 }
 
-// Alert：错误提示（Notice 的简写）。
-export function Alert({ className, children }: { className?: string; children?: React.ReactNode }) {
+// Alert：错误提示（Notice 的简写）。在表单里出现时把焦点移过来，表单长的时候也看得到；
+// keepFocus：用户接着要改刚才的输入（例如登录失败重输密码）时不移动焦点。
+export function Alert({ className, children, keepFocus }: { className?: string; children?: React.ReactNode; keepFocus?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (keepFocus || !ref.current?.closest("form")) return;
+    ref.current.focus({ preventScroll: true });
+    ref.current.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
-    <Notice tone="danger" className={className}>
-      {children}
-    </Notice>
+    <div ref={ref} tabIndex={-1} className={cn("outline-none", className)}>
+      <Notice tone="danger">{children}</Notice>
+    </div>
   );
 }
 
 export function Spinner({ className }: { className?: string }) {
-  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)} aria-label={t.common.feedback.loading} />;
+  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent", className)} role="img" aria-label={t.common.feedback.loading} />;
 }
 
 // Loading：整块区域加载中。
 export function Loading() {
   return (
-    <div className="flex items-center justify-center py-16 text-muted-foreground">
+    <div role="status" className="flex items-center justify-center py-16 text-muted-foreground">
       <Spinner />
     </div>
   );
@@ -541,6 +575,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
           setTimeout(() => setDone(false), 1500);
         } catch {
           // 非 HTTPS 等情况下浏览器不让写剪贴板，只能手动选中复制。
+          toast.error(t.common.feedback.copyFailed);
         }
       }}
     >
@@ -584,7 +619,7 @@ export function Tabs<T extends string>({
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_var(--foreground)]"
+            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-sm text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_var(--foreground)]"
           >
             {it.label}
             {it.count !== undefined && it.count > 0 && <span className="rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{it.count}</span>}

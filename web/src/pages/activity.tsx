@@ -1,6 +1,6 @@
 // 活动记录：用户在面板上的操作和节点、面板发出的告警。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Alert, Button, EmptyRow, Loading, Segmented, Spinner, Status, Table, Td, Th } from "@/components/ui";
 import type { ActivityEntry } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, projectClient, settingsClient, toDate } from "@/lib/api";
@@ -16,7 +16,9 @@ export function actionLabel(e: ActivityEntry) {
 }
 
 export function ActivityCard() {
-  const [kind, setKind] = useState<"all" | "operation" | "alert">("all");
+  const kind = useSearch({ from: "/app/settings" }).kind ?? "all";
+  const navigate = useNavigate({ from: "/settings" });
+  const setKind = (v: "all" | "operation" | "alert") => navigate({ search: (s) => ({ ...s, kind: v === "all" ? undefined : v }), replace: true });
   const list = useInfiniteQuery({
     queryKey: ["activity", kind],
     initialPageParam: 0n,

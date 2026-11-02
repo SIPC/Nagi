@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
@@ -88,14 +88,20 @@ function RoutesOverview({ project }: { project: Project }) {
             {project.routes.map((r) => (
               <tr
                 key={r.name}
-                tabIndex={0}
-                className="cursor-pointer transition-colors outline-none hover:bg-subtle focus-visible:bg-subtle"
+                className="cursor-pointer transition-colors hover:bg-subtle"
                 onClick={() => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: r.container }, search: { view: "network" } })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: r.container }, search: { view: "network" } });
-                }}
               >
-                <Td className="font-mono text-xs">{r.name}</Td>
+                <Td className="font-mono text-xs">
+                  <Link
+                    to="/projects/$projectId/c/$container"
+                    params={{ projectId: project.id, container: r.container }}
+                    search={{ view: "network" }}
+                    className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {r.name}
+                  </Link>
+                </Td>
                 <Td className="font-mono text-xs">
                   {r.container}
                   {r.service !== r.container && `/${r.service}`}:{r.target}
@@ -250,7 +256,17 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               const addresses = !domainURL && r.published ? addressesOf(r) : [];
               return (
                 <tr key={r.name}>
-                  <Td className="font-mono text-xs">{r.name}</Td>
+                  <Td className="font-mono text-xs">
+                  <Link
+                    to="/projects/$projectId/c/$container"
+                    params={{ projectId: project.id, container: r.container }}
+                    search={{ view: "network" }}
+                    className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {r.name}
+                  </Link>
+                </Td>
                   {r.noLocalEntry && r.entryNodes.length === 0 ? (
                     <Td colSpan={3} className="text-[13px] text-destructive">
                       {t.projectNetwork.routes.noEntries}

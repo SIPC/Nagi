@@ -6,6 +6,7 @@ import { InviteCard } from "@/pages/invite";
 import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
 import { UpdateCard, UpdateDot } from "@/pages/update";
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { ActivityCard } from "@/pages/activity";
@@ -28,7 +29,7 @@ export const settingsTabs = [
 
 export type SettingsTab = (typeof settingsTabs)[number]["value"];
 
-export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: SettingsTab) => void }) {
+export function SettingsPage({ tab }: { tab: SettingsTab }) {
   const { isAdmin } = useRole();
   // 不是管理员时只有自己的账号。面板设置的接口也会拒绝。
   const tabs = isAdmin ? [...settingsTabs] : settingsTabs.filter((x) => x.value === "security");
@@ -39,18 +40,21 @@ export function SettingsPage({ tab, onTab }: { tab: SettingsTab; onTab: (t: Sett
       <div className="grid gap-8 md:grid-cols-[11rem_minmax(0,1fr)] md:gap-12">
         <nav className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
           {tabs.map((t) => (
-            <button
+            <Link
               key={t.value}
-              type="button"
-              onClick={() => onTab(t.value)}
+              to="/settings"
+              search={{ tab: t.value === "access" ? undefined : t.value }}
+              replace
+              activeOptions={{ explicitUndefined: true }}
+              aria-current={t.value === cur.value ? "page" : undefined}
               className={cn(
-                "flex h-8 shrink-0 cursor-pointer items-center rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                "flex h-8 shrink-0 cursor-pointer items-center rounded-md px-2.5 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset",
                 t.value === cur.value && "bg-accent font-medium text-foreground",
               )}
             >
               {t.label}
               {t.value === "update" && <UpdateDot />}
-            </button>
+            </Link>
           ))}
         </nav>
         <div className="min-w-0">

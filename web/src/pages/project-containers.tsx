@@ -230,7 +230,15 @@ function ContainersTable({
                   </Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-medium group-hover:underline">{m.name}</span>
+                      {/* 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；整行可点只是方便鼠标。 */}
+                      <Link
+                        to="/projects/$projectId/c/$container"
+                        params={{ projectId: project.id, container: m.name }}
+                        className="rounded-sm font-medium outline-none group-hover:underline focus-visible:ring-2 focus-visible:ring-ring/40"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {m.name}
+                      </Link>
                       <span className="text-xs text-muted-foreground">{containerKind(m)}</span>
                       {m.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
                       {m.sharedEnvOutdated && <Badge tone="warning">{t.projectContainers.badges.sharedEnvPending}</Badge>}
