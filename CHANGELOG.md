@@ -8,6 +8,16 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.11.1
+
+### 改进
+
+- 节点卡片的 CPU 恢复显示「当前 / 上限」，例如 `12% / 1200%`，每核按 100% 计算。拓扑图和节点详情仍显示占整机的比例。
+
+### 升级说明
+
+- 只改了前端，面板更新后即可使用，节点无需升级。
+
 ## v0.11.0
 
 ### 新功能
