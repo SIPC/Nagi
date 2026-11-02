@@ -15,13 +15,13 @@ function AuthShell({ title, description, children }: { title?: string; descripti
       <div className="fixed top-4 right-4">
         <LanguageButton />
       </div>
-      <main className="grid w-full max-w-[360px] gap-6">
+      <main className="grid w-full max-w-[320px] gap-6">
         <div className="grid justify-items-start gap-3">
           <Waves className="h-6 w-[42px] text-wave" />
           <span className="sr-only">Nagi</span>
           {title && (
             <div className="grid gap-1">
-              <h1 className="text-2xl leading-8 font-medium tracking-tight">{title}</h1>
+              <h1 className="text-2xl leading-8 font-semibold tracking-tight">{title}</h1>
               {description && <p className="text-muted-foreground">{description}</p>}
             </div>
           )}
@@ -205,7 +205,6 @@ export function LoginPage() {
           {t.auth.login.submit}
         </Button>
       </form>
-      <p className="text-xs text-muted-foreground">{t.auth.login.forgotHint(<span className="font-mono">nagi reset password</span>)}</p>
     </AuthShell>
   );
 }

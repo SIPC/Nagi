@@ -17,7 +17,6 @@ export default {
   login: {
     title: "登录 Nagi",
     back: "返回",
-    forgotHint: (command: ReactNode) => <>忘记密码时在面板服务器上执行 {command}</>,
     totpTitle: "两步验证",
     description: "使用管理员账号登录面板。",
     totpDescription: "输入验证器应用中的 6 位验证码。",

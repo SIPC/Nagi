@@ -271,7 +271,7 @@ export function AppLayout() {
           id="main"
           tabIndex={-1}
           className={cn(
-            "max-w-[1184px] px-4 pt-6 pb-16 outline-none md:px-8 md:pt-8",
+            "mx-auto max-w-[1184px] px-4 pt-6 pb-16 outline-none md:px-8 md:pt-8",
             split && "max-md:pt-4",
             split && "xl:flex xl:max-w-none xl:items-start xl:px-0 xl:pt-0 xl:pb-0",
           )}
@@ -297,7 +297,7 @@ export function NotFound() {
             <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="var(--wave)" strokeWidth="2.4" strokeLinecap="round" />
             <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--muted-foreground)" strokeWidth="2.4" strokeLinecap="round" />
           </svg>
-          <h1 className="mt-2 text-2xl leading-8 font-medium">{t.app.notFound.title}</h1>
+          <h1 className="mt-2 text-2xl leading-8 font-semibold">{t.app.notFound.title}</h1>
           <p className="text-muted-foreground">{t.app.notFound.body}</p>
           <ButtonLink to="/projects" className="mt-4" readOnlyOk>
             {t.app.notFound.back}
@@ -346,7 +346,7 @@ export function PageHeader({
   return (
     <div className={cn("mb-6 flex flex-wrap items-start justify-between gap-4", className)}>
       <div className="min-w-0">
-        <h1 className="flex flex-wrap items-center gap-3 text-2xl leading-8 font-medium tracking-tight [&>span]:font-normal [&>span]:tracking-normal">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-3 text-2xl leading-8 font-semibold tracking-tight [&>span]:font-normal [&>span]:tracking-normal">{title}</h1>
         {description && <p className="text-pretty text-muted-foreground">{description}</p>}
         {meta && <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">{meta}</div>}
       </div>

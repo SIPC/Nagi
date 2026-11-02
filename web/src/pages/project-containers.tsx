@@ -154,7 +154,7 @@ export function ContainersTab({
           </Section>
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
-          <h2 className="text-base font-medium">{t.projectContainers.add.noContainers}</h2>
+          <h2 className="text-base font-semibold">{t.projectContainers.add.noContainers}</h2>
           <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }}>
             <Plus />
             {t.projectContainers.table.addContainer}
@@ -1103,7 +1103,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
       {container.hasDraft && (
         <section className="grid gap-4">
           <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <h2 className="text-base font-medium">{c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}</h2>
+            <h2 className="text-base font-semibold">{c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}</h2>
             <Button variant="ghost" className="-mr-3" onClick={discard} disabled={busy}>
               {c.discardDraft}
             </Button>
@@ -1231,7 +1231,7 @@ function ConfigGroup({ title, help, action, children }: { title: React.ReactNode
   return (
     <section className="grid max-w-[720px] gap-4">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h2 className="flex items-center gap-1 text-base font-medium">
+        <h2 className="flex items-center gap-1 text-base font-semibold">
           {title}
           {help && <HelpTip>{help}</HelpTip>}
         </h2>

@@ -306,7 +306,7 @@ export function Section({
       {(title || actions) && (
         <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:min-h-10 max-md:gap-y-0">
           <div className="min-w-0 max-md:grow">
-            <h2 className={cn("flex items-center gap-1 text-base font-medium", tone === "danger" && "text-destructive")}>
+            <h2 className={cn("flex items-center gap-1 text-base font-semibold", tone === "danger" && "text-destructive")}>
               {title}
               {help && <HelpTip>{help}</HelpTip>}
             </h2>
@@ -642,7 +642,7 @@ export function Empty({ title, children, action, icon }: { title: string; childr
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
       {icon && <div className="mb-1 text-muted-foreground [&_svg]:size-5">{icon}</div>}
-      <p className="text-base font-medium">{title}</p>
+      <p className="text-base font-semibold">{title}</p>
       {children && <div className="max-w-md text-muted-foreground">{children}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>

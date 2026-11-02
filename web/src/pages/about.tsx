@@ -40,7 +40,7 @@ export function AboutCard() {
       <div className="grid justify-items-start gap-4 pb-8">
         <Waves className="h-8 w-14 text-wave" />
         <div className="grid gap-1">
-          <h2 className="text-2xl leading-8 font-medium tracking-tight">Nagi</h2>
+          <h2 className="text-2xl leading-8 font-semibold tracking-tight">Nagi</h2>
           <p className="text-pretty text-muted-foreground">{a.tagline}</p>
         </div>
         <div className="flex min-h-5 flex-wrap items-center gap-x-4 gap-y-1">

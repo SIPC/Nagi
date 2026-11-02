@@ -131,7 +131,7 @@ export function ProjectSplit({
         <ProjectColumn projectId={projectId} tab={tab} container={container} view={view} adding={adding} />
       </aside>
       <div className="min-w-0 flex-1 xl:px-8 xl:pt-8 xl:pb-16">
-        <div key={adding ? "add" : container ? "c/" + container : tab} className="animate-fade-in motion-safe:animate-pane-in xl:max-w-[1120px]">
+        <div key={adding ? "add" : container ? "c/" + container : tab} className="animate-fade-in motion-safe:animate-pane-in xl:mx-auto xl:max-w-[1120px]">
           {children}
         </div>
       </div>
@@ -229,11 +229,11 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
   return (
     <div className="grid grid-cols-1 gap-4">
       <div className="grid gap-1 px-2">
-        <Link to="/projects" className="text-[13px] leading-5">
+        <Link to="/projects" className="w-fit text-[13px] leading-5 text-muted-foreground hover:text-foreground">
           {t.project.breadcrumb}
         </Link>
-        <h2 className="truncate leading-5 font-medium">{p.name}</h2>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h2 className="truncate text-base leading-6 font-semibold">{p.name}</h2>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
           <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
           </span>
