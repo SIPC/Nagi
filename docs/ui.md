@@ -61,6 +61,7 @@
 | `Menu` | 「更多」下拉菜单（shadcn DropdownMenu），选项可带 `hint` 说明不可用的原因 |
 | `Select` | 下拉选择（shadcn Select），写法和原生 select 一样：`<option>` 作子元素 |
 | `confirmAction` / `ask` / `notify` | 确认框和提示（shadcn AlertDialog），`action` 写具体动作。不用浏览器的 `confirm`、`alert` |
+| `ButtonLink` | 外观是按钮的链接，不要在 `Link` 里套 `Button`；只读时置灰，只是跳转的加 `readOnlyOk` |
 | `EnvEditor` | 环境变量编辑器：一行一个变量，像密钥的值默认隐藏，可切到文本批量编辑 |
 | `ConfigDiff` | 草稿相对当前版本的改动 |
 | `useUnsaved` | 表单有未保存的修改时，离开前确认 |

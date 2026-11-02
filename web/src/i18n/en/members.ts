@@ -26,6 +26,8 @@ export default {
   passwordReset: (name) => `Password reset for ${name}. Existing sign-ins were ended`,
   clearTotp: "Clear two-factor",
   clearTotpConfirm: (name) => `Clear two-factor authentication for ${name}? The account can then sign in with just a password.`,
+  changeRole: "Change role",
+  roleConfirm: (name, role) => `Change ${name}'s role to ${role}? This takes effect immediately.`,
   deleteConfirm: (name) => `Delete member ${name}? The account can no longer sign in, and existing sign-ins end immediately.`,
   unknownAddress: "Unknown address",
   signedInAt: (date) => `Signed in ${date}`,

@@ -189,7 +189,7 @@ export function AlertSettings() {
                     ) : (
                       <Input
                         className="h-8 min-w-64 font-mono"
-                        placeholder="https://..."
+                        placeholder="https://…"
                         aria-label={t.alerts.webhookUrl}
                         value={c.url}
                         onChange={(e) => update(i, { url: e.target.value })}

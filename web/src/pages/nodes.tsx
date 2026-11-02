@@ -435,14 +435,14 @@ function RenameNode({ n, onDone }: { n: Node; onDone: () => void }) {
       }}
     >
       <Field label={t.nodes.rename.label} htmlFor="node-name" hint={t.nodes.rename.hint(n.info?.hostname || "—")}>
-        <Input id="node-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus required />
+        <Input id="node-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus required pattern=".*\S.*" />
       </Field>
       {error && <Alert>{error}</Alert>}
       <FormActions>
         <Button size="sm" variant="ghost" onClick={onDone}>
           {t.common.actions.cancel}
         </Button>
-        <Button type="submit" size="sm" disabled={busy || !trimmed}>
+        <Button type="submit" size="sm" disabled={busy}>
           {busy && <Spinner />}
           {t.common.actions.save}
         </Button>
@@ -591,11 +591,11 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
         }}
       >
         <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} hint={t.nodes.settings.rootHint} help={t.nodes.settings.rootHelp}>
-          <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required />
+          <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required pattern=".*\S.*" />
         </Field>
         {error && <Alert>{error}</Alert>}
         <FormActions>
-          <Button type="submit" size="sm" disabled={busy || !value.trim()}>
+          <Button type="submit" size="sm" disabled={busy}>
             {busy && <Spinner />}
             {t.common.actions.save}
           </Button>

@@ -10,6 +10,7 @@ export default {
     pathLabel: "当前路径",
     empty: "这个目录是空的",
     truncated: "文件太多，只列出前 5000 个。",
+    showMore: (n: number) => `显示更多（还有 ${n} 个）`,
     columns: { name: "名称", size: "大小", modified: "最后修改" },
     download: "下载",
     downloadDir: "下载此目录",

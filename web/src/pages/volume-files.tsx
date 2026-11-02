@@ -2,7 +2,7 @@
 // 规则在节点上执行（只读角色看不到入口，接口也拒绝；有顶替的容器只在持有租约时能写）。
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Download, File, Folder, FolderPlus, Link2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
 import { Alert, Button, Dialog, EmptyRow, Field, Input, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
@@ -12,6 +12,9 @@ import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
+
+// 目录一次显示的条数，内容多时点「显示更多」。
+const pageSize = 200;
 
 const maxEditBytes = 1 << 20;
 const maxUploadBytes = 8 * 1024 ** 3;
@@ -51,6 +54,8 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
     queryClient.invalidateQueries({ queryKey: ["volume-files", project.id, container.name, volume] });
     queryClient.invalidateQueries({ queryKey: ["volumes", project.id, container.name] });
   };
+  const [shown, setShown] = useState(pageSize);
+  useEffect(() => setShown(pageSize), [path, snapshot]);
   const join = (name: string) => (path ? `${path}/${name}` : name);
   const parts = path ? path.split("/") : [];
 
@@ -260,7 +265,7 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
                 </tr>
               </thead>
               <tbody>
-                {files.data.entries.map((e) => (
+                {files.data.entries.slice(0, shown).map((e) => (
                   <tr key={e.name}>
                     <Td className="font-mono text-xs">
                       {e.isDir ? (
@@ -308,6 +313,13 @@ export function VolumeFiles({ project, container, volume, label, onClose }: Prop
                 ))}
               </tbody>
             </Table>
+          )}
+          {(files.data?.entries.length ?? 0) > shown && (
+            <div className="mt-2 flex justify-center">
+              <Button readOnlyOk size="sm" variant="ghost" onClick={() => setShown(shown + pageSize)}>
+                {m.showMore((files.data?.entries.length ?? 0) - shown)}
+              </Button>
+            </div>
           )}
           {files.data?.truncated && <p className="mt-2 text-xs text-muted-foreground">{m.truncated}</p>}
         </div>

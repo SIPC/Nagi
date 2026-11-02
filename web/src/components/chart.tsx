@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
 
 // 时间图表：折线（可有多条）或堆叠柱。横轴是选定的时间范围 [from, to]，不是数据的范围，
 // 所以一段时间没有数据时那一段就是空的。鼠标移上去显示该时刻各条序列的值。
@@ -24,13 +24,16 @@ function useWidth() {
   return { ref, width };
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
+const clock = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
+const timeFormat = new Intl.DateTimeFormat(locale, clock);
+const secondsFormat = new Intl.DateTimeFormat(locale, { ...clock, second: "2-digit" });
+const dateFormat = new Intl.DateTimeFormat(locale, { ...clock, month: "2-digit", day: "2-digit" });
+const dateSecondsFormat = new Intl.DateTimeFormat(locale, { ...clock, second: "2-digit", month: "2-digit", day: "2-digit" });
 
 // fmtTime：24 小时以内只写时刻，更长的范围带上日期。
 export function fmtTime(t: number, withDate: boolean, withSeconds = false) {
-  const d = new Date(t * 1000);
-  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}${withSeconds ? ":" + pad(d.getSeconds()) : ""}`;
-  return withDate ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${time}` : time;
+  const format = withDate ? (withSeconds ? dateSecondsFormat : dateFormat) : withSeconds ? secondsFormat : timeFormat;
+  return format.format(t * 1000);
 }
 
 export function TimeChart({

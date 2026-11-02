@@ -11,6 +11,7 @@ export default {
     pathLabel: "Current path",
     empty: "This directory is empty",
     truncated: "Too many files. Only the first 5,000 are listed.",
+    showMore: (n) => `Show more (${n} left)`,
     columns: { name: "Name", size: "Size", modified: "Last modified" },
     download: "Download",
     downloadDir: "Download this directory",

@@ -267,11 +267,12 @@ function Volumes({ project, container }: { project: Project; container: Containe
             onChange={(e) => setAdding(e.target.value)}
             placeholder={m.addPlaceholder}
             aria-label={m.addLabel}
+            required
             pattern="/.*"
             title={m.addTitle}
             className="h-8 max-w-64 font-mono text-[13px]"
           />
-          <Button type="submit" size="sm" variant="outline" disabled={busy || !adding.trim()}>
+          <Button type="submit" size="sm" variant="outline" disabled={busy}>
             {busy && <Spinner />}
             {m.add}
           </Button>

@@ -148,7 +148,11 @@ export function MembersCard() {
                     aria-label={t.members.role}
                     className="h-8 w-28 text-[13px]"
                     value={u.role}
-                    onChange={(e) => call(() => settingsClient.updateUser({ id: u.id, role: e.target.value }), t.common.feedback.saved)}
+                    onChange={async (e) => {
+                      const role = e.target.value;
+                      if (await confirmAction(t.members.roleConfirm(u.username, t.members.roles[role as (typeof roles)[number]]), { action: t.members.changeRole }))
+                        call(() => settingsClient.updateUser({ id: u.id, role }), t.common.feedback.saved);
+                    }}
                   >
                     {roleOptions}
                   </Select>

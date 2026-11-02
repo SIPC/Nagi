@@ -25,6 +25,8 @@ export default {
   passwordReset: (name: string) => `已重置 ${name} 的密码，其已有登录已失效`,
   clearTotp: "清除两步验证",
   clearTotpConfirm: (name: string) => `清除 ${name} 的两步验证？此后该账号只用密码即可登录。`,
+  changeRole: "修改角色",
+  roleConfirm: (name: string, role: string) => `把 ${name} 的角色改成${role}？立即生效。`,
   deleteConfirm: (name: string) => `删除成员 ${name}？该账号将无法登录，已有登录立即失效。`,
   unknownAddress: "未知地址",
   signedInAt: (date: string) => `登录于 ${date}`,
