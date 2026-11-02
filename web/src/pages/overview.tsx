@@ -181,7 +181,8 @@ function Sankey({ rows: allRows, flows: allFlows }: { rows: { id: string; name: 
     }
   }
   const sum = (list: Flow[]) => list.reduce((acc, f) => acc + f.rate, 0);
-  const height = (groups[groups.length - 1]?.center ?? 0) + 13;
+  // 最后一行可能有多条线，比名称那两行更低，取较低的一边，否则最下面的标注会被裁掉。
+  const height = Math.max((groups[groups.length - 1]?.center ?? 0) + 13, y - groupGap + 2);
   const nameMax = Math.max(label - 8, 40);
 
   return (
@@ -311,12 +312,18 @@ function Stat({ label, value, unit, to, title }: { label: string; value: ReactNo
 
 const thClass =
   "h-9 bg-[linear-gradient(var(--border),var(--border))] [background-position:bottom] [background-size:100%_1px] bg-no-repeat px-2 text-left text-[13px] font-normal whitespace-nowrap text-muted-foreground first:[background-position:right_bottom] first:[background-size:calc(100%-8px)_1px] last:[background-position:left_bottom] last:[background-size:calc(100%-8px)_1px]";
-const tdClass = "h-10 px-2 py-1 align-middle whitespace-nowrap transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
+const tdClass = "h-9 truncate px-2 py-1 align-middle whitespace-nowrap text-muted-foreground transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
 
-function OverviewTable({ head, children }: { head: string[]; children: ReactNode }) {
+// 列宽跟内容走（cols 是除最后一列外的宽度），靠左排，多出来的宽度都留给最后一列。
+function OverviewTable({ head, cols, children }: { head: string[]; cols: number[]; children: ReactNode }) {
   return (
     <div className="-mx-2 overflow-x-auto">
-      <table className="w-full border-separate border-spacing-0">
+      <table className="w-full border-separate border-spacing-0 md:table-fixed">
+        <colgroup>
+          {head.map((h, i) => (
+            <col key={h} style={{ width: cols[i] }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {head.map((h) => (
@@ -587,7 +594,7 @@ export function OverviewPage() {
         }
       />
       {nodes.error && <QueryError className="mb-6" error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4 md:flex md:flex-wrap md:gap-x-12">
         <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
         <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
@@ -597,7 +604,7 @@ export function OverviewPage() {
       </div>
 
       {noNodes ? (
-        <div className="mt-8 border-t pt-8">
+        <div className="mt-6 border-t pt-6">
           <Empty
             title={o.noNodes.title}
             action={
@@ -674,7 +681,7 @@ export function OverviewPage() {
             {nodes.isPending ? (
               <RowsSkeleton />
             ) : (
-              <OverviewTable head={[o.nodes.name, o.nodes.status, o.nodes.cpu, o.nodes.memory, o.nodes.disk, o.nodes.inbound, o.nodes.outbound, o.nodes.containers]}>
+              <OverviewTable cols={[176, 80, 72, 136, 136, 104, 104]} head={[o.nodes.name, o.nodes.status, o.nodes.cpu, o.nodes.memory, o.nodes.disk, o.nodes.inbound, o.nodes.outbound, o.nodes.containers]}>
                 {(nodes.data?.nodes ?? []).map((n) => {
                   const u = n.online ? n.usage : undefined;
                   const memTotal = Number(n.info?.memoryBytes ?? 0n);
@@ -684,8 +691,8 @@ export function OverviewPage() {
                   const net = n.online ? live.data?.get(n.id) : undefined;
                   return (
                     <tr key={n.id} className="group">
-                      <td className={tdClass}>
-                        <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className="font-medium">
+                      <td className={cn(tdClass, "text-foreground")} title={n.name}>
+                        <Link to="/nodes/$nodeId" params={{ nodeId: n.id }}>
                           {n.name}
                         </Link>
                       </td>
@@ -711,16 +718,16 @@ export function OverviewPage() {
                 <EmptyRow>{o.routes.empty}</EmptyRow>
               )
             ) : (
-              <OverviewTable head={[o.routes.mapping, o.routes.project, o.routes.container, o.routes.requests, o.routes.errorRate, o.routes.inbound, o.routes.outbound]}>
+              <OverviewTable cols={[176, 160, 136, 104, 72, 104]} head={[o.routes.mapping, o.routes.project, o.routes.container, o.routes.requests, o.routes.errorRate, o.routes.inbound, o.routes.outbound]}>
                 {routeRows.map((x) => (
                   <tr key={`${x.project.id}/${x.route.name}`} className="group">
-                    <td className={cn(tdClass, "font-mono text-[13px] font-medium")}>{x.route.name}</td>
-                    <td className={tdClass}>
+                    <td className={cn(tdClass, "font-mono text-[13px] text-foreground")}>{x.route.name}</td>
+                    <td className={cn(tdClass, "text-foreground")}>
                       <Link to="/projects/$projectId" params={{ projectId: x.project.id }}>
                         {x.project.name}
                       </Link>
                     </td>
-                    <td className={cn(tdClass, "text-muted-foreground")}>{x.route.container}</td>
+                    <td className={tdClass}>{x.route.container}</td>
                     <td className={tdClass}>{t.metrics.count(Math.round(x.req).toLocaleString(locale))}</td>
                     <td className={tdClass}>{x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash}</td>
                     <td className={tdClass}>{fmtTotal(x.in)}</td>

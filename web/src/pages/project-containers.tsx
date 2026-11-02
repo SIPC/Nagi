@@ -854,7 +854,7 @@ function ContainerEvents({ project, container }: { project: Project; container: 
             <tbody>
               {list.map(({ entry: e, count }) => {
                 const tone = e.kind === "alert" ? (e.action === "resolved" ? "success" : "warning") : e.failed ? "danger" : "success";
-                const td = "h-10 px-2 py-1 align-middle transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
+                const td = "h-9 px-2 py-1 align-middle transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
                 return (
                   <tr key={String(e.id)} className="group">
                     <td className={cn(td, "w-28 whitespace-nowrap text-muted-foreground")} title={formatDateTime(toDate(e.time))}>

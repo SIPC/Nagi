@@ -575,7 +575,7 @@ function RouteMetrics({ name, data, range, divided, empty, quiet }: { name?: str
 
   return (
     <>
-      <div className={cn("font-medium", divided && "mt-4 border-t pt-8")}>
+      <div className={cn("font-medium", divided && "mt-4 border-t pt-6")}>
         {m.portMapping}
         {name && " "}
         {name && <span className="ml-1 font-mono text-[13px] font-normal text-muted-foreground">{name}</span>}

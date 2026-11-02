@@ -34,9 +34,9 @@
 .dark {
   color-scheme: dark;
   --background: #0a0a0a;
-  --foreground: #fafafa;
+  --foreground: #ededed;
   --card: #171717;
-  --card-foreground: #fafafa;
+  --card-foreground: #ededed;
   --muted: #262626;
   --muted-foreground: #a1a1a1;
   --subtle: #171717;
@@ -46,7 +46,7 @@
   --primary: #e5e5e5;
   --primary-foreground: #171717;
   --accent: #262626;
-  --accent-foreground: #fafafa;
+  --accent-foreground: #ededed;
   --ring: #737373;
   --destructive: #ff6467;
   --success: #4ade80;

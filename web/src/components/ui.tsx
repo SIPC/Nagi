@@ -281,7 +281,7 @@ export function DialogActions({ className, ...props }: React.ComponentProps<"div
   return <div className={cn("flex items-center justify-end gap-2 max-md:[&>*]:flex-1", className)} {...props} />;
 }
 
-// Section：页面上的一组内容，没有外框。区块之间一条细线，线上下各 32，所以父级不要再加间距（Sections 排列）。
+// Section：页面上的一组内容，没有外框。区块之间一条细线，线上下各 24，所以父级不要再加间距（Sections 排列）。
 // 说明放进标题旁的问号（help），不占一行；description 只给确实需要一直看到的话。
 export function Section({
   title,
@@ -302,7 +302,7 @@ export function Section({
   children?: React.ReactNode;
 }) {
   return (
-    <section className={cn("grid gap-4 border-t pt-8 mt-8 first:mt-0 first:border-t-0 first:pt-0 max-md:mt-4 max-md:gap-2 max-md:pt-4", className)}>
+    <section className={cn("grid gap-4 border-t pt-6 mt-6 first:mt-0 first:border-t-0 first:pt-0 max-md:mt-4 max-md:gap-2 max-md:pt-4", className)}>
       {(title || actions) && (
         <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:min-h-10 max-md:gap-y-0">
           <div className="min-w-0 max-md:grow">
@@ -359,13 +359,13 @@ export function Row({
 }) {
   const merged = (cols ?? []).filter((c) => !c.phone && c.content !== undefined && c.content !== null && c.content !== "");
   return (
-    <div className={cn("flex gap-4 rounded-md px-2 py-2 transition-colors hover:bg-accent max-md:gap-2 max-md:py-2.5", sub ? "min-h-14 max-md:min-h-[60px]" : merged.length > 0 ? "min-h-10 max-md:min-h-[60px]" : "min-h-10 max-md:min-h-11", center ? "items-center" : "items-start", !sub && !center && "py-2.5 max-md:py-3", className)}>
+    <div className={cn("flex gap-4 rounded-md px-2 transition-colors hover:bg-accent max-md:gap-2 max-md:py-2.5", sub ? "min-h-13 py-1.5 max-md:min-h-[60px]" : merged.length > 0 ? "min-h-9 max-md:min-h-[60px]" : "min-h-9 max-md:min-h-11", center ? "items-center" : "items-start", !sub && !center && "py-2 max-md:py-3", !sub && center && "min-h-10 py-1", className)}>
       {icon && <span className="mt-0.5 flex shrink-0 text-muted-foreground [&_svg]:size-4">{icon}</span>}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2 leading-5">{title}</div>
-        {sub && <div className="text-[13px] leading-5 font-medium text-muted-foreground max-md:hidden">{sub}</div>}
+        {sub && <div className="text-[13px] leading-5 text-muted-foreground max-md:hidden">{sub}</div>}
         {(sub || merged.length > 0) && (
-          <div className="text-[13px] leading-5 font-medium wrap-anywhere text-muted-foreground md:hidden">
+          <div className="text-[13px] leading-5 wrap-anywhere text-muted-foreground md:hidden">
             {sub}
             {merged.map((c, i) => (
               <span key={i}>
@@ -396,7 +396,7 @@ export function RowsSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div role="status" aria-label={t.common.feedback.loading} className="grid">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="flex min-h-14 items-center justify-between gap-4">
+        <div key={i} className="flex min-h-13 items-center justify-between gap-4">
           <div className="grid flex-1 gap-2">
             <Skeleton className="h-3 w-40 max-w-full" />
             <Skeleton className="h-3 w-72 max-w-full" />
@@ -521,7 +521,7 @@ export function Th({ className, ...props }: React.ComponentProps<"th">) {
 }
 
 export function Td({ className, ...props }: React.ComponentProps<"td">) {
-  return <td className={cn("h-10 px-2 py-1 align-middle first:pl-0 last:pr-0", className)} {...props} />;
+  return <td className={cn("h-9 px-2 py-1 align-middle first:pl-0 last:pr-0", className)} {...props} />;
 }
 
 // ---- 状态与提示 ----
@@ -745,7 +745,7 @@ export function Tabs<T extends string>({
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="-mb-px inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 border-b-2 border-transparent text-sm whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset data-[state=active]:border-foreground"
+            className="-mb-px inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 border-b-2 border-transparent text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset data-[state=active]:border-foreground data-[state=active]:text-foreground"
           >
             {it.label}
             {it.count !== undefined && it.count > 0 && <span className="text-xs text-muted-foreground">{it.count}</span>}

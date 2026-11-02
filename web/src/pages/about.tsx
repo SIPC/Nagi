@@ -48,7 +48,7 @@ export function AboutCard() {
           {state && (isAdmin ? <Link to="/settings" search={{ tab: "update" }}>{state}</Link> : state)}
         </div>
       </div>
-      <Section className="border-t pt-8" title={a.links.title}>
+      <Section className="border-t pt-6" title={a.links.title}>
         <List>
           <Row title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />
           <Row title={<External href={`${repo}/releases`}>{a.links.changelog}</External>} cols={[{ phone: true, content: "Releases" }]} />
