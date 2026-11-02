@@ -1,21 +1,18 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Boxes, Check, ChevronRight, LogOut, Monitor, Moon, Server, Settings, Sun } from "lucide-react";
+import { Boxes, ChevronRight, Server, Settings } from "lucide-react";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { Button, Empty, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot } from "@/pages/update";
-import { LanguageButton } from "@/components/language";
+import { UserMenu, type ThemeMode } from "@/components/account";
 import { t } from "@/i18n";
 import { CommandPalette, SearchButton } from "@/components/command-palette";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { settingsTabs } from "@/pages/settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { useRole } from "@/components/role";
-
-type ThemeMode = "light" | "dark" | "system";
 
 function readTheme(): ThemeMode {
   try {
@@ -75,34 +72,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   }, [title]);
 }
 
-const themeIcons = { light: Sun, dark: Moon, system: Monitor };
-
-function ThemeMenu({ mode, onChange }: { mode: ThemeMode; onChange: (m: ThemeMode) => void }) {
-  const Icon = themeIcons[mode];
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button readOnlyOk variant="ghost" size="icon" aria-label={t.app.theme.label} title={t.app.theme.label}>
-          <Icon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="min-w-32">
-        {(["light", "dark", "system"] as const).map((m) => {
-          const ItemIcon = themeIcons[m];
-          return (
-            <DropdownMenuItem key={m} className="flex items-center gap-2 [&_svg]:size-3.5" onSelect={() => onChange(m)}>
-              <ItemIcon />
-              {t.app.theme[m]}
-              {mode === m && <Check className="ml-auto" />}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-// 左侧导航（参照 OpenAI 平台后台）：上面是产品名和三个入口，下面是账号、主题和退出。窄屏时收成顶部一行。
+// 左侧导航（参照 OpenAI 平台后台）：上面是产品名和三个入口，下面是用户卡片。窄屏时收成顶部一行。
 const navItems = [
   { to: "/projects", label: t.app.nav.projects, icon: Boxes },
   { to: "/nodes", label: t.app.nav.nodes, icon: Server },
@@ -153,14 +123,8 @@ export function AppLayout() {
       )}
     </Link>
   ));
-  const actions = (
-    <>
-      <LanguageButton account />
-      <ThemeMenu mode={theme.mode} onChange={theme.set} />
-      <Button readOnlyOk variant="ghost" size="icon" onClick={logout} aria-label={t.app.logout} title={t.app.logout}>
-        <LogOut />
-      </Button>
-    </>
+  const userMenu = (compact: boolean) => (
+    <UserMenu me={me.data} theme={theme.mode} onTheme={theme.set} onLogout={logout} readOnly={standby?.isStandby ?? false} compact={compact} />
   );
 
   return (
@@ -175,17 +139,14 @@ export function AppLayout() {
           <SearchButton />
         </div>
         <nav className="mt-3 grid gap-0.5">{nav}</nav>
-        <div className="mt-auto flex items-center gap-1">
-          <span className="min-w-0 flex-1 truncate px-2.5 text-[13px] text-muted-foreground">{me.data?.username}</span>
-          {actions}
-        </div>
+        <div className="mt-auto">{userMenu(false)}</div>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex h-12 items-center gap-1 border-b bg-background/90 px-2 backdrop-blur md:hidden">
           <nav className="flex min-w-0 items-center gap-0.5">{nav}</nav>
           <div className="ml-auto flex shrink-0 items-center">
             <SearchButton compact />
-            {actions}
+            {userMenu(true)}
           </div>
         </header>
         {standby?.isStandby && (

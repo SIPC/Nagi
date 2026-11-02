@@ -141,6 +141,8 @@ type User struct {
 	TotpLastStep int64
 	Language     string
 	Role         string
+	DisplayName  string
+	Avatar       []byte
 }
 
 type Version struct {

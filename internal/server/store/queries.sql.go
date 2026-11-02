@@ -799,7 +799,7 @@ func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users WHERE id = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -814,12 +814,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.TotpLastStep,
 		&i.Language,
 		&i.Role,
+		&i.DisplayName,
+		&i.Avatar,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -834,6 +836,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.TotpLastStep,
 		&i.Language,
 		&i.Role,
+		&i.DisplayName,
+		&i.Avatar,
 	)
 	return i, err
 }
@@ -1496,7 +1500,7 @@ func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error)
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role FROM users ORDER BY id
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -1517,6 +1521,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpLastStep,
 			&i.Language,
 			&i.Role,
+			&i.DisplayName,
+			&i.Avatar,
 		); err != nil {
 			return nil, err
 		}
@@ -1949,6 +1955,21 @@ type SetUserLanguageParams struct {
 
 func (q *Queries) SetUserLanguage(ctx context.Context, arg SetUserLanguageParams) error {
 	_, err := q.db.ExecContext(ctx, setUserLanguage, arg.Language, arg.ID)
+	return err
+}
+
+const setUserProfile = `-- name: SetUserProfile :exec
+UPDATE users SET display_name = ?, avatar = ? WHERE id = ?
+`
+
+type SetUserProfileParams struct {
+	DisplayName string
+	Avatar      []byte
+	ID          int64
+}
+
+func (q *Queries) SetUserProfile(ctx context.Context, arg SetUserProfileParams) error {
+	_, err := q.db.ExecContext(ctx, setUserProfile, arg.DisplayName, arg.Avatar, arg.ID)
 	return err
 }
 

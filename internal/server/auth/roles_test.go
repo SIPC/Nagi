@@ -17,6 +17,7 @@ func TestAllowed(t *testing.T) {
 		removeN  = "/nagi.v1.NodeService/RemoveNode"
 		nodes    = "/nagi.v1.NodeService/ListNodes"
 		password = "/nagi.v1.AuthService/ChangePassword"
+		profile  = "/nagi.v1.AuthService/UpdateProfile"
 		sessions = "/nagi.v1.SettingsService/RevokeSession"
 		unknown  = "/nagi.v1.SettingsService/SomethingNew"
 	)
@@ -31,6 +32,7 @@ func TestAllowed(t *testing.T) {
 		{RoleOperator, events, true}, {RoleViewer, events, true},
 		{RoleViewer, volumes, true}, {RoleViewer, files, false}, {RoleViewer, delFile, false},
 		{RoleOperator, volumes, true}, {RoleOperator, files, true}, {RoleOperator, delFile, true},
+		{RoleOperator, profile, true}, {RoleViewer, profile, true},
 		{RoleViewer, list, true}, {RoleViewer, nodes, true}, {RoleViewer, password, true}, {RoleViewer, sessions, true},
 		{RoleViewer, deploy, false}, {RoleViewer, key, false}, {RoleViewer, settings, false}, {RoleViewer, users, false}, {RoleViewer, alerts, false}, {RoleViewer, removeN, false}, {RoleViewer, unknown, false},
 		{"", list, false}, {"root", list, false},

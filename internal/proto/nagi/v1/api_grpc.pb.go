@@ -164,6 +164,7 @@ const (
 	AuthService_Me_FullMethodName             = "/nagi.v1.AuthService/Me"
 	AuthService_ChangePassword_FullMethodName = "/nagi.v1.AuthService/ChangePassword"
 	AuthService_SetLanguage_FullMethodName    = "/nagi.v1.AuthService/SetLanguage"
+	AuthService_UpdateProfile_FullMethodName  = "/nagi.v1.AuthService/UpdateProfile"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -178,6 +179,8 @@ type AuthServiceClient interface {
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
 	SetLanguage(ctx context.Context, in *SetLanguageRequest, opts ...grpc.CallOption) (*SetLanguageResponse, error)
+	// 保存自己的个人资料（显示名称和头像），整份覆盖。
+	UpdateProfile(ctx context.Context, in *UpdateProfileRequest, opts ...grpc.CallOption) (*UpdateProfileResponse, error)
 }
 
 type authServiceClient struct {
@@ -238,6 +241,16 @@ func (c *authServiceClient) SetLanguage(ctx context.Context, in *SetLanguageRequ
 	return out, nil
 }
 
+func (c *authServiceClient) UpdateProfile(ctx context.Context, in *UpdateProfileRequest, opts ...grpc.CallOption) (*UpdateProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateProfileResponse)
+	err := c.cc.Invoke(ctx, AuthService_UpdateProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -250,6 +263,8 @@ type AuthServiceServer interface {
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
 	SetLanguage(context.Context, *SetLanguageRequest) (*SetLanguageResponse, error)
+	// 保存自己的个人资料（显示名称和头像），整份覆盖。
+	UpdateProfile(context.Context, *UpdateProfileRequest) (*UpdateProfileResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -274,6 +289,9 @@ func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePas
 }
 func (UnimplementedAuthServiceServer) SetLanguage(context.Context, *SetLanguageRequest) (*SetLanguageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetLanguage not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdateProfile(context.Context, *UpdateProfileRequest) (*UpdateProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateProfile not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -386,6 +404,24 @@ func _AuthService_SetLanguage_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_UpdateProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdateProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdateProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdateProfile(ctx, req.(*UpdateProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -412,6 +448,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetLanguage",
 			Handler:    _AuthService_SetLanguage_Handler,
+		},
+		{
+			MethodName: "UpdateProfile",
+			Handler:    _AuthService_UpdateProfile_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

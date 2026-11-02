@@ -27,6 +27,7 @@ export default {
     Login: "登录",
     Logout: "退出登录",
     ChangePassword: "修改密码",
+    UpdateProfile: "修改个人资料",
     Setup: "初始化面板",
     CreateProject: "新建项目",
     UpdateProjectSettings: "修改项目设置",

@@ -34,6 +34,9 @@ import (
 // maxRequestBytes 是接口请求体（解压后）的上限。compose、环境变量这些都远小于它。
 const maxRequestBytes = 4 << 20
 
+// maxAvatarBytes 是头像的大小上限。界面上传前会缩小到很小的尺寸，这里只防止绕过界面塞大文件。
+const maxAvatarBytes = 256 << 10
+
 // SetupTokenTTL 是面板初始化令牌的有效期。
 const SetupTokenTTL = 24 * time.Hour
 
@@ -168,6 +171,9 @@ func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeReques
 	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		resp.Language = row.Language
+		resp.DisplayName = row.DisplayName
+		resp.Avatar = row.Avatar
+		resp.AvatarType = avatarType(row.Avatar)
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -182,6 +188,36 @@ func (s *authService) SetLanguage(ctx context.Context, req *connect.Request[nagi
 		return nil, err
 	}
 	return connect.NewResponse(&nagiv1.SetLanguageResponse{}), nil
+}
+
+// avatarType 按内容判断头像的类型，不是允许的图片时返回空。头像显示在页面里，所以不接受 SVG 这类能带脚本的格式。
+func avatarType(avatar []byte) string {
+	switch t := http.DetectContentType(avatar); t {
+	case "image/png", "image/jpeg", "image/webp":
+		return t
+	}
+	return ""
+}
+
+// UpdateProfile 保存当前用户的显示名称和头像。
+func (s *authService) UpdateProfile(ctx context.Context, req *connect.Request[nagiv1.UpdateProfileRequest]) (*connect.Response[nagiv1.UpdateProfileResponse], error) {
+	name := strings.TrimSpace(req.Msg.GetDisplayName())
+	if utf8.RuneCountInString(name) > 32 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("显示名称不能超过 32 个字符"))
+	}
+	avatar := req.Msg.GetAvatar()
+	if len(avatar) > maxAvatarBytes {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("头像不能超过 256 KB"))
+	}
+	if len(avatar) == 0 {
+		avatar = []byte{} // 列不能为 NULL。
+	} else if avatarType(avatar) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("头像只能是 PNG、JPEG 或 WebP 图片"))
+	}
+	if err := s.Q.SetUserProfile(ctx, store.SetUserProfileParams{DisplayName: name, Avatar: avatar, ID: auth.CurrentUser(ctx).ID}); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.UpdateProfileResponse{}), nil
 }
 
 func (s *authService) ChangePassword(ctx context.Context, req *connect.Request[nagiv1.ChangePasswordRequest]) (*connect.Response[nagiv1.ChangePasswordResponse], error) {

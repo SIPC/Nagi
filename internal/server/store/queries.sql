@@ -132,6 +132,9 @@ UPDATE users SET totp_last_step = ? WHERE id = ? AND totp_last_step < ?;
 -- name: SetUserLanguage :exec
 UPDATE users SET language = ? WHERE id = ?;
 
+-- name: SetUserProfile :exec
+UPDATE users SET display_name = ?, avatar = ? WHERE id = ?;
+
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = ?;
 

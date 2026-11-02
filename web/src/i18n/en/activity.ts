@@ -28,6 +28,7 @@ export default {
     Login: "Sign in",
     Logout: "Sign out",
     ChangePassword: "Change password",
+    UpdateProfile: "Update profile",
     Setup: "Set up panel",
     CreateProject: "Create project",
     UpdateProjectSettings: "Update project settings",

@@ -39,6 +39,8 @@ service AuthService {
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
   // 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
   rpc SetLanguage(SetLanguageRequest) returns (SetLanguageResponse);
+  // 保存自己的个人资料（显示名称和头像），整份覆盖。
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
 }
 
 message LoginRequest {
@@ -70,7 +72,21 @@ message MeResponse {
   string language = 3;
   // admin、operator、viewer。
   string role = 4;
+  // 显示名称，空表示显示用户名。登录仍然用用户名。
+  string display_name = 5;
+  // 头像图片的内容和类型，没有头像时为空。
+  bytes avatar = 6;
+  string avatar_type = 7;
 }
+
+message UpdateProfileRequest {
+  // 空表示显示用户名。
+  string display_name = 1;
+  // 头像图片（PNG、JPEG、WebP），不超过 256 KB；空表示没有头像。
+  bytes avatar = 2;
+}
+
+message UpdateProfileResponse {}
 
 message SetLanguageRequest {
   // "zh-CN"、"en"；空表示不指定（跟随浏览器）。

@@ -4,6 +4,7 @@ import app from "./app";
 import auth from "./auth";
 import settings from "./settings";
 import access from "./access";
+import account from "./account";
 import activity from "./activity";
 import members from "./members";
 import alerts from "./alerts";
@@ -29,6 +30,7 @@ export default {
   auth,
   settings,
   access,
+  account,
   activity,
   members,
   alerts,

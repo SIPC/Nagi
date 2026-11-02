@@ -27,7 +27,7 @@
 
 ## 布局
 
-- **左侧竖排导航**（`AppLayout`）：顶部标识和搜索（Ctrl/⌘ + K），中间 项目 / 节点 / 设置，节点上有离线数量，底部用户名、主题（浅色、深色、跟随系统）、退出。标签页标题显示当前页面。窄屏（< 768px）改为顶部一行。内容区最宽 1024px。
+- **左侧竖排导航**（`AppLayout`）：顶部标识和搜索（Ctrl/⌘ + K），中间 项目 / 节点 / 设置，节点上有离线数量，底部是用户卡片（头像、显示名称、角色），点开是个人资料、账号安全、主题（浅色、深色、跟随系统）、语言和退出；窄屏只显示头像。标签页标题显示当前页面。窄屏（< 768px）改为顶部一行。内容区最宽 1024px。
 - **详情页**：`Breadcrumb` 上级链接 → `PageHeader`（标题、状态、元信息、操作）→ `Tabs` → 内容。当前标签记在地址的 `tab` 参数里。
 - **项目页**分三块：概览（容器表、全部容器的资源合计、各端口映射的请求和流量；各容器的监控在容器页的概览里）、网络（全部端口映射的总览、项目内网、内部端口、项目连接）、设置，记在地址的 `tab` 参数里。点一个容器进入**容器页**（`/projects/<项目>/c/<容器>`，当前标签记在 `view` 参数里），标签：概览、日志、终端、配置、版本、网络（端口映射、内部访问地址）、存储（卷、文件、快照）、高可用（顶替、备份节点、更换节点）。旧地址 `?view=data` 跳到存储。容器页标题右侧是重启（已停止时是启动）和重新部署，停止、删除容器在 ⋯ 菜单里。启动、停止、重启不重建容器，不生成版本；设置了顶替的容器不能停止，菜单项置灰并说明要先取消顶替。
 - **三栏**：宽屏（≥ 1280px）的项目页始终是 导航 / 项目栏 / 内容（`ProjectSplit`）。项目栏列出概览、各个容器（状态、节点、当前 CPU 和内存）、网络、设置，选中的一项显示在右边；点另一个容器时保留当前标签。右边不显示上级链接和项目页的标签，概览里也不再重复容器表（只保留添加和部署按钮）。窄屏没有项目栏，改用标签页和上级链接。
@@ -93,7 +93,7 @@
 
 界面支持中文和英文，中文是基准。
 
-- **选择顺序**：浏览器里记住的选择（`localStorage` 的 `lang`）→ 账号保存的语言（登录后，浏览器里没有选过时采用，例如换了设备）→ 浏览器的语言偏好（`navigator.languages`，中文以外的都显示英文）。导航底部、登录页右上角的按钮切换语言，刷新页面后生效；登录后同时保存到账号（`AuthService.SetLanguage`，`users.language`）。
+- **选择顺序**：浏览器里记住的选择（`localStorage` 的 `lang`）→ 账号保存的语言（登录后，浏览器里没有选过时采用，例如换了设备）→ 浏览器的语言偏好（`navigator.languages`，中文以外的都显示英文）。导航底部的用户菜单、登录页右上角的按钮切换语言，刷新页面后生效；登录后同时保存到账号（`AuthService.SetLanguage`，`users.language`）。
 - **前端文案**放在 `web/src/i18n/zh/<命名空间>.ts`，英文在 `en/` 下同名文件，结构必须一致（`satisfies`，少一条 `tsc` 报错）。每个页面或组件一个命名空间，通用的状态词、按钮、时间单位在 `common`。代码里 `import { t } from "@/i18n"` 后直接用 `t.<命名空间>.<键>`，模块顶层的常量里也可以用。带参数的写成函数，句子里夹着链接等元素的写成返回 JSX 的函数（文件用 `.tsx`）。日期用 `lib/utils` 的 `formatDateTime` / `formatDate` / `formatTime`，不直接调 `toLocaleString()`。`pnpm -C web check:i18n` 检查有没有写死的中文，确实需要的行尾加 `// i18n-ignore`。
 - **面板返回的文字**：前端请求都带 `Accept-Language`（终端的 WebSocket 用 `lang` 参数），面板按它返回错误信息和操作过程的输出。Go 代码里照常写中文，返回给浏览器的错误用 `i18n.Errorf` / `i18n.New`（`spec.Invalid` 已经是），过程输出用 `i18n.T(ctx, …)`，英文译文登记在 `internal/pkg/i18n/en.go`，`go test ./internal/pkg/i18n` 检查有没有漏。日志不翻译。节点返回的信息、告警消息、已保存的部署记录目前还是中文。
 - **英文文案**：简洁的控制台用语，标题和按钮用句首大写（「Delete project」「Sync now」），不用感叹号，少用 please。术语：项目 project、容器 container、容器组 container group、节点 node、面板 panel、主面板 primary panel、备用面板 standby panel、项目内网 project network、项目连接 project link、网络名 network name、端口映射 port mapping、跨节点入口 cross-node entry、入口节点 entry node、快照 snapshot、备份节点 backup node、顶替 failover、热备 hot standby、见证人 witness、迁移 migration、部署 deployment、版本 version、草稿 draft、接入码 invite code、移交 handover。
