@@ -43,7 +43,7 @@ function layout(nodes: Node[]) {
   const ys = [...pos.values()].map((p) => p.y);
   const padX = 100; // 名字和说明写在节点下面，左右留出文字的宽度
   // 上方还要容得下从面板上方绕过的线和它的标签（见 bend）：按每对节点之间可能的线算。
-  let top = Math.min(...ys) - 44;
+  let top = Math.min(...ys) - 64;
   const pts = nodes.map((n) => pos.get(n.id)!);
   for (let i = 0; i < pts.length; i++) {
     for (let j = i + 1; j < pts.length; j++) {
@@ -189,6 +189,10 @@ function NodeGlyph({
   const ratio = u ? Math.min(Math.max(u.cpu, u.memory, u.disk) / 100, 1) : 0;
   const ring = ratio >= 0.9 ? "stroke-destructive" : ratio >= 0.75 ? "stroke-warning" : "stroke-info";
   const status = nodeStatus(n);
+  // 文字放在圆的外侧，连线都朝内，压不到字。
+  const above = at.y < -1;
+  const nameY = above ? (sub ? -50 : -34) : 46;
+  const subY = above ? -34 : 62;
   const detail = [n.name, status, u && `CPU ${pct(u.cpu)} · ${t.nodes.memory} ${pct(u.memory)} · ${t.nodes.disk} ${pct(u.disk)}`, t.nodes.containers(n.containers)]
     .filter(Boolean)
     .join("\n");
@@ -231,11 +235,11 @@ function NodeGlyph({
             failed ? "fill-destructive" : n.pending ? "fill-warning" : n.online ? "fill-success" : "fill-muted-foreground/60",
           )}
         />
-        <text y={46} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
+        <text y={nameY} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
           {n.name}
         </text>
         {sub && (
-          <text y={62} textAnchor="middle" fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
+          <text y={subY} textAnchor="middle" fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
             {sub}
           </text>
         )}
