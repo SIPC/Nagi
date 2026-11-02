@@ -340,7 +340,7 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   );
   return (
     <span className={cn("flex items-center gap-3 text-xs text-muted-foreground", className)}>
-      {ring(cpu, usage ? `CPU ${usage.cpu.toFixed(1)}%` : "CPU —", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
+      {ring(cpu, usage ? `${usage.cpu.toFixed(1)}%` : "—", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
       {ring(mem, usage ? fmtBytes(usage.mem) : "—", m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem)))}
     </span>
   );
