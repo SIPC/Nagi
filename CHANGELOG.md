@@ -8,6 +8,19 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.11.2
+
+### 改进
+
+- **字重**：正文改用 MiSans Normal，强调文字改用 MiSans Regular，页面、区块和对话框标题改用 MiSans Medium。
+- **项目栏**：项目名放大加粗，「项目」和状态改为灰色小字，层级更清楚。
+- **宽屏布局**：内容区保持最宽 1120，在宽屏上居中显示。
+- **登录页**：表单收窄到 320，去掉忘记密码的提示。找回方式不变，见[文档](docs/panel.md#登录)。
+
+### 升级说明
+
+- 只改了前端，面板更新后即可使用，节点无需升级。
+
 ## v0.11.1
 
 ### 改进
