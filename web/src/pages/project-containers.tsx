@@ -887,10 +887,10 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   useUnsaved(buildConfig());
 
   const save = () =>
-    call(
-      () => projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() }),
-      t.projectContainers.config.savedDraft,
-    );
+    call(async () => {
+      const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
+      toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? t.projectContainers.config.savedDraft : t.projectContainers.config.noChanges);
+    });
 
   // 保存为草稿后立即部署。已部署的容器会被重建，先确认。
   const saveAndDeploy = async () => {

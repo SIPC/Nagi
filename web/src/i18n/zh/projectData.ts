@@ -60,6 +60,7 @@ export default {
     addPlaceholder: "/data",
     addTitle: "以 / 开头的容器内路径",
     savedDraft: "已保存为草稿，部署后生效",
+    noChanges: "和当前版本相同，没有要部署的修改",
     deployHint: "有未部署的草稿，部署后生效",
   },
   dirHelp: "默认：<项目根目录>/<项目名>/<容器名>。须为绝对路径，且目录不存在或为空。",

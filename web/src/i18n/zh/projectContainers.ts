@@ -148,6 +148,7 @@ export default {
     serviceEnv: (service: string) => `环境变量：${service}`,
     serviceEnvHelp: "仅注入此容器。",
     savedDraft: "已保存为草稿",
+    noChanges: "和当前版本相同，没有要部署的修改",
     saveAndDeploy: "保存并部署",
     diffTitle: "未部署的修改",
     diffCount: (n: number) => `${n} 行`,

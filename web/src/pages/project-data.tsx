@@ -130,13 +130,13 @@ function Volumes({ project, container }: { project: Project; container: Containe
     setBusy(true);
     setError("");
     try {
-      await projectClient.saveDraft({
+      const res = await projectClient.saveDraft({
         projectId: project.id,
         container: container.name,
         baseRevision: container.revision,
         config: { ...cfg, form: { ...form, volumes: next } },
       });
-      toast.success(m.savedDraft);
+      toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? m.savedDraft : m.noChanges);
       setAdding("");
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     } catch (err) {

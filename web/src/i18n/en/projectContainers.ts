@@ -153,6 +153,7 @@ export default {
     serviceEnv: (service) => `Environment variables: ${service}`,
     serviceEnvHelp: "Injected into this container only.",
     savedDraft: "Saved as draft",
+    noChanges: "Same as the current version. Nothing to deploy",
     saveAndDeploy: "Save and deploy",
     diffTitle: "Undeployed changes",
     diffCount: (n) => (n === 1 ? "1 line" : `${n} lines`),

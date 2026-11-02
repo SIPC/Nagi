@@ -261,9 +261,12 @@ func (s *Service) SaveDraft(ctx context.Context, projectID, name string, base in
 	if err := s.checkNames(ctx, projectID, name, cfg, cp.ServiceNames()); err != nil {
 		return nil, err
 	}
-	sealed, err := s.seal(cfg, draftCtx(projectID, name))
-	if err != nil {
-		return nil, err
+	// 改回和最新版本一样时没有东西要部署，不留草稿。
+	var sealed []byte
+	if !proto.Equal(cfg, latest) {
+		if sealed, err = s.seal(cfg, draftCtx(projectID, name)); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.Q.SetContainerDraft(ctx, store.SetContainerDraftParams{Draft: sealed, ProjectID: projectID, Name: name}); err != nil {
 		return nil, err

@@ -61,6 +61,7 @@ export default {
     addPlaceholder: "/data",
     addTitle: "A container path starting with /",
     savedDraft: "Saved as a draft. Applies after deploy",
+    noChanges: "Same as the current version. Nothing to deploy",
     deployHint: "Undeployed draft. Applies after deploy",
   },
   dirHelp: "Default: <project root>/<project name>/<container name>. Must be an absolute path to a directory that is empty or does not exist.",
