@@ -10,7 +10,7 @@ import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { Container, MeshStatus, Project } from "@/gen/nagi/v1/common_pb";
 
-// 节点页的拓扑视图：面板在中间，节点围成一圈，两个图层的位置相同。
+// 节点页的拓扑视图：面板在最上面，和节点围成一圈，两个图层的位置相同。
 // - 网络：在线节点之间的 mesh 连接（见 docs/mesh.md）。
 // - 高可用：容器所在节点指向它的热备或备份节点；点选一个节点，模拟它故障时各容器的结果（见 docs/failover.md）。
 
@@ -26,23 +26,18 @@ const PANEL = "panel";
 
 type Pt = { x: number; y: number };
 
-// CLEAR：线离面板中心至少这么远，不压住面板和它下面的名字。
-const CLEAR = 64;
-
-// layout：节点在圆上的位置。偶数个时转半格；两个节点放在左下、右下，和面板成三角形
-// （左右一字排开时，它们之间的线只能绕过面板）。
+// layout：面板和节点在圆上的位置。面板不在圆心，节点之间的线不用绕开它，都是直线。
 function layout(nodes: Node[]) {
   const count = nodes.length;
   const r = count <= 3 ? 180 : Math.min(260, 130 + count * 14);
-  const start = -Math.PI / 2 + (count % 2 === 0 ? Math.PI / count : 0);
-  const angle = (i: number) => (count === 2 ? [(5 * Math.PI) / 6, Math.PI / 6][i] : start + (2 * Math.PI * i) / count);
-  const pos = new Map<string, Pt>([[PANEL, { x: 0, y: 0 }]]);
+  const angle = (i: number) => -Math.PI / 2 + (2 * Math.PI * (i + 1)) / (count + 1);
+  const pos = new Map<string, Pt>([[PANEL, { x: 0, y: -r }]]);
   nodes.forEach((n, i) => {
     pos.set(n.id, { x: r * Math.cos(angle(i)), y: r * Math.sin(angle(i)) });
   });
   const ys = [...pos.values()].map((p) => p.y);
-  const padX = 100; // 名字和说明写在节点下面，左右留出文字的宽度
-  // 上方还要容得下从面板上方绕过的线和它的标签（见 bend）：按每对节点之间可能的线算。
+  const padX = 170; // 两侧节点的名字和说明写在外侧，留出文字的宽度
+  // 上方还要容得下向外弯的线和它的标签（见 bend）：按每对节点之间可能的线算。
   let top = Math.min(...ys) - 64;
   const pts = nodes.map((n) => pos.get(n.id)!);
   for (let i = 0; i < pts.length; i++) {
@@ -64,9 +59,7 @@ function curve(A: Pt, B: Pt, P: Pt) {
   return { d: `M${A.x},${A.y}Q${P.x},${P.y} ${B.x},${B.y}`, at };
 }
 
-// bend：节点之间的线向外（远离面板的一侧）弯的控制点，弯曲程度至少是长度的 k 倍。
-// 节点都在同一个圆上，弦离圆心（面板）最近的点就是它的中点；二次曲线的中点在弦中点和控制点正中间，
-// 所以把控制点推到曲线中点离面板至少 CLEAR。弦正好穿过面板时从上面绕，面板的名字在下面。
+// bend：有向的线向外（远离圆心的一侧）弯的控制点，控制点离弦的距离是长度的 k 倍。弦正好穿过圆心时向上弯。
 function bend(A: Pt, B: Pt, k: number): Pt {
   const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
   const dx = B.x - A.x;
@@ -80,8 +73,7 @@ function bend(A: Pt, B: Pt, k: number): Pt {
     ny = -ny;
     side = -side;
   }
-  const offset = 2 * Math.max((k * len) / 2, CLEAR - side);
-  return { x: M.x + nx * offset, y: M.y + ny * offset };
+  return { x: M.x + nx * k * len, y: M.y + ny * k * len };
 }
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -141,16 +133,17 @@ function MapSvg({ box, label, onBackground, children }: { box: { x: number; y: n
   );
 }
 
-function PanelGlyph({ dim, onActive }: { dim: boolean; onActive?: (on: boolean) => void }) {
+function PanelGlyph({ at, dim, onActive }: { at: Pt; dim: boolean; onActive?: (on: boolean) => void }) {
   return (
     <g
+      transform={`translate(${at.x},${at.y})`}
       className={cn("transition-opacity duration-150 ease-out", dim && "opacity-40")}
       onMouseEnter={() => onActive?.(true)}
       onMouseLeave={() => onActive?.(false)}
     >
       <rect x={-24} y={-24} width={48} height={48} rx={12} className="fill-card stroke-border" strokeWidth={1} />
       <Waves x={-13} y={-13} width={26} height={26} className="text-wave" />
-      <text y={42} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium">
+      <text y={-34} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium">
         {t.nodes.map.panel}
       </text>
     </g>
@@ -189,10 +182,13 @@ function NodeGlyph({
   const ratio = u ? Math.min(Math.max(u.cpu, u.memory, u.disk) / 100, 1) : 0;
   const ring = ratio >= 0.9 ? "stroke-destructive" : ratio >= 0.75 ? "stroke-warning" : "stroke-info";
   const status = nodeStatus(n);
-  // 文字放在圆的外侧，连线都朝内，压不到字。
-  const above = at.y < -1;
-  const nameY = above ? (sub ? -50 : -34) : 46;
-  const subY = above ? -34 : 62;
+  // 文字放在圆的外侧，连线都朝内，压不到字：两侧的节点写在旁边，其余写在上方或下方。
+  const side = Math.abs(at.x) > 0.7 * Math.hypot(at.x, at.y);
+  const above = at.y < 0;
+  const textX = side ? Math.sign(at.x) * 34 : 0;
+  const anchor = !side ? "middle" : at.x > 0 ? "start" : "end";
+  const nameY = side ? (sub ? -3 : 4) : above ? (sub ? -50 : -34) : 46;
+  const subY = side ? 13 : above ? -34 : 62;
   const detail = [n.name, status, u && `CPU ${pct(u.cpu)} · ${t.nodes.memory} ${pct(u.memory)} · ${t.nodes.disk} ${pct(u.disk)}`, t.nodes.containers(n.containers)]
     .filter(Boolean)
     .join("\n");
@@ -235,11 +231,11 @@ function NodeGlyph({
             failed ? "fill-destructive" : n.pending ? "fill-warning" : n.online ? "fill-success" : "fill-muted-foreground/60",
           )}
         />
-        <text y={nameY} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
+        <text x={textX} y={nameY} textAnchor={anchor} fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
           {n.name}
         </text>
         {sub && (
-          <text y={subY} textAnchor="middle" fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
+          <text x={textX} y={subY} textAnchor={anchor} fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
             {sub}
           </text>
         )}
@@ -344,12 +340,10 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
   return [...edges.values()];
 }
 
-// meshGeometry：连到面板的是直线；节点之间中转的线经过面板（控制点取中点关于面板的对称点，曲线中点正好在面板上），
-// 直连的线向外弯一点，免得两个对面的节点之间的直线穿过面板、看起来像中转。
-function meshGeometry(A: Pt, B: Pt, toPanel: boolean, kind: Kind) {
-  if (toPanel) return { d: `M${A.x},${A.y}L${B.x},${B.y}`, at: (s: number) => ({ x: A.x + (B.x - A.x) * s, y: A.y + (B.y - A.y) * s }) };
-  const P = kind === "relay" ? { x: -(A.x + B.x) / 2, y: -(A.y + B.y) / 2 } : bend(A, B, 0.16);
-  return curve(A, B, P);
+// meshGeometry：都是直线；只有节点之间中转的线经过面板（控制点取中点关于面板的对称点，曲线中点正好在面板上）。
+function meshGeometry(A: Pt, B: Pt, panel: Pt, toPanel: boolean, kind: Kind) {
+  const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+  return curve(A, B, kind === "relay" && !toPanel ? { x: 2 * panel.x - M.x, y: 2 * panel.y - M.y } : M);
 }
 
 const meshLabel = (e: MeshEdge) => {
@@ -382,7 +376,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
   const neighbors = new Set(edges.filter(touches).flatMap((e) => [e.a, e.b]));
   const dim = (id: string) => active !== null && !neighbors.has(id) && id !== active;
   const issues = edges.filter((e) => e.kind !== "direct");
-  const geometry = (e: MeshEdge) => meshGeometry(pos.get(e.a)!, pos.get(e.b)!, e.a === PANEL || e.b === PANEL, e.kind);
+  const geometry = (e: MeshEdge) => meshGeometry(pos.get(e.a)!, pos.get(e.b)!, pos.get(PANEL)!, e.a === PANEL || e.b === PANEL, e.kind);
 
   return (
     <div className="grid gap-4">
@@ -414,7 +408,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
           );
         })}
 
-        <PanelGlyph dim={dim(PANEL)} onActive={(on) => setActive(on ? PANEL : null)} />
+        <PanelGlyph at={pos.get(PANEL)!} dim={dim(PANEL)} onActive={(on) => setActive(on ? PANEL : null)} />
         {nodes.map((n) => (
           <NodeGlyph
             key={n.id}
@@ -528,7 +522,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
   }
   const edges = [...edgeMap.values()].filter((e) => nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to));
   const { pos: layoutPos, box } = layout(nodes);
-  // 箭头都朝外弯，不压在面板上。两个节点互相指向时，ID 大的一方发出的弯得更多，两条一里一外；
+  // 箭头都朝外弯。两个节点互相指向时，ID 大的一方发出的弯得更多，两条一里一外；
   // 同一方向既有顶替又有备份时，备份弯得多一些。
   const directed = new Set(edges.map((e) => e.from + "|" + e.to));
   const geometry = (e: HaEdge) => {
@@ -584,7 +578,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
           );
         })}
 
-        <PanelGlyph dim={focus !== null} />
+        <PanelGlyph at={layoutPos.get(PANEL)!} dim={focus !== null} />
         {nodes.map((n) => {
           const k = risky.get(n.id) ?? 0;
           return (
