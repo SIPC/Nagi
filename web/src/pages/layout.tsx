@@ -71,7 +71,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
-    const allowed = isAdmin ? settingsTabs : settingsTabs.filter((x) => x.value === "security" || x.value === "profile");
+    const allowed = isAdmin ? settingsTabs : settingsTabs.filter((x) => x.value === "security" || x.value === "profile" || x.value === "about");
     const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed.find((x) => x.value === "security") ?? allowed[0];
     title = `${tab.label} · ${t.app.nav.settings}`;
   }

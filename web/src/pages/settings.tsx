@@ -7,6 +7,7 @@ import { InviteCard } from "@/pages/invite";
 import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
 import { UpdateCard, UpdateDot } from "@/pages/update";
+import { AboutCard } from "@/pages/about";
 import { Link, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -29,25 +30,30 @@ export const settingsTabs = [
   { value: "mesh", label: t.settings.tabs.mesh.label },
   { value: "alerts", label: t.settings.tabs.alerts.label },
   { value: "activity", label: t.settings.tabs.activity.label },
+  { value: "about", label: t.settings.tabs.about.label },
 ] as const;
 
 export type SettingsTab = (typeof settingsTabs)[number]["value"];
 
 const accountGroup = { label: t.settings.groups.account, tabs: ["profile", "security"] as SettingsTab[] };
 
+// 只有一项，不要分组标题（和菜单项重复），只留分组之间的间距。
+const aboutGroup = { label: "", tabs: ["about"] as SettingsTab[] };
+
 const menuGroups = [
   accountGroup,
   { label: t.settings.groups.panel, tabs: ["access", "members", "update", "standby"] as SettingsTab[] },
   { label: t.settings.groups.nodes, tabs: ["invite", "mesh"] as SettingsTab[] },
   { label: t.settings.groups.records, tabs: ["alerts", "activity"] as SettingsTab[] },
+  aboutGroup,
 ];
 
 // 选中项直接读地址：没有 tab 参数时显示账号安全。
 export function SettingsPage(_props: { tab: SettingsTab }) {
   const tab = useSearch({ from: "/app/settings" }).tab ?? "security";
   const { isAdmin } = useRole();
-  // 不是管理员时只有自己的账号。面板设置的接口也会拒绝。
-  const groups = isAdmin ? menuGroups : [accountGroup];
+  // 不是管理员时只有自己的账号和关于。面板设置的接口也会拒绝。
+  const groups = isAdmin ? menuGroups : [accountGroup, aboutGroup];
   const allowed = groups.flatMap((g) => g.tabs);
   const cur: SettingsTab = allowed.includes(tab) ? tab : "security";
   const label = (value: SettingsTab) => settingsTabs.find((x) => x.value === value)?.label;
@@ -66,8 +72,8 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
         {/* 窄屏是一行可以横向滑动的标签，分组标题收起。 */}
         <nav ref={navRef} aria-label={t.settings.title} className="flex gap-1 overflow-x-auto [scrollbar-width:none] md:grid md:content-start md:overflow-visible">
           {groups.map((g) => (
-            <Fragment key={g.label}>
-              <div className="mt-2 hidden h-6 items-center px-2 text-xs leading-5 font-medium text-muted-foreground first:mt-0 md:flex">{g.label}</div>
+            <Fragment key={g.tabs[0]}>
+              {g.label ? <div className="mt-2 hidden h-6 items-center px-2 text-xs leading-5 font-medium text-muted-foreground first:mt-0 md:flex">{g.label}</div> : <div className="hidden h-2 md:block" />}
               {g.tabs.map((value) => (
                 <Link
                   key={value}
@@ -99,6 +105,7 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
           {cur === "invite" && <InviteCard />}
           {cur === "mesh" && <PanelMeshCard />}
           {cur === "update" && <UpdateCard />}
+          {cur === "about" && <AboutCard />}
         </div>
       </div>
     </>

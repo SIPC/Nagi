@@ -26,6 +26,7 @@ import projectSettings from "./projectSettings";
 import containerForm from "./containerForm";
 import metrics from "./metrics";
 import overview from "./overview";
+import about from "./about";
 
 export default {
   common,
@@ -54,4 +55,5 @@ export default {
   containerForm,
   metrics,
   overview,
+  about,
 };

@@ -1,7 +1,6 @@
 // 设置页「版本更新」。
 export default {
   badge: "有新版本",
-  fontCredit: "界面字体 MiSans，由小米提供",
   current: "当前版本",
   latest: "最新版本",
   check: "检查更新",
