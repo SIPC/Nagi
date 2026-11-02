@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, CodeBlock, Dialog, EmptyRow, Field, Notice, Section, Spinner, Status, Table, Td, Th } from "@/components/ui";
+import { CodeBox } from "@/pages/invite";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import { confirmAction, notify } from "@/components/confirm";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
@@ -13,7 +15,7 @@ export function useStandbys() {
 }
 
 // PromoteButton：把本面板（备用面板）提升为主面板。提升后面板按主面板重新启动，页面几秒后刷新。
-export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
+export function PromoteButton({ size = "sm", variant = "outline" }: { size?: "sm" | "xs"; variant?: "outline" | "destructive-outline" }) {
   const [busy, setBusy] = useState(false);
   const promote = async () => {
     if (!(await confirmAction(t.standby.promote.confirm, { action: t.standby.promote.button, danger: true }))) return;
@@ -28,7 +30,7 @@ export function PromoteButton({ size = "sm" }: { size?: "sm" | "xs" }) {
     }
   };
   return (
-    <Button readOnlyOk size={size} variant="outline" onClick={promote} disabled={busy}>
+    <Button readOnlyOk size={size} variant={variant} onClick={promote} disabled={busy}>
       {busy && <Spinner />}
       {t.standby.promote.button}
     </Button>
@@ -41,23 +43,43 @@ export function StandbyCard() {
   const [code, setCode] = useState<{ code: string; expires?: Date } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState("");
 
-  if (q.isPending) return null;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  if (q.isPending)
+    return (
+      <Section title={t.settings.tabs.standby.label}>
+        <RowsSkeleton />
+      </Section>
+    );
+  if (!q.data)
+    return (
+      <Section title={t.settings.tabs.standby.label}>
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
+      </Section>
+    );
   const d = q.data;
+  // 每 5 秒刷新一次：刷新失败时列表留着，上面提示数据不是最新的。
+  const refetchError = q.error && <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
 
   if (d.isStandby) {
     return (
-      <Section title={t.standby.status.title} description={t.standby.status.description} actions={<PromoteButton />}>
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-2 text-[13px]">
-          <dt className="text-muted-foreground">{t.standby.status.primary}</dt>
-          <dd className="font-mono">{d.primaryAddress}</dd>
-          <dt className="text-muted-foreground">{t.standby.status.connection}</dt>
-          <dd>{d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>}</dd>
-          <dt className="text-muted-foreground">{t.standby.lastSync}</dt>
-          <dd title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? timeAgo(toDate(d.lastSync)) : t.standby.status.neverSynced}</dd>
-        </dl>
-        {d.lastError && <Alert className="mt-4">{d.lastError}</Alert>}
+      <Section title={<span title={t.standby.status.description}>{t.standby.status.title}</span>}>
+        {refetchError}
+        <KeyValue
+          items={[
+            [t.standby.status.primary, <span className="wrap-anywhere">{d.primaryAddress}</span>],
+            [t.standby.status.connection, d.connected ? <Status tone="success">{t.standby.connected}</Status> : <span className="text-warning-text"><Status tone="warning">{t.standby.disconnected}</Status></span>],
+            [t.standby.lastSync, <span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? timeAgo(toDate(d.lastSync)) : t.standby.status.neverSynced}</span>],
+          ]}
+        />
+        {d.lastError && (
+          <Notice tone="danger" title={t.standby.status.syncFailed}>
+            {d.lastError}
+          </Notice>
+        )}
+        <div>
+          <PromoteButton variant="destructive-outline" />
+        </div>
       </Section>
     );
   }
@@ -77,75 +99,74 @@ export function StandbyCard() {
   const remove = async (id: string, name: string) => {
     if (!(await confirmAction(t.standby.removeConfirm(name), { action: t.common.actions.remove, danger: true }))) return;
     setError("");
+    setRemoving(id);
     try {
       await settingsClient.removeStandby({ id });
-      queryClient.invalidateQueries({ queryKey: ["standbys"] });
+      await queryClient.invalidateQueries({ queryKey: ["standbys"] });
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setRemoving("");
     }
   };
 
   return (
     <Section
-      flush
       title={t.standby.list.title}
       help={t.standby.list.help}
       actions={
-        <Button size="sm" variant="outline" onClick={create} disabled={busy}>
-          {busy && <Spinner />}
+        <Button variant="outline" onClick={create} disabled={busy}>
+          {busy ? <Spinner /> : <Plus />}
           {t.standby.list.add}
         </Button>
       }
     >
-      {error && <Alert className="mb-3">{error}</Alert>}
+      {refetchError}
+      {error && <Alert>{error}</Alert>}
       {d.standbys.length === 0 ? (
         <EmptyRow>{t.standby.list.empty}</EmptyRow>
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.standby.list.name}</Th>
-              <Th>{t.standby.list.address}</Th>
-              <Th>{t.standby.list.status}</Th>
-              <Th>{t.standby.lastSync}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {d.standbys.map((s) => (
-              <tr key={s.id}>
-                <Td className="font-medium">{s.name}</Td>
-                <Td className="font-mono text-xs text-muted-foreground">{s.address}</Td>
-                <Td>
-                  {s.connected ? (
+        <List>
+          {d.standbys.map((s) => (
+            <Row
+              key={s.id}
+              title={<span className="truncate">{s.name}</span>}
+              sub={
+                <span className="wrap-anywhere" title={formatDateTime(toDate(s.lastSync))}>{`${s.address} · ${t.standby.lastSync} ${s.lastSync ? timeAgo(toDate(s.lastSync)) : "—"}`}</span>
+              }
+              cols={[
+                {
+                  phone: true,
+                  content: s.connected ? (
                     <Status tone="success">{t.standby.connected}</Status>
                   ) : (
-                    <span title={t.standby.disconnectedHint}>
+                    <span className="text-warning-text" title={t.standby.disconnectedHint}>
                       <Status tone="warning">{t.standby.disconnected}</Status>
                     </span>
-                  )}
-                </Td>
-                <Td className="text-[13px] text-muted-foreground" title={formatDateTime(toDate(s.lastSync))}>
-                  {s.lastSync ? timeAgo(toDate(s.lastSync)) : "—"}
-                </Td>
-                <Td className="text-right">
-                  <Button size="xs" variant="ghost" onClick={() => remove(s.id, s.name)}>
-                    {t.common.actions.remove}
-                  </Button>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+                  ),
+                },
+              ]}
+              actions={
+                <Button size="row" variant="ghost" disabled={removing !== ""} onClick={() => remove(s.id, s.name)}>
+                  {removing === s.id && <Spinner />}
+                  {t.common.actions.remove}
+                </Button>
+              }
+            />
+          ))}
+        </List>
       )}
-      <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} description={t.standby.dialog.description}>
+      <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} className="max-w-[520px]">
         {code && (
-          <div className="grid gap-4">
-            <Field label={t.standby.dialog.command} hint={t.standby.dialog.commandHint}>
-              <CodeBlock copy>{`nagi server --standby ${code.code}`}</CodeBlock>
-            </Field>
-            <Notice>{t.standby.dialog.notice}</Notice>
-          </div>
+          <>
+            <CodeBox text={`nagi server --standby ${code.code}`} />
+            <p className="text-[13px] leading-5 text-muted-foreground">{t.standby.dialog.notice}</p>
+            <DialogActions>
+              <Button readOnlyOk onClick={() => setCode(null)}>
+                {t.standby.dialog.done}
+              </Button>
+            </DialogActions>
+          </>
         )}
       </Dialog>
     </Section>

@@ -14,7 +14,9 @@ export default {
     submit: "Complete setup",
   },
   login: {
-    title: "Sign in",
+    title: "Sign in to Nagi",
+    back: "Back",
+    forgotHint: (command) => <>Forgot your password? Run {command} on the panel server</>,
     totpTitle: "Two-factor authentication",
     description: "Sign in to the panel with the admin account.",
     totpDescription: "Enter the 6-digit code from your authenticator app.",

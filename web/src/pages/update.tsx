@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, Button, Notice, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
 import { confirmAction } from "@/components/confirm";
@@ -215,74 +215,79 @@ export function UpdateCard() {
     }
   };
 
-  if (q.isPending) return null;
   const d = q.data;
   const panel = status.data?.panel;
   const active = updateActive(panel);
-  const shownError = error || (q.error ? errorMessage(q.error) : "");
-  const standbyHint = standbys?.isStandby ? t.update.standbyHint : standbys?.standbys.length ? t.update.primaryHint : "";
+  const failed = panel?.phase === "failed";
+  const primaryHint = !standbys?.isStandby && standbys?.standbys.length ? t.update.primaryHint : "";
+  const updateButton = (label: string) =>
+    d?.available && (
+      <Button readOnlyOk onClick={() => update(d.latest)} disabled={starting}>
+        {starting && <Spinner />}
+        {label}
+      </Button>
+    );
+  const details = d?.available && (
+    <>
+      {primaryHint && <span title={t.update.primaryHelp}>{`${primaryHint} `}</span>}
+      <a className="text-foreground underline-offset-4 hover:underline" href={d.releaseUrl} target="_blank" rel="noreferrer">
+        {t.update.notes}
+      </a>
+    </>
+  );
 
   return (
-    <SettingRows>
-      {shownError && (
-        <div className="pb-5">
-          <Alert>{shownError}</Alert>
-        </div>
+    <Section title={<span title={t.settings.tabs.update.description}>{t.settings.tabs.update.label}</span>}>
+      {error && <Alert>{error}</Alert>}
+      {status.error && !status.data && <QueryError error={errorMessage(status.error)} onRetry={() => status.refetch()} />}
+      {panel && failed && (
+        <Notice tone="danger" title={t.update.tips.panelFailed(panel.target)} actions={updateButton(t.update.retry)}>
+          {panel.error}
+          {panel.error && details && " "}
+          {details}
+        </Notice>
       )}
-      {panel?.phase === "failed" && (
-        <div className="pb-5">
-          <Alert>
-            <p>{t.update.tips.panelFailed(panel.target)}</p>
-            {panel.error && <p className="mt-1">{panel.error}</p>}
-          </Alert>
-        </div>
-      )}
-      {panel && active && (
-        <div className="pb-5">
-          {panel.phase === "restarting" ? (
-            <Notice tone="success" title={t.update.restartingTitle(panel.target)}>
-              {t.update.restartingText}
-            </Notice>
-          ) : (
-            <Notice title={t.update.installingTitle(panel.target)}>{t.update.installingText}</Notice>
-          )}
-        </div>
-      )}
-      {d?.available && !active && (
-        <div className="pb-5">
-          <Notice
-            title={t.update.availableTitle(d.latest)}
-            actions={
-              <Button readOnlyOk size="sm" onClick={() => update(d.latest)} disabled={starting}>
-                {starting && <Spinner />}
-                {panel?.phase === "failed" ? t.update.retry : t.update.action}
-              </Button>
-            }
-          >
-            <p>
-              {t.update.text}{" "}
-              <a className="text-foreground underline underline-offset-2" href={d.releaseUrl} target="_blank" rel="noreferrer">
-                {t.update.notes}
-              </a>
-            </p>
-            {standbyHint && <p className="mt-1">{standbyHint}</p>}
+      {panel &&
+        active &&
+        (panel.phase === "restarting" ? (
+          <Notice tone="success" title={t.update.restartingTitle(panel.target)}>
+            {t.update.restartingText}
           </Notice>
-        </div>
+        ) : (
+          <Notice tone="info" title={<span title={t.update.installingText}>{t.update.installingTitle(panel.target)}</span>} />
+        ))}
+      {d?.available && !active && !failed && (
+        <Notice tone="info" title={t.update.availableTitle(d.latest)} actions={updateButton(t.update.action)}>
+          <span title={t.update.text}>{details}</span>
+        </Notice>
       )}
-      <SettingRow label={t.update.current} description={d?.unsupported}>
-        <code className="font-mono text-[13px]">{d?.current || "—"}</code>
-      </SettingRow>
-      {!d?.unsupported && (
-        <SettingRow label={t.update.latest} description={checked && d && !d.available ? t.update.upToDate : undefined}>
-          <div className="flex flex-wrap items-center gap-3">
-            <code className="font-mono text-[13px]">{d?.latest || "—"}</code>
-            <Button readOnlyOk size="sm" variant="outline" onClick={check} disabled={checking || starting || active}>
-              {checking && <Spinner />}
-              {t.update.check}
-            </Button>
-          </div>
-        </SettingRow>
+      {checked && d && !d.available && <Notice title={t.update.upToDate} />}
+      {standbys?.isStandby && <Notice title={<span title={t.update.standbyHint}>{t.update.standbyTitle}</span>} />}
+      {q.isPending ? (
+        <RowsSkeleton count={2} />
+      ) : !d ? (
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
+      ) : (
+        <SettingRows>
+          <SettingRow
+            label={t.update.current}
+            description={`${d.current || "—"}${d.unsupported ? ` · ${d.unsupported}` : ""}`}
+          />
+          {!d.unsupported && (
+            <SettingRow
+              label={t.update.latest}
+              description={d.latest || "—"}
+            >
+              <Button readOnlyOk variant="outline" onClick={check} disabled={checking || starting || active}>
+                {checking && <Spinner />}
+                {t.update.check}
+              </Button>
+            </SettingRow>
+          )}
+        </SettingRows>
       )}
-    </SettingRows>
+      {/* 字体许可要求的署名，不能省。 */}
+      <p className="mt-4 text-xs text-muted-foreground">{t.update.fontCredit}</p>
+    </Section>
   );
 }

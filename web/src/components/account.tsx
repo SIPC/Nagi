@@ -1,10 +1,10 @@
 // 导航底部的用户卡片：头像、名称和角色，点开是个人资料、账号安全、主题、语言和退出。窄屏只显示头像。
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, ChevronsUpDown, Languages, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { Check, Languages, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, Button, Dialog, Field, Input, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, Field, FormActions, Input, QueryError, RowsSkeleton, Section, Spinner } from "@/components/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { nextLocale, switchLanguage } from "@/components/language";
@@ -50,7 +50,8 @@ function UserAvatar({ name, src, className }: { name: string; src?: string; clas
   );
 }
 
-function ProfileDialog({ me, onClose }: { me: MeResponse; onClose: () => void }) {
+// ProfileForm：个人资料表单。用户菜单的对话框和设置页的「个人资料」共用；传 onClose 就是对话框的样式。
+function ProfileForm({ me, onClose }: { me: MeResponse; onClose?: () => void }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState(me.displayName);
@@ -61,7 +62,7 @@ function ProfileDialog({ me, onClose }: { me: MeResponse; onClose: () => void })
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       toast.success(t.account.saved);
-      onClose();
+      onClose?.();
     },
     onError: (err) => setError(errorMessage(err)),
   });
@@ -78,56 +79,75 @@ function ProfileDialog({ me, onClose }: { me: MeResponse; onClose: () => void })
       setError(t.account.notImage);
     }
   };
+  const submit = (
+    <Button type="submit" variant={onClose ? "default" : "outline"} disabled={save.isPending}>
+      {save.isPending && <Spinner />}
+      {t.common.actions.save}
+    </Button>
+  );
   return (
-    <Dialog open onClose={onClose} title={t.account.profile}>
-      <form
-        className="grid gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setError("");
-          save.mutate();
-        }}
-      >
-        <Field label={t.account.avatar} hint={t.account.avatarHint}>
-          <div className="flex items-center gap-3">
-            <UserAvatar name={displayName.trim() || me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="size-16" />
-            <input
-              ref={input}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
-              aria-label={t.account.upload}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = ""; // 换了图再选回同一个文件时也要触发。
-                pick(file);
-              }}
-            />
-            <Button size="sm" variant="outline" onClick={() => input.current?.click()}>
-              {t.account.upload}
-            </Button>
-            {avatar.bytes.length > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => setAvatar({ bytes: new Uint8Array(), type: "" })}>
-                {t.account.remove}
-              </Button>
-            )}
-          </div>
-        </Field>
-        <Field label={t.account.displayName} htmlFor="profile-name" hint={t.account.displayNameHint(me.username)}>
-          <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} placeholder={me.username} autoComplete="off" />
-        </Field>
-        {error && <Alert>{error}</Alert>}
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onClose}>
+    <form
+      className="grid max-w-[672px] gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError("");
+        save.mutate();
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <UserAvatar name={displayName.trim() || me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="size-12 text-lg" />
+        <input
+          ref={input}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          aria-label={t.account.upload}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = ""; // 换了图再选回同一个文件时也要触发。
+            pick(file);
+          }}
+        />
+        <Button variant="outline" title={t.account.avatarHint} onClick={() => input.current?.click()}>
+          {t.account.upload}
+        </Button>
+        <Button variant="ghost" disabled={avatar.bytes.length === 0} onClick={() => setAvatar({ bytes: new Uint8Array(), type: "" })}>
+          {t.account.remove}
+        </Button>
+      </div>
+      <Field label={t.account.displayName} htmlFor="profile-name" help={t.account.displayNameHint(me.username)} className={onClose ? undefined : "sm:max-w-[328px]"}>
+        <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} placeholder={me.username} autoComplete="off" />
+      </Field>
+      {error && <Alert>{error}</Alert>}
+      {onClose ? (
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
             {t.common.actions.cancel}
           </Button>
-          <Button type="submit" size="sm" disabled={save.isPending}>
-            {save.isPending && <Spinner />}
-            {t.common.actions.save}
-          </Button>
-        </div>
-      </form>
+          {submit}
+        </DialogActions>
+      ) : (
+        <FormActions>{submit}</FormActions>
+      )}
+    </form>
+  );
+}
+
+function ProfileDialog({ me, onClose }: { me: MeResponse; onClose: () => void }) {
+  return (
+    <Dialog open onClose={onClose} title={t.account.profile}>
+      <ProfileForm me={me} onClose={onClose} />
     </Dialog>
+  );
+}
+
+// ProfileCard：设置页的「个人资料」，所有角色都有。
+export function ProfileCard() {
+  const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
+  return (
+    <Section title={<span title={t.settings.tabs.profile.description}>{t.settings.tabs.profile.label}</span>}>
+      {me.isPending ? <RowsSkeleton count={2} /> : !me.data ? <QueryError error={errorMessage(me.error)} onRetry={() => me.refetch()} /> : <ProfileForm me={me.data} />}
+    </Section>
   );
 }
 
@@ -162,18 +182,15 @@ export function UserMenu({
             aria-label={t.account.menu}
             title={compact ? name : undefined}
             className={cn(
-              "flex items-center gap-2.5 rounded-lg text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-              compact ? "p-1" : "w-full border bg-card p-2 hover:bg-accent data-[state=open]:bg-accent",
+              "flex items-center gap-2 rounded-md text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              compact ? "p-1" : "h-10 w-full px-2 hover:bg-accent data-[state=open]:bg-accent",
             )}
           >
-            <UserAvatar name={name} src={src} className={compact ? "size-7" : undefined} />
+            <UserAvatar name={name} src={src} className={compact ? "size-7" : "size-6 text-xs"} />
             {!compact && (
               <>
-                <span className="grid min-w-0 flex-1">
-                  <span className="truncate text-[13px] font-medium">{name}</span>
-                  <span className="truncate text-xs text-muted-foreground">{role}</span>
-                </span>
-                <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{role}</span>
               </>
             )}
           </button>

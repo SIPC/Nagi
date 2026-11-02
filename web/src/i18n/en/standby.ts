@@ -19,6 +19,7 @@ export default {
     primary: "Primary panel",
     connection: "Connection",
     neverSynced: "Not synced yet",
+    syncFailed: "Sync failed",
   },
   list: {
     title: "Paired standby panels",
@@ -34,9 +35,7 @@ export default {
     `Remove standby panel ${name}? It will no longer be able to sync data from this panel. Its data directory must be deleted manually.`,
   dialog: {
     title: "Add standby panel",
-    description: "Start a standby panel on a new machine with a pairing code.",
-    command: "Start command",
-    commandHint: "The data directory must be empty. The pairing code is valid for 1 hour and can be used once",
-    notice: "Once started, the standby panel connects to this panel, starts syncing and appears in the list.",
+    done: "Done",
+    notice: "The data directory must be empty. The pairing code is valid for 1 hour and can be used once. Once started, the standby panel connects to this panel, starts syncing and appears in the list.",
   },
 } satisfies typeof zh;

@@ -18,6 +18,7 @@ export default {
     primary: "主面板",
     connection: "连接",
     neverSynced: "尚未同步",
+    syncFailed: "同步失败",
   },
   list: {
     title: "已配对的备用面板",
@@ -32,9 +33,7 @@ export default {
   disconnectedHint: "备用面板没有连接到本面板。检查备用面板是否在运行、网络是否可达。",
   dialog: {
     title: "添加备用面板",
-    description: "在新机器上使用配对码启动备用面板。",
-    command: "启动命令",
-    commandHint: "数据目录须为空；配对码 1 小时内有效，仅可使用一次",
-    notice: "备用面板启动后自动连接本面板并开始同步，同时显示在列表中。",
+    done: "完成",
+    notice: "数据目录须为空；配对码 1 小时内有效，仅可使用一次。备用面板启动后自动连接本面板并开始同步，同时显示在列表中。",
   },
 };

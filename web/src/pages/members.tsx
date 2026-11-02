@@ -1,15 +1,27 @@
 // 成员：面板的账号和角色。只有管理员能看到。
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Badge, Button, Dialog, EmptyRow, Field, Input, Loading, Section, Select, Spinner, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
-import { t } from "@/i18n";
+import { formatDate, formatDateTime } from "@/lib/utils";
+import { locale, t } from "@/i18n";
 
 const roles = ["admin", "operator", "viewer"] as const;
+
+// shortDate：今天 08:12、昨天、10/28，不是今年的写全年份。
+function shortDate(d: Date | undefined) {
+  if (!d) return "—";
+  const now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+  if (days === 0) return `${t.members.today} ${d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  if (days === 1) return t.members.yesterday;
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(locale, { month: "2-digit", day: "2-digit" });
+  return formatDate(d) ?? "—";
+}
 
 const roleOptions = roles.map((r) => (
   <option key={r} value={r}>
@@ -17,7 +29,7 @@ const roleOptions = roles.map((r) => (
   </option>
 ));
 
-function AddMember({ onDone }: { onDone: () => void }) {
+function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<string>("operator");
@@ -39,7 +51,7 @@ function AddMember({ onDone }: { onDone: () => void }) {
       <Field label={t.members.username} htmlFor="member-name" required>
         <Input id="member-name" value={username} onChange={(e) => setUsername(e.target.value)} required maxLength={32} autoComplete="off" />
       </Field>
-      <Field label={t.members.password} htmlFor="member-password" hint={t.members.passwordHint} required>
+      <Field label={t.members.password} htmlFor="member-password" required>
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
       <Field label={t.members.role} htmlFor="member-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
@@ -48,17 +60,20 @@ function AddMember({ onDone }: { onDone: () => void }) {
         </Select>
       </Field>
       {add.error && <Alert>{errorMessage(add.error)}</Alert>}
-      <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={add.isPending}>
+      <DialogActions>
+        <Button variant="outline" onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={add.isPending}>
           {add.isPending && <Spinner />}
           {t.members.add}
         </Button>
-      </div>
+      </DialogActions>
     </form>
   );
 }
 
-function ResetPassword({ user, onDone }: { user: PanelUser; onDone: () => void }) {
+function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
   const [password, setPassword] = useState("");
   const reset = useMutation({
     mutationFn: () => settingsClient.updateUser({ id: user.id, password }),
@@ -79,12 +94,15 @@ function ResetPassword({ user, onDone }: { user: PanelUser; onDone: () => void }
         <Input id="member-new-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
       {reset.error && <Alert>{errorMessage(reset.error)}</Alert>}
-      <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={reset.isPending}>
+      <DialogActions>
+        <Button variant="outline" onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={reset.isPending}>
           {reset.isPending && <Spinner />}
           {t.members.resetPassword}
         </Button>
-      </div>
+      </DialogActions>
     </form>
   );
 }
@@ -109,44 +127,40 @@ export function MembersCard() {
 
   return (
     <Section
-      flush
-      title={t.members.title}
-      help={t.members.help}
+      title={<span title={t.members.help}>{t.members.title}</span>}
       actions={
-        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+        <Button variant="outline" onClick={() => setAdding(true)}>
+          <Plus />
           {t.members.add}
         </Button>
       }
     >
-      {error && <Alert className="mb-3">{error}</Alert>}
+      {error && <Alert>{error}</Alert>}
       {users.isPending ? (
-        <Loading />
-      ) : users.error ? (
-        <Alert>{errorMessage(users.error)}</Alert>
+        <RowsSkeleton />
+      ) : !users.data ? (
+        <QueryError error={errorMessage(users.error)} onRetry={() => users.refetch()} />
       ) : users.data.users.length === 0 ? (
         <EmptyRow>{t.members.empty}</EmptyRow>
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.members.username}</Th>
-              <Th>{t.members.role}</Th>
-              <Th className="hidden sm:table-cell">{t.members.totp}</Th>
-              <Th className="hidden sm:table-cell">{t.members.createdAt}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {users.data.users.map((u) => (
-              <tr key={String(u.id)}>
-                <Td className="font-medium">
-                  {u.username}
-                  {u.isSelf && <Badge className="ml-2">{t.members.you}</Badge>}
-                </Td>
-                <Td>
+        <List>
+          {users.data.users.map((u) => (
+            <Row
+              key={String(u.id)}
+              title={
+                <>
+                  <span className="truncate">{u.username}</span>
+                  {u.isSelf && <span className="shrink-0 text-muted-foreground">{t.members.you}</span>}
+                </>
+              }
+              sub={<span title={formatDateTime(toDate(u.createdAt))}>{t.members.createdOn(shortDate(toDate(u.createdAt)))}</span>}
+              cols={[{ content: u.totpEnabled ? t.members.totpOnShort : t.members.totpOffShort }]}
+              actionsWidth="w-40"
+              actions={
+                <span className="flex items-center gap-1">
                   <Select
                     aria-label={t.members.role}
-                    className="h-8 w-28 text-[13px]"
+                    className="h-8 w-[104px]"
                     value={u.role}
                     onChange={async (e) => {
                       const role = e.target.value;
@@ -156,45 +170,43 @@ export function MembersCard() {
                   >
                     {roleOptions}
                   </Select>
-                </Td>
-                <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{u.totpEnabled ? t.members.totpOn : t.members.totpOff}</Td>
-                <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{formatDate(toDate(u.createdAt))}</Td>
-                <Td className="text-right whitespace-nowrap">
-                  <Button size="xs" variant="ghost" onClick={() => setResetting(u)}>
-                    {t.members.resetPassword}
-                  </Button>
-                  {u.totpEnabled && !u.isSelf && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={async () => {
-                        if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
-                          call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.common.feedback.done);
-                      }}
-                    >
-                      {t.members.clearTotp}
-                    </Button>
-                  )}
-                  {!u.isSelf && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={async () => {
-                        if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.common.actions.delete, danger: true }))
-                          call(() => settingsClient.deleteUser({ id: u.id }), t.common.feedback.done);
-                      }}
-                    >
-                      {t.common.actions.delete}
-                    </Button>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+                  <RowMenu
+                    items={[
+                      { label: t.members.resetPassword, onSelect: () => setResetting(u) },
+                      ...(u.totpEnabled && !u.isSelf
+                        ? [
+                            {
+                              label: t.members.clearTotp,
+                              onSelect: async () => {
+                                if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
+                                  call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.common.feedback.done);
+                              },
+                            },
+                          ]
+                        : []),
+                      ...(!u.isSelf
+                        ? [
+                            {
+                              label: t.common.actions.delete,
+                              danger: true,
+                              onSelect: async () => {
+                                if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.common.actions.delete, danger: true }))
+                                  call(() => settingsClient.deleteUser({ id: u.id }), t.common.feedback.done);
+                              },
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </span>
+              }
+            />
+          ))}
+        </List>
       )}
       <Dialog open={adding} onClose={() => setAdding(false)} title={t.members.add}>
         <AddMember
+          onCancel={() => setAdding(false)}
           onDone={() => {
             setAdding(false);
             refresh();
@@ -202,50 +214,76 @@ export function MembersCard() {
         />
       </Dialog>
       <Dialog open={!!resetting} onClose={() => setResetting(null)} title={t.members.resetPassword} description={resetting?.username}>
-        {resetting && <ResetPassword user={resetting} onDone={() => setResetting(null)} />}
+        {resetting && <ResetPassword user={resetting} onCancel={() => setResetting(null)} onDone={() => setResetting(null)} />}
       </Dialog>
     </Section>
   );
 }
 
-// SessionsRow 的内容：当前用户已登录的设备。
+// 默认显示几条登录设备，其余点开。
+const sessionsShown = 3;
+
+// 账号安全里的「登录设备」：当前用户已登录的设备。
 export function SessionList() {
   const queryClient = useQueryClient();
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: () => settingsClient.listSessions({}) });
   const [error, setError] = useState("");
-  if (sessions.isPending) return <Loading />;
-  if (sessions.error) return <Alert>{errorMessage(sessions.error)}</Alert>;
+  const [all, setAll] = useState(false);
+  const [revoking, setRevoking] = useState("");
+  if (sessions.isPending) return <RowsSkeleton />;
+  if (!sessions.data) return <QueryError error={errorMessage(sessions.error)} onRetry={() => sessions.refetch()} />;
+  // 当前设备排最前，收起时也看得到。
+  const list = [...sessions.data.sessions.filter((s) => s.current), ...sessions.data.sessions.filter((s) => !s.current)];
+  const shown = all ? list : list.slice(0, sessionsShown);
   return (
-    <div className="grid gap-2">
+    <>
       {error && <Alert>{error}</Alert>}
-      {sessions.data.sessions.map((s) => (
-        <div key={s.id} className="flex items-center justify-between gap-3 text-[13px]">
-          <span className="min-w-0">
-            <span className="font-mono text-xs">{s.ip || t.members.unknownAddress}</span>
-            <span className="ml-2 text-muted-foreground">{t.members.signedInAt(formatDate(toDate(s.createdAt)) ?? "—")}</span>
-          </span>
-          {s.current ? (
-            <Badge>{t.members.thisDevice}</Badge>
-          ) : (
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={async () => {
-                setError("");
-                try {
-                  await settingsClient.revokeSession({ id: s.id });
-                  toast.success(t.common.feedback.done);
-                  queryClient.invalidateQueries({ queryKey: ["sessions"] });
-                } catch (err) {
-                  setError(errorMessage(err));
-                }
-              }}
-            >
-              {t.members.signOutDevice}
-            </Button>
-          )}
+      <List>
+        {shown.map((s) => (
+          <Row
+            key={s.id}
+            title={
+              <>
+                <span className="truncate">{s.ip || t.members.unknownAddress}</span>
+                {s.current && <span className="shrink-0 text-muted-foreground">{t.members.thisDevice}</span>}
+              </>
+            }
+            sub={<span title={formatDateTime(toDate(s.createdAt))}>{t.members.signedInAt(shortDate(toDate(s.createdAt)))}</span>}
+            actions={
+              s.current ? null : (
+                <Button
+                  size="row"
+                  variant="ghost"
+                  disabled={revoking !== ""}
+                  onClick={async () => {
+                    setError("");
+                    setRevoking(s.id);
+                    try {
+                      await settingsClient.revokeSession({ id: s.id });
+                      toast.success(t.common.feedback.done);
+                      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+                    } catch (err) {
+                      setError(errorMessage(err));
+                    } finally {
+                      setRevoking("");
+                    }
+                  }}
+                >
+                  {revoking === s.id && <Spinner />}
+                  {t.members.signOutDevice}
+                </Button>
+              )
+            }
+          />
+        ))}
+      </List>
+      {!all && list.length > sessionsShown && (
+        <div>
+          <Button readOnlyOk variant="ghost" className="-ml-3" onClick={() => setAll(true)}>
+            {t.members.showAllSessions(list.length)}
+          </Button>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

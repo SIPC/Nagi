@@ -1,9 +1,22 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { Alert, Button, CodeBlock, EmptyRow, Section, Table, Td, Th } from "@/components/ui";
-import { formatTime } from "@/lib/utils";
+import { confirmAction } from "@/components/confirm";
+import { Alert, Button, CopyButton, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
+
+// CodeBox：一行命令或接入码加复制按钮，放不下时截断，完整内容在悬停提示里。
+export function CodeBox({ text, title }: { text: string; title?: string }) {
+  return (
+    <div className="flex min-h-10 items-center justify-between gap-2 rounded-md bg-accent pr-2 pl-3">
+      <span className="min-w-0 truncate font-mono text-[13px] leading-5" title={title ?? text}>
+        {text}
+      </span>
+      <CopyButton text={text} className="shrink-0" />
+    </div>
+  );
+}
 
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
 export function InviteCard() {
@@ -13,83 +26,75 @@ export function InviteCard() {
   });
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState("");
 
   const create = async () => {
     setError("");
+    setCreating(true);
     try {
       const res = await settingsClient.createInvite({});
       setCode(res.invite);
       invites.refetch();
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setCreating(false);
     }
   };
 
-  const list = invites.data?.invites ?? [];
+  const revoke = async (id: string) => {
+    if (!(await confirmAction(t.invite.revokeConfirm(id), { action: t.invite.revoke, danger: true }))) return;
+    setError("");
+    setRevoking(id);
+    try {
+      await settingsClient.revokeInvite({ id });
+      // 上面显示的接入码可能就是作废的这个：不再显示，有效的看列表。
+      setCode("");
+      await invites.refetch();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setRevoking("");
+    }
+  };
 
   return (
     <Section
-      title={t.invite.title}
-      description={t.invite.description}
+      title={<span title={t.invite.description}>{t.settings.tabs.invite.label}</span>}
       help={t.invite.help}
       actions={
-        <Button size="sm" onClick={create}>
+        <Button variant="outline" onClick={create} disabled={creating}>
+          {creating && <Spinner />}
           {t.invite.generate}
         </Button>
       }
-      flush
     >
-      {(error || code) && (
-        <div className="grid gap-3 pb-4">
-          {error && <Alert>{error}</Alert>}
-          {code && (
-            <>
-              <p className="text-[13px] text-muted-foreground">
-                {t.invite.pasteHint(<span className="font-mono">{t.invite.command}</span>)}
-              </p>
-              <CodeBlock copy>{code}</CodeBlock>
-            </>
-          )}
-        </div>
-      )}
-      {list.length > 0 ? (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.invite.id}</Th>
-              <Th>{t.invite.uses}</Th>
-              <Th>{t.invite.expires}</Th>
-              <Th className="w-px" />
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((i) => (
-              <tr key={i.id}>
-                <Td className="font-mono text-xs">{i.id}</Td>
-                <Td className="text-[13px]">{t.invite.usesCount(i.uses)}</Td>
-                <Td className="text-[13px] text-muted-foreground">{formatTime(toDate(i.expiresAt))}</Td>
-                <Td>
-                  <div className="flex justify-end">
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={async () => {
-                        await settingsClient.revokeInvite({ id: i.id });
-                        // 上面显示的接入码可能就是作废的这个：不再显示，有效的看列表。
-                        setCode("");
-                        invites.refetch();
-                      }}
-                    >
-                      {t.invite.revoke}
-                    </Button>
-                  </div>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      ) : (
+      {error && <Alert>{error}</Alert>}
+      {code && <CodeBox text={code} title={t.invite.pasteHint(t.invite.command)} />}
+      {invites.isPending ? (
+        <RowsSkeleton count={2} />
+      ) : !invites.data ? (
+        <QueryError error={errorMessage(invites.error)} onRetry={() => invites.refetch()} />
+      ) : invites.data.invites.length === 0 ? (
         <EmptyRow>{t.invite.empty}</EmptyRow>
+      ) : (
+        <List>
+          {invites.data.invites.map((i) => (
+            <Row
+              key={i.id}
+              title={<span className="truncate">{i.id}</span>}
+              sub={t.invite.usedCount(i.uses)}
+              cols={[{ content: <span title={formatDateTime(toDate(i.expiresAt))}>{t.invite.expiresIn(timeAgo(toDate(i.expiresAt)))}</span>, num: true }]}
+              actions={
+                <Button size="row" variant="ghost" disabled={revoking !== ""} onClick={() => revoke(i.id)}>
+                  {revoking === i.id && <Spinner />}
+                  {t.invite.revoke}
+                </Button>
+              }
+            />
+          ))}
+        </List>
       )}
     </Section>
   );

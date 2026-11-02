@@ -2,6 +2,7 @@ import type zh from "../zh/update";
 
 export default {
   badge: "Update available",
+  fontCredit: "Interface font: MiSans by Xiaomi",
   current: "Current version",
   latest: "Latest version",
   check: "Check for updates",
@@ -9,8 +10,10 @@ export default {
   availableTitle: (version: string) => `${version} is available`,
   text: "The panel downloads the new version from GitHub Release (or the mirror set during installation), verifies it and restarts in place. The page is interrupted for a few seconds; project containers keep running.",
   notes: "View release notes",
-  primaryHint: "Standby panels are updated separately. If their database version differs from this panel's, they pause syncing until both are on the same version.",
-  standbyHint: "This updates only this standby panel. If its database version differs from the primary's, syncing pauses until both are on the same version.",
+  primaryHint: "Standby panels are updated separately.",
+  primaryHelp: "If their database version differs from this panel's, they pause syncing until both are on the same version.",
+  standbyTitle: "This updates only this standby panel",
+  standbyHint: "If its database version differs from the primary's, syncing pauses until both are on the same version.",
   action: "Update",
   running: "Downloading…",
   confirm: (version: string) =>

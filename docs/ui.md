@@ -226,8 +226,8 @@
 | `CardGrid` / `Card` / `CardHeader` / `CardBody` / `CardFooter` | 概览网格里的卡片；整张是链接时给 `Link` 用 `cardClass` |
 | `TileGrid` / `Tile` | 监控数值块 |
 | `ChartContainer` 等（规划） | shadcn Charts，取代现在的 `TimeChart` |
-| `UsageRing`（规划） | 占用圆环，取代现在的 `UsageBars` 占用条 |
-| `Sankey`（规划） | 流量桑基图，SVG 自己算布局 |
+| `UsageRings` | 项目栏里容器的 CPU 和内存占用圆环 |
+| 流量桑基图（`pages/overview.tsx`） | SVG 自己算布局，节点之间的速率由 mesh 累计字节的差值估算 |
 | `Status` | 状态点加文字（运行中、离线……） |
 | `Badge` | 小标记（草稿、有状态、本面板……），`tone` 区分含义 |
 | `Dialog` | 带表单或内容的对话框（shadcn Dialog） |

@@ -1,7 +1,7 @@
 // 活动记录：用户在面板上的操作和节点、面板发出的告警。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Alert, Button, EmptyRow, Loading, Segmented, Spinner, Status, Table, Td, Th } from "@/components/ui";
+import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Segmented, Spinner, Status } from "@/components/ui";
 import type { ActivityEntry } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, projectClient, settingsClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
@@ -13,6 +13,24 @@ const pageSize = 50;
 export function actionLabel(e: ActivityEntry) {
   if (e.kind === "alert") return e.action === "resolved" ? t.activity.resolved : t.activity.firing;
   return (t.activity.actions as Record<string, string>)[e.action] ?? e.action;
+}
+
+function result(e: ActivityEntry) {
+  if (e.kind === "alert")
+    return e.action === "resolved" ? (
+      <Status tone="success">{actionLabel(e)}</Status>
+    ) : (
+      <span className="text-warning-text">
+        <Status tone="warning">{actionLabel(e)}</Status>
+      </span>
+    );
+  if (e.failed)
+    return (
+      <span className="text-destructive">
+        <Status tone="danger">{t.activity.failed}</Status>
+      </span>
+    );
+  return <Status tone="success">{t.activity.succeeded}</Status>;
 }
 
 export function ActivityCard() {
@@ -31,8 +49,9 @@ export function ActivityCard() {
   const entries = list.data?.pages.flatMap((p) => p.entries) ?? [];
 
   return (
-    <div className="grid gap-4">
-      <div>
+    <Section
+      title={<span title={t.settings.tabs.activity.description}>{t.settings.tabs.activity.label}</span>}
+      actions={
         <Segmented
           value={kind}
           onChange={setKind}
@@ -42,68 +61,54 @@ export function ActivityCard() {
             { value: "alert", label: t.activity.alerts },
           ]}
         />
-      </div>
+      }
+    >
       {list.isPending ? (
-        <Loading />
-      ) : list.error ? (
-        <Alert>{errorMessage(list.error)}</Alert>
-      ) : entries.length === 0 ? (
-        <EmptyRow>{t.activity.empty}</EmptyRow>
+        <RowsSkeleton count={5} />
       ) : (
-        <Table compact>
-          <thead>
-            <tr>
-              <Th>{t.activity.time}</Th>
-              <Th>{t.activity.actor}</Th>
-              <Th>{t.activity.action}</Th>
-              <Th className="hidden md:table-cell">{t.activity.target}</Th>
-              <Th>{t.activity.result}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={String(e.id)}>
-                <Td className="text-[13px] whitespace-nowrap text-muted-foreground" title={formatDateTime(toDate(e.time))}>
-                  {timeAgo(toDate(e.time))}
-                </Td>
-                <Td className="text-[13px]">{e.actor || "—"}</Td>
-                <Td className="text-[13px]">{actionLabel(e)}</Td>
-                <Td className="hidden font-mono text-xs text-muted-foreground md:table-cell">
-                  {e.projectId ? `${projectName(e.projectId)}${e.target ? ` / ${e.target}` : ""}` : e.target || "—"}
-                </Td>
-                <Td className="max-w-72 text-[13px]">
-                  {e.kind === "alert" ? (
-                    <Status tone={e.action === "resolved" ? "success" : "warning"}>
-                      <span className="whitespace-normal">{e.detail}</span>
-                    </Status>
-                  ) : e.failed ? (
-                    <span title={e.detail}>
-                      <Status tone="danger">{t.activity.failed}</Status>
-                    </span>
-                  ) : (
-                    <span className="flex min-w-0 items-center gap-2">
-                      <Status tone="success">{t.activity.succeeded}</Status>
-                      {e.detail && (
-                        <span className="truncate font-mono text-xs text-muted-foreground" title={e.detail}>
-                          {e.detail}
+        <>
+          {/* 定时刷新或加载更多失败时，已经显示的记录留着。 */}
+          {list.error && <QueryError error={errorMessage(list.error)} onRetry={() => list.refetch()} />}
+          {list.data &&
+            (entries.length === 0 ? (
+              <EmptyRow>{t.activity.empty}</EmptyRow>
+            ) : (
+              <List>
+                {entries.map((e) => {
+                  const target = e.projectId ? `${projectName(e.projectId)}${e.target ? ` / ${e.target}` : ""}` : e.target;
+                  const name = (e.kind === "alert" && e.detail) || actionLabel(e);
+                  const time = timeAgo(toDate(e.time));
+                  // 告警第二行写类型和是否已恢复，操作写谁做的和失败原因。
+                  const parts = e.kind === "alert" ? [t.activity.firing, e.action === "resolved" && t.activity.resolved, time] : [e.actor, e.detail, time];
+                  return (
+                    <Row
+                      key={String(e.id)}
+                      title={
+                        <span className="min-w-0 truncate" title={e.kind === "alert" ? [e.detail, e.actor].filter(Boolean).join(" · ") : undefined}>
+                          {target ? `${name} ${target}` : name}
                         </span>
-                      )}
-                    </span>
-                  )}
-                </Td>
-              </tr>
+                      }
+                      sub={
+                        <span className="wrap-anywhere" title={formatDateTime(toDate(e.time))}>
+                          {parts.filter(Boolean).join(" · ")}
+                        </span>
+                      }
+                      cols={[{ content: result(e), phone: true }]}
+                    />
+                  );
+                })}
+              </List>
             ))}
-          </tbody>
-        </Table>
+        </>
       )}
       {list.hasNextPage && (
-        <div className="flex justify-center">
-          <Button readOnlyOk size="sm" variant="ghost" disabled={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+        <div>
+          <Button readOnlyOk variant="ghost" className="-ml-3" disabled={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
             {list.isFetchingNextPage && <Spinner />}
             {t.activity.more}
           </Button>
         </div>
       )}
-    </div>
+    </Section>
   );
 }

@@ -2,7 +2,9 @@ import type zh from "../zh/settings";
 
 export default {
   title: "Settings",
+  groups: { account: "My account", panel: "Panel", nodes: "Nodes", records: "Records and alerts" },
   tabs: {
+    profile: { label: "Profile", description: "Display name and avatar." },
     access: { label: "Panel access", description: "Addresses nodes and browsers use to reach this panel." },
     security: { label: "Account security", description: "Sign-in password, two-factor authentication and secure entry." },
     members: { label: "Members", description: "Accounts that can sign in to this panel, and their roles." },

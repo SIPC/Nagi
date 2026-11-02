@@ -3,32 +3,31 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
-import { Alert, Button, Field, Input, Notice, Spinner, Waves } from "@/components/ui";
+import { Button, Field, Input, Notice, QueryError, Spinner, Waves } from "@/components/ui";
 import { LanguageButton } from "@/components/language";
 import { t } from "@/i18n";
 
-// AuthShell：登录、初始化页面的外框。居中的窄卡片，上方是品牌标识。
-function AuthShell({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+// AuthShell：登录、初始化页面的外框。居中 360 宽，没有卡片：品牌、标题、内容。
+// 只有一条提示（未初始化、连不上面板）时不写标题。
+function AuthShell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="fixed top-4 right-4">
         <LanguageButton />
       </div>
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-2.5">
-          <Waves className="h-5 w-12 text-wave" />
-          <span className="text-base font-semibold tracking-tight">
-            凪 <span className="font-normal text-muted-foreground">Nagi</span>{/* i18n-ignore */}
-          </span>
+      <main className="grid w-full max-w-[360px] gap-6">
+        <div className="grid justify-items-start gap-3">
+          <Waves className="h-6 w-[42px] text-wave" />
+          <span className="sr-only">Nagi</span>
+          {title && (
+            <div className="grid gap-1">
+              <h1 className="text-2xl leading-8 font-medium tracking-tight">{title}</h1>
+              {description && <p className="text-muted-foreground">{description}</p>}
+            </div>
+          )}
         </div>
-        <div className="rounded-lg border bg-card px-6 pt-6 pb-6 shadow-xs">
-          <div className="mb-5">
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-            <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>
-          </div>
-          {children}
-        </div>
-      </div>
+        {children}
+      </main>
     </div>
   );
 }
@@ -49,71 +48,59 @@ export function SetupPage({ token }: { token: string }) {
     mutationFn: () => setupClient.setup({ token, username, password }),
     onSuccess: async () => {
       await queryClient.invalidateQueries();
-      navigate({ to: "/projects" });
+      navigate({ to: "/" });
     },
   });
 
   // 已经初始化：去项目页（刚初始化完已经登录；没登录的话项目页会再转去登录页）。
   if (state.data?.initialized) return <Navigate to="/projects" />;
 
-  return (
-    <AuthShell title={t.auth.setup.title} description={t.auth.setup.description}>
-      {!token ? (
+  if (!token)
+    return (
+      <AuthShell>
         <Notice tone="danger" title={t.auth.setup.missingToken}>
           {t.auth.setup.missingTokenHint}
         </Notice>
-      ) : (
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setLocalError("");
-            if (password !== confirm) {
-              setLocalError(t.auth.setup.passwordMismatch);
-              return;
-            }
-            setup.mutate();
-          }}
-        >
-          <Field label={t.auth.username} htmlFor="username">
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              placeholder="admin"
-              autoFocus
-              required
-            />
-          </Field>
-          <Field label={t.auth.password} htmlFor="password" hint={t.auth.setup.passwordHint}>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              required
-              minLength={8}
-            />
-          </Field>
-          <Field label={t.auth.setup.confirmPassword} htmlFor="confirm">
-            <Input
-              id="confirm"
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-              required
-            />
-          </Field>
-          {(localError || setup.error) && <Alert>{localError || errorMessage(setup.error)}</Alert>}
-          <Button type="submit" className="mt-1 w-full" disabled={setup.isPending}>
-            {setup.isPending && <Spinner />}
-            {t.auth.setup.submit}
-          </Button>
-        </form>
-      )}
+      </AuthShell>
+    );
+
+  if (state.error && !state.data)
+    return (
+      <AuthShell>
+        <QueryError error={errorMessage(state.error)} onRetry={() => state.refetch()} />
+      </AuthShell>
+    );
+
+  const error = localError || (setup.error ? errorMessage(setup.error) : undefined);
+
+  return (
+    <AuthShell title={t.auth.setup.title} description={t.auth.setup.description}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setLocalError("");
+          if (password !== confirm) {
+            setLocalError(t.auth.setup.passwordMismatch);
+            return;
+          }
+          setup.mutate();
+        }}
+      >
+        <Field label={t.auth.username} htmlFor="username">
+          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="admin" autoFocus required />
+        </Field>
+        <Field label={t.auth.password} htmlFor="password">
+          <Input id="password" type="password" placeholder={t.auth.setup.passwordHint} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} />
+        </Field>
+        <Field label={t.auth.setup.confirmPassword} htmlFor="confirm" error={error}>
+          <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
+        </Field>
+        <Button type="submit" className="w-full" disabled={setup.isPending}>
+          {setup.isPending && <Spinner />}
+          {t.auth.setup.submit}
+        </Button>
+      </form>
     </AuthShell>
   );
 }
@@ -135,69 +122,90 @@ export function LoginPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries();
-      navigate({ to: "/projects" });
+      navigate({ to: "/" });
     },
   });
 
-  return (
-    <AuthShell
-      title={needCode ? t.auth.login.totpTitle : t.auth.login.title}
-      description={needCode ? t.auth.login.totpDescription : t.auth.login.description}
-    >
-      {setupState.data && !setupState.data.initialized ? (
+  if (setupState.error && !setupState.data)
+    return (
+      <AuthShell>
+        <QueryError error={errorMessage(setupState.error)} onRetry={() => setupState.refetch()} />
+      </AuthShell>
+    );
+
+  if (setupState.data && !setupState.data.initialized)
+    return (
+      <AuthShell>
         <Notice tone="warning" title={t.auth.login.notInitialized}>
-          {t.auth.login.notInitializedHint(<span className="font-mono">{t.auth.login.setupUrl}</span>)}
+          {t.auth.login.notInitializedHint(t.auth.login.setupUrl)}
         </Notice>
-      ) : (
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            login.mutate();
-          }}
-        >
-          <Field label={t.auth.username} htmlFor="username">
+      </AuthShell>
+    );
+
+  // 刚进入两步验证时的「需要验证码」不算错误，还没有填。
+  const error = login.error && !(needCode && !totpCode) ? errorMessage(login.error) : undefined;
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    login.mutate();
+  };
+
+  if (needCode)
+    return (
+      <AuthShell title={t.auth.login.totpTitle} description={t.auth.login.totpDescription}>
+        <form className="grid gap-4" onSubmit={submit}>
+          <Field label={t.auth.login.code} htmlFor="totp" error={error}>
             <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
+              id="totp"
+              inputMode="numeric"
+              maxLength={6}
+              value={totpCode}
+              onChange={(e) => {
+                setTotpCode(e.target.value);
+                // 改了验证码，上一次的结果就不算了。
+                if (login.error) login.reset();
+              }}
+              autoComplete="one-time-code"
+              placeholder="000000"
               autoFocus
-              required
             />
           </Field>
-          <Field label={t.auth.password} htmlFor="password">
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          {needCode && (
-            <Field label={t.auth.login.code} htmlFor="totp">
-              <Input
-                id="totp"
-                inputMode="numeric"
-                maxLength={6}
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value)}
-                autoComplete="one-time-code"
-                className="font-mono tracking-widest"
-                placeholder="000000"
-                autoFocus
-              />
-            </Field>
-          )}
-          {login.error && !(needCode && !totpCode) && <Alert keepFocus>{errorMessage(login.error)}</Alert>}
-          <Button type="submit" className="mt-1 w-full" disabled={login.isPending}>
-            {login.isPending && <Spinner />}
-            {needCode ? t.auth.login.verifySubmit : t.auth.login.submit}
-          </Button>
+          <div className="grid gap-2">
+            <Button type="submit" className="w-full" disabled={login.isPending}>
+              {login.isPending && <Spinner />}
+              {t.auth.login.verifySubmit}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={login.isPending}
+              onClick={() => {
+                setNeedCode(false);
+                setTotpCode("");
+                login.reset();
+              }}
+            >
+              {t.auth.login.back}
+            </Button>
+          </div>
         </form>
-      )}
+      </AuthShell>
+    );
+
+  return (
+    <AuthShell title={t.auth.login.title}>
+      <form className="grid gap-4" onSubmit={submit}>
+        <Field label={t.auth.username} htmlFor="username">
+          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
+        </Field>
+        <Field label={t.auth.password} htmlFor="password" error={error}>
+          <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+        </Field>
+        <Button type="submit" className="w-full" disabled={login.isPending}>
+          {login.isPending && <Spinner />}
+          {t.auth.login.submit}
+        </Button>
+      </form>
+      <p className="text-xs text-muted-foreground">{t.auth.login.forgotHint(<span className="font-mono">nagi reset password</span>)}</p>
     </AuthShell>
   );
 }
