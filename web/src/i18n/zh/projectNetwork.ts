@@ -12,7 +12,6 @@ export default {
     add: "添加映射",
     emptyContainer: "这个容器还没有端口映射",
     overviewDescription: "项目内全部端口映射，点一行到容器页查看和修改。",
-    metricsTitle: "请求监控",
     edit: (name: string) => `编辑映射 ${name}`,
     empty: "暂无端口映射",
     deleteConfirm: (name: string) => `删除端口映射 ${name}？对应的端口和域名将立即停止对外提供访问。`,

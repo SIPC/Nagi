@@ -10,7 +10,6 @@ import { t } from "@/i18n";
 import { Alert, Badge, Button, Check, CopyButton, EmptyRow, Field, FormActions, FormBody, Input, Section, Select, Spinner, Table, Td, Textarea, Th } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
-import { projectMetricNodes, RoutesMetrics, useRange } from "@/components/metrics";
 import { confirmAction } from "@/components/confirm";
 import { toast } from "sonner";
 
@@ -26,19 +25,12 @@ export function NetworkTab({ project, services }: { project: Project; services: 
   );
 }
 
-// ContainerNetwork：容器页的「网络」标签：这个容器的端口映射、请求监控，以及别的容器怎么访问它。
+// ContainerNetwork：容器页的「网络」标签：这个容器的端口映射，以及别的容器怎么访问它。
 export function ContainerNetwork({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
-  const { range, picker } = useRange();
-  const names = project.routes.filter((r) => r.container === container.name).map((r) => r.name);
   return (
     <div className="grid grid-cols-1 gap-6">
       <RoutesSection project={project} services={services} container={container.name} />
       <InternalAccess project={project} container={container} services={services} />
-      {names.length > 0 && (
-        <Section title={t.projectNetwork.routes.metricsTitle} actions={picker}>
-          <RoutesMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} routes={names} range={range} />
-        </Section>
-      )}
     </div>
   );
 }

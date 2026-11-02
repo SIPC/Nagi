@@ -45,7 +45,7 @@ export default {
     confirm: (names: string) => `更新 ${names} 的镜像？将拉取新镜像并重建容器，服务短暂中断，并生成新版本。`,
   },
   projectMetrics: {
-    description: "所有容器的资源占用合计。",
+    description: "所有容器的资源占用合计，以及各端口映射的请求和流量。",
     help: "各容器的监控见容器页。耗时图中每个时段的 P95、P99 取该时段内的最大值，其余指标取平均值。",
   },
   table: {

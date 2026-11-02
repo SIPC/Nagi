@@ -13,7 +13,6 @@ export default {
     add: "Add mapping",
     emptyContainer: "This container has no port mappings",
     overviewDescription: "All port mappings in this project. Select one to view or change it on the container page.",
-    metricsTitle: "Requests",
     edit: (name) => `Edit mapping ${name}`,
     empty: "No port mappings",
     deleteConfirm: (name) => `Delete port mapping ${name}? Its ports and domains will stop serving traffic immediately.`,

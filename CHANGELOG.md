@@ -8,6 +8,12 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## 未发布
+
+### 改进
+
+- 端口映射的请求和流量统计移回项目概览，一页就能看到所有映射。容器的「网络」标签不再显示这部分。
+
 ## v0.8.0
 
 ### 新功能

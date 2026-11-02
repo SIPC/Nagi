@@ -46,7 +46,7 @@ export default {
     confirm: (names) => `Update the image of ${names}? The new image is pulled and containers are recreated. The service is briefly interrupted and new versions are created.`,
   },
   projectMetrics: {
-    description: "Combined resource usage of all containers.",
+    description: "Combined resource usage of all containers, plus requests and traffic for each port mapping.",
     help: "Per-container metrics are on each container page. In latency charts, P95 and P99 show the maximum within each interval; other metrics show the average.",
   },
   table: {
