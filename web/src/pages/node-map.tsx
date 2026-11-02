@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Server } from "lucide-react";
-import { nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { HelpTip, Status, Waves } from "@/components/ui";
+import { HelpTip, QueryError, Status, Waves } from "@/components/ui";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { Container, MeshStatus, Project } from "@/gen/nagi/v1/common_pb";
@@ -108,13 +108,13 @@ function arrow(A: Pt, B: Pt, P: Pt) {
 }
 
 // EdgeLabel：线上的标签（延迟、容器数），带圆角底框，线从下面穿过也不会露在字缝里。
-// 宽度按字符估算：11px 等宽字体每个半角字符约 6.6px，全角字符 11px。
+// 宽度按字符估算：12px 字体每个半角字符约 7px，全角字符 12px。
 function EdgeLabel({ at, text, className }: { at: Pt; text: string; className?: string }) {
-  const w = [...text].reduce((s, ch) => s + (/[\u2e80-\uffff]/.test(ch) ? 11 : 6.6), 0) + 12;
+  const w = [...text].reduce((s, ch) => s + (/[\u2e80-\uffff]/.test(ch) ? 12 : 7), 0) + 12;
   return (
     <g transform={`translate(${at.x},${at.y})`} className={className}>
       <rect x={-w / 2} y={-9} width={w} height={18} rx={9} strokeWidth={1} className="fill-background stroke-border" />
-      <text dy="0.35em" textAnchor="middle" fontSize={11} className="fill-current font-mono tabular-nums">
+      <text dy="0.35em" textAnchor="middle" fontSize={12} className="fill-current tabular-nums">
         {text}
       </text>
     </g>
@@ -235,7 +235,7 @@ function NodeGlyph({
           {n.name}
         </text>
         {sub && (
-          <text y={62} textAnchor="middle" fontSize={11} {...halo} className="fill-muted-foreground font-mono tabular-nums">
+          <text y={62} textAnchor="middle" fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
             {sub}
           </text>
         )}
@@ -280,7 +280,7 @@ function NodeGlyph({
 // headClass：有箭头时箭头的填充色（类名要写全，Tailwind 才能生成）。
 function LegendLine({ className, dash, headClass, children }: { className: string; dash?: string; headClass?: string; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-2">
       <svg width={24} height={8} aria-hidden>
         <line x1={1} y1={4} x2={headClass ? 17 : 23} y2={4} strokeWidth={1.5} strokeLinecap="round" strokeDasharray={dash} className={className} />
         {headClass && <path d="M23,4L15,0L15,8Z" className={headClass} />}
@@ -291,7 +291,7 @@ function LegendLine({ className, dash, headClass, children }: { className: strin
 }
 
 function Legend({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">{children}</div>;
+  return <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">{children}</div>;
 }
 
 // ---- 网络图层 ----
@@ -364,6 +364,8 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
     })),
   });
   const panelMesh = useQuery({ queryKey: ["panel-mesh"], queryFn: () => nodeClient.getPanelMesh({}), refetchInterval: 10000 });
+  // 查不到的一端只能按默认样式画，所以要写出来；有旧数据时偶尔失败一次不提示。
+  const failedMesh = [...meshes, panelMesh].filter((q) => q.error && !q.data);
 
   const statuses = new Map<string, MeshStatus>();
   live.forEach((n, i) => meshes[i]?.data && statuses.set(n.id, meshes[i].data));
@@ -404,7 +406,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
           // 中转的线中点在面板上，标签放在靠近当前节点的一段。
           const mid = geometry(e).at(e.kind === "relay" && e.a !== PANEL && e.b !== PANEL ? (e.a === active ? 0.3 : 0.7) : 0.5);
           return (
-            label && <EdgeLabel key={e.a + "|" + e.b} at={mid} text={label} className={e.kind === "none" ? "text-destructive" : "text-foreground"} />
+            label && <EdgeLabel key={e.a + "|" + e.b} at={mid} text={label} className={e.kind === "none" ? "text-destructive" : e.kind === "relay" ? "text-warning-text" : "text-foreground"} />
           );
         })}
 
@@ -427,14 +429,16 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
           {t.nodes.map.relay}
         </LegendLine>
         <LegendLine className="stroke-destructive" dash="2 5">
-          {t.nodes.map.none}
+          <span className="text-destructive">{t.nodes.map.none}</span>
         </LegendLine>
         <HelpTip>{t.nodes.map.help}</HelpTip>
       </Legend>
 
+      {failedMesh.length > 0 && <QueryError className="mx-auto" error={errorMessage(failedMesh[0].error)} onRetry={() => failedMesh.forEach((q) => q.refetch())} />}
+
       {issues.length > 0 && (
         <div className="mx-auto grid gap-2">
-          <div className="text-xs font-medium text-muted-foreground">{t.nodes.map.issues}</div>
+          <div className="text-sm font-medium">{t.nodes.map.issues}</div>
           <ul className="grid gap-2">
             {issues.map((e) => (
               <li
@@ -446,7 +450,9 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
                 <span className="font-medium">
                   {nameOf(e.a)} ↔ {nameOf(e.b)}
                 </span>
-                <Status tone={e.kind === "none" ? "danger" : "warning"}>{pathLabel[e.path] ?? e.path}</Status>
+                <span className={e.kind === "none" ? "text-destructive" : "text-warning-text"}>
+                  <Status tone={e.kind === "none" ? "danger" : "warning"}>{pathLabel[e.path] ?? e.path}</Status>
+                </span>
               </li>
             ))}
           </ul>
@@ -588,7 +594,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
                 statusLine(n) || (
                   <>
                     {t.nodes.containers(n.containers)}
-                    {k > 0 && <tspan className="fill-warning"> · {t.nodes.ha.unprotected(k)}</tspan>}
+                    {k > 0 && <tspan className="fill-warning-text"> · {t.nodes.ha.unprotected(k)}</tspan>}
                   </>
                 )
               }
@@ -610,7 +616,9 @@ function HaMap({ nodes }: { nodes: Node[] }) {
       </Legend>
 
       <div className="mx-auto w-full max-w-xl">
-        {failedNode ? (
+        {projects.error && !projects.data ? (
+          <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />
+        ) : failedNode ? (
           <FailureReport node={failedNode} nodes={nodes} items={items} />
         ) : (
           <p className="text-center text-[13px] text-muted-foreground">{t.nodes.ha.hint}</p>
@@ -640,7 +648,7 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
   return (
     <div className="grid gap-3 border-t pt-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold">{t.nodes.ha.title(node.name)}</h3>
+        <h3 className="text-sm font-medium">{t.nodes.ha.title(node.name)}</h3>
         <Link to="/nodes/$nodeId" params={{ nodeId: node.id }} className="text-[13px] text-muted-foreground hover:text-foreground">
           {t.nodes.ha.open} →
         </Link>
@@ -651,7 +659,9 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
         <ul className="grid gap-3">
           {list.map((g) => (
             <li key={g.key} className="grid gap-1">
-              <Status tone={g.tone}>{g.label}</Status>
+              <span className={g.tone === "danger" ? "text-destructive" : g.tone === "warning" ? "text-warning-text" : undefined}>
+                <Status tone={g.tone}>{g.label}</Status>
+              </span>
               <div className="flex flex-wrap gap-x-3 gap-y-1 pl-3.5 text-[13px]">
                 {g.items.map(({ p, c }) => (
                   <Link

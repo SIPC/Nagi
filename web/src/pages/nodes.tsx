@@ -1,43 +1,49 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, Server } from "lucide-react";
+import { Plus } from "lucide-react";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { NodeMetrics, NodeUsageBars, fmtBytes, fmtBytesShort } from "@/components/metrics";
+import { NodeUsageBars, fmtBytes, fmtBytesShort, metricRanges, type MetricRange } from "@/components/metrics";
+import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh } from "@/pages/mesh";
+import { CodeBox } from "@/pages/invite";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
   Alert,
   Badge,
   Button,
-  CardBody,
   cardClass,
-  CardFooter,
   CardGrid,
-  CardHeader,
-  CodeBlock,
   Dialog,
+  DialogActions,
   Empty,
   EmptyRow,
   Field,
   FormActions,
+  FormBody,
+  FormRow,
+  HelpTip,
   Input,
+  List,
   Loading,
   Menu,
   Notice,
+  QueryError,
+  Row,
+  RowsSkeleton,
   Section,
   Segmented,
+  Skeleton,
   Spinner,
   Status,
-  Table,
   Tabs,
-  Td,
   Textarea,
-  Th,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
@@ -68,29 +74,104 @@ function usePanelVersion() {
   return settings.data?.settings?.version ?? "";
 }
 
-// nodeSpec：节点的配置，例如「2 核 · 内存 3.8GB · 磁盘 39GB」。旧版本的节点不报配置，返回空串。
+// 例如 8 GB、1.0 TB：数字和单位之间留空格。
+const sizeLabel = (v: number) => fmtBytesShort(v).replace(/([A-Z])/, " $1");
+
 // 磁盘是所有盘加起来；旧版本的节点不报各盘，用数据目录所在的盘。
-function nodeSpec(info?: NodeInfo, usage?: NodeUsage) {
+const diskTotal = (info?: NodeInfo, usage?: NodeUsage) => usage?.disks.reduce((sum, d) => sum + Number(d.totalBytes), 0) || Number(info?.diskBytes ?? 0);
+
+// nodeSpec：节点的配置，例如「2 核 · 3.8 GB」，磁盘在悬停提示里。旧版本的节点不报配置，返回空串。
+function nodeSpec(info?: NodeInfo) {
   if (!info) return "";
   const parts: string[] = [];
   if (info.cpus) parts.push(t.nodes.cores(info.cpus));
-  if (info.memoryBytes) parts.push(`${t.nodes.memory} ${fmtBytesShort(Number(info.memoryBytes))}`);
-  const disk = usage?.disks.reduce((sum, d) => sum + Number(d.totalBytes), 0) || Number(info.diskBytes);
-  if (disk) parts.push(`${t.nodes.disk} ${fmtBytesShort(disk)}`);
+  if (info.memoryBytes) parts.push(sizeLabel(Number(info.memoryBytes)));
   return parts.join(" · ");
 }
 
+function nodeSpecTitle(info?: NodeInfo, usage?: NodeUsage) {
+  const disk = diskTotal(info, usage);
+  return disk ? `${t.nodes.disk} ${sizeLabel(disk)}` : undefined;
+}
+
+const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
+const fmtPercent = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
+
+// NodeResources：节点页的监控，每项一个数字加一张小图，三列；时间范围在区块标题右侧。内存和磁盘写成「已用 / 总量」。
+function NodeResources({ n }: { n: Node }) {
+  const [range, setRange] = useState<MetricRange>("1h");
+  const r = metricRanges.find((x) => x.value === range)!;
+  const q = useQuery({
+    queryKey: ["node-metrics", n.id, range],
+    queryFn: () => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:", from: ago(r.seconds), step: BigInt(r.step) }),
+    refetchInterval: 10_000,
+    placeholderData: (prev) => prev,
+  });
+  const ofTotal = (total: number) => (total ? (v: number) => `${sizeLabel((v / 100) * total)} / ${sizeLabel(total)}` : fmtPercent);
+  const rate = (v: number) => `${fmtBytes(v)}/s`;
+  const items = [
+    { label: "CPU", name: "node:cpu", format: fmtPercent, minMax: 1 },
+    { label: t.metrics.memory, name: "node:mem", format: ofTotal(Number(n.info?.memoryBytes ?? 0)) },
+    { label: t.metrics.disk, name: "node:disk", format: ofTotal(diskTotal(n.info, n.usage)) },
+    { label: t.metrics.netRx, name: "node:net_rx", format: rate },
+    { label: t.metrics.netTx, name: "node:net_tx", format: rate },
+  ];
+  const now = Date.now() / 1000;
+  return (
+    <Section title={t.metrics.resourceUsage} actions={<Segmented value={range} onChange={setRange} items={metricRanges.map((x) => ({ value: x.value, label: t.metrics.rangesShort[x.value] }))} />}>
+      {q.isPending ? (
+        <Loading />
+      ) : q.error ? (
+        <Alert>{errorMessage(q.error)}</Alert>
+      ) : (
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          {items.map((it) => {
+            const s = q.data.series.find((x) => x.name === it.name);
+            const points = (s?.values ?? []).map((v, i): [number, number] => [Number(s!.times[i]), v]);
+            return (
+              <div key={it.name} className="grid min-w-0 gap-3">
+                <div className="text-muted-foreground">{it.label}</div>
+                <div className="text-[20px] leading-7 font-medium tracking-tight">{points.length ? it.format(points[points.length - 1][1]) : "—"}</div>
+                <TimeChart
+                  className="mt-2"
+                  series={[{ label: it.label, points, className: "text-info" }]}
+                  from={now - r.seconds}
+                  to={now}
+                  step={r.step}
+                  format={it.format}
+                  height={80}
+                  axis={false}
+                  minMax={it.minMax}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function NodeStatus({ n }: { n: Node }) {
-  if (n.pending) return <Status tone="warning">{t.common.status.pendingApproval}</Status>;
+  if (n.pending)
+    return (
+      <span className="text-warning-text">
+        <Status tone="warning">{t.common.status.pendingApproval}</Status>
+      </span>
+    );
   if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
-  return <Status tone="danger">{t.common.status.offline}</Status>;
+  return (
+    <span className="text-destructive">
+      <Status tone="danger">{t.common.status.offline}</Status>
+    </span>
+  );
 }
 
 // NodeContainers：运行在这个节点上的容器。节点离线时状态未知，但列表来自面板，仍然可以看。
 function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean }) {
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: 5000 });
-  if (projects.isPending) return <Loading />;
-  if (projects.error) return <Alert>{errorMessage(projects.error)}</Alert>;
+  if (projects.isPending) return <RowsSkeleton />;
+  if (projects.error) return <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />;
   const rows = projects.data.projects.flatMap((s) =>
     (s.project?.containers ?? [])
       .filter((c) => c.nodeId === nodeId)
@@ -98,43 +179,46 @@ function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean })
   );
   if (rows.length === 0) return <EmptyRow>{t.nodes.noContainers}</EmptyRow>;
   return (
-    <Table>
-      <thead>
-        <tr>
-          <Th>{t.nodes.containerColumns.container}</Th>
-          <Th>{t.nodes.containerColumns.project}</Th>
-          <Th>{t.nodes.containerColumns.status}</Th>
-          <Th className="hidden sm:table-cell">{t.nodes.containerColumns.version}</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(({ project, container, services }) => {
-          const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "warning" as const, label: t.common.status.unknown };
-          return (
-            <tr key={project.id + container.name}>
-              <Td className="font-medium">
-                <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} className="underline-offset-2 hover:underline">
-                  {container.name}
-                </Link>
-              </Td>
-              <Td className="text-[13px] text-muted-foreground">{project.name}</Td>
-              <Td>
-                <Status tone={st.tone}>{st.label}</Status>
-              </Td>
-              <Td className="hidden font-mono text-xs text-muted-foreground sm:table-cell">{container.deployedVersion > 0n ? `v${container.deployedVersion}` : "—"}</Td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </Table>
+    <List>
+      {rows.map(({ project, container, services }) => {
+        const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "warning" as const, label: t.common.status.unknown };
+        return (
+          <Row
+            key={project.id + container.name}
+            title={
+              <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} className="truncate underline-offset-4 hover:underline">
+                {container.name}
+              </Link>
+            }
+            sub={project.name}
+            cols={[
+              { content: container.deployedVersion > 0n ? `v${container.deployedVersion}` : "—", num: true },
+              {
+                content: (
+                  <span className={cn(st.tone === "danger" && "text-destructive", st.tone === "warning" && "text-warning-text")}>
+                    <Status tone={st.tone}>{st.label}</Status>
+                  </span>
+                ),
+                phone: true,
+              },
+            ]}
+          />
+        );
+      })}
+    </List>
   );
 }
 
 // approve 批准用接入码加入的节点。
 async function approve(n: Node) {
   if (!(await confirmAction(t.nodes.approveConfirm(n.name, n.address || n.id), { action: t.nodes.approve }))) return false;
-  await nodeClient.approveNode({ nodeId: n.id });
-  return true;
+  try {
+    await nodeClient.approveNode({ nodeId: n.id });
+    return true;
+  } catch (err) {
+    await notify(errorMessage(err));
+    return false;
+  }
 }
 
 export type NodesView = "cards" | MapLayer;
@@ -210,11 +294,19 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
         }
       />
       {nodes.isPending ? (
-        <Loading />
+        <CardsSkeleton />
       ) : nodes.error ? (
-        <Alert>{errorMessage(nodes.error)}</Alert>
+        <QueryError error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />
       ) : list.length === 0 ? (
-        <Empty title={t.nodes.empty} icon={<Server className="size-5" />} action={<Button onClick={() => setDialog("add")}>{t.nodes.addNode}</Button>}>
+        <Empty
+          title={t.nodes.empty}
+          action={
+            <Button onClick={() => setDialog("add")}>
+              <Plus />
+              {t.nodes.addNode}
+            </Button>
+          }
+        >
           {t.nodes.addNodeDescription}
         </Empty>
       ) : view !== "cards" ? (
@@ -227,62 +319,76 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
       ) : (
         cards
       )}
-      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} description={t.nodes.addNodeDescription}>
-        <AddNode />
+      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} className="max-w-[520px]">
+        <AddNode onClose={() => setDialog(null)} />
       </Dialog>
-      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} description={t.nodes.handoverDescription}>
-        <HandOver nodes={list} />
+      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} className="max-w-[520px]">
+        <HandOver nodes={list} onClose={() => setDialog(null)} />
       </Dialog>
     </>
+  );
+}
+
+// CardsSkeleton：节点卡片加载中。
+function CardsSkeleton() {
+  return (
+    <div role="status" aria-label={t.common.feedback.loading}>
+      <CardGrid>
+        {[0, 1].map((i) => (
+          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+            <Skeleton className="my-1 h-3 w-3/5" />
+            <Skeleton className="my-1 h-3 w-2/5" />
+            <Skeleton className="my-1 h-3 w-4/5" />
+          </div>
+        ))}
+      </CardGrid>
+    </div>
   );
 }
 
 function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
   const u = n.online && !n.pending ? n.usage : undefined;
   return (
-    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className={cardClass}>
-      <CardHeader
-        title={
-          <>
-            <span className="truncate">{n.name}</span>
-            {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
-            {upgrade ? (
-              <Badge tone={upgrade.phase === "failed" ? "warning" : "info"} title={upgrade.error || undefined}>
-                {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
-              </Badge>
-            ) : (
-              canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>
-            )}
-          </>
-        }
-        subtitle={<span className="truncate font-mono">{n.address || n.id}</span>}
-        aside={<NodeStatus n={n} />}
-      />
-      <CardBody>
-        {n.pending ? (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] text-muted-foreground">{t.nodes.pendingHint}</span>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={async (e) => {
-                e.preventDefault();
-                if (await approve(n)) onApproved();
-              }}
-            >
-              {t.nodes.approve}
-            </Button>
-          </div>
-        ) : n.online ? (
-          <NodeUsageBars usage={u} info={n.info} />
+    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className={cn(cardClass, "min-w-0 gap-3 p-4")}>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">{n.name}</span>
+          {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
+        </span>
+        <NodeStatus n={n} />
+      </div>
+      <div className="-mt-2 flex min-w-0 items-center justify-between gap-2">
+        <span className="truncate font-mono text-xs leading-5 text-muted-foreground">{n.address || n.id}</span>
+        {upgrade ? (
+          <Badge tone={upgrade.phase === "failed" ? "warning" : "neutral"} title={upgrade.error || undefined}>
+            {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
+          </Badge>
         ) : (
-          <span className="text-[13px] text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>
+          canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>
         )}
-      </CardBody>
-      <CardFooter>
-        <span>{t.nodes.containers(n.containers)}</span>
+      </div>
+      {n.pending ? (
+        <>
+          <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.pendingHint}</p>
+          <Button
+            variant="outline"
+            onClick={async (e) => {
+              e.preventDefault();
+              if (await approve(n)) onApproved();
+            }}
+          >
+            {t.nodes.approve}
+          </Button>
+        </>
+      ) : n.online ? (
+        <NodeUsageBars usage={u} info={n.info} className="font-sans text-foreground [&_.truncate>span]:text-muted-foreground" />
+      ) : (
+        <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</p>
+      )}
+      <div className="mt-auto flex items-center justify-between gap-3 text-xs leading-4 text-muted-foreground">
+        <span className="shrink-0">{t.nodes.containers(n.containers)}</span>
         <span className="truncate font-mono">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
-      </CardFooter>
+      </div>
     </Link>
   );
 }
@@ -295,14 +401,14 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   const panelVersion = usePanelVersion();
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
-  if (nodes.isPending) return <Loading />;
-  if (nodes.error) return <Alert>{errorMessage(nodes.error)}</Alert>;
+  if (nodes.isPending) return <RowsSkeleton />;
+  if (nodes.error) return <QueryError error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />;
   const n = nodes.data.nodes.find((x) => x.id === nodeId);
   if (!n) {
     return (
       <>
-        <Breadcrumb items={[{ label: t.nodes.title, to: "/nodes" }]} />
-        <Alert>{t.nodes.notFound}</Alert>
+        <Breadcrumb className="md:hidden" items={[{ label: t.nodes.title, to: "/nodes" }]} />
+        <Notice tone="danger" title={t.nodes.notFound} />
       </>
     );
   }
@@ -319,8 +425,9 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
   };
   return (
     <>
-      <Breadcrumb items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
+      <Breadcrumb className="md:hidden" items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
       <PageHeader
+        className="mb-4"
         title={
           <>
             {n.name}
@@ -330,75 +437,80 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
         }
         meta={
           <>
-            <span className="font-mono">{n.address || n.id}</span>
+            <span>{n.address || n.id}</span>
             {n.info && (
               <>
-                <span>
-                  {n.info.os}/{n.info.arch}
-                </span>
-                {nodeSpec(n.info, n.usage) && <span>{nodeSpec(n.info, n.usage)}</span>}
-                <span className="font-mono">
-                  Docker {n.info.dockerVersion || "?"} / Compose {n.info.composeVersion || "?"}
-                </span>
-                <span className="font-mono">Nagi {n.info.version || "?"}</span>
+                <span>{`${n.info.os}/${n.info.arch}`}</span>
+                {nodeSpec(n.info) && <span title={nodeSpecTitle(n.info, n.usage)}>{nodeSpec(n.info)}</span>}
+                <span title={`Compose ${n.info.composeVersion || "?"}`}>{`Docker ${n.info.dockerVersion || "?"}`}</span>
+                <span>{`Nagi ${n.info.version || "?"}`}</span>
               </>
             )}
-            <button type="button" className="cursor-pointer underline-offset-2 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
+            <button type="button" className="cursor-pointer underline-offset-4 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
               {t.nodes.containers(n.containers)}
             </button>
             {!n.online && <span>{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>}
           </>
         }
         actions={
-          <>
-            {n.pending && (
-              <Button
-                onClick={async () => {
-                  if (await approve(n)) nodes.refetch();
-                }}
-              >
-                {t.nodes.approve}
-              </Button>
-            )}
-            <Menu
-              items={[
-                { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
-                { label: t.nodes.removeNode, onSelect: remove, danger: true },
-              ]}
-            />
-          </>
+          <Menu
+            items={[
+              { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
+              { label: t.nodes.removeNode, onSelect: remove, danger: true },
+            ]}
+          />
         }
       />
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
         <RenameNode n={n} onDone={() => setRenaming(false)} />
       </Dialog>
-      {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
-      {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
-      {n.pending ? (
-        <Notice tone="warning" title={t.common.status.pendingApproval}>
-          {t.nodes.pendingNotice}
-        </Notice>
-      ) : (
+      {(target || upgradeState || n.unknownContainers.length > 0 || n.pending) && (
+        <div className="mb-4 grid gap-2">
+          {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
+          {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
+          {n.pending && (
+            <Notice
+              tone="warning"
+              title={t.common.status.pendingApproval}
+              actions={
+                <Button
+                  onClick={async () => {
+                    if (await approve(n)) nodes.refetch();
+                  }}
+                >
+                  {t.nodes.approve}
+                </Button>
+              }
+            >
+              {t.nodes.pendingNotice}
+            </Notice>
+          )}
+        </div>
+      )}
+      {!n.pending && (
         <>
           <Tabs value={tab} onChange={onTab} items={nodeTabs} className="mb-6" />
-          {tab === "containers" ? (
-            <NodeContainers nodeId={n.id} online={n.online} />
-          ) : !n.online ? (
-            <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
-          ) : tab === "metrics" ? (
-            <NodeMetrics nodeId={n.id} />
-          ) : tab === "mesh" ? (
-            <NodeMesh nodeId={n.id} />
-          ) : tab === "replicas" ? (
-            <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
-          ) : tab === "settings" ? (
-            <div className="grid grid-cols-1 gap-6">
-              <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
-              <NodeMirrors nodeId={n.id} />
-            </div>
-          ) : (
-            <NodePanels nodeId={n.id} />
-          )}
+          {/* 这一层不能省：区块靠 first: 去掉第一个的分隔线。 */}
+          <div>
+            {tab === "containers" ? (
+              <NodeContainers nodeId={n.id} online={n.online} />
+            ) : !n.online ? (
+              <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
+            ) : tab === "metrics" ? (
+              <NodeResources n={n} />
+            ) : tab === "mesh" ? (
+              <NodeMesh nodeId={n.id} />
+            ) : tab === "replicas" ? (
+              <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
+            ) : tab === "settings" ? (
+              <>
+                <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
+                <NodeMirrors nodeId={n.id} />
+              </>
+            ) : (
+              <NodePanels nodeId={n.id} />
+            )}
+          </div>
         </>
       )}
     </>
@@ -438,15 +550,15 @@ function RenameNode({ n, onDone }: { n: Node; onDone: () => void }) {
         <Input id="node-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus required pattern=".*\S.*" />
       </Field>
       {error && <Alert>{error}</Alert>}
-      <FormActions>
-        <Button size="sm" variant="ghost" onClick={onDone}>
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onDone}>
           {t.common.actions.cancel}
         </Button>
-        <Button type="submit" size="sm" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy && <Spinner />}
           {t.common.actions.save}
         </Button>
-      </FormActions>
+      </DialogActions>
     </form>
   );
 }
@@ -470,39 +582,47 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
   };
   if (state?.phase === "restarting") {
     return (
-      <Notice tone="success" title={t.nodes.upgrade.restartingTitle(state.target)} className="mb-6">
+      <Notice tone="success" title={t.nodes.upgrade.restartingTitle(state.target)}>
         {t.nodes.upgrade.restartingText}
       </Notice>
     );
   }
   if (state?.phase === "installing" || state?.phase === "queued") {
+    const queued = state.phase === "queued";
     return (
-      <Notice title={state.phase === "queued" ? t.nodes.upgrade.queuedTitle(state.target) : t.nodes.upgrade.installingTitle(state.target)} className="mb-6">
-        {state.phase === "queued" ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
+      <Notice tone={queued ? "neutral" : "info"} title={queued ? t.nodes.upgrade.queuedTitle(state.target) : t.nodes.upgrade.installingTitle(state.target)}>
+        {queued ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
       </Notice>
     );
   }
   const failed = state?.phase === "failed";
   return (
-    <Notice
-      title={failed ? t.nodes.upgrade.failedTitle(state.target) : t.nodes.upgrade.title(target)}
-      className="mb-6"
-      actions={
-        target && (
-          <Button size="sm" onClick={upgrade} disabled={busy}>
-            {busy ? t.nodes.upgrade.running : failed ? t.nodes.upgrade.retry : t.nodes.upgrade.action}
-          </Button>
-        )
-      }
-    >
-      <p>{t.nodes.upgrade.text(n.info?.version || "?")}</p>
-      {failed && state.error && <Alert className="mt-2">{state.error}</Alert>}
-      {error && <Alert className="mt-2">{error}</Alert>}
-    </Notice>
+    <>
+      <Notice
+        tone={failed ? "danger" : "info"}
+        title={failed ? t.nodes.upgrade.failedTitle(state.target) : t.nodes.upgrade.title(target)}
+        actions={
+          target && (
+            <Button variant="outline" onClick={upgrade} disabled={busy}>
+              {busy ? t.nodes.upgrade.running : failed ? t.nodes.upgrade.retry : t.nodes.upgrade.action}
+            </Button>
+          )
+        }
+      >
+        {failed && state.error ? (
+          state.error
+        ) : (
+          <>
+            {t.nodes.upgrade.text(n.info?.version || "?")} <HelpTip>{t.nodes.upgrade.help}</HelpTip>
+          </>
+        )}
+      </Notice>
+      {error && <Alert>{error}</Alert>}
+    </>
   );
 }
 
-function AddNode() {
+function AddNode({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: ["settings"],
@@ -534,30 +654,54 @@ function AddNode() {
   };
 
   const s = settings.data?.settings;
+  if (settings.isPending) return <RowsSkeleton count={1} />;
+  if (settings.error) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
   return (
     <div className="grid gap-4">
       {error && <Alert>{error}</Alert>}
-      <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input id="public-address" className="w-56 font-mono" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
-          <span className="font-mono text-[13px] text-muted-foreground">:{s?.port}</span>
-          {address !== null && (
-            <Button size="sm" variant="outline" onClick={saveAddress}>
-              {t.common.actions.save}
-            </Button>
-          )}
-        </div>
-      </Field>
-      {command && (
-        <Field label={t.nodes.add.command} hint={t.nodes.add.commandHint} help={t.nodes.add.commandHelp}>
-          <CodeBlock copy>{command}</CodeBlock>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address">
+          <div className="flex items-center gap-2">
+            <Input id="public-address" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
+            {address !== null && (
+              <Button variant="outline" onClick={saveAddress}>
+                {t.common.actions.save}
+              </Button>
+            )}
+          </div>
         </Field>
+        <Field label={t.nodes.add.port} htmlFor="public-port">
+          <Input id="public-port" value={s?.port ?? ""} readOnly />
+        </Field>
+      </div>
+      {command && (
+        <>
+          <CodeBox text={command} />
+          <p className="flex items-center gap-1 text-[13px] leading-5 text-muted-foreground">
+            {t.nodes.add.commandHint}
+            <HelpTip>{t.nodes.add.commandHelp}</HelpTip>
+          </p>
+        </>
       )}
-      <FormActions className="border-t pt-4">
-        <Button size="sm" onClick={create}>
-          {command ? t.nodes.add.regenerate : t.nodes.add.generate}
-        </Button>
-      </FormActions>
+      <DialogActions>
+        {command ? (
+          <>
+            <Button variant="outline" onClick={create}>
+              {t.nodes.add.regenerate}
+            </Button>
+            <Button readOnlyOk onClick={onClose}>
+              {t.nodes.add.finish}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" readOnlyOk onClick={onClose}>
+              {t.common.actions.cancel}
+            </Button>
+            <Button onClick={create}>{t.nodes.add.generate}</Button>
+          </>
+        )}
+      </DialogActions>
     </div>
   );
 }
@@ -584,22 +728,25 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
   return (
     <Section title={t.nodes.settings.rootTitle}>
       <form
-        className="grid max-w-2xl gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           save();
         }}
       >
-        <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} hint={t.nodes.settings.rootHint} help={t.nodes.settings.rootHelp}>
-          <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" required pattern=".*\S.*" />
-        </Field>
-        {error && <Alert>{error}</Alert>}
-        <FormActions>
-          <Button type="submit" size="sm" disabled={busy}>
-            {busy && <Spinner />}
-            {t.common.actions.save}
-          </Button>
-        </FormActions>
+        <FormBody>
+          <FormRow>
+            <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} help={t.nodes.settings.rootHelp}>
+              <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder={t.nodes.settings.rootHint} required pattern=".*\S.*" />
+            </Field>
+          </FormRow>
+          {error && <Alert>{error}</Alert>}
+          <FormActions>
+            <Button type="submit" variant="outline" disabled={busy}>
+              {busy && <Spinner />}
+              {t.common.actions.save}
+            </Button>
+          </FormActions>
+        </FormBody>
       </form>
     </Section>
   );
@@ -607,15 +754,17 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
 
 // NodeMirrors：节点的 Docker 镜像加速地址（见 docs/agent.md#镜像）。
 function NodeMirrors({ nodeId }: { nodeId: string }) {
-  const q = useQuery({ queryKey: ["node-mirrors", nodeId], queryFn: () => nodeClient.getNodeMirrors({ nodeId }) });
+  const { isAdmin } = useRole();
+  const q = useQuery({ queryKey: ["node-mirrors", nodeId], queryFn: () => nodeClient.getNodeMirrors({ nodeId }), enabled: isAdmin });
+  const denied = !isAdmin || (q.error instanceof ConnectError && q.error.code === Code.PermissionDenied);
   return (
-    <Section title={t.nodes.mirrors.title} description={t.nodes.mirrors.description} help={t.nodes.mirrors.help}>
-      {q.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
+    <Section title={t.nodes.mirrors.title}>
+      {denied ? (
+        <Notice title={t.nodes.mirrors.adminOnly} />
+      ) : q.isPending ? (
+        <RowsSkeleton count={1} />
       ) : q.error ? (
-        <Alert>{errorMessage(q.error)}</Alert>
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
         <MirrorsForm nodeId={nodeId} mirrors={q.data} />
       )}
@@ -656,36 +805,42 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
   // daemon.json 里的和 Docker 正在用的不一样：还没有重启 Docker。
   const pending = !sameMirrors(mirrors.mirrors, mirrors.active);
   return (
-    <form
-      className="grid max-w-2xl gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save();
-      }}
-    >
+    <>
       {pending && (
         <Notice tone="warning" title={t.nodes.mirrors.pendingTitle}>
           <span className="break-all">{t.nodes.mirrors.pendingText(mirrors.active.join(", ") || t.nodes.mirrors.none)}</span>
         </Notice>
       )}
-      <Field label={t.nodes.mirrors.label} htmlFor={`mirrors-${nodeId}`} hint={t.nodes.mirrors.hint}>
-        <Textarea
-          id={`mirrors-${nodeId}`}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="https://mirror.example.com"
-          spellCheck={false}
-          className="font-mono text-[13px]"
-        />
-      </Field>
-      {error && <Alert>{error}</Alert>}
-      <FormActions>
-        <Button type="submit" size="sm" disabled={busy}>
-          {busy && <Spinner />}
-          {t.common.actions.save}
-        </Button>
-      </FormActions>
-    </form>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <FormBody>
+          <Field
+            label={t.nodes.mirrors.label}
+            htmlFor={`mirrors-${nodeId}`}
+            help={
+              <span className="grid gap-1">
+                <span>{t.nodes.mirrors.description}</span>
+                <span>{t.nodes.mirrors.hint}</span>
+                <span>{t.nodes.mirrors.help}</span>
+              </span>
+            }
+          >
+            <Textarea id={`mirrors-${nodeId}`} rows={3} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" spellCheck={false} className="py-2" />
+          </Field>
+          {error && <Alert>{error}</Alert>}
+          <FormActions>
+            <Button type="submit" variant="outline" disabled={busy}>
+              {busy && <Spinner />}
+              {t.common.actions.save}
+            </Button>
+          </FormActions>
+        </FormBody>
+      </form>
+    </>
   );
 }
 
@@ -694,8 +849,8 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
   const [error, setError] = useState("");
-  const remove = async (projectId: string, container: string, label: string) => {
-    if (!(await confirmAction(t.nodes.replicas.deleteConfirm(label), { action: t.common.actions.delete, danger: true }))) return;
+  const remove = async (projectId: string, container: string) => {
+    if (!(await confirmAction(t.nodes.replicas.deleteConfirm(container), { action: t.common.actions.delete, danger: true }))) return;
     setError("");
     try {
       await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
@@ -705,53 +860,37 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
     }
   };
   return (
-    <Section flush title={t.nodes.replicas.title} description={t.nodes.replicas.intro}>
-      {error && <Alert className="mb-3">{error}</Alert>}
+    <Section title={t.nodes.replicas.title} help={t.nodes.replicas.intro}>
+      {error && <Alert>{error}</Alert>}
       {q.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
+        <RowsSkeleton />
       ) : q.error ? (
-        <Alert>{errorMessage(q.error)}</Alert>
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : q.data.replicas.length === 0 ? (
         <EmptyRow>{t.nodes.replicas.empty}</EmptyRow>
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.nodes.replicas.columns.container}</Th>
-              <Th className="hidden sm:table-cell">{t.nodes.replicas.columns.source}</Th>
-              <Th className="hidden sm:table-cell">{t.nodes.replicas.columns.size}</Th>
-              <Th>{t.nodes.replicas.columns.lastSync}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {q.data.replicas.map(({ replica: r, inUse }) => {
-              const label = `${r?.projectName || r?.projectId}/${r?.container}`;
-              return (
-                <tr key={`${r?.projectId}-${r?.container}`}>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{label}</span>
-                      {!inUse && <Badge tone="warning">{t.nodes.replicas.unused}</Badge>}
-                    </div>
-                  </Td>
-                  <Td className="hidden text-[13px] text-muted-foreground sm:table-cell">{nodes.find((x) => x.id === r?.sourceNodeId)?.name || r?.sourceName || "—"}</Td>
-                  <Td className="hidden font-mono text-xs whitespace-nowrap text-muted-foreground sm:table-cell">{fmtBytes(Number(r?.bytes ?? 0))}</Td>
-                  <Td className="text-[13px] whitespace-nowrap text-muted-foreground">{r?.lastSync ? timeAgo(toDate(r.lastSync)) : "—"}</Td>
-                  <Td className="text-right">
-                    {!inUse && (
-                      <Button size="xs" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
-                        {t.common.actions.delete}
-                      </Button>
-                    )}
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
+        <List>
+          {q.data.replicas.map(({ replica: r, inUse }) => {
+            const label = `${r?.projectName || r?.projectId} / ${r?.container}`;
+            const source = nodes.find((x) => x.id === r?.sourceNodeId)?.name || r?.sourceName;
+            const detail = [source && t.nodes.replicas.source(source), r?.lastSync ? t.nodes.replicas.synced(timeAgo(toDate(r.lastSync))) : t.nodes.replicas.neverSynced].filter(Boolean).join(" · ");
+            return (
+              <Row
+                key={`${r?.projectId}-${r?.container}`}
+                title={<span className="truncate">{label}</span>}
+                sub={!inUse ? <span className="text-warning-text" title={detail}>{t.nodes.replicas.unused}</span> : detail}
+                cols={[{ content: fmtBytes(Number(r?.bytes ?? 0)), num: true }]}
+                actions={
+                  inUse ? null : (
+                    <Button size="row" variant="ghost" onClick={() => remove(r!.projectId, r!.container)}>
+                      {t.common.actions.delete}
+                    </Button>
+                  )
+                }
+              />
+            );
+          })}
+        </List>
       )}
     </Section>
   );
@@ -771,21 +910,26 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
     }
   };
   return (
-    <Notice tone="warning" title={t.nodes.unknown.title} className="mb-6">
-      <p>{t.nodes.unknown.text}</p>
-      {error && <Alert className="mt-2">{error}</Alert>}
-      <ul className="mt-2 grid gap-1.5">
+    <div className="grid gap-4">
+      <Notice tone="warning" title={t.nodes.unknown.title}>
+        {t.nodes.unknown.text}
+      </Notice>
+      {error && <Alert>{error}</Alert>}
+      <List>
         {list.map((u) => (
-          <li key={u.projectId + "/" + u.container} className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-[13px]">
-              {u.projectName} / {u.container}
-            </span>
-            <Button size="xs" variant="outline" onClick={() => adopt(u)}>
-              {t.nodes.unknown.adopt}
-            </Button>
-          </li>
+          <Row
+            key={u.projectId + "/" + u.container}
+            title={<span className="truncate">{u.container}</span>}
+            sub={u.projectName}
+            actionsWidth="w-auto"
+            actions={
+              <Button size="row" variant="ghost" onClick={() => adopt(u)}>
+                {t.nodes.unknown.adopt}
+              </Button>
+            }
+          />
         ))}
-      </ul>
-    </Notice>
+      </List>
+    </div>
   );
 }

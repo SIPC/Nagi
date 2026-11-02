@@ -79,8 +79,8 @@ export default {
   upgrade: {
     badge: "Upgrade available",
     title: (version) => `Upgrade to ${version} available`,
-    text: (current) =>
-      `This node runs ${current}. The node downloads the panel's version from GitHub Release (or the mirror set at install time), verifies it and restarts in place. Containers keep running; the built-in Caddy is interrupted for a second or two.`,
+    text: (current) => `This node runs ${current}. Containers keep running; the built-in Caddy is interrupted for a second or two.`,
+    help: "The node downloads the panel's version from GitHub Release (or the mirror set at install time), verifies it and restarts in place.",
     confirm: (name, version) => `Upgrade node ${name} to ${version}? The node downloads and verifies the new version, then restarts in place.`,
     action: "Upgrade",
     running: "Upgrading…",
@@ -101,11 +101,13 @@ export default {
   add: {
     publicAddress: "Panel public address",
     publicAddressHelp: "Nodes connect to the panel at this address. It must be reachable from the node.",
+    port: "Port",
     command: "Install command",
     commandHint: "Run as root on the new machine",
     commandHelp: "The token is single-use: one command per machine, valid for 1 hour.",
     regenerate: "Regenerate",
     generate: "Generate install command",
+    finish: "Done",
   },
   settings: {
     rootTitle: "Project directories",
@@ -123,6 +125,7 @@ export default {
     pendingTitle: "Takes effect after Docker restarts",
     pendingText: (active) => `Written to daemon.json. Run systemctl restart docker on the node to apply. Docker currently uses: ${active}`,
     none: "none",
+    adminOnly: "Only admins can view registry mirrors",
   },
   replicas: {
     title: "Container replicas",
@@ -130,6 +133,9 @@ export default {
     intro: "Container replicas this node stores as a backup node or hot standby.",
     empty: "No replicas",
     unused: "Unused",
+    source: (name) => `Source node ${name}`,
+    synced: (ago) => `Synced ${ago}`,
+    neverSynced: "Not synced yet",
     columns: {
       container: "Container",
       source: "Source node",

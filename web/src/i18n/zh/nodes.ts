@@ -77,8 +77,8 @@ export default {
   upgrade: {
     badge: "可升级",
     title: (version: string) => `可升级到 ${version}`,
-    text: (current: string) =>
-      `节点当前为 ${current}。升级时节点从 GitHub Release（安装时指定了镜像则从镜像）下载与面板相同的版本，校验后原地重启；容器照常运行，内置的 Caddy 会中断一两秒。`,
+    text: (current: string) => `节点当前为 ${current}。容器照常运行，内置的 Caddy 会中断一两秒。`,
+    help: "升级时节点从 GitHub Release（安装时指定了镜像则从镜像）下载与面板相同的版本，校验后原地重启。",
     confirm: (name: string, version: string) => `将节点 ${name} 升级到 ${version}？节点下载并校验新版本后原地重启。`,
     action: "升级",
     running: "升级中…",
@@ -99,11 +99,13 @@ export default {
   add: {
     publicAddress: "面板对外地址",
     publicAddressHelp: "节点通过该地址连接面板，须可从节点访问。",
+    port: "端口",
     command: "安装命令",
     commandHint: "以 root 身份在新机器上执行",
     commandHelp: "令牌仅可使用一次：每台机器一条命令，有效期 1 小时。",
     regenerate: "重新生成",
     generate: "生成安装命令",
+    finish: "完成",
   },
   settings: {
     rootTitle: "项目目录",
@@ -115,11 +117,12 @@ export default {
     title: "镜像加速",
     description: "Docker 从 Docker Hub 拉取镜像时使用的加速地址，适用于国内节点。",
     help: "写入节点的 /etc/docker/daemon.json（registry-mirrors），保留其中的其他配置；清空则删除该项。Nagi 不会自动重启 Docker，重启时容器会短暂中断，建议同时开启 Docker 的 live-restore。",
-    label: "加速地址",
+    label: "镜像源",
     hint: "每行一个，以 http:// 或 https:// 开头",
     pendingTitle: "重启 Docker 后生效",
     pendingText: (active: string) => `已写入 daemon.json，在节点上执行 systemctl restart docker 后生效。Docker 当前使用：${active}`,
     none: "无",
+    adminOnly: "只有管理员可以查看镜像加速",
   },
   replicas: {
     title: "容器副本",
@@ -127,6 +130,9 @@ export default {
     intro: "本节点作为备份节点或热备保存的容器副本。",
     empty: "暂无副本",
     unused: "未使用",
+    source: (name: string) => `来源节点 ${name}`,
+    synced: (ago: string) => `${ago}同步`,
+    neverSynced: "尚未同步",
     columns: {
       container: "容器",
       source: "来源节点",

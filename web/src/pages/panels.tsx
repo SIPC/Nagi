@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { Project } from "@/gen/nagi/v1/common_pb";
-import { Alert, Badge, Button, Check, EmptyRow, Field, Section, Spinner, Status, Table, Td, Textarea, Th } from "@/components/ui";
+import { Alert, Button, Check, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import { t } from "@/i18n";
 import { confirmAction } from "@/components/confirm";
 
@@ -22,12 +22,13 @@ function relatedNodes(p: Project) {
 }
 
 // HandOver：把勾选的节点移交给另一个面板（放在对话框里）。一个节点同一时间只归一个面板管理。
-export function HandOver({ nodes }: { nodes: { id: string; name: string; online: boolean }[] }) {
+export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string; online: boolean }[]; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<HandOverResult[]>([]);
+  const [missing, setMissing] = useState<{ code?: boolean; nodes?: boolean }>({});
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
   const projectList = (projects.data?.projects ?? []).map((p) => p.project!).filter((p) => p && p.containers.length > 0);
   // 项目的相关节点都选中了，就算选中了这个项目。
@@ -38,6 +39,9 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
   };
 
   const run = async () => {
+    const lacks = { code: !code.trim(), nodes: selected.length === 0 };
+    setMissing(lacks);
+    if (lacks.code || lacks.nodes) return;
     if (!(await confirmAction(t.panels.handover.confirm(selected.length), { action: t.panels.handover.submit, danger: true }))) return;
     setBusy(true);
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
@@ -54,22 +58,13 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
 
   return (
     <div className="grid gap-4">
-      <p className="text-[13px] text-muted-foreground">
-        {t.panels.handover.intro}
-      </p>
-        <Field label={t.panels.handover.code} hint={t.panels.handover.codeHint} htmlFor="handover-code">
-          <Textarea
-            id="handover-code"
-            className="font-mono text-xs"
-            rows={2}
-            placeholder={t.panels.handover.codePlaceholder}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
+        <Field label={t.panels.handover.code} help={t.panels.handover.intro} htmlFor="handover-code" error={missing.code && !code.trim() ? t.panels.handover.codeRequired : undefined}>
+          <Input id="handover-code" placeholder={t.panels.handover.codePlaceholder} value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" spellCheck={false} />
         </Field>
+        {projects.error && !projects.data && <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
         {projectList.length > 0 && (
           <Field label={t.panels.handover.byProject} help={t.panels.handover.byProjectHelp}>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
               {projectList.map((p) => (
                 <Check key={p.id} checked={projectSelected(p)} onChange={(v) => toggleProject(p, v)}>
                   {p.name}
@@ -78,8 +73,8 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
             </div>
           </Field>
         )}
-        <Field label={t.panels.handover.nodes}>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <Field label={t.panels.handover.nodes} error={missing.nodes && selected.length === 0 ? t.panels.handover.nodesRequired : undefined}>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
             {nodes.map((n) => (
               <Check
                 key={n.id}
@@ -88,27 +83,32 @@ export function HandOver({ nodes }: { nodes: { id: string; name: string; online:
                 onChange={(v) => setSelected(v ? [...selected, n.id] : selected.filter((x) => x !== n.id))}
               >
                 {n.name}
-                {!n.online && <span className="text-muted-foreground">{t.panels.handover.offline}</span>}
+                {!n.online && t.panels.handover.offline}
               </Check>
             ))}
           </div>
         </Field>
         {results.length > 0 && (
-          <div className="grid gap-1.5 rounded-md border bg-subtle px-3.5 py-2.5">
+          <List>
             {results.map((r, i) => (
-              <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <Status tone={r.ok ? "success" : "danger"}>{r.name}</Status>
-                <span className={r.ok ? "text-[13px] text-muted-foreground" : "text-[13px] text-destructive"}>{r.ok ? t.common.feedback.done : r.error}</span>
-              </div>
+              <Row
+                key={i}
+                title={r.name}
+                sub={r.ok ? undefined : r.error}
+                cols={[{ content: <Status tone={r.ok ? "success" : "danger"}>{r.ok ? t.common.feedback.done : t.panels.handover.failed}</Status>, phone: true }]}
+              />
             ))}
-          </div>
+          </List>
         )}
-      <div className="flex justify-end border-t pt-4">
-        <Button size="sm" disabled={busy || !code || selected.length === 0} onClick={run}>
-          {busy && <Spinner className="size-3.5" />}
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onClose}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button variant="destructive" disabled={busy} onClick={run}>
+          {busy && <Spinner />}
           {busy ? t.panels.handover.processing : t.panels.handover.submit}
         </Button>
-      </div>
+      </DialogActions>
     </div>
   );
 }
@@ -122,51 +122,46 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
   });
   const [error, setError] = useState("");
   return (
-    <Section flush title={t.panels.nodePanels.title} description={t.panels.nodePanels.intro}>
-      {error && <Alert className="mb-3">{error}</Alert>}
+    <Section title={t.panels.nodePanels.title} help={t.panels.nodePanels.intro}>
+      {error && <Alert>{error}</Alert>}
       {q.isPending ? (
-        <EmptyRow>
-          <Spinner />
-        </EmptyRow>
+        <RowsSkeleton />
       ) : q.error ? (
-        <Alert>{errorMessage(q.error)}</Alert>
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : q.data.panels.length === 0 ? (
         <EmptyRow>{t.panels.nodePanels.empty}</EmptyRow>
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.panels.nodePanels.columns.panel}</Th>
-              <Th>{t.panels.nodePanels.columns.status}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {q.data.panels.map((p) => (
-              <tr key={p.fingerprint}>
-                <Td className="max-w-0 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-[13px]">{p.address}</span>
-                    {p.isSelf && <Badge>{t.panels.nodePanels.self}</Badge>}
-                    {p.role === "primary" && <Badge>{t.panels.nodePanels.primary}</Badge>}
-                    {p.role === "standby" && <Badge>{t.panels.nodePanels.standby}</Badge>}
-                  </div>
-                  <div className="truncate font-mono text-xs text-muted-foreground" title={p.fingerprint}>
-                    {p.fingerprint}
-                  </div>
-                </Td>
-                <Td>
-                  {p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>}
-                  {!p.connected && p.lastError && <div className="mt-0.5 text-xs text-warning">{p.lastError}</div>}
-                </Td>
-                <Td className="w-px text-right">
+        <List>
+          {q.data.panels.map((p) => {
+            const key = p.fingerprint.replace("sha256//", "");
+            const roles = [p.isSelf && t.panels.nodePanels.self, p.role === "primary" && t.panels.nodePanels.primary, p.role === "standby" && t.panels.nodePanels.standby].filter(Boolean).join(" · ");
+            return (
+              <Row
+                key={p.fingerprint}
+                title={
+                  <>
+                    <span className="truncate">{p.address}</span>
+                    {roles && <span className="shrink-0 text-muted-foreground">{roles}</span>}
+                  </>
+                }
+                sub={
+                  <>
+                    <span title={p.fingerprint}>{`${t.panels.nodePanels.publicKey} ${key.slice(0, 8)}`}</span>
+                    {!p.connected && p.lastError && (
+                      <>
+                        {" · "}
+                        <span className="text-warning-text">{p.lastError}</span>
+                      </>
+                    )}
+                  </>
+                }
+                cols={[{ content: p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>, phone: true }]}
+                actions={
                   <Button
-                    size="xs"
+                    size="row"
                     variant="ghost"
                     onClick={async () => {
-                      const msg = p.isSelf
-                        ? t.panels.nodePanels.removeSelfConfirm
-                        : t.panels.nodePanels.removeConfirm(p.address, p.fingerprint.replace("sha256//", "").slice(0, 12));
+                      const msg = p.isSelf ? t.panels.nodePanels.removeSelfConfirm : t.panels.nodePanels.removeConfirm(p.address, key.slice(0, 12));
                       if (!(await confirmAction(msg, { action: t.common.actions.remove, danger: true }))) return;
                       setError("");
                       try {
@@ -179,11 +174,11 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
                   >
                     {t.common.actions.remove}
                   </Button>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+                }
+              />
+            );
+          })}
+        </List>
       )}
     </Section>
   );
