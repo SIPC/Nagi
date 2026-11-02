@@ -379,7 +379,8 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
       </span>
     );
   };
-  // CPU 统一显示占整机的百分比，和拓扑图、节点详情一致；核数在悬停提示里。
+  // 节点卡片的 CPU 和容器一样按每核 100% 算：16 核的机器总量是 1600%。悬停提示里同时有占整机的比例和核数。
+  const cpuTotal = info?.cpus ? info.cpus * 100 : undefined;
   const cpuDetail = info?.cpus ? m.cpuCores(info.cpus) : undefined;
   // 磁盘是所有盘加起来，每块盘的用量在悬停提示里。旧版本的节点不报各盘，退回数据目录所在的盘。
   const disks = usage?.disks ?? [];
@@ -393,7 +394,7 @@ export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; i
         className,
       )}
     >
-      {row(<Cpu />, "CPU", usage?.cpu, undefined, fmtCpuShort, fmtCpuShort, cpuDetail)}
+      {row(<Cpu />, "CPU", usage?.cpu, cpuTotal, fmtCpuShort, fmtCpuShort, cpuDetail)}
       {row(<MemoryStick />, m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
       {diskTotal > 0
         ? row(<HardDrive />, m.disk, (100 * diskUsed) / diskTotal, diskTotal, size, size, diskDetail)
