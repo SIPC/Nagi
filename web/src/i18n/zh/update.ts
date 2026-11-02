@@ -15,5 +15,16 @@ export default {
   confirm: (version: string) => `将面板更新到 ${version}？面板下载并校验新版本后原地重启，进行中的部署等操作会中断。更新后不能在面板上退回旧版本。`,
   restartingTitle: (version: string) => `已替换为 ${version}，面板正在重启`,
   restartingText: "重启好后页面会自动刷新。之后可以到节点页升级各节点。",
-  timeout: (version: string) => `面板已替换为 ${version}，但 3 分钟内没有恢复。请到服务器上查看日志：journalctl -u nagi-server -n 50`,
+  retry: "重试",
+  installingTitle: (version: string) => `正在更新到 ${version}`,
+  installingText: "面板正在下载并校验新版本，完成后原地重启，页面会自动刷新。可以离开这个页面，进度记在面板上。",
+  tips: {
+    view: "查看",
+    available: (version: string) => `发现新版本 ${version}`,
+    availableText: "到版本更新页查看说明并更新面板。",
+    panelFailed: (version: string) => `面板更新到 ${version} 失败`,
+    nodesRunning: (n: number) => `正在升级节点，还剩 ${n} 个`,
+    nodeFailed: (name: string) => `节点 ${name} 升级失败`,
+    nodesAvailable: (n: number, version: string) => `${n} 个节点可以升级到 ${version}`,
+  },
 };

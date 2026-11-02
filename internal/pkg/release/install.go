@@ -172,7 +172,7 @@ func PageURL(version string) string {
 var versionPartsRe = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)([-+].*)?$`)
 
 // Older 判断版本 a 是否早于 b。不是正式版本号（例如本地编译的 dev）时不比较，返回 false。
-// 和 web/src/pages/nodes.tsx 的 isOlder 一致。
+// 和 web/src/pages/update.tsx 的 isOlder 一致。
 func Older(a, b string) bool {
 	x, y := versionPartsRe.FindStringSubmatch(a), versionPartsRe.FindStringSubmatch(b)
 	if x == nil || y == nil {

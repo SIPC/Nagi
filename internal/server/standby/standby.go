@@ -44,7 +44,7 @@ const (
 )
 
 // LocalSettings 是每个面板自己的设置，不随同步覆盖。
-var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", "proxy_secret", SettingSeenTerm}
+var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", "proxy_secret", SettingSeenTerm, SettingUpdateState}
 
 // localTables 是不同步的表：登录会话各面板自己的。
 var localTables = map[string]bool{"sessions": true}

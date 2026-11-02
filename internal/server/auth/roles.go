@@ -22,7 +22,7 @@ var selfMethods = map[string]bool{
 
 // adminReads 是只有管理员能用的查询：内容涉及整个面板或者含有密钥。
 var adminReads = map[string]bool{
-	"GetAlertConfig": true, "ListInvites": true, "ListActivity": true, "ListUsers": true, "GetNodeMirrors": true,
+	"GetAlertConfig": true, "ListInvites": true, "ListActivity": true, "ListUsers": true, "GetNodeMirrors": true, "GetUpdateStatus": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

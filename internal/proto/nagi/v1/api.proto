@@ -113,8 +113,10 @@ service NodeService {
   rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
   // 面板自己的 mesh 状态。
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
-  // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+  // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
   rpc UpgradeNode(UpgradeNodeRequest) returns (UpgradeResponse);
+  // 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+  rpc UpgradeAllNodes(UpgradeAllNodesRequest) returns (UpgradeAllNodesResponse);
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
@@ -186,6 +188,15 @@ message GetPanelMeshRequest {}
 
 message UpgradeNodeRequest {
   string node_id = 1;
+}
+
+message UpgradeAllNodesRequest {}
+
+message UpgradeAllNodesResponse {
+  // 要升级的节点，按升级的顺序。
+  repeated string node_ids = 1;
+  // 升级到的版本。
+  string version = 2;
 }
 
 message SetNodeMirrorsRequest {
@@ -270,8 +281,10 @@ service SettingsService {
   rpc PromoteStandby(PromoteStandbyRequest) returns (PromoteStandbyResponse);
   // 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
   rpc CheckPanelUpdate(CheckPanelUpdateRequest) returns (CheckPanelUpdateResponse);
-  // 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+  // 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
   rpc UpdatePanel(UpdatePanelRequest) returns (UpdatePanelResponse);
+  // 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
+  rpc GetUpdateStatus(GetUpdateStatusRequest) returns (GetUpdateStatusResponse);
   // 账号安全：两步验证和安全入口。
   rpc GetSecurity(GetSecurityRequest) returns (Security);
   // 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -733,8 +746,31 @@ message CheckPanelUpdateResponse {
 message UpdatePanelRequest {}
 
 message UpdatePanelResponse {
-  // 更新到的版本。面板正在重启，版本变成它就是重启好了。
+  // 要更新到的版本。更新在后台进行，版本变成它就是重启好了。
   string version = 1;
+}
+
+message GetUpdateStatusRequest {}
+
+message UpdateState {
+  // 要更新到的版本。
+  string target = 1;
+  // 更新前的版本。
+  string from = 2;
+  // queued（排队）、installing（下载和替换）、restarting（等它用新版本回来）、failed。
+  string phase = 3;
+  // 失败的原因。
+  string error = 4;
+  google.protobuf.Timestamp started_at = 5;
+}
+
+message GetUpdateStatusResponse {
+  // 本面板的版本。
+  string version = 1;
+  // 本面板的更新，没有在更新也没有失败时为空。
+  UpdateState panel = 2;
+  // 节点 ID → 这个节点的升级。升级成功后记录就没了。
+  map<string, UpdateState> nodes = 3;
 }
 
 message ConnectProjectRequest {

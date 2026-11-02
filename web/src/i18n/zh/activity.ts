@@ -63,6 +63,7 @@ export default {
     RemoveNodePanel: "移除受信面板",
     DeleteNodeReplica: "删除副本",
     UpgradeNode: "升级节点",
+    UpgradeAllNodes: "升级全部节点",
     SetNodeMirrors: "设置镜像加速",
     SetNodeProjectsRoot: "设置项目根目录",
     CreateEnrollCommand: "生成节点安装命令",

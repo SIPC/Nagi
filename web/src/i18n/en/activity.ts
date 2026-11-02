@@ -64,6 +64,7 @@ export default {
     RemoveNodePanel: "Remove trusted panel",
     DeleteNodeReplica: "Delete replica",
     UpgradeNode: "Upgrade node",
+    UpgradeAllNodes: "Upgrade all nodes",
     SetNodeMirrors: "Set registry mirrors",
     SetNodeProjectsRoot: "Set projects root",
     CreateEnrollCommand: "Generate node install command",

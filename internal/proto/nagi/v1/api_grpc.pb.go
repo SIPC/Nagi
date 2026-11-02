@@ -469,6 +469,7 @@ const (
 	NodeService_PingNodeMesh_FullMethodName        = "/nagi.v1.NodeService/PingNodeMesh"
 	NodeService_GetPanelMesh_FullMethodName        = "/nagi.v1.NodeService/GetPanelMesh"
 	NodeService_UpgradeNode_FullMethodName         = "/nagi.v1.NodeService/UpgradeNode"
+	NodeService_UpgradeAllNodes_FullMethodName     = "/nagi.v1.NodeService/UpgradeAllNodes"
 	NodeService_GetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/GetNodeMirrors"
 	NodeService_SetNodeMirrors_FullMethodName      = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_SetNodeProjectsRoot_FullMethodName = "/nagi.v1.NodeService/SetNodeProjectsRoot"
@@ -501,8 +502,10 @@ type NodeServiceClient interface {
 	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
-	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
+	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	UpgradeAllNodes(ctx context.Context, in *UpgradeAllNodesRequest, opts ...grpc.CallOption) (*UpgradeAllNodesResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
@@ -630,6 +633,16 @@ func (c *nodeServiceClient) UpgradeNode(ctx context.Context, in *UpgradeNodeRequ
 	return out, nil
 }
 
+func (c *nodeServiceClient) UpgradeAllNodes(ctx context.Context, in *UpgradeAllNodesRequest, opts ...grpc.CallOption) (*UpgradeAllNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeAllNodesResponse)
+	err := c.cc.Invoke(ctx, NodeService_UpgradeAllNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
@@ -741,8 +754,10 @@ type NodeServiceServer interface {
 	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
-	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error)
+	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	UpgradeAllNodes(context.Context, *UpgradeAllNodesRequest) (*UpgradeAllNodesResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
@@ -799,6 +814,9 @@ func (UnimplementedNodeServiceServer) GetPanelMesh(context.Context, *GetPanelMes
 }
 func (UnimplementedNodeServiceServer) UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpgradeNode not implemented")
+}
+func (UnimplementedNodeServiceServer) UpgradeAllNodes(context.Context, *UpgradeAllNodesRequest) (*UpgradeAllNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpgradeAllNodes not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
@@ -1028,6 +1046,24 @@ func _NodeService_UpgradeNode_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_UpgradeAllNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeAllNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).UpgradeAllNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_UpgradeAllNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).UpgradeAllNodes(ctx, req.(*UpgradeAllNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeRef)
 	if err := dec(in); err != nil {
@@ -1238,6 +1274,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_UpgradeNode_Handler,
 		},
 		{
+			MethodName: "UpgradeAllNodes",
+			Handler:    _NodeService_UpgradeAllNodes_Handler,
+		},
+		{
 			MethodName: "GetNodeMirrors",
 			Handler:    _NodeService_GetNodeMirrors_Handler,
 		},
@@ -1294,6 +1334,7 @@ const (
 	SettingsService_PromoteStandby_FullMethodName    = "/nagi.v1.SettingsService/PromoteStandby"
 	SettingsService_CheckPanelUpdate_FullMethodName  = "/nagi.v1.SettingsService/CheckPanelUpdate"
 	SettingsService_UpdatePanel_FullMethodName       = "/nagi.v1.SettingsService/UpdatePanel"
+	SettingsService_GetUpdateStatus_FullMethodName   = "/nagi.v1.SettingsService/GetUpdateStatus"
 	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
 	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
 	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
@@ -1334,8 +1375,10 @@ type SettingsServiceClient interface {
 	PromoteStandby(ctx context.Context, in *PromoteStandbyRequest, opts ...grpc.CallOption) (*PromoteStandbyResponse, error)
 	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
 	CheckPanelUpdate(ctx context.Context, in *CheckPanelUpdateRequest, opts ...grpc.CallOption) (*CheckPanelUpdateResponse, error)
-	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(ctx context.Context, in *UpdatePanelRequest, opts ...grpc.CallOption) (*UpdatePanelResponse, error)
+	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
+	GetUpdateStatus(ctx context.Context, in *GetUpdateStatusRequest, opts ...grpc.CallOption) (*GetUpdateStatusResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1516,6 +1559,16 @@ func (c *settingsServiceClient) UpdatePanel(ctx context.Context, in *UpdatePanel
 	return out, nil
 }
 
+func (c *settingsServiceClient) GetUpdateStatus(ctx context.Context, in *GetUpdateStatusRequest, opts ...grpc.CallOption) (*GetUpdateStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUpdateStatusResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetUpdateStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, in *GetSecurityRequest, opts ...grpc.CallOption) (*Security, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Security)
@@ -1662,8 +1715,10 @@ type SettingsServiceServer interface {
 	PromoteStandby(context.Context, *PromoteStandbyRequest) (*PromoteStandbyResponse, error)
 	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
 	CheckPanelUpdate(context.Context, *CheckPanelUpdateRequest) (*CheckPanelUpdateResponse, error)
-	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error)
+	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
+	GetUpdateStatus(context.Context, *GetUpdateStatusRequest) (*GetUpdateStatusResponse, error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *GetSecurityRequest) (*Security, error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1738,6 +1793,9 @@ func (UnimplementedSettingsServiceServer) CheckPanelUpdate(context.Context, *Che
 }
 func (UnimplementedSettingsServiceServer) UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdatePanel not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetUpdateStatus(context.Context, *GetUpdateStatusRequest) (*GetUpdateStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUpdateStatus not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetSecurity(context.Context, *GetSecurityRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecurity not implemented")
@@ -2066,6 +2124,24 @@ func _SettingsService_UpdatePanel_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_GetUpdateStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUpdateStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetUpdateStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetUpdateStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetUpdateStatus(ctx, req.(*GetUpdateStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SettingsService_GetSecurity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSecurityRequest)
 	if err := dec(in); err != nil {
@@ -2348,6 +2424,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdatePanel",
 			Handler:    _SettingsService_UpdatePanel_Handler,
+		},
+		{
+			MethodName: "GetUpdateStatus",
+			Handler:    _SettingsService_GetUpdateStatus_Handler,
 		},
 		{
 			MethodName: "GetSecurity",

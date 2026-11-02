@@ -40,9 +40,11 @@ import {
   Th,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
-import type { Node, UnknownContainer } from "@/gen/nagi/v1/api_pb";
+import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { confirmAction, notify } from "@/components/confirm";
+import { updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { useRole } from "@/components/role";
 import { toast } from "sonner";
 import { stateOf } from "@/components/status";
 
@@ -64,28 +66,6 @@ function useNodeList() {
 function usePanelVersion() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
   return settings.data?.settings?.version ?? "";
-}
-
-// 与 internal/pkg/release.IsVersion 一致。
-const versionRe = /^v(\d+)\.(\d+)\.(\d+)([-+][0-9A-Za-z.-]+)?$/;
-
-// isOlder：节点版本 a 是否早于面板版本 b。不是正式版本号（例如本地编译的 dev）时不比较。
-function isOlder(a: string, b: string) {
-  const x = versionRe.exec(a);
-  const y = versionRe.exec(b);
-  if (!x || !y) return false;
-  for (let i = 1; i <= 3; i++) {
-    if (Number(x[i]) !== Number(y[i])) return Number(x[i]) < Number(y[i]);
-  }
-  // 数字相同时，预发布版（v0.2.0-rc.1）早于正式版（v0.2.0）。
-  return a !== b && x[4]?.startsWith("-") === true && !y[4]?.startsWith("-");
-}
-
-// upgradeTarget：节点可以一键升级到的版本（即面板的版本），不能升级时返回空串。
-// 只升不降；面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。
-function upgradeTarget(n: Node, panelVersion: string) {
-  if (!n.online || n.pending || !n.info || n.info.embedded || n.info.os !== "linux") return "";
-  return isOlder(n.info.version, panelVersion) ? panelVersion : "";
 }
 
 // nodeSpec：节点的配置，例如「2 核 · 内存 3.8GB · 磁盘 39GB」。旧版本的节点不报配置，返回空串。
@@ -162,12 +142,30 @@ export type NodesView = "cards" | MapLayer;
 export function NodesPage({ view, onView }: { view: NodesView; onView: (v: NodesView) => void }) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
+  const { isAdmin } = useRole();
+  const status = useUpdateStatus(isAdmin);
   const [dialog, setDialog] = useState<"add" | "handover" | null>(null);
+  const [starting, setStarting] = useState(false);
   const list = nodes.data?.nodes ?? [];
+  const states = status.data?.nodes ?? {};
+  const running = Object.values(states).filter(updateActive).length;
+  const behind = list.filter((n) => upgradeTarget(n, panelVersion) && !updateActive(states[n.id])).length;
+  const upgradeAll = async () => {
+    if (!(await confirmAction(t.nodes.upgrade.allConfirm(behind, panelVersion), { action: t.nodes.upgrade.all }))) return;
+    setStarting(true);
+    try {
+      await nodeClient.upgradeAllNodes({});
+      await status.refetch();
+    } catch (err) {
+      await notify(errorMessage(err));
+    } finally {
+      setStarting(false);
+    }
+  };
   const cards = (
     <CardGrid>
       {list.map((n) => (
-        <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} onApproved={() => nodes.refetch()} />
+        <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
       ))}
     </CardGrid>
   );
@@ -192,6 +190,12 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
                   ]}
                 />
               </div>
+            )}
+            {isAdmin && (running > 0 || behind > 0) && (
+              <Button variant="outline" onClick={upgradeAll} disabled={starting || running > 0}>
+                {(starting || running > 0) && <Spinner />}
+                {running > 0 ? t.nodes.upgrade.allRunning(running) : t.nodes.upgrade.allCount(behind)}
+              </Button>
             )}
             <Button onClick={() => setDialog("add")}>
               <Plus />
@@ -233,7 +237,7 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
   );
 }
 
-function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean; onApproved: () => void }) {
+function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
   const u = n.online && !n.pending ? n.usage : undefined;
   return (
     <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className={cardClass}>
@@ -242,7 +246,13 @@ function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean;
           <>
             <span className="truncate">{n.name}</span>
             {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
-            {canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>}
+            {upgrade ? (
+              <Badge tone={upgrade.phase === "failed" ? "warning" : "info"} title={upgrade.error || undefined}>
+                {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
+              </Badge>
+            ) : (
+              canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>
+            )}
           </>
         }
         subtitle={<span className="truncate font-mono">{n.address || n.id}</span>}
@@ -280,6 +290,8 @@ function NodeCard({ n, canUpgrade, onApproved }: { n: Node; canUpgrade: boolean;
 // NodePage：节点详情页。
 export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab; onTab: (t: NodeTab) => void }) {
   const nodes = useNodeList();
+  const { isAdmin: canSeeUpgrades } = useRole();
+  const status = useUpdateStatus(canSeeUpgrades);
   const panelVersion = usePanelVersion();
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
@@ -295,6 +307,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
     );
   }
   const target = upgradeTarget(n, panelVersion);
+  const upgradeState = status.data?.nodes[n.id];
   const remove = async () => {
     if (!(await confirmAction(t.nodes.removeConfirm(n.name), { action: t.common.actions.remove, danger: true }))) return;
     try {
@@ -359,7 +372,7 @@ export function NodePage({ nodeId, tab, onTab }: { nodeId: string; tab: NodeTab;
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
         <RenameNode n={n} onDone={() => setRenaming(false)} />
       </Dialog>
-      {target && <NodeUpgrade key={target} n={n} target={target} onDone={() => nodes.refetch()} />}
+      {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
       {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
       {n.pending ? (
         <Notice tone="warning" title={t.common.status.pendingApproval}>
@@ -438,10 +451,9 @@ function RenameNode({ n, onDone }: { n: Node; onDone: () => void }) {
   );
 }
 
-// NodeUpgrade：节点版本早于面板时的升级提示。节点重启后上报新版本，target 变为空，提示随之消失。
-function NodeUpgrade({ n, target, onDone }: { n: Node; target: string; onDone: () => void }) {
+// NodeUpgrade：节点版本早于面板时的升级提示和进度。进度记在面板上，刷新页面后还在；节点用新版本回来后记录消失，提示随之消失。
+function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; state?: UpdateState; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const upgrade = async () => {
     if (!(await confirmAction(t.nodes.upgrade.confirm(n.name, target), { action: t.nodes.upgrade.action }))) return;
@@ -449,7 +461,6 @@ function NodeUpgrade({ n, target, onDone }: { n: Node; target: string; onDone: (
     setBusy(true);
     try {
       await nodeClient.upgradeNode({ nodeId: n.id });
-      setDone(true);
       onDone();
     } catch (err) {
       setError(errorMessage(err));
@@ -457,24 +468,35 @@ function NodeUpgrade({ n, target, onDone }: { n: Node; target: string; onDone: (
       setBusy(false);
     }
   };
-  if (done) {
+  if (state?.phase === "restarting") {
     return (
-      <Notice tone="success" title={t.nodes.upgrade.restartingTitle(target)} className="mb-6">
+      <Notice tone="success" title={t.nodes.upgrade.restartingTitle(state.target)} className="mb-6">
         {t.nodes.upgrade.restartingText}
       </Notice>
     );
   }
+  if (state?.phase === "installing" || state?.phase === "queued") {
+    return (
+      <Notice title={state.phase === "queued" ? t.nodes.upgrade.queuedTitle(state.target) : t.nodes.upgrade.installingTitle(state.target)} className="mb-6">
+        {state.phase === "queued" ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
+      </Notice>
+    );
+  }
+  const failed = state?.phase === "failed";
   return (
     <Notice
-      title={t.nodes.upgrade.title(target)}
+      title={failed ? t.nodes.upgrade.failedTitle(state.target) : t.nodes.upgrade.title(target)}
       className="mb-6"
       actions={
-        <Button size="sm" onClick={upgrade} disabled={busy}>
-          {busy ? t.nodes.upgrade.running : t.nodes.upgrade.action}
-        </Button>
+        target && (
+          <Button size="sm" onClick={upgrade} disabled={busy}>
+            {busy ? t.nodes.upgrade.running : failed ? t.nodes.upgrade.retry : t.nodes.upgrade.action}
+          </Button>
+        )
       }
     >
       <p>{t.nodes.upgrade.text(n.info?.version || "?")}</p>
+      {failed && state.error && <Alert className="mt-2">{state.error}</Alert>}
       {error && <Alert className="mt-2">{error}</Alert>}
     </Notice>
   );

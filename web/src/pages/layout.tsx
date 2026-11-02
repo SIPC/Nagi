@@ -6,7 +6,7 @@ import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { Button, Empty, ReadOnlyContext, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
-import { UpdateDot } from "@/pages/update";
+import { UpdateDot, UpdateTips } from "@/pages/update";
 import { UserMenu, type ThemeMode } from "@/components/account";
 import { t } from "@/i18n";
 import { CommandPalette, SearchButton } from "@/components/command-palette";
@@ -133,6 +133,7 @@ export function AppLayout() {
         {t.app.skipToContent}
       </a>
       <CommandPalette />
+      {me.data?.role === "admin" && <UpdateTips nodes={nodes.data?.nodes ?? []} isStandby={standby?.isStandby ?? false} />}
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r bg-sidebar px-3 py-5 md:flex">
         {brand}
         <div className="mt-5">

@@ -54,6 +54,9 @@ func AddRemoved(ctx context.Context, q *store.Queries, fingerprint string) error
 // SettingSeenTerm 是本面板向别的面板核实过的最大任期。是本面板自己的设置，同步时不覆盖。
 const SettingSeenTerm = "seen_term"
 
+// SettingUpdateState 是本面板记下的面板和节点更新状态（见 internal/server/api/upgrades.go），每个面板自己的。
+const SettingUpdateState = "update_state"
+
 func seenTerm(ctx context.Context, q *store.Queries) uint64 {
 	v, _ := q.GetSetting(ctx, SettingSeenTerm)
 	n, _ := strconv.ParseUint(v, 10, 64)

@@ -10,7 +10,6 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
-	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -263,29 +262,6 @@ func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetP
 		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板的 mesh 没有启动"))
 	}
 	return connect.NewResponse(mesh.StatusProto(m, s.Nodes.MeshPeerName)), nil
-}
-
-// ---- 升级节点 ----
-
-func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagiv1.UpgradeNodeRequest]) (*connect.Response[nagiv1.UpgradeResponse], error) {
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	info := conn.LastReport().GetNode()
-	if info.GetOs() != "linux" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("只能升级 Linux 节点"))
-	}
-	// 节点从 GitHub Release（或安装时指定的镜像）下载和面板同一个版本，面板不提供二进制。
-	if !release.IsVersion(s.Panel.Version) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，不能一键升级节点"))
-	}
-	resp, err := conn.Agent.Upgrade(ctx, &nagiv1.UpgradeRequest{Version: s.Panel.Version})
-	if err != nil {
-		return nil, fromGRPC(err)
-	}
-	s.Log.Info("节点正在升级", "node", req.Msg.GetNodeId(), "from", info.GetVersion(), "to", resp.GetVersion())
-	return connect.NewResponse(resp), nil
 }
 
 // ---- 镜像加速、项目根目录 ----

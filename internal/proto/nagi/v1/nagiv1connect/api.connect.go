@@ -87,6 +87,9 @@ const (
 	NodeServiceGetPanelMeshProcedure = "/nagi.v1.NodeService/GetPanelMesh"
 	// NodeServiceUpgradeNodeProcedure is the fully-qualified name of the NodeService's UpgradeNode RPC.
 	NodeServiceUpgradeNodeProcedure = "/nagi.v1.NodeService/UpgradeNode"
+	// NodeServiceUpgradeAllNodesProcedure is the fully-qualified name of the NodeService's
+	// UpgradeAllNodes RPC.
+	NodeServiceUpgradeAllNodesProcedure = "/nagi.v1.NodeService/UpgradeAllNodes"
 	// NodeServiceGetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// GetNodeMirrors RPC.
 	NodeServiceGetNodeMirrorsProcedure = "/nagi.v1.NodeService/GetNodeMirrors"
@@ -156,6 +159,9 @@ const (
 	// SettingsServiceUpdatePanelProcedure is the fully-qualified name of the SettingsService's
 	// UpdatePanel RPC.
 	SettingsServiceUpdatePanelProcedure = "/nagi.v1.SettingsService/UpdatePanel"
+	// SettingsServiceGetUpdateStatusProcedure is the fully-qualified name of the SettingsService's
+	// GetUpdateStatus RPC.
+	SettingsServiceGetUpdateStatusProcedure = "/nagi.v1.SettingsService/GetUpdateStatus"
 	// SettingsServiceGetSecurityProcedure is the fully-qualified name of the SettingsService's
 	// GetSecurity RPC.
 	SettingsServiceGetSecurityProcedure = "/nagi.v1.SettingsService/GetSecurity"
@@ -659,8 +665,10 @@ type NodeServiceClient interface {
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
-	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
+	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -751,6 +759,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("UpgradeNode")),
 			connect.WithClientOptions(opts...),
 		),
+		upgradeAllNodes: connect.NewClient[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse](
+			httpClient,
+			baseURL+NodeServiceUpgradeAllNodesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UpgradeAllNodes")),
+			connect.WithClientOptions(opts...),
+		),
 		getNodeMirrors: connect.NewClient[v1.NodeRef, v1.Mirrors](
 			httpClient,
 			baseURL+NodeServiceGetNodeMirrorsProcedure,
@@ -820,6 +834,7 @@ type nodeServiceClient struct {
 	pingNodeMesh        *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
 	getPanelMesh        *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
 	upgradeNode         *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
+	upgradeAllNodes     *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
 	getNodeMirrors      *connect.Client[v1.NodeRef, v1.Mirrors]
 	setNodeMirrors      *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	setNodeProjectsRoot *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
@@ -879,6 +894,11 @@ func (c *nodeServiceClient) GetPanelMesh(ctx context.Context, req *connect.Reque
 // UpgradeNode calls nagi.v1.NodeService.UpgradeNode.
 func (c *nodeServiceClient) UpgradeNode(ctx context.Context, req *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
 	return c.upgradeNode.CallUnary(ctx, req)
+}
+
+// UpgradeAllNodes calls nagi.v1.NodeService.UpgradeAllNodes.
+func (c *nodeServiceClient) UpgradeAllNodes(ctx context.Context, req *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error) {
+	return c.upgradeAllNodes.CallUnary(ctx, req)
 }
 
 // GetNodeMirrors calls nagi.v1.NodeService.GetNodeMirrors.
@@ -945,8 +965,10 @@ type NodeServiceHandler interface {
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
-	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。
+	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
+	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -1033,6 +1055,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("UpgradeNode")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceUpgradeAllNodesHandler := connect.NewUnaryHandler(
+		NodeServiceUpgradeAllNodesProcedure,
+		svc.UpgradeAllNodes,
+		connect.WithSchema(nodeServiceMethods.ByName("UpgradeAllNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetNodeMirrorsHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeMirrorsProcedure,
 		svc.GetNodeMirrors,
@@ -1109,6 +1137,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetPanelMeshHandler.ServeHTTP(w, r)
 		case NodeServiceUpgradeNodeProcedure:
 			nodeServiceUpgradeNodeHandler.ServeHTTP(w, r)
+		case NodeServiceUpgradeAllNodesProcedure:
+			nodeServiceUpgradeAllNodesHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMirrorsProcedure:
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
@@ -1176,6 +1206,10 @@ func (UnimplementedNodeServiceHandler) UpgradeNode(context.Context, *connect.Req
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UpgradeNode is not implemented"))
 }
 
+func (UnimplementedNodeServiceHandler) UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UpgradeAllNodes is not implemented"))
+}
+
 func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetNodeMirrors is not implemented"))
 }
@@ -1236,8 +1270,10 @@ type SettingsServiceClient interface {
 	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
 	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
 	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
-	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
+	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
+	GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1361,6 +1397,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
 			connect.WithClientOptions(opts...),
 		),
+		getUpdateStatus: connect.NewClient[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse](
+			httpClient,
+			baseURL+SettingsServiceGetUpdateStatusProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetUpdateStatus")),
+			connect.WithClientOptions(opts...),
+		),
 		getSecurity: connect.NewClient[v1.GetSecurityRequest, v1.Security](
 			httpClient,
 			baseURL+SettingsServiceGetSecurityProcedure,
@@ -1453,6 +1495,7 @@ type settingsServiceClient struct {
 	promoteStandby    *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
 	checkPanelUpdate  *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
 	updatePanel       *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
+	getUpdateStatus   *connect.Client[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse]
 	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
 	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
 	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
@@ -1542,6 +1585,11 @@ func (c *settingsServiceClient) UpdatePanel(ctx context.Context, req *connect.Re
 	return c.updatePanel.CallUnary(ctx, req)
 }
 
+// GetUpdateStatus calls nagi.v1.SettingsService.GetUpdateStatus.
+func (c *settingsServiceClient) GetUpdateStatus(ctx context.Context, req *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error) {
+	return c.getUpdateStatus.CallUnary(ctx, req)
+}
+
 // GetSecurity calls nagi.v1.SettingsService.GetSecurity.
 func (c *settingsServiceClient) GetSecurity(ctx context.Context, req *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
 	return c.getSecurity.CallUnary(ctx, req)
@@ -1626,8 +1674,10 @@ type SettingsServiceHandler interface {
 	PromoteStandby(context.Context, *connect.Request[v1.PromoteStandbyRequest]) (*connect.Response[v1.PromoteStandbyResponse], error)
 	// 检查 GitHub Release 上有没有比本面板新的版本（见 docs/panel.md#更新面板）。
 	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
-	// 把本面板更新到最新发布的版本：下载并核对后替换可执行文件，返回后原地重启。备用面板上也可以用。
+	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
+	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
+	GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error)
 	// 账号安全：两步验证和安全入口。
 	GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error)
 	// 开始设置两步验证：返回密钥和验证器 App 扫码用的地址，10 分钟内用 EnableTOTP 确认。
@@ -1747,6 +1797,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetUpdateStatusHandler := connect.NewUnaryHandler(
+		SettingsServiceGetUpdateStatusProcedure,
+		svc.GetUpdateStatus,
+		connect.WithSchema(settingsServiceMethods.ByName("GetUpdateStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
 	settingsServiceGetSecurityHandler := connect.NewUnaryHandler(
 		SettingsServiceGetSecurityProcedure,
 		svc.GetSecurity,
@@ -1851,6 +1907,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceCheckPanelUpdateHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdatePanelProcedure:
 			settingsServiceUpdatePanelHandler.ServeHTTP(w, r)
+		case SettingsServiceGetUpdateStatusProcedure:
+			settingsServiceGetUpdateStatusHandler.ServeHTTP(w, r)
 		case SettingsServiceGetSecurityProcedure:
 			settingsServiceGetSecurityHandler.ServeHTTP(w, r)
 		case SettingsServiceBeginTOTPProcedure:
@@ -1942,6 +2000,10 @@ func (UnimplementedSettingsServiceHandler) CheckPanelUpdate(context.Context, *co
 
 func (UnimplementedSettingsServiceHandler) UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdatePanel is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetUpdateStatus is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetSecurity(context.Context, *connect.Request[v1.GetSecurityRequest]) (*connect.Response[v1.Security], error) {
