@@ -334,6 +334,8 @@ export type RowCol = {
   // num：数字靠右。phone：手机上留在第一行（状态），其余并进第二行。
   num?: boolean;
   phone?: boolean;
+  // width：内容较长的列换一个宽度，放不下时截断。
+  width?: string;
 };
 
 export function Row({
@@ -377,7 +379,7 @@ export function Row({
         )}
       </div>
       {(cols ?? []).map((c, i) => (
-        <span key={i} className={cn("w-24 shrink-0 leading-5 whitespace-nowrap text-muted-foreground", c.num && "text-right", c.phone ? "max-md:w-auto" : "max-md:hidden")}>
+        <span key={i} className={cn("shrink-0 leading-5 whitespace-nowrap text-muted-foreground", c.width ? cn(c.width, "truncate") : "w-24", c.num && "text-right", c.phone ? "max-md:w-auto" : "max-md:hidden")}>
           {c.content}
         </span>
       ))}

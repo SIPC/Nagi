@@ -1317,7 +1317,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
                   </>
                 }
                 cols={[
-                  { num: true, content: <span className="font-mono text-[13px] leading-none" title={Object.values(x.images).join(", ")}>{imageDigest(x.images)}</span> },
+                  { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={Object.values(x.images).join(", ")}>{imageDigest(x.images)}</span> },
                   { content: x.deployedAt ? timeAgo(toDate(x.deployedAt)) : "" },
                 ]}
                 actions={
