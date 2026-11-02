@@ -1,50 +1,55 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { Download, Pause, Plus, Play, Rocket, RotateCw } from "lucide-react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { ArrowUpCircle, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
-import { ContainerMetrics, containerUsage, ProjectMetrics, projectMetricNodes, UsageBars, useProjectMetrics, useRange } from "@/components/metrics";
-import { offlineNodeNames, ProjectState, serviceDetail, ServiceState } from "@/components/status";
+import { ContainerMetrics, containerUsage, EmptyProjectMetrics, ProjectMetrics, projectMetricNodes, UsageRings, useProjectMetrics, useRange } from "@/components/metrics";
+import { offlineNodeNames, ProjectState, serviceDetail, ServiceState, stateOf } from "@/components/status";
 import { ask, confirmAction } from "@/components/confirm";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ContainerAction } from "@/gen/nagi/v1/agent_pb";
 import { TerminalView } from "@/components/terminal";
-import { useImageForm, useContainerForm } from "@/components/container-form";
+import { composeInputClass, formToCompose, useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
-import { Breadcrumb, PageHeader } from "@/pages/layout";
+import { Breadcrumb, MobileBar, PageHeader } from "@/pages/layout";
 import { ContainerHA, ContainerStorage } from "@/pages/project-data";
 import { ContainerNetwork } from "@/pages/project-network";
 import {
   Alert,
   Badge,
   Button,
-  Check,
-  CodeBlock,
+  ButtonLink,
   EmptyRow,
   Field,
+  FormActions,
+  FormRow,
+  HelpTip,
   Input,
-  KeyValue,
-  Loading,
-  Menu,
-  Status,
+  List,
+    Menu,
   Notice,
+  QueryError,
+  ReadOnlyContext,
+  Row,
+  RowsSkeleton,
   Section,
+  Segmented,
+  useIsMobile,
   Select,
+  Skeleton,
   Spinner,
-  Table,
+  Status,
   Tabs,
-  Td,
   Textarea,
-  Th,
 } from "@/components/ui";
 import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
-import { toast } from "sonner";
 import { useUnsaved } from "@/components/unsaved";
-import { EnvEditor } from "@/components/env-editor";
+import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
 import { useRole } from "@/components/role";
 import { actionLabel } from "@/pages/activity";
@@ -56,60 +61,115 @@ type ImageUpdate = { container: string; service: string; image: string };
 export const containerTabs = ["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha"] as const;
 export type DetailView = (typeof containerTabs)[number];
 
-export function ContainersTab({
-  project,
-  services,
-  imageUpdates,
-}: {
-  project: Project;
-  services: ServiceStatus[];
-  imageUpdates: ImageUpdate[];
-}) {
-  const [adding, setAdding] = useState(project.containers.length === 0);
+// useProjectActions：项目概览页头的操作：更新有新版本的容器、部署全部容器、⋯。部署的输出显示在概览里。
+export function useProjectActions(project: Project, imageUpdates: ImageUpdate[]) {
   const navigate = useNavigate();
-  const { range, picker } = useRange();
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const open = (name: string) => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: name } });
-  const updates = useRun(project.id);
+  const { isViewer } = useRole();
+  const { run, busy, output, hasOutput } = useRun(project.id);
+  const pc = t.projectContainers;
+  const sep = pc.listSeparator;
+  const updateNames = [...new Set(imageUpdates.map((u) => u.container))];
+  const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
+
   const updateImages = async () => {
-    const names = [...new Set(imageUpdates.map((u) => u.container))];
-    const label = t.projectContainers.imageUpdates.action(names.length);
-    if (!(await confirmAction(t.projectContainers.imageUpdates.confirm(names.join(t.projectContainers.listSeparator)), { action: label }))) return;
-    updates.run(() =>
+    const label = pc.imageUpdates.action(updateNames.length);
+    if (!(await confirmAction(pc.imageUpdates.confirm(updateNames.join(sep)), { action: label }))) return;
+    run(() =>
       projectClient.deploy({
         projectId: project.id,
         pullImages: true,
-        targets: project.containers.filter((c) => names.includes(c.name)).map((c) => ({ container: c.name, baseRevision: c.revision })),
+        targets: project.containers.filter((c) => updateNames.includes(c.name)).map((c) => ({ container: c.name, baseRevision: c.revision })),
+      }),
+    );
+  };
+  const deploy = async (containers: Container[]) => {
+    const running = containers.filter((m) => m.deployedVersion > 0n).map((m) => m.name);
+    if (running.length > 0 && !(await confirmAction(pc.table.deployConfirm(running.join(sep)), { action: pc.detail.deploy }))) return;
+    run(() =>
+      projectClient.deploy({
+        projectId: project.id,
+        targets: containers.map((m) => ({ container: m.name, baseRevision: m.revision })),
       }),
     );
   };
 
+  const actions =
+    project.containers.length === 0 ? undefined : (
+      <>
+        {updateNames.length > 0 && !isViewer && (
+          <Button variant="outline" disabled={busy} onClick={updateImages} title={pc.imageUpdates.hover([...new Set(imageUpdates.map((u) => u.image))].join(sep))}>
+            {busy ? <Spinner /> : <ArrowUpCircle className="size-3.5! text-info" />}
+            {pc.imageUpdates.action(updateNames.length)}
+          </Button>
+        )}
+        {/* 有变更时主按钮只部署有变更的容器，部署全部收进 ⋯。 */}
+        {changed.length > 0 ? (
+          <Button disabled={busy} onClick={() => deploy(changed)} title={pc.table.changedTitle(changed.map((m) => m.name).join(sep))}>
+            {busy && <Spinner />}
+            {pc.table.deployChanged(changed.length)}
+          </Button>
+        ) : (
+          <Button variant="outline" disabled={busy} onClick={() => deploy(project.containers)}>
+            {busy && <Spinner />}
+            {pc.table.deployAll}
+          </Button>
+        )}
+        <Menu
+          items={[
+            ...(changed.length > 0 ? [{ label: pc.table.deployAll, disabled: busy, onSelect: () => deploy(project.containers) }] : []),
+            { label: pc.table.addContainer, onSelect: () => navigate({ to: "/projects/$projectId/add", params: { projectId: project.id } }) },
+            { label: t.project.sections.settings, onSelect: () => navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { tab: "settings" } }) },
+          ]}
+        />
+      </>
+    );
+  return { actions, deploy, busy, output, hasOutput };
+}
+
+export function ContainersTab({
+  project,
+  services,
+  deploy,
+  busy,
+  output,
+  hasOutput,
+}: {
+  project: Project;
+  services: ServiceStatus[];
+  deploy: (containers: Container[]) => void;
+  busy: boolean;
+  output: React.ReactNode;
+  hasOutput: boolean;
+}) {
+  const { range, picker } = useRange();
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+
+  // 还没有容器：监控照常排版但没有数据，模糊处理，上面写「暂无容器」。模糊加在内容上，边缘自然淡出，不会有截止线。
+  if (project.containers.length === 0) {
+    return (
+      <div className="relative">
+        <div aria-hidden className="pointer-events-none opacity-60 blur-[4px] select-none">
+          <Section title={t.projectContainers.monitoring} actions={picker}>
+            <EmptyProjectMetrics range={range} />
+          </Section>
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
+          <h2 className="text-base font-medium">{t.projectContainers.add.noContainers}</h2>
+          <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }}>
+            <Plus />
+            {t.projectContainers.table.addContainer}
+          </ButtonLink>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-6">
-      {imageUpdates.length > 0 && (
-        <Notice
-          tone="info"
-          title={t.projectContainers.imageUpdates.title}
-          actions={
-            <Button size="sm" variant="outline" disabled={updates.busy} onClick={updateImages}>
-              {updates.busy && <Spinner />}
-              {t.projectContainers.imageUpdates.action(new Set(imageUpdates.map((u) => u.container)).size)}
-            </Button>
-          }
-        >
-          {imageUpdates.map((u) => t.projectContainers.imageUpdates.item(u.container, u.service, u.image)).join(t.projectContainers.listSeparator)}
-        </Notice>
-      )}
-      {updates.output}
-      <ContainersTable project={project} services={services} onOpen={open} onAdd={() => setAdding(true)} />
-      {adding && <AddContainer project={project} onClose={() => setAdding(false)} onAdded={open} />}
-      <Section
-        title={t.projectContainers.monitoring}
-        description={t.projectContainers.projectMetrics.description}
-        help={t.projectContainers.projectMetrics.help}
-        actions={picker}
-      >
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, nodes.data?.nodes)} />
+    <div>
+      {hasOutput && <div className="mb-8">{output}</div>}
+      <ContainerList project={project} services={services} deploy={deploy} busy={busy} />
+      <Section className="xl:mt-0 xl:border-t-0 xl:pt-0" title={t.projectContainers.monitoring} actions={picker}>
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, nodes.data?.nodes)} httpRoutes={project.routes.filter((r) => r.protocol === "http").map((r) => r.name)} />
       </Section>
     </div>
   );
@@ -126,155 +186,90 @@ export function containerKind(m: Container) {
   return m.kind === "group" ? t.projectContainers.kind.group : t.projectContainers.kind.container;
 }
 
-// ---- 容器列表与批量部署 ----
+// ---- 窄屏的容器列表 ----
 
-function ContainersTable({
-  project,
-  services,
-  onOpen,
-  onAdd,
-}: {
-  project: Project;
-  services: ServiceStatus[];
-  onOpen: (name: string) => void;
-  onAdd: () => void;
-}) {
-  const { run, busy, output, hasOutput } = useRun(project.id);
+// ContainerList：窄屏没有项目栏，容器列在概览里，徽标写进第二行灰字；勾选多个可批量部署。宽屏整块隐藏。
+function ContainerList({ project, services, deploy, busy }: { project: Project; services: ServiceStatus[]; deploy: (containers: Container[]) => void; busy: boolean }) {
+  const pc = t.projectContainers;
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
-  const nodeOffline = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.online === false;
+  const nodeOf = (id: string) => nodes.data?.nodes.find((n) => n.id === id);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const targets = project.containers.filter((m) => checked[m.name]);
-  const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
-  const multi = project.containers.length > 1;
   const usage = containerUsage(useProjectMetrics(project.id, projectMetricNodes(project)).data);
   const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
 
-  const deploy = async (containers: Container[]) => {
-    const running = containers.filter((m) => m.deployedVersion > 0n).map((m) => m.name);
-    if (running.length > 0 && !(await confirmAction(t.projectContainers.table.deployConfirm(running.join(t.projectContainers.listSeparator)), { action: t.projectContainers.detail.deploy }))) return;
-    run(() =>
-      projectClient.deploy({ projectId: project.id,
-        targets: containers.map((m) => ({ container: m.name, baseRevision: m.revision })),
-      }),
-    );
-  };
-
   return (
     <Section
-      flush
-      // 宽屏时下面的表格不显示，标题行下面不留空（部署输出自己带上边距）。
-      className="xl:[&>header]:mb-0 xl:[&>header_h2_button]:hidden"
-      title={<span className="xl:hidden">{t.projectContainers.table.title}</span>}
-      // 宽屏时容器列在左边的项目栏里，这里只剩标题和操作一行。
-      description={<span className="xl:hidden">{t.projectContainers.table.descriptionNarrow}</span>}
-      help={t.projectContainers.table.help}
+      className="xl:hidden"
+      title={pc.table.title}
+      help={pc.table.help}
       actions={
-        <>
-          <Button variant="ghost" size="sm" onClick={onAdd}>
-            <Plus />
-            {t.projectContainers.table.addContainer}
+        project.containers.length > 1 &&
+        targets.length > 0 && (
+          <Button disabled={busy} onClick={() => deploy(targets)}>
+            {busy && <Spinner />}
+            {pc.table.deploySelected(targets.length)}
           </Button>
-          {/* 批量部署只在有多个容器时出现；只有一个容器时用下面详情里的「部署」。 */}
-          {multi && changed.length > 0 && targets.length === 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => deploy(changed)}
-              title={t.projectContainers.table.changedTitle(changed.map((m) => m.name).join(t.projectContainers.listSeparator))}
-            >
-              {busy ? <Spinner /> : <Rocket />}
-              {t.projectContainers.table.deployChanged(changed.length)}
-            </Button>
-          )}
-          {multi && targets.length > 0 && (
-            <Button size="sm" disabled={busy} onClick={() => deploy(targets)}>
-              {busy ? <Spinner /> : <Rocket />}
-              {t.projectContainers.table.deploySelected(targets.length)}
-            </Button>
-          )}
-        </>
+        )
       }
     >
-      {project.containers.length === 0 ? (
-        <div className="xl:hidden">
-          <EmptyRow>{t.projectContainers.table.empty}</EmptyRow>
-        </div>
-      ) : (
-        <Table className="xl:hidden">
-          <thead>
-            <tr>
-              <Th className="w-10" />
-              <Th>{t.projectContainers.columns.name}</Th>
-              <Th>{t.projectContainers.columns.node}</Th>
-              <Th>{t.projectContainers.columns.status}</Th>
-              {/* 窄屏只留名称、节点、状态，不用横向滚动。 */}
-              <Th className="hidden sm:table-cell">{t.projectContainers.columns.usage}</Th>
-              <Th className="hidden md:table-cell">{t.projectContainers.columns.version}</Th>
-              <Th className="hidden md:table-cell">{t.projectContainers.columns.address}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {project.containers.map((m) => {
-              const svc = services.filter((s) => s.container === m.name);
-              const u = nodeOffline(m.nodeId) ? undefined : usage.get(m.name);
-              return (
-                <tr key={m.name} className="group cursor-pointer transition-colors hover:bg-subtle" onClick={() => onOpen(m.name)}>
-                  <Td onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      aria-label={t.projectContainers.table.select(m.name)}
-                      checked={!!checked[m.name]}
-                      onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })}
-                    />
-                  </Td>
-                  <Td>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {/* 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；整行可点只是方便鼠标。 */}
-                      <Link
-                        to="/projects/$projectId/c/$container"
-                        params={{ projectId: project.id, container: m.name }}
-                        className="rounded-sm font-medium outline-none group-hover:underline focus-visible:ring-2 focus-visible:ring-ring/40"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {m.name}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">{containerKind(m)}</span>
-                      {m.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
-                      {m.sharedEnvOutdated && <Badge tone="warning">{t.projectContainers.badges.sharedEnvPending}</Badge>}
-                      {m.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
-                      {m.hostNetworkServices.length > 0 && <Badge tone="danger">{t.projectContainers.badges.hostNetwork}</Badge>}
-                      {m.unmanagedVolumes.length > 0 && <Badge tone="warning">{t.projectContainers.badges.volumeUnmanaged}</Badge>}
-                    </div>
-                  </Td>
-                  <Td className="text-[13px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                      {nodeName(m.nodeId)}
-                      {nodeOffline(m.nodeId) && <Badge tone="warning">{t.common.status.offline}</Badge>}
+      <List>
+        {project.containers.map((m) => {
+          const node = nodeOf(m.nodeId);
+          const offline = node?.online === false;
+          const svc = services.filter((s) => s.container === m.name);
+          const version = m.deployedVersion > 0n ? `v${m.deployedVersion}${m.latestVersion !== m.deployedVersion ? pc.table.latest(String(m.latestVersion)) : ""}` : "";
+          const address = m.kind !== "group" ? m.name : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ");
+          const notes: React.ReactNode[] = [
+            !offline && (node?.name ?? m.nodeId),
+            offline ? <span className="text-warning-text">{pc.nodeOffline}</span> : stateOf(svc, m.deployedVersion > 0n).label,
+            offline && t.common.status.unknown,
+            !offline && version,
+            m.kind === "group" && pc.kind.group,
+            m.hasDraft && pc.badges.draft,
+            m.sharedEnvOutdated && pc.badges.sharedEnvPending,
+            m.stateful && pc.badges.stateful,
+            m.hostNetworkServices.length > 0 && <span className="text-destructive">{pc.badges.hostNetwork}</span>,
+            m.unmanagedVolumes.length > 0 && pc.badges.volumeUnmanaged,
+          ].filter(Boolean);
+          return (
+            <Row
+              key={m.name}
+              className="relative"
+              icon={
+                <span className="relative z-10 flex">
+                  <Checkbox aria-label={pc.table.select(m.name)} checked={!!checked[m.name]} onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })} />
+                </span>
+              }
+              title={
+                // 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；after 让整行可点。
+                <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: m.name }} className="rounded-sm outline-none after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring/40">
+                  {m.name}
+                </Link>
+              }
+              sub={
+                <>
+                  {notes.map((n, i) => (
+                    <span key={i}>
+                      {i > 0 && " · "}
+                      {n}
                     </span>
-                  </Td>
-                  <Td>
-                    {nodeOffline(m.nodeId) ? <Status tone="warning">{t.projectContainers.nodeOffline}</Status> : <ProjectState services={svc} deployed={m.deployedVersion > 0n} />}
-                  </Td>
-                  <Td className="hidden sm:table-cell">
-                    <UsageBars usage={u} memFallback={memFallback} className="w-36" />
-                  </Td>
-                  <Td className="hidden font-mono text-xs md:table-cell">
-                    {m.deployedVersion > 0n ? `v${m.deployedVersion}` : <span className="text-muted-foreground">—</span>}
-                    {m.latestVersion !== m.deployedVersion && m.deployedVersion > 0n && <span className="text-muted-foreground">{t.projectContainers.table.latest(String(m.latestVersion))}</span>}
-                  </Td>
-                  <Td className="hidden font-mono text-xs text-muted-foreground md:table-cell">
-                    {m.kind !== "group"
-                      ? m.name
-                      : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ") || "—"}
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
-      )}
-      {hasOutput && <div className="pt-3 xl:pt-4">{output}</div>}
+                  ))}
+                  {address && <span className="max-md:hidden"> · <span className="font-mono">{address}</span></span>}
+                </>
+              }
+              actionsWidth="w-auto max-sm:hidden"
+              actions={<UsageRings usage={offline ? undefined : usage.get(m.name)} memFallback={memFallback} />}
+            />
+          );
+        })}
+      </List>
+      <div>
+        <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }} variant="outline">
+          <Plus />
+          {pc.table.addContainer}
+        </ButtonLink>
+      </div>
     </Section>
   );
 }
@@ -283,14 +278,14 @@ function ContainersTable({
 
 // ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 view 参数里。
 // 宽屏时左边有项目栏（见 ProjectSplit），不再显示上级链接。
-export function ContainerPage({ projectId, name, view, onView }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void }) {
+export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAutoDeployed }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void; autoDeploy?: boolean; onAutoDeployed?: () => void }) {
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
     refetchInterval: 5000,
   });
-  if (project.isPending) return <Loading />;
-  if (project.error) return <Alert>{errorMessage(project.error)}</Alert>;
+  if (project.isPending) return <ContainerSkeleton />;
+  if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
   if (!p) return null;
   const container = p.containers.find((c) => c.name === name);
@@ -301,18 +296,86 @@ export function ContainerPage({ projectId, name, view, onView }: { projectId: st
   if (!container) {
     return (
       <>
-        <Breadcrumb items={crumbs} className="xl:hidden" />
+        <Breadcrumb items={crumbs} className="max-md:hidden xl:hidden" />
         <Alert>{t.projectContainers.page.notFound(name)}</Alert>
       </>
     );
   }
   const services = (project.data.status?.services ?? []).filter((s) => s.container === name);
-  const hasImageUpdate = (project.data.status?.imageUpdates ?? []).some((u) => u.container === name);
+  const imageUpdates = (project.data.status?.imageUpdates ?? []).filter((u) => u.container === name);
   return (
     <>
-      <Breadcrumb items={[...crumbs, { label: name }]} className="xl:hidden" />
-      <ContainerDetail project={p} container={container} services={services} hasImageUpdate={hasImageUpdate} view={view} onView={onView} />
+      <Breadcrumb items={[...crumbs, { label: name }]} className="max-md:hidden xl:hidden" />
+      <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
     </>
+  );
+}
+
+// ContainerSkeleton：容器页加载中，和页头、标签一样的版面。
+function ContainerSkeleton() {
+  return (
+    <div role="status" aria-label={t.common.feedback.loading}>
+      <div className="mb-4 flex min-h-8 items-center justify-between gap-4">
+        <Skeleton className="h-6 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+      </div>
+      <Skeleton className="mb-6 h-10 w-full max-w-md" />
+      <RowsSkeleton />
+    </div>
+  );
+}
+
+// imageTipKey：关掉提示后按「容器 + 镜像」记在浏览器里，同一版本不再自动弹。
+const imageTipKey = (project: string, container: string, images: string) => `nagi:image-tip:${project}/${container}:${images}`;
+
+// ImageTip：进入可更新的容器时右下角的提示。不自动消失，不抢焦点（规则见 docs/ui.md「镜像更新提示」）。
+function ImageTip({ storageKey, images, disabled, onUpdate }: { storageKey: string; images: string; disabled: boolean; onUpdate: () => void }) {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  if (hidden) return null;
+  const close = () => {
+    setHidden(true);
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {
+      // 浏览器不让存时，这次关掉就行。
+    }
+  };
+  const tip = t.projectContainers.imageTip;
+  return (
+    <aside role="status" aria-label={tip.label} className="fixed right-6 bottom-6 z-20 grid w-[340px] max-w-[calc(100vw-32px)] gap-3 rounded-lg border bg-popover p-4 shadow-lg max-md:right-4 max-md:bottom-4 max-md:left-4 max-md:w-auto">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{tip.title}</span>
+        <Button variant="ghost" size="icon" className="-my-1 -mr-1 size-6! text-muted-foreground" aria-label={t.common.actions.close} onClick={close}>
+          <X />
+        </Button>
+      </div>
+      <p className="text-muted-foreground">
+        <span className="font-mono text-[13px]">{images}</span> {tip.body}
+      </p>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={close}>
+          {tip.later}
+        </Button>
+        <Button
+          disabled={disabled}
+          onClick={() => {
+            close();
+            onUpdate();
+          }}
+        >
+          {tip.update}
+        </Button>
+      </div>
+    </aside>
   );
 }
 
@@ -320,20 +383,27 @@ function ContainerDetail({
   project,
   container,
   services,
-  hasImageUpdate,
+  imageUpdates,
   view: viewProp,
   onView,
+  autoDeploy,
+  onAutoDeployed,
 }: {
   project: Project;
   container: Container;
   services: ServiceStatus[];
-  hasImageUpdate: boolean;
+  imageUpdates: { image: string }[];
   view: DetailView;
   onView: (v: DetailView) => void;
+  autoDeploy?: boolean;
+  onAutoDeployed?: () => void;
 }) {
-  const { run, busy, output, setLines } = useRun(project.id);
+  const { run, busy, output, hasOutput, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
   const { isViewer } = useRole();
+  const readOnly = useContext(ReadOnlyContext);
+  const hasImageUpdate = imageUpdates.length > 0;
+  const updateImages = [...new Set(imageUpdates.map((u) => shortImage(u.image)))].join(t.projectContainers.listSeparator);
   // 只读角色没有配置和终端，直接打开这些地址时显示概览。
   const view = isViewer && (viewProp === "config" || viewProp === "terminal") ? "overview" : viewProp;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -361,6 +431,13 @@ function ContainerDetail({
     if (container.deployedVersion > 0n && !(await confirmAction(message, { action }))) return;
     deploy(opts);
   };
+  // 添加容器时选了「添加并部署」：进入容器页后开始部署，输出显示在概览里。
+  useEffect(() => {
+    if (!autoDeploy) return;
+    onAutoDeployed?.();
+    deploy({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDeploy]);
   const d = t.projectContainers.detail;
   const updateImage = () =>
     confirmDeploy((container.hasDraft ? d.updateImageDraftConfirm : d.updateImageConfirm)(container.name), d.updateImage, { pullImages: true });
@@ -406,34 +483,42 @@ function ContainerDetail({
     }
   };
 
-  const summary = container.hasDraft
-    ? t.projectContainers.detail.summaryDraft
-    : container.deployedVersion > 0n
-      ? t.projectContainers.detail.summaryRunning(String(container.deployedVersion))
-      : t.projectContainers.detail.summaryNotDeployed;
-
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
   const nodeOnline = node?.online !== false;
   const navigate = useNavigate();
+  const mobile = useIsMobile();
+  // 手机上打开卷的文件页时，标题栏换成卷名，不再显示容器标题和标签。
+  const { volume } = useSearch({ strict: false }) as { volume?: string };
+  const browsing = view === "storage" && !!volume && !isViewer;
+  const uploadDeployable = !cfg?.form || !!cfg.form.workdir;
+  const pullDeploy = () => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true });
 
   return (
     <>
+      {hasImageUpdate && !isViewer && !readOnly && (
+        <div className={cn(browsing && "max-md:hidden")}>
+          <ImageTip key={updateImages} storageKey={imageTipKey(project.id, container.name, updateImages)} images={updateImages} disabled={busy || !nodeOnline} onUpdate={updateImage} />
+        </div>
+      )}
       <PageHeader
+        className={cn("mb-4", browsing && "max-md:hidden")}
+        actionsClassName="max-md:w-full max-md:flex-nowrap max-md:[&>button:not(:last-child)]:flex-1"
         title={
           <>
             {container.name}
-            <ProjectState services={services} deployed={container.deployedVersion > 0n} offline={offlineNodeNames([container], nodes.data?.nodes)} />
-            {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
+            {/* 节点离线时容器的状态是未知，不是已停止。 */}
+            {offlineNodeNames([container], nodes.data?.nodes).length > 0 ? <Status tone="warning">{t.common.status.unknown}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
-          </>
-        }
-        meta={
-          <>
-            <span>{isGroup ? t.projectContainers.kind.groupCompose : t.projectContainers.kind.container}</span>
-            <span>{node?.name ?? container.nodeId}</span>
-            <span className="font-mono">{container.dir}</span>
-            <span>{summary + (container.sharedEnvOutdated ? t.projectContainers.detail.sharedEnvOutdated : "")}</span>
+            {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
+            {hasImageUpdate &&
+              (isViewer || readOnly ? (
+                <Badge tone="info">{d.updatable}</Badge>
+              ) : (
+                <button type="button" disabled={busy || !nodeOnline} onClick={updateImage} className="inline-flex shrink-0 cursor-pointer items-center rounded-[999px] border border-transparent bg-[color-mix(in_srgb,var(--info)_10%,transparent)] px-2 py-px text-xs leading-4 font-normal tracking-normal whitespace-nowrap text-info outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50">
+                  {d.updatable}
+                </button>
+              ))}
           </>
         }
         actions={
@@ -449,19 +534,15 @@ function ContainerDetail({
                 if (f) upload(f);
               }}
             />
-            {(!cfg?.form || cfg.form.workdir) && (
+            {/* 手机上这一行只放重启、重新部署和更多，其余进更多。 */}
+            {!mobile && uploadDeployable && (
               <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
                 {t.projectContainers.detail.uploadDeploy}
               </Button>
             )}
-            {cfg?.source?.gitUrl && (
-              <Button variant="outline" size="sm" onClick={() => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true })} disabled={busy}>
+            {!mobile && cfg?.source?.gitUrl && (
+              <Button variant="outline" size="sm" onClick={pullDeploy} disabled={busy}>
                 {t.projectContainers.detail.pullDeploy}
-              </Button>
-            )}
-            {hasImageUpdate && (
-              <Button variant="outline" size="sm" onClick={updateImage} disabled={busy}>
-                {t.projectContainers.detail.updateImage}
               </Button>
             )}
             {deployed && (running || !nodeOnline ? (
@@ -471,17 +552,17 @@ function ContainerDetail({
                 disabled={busy || !nodeOnline}
                 onClick={async () => (await confirmAction(d.restartConfirm(isGroup, container.name), { action: d.restart })) && control(ContainerAction.RESTART)}
               >
-                <RotateCw />
                 {d.restart}
               </Button>
             ) : (
               <Button variant="outline" size="sm" disabled={busy || !nodeOnline} onClick={() => control(ContainerAction.START)}>
-                <Play />
                 {d.start}
               </Button>
             ))}
             <Button
               size="sm"
+              // 只有要部署新内容（草稿、第一次部署）或正在部署时是主按钮。
+              variant={container.hasDraft || !deployed || busy ? "default" : "outline"}
               onClick={() =>
                 container.hasDraft
                   ? confirmDeploy(d.deployDraftConfirm(container.name), d.deployDraft, {})
@@ -489,7 +570,7 @@ function ContainerDetail({
               }
               disabled={busy || !nodeOnline}
             >
-              {busy ? <Spinner /> : <Rocket />}
+              {busy && <Spinner />}
               {busy
                 ? t.projectContainers.detail.deploying
                 : container.hasDraft
@@ -499,7 +580,11 @@ function ContainerDetail({
                     : t.projectContainers.detail.deploy}
             </Button>
             <Menu
+              title={container.name}
               items={[
+                ...(mobile && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy }] : []),
+                ...(mobile && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy }] : []),
+                { label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline },
                 // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
                 ...(deployed && running && stopped ? [{ label: d.start, onSelect: () => control(ContainerAction.START), disabled: busy || !nodeOnline }] : []),
                 // 设置了顶替的容器停止后会被代管重启或另一个节点拉起，须先取消顶替（见 docs/failover.md）。
@@ -515,8 +600,6 @@ function ContainerDetail({
                       },
                     ]
                   : []),
-                // 检查到新版本时标题旁已有按钮；没检查到（还没检查、从未部署成功）时从这里手动更新。
-                ...(hasImageUpdate ? [] : [{ label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy }]),
                 {
                   label: t.projectContainers.detail.deleteKind(isGroup),
                   danger: true,
@@ -530,7 +613,7 @@ function ContainerDetail({
         }
       />
       <Tabs
-        className="mb-6"
+        className={cn("mb-6 max-md:mb-4", browsing && "max-md:hidden")}
         value={view}
         onChange={onView}
         items={[
@@ -544,8 +627,8 @@ function ContainerDetail({
           { value: "ha", label: t.projectContainers.tabs.ha },
         ]}
       />
-      <div key={view} className="grid animate-fade-in gap-6">
-        {view !== "storage" && view !== "ha" && output}
+      <div key={view} className="animate-fade-in">
+        {view !== "storage" && view !== "ha" && hasOutput && <div className="mb-6">{output}</div>}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
         {view === "config" && !isViewer && <ContainerConfig
             key={`cfg-${container.revision}`}
@@ -575,136 +658,219 @@ function ContainerDetail({
   );
 }
 
+// uptime：把 Docker 的「Up 2 hours」换成界面语言。不是运行中时是「—」。
+function uptime(services: ServiceStatus[]) {
+  const up = t.projectContainers.overview.uptime;
+  const m = /^Up\s+(.+)$/.exec(serviceDetail(services.find((s) => s.state === "running")?.status ?? ""));
+  if (!m) return "—";
+  const text = m[1].trim();
+  if (/^about an hour/i.test(text)) return up.hour(1);
+  if (/^about a minute/i.test(text)) return up.minute(1);
+  if (/^less than a second/i.test(text)) return up.second(1);
+  const n = /^(\d+)\s+(second|minute|hour|day|week|month|year)s?/i.exec(text);
+  if (!n) return text;
+  return up[n[2].toLowerCase() as keyof typeof up](Number(n[1]));
+}
+
+// CopyLink：行内的「复制」文字按钮。
+function CopyLink({ text }: { text: string }) {
+  return (
+    <button
+      type="button"
+      className="ml-2 cursor-pointer whitespace-nowrap underline decoration-border underline-offset-4 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          toast.success(t.common.feedback.copied);
+        } catch {
+          toast.error(t.common.feedback.copyFailed);
+        }
+      }}
+    >
+      {t.common.actions.copy}
+    </button>
+  );
+}
+
 function Overview({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
   const cfg = container.draft ?? container.config;
+  const pc = t.projectContainers;
+  const o = pc.overview;
   const { range, picker } = useRange();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
+  const offline = !!node && !node.online;
+  const isGroup = container.kind === "group";
+  const images = [...new Set(services.map((s) => shortImage(s.image)).filter(Boolean))];
+  const image = container.config?.form?.image || cfg?.form?.image || images.join(pc.listSeparator) || "—";
+  const version =
+    container.deployedVersion > 0n ? `v${container.deployedVersion}${container.latestVersion !== container.deployedVersion ? pc.table.latest(String(container.latestVersion)) : ""}` : "—";
+  // 单个健康的容器，页头的状态已经说明了一切；多个服务或有问题时才列出每个服务。
+  const showServices = services.length !== 1 || services[0].state !== "running" || services[0].health === "unhealthy" || services[0].health === "starting" || offline;
+  const hasNotes = offline || container.hostNetworkServices.length > 0 || container.unmanagedVolumes.length > 0 || container.sharedEnvOutdated;
+  const mono = "font-mono text-[13px] wrap-anywhere";
   return (
-    <div className="grid grid-cols-1 gap-6">
-      {/* 节点和目录在页面标题下面；这里只在节点离线时提示。 */}
-      {node && !node.online && (
-        <Notice tone="warning" title={t.projectContainers.nodeOffline}>
-          {t.projectContainers.overview.nodeOfflineBody(node.name)}
-        </Notice>
+    <div>
+      {hasNotes && (
+        <div className="mb-6 grid gap-2">
+          {offline && (
+            <Notice tone="warning" title={pc.nodeOffline}>
+              {o.nodeOfflineBody(node.name)}
+            </Notice>
+          )}
+          {container.hostNetworkServices.length > 0 && (
+            <Notice tone="warning" title={o.hostNetworkTitle}>
+              {o.hostNetworkBody(container.hostNetworkServices.join(pc.listSeparator))}
+            </Notice>
+          )}
+          {container.unmanagedVolumes.length > 0 && (
+            <Notice tone="warning" title={pc.badges.volumeUnmanaged}>
+              {o.volumeBody(container.unmanagedVolumes.join(pc.listSeparator))}
+            </Notice>
+          )}
+          {container.sharedEnvOutdated && <Notice tone="warning" title={pc.badges.sharedEnvPending}>{pc.detail.sharedEnvOutdated}</Notice>}
+        </div>
       )}
-      {container.hostNetworkServices.length > 0 && (
-        <Notice tone="warning" title={t.projectContainers.overview.hostNetworkTitle}>
-          {t.projectContainers.overview.hostNetworkBody(container.hostNetworkServices.join(t.projectContainers.listSeparator))}
-        </Notice>
-      )}
-      {container.unmanagedVolumes.length > 0 && (
-        <Notice tone="warning" title={t.projectContainers.badges.volumeUnmanaged}>
-          {t.projectContainers.overview.volumeBody(container.unmanagedVolumes.join(t.projectContainers.listSeparator))}
-        </Notice>
-      )}
-      <Section title={t.projectContainers.overview.servicesTitle} flush>
-        <Table>
-          <thead>
-            <tr>
-              <Th>{t.projectContainers.columns.container}</Th>
-              <Th>{t.projectContainers.columns.status}</Th>
-              <Th>{t.projectContainers.columns.image}</Th>
-              <Th>{t.projectContainers.columns.details}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {services.length === 0 ? (
-              <tr>
-                <Td colSpan={4} className="text-center text-[13px] text-muted-foreground">
-                  {t.projectContainers.overview.notDeployed}
-                </Td>
-              </tr>
-            ) : (
-              services.map((s) => (
-                <tr key={s.name + s.containerId}>
-                  <Td className="font-medium">{s.name}</Td>
-                  <Td>
-                    {node && !node.online ? <Status tone="warning">{t.common.status.unknown}</Status> : <ServiceState service={s} />}
-                  </Td>
-                  <Td className="font-mono text-xs text-muted-foreground" title={s.image}>
-                    {shortImage(s.image)}
-                  </Td>
-                  <Td className="text-xs text-muted-foreground">{serviceDetail(s.status)}</Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
+      <Section>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
+          {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
+          <KvItem mono k={pc.columns.image} v={image} />
+          <KvItem mono k={pc.columns.node} v={node?.name ?? container.nodeId} />
+          <KvItem mono k={o.currentVersion} v={version} />
+          <KvItem k={o.uptimeLabel} v={uptime(services)} />
+          <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />
+        </div>
       </Section>
-      {cfg?.source?.gitUrl && (
-        <Section title={t.projectContainers.overview.gitTitle}>
-          <KeyValue
-            items={[
-              [
-                t.projectContainers.overview.gitRepo,
-                <span className="font-mono">
-                  {cfg.source.gitUrl}
-                  {cfg.source.gitRef && ` @ ${cfg.source.gitRef}`}
-                </span>,
-              ],
-              [t.projectContainers.overview.gitCommit, <span className="font-mono">{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>],
-              [
-                <span className="inline-flex items-center gap-1">deploy key</span>,
-                <div className="grid gap-1">
-                  <CodeBlock copy>{container.deployKey}</CodeBlock>
-                  <span className="text-xs text-muted-foreground">{t.projectContainers.overview.deployKeyHint}</span>
-                </div>,
-              ],
-              [
-                "webhook",
-                <div className="grid gap-1">
-                  <CodeBlock copy>{`${location.origin}/hooks/${container.webhookToken}`}</CodeBlock>
-                  <span className="text-xs text-muted-foreground">{t.projectContainers.overview.webhookHint}</span>
-                </div>,
-              ],
-            ]}
-          />
-        </Section>
-      )}
-      <ContainerEvents project={project} container={container} />
-      <Section title={t.projectContainers.monitoring} description={t.projectContainers.overview.metricsDescription} actions={picker}>
+      <Section title={o.resources} actions={picker}>
         <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} container={container.name} range={range} />
       </Section>
+      <ContainerEvents project={project} container={container} />
+      {showServices && (
+        <Section title={o.servicesTitle}>
+          {services.length === 0 ? (
+            <p className="text-muted-foreground">{o.notDeployed}</p>
+          ) : (
+            <List>
+              {services.map((s) => (
+                <Row
+                  key={s.name + s.containerId}
+                  title={s.name}
+                  sub={<span title={s.image}>{[shortImage(s.image), serviceDetail(s.status)].filter(Boolean).join(" · ")}</span>}
+                  cols={[{ phone: true, content: offline ? <Status tone="warning">{t.common.status.unknown}</Status> : <ServiceState service={s} /> }]}
+                />
+              ))}
+            </List>
+          )}
+        </Section>
+      )}
+      {cfg?.source?.gitUrl && (
+        <Section title={o.gitTitle}>
+          <dl className="m-0 grid">
+            <GitRow k={o.gitRepo}>
+              <span className={mono}>
+                {cfg.source.gitUrl}
+                {cfg.source.gitRef && ` @ ${cfg.source.gitRef}`}
+              </span>
+            </GitRow>
+            <GitRow k={o.gitCommit}>
+              <span className={mono}>{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>
+            </GitRow>
+            <GitRow k="deploy key" help={o.deployKeyHint}>
+              <span className={cn(mono, "line-clamp-1")} title={container.deployKey}>
+                {container.deployKey}
+              </span>
+              <CopyLink text={container.deployKey} />
+            </GitRow>
+            <GitRow k="webhook" help={o.webhookHint}>
+              <span className={mono}>{`${location.origin}/hooks/${container.webhookToken}`}</span>
+              <CopyLink text={`${location.origin}/hooks/${container.webhookToken}`} />
+            </GitRow>
+          </dl>
+        </Section>
+      )}
     </div>
   );
 }
 
-// ContainerEvents：这个容器最近的操作和告警。
+function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactNode; mono?: boolean; className?: string }) {
+  return (
+    <div className={cn("grid min-w-0 gap-1", className)}>
+      <span className="text-muted-foreground">{k}</span>
+      <span className={cn("wrap-anywhere", mono && "font-mono text-[13px]")}>{v}</span>
+    </div>
+  );
+}
+
+function GitRow({ k, help, children }: { k: string; help?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-8 items-center gap-4">
+      <dt className="flex w-24 flex-none items-center gap-1 text-muted-foreground">
+        {k}
+        {help && <HelpTip>{help}</HelpTip>}
+      </dt>
+      <dd className="m-0 flex min-w-0 items-center">{children}</dd>
+    </div>
+  );
+}
+
+// mergeEvents：同一个人连续做的同一种操作并成一行（多次保存草稿、删除几个文件），告警不合并。
+function mergeEvents<E extends { kind: string; action: string; actor: string; failed: boolean; time?: unknown }>(entries: E[]) {
+  const out: { entry: E; count: number }[] = [];
+  for (const e of entries) {
+    const last = out[out.length - 1];
+    if (last && e.kind !== "alert" && last.entry.kind === e.kind && last.entry.action === e.action && last.entry.actor === e.actor && last.entry.failed === e.failed) last.count++;
+    else out.push({ entry: e, count: 1 });
+  }
+  return out;
+}
+
+// ContainerEvents：这个容器最近的操作和告警，一行一条：时间、状态、详情、操作者。
 function ContainerEvents({ project, container }: { project: Project; container: Container }) {
+  const ev = t.projectContainers.events;
   const events = useQuery({
     queryKey: ["container-events", project.id, container.name],
     queryFn: () => projectClient.listContainerEvents({ projectId: project.id, container: container.name }),
     refetchInterval: 15000,
   });
-  const list = (events.data?.entries ?? []).slice(0, 8);
+  const list = mergeEvents(events.data?.entries ?? []).slice(0, 8);
   return (
-    <Section title={t.projectContainers.events.title} description={t.projectContainers.events.description} flush>
-      {events.error ? (
-        <Alert>{errorMessage(events.error)}</Alert>
+    <Section
+      title={ev.title}
+      actions={
+        <ButtonLink to="/settings" search={{ tab: "activity" }} variant="ghost" readOnlyOk className="-mr-3">
+          {ev.viewAll}
+        </ButtonLink>
+      }
+    >
+      {events.isPending ? (
+        <RowsSkeleton count={2} />
+      ) : events.error ? (
+        <QueryError error={errorMessage(events.error)} onRetry={() => events.refetch()} />
       ) : list.length === 0 ? (
-        <EmptyRow>{t.projectContainers.events.empty}</EmptyRow>
+        <EmptyRow>{ev.empty}</EmptyRow>
       ) : (
-        <Table compact>
-          <tbody>
-            {list.map((e) => {
-              const tone = e.kind === "alert" ? (e.action === "resolved" ? "success" : "warning") : e.failed ? "danger" : "success";
-              return (
-                <tr key={String(e.id)}>
-                  <Td className="w-28 text-[13px] whitespace-nowrap text-muted-foreground" title={formatDateTime(toDate(e.time))}>
-                    {timeAgo(toDate(e.time))}
-                  </Td>
-                  <Td className="text-[13px]" title={e.detail || undefined}>
-                    <Status tone={tone}>
-                      <span className="whitespace-normal">{e.kind === "alert" ? e.detail : actionLabel(e)}</span>
-                    </Status>
-                  </Td>
-                  <Td className="hidden text-right text-[13px] text-muted-foreground sm:table-cell">{e.actor}</Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
+        <div className="-mx-2 overflow-x-auto">
+          <table className="w-full border-separate border-spacing-0">
+            <tbody>
+              {list.map(({ entry: e, count }) => {
+                const tone = e.kind === "alert" ? (e.action === "resolved" ? "success" : "warning") : e.failed ? "danger" : "success";
+                const td = "h-10 px-2 py-1 align-middle transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
+                return (
+                  <tr key={String(e.id)} className="group">
+                    <td className={cn(td, "w-28 whitespace-nowrap text-muted-foreground")} title={formatDateTime(toDate(e.time))}>
+                      {timeAgo(toDate(e.time))}
+                    </td>
+                    <td className={cn(td, "whitespace-nowrap")}>
+                      <Status tone={tone}>{actionLabel(e)}</Status>
+                    </td>
+                    <td className={cn(td, "text-muted-foreground")}>{count === 1 ? e.detail : e.action.endsWith("VolumeFile") ? ev.files(count) : ev.times(count)}</td>
+                    <td className={cn(td, "text-right whitespace-nowrap text-muted-foreground")}>{e.actor}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Section>
   );
@@ -717,12 +883,15 @@ type Line = { key: number; service: string; stream: string; text: string; time?:
 const maxLines = 2000;
 
 function Logs({ projectId, container, services, containers }: { projectId: string; container: string; services: string[]; containers: string }) {
+  const l_ = t.projectContainers.logs;
   const [service, setService] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
+  const [connecting, setConnecting] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
   const [stderrOnly, setStderrOnly] = useState(false);
-  const [showTime, setShowTime] = useState(false);
+  const [showTime, setShowTime] = useState(true);
   // 暂停时继续接收，只是显示停在暂停那一刻。
   const [frozen, setFrozen] = useState<Line[] | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -745,10 +914,14 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
     let n = 0;
     setLines([]);
     setError("");
+    setConnecting(true);
+    // 流接上以后没有任何输出时收不到信号：等一会还没有日志，就当作「暂无日志」。
+    const settle = setTimeout(() => setConnecting(false), 2000);
     (async () => {
       try {
         const stream = projectClient.streamLogs({ projectId, container, service, tail: 200, follow: true }, { signal: abort.signal });
         for await (const l of stream) {
+          setConnecting(false);
           const line = { key: n++, service: l.service, stream: l.stream, text: l.text, time: toDate(l.time) };
           setLines((prev) => {
             const next = prev.length >= maxLines ? prev.slice(prev.length - maxLines + 1) : prev.slice();
@@ -760,9 +933,12 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         if (!abort.signal.aborted) setError(errorMessage(err));
       }
     })();
-    return () => abort.abort();
+    return () => {
+      clearTimeout(settle);
+      abort.abort();
+    };
     // 容器变化（例如部署后容器被重建）时重新订阅。
-  }, [projectId, container, service, containers]);
+  }, [projectId, container, service, containers, attempt]);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -771,66 +947,66 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
 
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.projectContainers.logs.search}
-          aria-label={t.projectContainers.logs.search}
-          className="h-8 max-w-56 text-[13px]"
-        />
-        {services.length > 1 && (
-          <Select value={service} onChange={(e) => setService(e.target.value)} className="h-8 w-40 text-[13px]" aria-label={t.projectContainers.logs.allContainers}>
-            <option value="">{t.projectContainers.logs.allContainers}</option>
-            {services.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        )}
-        <Check checked={stderrOnly} onChange={setStderrOnly}>
-          <span className="text-[13px]">{t.projectContainers.logs.stderrOnly}</span>
-        </Check>
-        <Check checked={showTime} onChange={setShowTime}>
-          <span className="text-[13px]">{t.projectContainers.logs.showTime}</span>
-        </Check>
-        <div className="ml-auto flex items-center gap-1">
-          <Button size="sm" variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
-            {frozen ? <Play /> : <Pause />}
-            {frozen ? t.projectContainers.logs.resume : t.projectContainers.logs.pause}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={l_.search} aria-label={l_.searchLabel} autoComplete="off" className="w-60 max-md:w-full" />
+          <Segmented
+            value={stderrOnly ? "stderr" : "all"}
+            onChange={(v) => setStderrOnly(v === "stderr")}
+            items={[
+              { value: "all", label: l_.all },
+              { value: "stderr", label: l_.stderrOnly },
+            ]}
+          />
+          {services.length > 1 && (
+            <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={l_.allContainers}>
+              <option value="">{l_.allContainers}</option>
+              {services.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" readOnlyOk aria-pressed={showTime} onClick={() => setShowTime(!showTime)}>
+            {l_.showTime}
           </Button>
-          <Button size="sm" variant="outline" readOnlyOk onClick={download} disabled={lines.length === 0}>
-            <Download />
-            {t.projectContainers.logs.download}
+          <Button variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
+            {frozen ? l_.resume : l_.pause}
+          </Button>
+          <Button variant="outline" readOnlyOk onClick={download} disabled={lines.length === 0}>
+            {l_.download}
           </Button>
         </div>
       </div>
-      <span className="text-xs text-muted-foreground">
-        {frozen ? t.projectContainers.logs.paused : t.projectContainers.logs.live(maxLines)}
-        {(q || stderrOnly) && ` · ${t.projectContainers.logs.matched(visible.length, source.length)}`}
-      </span>
-      {error && <Alert>{error}</Alert>}
+      {error && <QueryError error={error} onRetry={() => setAttempt((n) => n + 1)} />}
       <div
         ref={boxRef}
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         }}
-        className="h-96 overflow-auto rounded-md bg-log p-3.5 font-mono text-xs leading-relaxed text-log-foreground"
+        className="h-[560px] overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-xs leading-5 text-log-foreground max-md:h-[calc(100dvh-20rem)]"
       >
         {visible.length === 0 ? (
-          <span className="opacity-50">{lines.length === 0 ? t.projectContainers.logs.empty : t.projectContainers.logs.noMatch}</span>
+          <span className="opacity-50">{lines.length > 0 ? l_.noMatch : connecting && !error ? t.app.terminal.connecting : l_.empty}</span>
         ) : (
           visible.map((l) => (
             <div key={l.key} className="break-all whitespace-pre-wrap">
-              {showTime && l.time && <span className="mr-2 opacity-50">{formatTime(l.time)}</span>}
+              {showTime && l.time && <span className="mr-2 text-neutral-400">{formatTime(l.time)}</span>}
               {!service && services.length > 1 && <span className="mr-2 text-info">{l.service}</span>}
-              <span className={cn(l.stream === "stderr" && "text-warning")}>{l.text}</span>
+              <span className={cn(l.stream === "stderr" && "text-[#ff6467]")}>{l.text}</span>
             </div>
           ))
         )}
       </div>
+      {/* 实时和匹配信息放在黑框下面，工具条保持一行。 */}
+      <span className="text-muted-foreground">
+        {frozen ? l_.paused : l_.live(maxLines)}
+        {(q || stderrOnly) && ` · ${l_.matched(visible.length, source.length)}`}
+      </span>
     </div>
   );
 }
@@ -892,7 +1068,10 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
           ),
         };
   };
-  useUnsaved(buildConfig());
+  const dirty = useUnsaved(buildConfig());
+  const [preview, setPreview] = useState(false);
+  const showCompose = !isForm || preview;
+  const [envMode, setEnvMode] = useState<EnvMode>("rows");
 
   const save = () =>
     call(async () => {
@@ -917,246 +1096,353 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }), t.projectContainers.config.discarded);
   };
 
+  const c = t.projectContainers.config;
+  const textField = "font-mono text-[13px] max-md:text-base";
   return (
-    <form
-      ref={formRef}
-      className="grid gap-5"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save();
-      }}
-    >
-      <Notice>
-        {t.projectContainers.config.notice}{" "}
-        <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline underline-offset-2">
-          {t.projectContainers.config.portsLink}
-        </Link>
-      </Notice>
-      {container.hasDraft && <ConfigDiff deployed={container.config} draft={container.draft} />}
-      {isForm ? (
-        imageForm.fields
-      ) : (
-        <Field label="compose" htmlFor="edit-compose" help={t.projectContainers.config.composeHelp}>
-          <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className="min-h-56 font-mono text-[13px]" />
-        </Field>
+    <div className="grid gap-8">
+      {container.hasDraft && (
+        <section className="grid gap-4">
+          <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <h2 className="text-base font-medium">{c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}</h2>
+            <Button variant="ghost" className="-mr-3" onClick={discard} disabled={busy}>
+              {c.discardDraft}
+            </Button>
+          </header>
+          <ConfigDiff deployed={container.config} draft={container.draft} />
+        </section>
       )}
-      <div className="grid gap-4 border-t pt-5 sm:grid-cols-3">
-        <Field
-          label={t.projectContainers.config.git}
-          htmlFor="edit-git"
-          className="sm:col-span-2"
-          help={t.projectContainers.config.gitHelp}
+      <form
+        ref={formRef}
+        className="grid gap-8"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <ConfigGroup
+          title={c.groupImage}
+          action={
+            <Segmented
+              value={showCompose ? "compose" : "form"}
+              onChange={(v) => isForm && setPreview(v === "compose")}
+              items={[
+                { value: "form", label: isForm ? c.modeForm : <span title={c.modeFormDisabled} className="opacity-50">{c.modeForm}</span> },
+                { value: "compose", label: c.modeCompose },
+              ]}
+            />
+          }
         >
-          <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className="font-mono" />
-        </Field>
-        <Field label={t.projectContainers.config.ref} htmlFor="edit-ref" hint={t.projectContainers.config.refHint}>
-          <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} className="font-mono" />
-        </Field>
-        <Field
-                  label={t.projectContainers.config.preserve}
-                  htmlFor="edit-preserve"
-                  className="sm:col-span-2"
-                  hint={t.projectContainers.config.preserveHint}
-                  help={t.projectContainers.config.preserveHelp}
-                >
-          <Textarea id="edit-preserve" value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} className="min-h-16 font-mono text-[13px]" placeholder="uploads/" />
-        </Field>
-        <Field label={t.projectContainers.config.dependsOn} htmlFor="edit-deps" hint={t.projectContainers.config.dependsOnHint} help={t.projectContainers.config.dependsOnHelp}>
-          <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} className="font-mono" placeholder="db" />
-        </Field>
-      </div>
-      {!isForm && (
-        <div className="grid gap-4 border-t pt-5">
-          <Field label={t.projectContainers.config.groupEnv} htmlFor="edit-env" help={t.projectContainers.config.groupEnvHelp}>
-            <EnvEditor id="edit-env" value={env} onChange={setEnv} />
-          </Field>
-          {services.map((s) => (
-            <Field
-                          key={s}
-                          label={t.projectContainers.config.serviceEnv(s)}
-                          htmlFor={`edit-env-${s}`}
-                          help={t.projectContainers.config.serviceEnvHelp}
-                        >
-              <EnvEditor id={`edit-env-${s}`} value={serviceEnv[s] ?? ""} onChange={(v) => setServiceEnv((prev) => ({ ...prev, [s]: v }))} />
+          {/* 容器创建后不能在单个容器和容器组之间切换：单个容器的 Compose 是表单生成的只读预览。 */}
+          {isForm && showCompose && (
+            <Field label="compose" help={c.composePreviewHelp}>
+              <pre className="m-0 overflow-auto rounded-md bg-muted p-3 font-mono text-[13px] leading-5">{formToCompose(container.name, imageForm.build())}</pre>
             </Field>
+          )}
+          {isForm && !showCompose && (
+            <>
+              {imageForm.parts.image}
+              {imageForm.parts.command}
+            </>
+          )}
+          {!isForm && (
+            <Field label="compose" htmlFor="edit-compose" help={c.composeHelp}>
+              <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
+            </Field>
+          )}
+        </ConfigGroup>
+        <ConfigGroup
+          title={isForm ? t.containerForm.env : c.groupEnv}
+          help={isForm ? undefined : c.groupEnvHelp}
+          action={
+            <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
+              {envMode === "rows" ? c.envToText : t.containerForm.envRows}
+            </Button>
+          }
+        >
+          {isForm ? <EnvEditor id="edit-env" mode={envMode} value={imageForm.env} onChange={imageForm.setEnv} /> : <EnvEditor id="edit-env" mode={envMode} value={env} onChange={setEnv} />}
+        </ConfigGroup>
+        {!isForm &&
+          services.map((s) => (
+            <ConfigGroup key={s} title={c.serviceEnv(s)} help={c.serviceEnvHelp}>
+              <EnvEditor id={`edit-env-${s}`} value={serviceEnv[s] ?? ""} onChange={(v) => setServiceEnv((prev) => ({ ...prev, [s]: v }))} />
+            </ConfigGroup>
           ))}
-        </div>
-      )}
-      {error && <Alert>{error}</Alert>}
-      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t bg-background px-1 py-3">
-        {container.hasDraft && (
-          <Button variant="ghost" size="sm" onClick={discard} disabled={busy}>
-            {t.projectContainers.config.discardDraft}
-          </Button>
+        {isForm && (
+          <ConfigGroup title={c.groupStorage}>
+            <FormRow>
+              {imageForm.parts.volumes}
+              {imageForm.parts.workdir}
+            </FormRow>
+            <p className="text-muted-foreground">
+              <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
+                {c.portsLink}
+              </Link>
+            </p>
+          </ConfigGroup>
         )}
-        <Button type="submit" size="sm" variant="outline" disabled={busy || deploying}>
-          {busy && <Spinner />}
-          {t.projectContainers.config.saveDraft}
-        </Button>
-        <Button size="sm" disabled={busy || deploying} onClick={saveAndDeploy}>
-          <Rocket />
-          {t.projectContainers.config.saveAndDeploy}
-        </Button>
-      </div>
-    </form>
+        {!isForm && (
+          <p className="max-w-[720px] text-muted-foreground">
+            <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
+              {c.portsLink}
+            </Link>
+          </p>
+        )}
+        <ConfigGroup title={c.groupSource}>
+          <FormRow>
+            <Field label={c.git} htmlFor="edit-git" help={c.gitHelp}>
+              <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className={textField} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={c.ref} htmlFor="edit-ref" help={c.refHint}>
+              <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} className={textField} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={c.preserve} htmlFor="edit-preserve" help={`${c.preserveHint}${t.common.sentenceEnd}${c.preserveHelp}`}>
+              <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, "min-h-8 resize-none py-[5px] max-md:py-[9px]")} />
+            </Field>
+            <Field label={c.dependsOn} htmlFor="edit-deps" help={`${c.dependsOnHint}${t.common.sentenceEnd}${c.dependsOnHelp}`}>
+              <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
+            </Field>
+          </FormRow>
+        </ConfigGroup>
+        {isForm && (
+          <ConfigGroup title={c.groupLimits}>
+            <FormRow>{imageForm.parts.limits}</FormRow>
+          </ConfigGroup>
+        )}
+        {error && <Alert className="max-w-[720px]">{error}</Alert>}
+        <div className="sticky bottom-0 z-10 flex max-w-[720px] flex-wrap items-center justify-between gap-4 border-t bg-background py-3">
+          <span className="text-muted-foreground">{dirty ? c.unsaved : c.notice}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" variant="outline" disabled={busy || deploying}>
+              {busy && <Spinner />}
+              {c.saveDraft}
+            </Button>
+            <Button disabled={busy || deploying} onClick={saveAndDeploy}>
+              {c.saveAndDeploy}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ConfigGroup：配置页的一组字段，最宽 720，标题右边可以有切换。
+function ConfigGroup({ title, help, action, children }: { title: React.ReactNode; help?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="grid max-w-[720px] gap-4">
+      <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="flex items-center gap-1 text-base font-medium">
+          {title}
+          {help && <HelpTip>{help}</HelpTip>}
+        </h2>
+        {action}
+      </header>
+      {children}
+    </section>
   );
 }
 
 // ---- 版本 ----
 
+// imageDigest：镜像摘要的前 8 位；没有摘要时是镜像名。
+function imageDigest(images: Record<string, string>) {
+  return Object.values(images)
+    .map((image) => {
+      const i = image.indexOf("sha256:");
+      return i < 0 ? image : image.slice(i + 7, i + 15);
+    })
+    .join(", ");
+}
+
 // onRun：开始回滚时调用（上面那次部署的输出就过时了）。
 function Versions({ project, container, onRun }: { project: Project; container: Container; onRun: () => void }) {
-  const { run, busy, output } = useRun(project.id);
+  const { run, busy, output, hasOutput } = useRun(project.id);
   const ref = { projectId: project.id, container: container.name };
   const versions = useQuery({
     queryKey: ["versions", project.id, container.name, String(container.revision)],
     queryFn: () => projectClient.listVersions(ref),
   });
-  const [restoreData, setRestoreData] = useState(false);
+  const v_ = t.projectContainers.versions;
+  const list = versions.data?.versions ?? [];
+  const current = list.find((x) => x.version === container.deployedVersion);
+  const describe = (x: (typeof list)[number]) => (
+    <span>
+      {`v${x.version}`}{" "}
+      <span className="text-muted-foreground">
+        {x.deployedAt ? `· ${timeAgo(toDate(x.deployedAt))}` : ""} · <span className="font-mono text-[13px]">{imageDigest(x.images)}</span>
+      </span>
+    </span>
+  );
+  const rollback = async (x: (typeof list)[number]) => {
+    const answer = await ask(v_.rollbackTitle(container.name), {
+      action: v_.rollback,
+      check: v_.restoreDataCheck,
+      checkHelp: v_.restoreDataHelp,
+      checkDanger: true,
+      details: [
+        ...(current ? ([[v_.rollbackCurrent, describe(current)]] as [string, React.ReactNode][]) : []),
+        [v_.rollbackTarget, describe(x)],
+      ],
+    });
+    if (!answer) return;
+    onRun();
+    run(() => projectClient.rollback({ ...ref, version: x.version, restoreData: answer.checked }));
+  };
 
   return (
-    <div className="grid gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] text-muted-foreground">{t.projectContainers.versions.intro}</span>
-        <Check checked={restoreData} onChange={setRestoreData} help={t.projectContainers.versions.restoreDataHelp}>
-          <span className="text-[13px]">{t.projectContainers.versions.restoreData}</span>
-        </Check>
-      </div>
-      {output}
-      <div>
-        <Table compact>
-          <thead>
-            <tr>
-              <Th>{t.projectContainers.columns.version}</Th>
-              <Th>{t.projectContainers.columns.deployedAt}</Th>
-              <Th>{t.projectContainers.columns.image}</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody>
-            {versions.isPending ? (
-              <tr>
-                <Td colSpan={4} className="text-center">
-                  <Spinner className="text-muted-foreground" />
-                </Td>
-              </tr>
-            ) : versions.data?.versions.length === 0 ? (
-              <tr>
-                <Td colSpan={4} className="text-center text-[13px] text-muted-foreground">
-                  {t.projectContainers.versions.empty}
-                </Td>
-              </tr>
-            ) : (
-              versions.data?.versions.map((v) => (
-                <tr key={String(v.version)}>
-                  <Td className="font-mono text-xs">
-                    v{String(v.version)}
-                    {v.version === container.deployedVersion && (
-                      <Badge tone="success" className="ml-2">
-                        {t.projectContainers.versions.current}
-                      </Badge>
-                    )}
-                  </Td>
-                  <Td className="text-[13px] text-muted-foreground">
-                    {v.deployedAt ? timeAgo(toDate(v.deployedAt)) : t.projectContainers.versions.deployFailed}
-                    {v.rollbackOf > 0n && t.projectContainers.versions.rollbackOf(String(v.rollbackOf))}
-                    {v.commit && <span className="font-mono"> · {v.commit.slice(0, 8)}</span>}
-                  </Td>
-                  <Td className="max-w-80 truncate font-mono text-xs text-muted-foreground" title={Object.values(v.images).join(", ")}>
-                    {Object.values(v.images).map(shortImage).join(", ")}
-                  </Td>
-                  <Td className="text-right">
-                    {v.version !== container.deployedVersion && v.deployedAt && (
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={async () =>
-                          (await confirmAction(t.projectContainers.versions.rollbackConfirm(container.name, String(v.version), restoreData), { action: t.projectContainers.versions.rollback, danger: restoreData })) &&
-                          (onRun(), run(() => projectClient.rollback({ ...ref, version: v.version, restoreData })))
-                        }
-                      >
-                        {t.projectContainers.versions.rollback}
-                      </Button>
-                    )}
-                  </Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </div>
-    </div>
+    <Section className="max-md:[&>header]:hidden" title={t.projectContainers.tabs.versions} help={v_.intro}>
+      {hasOutput && output}
+      {versions.isPending ? (
+        <RowsSkeleton />
+      ) : versions.error ? (
+        <QueryError error={errorMessage(versions.error)} onRetry={() => versions.refetch()} />
+      ) : list.length === 0 ? (
+        <EmptyRow>{v_.empty}</EmptyRow>
+      ) : (
+        <List>
+          {list.map((x) => {
+            const notes = [
+              x.version === container.deployedVersion ? v_.current : "",
+              x.rollbackOf > 0n ? v_.rollbackOf(String(x.rollbackOf)).replace(/^\s*·\s*/, "") : "",
+              x.commit ? x.commit.slice(0, 8) : "",
+            ].filter(Boolean);
+            return (
+              <Row
+                key={String(x.version)}
+                title={
+                  <>
+                    <span>{`v${x.version}`}</span>
+                    {!x.deployedAt && <span className="text-destructive">{v_.deployFailed}</span>}
+                    {notes.length > 0 && <span className="truncate text-muted-foreground">{notes.join(" · ")}</span>}
+                  </>
+                }
+                cols={[
+                  { num: true, content: <span className="font-mono text-[13px] leading-none" title={Object.values(x.images).join(", ")}>{imageDigest(x.images)}</span> },
+                  { content: x.deployedAt ? timeAgo(toDate(x.deployedAt)) : "" },
+                ]}
+                actions={
+                  x.version !== container.deployedVersion && x.deployedAt ? (
+                    <Button size="row" variant="ghost" disabled={busy} onClick={() => rollback(x)}>
+                      {v_.rollback}
+                    </Button>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </List>
+      )}
+    </Section>
   );
 }
 
 // ---- 添加容器 ----
 
-function AddContainer({ project, onAdded, onClose }: { project: Project; onAdded: (name: string) => void; onClose: () => void }) {
+// imageBaseName：镜像名里的短名字，作为容器名称的默认值，例如 ghcr.io/org/app:1.2 得到 app。
+function imageBaseName(image: string) {
+  const base = image.split("@")[0].split("/").pop()?.split(":")[0] ?? "";
+  return base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+}
+
+// AddContainerPage：占整个主区。只填镜像就能提交：名称取镜像名，节点默认是项目里容器最多的在线节点。
+// 项目还没有容器时也从这里添加（概览写「暂无容器」和添加按钮）。
+export function AddContainerPage({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
+  const project = useQuery({ queryKey: ["project", projectId], queryFn: () => projectClient.getProject({ projectId }) });
+  if (project.isPending) return <RowsSkeleton />;
+  if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
+  const p = project.data.project;
+  if (!p) return null;
+  return (
+    <>
+      <MobileBar back={() => navigate({ to: "/projects/$projectId", params: { projectId: p.id } })} title={t.projectContainers.add.title} />
+      <Breadcrumb items={[{ label: t.projectContainers.page.projects, to: "/projects" }, { label: p.name, to: `/projects/${p.id}` }, { label: t.projectContainers.add.title }]} className="max-md:hidden xl:hidden" />
+      <PageHeader title={t.projectContainers.add.title} className="max-md:hidden" />
+      <AddContainer project={p} />
+    </>
+  );
+}
+
+function AddContainer({ project }: { project: Project }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const form = useContainerForm(project.containers.length === 0);
+  const deployAfter = useRef(true);
+  const formRef = useRef<{ image: () => string } | null>(null);
+  // 表单和节点选择互相要用对方的值，名称默认值放在提交时算。
+  const node = useNodeChoice({ projectId: project.id, projectName: project.networkName, container: name || imageBaseName(formRef.current?.image() ?? "") || "web", preferNodes: project.containers.map((m) => m.nodeId) });
+  const top = (mode: "compose" | "image") => (
+    <FormRow>
+      <Field
+        label={mode === "compose" ? t.projects.create.groupName : t.projectContainers.columns.name}
+        htmlFor="new-container"
+        help={mode === "compose" ? t.containerForm.groupNameHelp : `${t.containerForm.nameHelpImage}${t.projectContainers.add.nameHelp}`}
+        error={checkName(name)}
+      >
+        <Input
+          id="new-container"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            e.target.setCustomValidity(checkName(e.target.value));
+          }}
+          required={mode === "compose"}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={mode === "compose" ? "web" : imageBaseName(formRef.current?.image() ?? "") || "web"}
+        />
+      </Field>
+      {node.nodeField}
+    </FormRow>
+  );
+  const form = useContainerForm(project.containers.length === 0, top, node.dirField);
+  formRef.current = form;
   useUnsaved({ name, config: form.build() });
-  const node = useNodeChoice({ projectId: project.id, projectName: project.networkName, container: name || "api", preferNodes: project.containers.map((m) => m.nodeId) });
 
   const add = async () => {
     setBusy(true);
     setError("");
+    const finalName = name || imageBaseName(form.image());
     try {
-      await projectClient.addContainer({ projectId: project.id, name, config: form.build(), nodeId: node.nodeId, dir: node.dir });
-      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-      onAdded(name);
-      setName("");
+      await projectClient.addContainer({ projectId: project.id, name: finalName, config: form.build(), nodeId: node.nodeId, dir: node.dirFor(finalName) });
+      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      navigate({
+        to: "/projects/$projectId/c/$container",
+        params: { projectId: project.id, container: finalName },
+        search: deployAfter.current ? { deploy: true } : {},
+        ignoreBlocker: true,
+      });
     } catch (err) {
       setError(errorMessage(err));
-    } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Section title={t.projectContainers.add.title} description={t.projectContainers.add.description}>
-      <form
-        className="grid gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <Field
-          label={t.projectContainers.columns.name}
-          htmlFor="new-container"
-          hint={t.projectContainers.add.nameHint}
-          help={t.projectContainers.add.nameHelp}
-          error={checkName(name)}
-          required
-        >
-          <Input
-            id="new-container"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              e.target.setCustomValidity(checkName(e.target.value));
-            }}
-            required className="max-w-80 font-mono" placeholder="api" />
-        </Field>
-        {node.fields}
-        {form.fields}
-        {error && <Alert>{error}</Alert>}
-        <div className="flex justify-end gap-2 pt-2">
-          {project.containers.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              {t.common.actions.cancel}
-            </Button>
-          )}
-          <Button type="submit" size="sm" disabled={busy || !node.nodeId}>
-            {busy && <Spinner />}
-            {t.common.actions.add}
-          </Button>
-        </div>
-      </form>
-    </Section>
+    <form
+      className="grid max-w-[672px] gap-6 max-md:gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        add();
+      }}
+    >
+      {form.fields}
+      {error && <Alert>{error}</Alert>}
+      <FormActions className="mt-2 max-md:grid max-md:[&>*]:w-full">
+        <Button type="submit" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = true)}>
+          {busy && deployAfter.current && <Spinner />}
+          {t.projectContainers.add.addAndDeploy}
+        </Button>
+        <Button type="submit" variant="outline" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = false)}>
+          {busy && !deployAfter.current && <Spinner />}
+          {t.projectContainers.add.addOnly}
+        </Button>
+        <ButtonLink to="/projects/$projectId" params={{ projectId: project.id }} variant="ghost" readOnlyOk>
+          {t.common.actions.cancel}
+        </ButtonLink>
+      </FormActions>
+    </form>
   );
 }

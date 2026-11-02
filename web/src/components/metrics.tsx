@@ -4,7 +4,7 @@ import { Cpu, HardDrive, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { Alert, EmptyRow, Loading, Notice, Section, Segmented, Tile, TileGrid } from "@/components/ui";
+import { EmptyRow, Notice, QueryError, Section, Segmented, Select, Skeleton } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
@@ -25,7 +25,15 @@ export type MetricRange = (typeof metricRanges)[number]["value"];
 const rangeOf = (r: MetricRange) => metricRanges.find((x) => x.value === r)!;
 
 export function RangePicker({ value, onChange }: { value: MetricRange; onChange: (r: MetricRange) => void }) {
-  return <Segmented value={value} onChange={onChange} items={metricRanges.map((r) => ({ value: r.value, label: r.label }))} />;
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value as MetricRange)} aria-label={m.rangeLabel} className="w-auto">
+      {metricRanges.map((r) => (
+        <option key={r.value} value={r.value}>
+          {r.label}
+        </option>
+      ))}
+    </Select>
+  );
 }
 
 // useRange：一个监控区块的时间范围和选择器。
@@ -43,44 +51,67 @@ export function fmtBytes(v: number) {
     v /= 1024;
     i++;
   }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  return `${v.toFixed(i === 0 ? 0 : 1).replace(/\.0$/, "")} ${units[i]}`;
 }
 
 
 // CPU 图的纵轴至少到 1%，空闲容器的微小波动贴在底部，不被放大成尖峰。
 const cpuMinMax = 1;
 
-// Metric：一个指标的方块：名称、当前值、趋势图（鼠标移上去显示各时刻的值）。
+// Metric：一个数值块：名称、当前值、趋势图（鼠标移上去显示各时刻的值）。没有框，靠留白分组。
 function Metric({
   label,
   points,
   format,
   range,
   minMax,
+  quiet,
 }: {
   label: string;
   points: Pt[];
   format: (v: number) => string;
   range: MetricRange;
   minMax?: number;
+  quiet?: boolean;
 }) {
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   return (
-    <Tile>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-mono text-sm font-medium tabular-nums">{points.length ? format(points[points.length - 1][1]) : "—"}</div>
+    <div className="grid min-w-0 content-start gap-1">
+      <div className="text-muted-foreground">{label}</div>
+      <div className={mcval}>{points.length ? format(points[points.length - 1][1]) : "—"}</div>
       <TimeChart
-        series={[{ label, points, className: "text-info" }]}
+        className="mt-2"
+        series={[{ label, points, className: "text-muted-foreground" }]}
         from={now - r.seconds}
         to={now}
         step={r.step}
         format={format}
-        height={32}
+        height={40}
         axis={false}
         minMax={minMax}
+        quiet={quiet}
       />
-    </Tile>
+    </div>
+  );
+}
+
+const mcval = "block text-xl leading-7 font-medium tracking-tight";
+// 数值块 4 列，手机 2 列。
+const cellsC4 = "grid grid-cols-2 gap-8 max-md:gap-4 md:grid-cols-4";
+
+// MetricsSkeleton：监控加载中，和数值块一样的版面，内容出来时不跳。
+function MetricsSkeleton() {
+  return (
+    <div role="status" aria-label={t.common.feedback.loading} className={cellsC4}>
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="grid gap-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="mt-2 h-10 w-full" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -88,9 +119,9 @@ const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds
 
 // NodeMetrics：节点页的监控，时间范围在区块标题右侧。
 export function NodeMetrics({ nodeId }: { nodeId: string }) {
-  const { range, picker } = useRange();
+  const [range, setRange] = useState<MetricRange>("1h");
   return (
-    <Section title={m.resourceUsage} actions={picker}>
+    <Section title={m.resourceUsage} actions={<Segmented value={range} onChange={setRange} items={metricRanges.map((r) => ({ value: r.value, label: m.rangesShort[r.value] }))} />}>
       <NodeMetricCards nodeId={nodeId} range={range} />
     </Section>
   );
@@ -104,20 +135,20 @@ function NodeMetricCards({ nodeId, range }: { nodeId: string; range: MetricRange
     refetchInterval: 10_000,
     placeholderData: (prev) => prev,
   });
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  if (q.isPending) return <MetricsSkeleton />;
+  if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
   const series = new Map(q.data.series.map((s) => [s.name, s]));
   const metric = (label: string, name: string, format: (v: number) => string, minMax?: number) => (
     <Metric key={name} label={label} points={toPoints(series.get(name))} format={format} range={range} minMax={minMax} />
   );
   return (
-    <TileGrid>
+    <div className="grid grid-cols-1 gap-8 max-md:gap-4 md:grid-cols-3">
       {metric("CPU", "node:cpu", fmtCpu, cpuMinMax)}
       {metric(m.memory, "node:mem", fmtCpu)}
       {metric(m.disk, "node:disk", fmtCpu)}
       {metric(m.netRx, "node:net_rx", fmtRate)}
       {metric(m.netTx, "node:net_tx", fmtRate)}
-    </TileGrid>
+    </div>
   );
 }
 
@@ -281,6 +312,33 @@ export function UsageBars({ usage, memFallback, className }: { usage?: Usage; me
   );
 }
 
+// UsageRings：项目栏里一个容器的 CPU 和内存：小圆环加数值，一行放下。超过 75% 变黄、90% 变红。
+export function UsageRings({ usage, memFallback, className }: { usage?: Usage; memFallback: number; className?: string }) {
+  const cpuMax = usage?.cpuLimit ?? 100;
+  const memMax = usage?.memLimit ?? memFallback;
+  const cpu = usage ? usage.cpu / cpuMax : 0;
+  const mem = usage && memMax > 0 ? usage.mem / memMax : 0;
+  const ring = (ratio: number, value: string, title: string) => {
+    const r = Math.min(Math.max(ratio, 0), 1);
+    const color = r >= 0.9 ? "stroke-destructive" : r >= 0.75 ? "stroke-warning" : "stroke-primary";
+    return (
+      <span className="inline-flex items-center gap-1" title={title}>
+        <svg viewBox="0 0 100 100" className="size-4 shrink-0 -rotate-90" aria-hidden>
+          <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" className="stroke-primary/12" />
+          <circle cx="50" cy="50" r="42.5" fill="none" strokeWidth="15" strokeLinecap="round" pathLength={100} strokeDasharray={`${Math.max(r * 100, 3)} 100`} className={color} />
+        </svg>
+        {value}
+      </span>
+    );
+  };
+  return (
+    <span className={cn("flex items-center gap-3 text-xs text-muted-foreground", className)}>
+      {ring(cpu, usage ? `CPU ${usage.cpu.toFixed(1)}%` : "CPU —", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
+      {ring(mem, usage ? fmtBytes(usage.mem) : "—", m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem)))}
+    </span>
+  );
+}
+
 // NodeUsageBars：节点的 CPU、内存、磁盘占用，样式同容器的占用条：图标、条、数值。
 // CPU 显示百分比，内存和磁盘显示「已用 / 总量」（旧版本的节点不报总量，退回百分比）。三行在同一个网格里，条的长度对齐。
 export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; info?: NodeInfo; className?: string }) {
@@ -356,41 +414,40 @@ function UsageBar({ icon, ratio, value, title, fill }: { icon: ReactNode; ratio:
           style={{ transform: `scaleX(${r})` }}
         />
       </span>
-      <span className="min-w-[2.125rem] shrink-0 pl-0.5 font-mono text-[11px] leading-4 tabular-nums">{value}</span>
+      <span className="min-w-[2.125rem] shrink-0 pl-0.5 text-xs leading-4 tabular-nums">{value}</span>
     </span>
   );
 }
 
-function MetricGroups({ groups, range }: { groups: [string, Map<string, Pt[]>][]; range: MetricRange }) {
+const cellOrder = ["cpu", "mem", "net_rx", "net_tx"];
+
+// MetricCells：一组四个数值块，顺序固定，某项没有数据时写「—」。
+function MetricCells({ series, range, quiet }: { series: Map<string, Pt[]>; range: MetricRange; quiet?: boolean }) {
   return (
-    <div className="grid gap-5">
-      {groups.map(([name, series]) => (
-        <div key={name} className="grid gap-2">
-          {name && <div className="font-mono text-xs text-muted-foreground">{name}</div>}
-          <TileGrid>
-            {[...series.entries()].map(([metric, points]) => (
-              <Metric
-                key={metric}
-                label={containerMetricFormat[metric]?.[0] ?? metric}
-                points={points}
-                format={containerMetricFormat[metric]?.[1] ?? String}
-                range={range}
-                minMax={metric === "cpu" ? cpuMinMax : undefined}
-              />
-            ))}
-          </TileGrid>
-        </div>
+    <div className={cellsC4}>
+      {cellOrder.map((metric) => (
+        <Metric
+          key={metric}
+          label={containerMetricFormat[metric][0]}
+          points={series.get(metric) ?? []}
+          format={containerMetricFormat[metric][1]}
+          range={range}
+          minMax={metric === "cpu" ? cpuMinMax : undefined}
+          quiet={quiet}
+        />
       ))}
     </div>
   );
 }
 
 // ProjectMetrics：项目概览里的监控。各容器的占用在项目栏和容器页里看，这里只给所有容器的合计和各端口映射的请求情况。
-export function ProjectMetrics({ nodeIds, projectId, range, offline = [] }: { nodeIds: string[]; projectId: string; range: MetricRange; offline?: string[] }) {
+// 渲染在 Section 的网格里：分组标题和内容都是 Section 的直接子元素。
+// httpRoutes：项目的 http 端口映射，这段时间没有请求的也列出来（数字写「—」）。
+export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRoutes = [] }: { nodeIds: string[]; projectId: string; range: MetricRange; offline?: string[]; httpRoutes?: string[] }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
   if (nodeIds.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  if (q.isPending) return <MetricsSkeleton />;
+  if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
   const byMetric = new Map<string, MetricSeries[]>();
   const routeSeries = new Map<string, Map<string, MetricSeries[]>>();
   for (const s of q.data) {
@@ -410,25 +467,47 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [] }: { no
       new Map([...byName].map(([metric, list]) => [metric, routeLatencyMetrics.has(metric) ? maxSeries(list) : sumSeries(list)])),
     ]),
   );
-  const order = ["cpu", "mem", "net_rx", "net_tx"];
-  const total = new Map(order.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
-  if (total.size === 0 && routes.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
+  const total = new Map(cellOrder.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
+  const idle = httpRoutes.filter((name) => !routes.has(name));
+  if (total.size === 0 && routes.size === 0 && idle.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
-    <div className="grid grid-cols-1 gap-6">
+    <>
       {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(offline.join(m.seriesSeparator))}</Notice>}
-      {total.size > 0 && <MetricGroups groups={[[m.allContainersTotal, total]]} range={range} />}
-      {[...routes.entries()].map(([name, data]) => (
-        <RouteMetrics key={name} name={name} data={data} range={range} />
+      {total.size > 0 && (
+        <>
+          <div className="font-medium">{m.allContainersTotal}</div>
+          <MetricCells series={total} range={range} />
+        </>
+      )}
+      {[...routes.entries()].map(([name, data], i) => (
+        <RouteMetrics key={name} name={name} data={data} range={range} divided={i > 0 || total.size > 0} />
       ))}
-    </div>
+      {idle.map((name, i) => (
+        <RouteMetrics key={name} name={name} data={noRouteData()} range={range} divided={i > 0 || routes.size > 0 || total.size > 0} empty />
+      ))}
+    </>
+  );
+}
+
+// EmptyProjectMetrics：还没有容器时，概览照常排版但没有数据。
+const noRouteData = () => new Map<string, Pt[]>(["req", "2xx", "3xx", "4xx", "5xx", "lat", "p50", "p95", "p99", "in", "out"].map((n) => [n, []]));
+
+export function EmptyProjectMetrics({ range }: { range: MetricRange }) {
+  const none = (names: string[]) => new Map<string, Pt[]>(names.map((n) => [n, []]));
+  return (
+    <>
+      <div className="font-medium">{m.allContainersTotal}</div>
+      <MetricCells series={none(cellOrder)} range={range} quiet />
+      <RouteMetrics data={noRouteData()} range={range} divided empty quiet />
+    </>
   );
 }
 
 // ---- 端口映射（http）----
 
-// 状态码分类的颜色与状态色一致：2xx 正常、3xx 信息、4xx 警告、5xx 错误。
+// 状态码分类的颜色：2xx 灰色、3xx 蓝、4xx 橙、5xx 红，一眼先看到有问题的部分。
 const statusSeries = [
-  { metric: "2xx", label: "2xx", className: "text-success" },
+  { metric: "2xx", label: "2xx", className: "text-muted-foreground", faded: true },
   { metric: "3xx", label: "3xx", className: "text-info" },
   { metric: "4xx", label: "4xx", className: "text-warning" },
   { metric: "5xx", label: "5xx", className: "text-destructive" },
@@ -440,13 +519,14 @@ const latencySeries = [
   { metric: "p99", label: "P99", className: "text-destructive" },
 ];
 const trafficSeries = [
-  { metric: "in", label: m.inbound, className: "text-info" },
-  { metric: "out", label: m.outbound, className: "text-success" },
+  { metric: "in", label: m.inbound, className: "text-muted-foreground" },
+  { metric: "out", label: m.outbound, className: "text-wave" },
 ];
 
 // RouteMetrics：一条端口映射的请求情况。上面是时间范围内的汇总，下面是三张图：按状态码堆叠的请求数、耗时分位数、流量。
 // 节点存的是每秒速率，乘以步长就是该时段内的次数或字节数。旧版本的节点只报 req、5xx、lat，只显示有数据的部分。
-function RouteMetrics({ name, data, range }: { name: string; data: Map<string, Pt[]>; range: MetricRange }) {
+// divided：和上面的分组之间一条细线。empty：没有数据，数字都写「—」。quiet：图里也不写「暂无数据」（还没有容器时的占位）。
+function RouteMetrics({ name, data, range, divided, empty, quiet }: { name?: string; data: Map<string, Pt[]>; range: MetricRange; divided?: boolean; empty?: boolean; quiet?: boolean }) {
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   const get = (m: string) => data.get(m) ?? [];
@@ -479,49 +559,56 @@ function RouteMetrics({ name, data, range }: { name: string; data: Map<string, P
   if (data.has("p95")) stats.push({ label: m.p95Latency, value: p95 === undefined ? "—" : fmtMs(p95), title: m.p95Title });
   if (data.has("in")) stats.push({ label: m.inboundTraffic, value: fmtBytes(sum("in")) }, { label: m.outboundTraffic, value: fmtBytes(sum("out")) });
 
-  const pick = (defs: { metric: string; label: string; className: string }[], conv: (m: string) => Pt[]): ChartSeries[] =>
-    defs.filter((d) => data.has(d.metric)).map((d) => ({ label: d.label, className: d.className, points: conv(d.metric) }));
+  const pick = (defs: { metric: string; label: string; className: string; faded?: boolean }[], conv: (m: string) => Pt[]): ChartSeries[] =>
+    defs.filter((d) => data.has(d.metric)).map((d) => ({ label: d.label, className: d.className, faded: d.faded, points: conv(d.metric) }));
   const chart = (title: string, series: ChartSeries[], format: (v: number) => string, stacked = false) =>
     series.length > 0 && (
-      <Tile className="gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <span className="text-xs text-muted-foreground">{title}</span>
+      <div className="grid min-w-0 content-start gap-3">
+        {/* 标题和图例分两行，三张图的图形对齐。 */}
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-[13px] text-muted-foreground">{title}</span>
           {series.length > 1 && <Legend series={series} />}
         </div>
-        <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} stacked={stacked} height={88} />
-      </Tile>
+        <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} stacked={stacked} quiet={quiet} />
+      </div>
     );
 
   return (
-    <div className="grid gap-3">
-      <div className="font-mono text-xs text-muted-foreground">{m.portMapping(name)}</div>
-      <dl className={cn("grid grid-cols-3 gap-px overflow-hidden rounded-md bg-border", stats.length === 6 && "sm:grid-cols-6")}>
-        {stats.map((s) => (
-          <div key={s.label} className="grid gap-0.5 bg-subtle px-3 py-2" title={s.title}>
-            <dt className="text-xs text-muted-foreground">{s.label}</dt>
-            <dd className="font-mono text-sm font-medium tabular-nums">{s.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3">
-        {chart(
-          hasClasses ? m.requestCountByStatus : m.requestCount,
-          hasClasses ? pick(statusSeries, counts) : [{ label: m.requests, className: "text-info", points: counts("req") }],
-          fmtCount,
-          true,
-        )}
-        {chart(m.latency, pick(latencySeries, get), fmtMs)}
-        {chart(m.traffic, pick(trafficSeries, get), fmtRate)}
+    <>
+      <div className={cn("font-medium", divided && "mt-4 border-t pt-8")}>
+        {m.portMapping}
+        {name && " "}
+        {name && <span className="ml-1 font-mono text-[13px] font-normal text-muted-foreground">{name}</span>}
       </div>
-    </div>
+      <div className="grid gap-6">
+        <dl className="m-0 grid grid-cols-3 gap-8 max-md:gap-4 md:grid-cols-6">
+          {stats.map((s) => (
+            <div key={s.label} className="grid min-w-0 content-start gap-1" title={s.title}>
+              <dt className="text-muted-foreground">{s.label}</dt>
+              <dd className={cn("m-0", mcval)}>{empty ? "—" : s.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="grid grid-cols-1 gap-8 max-md:gap-4 md:grid-cols-3">
+          {chart(
+            m.requestCount,
+            hasClasses ? pick(statusSeries, counts) : [{ label: m.requests, className: "text-muted-foreground", points: counts("req") }],
+            (v) => Math.round(v).toLocaleString(locale),
+            true,
+          )}
+          {chart(m.latency, pick(latencySeries, get), fmtMs)}
+          {chart(m.traffic, pick(trafficSeries, get), fmtRate)}
+        </div>
+      </div>
+    </>
   );
 }
 
-// ContainerMetrics：一个容器的监控，容器组按服务分组。
+// ContainerMetrics：一个容器的资源：CPU、内存、下行、上行，容器组按服务分组。重启过的话在数值块下面写一行。
 export function ContainerMetrics({ projectId, nodeIds, container, range }: { projectId: string; nodeIds: string[]; container: string; range: MetricRange }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
-  if (q.isPending) return <Loading />;
-  if (q.error) return <Alert>{errorMessage(q.error)}</Alert>;
+  if (q.isPending) return <MetricsSkeleton />;
+  if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
   const services = new Map<string, Map<string, Pt[]>>();
   for (const s of q.data) {
     const { kind, path, metric } = parseName(s.name);
@@ -531,8 +618,23 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
     services.get(service)!.set(metric, toPoints(s));
   }
   if (services.size === 0) return <EmptyRow>{m.noData}</EmptyRow>;
-  // 单个容器（只有一个服务）不再重复名称。
-  const groups = [...services.entries()].map(([name, m]): [string, Map<string, Pt[]>] => [services.size > 1 ? name : "", m]);
-  return <MetricGroups groups={groups} range={range} />;
+  return (
+    <>
+      {[...services.entries()].map(([name, series]) => {
+        const restarts = Math.max(0, ...(series.get("restarts") ?? []).map((p) => p[1]));
+        return (
+          <div key={name} className="grid gap-4">
+            {/* 单个容器（只有一个服务）不再重复名称。 */}
+            {services.size > 1 && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
+            <MetricCells series={series} range={range} />
+            {restarts > 0 && (
+              <div className="text-muted-foreground">
+                {m.restarts} {restarts}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
 }
-

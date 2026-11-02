@@ -1,12 +1,20 @@
 // 监控图表（components/metrics.tsx、components/chart.tsx）。
 export default {
   ranges: {
+    "1h": "最近 1 小时",
+    "6h": "最近 6 小时",
+    "24h": "最近 24 小时",
+    "7d": "最近 7 天",
+    "30d": "最近 30 天",
+  },
+  rangesShort: {
     "1h": "1 小时",
     "6h": "6 小时",
     "24h": "24 小时",
     "7d": "7 天",
     "30d": "30 天",
   },
+  rangeLabel: "时间范围",
   resourceUsage: "资源占用",
   memory: "内存",
   disk: "磁盘",
@@ -30,9 +38,8 @@ export default {
   p95Title: "各时段 P95 按请求数加权平均",
   inboundTraffic: "入站流量",
   outboundTraffic: "出站流量",
-  portMapping: (name: string) => `端口映射 ${name}`,
+  portMapping: "端口映射",
   requestCount: "请求数",
-  requestCountByStatus: "请求数（按状态码）",
   latency: "耗时",
   traffic: "流量",
   seriesSeparator: "、",

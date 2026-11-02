@@ -4,11 +4,13 @@ import { locale, t } from "@/i18n";
 
 // 时间图表：折线（可有多条）或堆叠柱。横轴是选定的时间范围 [from, to]，不是数据的范围，
 // 所以一段时间没有数据时那一段就是空的。鼠标移上去显示该时刻各条序列的值。
+// 没有背景网格线和纵坐标，只留图形和 5 个时间刻度；具体数值看上面的数字和悬停提示（见 docs/ui.md）。
 // 颜色用 className 里的文字颜色（例如 text-info），图形用 currentColor。
 
 export type Pt = [time: number, value: number]; // time 是 Unix 秒
 
-export type ChartSeries = { label: string; points: Pt[]; className: string };
+// faded：堆叠柱里的常规部分（2xx）画淡一些，让 4xx、5xx 显眼。
+export type ChartSeries = { label: string; points: Pt[]; className: string; faded?: boolean };
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -29,11 +31,31 @@ const timeFormat = new Intl.DateTimeFormat(locale, clock);
 const secondsFormat = new Intl.DateTimeFormat(locale, { ...clock, second: "2-digit" });
 const dateFormat = new Intl.DateTimeFormat(locale, { ...clock, month: "2-digit", day: "2-digit" });
 const dateSecondsFormat = new Intl.DateTimeFormat(locale, { ...clock, second: "2-digit", month: "2-digit", day: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat(locale, { month: "2-digit", day: "2-digit" });
 
 // fmtTime：24 小时以内只写时刻，更长的范围带上日期。
 export function fmtTime(t: number, withDate: boolean, withSeconds = false) {
   const format = withDate ? (withSeconds ? dateSecondsFormat : dateFormat) : withSeconds ? secondsFormat : timeFormat;
   return format.format(t * 1000);
+}
+
+// smoothPath：单调三次曲线，曲线不会冲过数据点，平稳的数据不会画出假的起伏。
+function smoothPath(pts: [number, number][]) {
+  const n = pts.length;
+  const slope = pts.slice(1).map((p, i) => (p[1] - pts[i][1]) / Math.max(p[0] - pts[i][0], 1e-6));
+  const tangent = pts.map((_, i) => {
+    if (i === 0) return slope[0];
+    if (i === n - 1) return slope[n - 2];
+    const a = slope[i - 1];
+    const b = slope[i];
+    return a * b <= 0 ? 0 : (2 * a * b) / (a + b);
+  });
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = (pts[i + 1][0] - pts[i][0]) / 3;
+    d += `C${pts[i][0] + h} ${pts[i][1] + tangent[i] * h} ${pts[i + 1][0] - h} ${pts[i + 1][1] - tangent[i + 1] * h} ${pts[i + 1][0]} ${pts[i + 1][1]}`;
+  }
+  return d;
 }
 
 export function TimeChart({
@@ -43,9 +65,10 @@ export function TimeChart({
   step,
   format,
   stacked,
-  height = 72,
+  height = 112,
   axis = true,
   minMax = 0,
+  quiet,
   className,
 }: {
   series: ChartSeries[];
@@ -58,6 +81,8 @@ export function TimeChart({
   axis?: boolean;
   // minMax：纵轴上限至少是多少。数值很小时（例如空闲容器 0.01% 的 CPU），不让微小波动撑满整个图。
   minMax?: number;
+  // quiet：没有数据时也不写「暂无数据」（还没有容器时的占位）。
+  quiet?: boolean;
   className?: string;
 }) {
   const { ref, width } = useWidth();
@@ -103,14 +128,7 @@ export function TimeChart({
           seg.length === 1 ? (
             <circle key={j} cx={x(seg[0][0])} cy={y(seg[0][1])} r={1.5} fill="currentColor" />
           ) : (
-            <polyline
-              key={j}
-              points={seg.map((p) => `${x(p[0])},${y(p[1])}`).join(" ")}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.25}
-              strokeLinejoin="round"
-            />
+            <path key={j} d={smoothPath(seg.map((p) => [x(p[0]), y(p[1])]))} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
           ),
         )}
       </g>
@@ -130,16 +148,17 @@ export function TimeChart({
             const top = y(acc + v);
             const bottom = y(acc);
             acc += v;
-            return <rect key={i} className={s.className} x={x(t)} y={top} width={barW} height={Math.max(bottom - top, 0.5)} fill="currentColor" />;
+            return <rect key={i} className={s.className} x={x(t)} y={top} width={barW} height={Math.max(bottom - top, 0.5)} fill="currentColor" opacity={s.faded ? 0.5 : undefined} />;
           })}
         </g>
       );
     });
 
   const tipLeft = hover !== null && x(hover) > width / 2;
+  const ticks = Array.from({ length: 5 }, (_, i) => from + (span * i) / 4);
 
   return (
-    <div className={cn("grid gap-1", className)}>
+    <div className={cn("grid gap-3", className)}>
       <div
         ref={ref}
         className="relative touch-none"
@@ -148,18 +167,16 @@ export function TimeChart({
         onPointerLeave={() => setHover(null)}
       >
         {width > 0 && (
-          <svg width={width} height={height} className="block overflow-visible" role="img" aria-label={series.map((s) => s.label).join(t.metrics.seriesSeparator)}>
-            <line x1={0} x2={width} y1={height - 0.5} y2={height - 0.5} className="stroke-border" />
+          <svg width={width} height={height} className="absolute inset-0 block overflow-visible" role="img" aria-label={series.map((s) => s.label).join(t.metrics.seriesSeparator)}>
             {stacked ? bars() : series.map(lines)}
-            {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={height} className="stroke-foreground/30" strokeDasharray="2 2" />}
+            {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={height} className="stroke-muted-foreground" strokeDasharray="3 3" />}
           </svg>
         )}
-        {axis && !empty && <span className="pointer-events-none absolute top-0 left-0 font-mono text-[10px] leading-none text-muted-foreground/80">{format(peak)}</span>}
-        {empty && <span className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">{t.metrics.noData}</span>}
+        {empty && !quiet && <span className="absolute inset-0 flex items-center justify-center text-xs leading-4 text-muted-foreground">{t.metrics.noData}</span>}
         {hover !== null && (
           <div
             className={cn(
-              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-0.5 rounded-md border bg-card px-2 py-1.5 text-[11px] whitespace-nowrap shadow-md",
+              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap shadow-xl",
               tipLeft ? "-translate-x-full" : "",
             )}
             style={{ left: x(hover) + (tipLeft ? -8 : 8) }}
@@ -168,33 +185,34 @@ export function TimeChart({
             {series.map((s, i) => {
               const v = byTime[i].get(hover);
               return (
-                <span key={i} className="flex items-center gap-1.5">
-                  <span className={cn("size-1.5 shrink-0 rounded-full bg-current", s.className)} />
-                  {series.length > 1 && <span className="text-muted-foreground">{s.label}</span>}
-                  <span className="ml-auto pl-2 font-mono tabular-nums">{v === undefined ? "—" : format(v)}</span>
-                </span>
+                <div key={i} className="flex items-center gap-2">
+                  <i className={cn("size-2.5 shrink-0 rounded-[2px] bg-current", s.className)} />
+                  <span className="text-muted-foreground">{s.label}</span>
+                  <b className="ml-auto pl-3 font-mono font-medium">{v === undefined ? "—" : format(v)}</b>
+                </div>
               );
             })}
           </div>
         )}
       </div>
       {axis && (
-        <div className="flex justify-between font-mono text-[10px] text-muted-foreground/80">
-          <span>{fmtTime(from, withDate)}</span>
-          <span>{fmtTime(to, withDate)}</span>
+        <div aria-hidden className="flex justify-between text-xs leading-4 text-muted-foreground">
+          {ticks.map((tick) => (
+            <span key={tick}>{withDate ? dayFormat.format(tick * 1000) : fmtTime(tick, false)}</span>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// Legend：图例，彩色圆点加名称。
+// Legend：图例，10px 的方块加名称。
 export function Legend({ series }: { series: { label: string; className: string }[] }) {
   return (
-    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-muted-foreground">
+    <span className="flex flex-wrap gap-4 text-[13px] leading-4 text-muted-foreground">
       {series.map((s) => (
-        <span key={s.label} className="flex items-center gap-1">
-          <span className={cn("size-1.5 rounded-full bg-current", s.className)} />
+        <span key={s.label} className="inline-flex items-center gap-1">
+          <i className={cn("size-2.5 rounded-[2px] bg-current", s.className)} />
           {s.label}
         </span>
       ))}

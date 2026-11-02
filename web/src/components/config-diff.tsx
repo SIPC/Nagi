@@ -1,9 +1,6 @@
 // 草稿和当前运行版本的对比：把配置展开成文本，按行比较。
-import { Fragment, useState } from "react";
-import { ChevronRight } from "lucide-react";
 import type { ContainerConfig } from "@/gen/nagi/v1/common_pb";
 import { portsToText } from "@/lib/config";
-import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 
 function configLines(c: ContainerConfig | undefined): string[] {
@@ -52,8 +49,8 @@ function diffLines(a: string[], b: string[]): Op[] {
       out.push({ kind: "same", text: a[i] });
       i++;
       j++;
-    } else if (j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j])) out.push({ kind: "add", text: b[j++] });
-    else out.push({ kind: "del", text: a[i++] });
+    } else if (i < m && (j >= n || dp[i + 1][j] >= dp[i][j + 1])) out.push({ kind: "del", text: a[i++] });
+    else out.push({ kind: "add", text: b[j++] });
   }
   return out;
 }
@@ -61,35 +58,17 @@ function diffLines(a: string[], b: string[]): Op[] {
 // 敏感变量的值不直接显示。
 const maskLine = (text: string) => text.replace(/^(env(?: \S+)?: [^=]*(?:pass|pwd|secret|token|key|credential)[^=]*=).+$/i, "$1••••••");
 
+// ConfigDiff：「相对 vN 的改动」区块的内容：只列有改动的行，新增绿色、删除红色。
 export function ConfigDiff({ deployed, draft }: { deployed: ContainerConfig | undefined; draft: ContainerConfig | undefined }) {
-  const [open, setOpen] = useState(true);
-  const ops = diffLines(configLines(deployed), configLines(draft));
-  const changed = ops.filter((o) => o.kind !== "same").length;
+  const ops = diffLines(configLines(deployed), configLines(draft)).filter((o) => o.kind !== "same");
+  if (ops.length === 0) return <p className="text-muted-foreground">{t.projectContainers.config.diffNone}</p>;
   return (
-    <div className="rounded-md border">
-      <button type="button" className="flex w-full cursor-pointer items-center gap-1.5 px-3.5 py-2.5 text-left text-[13px] font-medium" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
-        {t.projectContainers.config.diffTitle}
-        <span className="font-normal text-muted-foreground">{t.projectContainers.config.diffCount(changed)}</span>
-      </button>
-      {open && (
-        <div className="overflow-x-auto border-t py-2 font-mono text-xs leading-relaxed">
-          {changed === 0 ? (
-            <p className="px-3.5 font-sans text-[13px] text-muted-foreground">{t.projectContainers.config.diffNone}</p>
-          ) : (
-            ops.map((o, i) => (
-              <Fragment key={i}>
-                {o.kind !== "same" && (
-                  <div className={cn("px-3.5 whitespace-pre", o.kind === "add" ? "bg-success/10" : "bg-destructive/10")}>
-                    <span className="mr-2 select-none text-muted-foreground">{o.kind === "add" ? "+" : "-"}</span>
-                    {maskLine(o.text)}
-                  </div>
-                )}
-              </Fragment>
-            ))
-          )}
+    <div className="overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre">
+      {ops.map((o, i) => (
+        <div key={i} className={o.kind === "add" ? "text-success" : "text-destructive"}>
+          {`${o.kind === "add" ? "+" : "-"} ${maskLine(o.text)}`}
         </div>
-      )}
+      ))}
     </div>
   );
 }
