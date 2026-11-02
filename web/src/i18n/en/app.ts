@@ -2,9 +2,12 @@ import type zh from "../zh/app";
 
 export default {
   nav: {
+    overview: "Overview",
     projects: "Projects",
     nodes: "Nodes",
     settings: "Settings",
+    open: "Open navigation",
+    close: "Close navigation",
   },
   notFound: {
     title: "Page not found",
@@ -23,6 +26,7 @@ export default {
     empty: "No results",
     containers: "Containers",
     newProject: "New project",
+    pages: "Pages",
   },
   theme: {
     label: "Theme",

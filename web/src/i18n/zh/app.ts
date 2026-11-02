@@ -1,9 +1,12 @@
 // 外框（导航、备用面板提示）、终端、操作输出和端口格式检查。
 export default {
   nav: {
+    overview: "概览",
     projects: "项目",
     nodes: "节点",
     settings: "设置",
+    open: "打开导航",
+    close: "关闭导航",
   },
   notFound: {
     title: "页面不存在",
@@ -22,6 +25,7 @@ export default {
     empty: "没有匹配的结果",
     containers: "容器",
     newProject: "新建项目",
+    pages: "页面",
   },
   theme: {
     label: "主题",

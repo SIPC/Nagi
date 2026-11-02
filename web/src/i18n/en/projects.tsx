@@ -1,6 +1,18 @@
 import type zh from "../zh/projects";
 
 export default {
+  attention: {
+    title: (n) => (n === 1 ? "1 item needs attention" : `${n} items need attention`),
+    standby: "standby panel disconnected",
+    totp: "two-factor authentication off",
+    masterKey: "master key not backed up",
+    separator: ", ",
+    view: "View",
+    collapse: "Collapse",
+  },
+  loadFailed: {
+    title: "Can't load projects",
+  },
   reminders: {
     totpTitle: "Two-factor authentication is off",
     // 链接自带左右外边距（mx-1），当作空格；句末不加句号，免得句号前空一格。
@@ -13,14 +25,16 @@ export default {
     dismiss: "Don't remind me",
   },
   title: "Projects",
-  description: "A project is a group of containers that work together. Containers can run on different nodes and reach each other by name.",
+  description: "A group of containers that work together. They can run on different nodes.",
+  newShort: "New",
   newProject: "New project",
   empty: {
     title: "No projects",
     text: "Create a project, then add containers or container groups (a compose file) and choose a node for each container.",
   },
   filter: {
-    placeholder: "Filter projects or containers",
+    placeholder: "Filter projects or containers…",
+    label: "Filter projects or containers",
     sort: "Sort",
     byCreated: "Newest",
     byName: "Name",
@@ -40,7 +54,8 @@ export default {
     noContainers: "No containers",
     nodeOffline: "Node offline",
     tookOver: "Failed over",
-    failover: "Failover",
+    failover: "Hot standby",
+    imageUpdate: "Image update available",
     containers: (n) => (n === 1 ? "1 container" : `${n} containers`),
     portMappings: (n) => (n === 1 ? "1 port mapping" : `${n} port mappings`),
     moreContainers: (n) => `${n} more`,
@@ -56,6 +71,7 @@ export default {
       "Holds the container's runtime files, data and snapshots. Must be an absolute path to a directory that doesn't exist or is empty. Defaults to <projects root>/<project name>/<container name>, with Chinese characters converted to pinyin and a suffix such as -2 added on conflict.",
   },
   create: {
+    editNetwork: "Edit",
     description: "Projects aren't deployed automatically. Deploy manually once the configuration is ready.",
     basics: "General",
     name: "Name",

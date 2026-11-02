@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Box, Boxes, Plus, Search, Server, Settings } from "lucide-react";
+import { Activity, Box, Boxes, Plus, Search, Server, Settings } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DialogContent } from "@/components/ui/dialog";
@@ -25,10 +25,10 @@ export function SearchButton({ compact }: { compact?: boolean }) {
     );
   }
   return (
-    <Button readOnlyOk variant="outline" size="sm" className="w-full justify-start gap-2 font-normal text-muted-foreground" onClick={open}>
+    <Button readOnlyOk variant="ghost" size="sm" className="w-full justify-start gap-2 px-2 text-muted-foreground" onClick={open}>
       <Search />
       {t.app.search.button}
-      <kbd className="ml-auto font-mono text-[11px]">{isMac ? "⌘K" : "Ctrl K"}</kbd>
+      <kbd className="ml-auto px-1 font-sans text-xs leading-5">{isMac ? "⌘K" : "Ctrl K"}</kbd>
     </Button>
   );
 }
@@ -69,6 +69,12 @@ export function CommandPalette() {
             <CommandInput placeholder={t.app.search.placeholder} autoFocus />
             <CommandList>
               <CommandEmpty>{t.app.search.empty}</CommandEmpty>
+              <CommandGroup heading={t.app.search.pages}>
+                <CommandItem value="overview" keywords={[t.app.nav.overview]} onSelect={() => go(() => navigate({ to: "/overview" }))}>
+                  <Activity />
+                  {t.app.nav.overview}
+                </CommandItem>
+              </CommandGroup>
               {list.length > 0 && (
                 <CommandGroup heading={t.app.nav.projects}>
                   {list.map((s) => (

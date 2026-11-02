@@ -49,9 +49,12 @@ export function stateOf(services: ServiceStatus[], deployed: boolean, offline: s
   if (!deployed) return { tone: "neutral", label: s.notDeployed };
   const total = services.length;
   const running = services.filter((v) => v.state === "running").length;
-  if (services.some((v) => v.health === "unhealthy" || v.state === "restarting")) return { tone: "danger", label: s.abnormal };
+  if (services.some((v) => v.health === "unhealthy")) return { tone: "danger", label: s.unhealthy };
+  if (services.some((v) => v.state === "dead")) return { tone: "danger", label: s.abnormal };
   if (offline.length > 0) return { tone: "warning", label: s.nodesOffline(offline) };
-  if (total > 0 && running === total) return { tone: "success", label: s.running };
+  if (services.some((v) => v.state === "restarting")) return { tone: "warning", label: s.restarting };
+  if (total > 0 && services.every((v) => v.state === "paused")) return { tone: "warning", label: s.paused };
+  if (total > 0 && running === total) return services.some((v) => v.health === "starting") ? { tone: "warning", label: s.starting } : { tone: "success", label: s.running };
   if (running > 0) return { tone: "warning", label: s.partial(running, total) };
   return { tone: "neutral", label: s.stopped };
 }

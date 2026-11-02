@@ -2,6 +2,18 @@
 import type { ReactNode } from "react";
 
 export default {
+  attention: {
+    title: (n: number) => `需要处理 ${n} 项`,
+    standby: "备用面板未连接",
+    totp: "未开启两步验证",
+    masterKey: "未备份主密钥",
+    separator: "、",
+    view: "查看",
+    collapse: "收起",
+  },
+  loadFailed: {
+    title: "无法加载项目",
+  },
   reminders: {
     totpTitle: "未开启两步验证",
     totpText: (link: ReactNode) => <>建议在{link}中开启。</>,
@@ -11,14 +23,16 @@ export default {
     dismiss: "不再提醒",
   },
   title: "项目",
-  description: "项目由一组协同工作的容器组成，容器可分布在不同节点，并按名称互相访问。",
+  description: "一组协同工作的容器，可以分布在不同节点。",
+  newShort: "新建",
   newProject: "新建项目",
   empty: {
     title: "暂无项目",
     text: "新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。",
   },
   filter: {
-    placeholder: "筛选项目或容器",
+    placeholder: "筛选项目或容器…",
+    label: "筛选项目或容器",
     sort: "排序",
     byCreated: "最近创建",
     byName: "按名称",
@@ -38,7 +52,8 @@ export default {
     noContainers: "暂无容器",
     nodeOffline: "节点离线",
     tookOver: "已顶替",
-    failover: "顶替",
+    failover: "热备",
+    imageUpdate: "镜像可更新",
     containers: (n: number) => `${n} 个容器`,
     portMappings: (n: number) => `${n} 个端口映射`,
     moreContainers: (n: number) => `还有 ${n} 个`,
@@ -54,6 +69,7 @@ export default {
       "存放容器的运行文件、数据和快照。须为绝对路径，且目录不存在或为空。留空时使用默认目录：<项目根目录>/<项目名>/<容器名>，项目名转为拼音，重名时追加 -2 等后缀。",
   },
   create: {
+    editNetwork: "修改",
     description: "创建后不自动部署，确认配置后可手动部署。",
     basics: "基本信息",
     name: "名称",

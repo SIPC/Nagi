@@ -23,6 +23,7 @@ import projectNetwork from "./projectNetwork";
 import projectSettings from "./projectSettings";
 import containerForm from "./containerForm";
 import metrics from "./metrics";
+import overview from "./overview";
 
 export default {
   common,
@@ -49,4 +50,5 @@ export default {
   projectSettings,
   containerForm,
   metrics,
+  overview,
 } satisfies Messages;

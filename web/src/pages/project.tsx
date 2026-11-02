@@ -1,18 +1,21 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { LayoutGrid, Network, Settings2 } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ArrowUpCircle, ChevronLeft, Plus } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
-import { containerUsage, projectMetricNodes, UsageBars, useProjectMetrics } from "@/components/metrics";
-import { Alert, Badge, dotColor, Loading, Tabs } from "@/components/ui";
-import { containerKind, ContainersTab, type DetailView } from "@/pages/project-containers";
+import { containerUsage, projectMetricNodes, UsageRings, useProjectMetrics } from "@/components/metrics";
+import { Badge, ButtonLink, dotColor, Loading, QueryError, Tabs } from "@/components/ui";
+import { containerKind, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
 import { SettingsTab } from "@/pages/project-settings";
+import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { Container } from "@/gen/nagi/v1/common_pb";
+
+type ProjectData = Awaited<ReturnType<typeof projectClient.getProject>>;
 
 // 项目页：项目由多个容器组成，每个容器指定一个节点运行，各自部署、记版本、回滚（见 docs/agent.md#项目与容器）。
 // 内容分三块：概览（容器列表和监控）、网络、设置；当前一块记在地址的 tab 参数里。每个容器有自己的页（快照、顶替、迁移在容器页的「数据」里）。
@@ -29,44 +32,50 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
     queryFn: () => projectClient.getProject({ projectId }),
     refetchInterval: 5000,
   });
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
 
   if (project.isPending) return <Loading />;
   if (project.error) {
     return (
       <>
         <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: projectId }]} />
-        <Alert>{errorMessage(project.error)}</Alert>
+        <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />
+        <ButtonLink to="/projects" variant="outline" readOnlyOk className="mt-4">
+          {t.project.back}
+        </ButtonLink>
       </>
     );
   }
   const p = project.data.project;
-  const services = project.data.status?.services ?? [];
-  const imageUpdates = project.data.status?.imageUpdates ?? [];
   if (!p) return null;
+  return <ProjectBody p={p} services={project.data.status?.services ?? []} imageUpdates={project.data.status?.imageUpdates ?? []} tab={tab} onTab={onTab} />;
+}
+
+function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable<ProjectData["project"]>; services: NonNullable<ProjectData["status"]>["services"]; imageUpdates: NonNullable<ProjectData["status"]>["imageUpdates"]; tab: ProjectTab; onTab: (t: ProjectTab) => void }) {
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
   const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
+  const { actions, deploy, busy, output, hasOutput } = useProjectActions(p, imageUpdates);
 
   return (
     <>
-      <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: p.name }]} className="xl:hidden" />
-      {/* 宽屏时项目名已在项目栏里：概览仍显示项目标题和元信息，网络、设置只显示这一块的标题。 */}
-      <div className={cn(tab !== "containers" && "xl:hidden")}>
+      <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: p.name }]} className="max-md:hidden xl:hidden" />
+      {/* 宽屏和手机上项目名已在项目栏、标题栏里：概览仍显示项目标题和元信息，网络、设置只显示这一块的标题。 */}
+      <div className={cn(tab !== "containers" && "max-md:hidden xl:hidden")}>
         <PageHeader
           title={
             <>
-              <span className="hidden xl:inline">{t.project.sections.overview}</span>
-              <span className="xl:hidden">{p.name}</span>
-              <span className="flex items-center gap-3 xl:hidden">
+              <span className="hidden font-medium! tracking-tight! max-md:inline xl:inline">{t.project.sections.overview}</span>
+              <span className="max-md:hidden xl:hidden">{p.name}</span>
+              <span className="flex items-center gap-3 max-md:hidden xl:hidden">
                 <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
               </span>
-              {p.stateful && <Badge>{t.project.stateful}</Badge>}
             </>
           }
+          actions={tab === "containers" ? actions : undefined}
           meta={
             <>
-              <span className="font-mono text-xs">{p.networkName}</span>
-              <span>{nodeIds.length > 0 ? t.project.nodes(nodeIds.map(nodeName)) : t.project.noContainers}</span>
+              <span className="max-md:hidden xl:hidden">{p.networkName}</span>
+              {nodeIds.length > 0 && <span>{t.project.nodes(nodeIds.map(nodeName))}</span>}
               <span>{countContainers(p.containers)}</span>
               {p.rebuiltAt ? (
                 <span title={t.project.rebuiltHint}>{t.project.rebuiltAt(timeAgo(toDate(p.rebuiltAt)))}</span>
@@ -78,12 +87,12 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
         />
       </div>
       {tab !== "containers" && (
-        <div className="hidden xl:block">
+        <div className="hidden max-md:block xl:block">
           <PageHeader title={sectionTitles[tab]} />
         </div>
       )}
       <Tabs
-        className="mb-6 xl:hidden"
+        className="mb-6 max-md:hidden xl:hidden"
         value={tab}
         onChange={onTab}
         items={[
@@ -92,7 +101,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
           { value: "settings", label: t.project.tabs.settings },
         ]}
       />
-      {tab === "containers" && <ContainersTab project={p} services={services} imageUpdates={imageUpdates} />}
+      {tab === "containers" && <ContainersTab project={p} services={services} deploy={deploy} busy={busy} output={output} hasOutput={hasOutput} />}
       {tab === "network" && <NetworkTab project={p} services={services} />}
       {tab === "settings" && <SettingsTab project={p} />}
     </>
@@ -106,21 +115,23 @@ export function ProjectSplit({
   tab,
   container,
   view,
+  adding,
   children,
 }: {
   projectId: string;
   tab: ProjectTab;
   container?: string;
   view?: DetailView;
+  adding?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <>
-      <aside className="hidden motion-safe:animate-fade-in xl:sticky xl:top-0 xl:block xl:h-screen xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:border-r xl:px-4 xl:pt-10 xl:pb-8">
-        <ProjectColumn projectId={projectId} tab={tab} container={container} view={view} />
+      <aside className="hidden motion-safe:animate-fade-in xl:sticky xl:top-0 xl:block xl:h-screen xl:w-70 xl:shrink-0 xl:overflow-y-auto xl:border-r xl:px-3 xl:pt-8 xl:pb-4">
+        <ProjectColumn projectId={projectId} tab={tab} container={container} view={view} adding={adding} />
       </aside>
-      <div className="min-w-0 flex-1 xl:px-10 xl:pt-10 xl:pb-16">
-        <div key={container ? "c/" + container : tab} className="animate-fade-in motion-safe:animate-pane-in xl:mx-auto xl:max-w-6xl">
+      <div className="min-w-0 flex-1 xl:px-8 xl:pt-8 xl:pb-16">
+        <div key={adding ? "add" : container ? "c/" + container : tab} className="animate-fade-in motion-safe:animate-pane-in xl:max-w-[1120px]">
           {children}
         </div>
       </div>
@@ -128,9 +139,72 @@ export function ProjectSplit({
   );
 }
 
+// navState：项目导航里容器的状态点。节点离线时容器的状态是未知。
+function navState(m: Container, node: Node | undefined, services: NonNullable<ProjectData["status"]>["services"]) {
+  if (node?.online === false) return { tone: "warning" as const, label: t.project.column.nodeOffline };
+  return stateOf(
+    services.filter((s) => s.container === m.name),
+    m.deployedVersion > 0n,
+  );
+}
+
+// MobileProjectNav：手机的全屏导航在项目里的内容，和项目栏同样的入口，行高 44。点容器时同样保留当前的标签。
+export function MobileProjectNav({ projectId }: { projectId: string }) {
+  const location = useRouterState({ select: (s) => s.location });
+  const project = useQuery({ queryKey: ["project", projectId], queryFn: () => projectClient.getProject({ projectId }) });
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  if (project.isPending) return <Loading />;
+  if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
+  const p = project.data.project;
+  if (!p) return null;
+  const parts = location.pathname.split("/").filter(Boolean);
+  const search = location.search as { tab?: ProjectTab; view?: DetailView };
+  const container = parts[2] === "c" ? decodeURIComponent(parts[3] ?? "") : "";
+  const onSection = parts.length === 2;
+  const tab = search.tab ?? "containers";
+  const item = (active: boolean) => cn("flex min-h-11 items-center gap-2 rounded-md px-2 text-sm transition-colors hover:bg-accent", active && "bg-accent");
+  const label = "mt-1 flex h-6 items-center px-2 text-xs font-medium text-muted-foreground";
+  return (
+    <nav className="grid gap-1" aria-label={p.name}>
+      <Link to="/projects" className={item(false)}>
+        <ChevronLeft className="size-4" />
+        {t.project.column.allProjects}
+      </Link>
+      <Link to="/projects/$projectId" params={{ projectId: p.id }} className={item(onSection && tab === "containers")}>
+        {t.project.sections.overview}
+      </Link>
+      <div className={label}>
+        {t.project.column.containers}
+        <span className="ml-1 tabular-nums">{p.containers.length}</span>
+      </div>
+      {p.containers.map((m) => {
+        const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
+        const st = navState(m, node, project.data.status?.services ?? []);
+        return (
+          <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: search.view }} className={item(m.name === container)} title={st.label}>
+            <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
+            <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
+            <span className="min-w-0 truncate">{m.name}</span>
+            {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
+            <span className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+          </Link>
+        );
+      })}
+      <div className={label}>{t.project.column.project}</div>
+      <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} className={item(onSection && tab === "network")}>
+        {t.project.sections.network}
+        {p.routes.length > 0 && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{p.routes.length}</span>}
+      </Link>
+      <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} className={item(onSection && tab === "settings")}>
+        {t.project.sections.settings}
+      </Link>
+    </nav>
+  );
+}
+
 // ProjectColumn：项目栏。概览、各个容器（状态、节点、当前 CPU 和内存）、网络、设置，选中的一项由一块背景标出，换选中项时这块背景滑过去。
 // 点容器时保留容器页当前的标签，方便对比几个容器的日志。
-function ProjectColumn({ projectId, tab, container, view }: { projectId: string; tab: ProjectTab; container?: string; view?: DetailView }) {
+function ProjectColumn({ projectId, tab, container, view, adding }: { projectId: string; tab: ProjectTab; container?: string; view?: DetailView; adding?: boolean }) {
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
@@ -143,25 +217,30 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
   const { ref, box } = useActiveBox();
 
   if (project.isPending) return <Loading />;
-  if (project.error) return <Alert>{errorMessage(project.error)}</Alert>;
+  if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
   if (!p) return null;
   const services = project.data.status?.services ?? [];
-  const section = (t: ProjectTab) => !container && tab === t;
-  const item = "relative flex items-center gap-2.5 rounded-md px-2.5 transition-colors [&_svg]:size-4";
-  const idle = "text-muted-foreground hover:bg-accent/50 hover:text-foreground";
+  const imageUpdates = project.data.status?.imageUpdates ?? [];
+  const section = (t: ProjectTab) => !container && !adding && tab === t;
+  const item = "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors";
+  const idle = "hover:bg-accent/50";
 
   return (
-    <div className="grid grid-cols-1 gap-6">
-      <div className="px-2.5">
-        <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }]} />
-        <h2 className="truncate text-lg font-semibold tracking-tight">{p.name}</h2>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+    <div className="grid grid-cols-1 gap-4">
+      <div className="grid gap-1 px-2">
+        <Link to="/projects" className="text-[13px] leading-5">
+          {t.project.breadcrumb}
+        </Link>
+        <h2 className="truncate leading-5 font-medium">{p.name}</h2>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
-          <span className="font-mono text-xs">{p.networkName}</span>
+          </span>
+          <span className="font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</span>
         </div>
       </div>
-      <nav ref={ref} className="relative grid gap-0.5" aria-label={p.name}>
+      <nav ref={ref} className="relative grid gap-1" aria-label={p.name}>
         {box && (
           <div
             aria-hidden
@@ -172,29 +251,21 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
             style={{ transform: `translateY(${box.top}px)`, height: box.height }}
           />
         )}
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId: p.id }}
-          data-active={section("containers") || undefined}
-          className={cn(item, "h-8 text-sm", section("containers") ? "font-medium text-foreground" : idle)}
-        >
-          <LayoutGrid />
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} data-active={section("containers") || undefined} className={cn(item, !section("containers") && idle)}>
           {t.project.sections.overview}
         </Link>
-        <div className="mt-4 mb-1 flex items-center px-2.5 text-xs font-medium text-muted-foreground">
-          {t.project.column.containers}
-          <span className="ml-1.5 tabular-nums opacity-70">{p.containers.length}</span>
+        <div className="relative mt-2 flex h-6 items-center justify-between px-2 text-xs font-medium text-muted-foreground">
+          <span>
+            {t.project.column.containers}
+            <span className="ml-1 tabular-nums">{p.containers.length}</span>
+          </span>
+          <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="xs" className="-mr-1 size-6 p-0 text-foreground" aria-label={t.projectContainers.table.addContainer}>
+            <Plus />
+          </ButtonLink>
         </div>
-        {p.containers.length === 0 && <p className="px-2.5 py-1 text-[13px] text-muted-foreground">{t.project.noContainers}</p>}
         {p.containers.map((m) => {
           const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
-          const st =
-            node?.online === false
-              ? { tone: "warning" as const, label: t.project.column.nodeOffline }
-              : stateOf(
-                  services.filter((s) => s.container === m.name),
-                  m.deployedVersion > 0n,
-                );
+          const st = navState(m, node, services);
           const active = m.name === container;
           const u = node?.online === false ? undefined : usage.get(m.name);
           return (
@@ -204,45 +275,31 @@ function ProjectColumn({ projectId, tab, container, view }: { projectId: string;
               params={{ projectId: p.id, container: m.name }}
               search={{ view }}
               data-active={active || undefined}
-              className={cn("relative flex items-center gap-3 rounded-md px-2.5 py-2 transition-colors", !active && "hover:bg-accent/50")}
+              className={cn("relative grid gap-1 rounded-md p-2 transition-colors", !active && "hover:bg-accent/50")}
             >
-              <span className="grid min-w-0 flex-1 gap-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-sm font-medium">{m.name}</span>
-                  {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
-                  {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-                </span>
-                {/* 状态只用圆点的颜色表示，文字放在悬停提示和读屏里。 */}
-                <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" title={st.label}>
-                  <span className={cn("size-2 shrink-0 rounded-full", dotColor[st.tone])} />
-                  <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
-                  <span className="truncate text-xs">{node?.name ?? m.nodeId}</span>
-                </span>
+              <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
+                <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
+                <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
+                <span className={cn("truncate", active && "font-medium")}>{m.name}</span>
+                {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
+                {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
+                {imageUpdates.some((x) => x.container === m.name) && <ArrowUpCircle aria-label={t.projectContainers.imageUpdates.title} className="size-3.5 shrink-0 text-info" />}
+                <span className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
               </span>
-              <UsageBars usage={u} memFallback={memFallback} className="w-32 shrink-0" />
+              {node?.online === false ? (
+                <span className="pl-3.5 text-xs text-warning-text">{t.project.column.nodeOffline}</span>
+              ) : (
+                <UsageRings usage={u} memFallback={memFallback} className="pl-3.5" />
+              )}
             </Link>
           );
         })}
-        <div className="my-3 border-t" />
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId: p.id }}
-          search={{ tab: "network" }}
-          data-active={section("network") || undefined}
-          className={cn(item, "h-8 text-sm", section("network") ? "font-medium text-foreground" : idle)}
-        >
-          <Network />
+        <div className="h-1" />
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, !section("network") && idle)}>
           {t.project.sections.network}
-          {p.routes.length > 0 && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{p.routes.length}</span>}
+          {p.routes.length > 0 && <span className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground">{p.routes.length}</span>}
         </Link>
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId: p.id }}
-          search={{ tab: "settings" }}
-          data-active={section("settings") || undefined}
-          className={cn(item, "h-8 text-sm", section("settings") ? "font-medium text-foreground" : idle)}
-        >
-          <Settings2 />
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !section("settings") && idle)}>
           {t.project.sections.settings}
         </Link>
       </nav>
@@ -267,10 +324,11 @@ function useActiveBox() {
   return { ref, box };
 }
 
-// countContainers 按种类数，例如"2 个容器，1 个容器组"。
+// countContainers 按种类数，例如"2 个容器，1 个容器组，1 个有状态"。
 function countContainers(cs: Container[]) {
   if (cs.length === 0) return t.project.noContainers;
   const groups = cs.filter((c) => c.kind === "group").length;
   const singles = cs.length - groups;
-  return [singles > 0 && t.project.containerCount(singles), groups > 0 && t.project.groupCount(groups)].filter(Boolean).join(t.project.countSeparator);
+  const stateful = cs.filter((c) => c.stateful).length;
+  return [singles > 0 && t.project.containerCount(singles), groups > 0 && t.project.groupCount(groups), stateful > 0 && t.project.statefulCount(stateful)].filter(Boolean).join(t.project.countSeparator);
 }

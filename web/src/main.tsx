@@ -13,9 +13,11 @@ import {
 import { authClient, isNotFound, isUnauthenticated, setupClient } from "@/lib/api";
 import { LoginPage, SetupPage } from "@/pages/auth";
 import { AppLayout, NotFound } from "@/pages/layout";
+import { OverviewPage } from "@/pages/overview";
+import { metricRanges, type MetricRange } from "@/components/metrics";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages/project";
-import { ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
+import { AddContainerPage, ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { adoptAccountLocale } from "@/i18n";
@@ -79,8 +81,19 @@ const indexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/projects" });
+    throw redirect({ to: "/overview" });
   },
+});
+
+// 全局概览。桑基图的视图和趋势的时间范围写进地址。
+const overviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/overview",
+  validateSearch: (search: Record<string, unknown>): { flow?: "ext" | "mesh"; range?: MetricRange } => ({
+    flow: search.flow === "ext" || search.flow === "mesh" ? search.flow : undefined,
+    range: metricRanges.some((r) => r.value === search.range && r.value !== "1h") ? (search.range as MetricRange) : undefined,
+  }),
+  component: OverviewPage,
 });
 
 const projectsRoute = createRoute({
@@ -107,9 +120,10 @@ const projectRoute = createRoute({
     const { tab } = projectRoute.useSearch();
     const navigate = projectRoute.useNavigate();
     const child = useMatch({ from: containerRoute.id, shouldThrow: false });
+    const adding = useMatch({ from: addContainerRoute.id, shouldThrow: false });
     return (
-      <ProjectSplit key={projectId} projectId={projectId} tab={tab ?? "containers"} container={child?.params.container} view={child?.search.view}>
-        {child ? (
+      <ProjectSplit key={projectId} projectId={projectId} tab={tab ?? "containers"} container={child?.params.container} view={child?.search.view} adding={!!adding}>
+        {child || adding ? (
           <Outlet />
         ) : (
           <ProjectPage
@@ -127,13 +141,17 @@ const projectRoute = createRoute({
 const containerRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "c/$container",
-  validateSearch: (search: Record<string, unknown>): { view?: DetailView } => ({
+  validateSearch: (search: Record<string, unknown>): { view?: DetailView; volume?: string; deploy?: boolean } => ({
     // 旧地址的「数据」标签拆成了存储和高可用，快照在存储里。
     view: search.view === "data" ? "storage" : containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
+    // 存储标签里打开的卷（文件管理就地显示，后退能回到卷列表）。
+    volume: typeof search.volume === "string" && search.volume ? search.volume : undefined,
+    // 添加容器时选了「添加并部署」：进入容器页后开始部署。
+    deploy: search.deploy === true ? true : undefined,
   }),
   component: function ContainerRoute() {
     const { projectId, container } = containerRoute.useParams();
-    const { view } = containerRoute.useSearch();
+    const { view, deploy } = containerRoute.useSearch();
     const navigate = containerRoute.useNavigate();
     return (
       <ContainerPage
@@ -142,8 +160,20 @@ const containerRoute = createRoute({
         name={container}
         view={view ?? "overview"}
         onView={(t) => navigate({ search: { view: t === "overview" ? undefined : t }, replace: true })}
+        autoDeploy={!!deploy}
+        onAutoDeployed={() => navigate({ search: (s) => ({ ...s, deploy: undefined }), replace: true })}
       />
     );
+  },
+});
+
+// 添加容器占整个主区，不和项目概览混在一页。
+const addContainerRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "add",
+  component: function AddContainerRoute() {
+    const { projectId } = addContainerRoute.useParams();
+    return <AddContainerPage key={projectId} projectId={projectId} />;
   },
 });
 
@@ -197,7 +227,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
-  appRoute.addChildren([indexRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute]), nodesRoute, nodeRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent", defaultNotFoundComponent: NotFound });
