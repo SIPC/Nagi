@@ -183,7 +183,7 @@ export function UserMenu({
             title={compact ? name : undefined}
             className={cn(
               "flex items-center gap-2 rounded-md text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-              compact ? "p-1" : "h-10 w-full px-2 hover:bg-accent data-[state=open]:bg-accent",
+              compact ? "p-1" : "h-10 w-full px-2 hover:bg-accent/50 data-[state=open]:bg-accent",
             )}
           >
             <UserAvatar name={name} src={src} className={compact ? "size-7" : "size-6 text-xs"} />

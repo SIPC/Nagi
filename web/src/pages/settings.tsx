@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect } from "react";
 import { PageHeader } from "@/pages/layout";
 import { SecurityCard } from "@/pages/security";
 import { AlertSettings } from "@/pages/alerts";
@@ -10,6 +10,7 @@ import { UpdateCard, UpdateDot } from "@/pages/update";
 import { AboutCard } from "@/pages/about";
 import { Link, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import { ActiveBox, Slide, useActiveBox } from "@/components/ui";
 import { t } from "@/i18n";
 import { ActivityCard } from "@/pages/activity";
 import { MembersCard } from "@/pages/members";
@@ -58,22 +59,23 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
   const cur: SettingsTab = allowed.includes(tab) ? tab : "security";
   const label = (value: SettingsTab) => settingsTabs.find((x) => x.value === value)?.label;
   // 窄屏是横向滑动的一行：选中项滚到可见。
-  const navRef = useRef<HTMLElement>(null);
+  const { ref: navRef, box } = useActiveBox();
   useEffect(() => {
     const nav = navRef.current;
     const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
     if (!nav || !active) return;
     nav.scrollTo({ left: active.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft - (nav.clientWidth - active.offsetWidth) / 2 });
-  }, [cur]);
+  }, [cur, navRef]);
   return (
     <>
       <PageHeader title={t.settings.title} />
       <div className="grid gap-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-12">
         {/* 窄屏是一行可以横向滑动的标签，分组标题收起。 */}
-        <nav ref={navRef} aria-label={t.settings.title} className="flex gap-1 overflow-x-auto [scrollbar-width:none] md:grid md:content-start md:overflow-visible">
+        <nav ref={navRef} aria-label={t.settings.title} className="relative flex gap-1 overflow-x-auto [scrollbar-width:none] md:grid md:content-start md:self-start md:overflow-visible">
+          <ActiveBox box={box} className="max-md:hidden" />
           {groups.map((g) => (
             <Fragment key={g.tabs[0]}>
-              {g.label ? <div className="mt-2 hidden h-6 items-center px-2 text-xs leading-5 font-medium text-muted-foreground first:mt-0 md:flex">{g.label}</div> : <div className="hidden h-2 md:block" />}
+              {g.label ? <div className="relative mt-2 hidden h-6 items-center px-2 text-xs leading-5 font-medium text-muted-foreground first:mt-0 md:flex">{g.label}</div> : <div className="hidden h-2 md:block" />}
               {g.tabs.map((value) => (
                 <Link
                   key={value}
@@ -82,9 +84,10 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
                   replace
                   activeOptions={{ explicitUndefined: true }}
                   aria-current={value === cur ? "page" : undefined}
+                  data-active={value === cur || undefined}
                   className={cn(
-                    "flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset max-md:h-10",
-                    value === cur && "bg-accent",
+                    "relative flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors not-data-active:hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset max-md:h-10",
+                    value === cur && "max-md:bg-accent",
                   )}
                 >
                   {label(value)}
@@ -94,7 +97,7 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
             </Fragment>
           ))}
         </nav>
-        <div className="min-w-0">
+        <Slide id={cur} index={allowed.indexOf(cur)} variant="settings" className="min-w-0">
           {cur === "profile" && <ProfileCard />}
           {cur === "access" && <PanelAccessCard />}
           {cur === "security" && <SecurityCard />}
@@ -106,7 +109,7 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
           {cur === "mesh" && <PanelMeshCard />}
           {cur === "update" && <UpdateCard />}
           {cur === "about" && <AboutCard />}
-        </div>
+        </Slide>
       </div>
     </>
   );

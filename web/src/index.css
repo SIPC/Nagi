@@ -90,12 +90,101 @@
 
   /* 切换动画：短、只动 opacity 和 transform。不加 fill-mode，结束后不留 transform（否则里面 fixed 的对话框会错位）。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --animate-pane-in: pane-in 220ms var(--ease-out);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-slide: cubic-bezier(0.25, 0.46, 0.3, 1);
+  /* 位移和透明度分开走：透明度先到，才看得见移动。 */
+  --animate-slide-from-below: slide-from-below 300ms var(--ease-slide), fade-in 120ms linear 20ms backwards;
+  --animate-slide-from-above: slide-from-above 300ms var(--ease-slide), fade-in 120ms linear 20ms backwards;
+  --animate-slide-from-right: slide-from-right 300ms var(--ease-slide), fade-in 120ms linear 20ms backwards;
+  --animate-slide-from-left: slide-from-left 300ms var(--ease-slide), fade-in 120ms linear 20ms backwards;
+  --animate-leave-up: leave-up 100ms linear forwards;
+  --animate-leave-down: leave-down 100ms linear forwards;
+  --animate-leave-left: leave-left 100ms linear forwards;
+  --animate-leave-right: leave-right 100ms linear forwards;
   --animate-fade-in: fade-in 160ms var(--ease-out);
-  @keyframes pane-in {
+  --animate-symbol-in: symbol-in 180ms var(--ease-out);
+  --animate-roll-in-up: roll-in-up 260ms var(--ease-slide) backwards;
+  --animate-roll-in-down: roll-in-down 260ms var(--ease-slide) backwards;
+  --animate-roll-out-up: roll-out-up 260ms var(--ease-slide) forwards;
+  --animate-roll-out-down: roll-out-down 260ms var(--ease-slide) forwards;
+  --animate-fade-out: fade-out 100ms var(--ease-in) forwards;
+  --animate-popover-in: popover-in 120ms var(--ease-out);
+  --animate-dialog-in: dialog-in 200ms var(--ease-out);
+  --animate-sheet-in: sheet-in 220ms var(--ease-out);
+  --animate-sheet-out: sheet-out 160ms var(--ease-in) forwards;
+  /* 位移和缩放都乘上 --motion：系统开启「减弱动态效果」时它是 0，只剩淡入淡出。 */
+  @keyframes slide-from-below {
+    from {
+      transform: translateY(calc(32px * var(--motion)));
+    }
+  }
+  @keyframes slide-from-above {
+    from {
+      transform: translateY(calc(-32px * var(--motion)));
+    }
+  }
+  @keyframes slide-from-right {
+    from {
+      transform: translateX(calc(32px * var(--motion)));
+    }
+  }
+  @keyframes slide-from-left {
+    from {
+      transform: translateX(calc(-32px * var(--motion)));
+    }
+  }
+  @keyframes leave-up {
+    to {
+      opacity: 0;
+      transform: translateY(calc(-16px * var(--motion)));
+    }
+  }
+  @keyframes leave-down {
+    to {
+      opacity: 0;
+      transform: translateY(calc(16px * var(--motion)));
+    }
+  }
+  @keyframes leave-left {
+    to {
+      opacity: 0;
+      transform: translateX(calc(-16px * var(--motion)));
+    }
+  }
+  @keyframes leave-right {
+    to {
+      opacity: 0;
+      transform: translateX(calc(16px * var(--motion)));
+    }
+  }
+  @keyframes roll-in-up {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(calc(70% * var(--motion)));
+    }
+  }
+  @keyframes roll-in-down {
+    from {
+      opacity: 0;
+      transform: translateY(calc(-70% * var(--motion)));
+    }
+  }
+  @keyframes roll-out-up {
+    to {
+      opacity: 0;
+      transform: translateY(calc(-70% * var(--motion)));
+    }
+  }
+  @keyframes roll-out-down {
+    to {
+      opacity: 0;
+      transform: translateY(calc(70% * var(--motion)));
+    }
+  }
+  @keyframes symbol-in {
+    from {
+      opacity: 0;
+      transform: scale(calc(1 - 0.4 * var(--motion)));
     }
   }
   @keyframes fade-in {
@@ -103,6 +192,77 @@
       opacity: 0;
     }
   }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      transform: scale(calc(1 - 0.03 * var(--motion)));
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: scale(calc(1 - 0.03 * var(--motion)));
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(calc(32px * var(--motion)));
+    }
+  }
+  @keyframes sheet-out {
+    to {
+      opacity: 0;
+      transform: translateY(calc(32px * var(--motion)));
+    }
+  }
+}
+
+:root {
+  --motion: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0;
+  }
+}
+
+/* 浮层和吸顶栏的材质：透出一点下面的内容，分清层次。系统要求减弱透明度时是实色。 */
+@utility material {
+  background-color: color-mix(in oklab, var(--material-base, var(--card)) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--material-base, var(--card));
+    backdrop-filter: none;
+  }
+}
+
+/* 高度过渡时下边缘渐隐，不留一条硬的裁切线。 */
+@property --auto-height-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.auto-height-running {
+  overflow-y: clip;
+  mask-image: linear-gradient(to bottom, #000 max(var(--auto-height-from), calc(100% - var(--auto-height-fade))), transparent);
+}
+
+/* 退场的旧内容是一份拷贝，里面的动画不能重播。 */
+[data-slide-ghost] * {
+  animation: none !important;
+}
+
+/* 切换主题时整页交叉淡化。 */
+::view-transition-group(root) {
+  animation-duration: 200ms;
 }
 
 @layer base {

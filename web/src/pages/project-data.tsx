@@ -23,6 +23,7 @@ import {
   List,
   Notice,
   QueryError,
+  Roll,
   Row,
   RowsSkeleton,
   Section,
@@ -272,7 +273,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
       actions={
         <>
           {container.kind === "group" && <span>{m.composeHint}</span>}
-          {disk && disk.diskTotalBytes > 0n && <span>{m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes)))}</span>}
+          {disk && disk.diskTotalBytes > 0n && <Roll value={m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes)))} n={Number(disk.diskFreeBytes)} />}
           {form && !isViewer && (
             <Button variant="outline" onClick={() => setAdding(true)}>
               <Plus />
@@ -335,7 +336,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
                 <span title={v.kind === "unmanaged" ? m.kinds.unmanagedHint : v.kind === "orphan" ? m.kinds.orphanHint : undefined}>{sub(v)}</span>
               }
               cols={[
-                { content: v.kind === "unmanaged" ? "" : `${v.partial ? ">" : ""}${fmtBytes(Number(v.sizeBytes))}`, num: true },
+                { content: v.kind === "unmanaged" ? "" : <Roll value={`${v.partial ? ">" : ""}${fmtBytes(Number(v.sizeBytes))}`} n={Number(v.sizeBytes)} />, num: true },
                 { content: v.kind !== "unmanaged" && v.modified ? <span title={formatDateTime(toDate(v.modified))}>{timeAgo(toDate(v.modified))}</span> : "" },
               ]}
               actions={
@@ -981,7 +982,7 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
         </div>
         <Collapsible.Root open={advanced} onOpenChange={setAdvanced} className="grid gap-4">
           <Collapsible.Trigger className="inline-flex cursor-pointer items-center gap-1 justify-self-start text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
-            <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90" : "size-4"} />
+            <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90 transition-transform" : "size-4 transition-transform"} />
             {advanced ? f.advanced : f.advancedHint}
           </Collapsible.Trigger>
           <Collapsible.Content>

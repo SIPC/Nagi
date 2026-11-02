@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -7,7 +7,7 @@ import { PageHeader } from "@/pages/layout";
 import { fmtCpu, metricRanges, RangePicker, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
-import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, Section, Status } from "@/components/ui";
+import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
@@ -36,7 +36,7 @@ const rateParts = (v: number) => scaled(v, ["B/s", "KB/s", "MB/s", "GB/s", "TB/s
 const fmtRate = (v: number) => rateParts(v).join(" ");
 const fmtTotal = (v: number) => scaled(v, ["B", "KB", "MB", "GB", "TB"]).join(" ");
 
-// 已用 / 总量：单位相同时只写一次（1.7 / 15.5 GB），不同时各写各的（86 GB / 1 TB）。
+// 已用 / 总量，两边都带单位，和节点卡片一样：2.0 GB / 15.5 GB、86 GB / 1.0 TB。
 function fmtUsed(used: number, total: number) {
   const part = (v: number): [string, string] => {
     const units = ["B", "KB", "MB", "GB", "TB"];
@@ -45,11 +45,11 @@ function fmtUsed(used: number, total: number) {
       v /= 1024;
       i++;
     }
-    return [String(v < 20 ? Number(v.toFixed(1)) : Math.round(v)), units[i]];
+    return [v < 20 ? v.toFixed(1) : String(Math.round(v)), units[i]];
   };
   const [u, uUnit] = part(used);
   const [a, aUnit] = part(total);
-  return uUnit === aUnit ? `${u} / ${a} ${aUnit}` : `${u} ${uUnit} / ${a} ${aUnit}`;
+  return `${u} ${uUnit} / ${a} ${aUnit}`;
 }
 
 // ---- 节点之间的流量 ----
@@ -134,10 +134,84 @@ function mergeSmall(rows: { id: string; name: string }[], flows: Flow[]) {
   return { rows: [...rows.filter((r) => r.id === external || keep.has(r.id)), { id: other, name: o.flow.other }], flows: [...merged.values()] };
 }
 
+// layoutEase：和 AutoHeight 同一条曲线，CSS 的 cubic-bezier 在 JS 里的算法。
+function layoutEase(p: number) {
+  const [x1, y1, x2, y2] = layoutMotionCurve;
+  const at = (t: number, a: number, b: number) => 3 * (1 - t) ** 2 * t * a + 3 * (1 - t) * t ** 2 * b + t ** 3;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(mid, x1, x2) < p) lo = mid;
+    else hi = mid;
+  }
+  return at((lo + hi) / 2, y1, y2);
+}
+
+// useTween：一组数值变化时平滑过渡，中途又变了就从当前值接着走。
+// 新出现的值从 seeds 里的起点开始，没有起点时线宽和透明度（:w、:op）从 0 开始，其他从目标值开始。
+// 透明度错开：淡出在前半段走完，淡入在后半段才开始，新旧路径不会混在一起。
+function useTween(target: Record<string, number>, seeds: Record<string, number>) {
+  const signature = JSON.stringify(target);
+  const [current, setCurrent] = useState(target);
+  const latest = useRef(target);
+  useEffect(() => {
+    const to: Record<string, number> = JSON.parse(signature);
+    const from = latest.current;
+    const show = (next: Record<string, number>) => {
+      latest.current = next;
+      setCurrent(next);
+    };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return show(to);
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / layoutMotionMs);
+      const next: Record<string, number> = {};
+      for (const k of Object.keys(to)) {
+        const fade = k.endsWith(":op");
+        const a = from[k] ?? seeds[k] ?? (fade || k.endsWith(":w") ? 0 : to[k]);
+        const local = !fade || a === to[k] ? p : to[k] < a ? Math.min(1, p / 0.5) : Math.max(0, (p - 0.3) / 0.7);
+        next[k] = a + (to[k] - a) * layoutEase(local);
+      }
+      show(next);
+      if (p < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+    // seeds 只在这一轮新出现的值上用，和 signature 同时变。
+  }, [signature]);
+  return current;
+}
+
+const flowKey = (f: Flow) => `${f.from}|${f.to}|${f.kind}`;
+
+// 路径断流后留一会儿（显示 0 B/s）再收起：流量小的路径时有时无，否则整张图隔几秒就换一次布局。
+const flowHoldMs = 30000;
+
+function useHeldFlows(flows: Flow[]) {
+  const seen = useRef(new Map<string, { flow: Flow; at: number }>());
+  const now = Date.now();
+  for (const f of flows) seen.current.set(flowKey(f), { flow: f, at: now });
+  const live = new Set(flows.map(flowKey));
+  const held: Flow[] = [];
+  for (const [k, v] of seen.current) {
+    if (live.has(k)) continue;
+    if (now - v.at > flowHoldMs) seen.current.delete(k);
+    else held.push({ ...v.flow, rate: 0 });
+  }
+  return [...flows, ...held];
+}
+
 // Sankey：左边发出，右边接收，每个节点和外部网络单独一行，两边顺序、高度相同。按实际宽度算布局，不整体缩放。
-function Sankey({ rows: allRows, flows: allFlows }: { rows: { id: string; name: string }[]; flows: Flow[] }) {
+// 切换视图时图不重建：不属于这个视图的路径和行淡出，其余的平滑换位。所以 flows 传全部路径，这里再按视图筛选；
+// 断流保留也在筛选之前算，否则切走的路径会被当成断流留下来。
+function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; name: string }[]; flows: Flow[]; view: FlowView }) {
   const { ref, width } = useWidth();
-  const { rows, flows } = mergeSmall(allRows, allFlows);
+  const held = useHeldFlows(allFlows);
+  const merged = mergeSmall(allRows, held.filter((f) => view === "all" || f.kind === view));
+  const rows = merged.rows;
+  const flows = merged.flows;
   const order = new Map(rows.map((r, i) => [r.id, i]));
   const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
   const top = [...flows].sort((a, b) => b.rate - a.rate)[0];
@@ -185,22 +259,70 @@ function Sankey({ rows: allRows, flows: allFlows }: { rows: { id: string; name: 
   const height = Math.max((groups[groups.length - 1]?.center ?? 0) + 13, y - groupGap + 2);
   const nameMax = Math.max(label - 8, 40);
 
+  // 路径增减时其他线会换位置：位置、线宽都过渡（高度由外层的区块过渡），新路径淡入，消失的路径留到淡出结束。
+  const leaving = useRef(new Map<string, { flow: Flow; y1: number; y2: number }>());
+  const shown = useRef(new Map<string, { flow: Flow; y1: number; y2: number }>());
+  type DrawnRow = { id: string; name: string; center: number; send: number; receive: number };
+  const leavingRows = useRef(new Map<string, DrawnRow>());
+  const shownRows = useRef(new Map<string, DrawnRow>());
+  const lastNow = useRef<Record<string, number>>({});
+  const next = new Map(flows.map((f) => [flowKey(f), { flow: f, y1: starts.get(f)!, y2: ends.get(f)! }]));
+  for (const [k, v] of shown.current) if (!next.has(k)) leaving.current.set(k, v);
+  for (const k of next.keys()) leaving.current.delete(k);
+  shown.current = next;
+  const goal: Record<string, number> = {};
+  const nextRows = new Map(
+    groups.map((g) => [
+      g.id,
+      { id: g.id, name: nameOf(g.id), center: g.center, send: sum(g.out), receive: sum(g.into) },
+    ]),
+  );
+  for (const [k, v] of shownRows.current) if (!nextRows.has(k)) leavingRows.current.set(k, v);
+  for (const k of nextRows.keys()) leavingRows.current.delete(k);
+  shownRows.current = nextRows;
+  for (const [k, v] of nextRows) Object.assign(goal, { [`row:${k}`]: v.center, [`row:${k}:op`]: 1 });
+  for (const [k, v] of leavingRows.current) Object.assign(goal, { [`row:${k}`]: v.center, [`row:${k}:op`]: 0 });
+  // 新路径从两端所在的行当前的位置长出来，消失的路径收回所在的行，线和行不脱节。
+  const seeds: Record<string, number> = {};
+  for (const [k, v] of next) {
+    Object.assign(goal, { [`${k}:y1`]: v.y1, [`${k}:y2`]: v.y2, [`${k}:w`]: strokeOf(v.flow.rate), [`${k}:op`]: 1 });
+    if (lastNow.current[`row:${v.flow.from}`] !== undefined) seeds[`${k}:y1`] = lastNow.current[`row:${v.flow.from}`];
+    if (lastNow.current[`row:${v.flow.to}`] !== undefined) seeds[`${k}:y2`] = lastNow.current[`row:${v.flow.to}`];
+  }
+  for (const [k, v] of leaving.current) {
+    Object.assign(goal, { [`${k}:y1`]: nextRows.get(v.flow.from)?.center ?? v.y1, [`${k}:y2`]: nextRows.get(v.flow.to)?.center ?? v.y2, [`${k}:w`]: 0, [`${k}:op`]: 0 });
+  }
+  const now = useTween(goal, seeds);
+  lastNow.current = now;
+  const [, setSettled] = useState(0);
+  const allGone =
+    leaving.current.size + leavingRows.current.size > 0 &&
+    [...leaving.current.keys()].every((k) => (now[`${k}:op`] ?? 0) < 0.01) &&
+    [...leavingRows.current.keys()].every((k) => (now[`row:${k}:op`] ?? 0) < 0.01);
+  useEffect(() => {
+    if (!allGone) return;
+    leaving.current.clear();
+    leavingRows.current.clear();
+    setSettled((n) => n + 1);
+  }, [allGone]);
+  const drawn = [...next.entries(), ...leaving.current.entries()];
+
   return (
-    <div ref={ref} className="min-w-0">
+    <div ref={ref} className="relative min-w-0">
       {width > 0 && (
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block" role="img" aria-label={top ? o.flow.aria(nameOf(top.from), nameOf(top.to), fmtRate(top.rate)) : o.flow.empty}>
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block overflow-visible" role="img" aria-label={top ? o.flow.aria(nameOf(top.from), nameOf(top.to), fmtRate(top.rate)) : o.flow.empty}>
           <text x={0} y={12} className="fill-muted-foreground text-xs">
             {o.flow.send}
           </text>
           <text x={width} y={12} textAnchor="end" className="fill-muted-foreground text-xs">
             {o.flow.receive}
           </text>
-          {flows.map((f) => {
-            const w = strokeOf(f.rate);
-            const y1 = starts.get(f)!;
-            const y2 = ends.get(f)!;
+          {drawn.map(([key, { flow: f, y1: toY1, y2: toY2 }]) => {
+            const w = now[`${key}:w`] ?? 0;
+            const y1 = now[`${key}:y1`] ?? toY1;
+            const y2 = now[`${key}:y2`] ?? toY2;
             return (
-              <g key={`${f.from}|${f.to}|${f.kind}`} className="group">
+              <g key={key} className="group" opacity={now[`${key}:op`] ?? 0}>
                 <title>{`${nameOf(f.from)} → ${nameOf(f.to)} ${fmtRate(f.rate)}`}</title>
                 <path
                   d={`M${x0} ${y1} L${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2} L${x3} ${y2}`}
@@ -208,33 +330,54 @@ function Sankey({ rows: allRows, flows: allFlows }: { rows: { id: string; name: 
                   strokeWidth={w}
                   className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")}
                 />
-                <text x={x0} y={y1 - w / 2 - 5} className="fill-foreground text-[13px]">
-                  {fit(nameOf(f.to), x1 - x0, 13)}
-                  <tspan dx={8} className="fill-muted-foreground text-xs">
-                    {fmtRate(f.rate)}
-                  </tspan>
+              </g>
+            );
+          })}
+          {[...nextRows.values(), ...leavingRows.current.values()].map((n) => {
+            const center = now[`row:${n.id}`] ?? n.center;
+            return (
+              <g key={n.id} opacity={now[`row:${n.id}:op`] ?? 0}>
+                <title>{n.name}</title>
+                <text x={0} y={center - 9} className="fill-foreground text-sm">
+                  {fit(n.name, nameMax, 14)}
+                </text>
+                <text x={width} y={center - 9} textAnchor="end" className="fill-foreground text-sm">
+                  {fit(n.name, nameMax, 14)}
                 </text>
               </g>
             );
           })}
-          {groups.map((n) => (
-            <g key={n.id}>
-              <title>{nameOf(n.id)}</title>
-              <text x={0} y={n.center - 9} className="fill-foreground text-sm">
-                {fit(nameOf(n.id), nameMax, 14)}
-              </text>
-              <text x={0} y={n.center + 8} className="fill-muted-foreground text-xs">
-                {n.out.length > 0 ? fmtRate(sum(n.out)) : o.flow.noSend}
-              </text>
-              <text x={width} y={n.center - 9} textAnchor="end" className="fill-foreground text-sm">
-                {fit(nameOf(n.id), nameMax, 14)}
-              </text>
-              <text x={width} y={n.center + 8} textAnchor="end" className="fill-muted-foreground text-xs">
-                {n.into.length > 0 ? fmtRate(sum(n.into)) : o.flow.noReceive}
-              </text>
-            </g>
-          ))}
         </svg>
+      )}
+      {/* 数字放在图上面的一层：SVG 文字不能逐位滚动。读屏读下面的表格。 */}
+      {width > 0 && (
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          {drawn.map(([key, { flow: f, y1: toY1 }]) => (
+            <div
+              key={key}
+              className="absolute flex items-baseline gap-2 text-[13px] leading-4 whitespace-nowrap text-foreground"
+              style={{ left: x0, top: (now[`${key}:y1`] ?? toY1) - (now[`${key}:w`] ?? 0) / 2 - 5 - 12, opacity: now[`${key}:op`] ?? 0 }}
+            >
+              {fit(nameOf(f.to), x1 - x0, 13)}
+              <Roll value={fmtRate(f.rate)} n={f.rate} className="text-xs text-muted-foreground" />
+            </div>
+          ))}
+          {[...nextRows.values(), ...leavingRows.current.values()].map((n) => {
+            const top = (now[`row:${n.id}`] ?? n.center) + 8 - 12;
+            const opacity = now[`row:${n.id}:op`] ?? 0;
+            const cell = "absolute text-xs leading-4 whitespace-nowrap text-muted-foreground";
+            return (
+              <Fragment key={n.id}>
+                <div className={cell} style={{ left: 0, top, opacity }}>
+                  <Roll value={n.send > 0 ? fmtRate(n.send) : o.flow.noSend} n={n.send} />
+                </div>
+                <div className={cell} style={{ right: 0, top, opacity }}>
+                  <Roll value={n.receive > 0 ? fmtRate(n.receive) : o.flow.noReceive} n={n.receive} />
+                </div>
+              </Fragment>
+            );
+          })}
+        </div>
       )}
       {/* 读屏：图只有一句总结，具体路径在表格里。 */}
       <table className="sr-only">
@@ -260,39 +403,20 @@ function Sankey({ rows: allRows, flows: allFlows }: { rows: { id: string; name: 
   );
 }
 
-function Seg<T extends string>({ value, onChange, items, label }: { value: T; onChange: (v: T) => void; items: { value: T; label: string }[]; label: string }) {
-  return (
-    <div role="group" aria-label={label} className="inline-flex h-8 w-fit rounded-lg bg-muted p-[3px] max-md:h-10">
-      {items.map((it) => (
-        <button
-          key={it.value}
-          type="button"
-          aria-pressed={it.value === value}
-          onClick={() => onChange(it.value)}
-          className={cn(
-            "inline-flex h-full cursor-pointer items-center rounded-md border border-transparent px-2 whitespace-nowrap text-foreground/60 outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-            it.value === value && "bg-background text-foreground shadow-[0_0_0_1px_var(--border)] dark:bg-input",
-          )}
-        >
-          {it.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ---- 表格和数字 ----
 
-function Stat({ label, value, unit, to, title }: { label: string; value: ReactNode; unit?: string; to?: "/nodes" | "/projects"; title?: string }) {
+function Stat({ label, value, n, unit, to, title }: { label: string; value: string | number; n?: number; unit?: string; to?: "/nodes" | "/projects"; title?: string }) {
   const inner = (
     <>
       <span className="text-muted-foreground">{label}</span>
       <span className="text-2xl leading-8 font-medium tracking-tight whitespace-nowrap">
-        {value}
+        <Roll value={String(value)} n={n} />
         {unit && (
           <>
             {" "}
-            <small className="text-sm leading-8 font-normal tracking-normal text-muted-foreground">{unit}</small>
+            <small className="text-sm leading-8 font-normal tracking-normal text-muted-foreground">
+              <Roll value={unit} n={n} />
+            </small>
           </>
         )}
       </span>
@@ -340,15 +464,26 @@ function OverviewTable({ head, cols, children }: { head: string[]; cols: number[
 }
 
 // 图表：标题、图例，下面是图形和 5 个时间。节点之间的线多时只画最大的几条。图例折行时两张图的图形仍然对齐（subgrid）。
+// 图例只占一行，左右两张图才对得齐：只列前两项，其余收成 +N，完整的在悬停提示里。
+const trendLegendMax = 2;
+
 function TrendChart({ title, help, series, from, to, step }: { title: string; help: string; series: ChartSeries[]; from: number; to: number; step: number }) {
+  const rest = series.slice(trendLegendMax);
   return (
     <div className="row-span-2 grid min-w-0 grid-rows-subgrid gap-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-x-3">
+        <span className="flex shrink-0 items-center gap-1 text-[13px] text-muted-foreground">
           {title}
           <HelpTip>{help}</HelpTip>
         </span>
-        <Legend series={series} />
+        <span className="flex min-w-0 items-center gap-4 text-[13px] leading-4 whitespace-nowrap text-muted-foreground">
+          <Legend series={series.slice(0, trendLegendMax)} className="min-w-0 flex-nowrap overflow-hidden" />
+          {rest.length > 0 && (
+            <span className="shrink-0" title={rest.map((s) => s.label).join("\n")}>
+              +{rest.length}
+            </span>
+          )}
+        </span>
       </div>
       <TimeChart series={series} from={from} to={to} step={step} format={fmtRate} />
     </div>
@@ -492,7 +627,6 @@ export function OverviewPage() {
       if (rate >= 1) flows.push({ from, to, rate, kind: "mesh" });
     }
   }
-  const shownFlows = flows.filter((f) => view === "all" || f.kind === view);
   const sankeyRows = [...(view === "mesh" ? [] : [{ id: external, name: o.flow.external }]), ...online.map((n) => ({ id: n.id, name: n.name }))];
 
   // ---- 趋势 ----
@@ -598,9 +732,9 @@ export function OverviewPage() {
         <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
         <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
-        <Stat label={o.stats.extIn} title={o.stats.estimated} value={ready ? inValue : dash} unit={ready ? inUnit : undefined} />
-        <Stat label={o.stats.extOut} title={o.stats.estimated} value={ready ? outValue : dash} unit={ready ? outUnit : undefined} />
-        <Stat label={o.stats.mesh} title={o.stats.meshTitle} value={sample ? meshValue : dash} unit={sample ? meshUnit : undefined} />
+        <Stat label={o.stats.extIn} title={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />
+        <Stat label={o.stats.extOut} title={o.stats.estimated} value={ready ? outValue : dash} n={extOut} unit={ready ? outUnit : undefined} />
+        <Stat label={o.stats.mesh} title={o.stats.meshTitle} value={sample ? meshValue : dash} n={meshTotal} unit={sample ? meshUnit : undefined} />
       </div>
 
       {noNodes ? (
@@ -622,7 +756,7 @@ export function OverviewPage() {
             title={o.flow.title}
             help={o.flow.help}
             actions={
-              <Seg
+              <Segmented
                 label={o.flow.viewLabel}
                 value={view}
                 onChange={(v) => setSearch({ flow: v === "all" ? undefined : v })}
@@ -641,10 +775,10 @@ export function OverviewPage() {
               <EmptyRow>{o.flow.empty}</EmptyRow>
             ) : !ready ? (
               <RowsSkeleton />
-            ) : shownFlows.length === 0 ? (
+            ) : flows.length === 0 ? (
               <EmptyRow>{o.flow.empty}</EmptyRow>
             ) : (
-              <Sankey rows={sankeyRows} flows={shownFlows} />
+              <Sankey rows={sankeyRows} flows={flows} view={view} />
             )}
           </Section>
 
@@ -697,12 +831,12 @@ export function OverviewPage() {
                         </Link>
                       </td>
                       <td className={tdClass}>{n.pending ? <Status>{o.nodes.pending}</Status> : n.online ? <Status tone="success">{o.nodes.online}</Status> : <Status tone="warning">{o.nodes.offline}</Status>}</td>
-                      <td className={tdClass}>{u ? fmtCpu(u.cpu) : dash}</td>
-                      <td className={tdClass}>{u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpu(u.memory)) : dash}</td>
-                      <td className={tdClass}>{u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpu(u.disk)) : dash}</td>
-                      <td className={tdClass}>{net?.rx !== undefined ? fmtRate(net.rx) : dash}</td>
-                      <td className={tdClass}>{net?.tx !== undefined ? fmtRate(net.tx) : dash}</td>
-                      <td className={tdClass}>{n.containers}</td>
+                      <td className={tdClass}><Roll value={u ? fmtCpu(u.cpu) : dash} /></td>
+                      <td className={tdClass}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpu(u.memory)) : dash} n={u?.memory} /></td>
+                      <td className={tdClass}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpu(u.disk)) : dash} n={u?.disk} /></td>
+                      <td className={tdClass}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></td>
+                      <td className={tdClass}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></td>
+                      <td className={tdClass}><Roll value={String(n.containers)} /></td>
                     </tr>
                   );
                 })}
@@ -728,10 +862,10 @@ export function OverviewPage() {
                       </Link>
                     </td>
                     <td className={tdClass}>{x.route.container}</td>
-                    <td className={tdClass}>{t.metrics.count(Math.round(x.req).toLocaleString(locale))}</td>
-                    <td className={tdClass}>{x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash}</td>
-                    <td className={tdClass}>{fmtTotal(x.in)}</td>
-                    <td className={tdClass}>{fmtTotal(x.out)}</td>
+                    <td className={tdClass}><Roll value={t.metrics.count(Math.round(x.req).toLocaleString(locale))} n={x.req} /></td>
+                    <td className={tdClass}><Roll value={x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash} /></td>
+                    <td className={tdClass}><Roll value={fmtTotal(x.in)} n={x.in} /></td>
+                    <td className={tdClass}><Roll value={fmtTotal(x.out)} n={x.out} /></td>
                   </tr>
                 ))}
               </OverviewTable>

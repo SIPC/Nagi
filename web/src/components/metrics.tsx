@@ -4,7 +4,7 @@ import { Cpu, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { EmptyRow, Notice, QueryError, Section, Segmented, Select, Skeleton } from "@/components/ui";
+import { EmptyRow, Notice, QueryError, Roll, Section, Segmented, Select, Skeleton } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
@@ -79,7 +79,9 @@ function Metric({
   return (
     <div className="grid min-w-0 content-start gap-1">
       <div className="text-muted-foreground">{label}</div>
-      <div className={mcval}>{points.length ? format(points[points.length - 1][1]) : "—"}</div>
+      <div className={mcval}>
+        <Roll value={points.length ? format(points[points.length - 1][1]) : "—"} n={points.length ? points[points.length - 1][1] : undefined} />
+      </div>
       <TimeChart
         className="mt-2"
         series={[{ label, points, className: "text-muted-foreground" }]}
@@ -333,7 +335,7 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   const ring = (ratio: number, value: string, title: string) => (
     <span className="inline-flex items-center gap-1" title={title}>
       <UsageRing ratio={ratio} />
-      {value}
+      <Roll value={value} n={ratio} />
     </span>
   );
   return (
@@ -373,13 +375,18 @@ ${detail}` : summary;
         <span className="flex min-w-0 items-baseline justify-between gap-2 text-[13px] leading-5">
           <span className="shrink-0 text-muted-foreground">{label}</span>
           <span className="truncate">
-            <span className={cn("font-medium", ratio >= 0.9 ? "text-destructive" : ratio >= 0.75 ? "text-warning-text" : "text-foreground")}>{percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)}</span>
-            {used !== undefined && <span className="text-muted-foreground"> / {fmtTotal(total!)}</span>}
+            <span className={cn("font-medium", ratio >= 0.9 ? "text-destructive" : ratio >= 0.75 ? "text-warning-text" : "text-foreground")}><Roll value={percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)} n={percent} /></span>
+            {used !== undefined && (
+              <span className="text-muted-foreground">
+                {" / "}
+                <Roll value={fmtTotal(total!)} />
+              </span>
+            )}
           </span>
         </span>
         <span className="h-1 overflow-hidden rounded-full bg-primary/12">
           <span
-            className={cn("block h-full origin-left rounded-full transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", ratio >= 0.9 ? "bg-destructive" : ratio >= 0.75 ? "bg-warning" : "bg-primary")}
+            className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", ratio >= 0.9 ? "bg-destructive" : ratio >= 0.75 ? "bg-warning" : "bg-primary")}
             style={{ transform: `scaleX(${r})` }}
           />
         </span>
@@ -416,11 +423,11 @@ function UsageBar({ icon, ratio, value, title, fill }: { icon: ReactNode; ratio:
       <span className="shrink-0 opacity-70 [&_svg]:size-3">{icon}</span>
       <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/10">
         <span
-          className={cn("block h-full origin-left rounded-full transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", fill)}
+          className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", fill)}
           style={{ transform: `scaleX(${r})` }}
         />
       </span>
-      <span className="min-w-[2.125rem] shrink-0 pl-0.5 text-xs leading-4 tabular-nums">{value}</span>
+      <Roll value={value} n={ratio} className="min-w-[2.125rem] shrink-0 pl-0.5 text-xs leading-4 tabular-nums" />
     </span>
   );
 }
@@ -591,7 +598,9 @@ function RouteMetrics({ name, data, range, divided, empty, quiet }: { name?: str
           {stats.map((s) => (
             <div key={s.label} className="grid min-w-0 content-start gap-1" title={s.title}>
               <dt className="text-muted-foreground">{s.label}</dt>
-              <dd className={cn("m-0", mcval)}>{empty ? "—" : s.value}</dd>
+              <dd className={cn("m-0", mcval)}>
+                <Roll value={empty ? "—" : s.value} />
+              </dd>
             </div>
           ))}
         </dl>

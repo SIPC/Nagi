@@ -4,7 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
-import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Section } from "@/components/ui";
+import { Button, EmptyRow, List, QueryError, Roll, Row, RowsSkeleton, Section } from "@/components/ui";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -58,10 +58,14 @@ function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
       {color ? (
         <>
           <span className={color}>{path}</span>
-          {` · ${rest}`}
+          {" · "}
+          <Roll value={rest} />
         </>
       ) : (
-        `${path} · ${rest}`
+        <>
+          {`${path} · `}
+          <Roll value={rest} />
+        </>
       )}
       {ping?.detail && (
         <>

@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, Server, SlidersHorizontal, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
-import { Button, ButtonLink, ReadOnlyContext, useIsMobile, Waves } from "@/components/ui";
+import { ActiveBox, Button, ButtonLink, ReadOnlyContext, Slide, useActiveBox, useIsMobile, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot, UpdateTips } from "@/pages/update";
 import { UserMenu, type ThemeMode } from "@/components/account";
@@ -48,7 +48,9 @@ function useTheme() {
     } catch {
       // 隐私模式等情况下无法保存，不影响切换。
     }
-    setMode(next);
+    const apply = () => flushSync(() => setMode(next));
+    if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(apply);
+    else apply();
   };
   return { mode, set };
 }
@@ -117,7 +119,7 @@ function MobileNav({ open, onClose, title, children }: { open: boolean; onClose:
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Content aria-describedby={undefined} className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background outline-none">
+        <DialogPrimitive.Content aria-describedby={undefined} className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out">
           <div className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
             <DialogPrimitive.Close asChild>
               <Button readOnlyOk variant="ghost" size="icon" aria-label={t.app.nav.close}>
@@ -153,8 +155,8 @@ const navItems = [
 ] as const;
 
 const navLink =
-  "flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors hover:bg-accent data-[status=active]:bg-accent [&_svg]:size-4";
-const mobileNavLink = navLink.replace("h-8", "h-11");
+  "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors not-data-active:hover:bg-accent/50 [&_svg]:size-4";
+const mobileNavLink = cn(navLink.replace("h-8", "h-11"), "data-[status=active]:bg-accent");
 
 export function AppLayout() {
   const theme = useTheme();
@@ -178,6 +180,7 @@ export function AppLayout() {
   const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
+  const navBox = useActiveBox();
 
   const logout = async () => {
     await authClient.logout({});
@@ -191,7 +194,7 @@ export function AppLayout() {
     </Link>
   );
   const nav = (className: string) => navItems.map((it) => (
-    <Link key={it.to} to={it.to} className={className}>
+    <Link key={it.to} to={it.to} data-active={pathname.startsWith(it.to) || undefined} className={className}>
       <it.icon />
       {it.label}
       {it.to === "/settings" && <UpdateDot />}
@@ -218,11 +221,14 @@ export function AppLayout() {
         <div className="mt-4">
           <SearchButton />
         </div>
-        <nav className="mt-4 grid gap-1">{nav(navLink)}</nav>
+        <nav ref={navBox.ref} className="relative mt-4 grid gap-1">
+          <ActiveBox box={navBox.box} />
+          {nav(navLink)}
+        </nav>
         <div className="mt-auto">{userMenu(false)}</div>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="group/bar sticky top-0 z-20 h-14 border-b bg-background px-2 md:hidden">
+        <header className="group/bar material sticky top-0 z-20 h-14 border-b px-2 [--material-base:var(--background)] md:hidden">
           <div className="flex h-full items-center gap-2 group-has-data-mobile-bar/bar:hidden">
             <Button readOnlyOk variant="ghost" size="icon" aria-label={t.app.nav.open} aria-expanded={navOpen} onClick={() => setNavOpen(true)}>
               <MenuIcon />
@@ -271,14 +277,17 @@ export function AppLayout() {
           id="main"
           tabIndex={-1}
           className={cn(
-            "mx-auto max-w-[1184px] px-4 pt-6 pb-16 outline-none md:px-8 md:pt-8",
+            "mx-auto max-w-[1184px] overflow-x-clip px-4 pt-6 pb-16 outline-none md:px-8 md:pt-8",
             split && "max-md:pt-4",
             split && "xl:flex xl:max-w-none xl:items-start xl:px-0 xl:pt-0 xl:pb-0",
           )}
         >
           <ReadOnlyContext.Provider value={readOnly}>
             <MobileBarSlot.Provider value={barSlot}>
-              <Outlet />
+              {/* 项目页由 ProjectSplit 分栏，这一层不占位，内容的动画也由它管。 */}
+              <Slide id={split ? "split" : pathname} index={navItems.findIndex((it) => pathname.startsWith(it.to))} variant="page" className={split ? "contents" : undefined}>
+                <Outlet />
+              </Slide>
             </MobileBarSlot.Provider>
           </ReadOnlyContext.Provider>
         </main>

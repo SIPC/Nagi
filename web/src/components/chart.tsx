@@ -207,11 +207,11 @@ export function TimeChart({
 }
 
 // Legend：图例，10px 的方块加名称。
-export function Legend({ series }: { series: { label: string; className: string }[] }) {
+export function Legend({ series, className }: { series: { label: string; className: string }[]; className?: string }) {
   return (
-    <span className="flex flex-wrap gap-4 text-[13px] leading-4 text-muted-foreground">
+    <span className={cn("flex flex-wrap gap-4 text-[13px] leading-4 text-muted-foreground", className)}>
       {series.map((s) => (
-        <span key={s.label} className="inline-flex items-center gap-1">
+        <span key={s.label} className="inline-flex shrink-0 items-center gap-1">
           <i className={cn("size-2.5 rounded-[2px] bg-current", s.className)} />
           {s.label}
         </span>

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { ChevronRight } from "lucide-react";
-import { Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
+import { Field, FormRow, Input, Segmented, Slide, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
@@ -31,7 +31,7 @@ function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: {
         {open ? labelOpen : <span className={cn(labelPhone && "max-md:hidden")}>{label}</span>}
         {!open && labelPhone && <span className="md:hidden">{labelPhone}</span>}
       </button>
-      {open && children}
+      {open && <div className="grid animate-slide-from-above gap-6 max-md:gap-4">{children}</div>}
     </>
   );
 }
@@ -200,6 +200,7 @@ export function useContainerForm(first = false, top?: (mode: "compose" | "image"
           ]}
         />
       </div>
+      <Slide id={mode} index={mode === "compose" ? 1 : 0} inner="grid gap-6 max-md:gap-4">
       {mode === "compose" ? (
         <>
           {top?.("compose")}
@@ -216,6 +217,7 @@ export function useContainerForm(first = false, top?: (mode: "compose" | "image"
       ) : (
         imageForm.fields
       )}
+      </Slide>
     </>
   );
   return { fields, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };

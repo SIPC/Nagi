@@ -38,7 +38,9 @@ import {
   Row,
   RowsSkeleton,
   Section,
+  Roll,
   Segmented,
+  Slide,
   useIsMobile,
   Select,
   Skeleton,
@@ -627,7 +629,7 @@ function ContainerDetail({
           { value: "ha", label: t.projectContainers.tabs.ha },
         ]}
       />
-      <div key={view} className="animate-fade-in">
+      <Slide id={view} index={["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha"].indexOf(view)}>
         {view !== "storage" && view !== "ha" && hasOutput && <div className="mb-6">{output}</div>}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
         {view === "config" && !isViewer && <ContainerConfig
@@ -653,7 +655,7 @@ function ContainerDetail({
         {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
         {view === "storage" && <ContainerStorage project={project} container={container} />}
         {view === "ha" && <ContainerHA project={project} container={container} />}
-      </div>
+      </Slide>
     </>
   );
 }
@@ -737,7 +739,7 @@ function Overview({ project, container, services }: { project: Project; containe
           <KvItem mono k={pc.columns.image} v={image} />
           <KvItem mono k={pc.columns.node} v={node?.name ?? container.nodeId} />
           <KvItem mono k={o.currentVersion} v={version} />
-          <KvItem k={o.uptimeLabel} v={uptime(services)} />
+          <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
           <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />
         </div>
       </Section>
@@ -1133,6 +1135,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
           }
         >
           {/* 容器创建后不能在单个容器和容器组之间切换：单个容器的 Compose 是表单生成的只读预览。 */}
+          <Slide id={showCompose ? "compose" : "form"} index={showCompose ? 1 : 0} inner="grid gap-4">
           {isForm && showCompose && (
             <Field label="compose" help={c.composePreviewHelp}>
               <pre className="m-0 overflow-auto rounded-md bg-muted p-3 font-mono text-[13px] leading-5">{formToCompose(container.name, imageForm.build())}</pre>
@@ -1149,6 +1152,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
             </Field>
           )}
+          </Slide>
         </ConfigGroup>
         <ConfigGroup
           title={isForm ? t.containerForm.env : c.groupEnv}

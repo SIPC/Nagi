@@ -12,7 +12,7 @@ export function DropdownMenuContent({ className, sideOffset = 4, align = "end", 
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 w-max max-w-64 min-w-32 rounded-md border bg-card p-1 shadow-lg data-[state=open]:animate-fade-in", className)}
+        className={cn("z-50 w-max max-w-64 min-w-32 rounded-md border material p-1 shadow-lg origin-(--radix-dropdown-menu-content-transform-origin) data-[state=open]:animate-popover-in data-[state=closed]:animate-fade-out", className)}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>

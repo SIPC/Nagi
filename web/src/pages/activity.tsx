@@ -1,7 +1,7 @@
 // 活动记录：用户在面板上的操作和节点、面板发出的告警。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Segmented, Spinner, Status } from "@/components/ui";
+import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Segmented, Slide, Spinner, Status } from "@/components/ui";
 import type { ActivityEntry } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, projectClient, settingsClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
@@ -63,6 +63,7 @@ export function ActivityCard() {
         />
       }
     >
+      <Slide id={kind} index={["all", "operation", "alert"].indexOf(kind)} inner="grid gap-4 max-md:gap-2">
       {list.isPending ? (
         <RowsSkeleton count={5} />
       ) : (
@@ -101,6 +102,7 @@ export function ActivityCard() {
             ))}
         </>
       )}
+      </Slide>
       {list.hasNextPage && (
         <div>
           <Button readOnlyOk variant="ghost" className="-ml-3" disabled={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>

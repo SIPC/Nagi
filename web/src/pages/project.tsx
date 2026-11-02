@@ -1,4 +1,3 @@
-import { useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpCircle, ChevronLeft, Plus } from "lucide-react";
@@ -8,7 +7,7 @@ import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { containerUsage, projectMetricNodes, UsageRings, useProjectMetrics } from "@/components/metrics";
-import { Badge, ButtonLink, dotColor, Loading, QueryError, Tabs } from "@/components/ui";
+import { ActiveBox, Badge, ButtonLink, dotColor, Loading, QueryError, Roll, Slide, Tabs, useActiveBox } from "@/components/ui";
 import { containerKind, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
 import { SettingsTab } from "@/pages/project-settings";
@@ -125,15 +124,18 @@ export function ProjectSplit({
   adding?: boolean;
   children: React.ReactNode;
 }) {
+  // 按项目栏的顺序比较：概览、添加容器、各个容器、网络、设置。
+  const containers = useQuery({ queryKey: ["project", projectId], queryFn: () => projectClient.getProject({ projectId }) }).data?.project?.containers ?? [];
+  const position = adding ? 1 : container ? 2 + containers.findIndex((m) => m.name === container) : tab === "containers" ? 0 : tab === "network" ? 2 + containers.length : 3 + containers.length;
   return (
     <>
       <aside className="hidden motion-safe:animate-fade-in xl:sticky xl:top-0 xl:block xl:h-screen xl:w-70 xl:shrink-0 xl:overflow-y-auto xl:border-r xl:px-3 xl:pt-8 xl:pb-4">
         <ProjectColumn projectId={projectId} tab={tab} container={container} view={view} adding={adding} />
       </aside>
       <div className="min-w-0 flex-1 xl:px-8 xl:pt-8 xl:pb-16">
-        <div key={adding ? "add" : container ? "c/" + container : tab} className="animate-fade-in motion-safe:animate-pane-in xl:mx-auto xl:max-w-[1120px]">
+        <Slide id={adding ? "add" : container ? "c/" + container : tab} index={position} variant="project" className="xl:mx-auto xl:max-w-[1120px]">
           {children}
-        </div>
+        </Slide>
       </div>
     </>
   );
@@ -162,7 +164,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
   const container = parts[2] === "c" ? decodeURIComponent(parts[3] ?? "") : "";
   const onSection = parts.length === 2;
   const tab = search.tab ?? "containers";
-  const item = (active: boolean) => cn("flex min-h-11 items-center gap-2 rounded-md px-2 text-sm transition-colors hover:bg-accent", active && "bg-accent");
+  const item = (active: boolean) => cn("flex min-h-11 items-center gap-2 rounded-md px-2 text-sm transition-colors", active ? "bg-accent" : "hover:bg-accent/50");
   const label = "mt-1 flex h-6 items-center px-2 text-xs font-medium text-muted-foreground";
   return (
     <nav className="grid gap-1" aria-label={p.name}>
@@ -175,7 +177,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
       </Link>
       <div className={label}>
         {t.project.column.containers}
-        <span className="ml-1 tabular-nums">{p.containers.length}</span>
+        <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
       </div>
       {p.containers.map((m) => {
         const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
@@ -193,7 +195,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
       <div className={label}>{t.project.column.project}</div>
       <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} className={item(onSection && tab === "network")}>
         {t.project.sections.network}
-        {p.routes.length > 0 && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{p.routes.length}</span>}
+        {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs tabular-nums text-muted-foreground" />}
       </Link>
       <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} className={item(onSection && tab === "settings")}>
         {t.project.sections.settings}
@@ -241,23 +243,14 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
         </div>
       </div>
       <nav ref={ref} className="relative grid gap-1" aria-label={p.name}>
-        {box && (
-          <div
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-x-0 top-0 rounded-md bg-accent",
-              box.animate && "transition-[transform,height] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
-            )}
-            style={{ transform: `translateY(${box.top}px)`, height: box.height }}
-          />
-        )}
+        <ActiveBox box={box} />
         <Link to="/projects/$projectId" params={{ projectId: p.id }} data-active={section("containers") || undefined} className={cn(item, !section("containers") && idle)}>
           {t.project.sections.overview}
         </Link>
         <div className="relative mt-2 flex h-6 items-center justify-between px-2 text-xs font-medium text-muted-foreground">
           <span>
             {t.project.column.containers}
-            <span className="ml-1 tabular-nums">{p.containers.length}</span>
+            <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
           </span>
           <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="xs" className="-mr-1 size-6 p-0 text-foreground" aria-label={t.projectContainers.table.addContainer}>
             <Plus />
@@ -297,7 +290,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
         <div className="h-1" />
         <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, !section("network") && idle)}>
           {t.project.sections.network}
-          {p.routes.length > 0 && <span className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground">{p.routes.length}</span>}
+          {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
         </Link>
         <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !section("settings") && idle)}>
           {t.project.sections.settings}
@@ -305,23 +298,6 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
       </nav>
     </div>
   );
-}
-
-// useActiveBox 量出列表里选中项（data-active）的位置，给滑动的背景用。第一次只放到位、不做动画。
-function useActiveBox() {
-  const ref = useRef<HTMLElement>(null);
-  const [box, setBox] = useState<{ top: number; height: number; animate: boolean } | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>("[data-active]");
-    setBox((prev) => {
-      if (!el) return null;
-      const top = el.offsetTop;
-      const height = el.offsetHeight;
-      if (prev && prev.top === top && prev.height === height) return prev;
-      return { top, height, animate: prev !== null };
-    });
-  });
-  return { ref, box };
 }
 
 // countContainers 按种类数，例如"2 个容器，1 个容器组，1 个有状态"。

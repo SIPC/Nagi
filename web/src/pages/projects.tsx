@@ -21,6 +21,7 @@ import {
   HelpTip,
   Input,
   Notice,
+  Roll,
   Select,
   Skeleton,
   Spinner,
@@ -199,7 +200,7 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
         {shown.length < p.containers.length && <div className="text-[13px] text-muted-foreground">{t.projects.card.moreContainers(p.containers.length - shown.length)}</div>}
       </div>
       <div className="mt-auto flex justify-between gap-3 text-xs leading-4 text-muted-foreground">
-        <span>{p.routes.length > 0 ? `${t.projects.card.containers(p.containers.length)} · ${t.projects.card.portMappings(p.routes.length)}` : t.projects.card.containers(p.containers.length)}</span>
+        <Roll value={p.routes.length > 0 ? `${t.projects.card.containers(p.containers.length)} · ${t.projects.card.portMappings(p.routes.length)}` : t.projects.card.containers(p.containers.length)} />
         <span
           className="shrink-0 tabular-nums"
           title={p.rebuiltAt ? t.projects.card.rebuiltAt(formatDate(toDate(p.rebuiltAt)) ?? "—") : t.projects.card.createdAt(formatDate(toDate(p.createdAt)) ?? "—")}
@@ -218,9 +219,7 @@ function CardsSkeleton() {
       {[0, 1, 2].map((i) => (
         <div key={i} className={projectCard}>
           <Skeleton className={cn(line, "w-3/5")} />
-          <Skeleton className={cn(line, "w-2/5")} />
           <Skeleton className={cn(line, "w-4/5")} />
-          <Skeleton className={cn(line, "w-[70%]")} />
         </div>
       ))}
     </div>

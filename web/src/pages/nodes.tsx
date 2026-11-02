@@ -37,8 +37,11 @@ import {
   QueryError,
   Row,
   RowsSkeleton,
+  AutoHeight,
+  Roll,
   Section,
   Segmented,
+  Slide,
   Skeleton,
   Spinner,
   Status,
@@ -135,7 +138,9 @@ function NodeResources({ n }: { n: Node }) {
             return (
               <div key={it.name} className="grid min-w-0 gap-3">
                 <div className="text-muted-foreground">{it.label}</div>
-                <div className="text-[20px] leading-7 font-medium tracking-tight">{points.length ? it.format(points[points.length - 1][1]) : "—"}</div>
+                <div className="text-[20px] leading-7 font-medium tracking-tight">
+                  <Roll value={points.length ? it.format(points[points.length - 1][1]) : "—"} n={points.length ? points[points.length - 1][1] : undefined} />
+                </div>
                 <TimeChart
                   className="mt-2"
                   series={[{ label: it.label, points, className: "text-info" }]}
@@ -297,6 +302,7 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
           </>
         }
       />
+      <AutoHeight>
       {nodes.isPending ? (
         <CardsSkeleton />
       ) : nodes.error ? (
@@ -313,16 +319,21 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
         >
           {t.nodes.addNodeDescription}
         </Empty>
-      ) : view !== "cards" ? (
-        <>
-          <div className="hidden sm:block">
-            <NodeMap nodes={list} layer={view} />
-          </div>
-          <div className="sm:hidden">{cards}</div>
-        </>
       ) : (
-        cards
+        <Slide id={view} index={["cards", "network", "ha"].indexOf(view)}>
+          {view !== "cards" ? (
+            <>
+              <div className="hidden sm:block">
+                <NodeMap nodes={list} layer={view} />
+              </div>
+              <div className="sm:hidden">{cards}</div>
+            </>
+          ) : (
+            cards
+          )}
+        </Slide>
       )}
+      </AutoHeight>
       <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} className="max-w-[520px]">
         <AddNode onClose={() => setDialog(null)} />
       </Dialog>
@@ -341,7 +352,6 @@ function CardsSkeleton() {
         {[0, 1].map((i) => (
           <div key={i} className="flex flex-col gap-3 rounded-lg border bg-background p-4">
             <Skeleton className="my-1 h-3 w-3/5" />
-            <Skeleton className="my-1 h-3 w-2/5" />
             <Skeleton className="my-1 h-3 w-4/5" />
           </div>
         ))}
@@ -387,10 +397,12 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
       ) : n.online ? (
         <NodeUsageBars usage={u} info={n.info} />
       ) : (
-        <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</p>
+        <p className="text-[13px] leading-5 text-muted-foreground">
+          <Roll value={t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))} />
+        </p>
       )}
       <div className="mt-auto flex items-center justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
-        <span className="shrink-0">{t.nodes.containers(n.containers)}</span>
+        <Roll value={t.nodes.containers(n.containers)} n={n.containers} className="shrink-0" />
         <span className="truncate">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
       </div>
     </Link>
@@ -463,9 +475,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               </>
             )}
             <button type="button" className="cursor-pointer underline-offset-4 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
-              {t.nodes.containers(n.containers)}
+              <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
-            {!n.online && <span>{t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))}</span>}
+            {!n.online && <Roll value={t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))} />}
           </>
         }
         actions={
@@ -507,7 +519,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
         <>
           <Tabs value={tab} onChange={onTab} items={tabs} className={cn("mb-6", browsing && "max-md:hidden")} />
           {/* 这一层不能省：区块靠 first: 去掉第一个的分隔线。 */}
-          <div>
+          <Slide id={tab} index={tabs.findIndex((x) => x.value === tab)}>
             {tab === "containers" ? (
               <NodeContainers nodeId={n.id} online={n.online} />
             ) : (tab === "terminal" || tab === "files") && !showAccess ? (
@@ -530,13 +542,13 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             ) : (
               <NodePanels nodeId={n.id} />
             )}
-            {/* 终端不卸载：卸载就断开了。放在后面：区块靠 first: 去掉第一条分隔线。 */}
-            {showAccess && n.online && !accessBlock && shellOpened && (
-              <div className={tab === "terminal" ? undefined : "hidden"}>
-                <NodeTerminal node={n} cwd={path} />
-              </div>
-            )}
-          </div>
+          </Slide>
+          {/* 终端不卸载：卸载就断开了。所以放在带 key 的那层外面。 */}
+          {showAccess && n.online && !accessBlock && shellOpened && (
+            <div className={tab === "terminal" ? "animate-fade-in" : "hidden"}>
+              <NodeTerminal node={n} cwd={path} />
+            </div>
+          )}
         </>
       )}
     </>
@@ -905,7 +917,7 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
                 key={`${r?.projectId}-${r?.container}`}
                 title={<span className="truncate">{label}</span>}
                 sub={!inUse ? <span className="text-warning-text" title={detail}>{t.nodes.replicas.unused}</span> : detail}
-                cols={[{ content: fmtBytes(Number(r?.bytes ?? 0)), num: true }]}
+                cols={[{ content: <Roll value={fmtBytes(Number(r?.bytes ?? 0))} n={Number(r?.bytes ?? 0)} />, num: true }]}
                 actions={
                   inUse ? null : (
                     <Button size="row" variant="ghost" onClick={() => remove(r!.projectId, r!.container)}>
