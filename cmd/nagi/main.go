@@ -25,7 +25,7 @@ var version = "dev"
 func main() {
 	root := &cobra.Command{
 		Use:           "nagi",
-		Short:         "Nagi（凪）：风平浪静的 Docker 项目面板",
+		Short:         "Nagi（凪）：风平浪静的容器部署平台",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

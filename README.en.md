@@ -13,7 +13,7 @@
 
 > Calm waters.
 
-Nagi is an open-source Docker panel that aims to be simple, good-looking and easy to deploy. It is ready for production out of the box and supports multiple nodes and high availability.
+Nagi is an open-source, self-hosted container deployment platform with multi-node support and high availability. It aims to be simple, good-looking and easy to deploy, and is ready for production out of the box.
 
 The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
 
