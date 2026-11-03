@@ -8,6 +8,7 @@ import { avatarSrc, UserAvatar } from "@/components/account";
 import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
+import { AccessTokenList } from "@/pages/tokens";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 
@@ -265,6 +266,7 @@ export function MembersCard() {
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<PanelUser | null>(null);
   const [editing, setEditing] = useState<PanelUser | null>(null);
+  const [tokensOf, setTokensOf] = useState<PanelUser | null>(null);
   const [error, setError] = useState("");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
   const call = async (fn: () => Promise<unknown>, done: string) => {
@@ -317,6 +319,7 @@ export function MembersCard() {
                   className="size-9 last:mr-0 [&_svg]:size-5"
                   items={[
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
+                    { label: t.tokens.title, onSelect: () => setTokensOf(u) },
                     { label: t.members.resetPassword, onSelect: () => setResetting(u) },
                     ...(u.totpEnabled && !u.isSelf
                       ? [
@@ -359,6 +362,9 @@ export function MembersCard() {
       </Dialog>
       <Dialog open={!!resetting} onClose={() => setResetting(null)} title={t.members.resetPassword} description={resetting?.username}>
         {resetting && <ResetPassword user={resetting} onCancel={() => setResetting(null)} onDone={() => setResetting(null)} />}
+      </Dialog>
+      <Dialog open={!!tokensOf} onClose={() => setTokensOf(null)} className="max-w-[560px]" title={t.tokens.title} description={tokensOf ? t.tokens.forUser(tokensOf.username) : undefined}>
+        {tokensOf && <AccessTokenList userId={tokensOf.id} />}
       </Dialog>
       <Dialog open={!!editing} onClose={() => setEditing(null)} title={t.members.editAccess} description={editing?.username}>
         {editing && (

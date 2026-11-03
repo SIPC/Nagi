@@ -13,6 +13,7 @@ import invite from "./invite";
 import mesh from "./mesh";
 import panels from "./panels";
 import security from "./security";
+import tokens from "./tokens";
 import standby from "./standby";
 import update from "./update";
 import projects from "./projects";
@@ -42,6 +43,7 @@ export default {
   mesh,
   panels,
   security,
+  tokens,
   standby,
   update,
   projects,

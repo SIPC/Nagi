@@ -15,6 +15,7 @@ export default {
   firing: "Alert",
   resolved: "Resolved",
   more: "Load more",
+  via: (token) => `via MCP (${token})`,
   actions: {
     OpenTerminal: "Open container terminal",
     OpenNodeShell: "Open node terminal",
@@ -58,6 +59,10 @@ export default {
     DeleteRoute: "Delete port mapping",
     RetryDomainCert: "Retry certificate",
     SetContainerDisplayName: "Rename container",
+    ExecCommand: "Run command in container",
+    CreateAccessToken: "Create access token",
+    RevokeAccessToken: "Revoke access token",
+    ApproveOAuth: "OAuth authorization",
     SetBackupNode: "Set backup node",
     SyncBackup: "Sync backup",
     RestoreFromBackup: "Restore from backup",

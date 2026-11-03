@@ -7,6 +7,7 @@ import { confirmAction } from "@/components/confirm";
 import { Alert, Button, CopyButton, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
+import { AccessTokenSection } from "@/pages/tokens";
 import { CopyTextButton } from "@/pages/access";
 import { CodeBox } from "@/pages/invite";
 import { useRole } from "@/components/role";
@@ -246,6 +247,7 @@ export function SecurityCard() {
       <Section title={<span title={t.security.sessions.description}>{t.security.sessions.label}</span>}>
         <SessionList />
       </Section>
+      <AccessTokenSection />
       {dialog === "password" && <PasswordDialog onClose={() => setDialog(null)} onDone={refresh} />}
       {dialog === "disable-totp" && <DisableTotpDialog onClose={() => setDialog(null)} onDone={refresh} />}
       {setup && <EnableTotpDialog setup={setup} onClose={() => setSetup(null)} onDone={refresh} />}

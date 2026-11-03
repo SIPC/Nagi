@@ -7,17 +7,17 @@ import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner } from "@/c
 import { t } from "@/i18n";
 import { authClient, errorMessage, toDate } from "@/lib/api";
 
-type Request = { totp: boolean; resolve: (ok: boolean) => void };
+type Request = { totp: boolean; description?: string; resolve: (ok: boolean) => void };
 
 let show: ((r: Request) => void) | undefined;
 
-// requireElevation 确认过了就直接返回 true，否则弹框。取消时返回 false。
-export async function requireElevation(): Promise<boolean> {
+// requireElevation 确认过了就直接返回 true，否则弹框。取消时返回 false。description 换掉对话框的说明（默认是节点权限的）。
+export async function requireElevation(description?: string): Promise<boolean> {
   const me = await authClient.me({});
   const until = toDate(me.elevatedUntil);
   if (until && until.getTime() > Date.now() + 5000) return true;
   return new Promise((resolve) => {
-    if (show) show({ totp: me.totpEnabled, resolve });
+    if (show) show({ totp: me.totpEnabled, description, resolve });
     else resolve(false);
   });
 }
@@ -67,7 +67,7 @@ export function ElevateHost() {
   };
 
   return (
-    <Dialog open={!!req} onClose={() => finish(false)} title={m.title} description={m.description}>
+    <Dialog open={!!req} onClose={() => finish(false)} title={m.title} description={req?.description ?? m.description}>
       <form
         className="grid gap-4"
         onSubmit={(e) => {

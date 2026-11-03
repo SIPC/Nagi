@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { authClient, isNotFound, isUnauthenticated, setupClient } from "@/lib/api";
 import { LoginPage, SetupPage } from "@/pages/auth";
+import { OAuthAuthorizePage } from "@/pages/tokens";
 import { AppLayout, NotFound } from "@/pages/layout";
 import { OverviewPage } from "@/pages/overview";
 import { metricRanges, type MetricRange } from "@/components/metrics";
@@ -59,6 +60,13 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
   component: LoginPage,
+});
+
+// OAuth 授权页（见 docs/mcp.md#oauth）：不在导航框里，没登录时自己转去登录页并记下回来的地址。
+const oauthRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/oauth/authorize",
+  component: OAuthAuthorizePage,
 });
 
 // 需要登录的页面。未初始化时去初始化页，未登录时去登录页。
@@ -233,6 +241,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
+  oauthRoute,
   appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, settingsRoute]),
 ]);
 

@@ -80,7 +80,7 @@ export function ActivityCard() {
                   const name = (e.kind === "alert" && e.detail) || actionLabel(e);
                   const time = timeAgo(toDate(e.time));
                   // 告警第二行写类型和是否已恢复，操作写谁做的和失败原因。
-                  const parts = e.kind === "alert" ? [t.activity.firing, e.action === "resolved" && t.activity.resolved, time] : [e.actor, e.detail, time];
+                  const parts = e.kind === "alert" ? [t.activity.firing, e.action === "resolved" && t.activity.resolved, time] : [e.actor, e.via && t.activity.via(e.via.replace(/^mcp:/, "")), e.detail, time];
                   return (
                     <Row
                       key={String(e.id)}

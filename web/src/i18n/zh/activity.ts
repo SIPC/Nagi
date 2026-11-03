@@ -14,6 +14,7 @@ export default {
   firing: "告警",
   resolved: "已恢复",
   more: "加载更多",
+  via: (token: string) => `通过 MCP（${token}）`,
   actions: {
     OpenTerminal: "打开容器终端",
     OpenNodeShell: "打开节点终端",
@@ -57,6 +58,10 @@ export default {
     DeleteRoute: "删除端口映射",
     RetryDomainCert: "重试申请证书",
     SetContainerDisplayName: "重命名容器",
+    ExecCommand: "在容器里执行命令",
+    CreateAccessToken: "生成访问令牌",
+    RevokeAccessToken: "吊销访问令牌",
+    ApproveOAuth: "OAuth 授权",
     SetBackupNode: "设置备份节点",
     SyncBackup: "同步备份",
     RestoreFromBackup: "从备份恢复",

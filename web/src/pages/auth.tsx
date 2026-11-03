@@ -7,9 +7,12 @@ import { Button, Field, Input, Notice, QueryError, Spinner, Waves } from "@/comp
 import { LanguageButton } from "@/components/language";
 import { t } from "@/i18n";
 
+// returnToKey：OAuth 授权页在没登录时记下自己的地址，登录后回到那里（见 pages/tokens.tsx）。
+export const returnToKey = "nagi.returnTo";
+
 // AuthShell：登录、初始化页面的外框。居中 360 宽，没有卡片：品牌、标题、内容。
 // 只有一条提示（未初始化、连不上面板）时不写标题。
-function AuthShell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {
+export function AuthShell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="fixed top-4 right-4">
@@ -122,7 +125,16 @@ export function LoginPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries();
-      navigate({ to: "/" });
+      // 从 OAuth 授权页过来的，登录后回去（见 pages/tokens.tsx）。
+      let back = "";
+      try {
+        back = sessionStorage.getItem(returnToKey) ?? "";
+        sessionStorage.removeItem(returnToKey);
+      } catch {
+        // 读不了就回首页。
+      }
+      if (back.startsWith("/oauth/authorize?")) window.location.assign(back);
+      else navigate({ to: "/" });
     },
   });
 
