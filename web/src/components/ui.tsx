@@ -437,6 +437,48 @@ export function AutoHeight({ className, children }: { className?: string; childr
   );
 }
 
+// Collapse：切换选项后多出、少掉的一块（例如选「指定」后出现的勾选列表）。高度和透明度一起过渡，
+// 收起时内容留到过渡结束才移除，不会先消失再收拢。带 data-auto-height：外层的 AutoHeight 当它是自己在过渡的子组件，不重复过渡。
+export function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [closing, setClosing] = useState(false);
+  const kept = useRef(children);
+  if (open) kept.current = children;
+  // 和上一次比较，不用「是否第一次」：开发模式下挂载时副作用会跑两遍。
+  const last = useRef(open);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (last.current === open || !el) return;
+    last.current = open;
+    const running = el.getAnimations();
+    // 正在过渡时从当前高度接着走。
+    const from = running.length > 0 ? el.offsetHeight : open ? 0 : el.offsetHeight;
+    running.forEach((a) => a.cancel());
+    if (!open) setClosing(true);
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setClosing(false);
+      return;
+    }
+    const to = open ? el.scrollHeight : 0;
+    const animation = el.animate(
+      [
+        { height: `${from}px`, opacity: open ? 0 : 1, overflow: "clip" },
+        { height: `${to}px`, opacity: open ? 1 : 0, overflow: "clip" },
+      ],
+      { duration: layoutMotionMs, easing: `cubic-bezier(${layoutMotionCurve.join(",")})`, fill: open ? "none" : "forwards" },
+    );
+    animation.onfinish = () => {
+      if (!open) setClosing(false);
+    };
+  }, [open]);
+  return (
+    <div ref={ref} data-auto-height="" className="min-w-0">
+      {/* last 还没更新时是刚收起的这一帧：内容先留着，副作用里才量得到收起前的高度。 */}
+      {(open || closing || last.current) && kept.current}
+    </div>
+  );
+}
+
 export function Section({
   title,
   description,
@@ -994,11 +1036,22 @@ export function Slide({ id, index, variant = "tabs", className, inner, children 
     return stop;
     // 只在换内容时运行。
   }, [id]);
+  // 主导航、设置页、项目页换的是整块内容，这一层不过渡高度（不过渡整页），只过渡里面的每个组件。
+  if (variant !== "tabs") {
+    return (
+      <div ref={node} key={id} className={cn(classes.enter[dir], className)}>
+        {variant === "page" ? children : <AutoHeight className={inner}>{children}</AutoHeight>}
+      </div>
+    );
+  }
+  // 页面里的标签和切换控件：高度过渡放在换内容的这一层外面。换内容时它不重建，从旧高度过渡到新高度，
+  // 下面的内容跟着平滑移动，不会先跳过去再被揭开。
   return (
-    <div ref={node} key={id} className={cn(classes.enter[dir], className)}>
-      {/* 主导航这一层不管高度：只过渡每个组件，不过渡整页。 */}
-      {variant === "page" ? children : <AutoHeight className={inner}>{children}</AutoHeight>}
-    </div>
+    <AutoHeight>
+      <div ref={node} key={id} className={cn(classes.enter[dir], className, inner)}>
+        {children}
+      </div>
+    </AutoHeight>
   );
 }
 
@@ -1114,7 +1167,8 @@ export function Dialog({
             </Button>
           </DialogClose>
         </div>
-        <div className="grid gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4">{children}</div>
+        {/* 内容变了（切换选项多出一块、出现错误提示）时高度过渡，不直接跳。 */}
+        <AutoHeight className="grid gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4">{children}</AutoHeight>
       </DialogContent>
     </DialogRoot>
   );
@@ -1165,12 +1219,12 @@ function ActionSheet({ open, onClose, items, label, title }: { open: boolean; on
 }
 
 // Menu：「更多」按钮和下拉菜单（shadcn）。不用模态模式：选中后常常接着打开确认框，模态菜单会和它争焦点。
-// 手机上是底部操作面板。title：面板的标题（灰字），例如文件名。ghost：无框按钮（手机标题栏的 ⋯）。
-export function Menu({ items, label = t.common.actions.more, rowStyle, ghost, title }: { items: MenuItem[]; label?: string; rowStyle?: boolean; ghost?: boolean; title?: React.ReactNode }) {
+// 手机上是底部操作面板。title：面板的标题（灰字），例如文件名。ghost：无框按钮（手机标题栏的 ⋯）。className：按钮的样式。
+export function Menu({ items, label = t.common.actions.more, rowStyle, ghost, title, className }: { items: MenuItem[]; label?: string; rowStyle?: boolean; ghost?: boolean; title?: React.ReactNode; className?: string }) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const trigger = (
-    <Button variant={rowStyle || ghost ? "ghost" : "outline"} size={rowStyle ? "rowIcon" : "icon"} aria-label={label} onClick={mobile ? () => setOpen(true) : undefined}>
+    <Button variant={rowStyle || ghost ? "ghost" : "outline"} size={rowStyle ? "rowIcon" : "icon"} className={className} aria-label={label} onClick={mobile ? () => setOpen(true) : undefined}>
       <Ellipsis />
     </Button>
   );
