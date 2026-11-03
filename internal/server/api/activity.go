@@ -108,6 +108,7 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		Target:    clipActivity(target, 200),
 		Detail:    clipActivity(detail, 500),
 		Failed:    boolInt(failure != ""),
+		Via:       clipActivity(auth.CurrentUser(ctx).Via, 80),
 	})
 	if err != nil {
 		a.Log.Warn("写入活动记录失败", "err", err)
@@ -210,7 +211,7 @@ func (c *activityConn) Send(m any) error {
 func activityEntry(r store.Activity) *nagiv1.ActivityEntry {
 	return &nagiv1.ActivityEntry{
 		Id: r.ID, Time: timestamppb.New(time.Unix(r.CreatedAt, 0)), Kind: r.Kind, Actor: r.Actor, Action: r.Action,
-		ProjectId: r.ProjectID, Target: r.Target, Detail: r.Detail, Failed: r.Failed != 0,
+		ProjectId: r.ProjectID, Target: r.Target, Detail: r.Detail, Failed: r.Failed != 0, Via: r.Via,
 	}
 }
 

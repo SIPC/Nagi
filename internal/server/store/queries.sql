@@ -1,6 +1,6 @@
 -- name: InsertActivity :exec
-INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed, via)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: PruneActivity :exec
 DELETE FROM activity WHERE id <= (SELECT MAX(id) FROM activity) - ?;

@@ -43,6 +43,43 @@ service AuthService {
   rpc SetLanguage(SetLanguageRequest) returns (SetLanguageResponse);
   // 保存自己的个人资料（显示名称和头像），整份覆盖。
   rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  // OAuth 授权页（见 docs/mcp.md#oauth）：检查授权请求，返回客户端的名称和回调地址的域名。
+  rpc GetOAuthRequest(OAuthRequest) returns (GetOAuthRequestResponse);
+  // 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
+  rpc ApproveOAuth(ApproveOAuthRequest) returns (ApproveOAuthResponse);
+}
+
+// OAuthRequest 是客户端打开授权页时带的参数（/oauth/authorize 的查询参数）。
+message OAuthRequest {
+  string response_type = 1;
+  string client_id = 2;
+  string redirect_uri = 3;
+  string state = 4;
+  string code_challenge = 5;
+  string code_challenge_method = 6;
+  string scope = 7;
+  string resource = 8;
+}
+
+message GetOAuthRequestResponse {
+  string client_name = 1;
+  // 回调地址的域名（本机客户端是 localhost），授权页上醒目显示，防止钓鱼。
+  string redirect_host = 2;
+  // 当前成员的角色：只读成员没有「可修改」「执行命令」两个选项。
+  string role = 3;
+}
+
+message ApproveOAuthRequest {
+  OAuthRequest request = 1;
+  bool allow = 2;
+  // 授权的有效期（天），0 表示不过期。
+  uint32 days = 3;
+  bool allow_write = 4;
+  bool allow_exec = 5;
+}
+
+message ApproveOAuthResponse {
+  string redirect_url = 1;
 }
 
 message LoginRequest {
@@ -327,7 +364,56 @@ service SettingsService {
   // 当前用户自己的登录会话。
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
   rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+  // 访问令牌（见 docs/mcp.md#登录）。user_id 为 0 时是自己的；管理员可以查看、吊销其他成员的。
+  rpc ListAccessTokens(ListAccessTokensRequest) returns (ListAccessTokensResponse);
+  // 生成个人访问令牌，只能给自己生成，要先做高权限确认。
+  rpc CreateAccessToken(CreateAccessTokenRequest) returns (CreateAccessTokenResponse);
+  rpc RevokeAccessToken(RevokeAccessTokenRequest) returns (RevokeAccessTokenResponse);
 }
+
+message AccessToken {
+  int64 id = 1;
+  // 个人令牌是成员起的名字，OAuth 是客户端的名称。
+  string name = 2;
+  // personal、oauth。
+  string source = 3;
+  bool allow_write = 4;
+  bool allow_exec = 5;
+  google.protobuf.Timestamp created_at = 6;
+  // 为空表示不过期。OAuth 是整个授权的有效期。
+  google.protobuf.Timestamp expires_at = 7;
+  // 没用过时为空。
+  google.protobuf.Timestamp last_used_at = 8;
+  string last_ip = 9;
+}
+
+message ListAccessTokensRequest {
+  int64 user_id = 1;
+}
+
+message ListAccessTokensResponse {
+  repeated AccessToken tokens = 1;
+}
+
+message CreateAccessTokenRequest {
+  string name = 1;
+  // 有效期（天），0 表示不过期。
+  uint32 days = 2;
+  bool allow_write = 3;
+  bool allow_exec = 4;
+}
+
+message CreateAccessTokenResponse {
+  AccessToken token = 1;
+  // 令牌本身，只在这里出现一次。
+  string secret = 2;
+}
+
+message RevokeAccessTokenRequest {
+  int64 id = 1;
+}
+
+message RevokeAccessTokenResponse {}
 
 message GetSecurityRequest {}
 
@@ -335,6 +421,8 @@ message Security {
   bool totp_enabled = 1;
   // 安全入口路径（不含 /），没开启时为空。开启后要先打开 https://<面板>/<路径> 才能看到登录页。
   string entrance = 2;
+  // 开没开安全入口。入口路径只给管理员，其他成员只知道开了：MCP 的地址要带着入口（见 docs/mcp.md#入口），要向管理员要。
+  bool entrance_enabled = 3;
 }
 
 message BeginTOTPRequest {}
@@ -758,6 +846,8 @@ message ActivityEntry {
   // 告警的标题；操作失败时的错误信息。
   string detail = 8;
   bool failed = 9;
+  // 操作的来源：网页为空，MCP 是 mcp:<令牌名>（见 docs/mcp.md#调用方式）。
+  string via = 10;
 }
 
 message ListActivityResponse {

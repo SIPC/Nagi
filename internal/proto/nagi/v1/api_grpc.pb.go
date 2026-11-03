@@ -159,13 +159,15 @@ var SetupService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Login_FullMethodName          = "/nagi.v1.AuthService/Login"
-	AuthService_Logout_FullMethodName         = "/nagi.v1.AuthService/Logout"
-	AuthService_Me_FullMethodName             = "/nagi.v1.AuthService/Me"
-	AuthService_Elevate_FullMethodName        = "/nagi.v1.AuthService/Elevate"
-	AuthService_ChangePassword_FullMethodName = "/nagi.v1.AuthService/ChangePassword"
-	AuthService_SetLanguage_FullMethodName    = "/nagi.v1.AuthService/SetLanguage"
-	AuthService_UpdateProfile_FullMethodName  = "/nagi.v1.AuthService/UpdateProfile"
+	AuthService_Login_FullMethodName           = "/nagi.v1.AuthService/Login"
+	AuthService_Logout_FullMethodName          = "/nagi.v1.AuthService/Logout"
+	AuthService_Me_FullMethodName              = "/nagi.v1.AuthService/Me"
+	AuthService_Elevate_FullMethodName         = "/nagi.v1.AuthService/Elevate"
+	AuthService_ChangePassword_FullMethodName  = "/nagi.v1.AuthService/ChangePassword"
+	AuthService_SetLanguage_FullMethodName     = "/nagi.v1.AuthService/SetLanguage"
+	AuthService_UpdateProfile_FullMethodName   = "/nagi.v1.AuthService/UpdateProfile"
+	AuthService_GetOAuthRequest_FullMethodName = "/nagi.v1.AuthService/GetOAuthRequest"
+	AuthService_ApproveOAuth_FullMethodName    = "/nagi.v1.AuthService/ApproveOAuth"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -184,6 +186,10 @@ type AuthServiceClient interface {
 	SetLanguage(ctx context.Context, in *SetLanguageRequest, opts ...grpc.CallOption) (*SetLanguageResponse, error)
 	// 保存自己的个人资料（显示名称和头像），整份覆盖。
 	UpdateProfile(ctx context.Context, in *UpdateProfileRequest, opts ...grpc.CallOption) (*UpdateProfileResponse, error)
+	// OAuth 授权页（见 docs/mcp.md#oauth）：检查授权请求，返回客户端的名称和回调地址的域名。
+	GetOAuthRequest(ctx context.Context, in *OAuthRequest, opts ...grpc.CallOption) (*GetOAuthRequestResponse, error)
+	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
+	ApproveOAuth(ctx context.Context, in *ApproveOAuthRequest, opts ...grpc.CallOption) (*ApproveOAuthResponse, error)
 }
 
 type authServiceClient struct {
@@ -264,6 +270,26 @@ func (c *authServiceClient) UpdateProfile(ctx context.Context, in *UpdateProfile
 	return out, nil
 }
 
+func (c *authServiceClient) GetOAuthRequest(ctx context.Context, in *OAuthRequest, opts ...grpc.CallOption) (*GetOAuthRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOAuthRequestResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetOAuthRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ApproveOAuth(ctx context.Context, in *ApproveOAuthRequest, opts ...grpc.CallOption) (*ApproveOAuthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveOAuthResponse)
+	err := c.cc.Invoke(ctx, AuthService_ApproveOAuth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -280,6 +306,10 @@ type AuthServiceServer interface {
 	SetLanguage(context.Context, *SetLanguageRequest) (*SetLanguageResponse, error)
 	// 保存自己的个人资料（显示名称和头像），整份覆盖。
 	UpdateProfile(context.Context, *UpdateProfileRequest) (*UpdateProfileResponse, error)
+	// OAuth 授权页（见 docs/mcp.md#oauth）：检查授权请求，返回客户端的名称和回调地址的域名。
+	GetOAuthRequest(context.Context, *OAuthRequest) (*GetOAuthRequestResponse, error)
+	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
+	ApproveOAuth(context.Context, *ApproveOAuthRequest) (*ApproveOAuthResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -310,6 +340,12 @@ func (UnimplementedAuthServiceServer) SetLanguage(context.Context, *SetLanguageR
 }
 func (UnimplementedAuthServiceServer) UpdateProfile(context.Context, *UpdateProfileRequest) (*UpdateProfileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateProfile not implemented")
+}
+func (UnimplementedAuthServiceServer) GetOAuthRequest(context.Context, *OAuthRequest) (*GetOAuthRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOAuthRequest not implemented")
+}
+func (UnimplementedAuthServiceServer) ApproveOAuth(context.Context, *ApproveOAuthRequest) (*ApproveOAuthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveOAuth not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -458,6 +494,42 @@ func _AuthService_UpdateProfile_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetOAuthRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OAuthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetOAuthRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetOAuthRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetOAuthRequest(ctx, req.(*OAuthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ApproveOAuth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveOAuthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ApproveOAuth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ApproveOAuth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ApproveOAuth(ctx, req.(*ApproveOAuthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -492,6 +564,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateProfile",
 			Handler:    _AuthService_UpdateProfile_Handler,
+		},
+		{
+			MethodName: "GetOAuthRequest",
+			Handler:    _AuthService_GetOAuthRequest_Handler,
+		},
+		{
+			MethodName: "ApproveOAuth",
+			Handler:    _AuthService_ApproveOAuth_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1655,6 +1735,9 @@ const (
 	SettingsService_DeleteUser_FullMethodName        = "/nagi.v1.SettingsService/DeleteUser"
 	SettingsService_ListSessions_FullMethodName      = "/nagi.v1.SettingsService/ListSessions"
 	SettingsService_RevokeSession_FullMethodName     = "/nagi.v1.SettingsService/RevokeSession"
+	SettingsService_ListAccessTokens_FullMethodName  = "/nagi.v1.SettingsService/ListAccessTokens"
+	SettingsService_CreateAccessToken_FullMethodName = "/nagi.v1.SettingsService/CreateAccessToken"
+	SettingsService_RevokeAccessToken_FullMethodName = "/nagi.v1.SettingsService/RevokeAccessToken"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -1707,6 +1790,11 @@ type SettingsServiceClient interface {
 	// 当前用户自己的登录会话。
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	RevokeSession(ctx context.Context, in *RevokeSessionRequest, opts ...grpc.CallOption) (*RevokeSessionResponse, error)
+	// 访问令牌（见 docs/mcp.md#登录）。user_id 为 0 时是自己的；管理员可以查看、吊销其他成员的。
+	ListAccessTokens(ctx context.Context, in *ListAccessTokensRequest, opts ...grpc.CallOption) (*ListAccessTokensResponse, error)
+	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
+	CreateAccessToken(ctx context.Context, in *CreateAccessTokenRequest, opts ...grpc.CallOption) (*CreateAccessTokenResponse, error)
+	RevokeAccessToken(ctx context.Context, in *RevokeAccessTokenRequest, opts ...grpc.CallOption) (*RevokeAccessTokenResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -1997,6 +2085,36 @@ func (c *settingsServiceClient) RevokeSession(ctx context.Context, in *RevokeSes
 	return out, nil
 }
 
+func (c *settingsServiceClient) ListAccessTokens(ctx context.Context, in *ListAccessTokensRequest, opts ...grpc.CallOption) (*ListAccessTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAccessTokensResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListAccessTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) CreateAccessToken(ctx context.Context, in *CreateAccessTokenRequest, opts ...grpc.CallOption) (*CreateAccessTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAccessTokenResponse)
+	err := c.cc.Invoke(ctx, SettingsService_CreateAccessToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, in *RevokeAccessTokenRequest, opts ...grpc.CallOption) (*RevokeAccessTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeAccessTokenResponse)
+	err := c.cc.Invoke(ctx, SettingsService_RevokeAccessToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2047,6 +2165,11 @@ type SettingsServiceServer interface {
 	// 当前用户自己的登录会话。
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	RevokeSession(context.Context, *RevokeSessionRequest) (*RevokeSessionResponse, error)
+	// 访问令牌（见 docs/mcp.md#登录）。user_id 为 0 时是自己的；管理员可以查看、吊销其他成员的。
+	ListAccessTokens(context.Context, *ListAccessTokensRequest) (*ListAccessTokensResponse, error)
+	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
+	CreateAccessToken(context.Context, *CreateAccessTokenRequest) (*CreateAccessTokenResponse, error)
+	RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -2140,6 +2263,15 @@ func (UnimplementedSettingsServiceServer) ListSessions(context.Context, *ListSes
 }
 func (UnimplementedSettingsServiceServer) RevokeSession(context.Context, *RevokeSessionRequest) (*RevokeSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeSession not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListAccessTokens(context.Context, *ListAccessTokensRequest) (*ListAccessTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAccessTokens not implemented")
+}
+func (UnimplementedSettingsServiceServer) CreateAccessToken(context.Context, *CreateAccessTokenRequest) (*CreateAccessTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAccessToken not implemented")
+}
+func (UnimplementedSettingsServiceServer) RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeAccessToken not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -2666,6 +2798,60 @@ func _SettingsService_RevokeSession_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_ListAccessTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAccessTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListAccessTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListAccessTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListAccessTokens(ctx, req.(*ListAccessTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_CreateAccessToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAccessTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).CreateAccessToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_CreateAccessToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).CreateAccessToken(ctx, req.(*CreateAccessTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_RevokeAccessToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeAccessTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).RevokeAccessToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_RevokeAccessToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).RevokeAccessToken(ctx, req.(*RevokeAccessTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2784,6 +2970,18 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeSession",
 			Handler:    _SettingsService_RevokeSession_Handler,
+		},
+		{
+			MethodName: "ListAccessTokens",
+			Handler:    _SettingsService_ListAccessTokens_Handler,
+		},
+		{
+			MethodName: "CreateAccessToken",
+			Handler:    _SettingsService_CreateAccessToken_Handler,
+		},
+		{
+			MethodName: "RevokeAccessToken",
+			Handler:    _SettingsService_RevokeAccessToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -18,6 +18,7 @@ type Activity struct {
 	Target    string
 	Detail    string
 	Failed    int64
+	Via       string
 }
 
 type Container struct {

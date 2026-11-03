@@ -49,6 +49,8 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.NodeServiceCreateNodeDirProcedure:         true,
 	nagiv1connect.NodeServiceListNodeFileBackupsProcedure:   true,
 	nagiv1connect.NodeServiceRestoreNodeFileBackupProcedure: true,
+	// 访问令牌是长期有效的凭据（见 docs/mcp.md#个人访问令牌）。
+	nagiv1connect.SettingsServiceCreateAccessTokenProcedure: true,
 }
 
 func elevationError() error {

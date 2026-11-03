@@ -238,6 +238,11 @@ type User struct {
 	ElevatedUntil int64
 	// LimitProjects、LimitNodes 表示只能访问指定的项目、节点（见 docs/panel.md#访问范围）。管理员不受限制。
 	LimitProjects, LimitNodes bool
+	// 用访问令牌（MCP）调用时：令牌的 ID、活动记录里的来源（mcp:<令牌名>），以及令牌是否允许修改、执行命令
+	// （见 docs/mcp.md#权限）。网页的会话这几项为空。
+	TokenID               int64
+	Via                   string
+	AllowWrite, AllowExec bool
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
@@ -261,12 +266,16 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0}, nil
 }
 
-// CleanupLoop 定期清理过期会话，直到 ctx 取消。
+// CleanupLoop 定期清理过期的会话、访问令牌和没用的 OAuth 客户端，直到 ctx 取消。
 func (s *Service) CleanupLoop(ctx context.Context) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
-		_ = s.q.DeleteExpiredSessions(ctx, time.Now().Unix())
+		now := time.Now()
+		_ = s.q.DeleteExpiredSessions(ctx, now.Unix())
+		_ = s.q.DeleteExpiredAccessTokens(ctx, now.Unix())
+		// 注册了一直没人授权的 OAuth 客户端（见 docs/mcp.md#oauth）。
+		_ = s.q.DeleteStaleOAuthClients(ctx, now.Add(-24*time.Hour).Unix())
 		select {
 		case <-ctx.Done():
 			return
@@ -282,6 +291,14 @@ type userKey struct{}
 // WithUser 把用户放进 ctx，给不走 Connect 拦截器的入口用。
 func WithUser(ctx context.Context, u User) context.Context {
 	return context.WithValue(ctx, userKey{}, u)
+}
+
+type internalUserKey struct{}
+
+// WithInternalUser 标记进程内的调用（MCP 调用面板自己的接口）已经按访问令牌核对过用户，登录检查直接采用它。
+// 只有进程里的代码能设置 ctx，所以不能从网络伪造。
+func WithInternalUser(ctx context.Context, u User) context.Context {
+	return context.WithValue(ctx, internalUserKey{}, u)
 }
 
 // Username 返回当前请求的登录用户名。
@@ -308,6 +325,10 @@ type interceptor struct {
 }
 
 func (i *interceptor) check(ctx context.Context, procedure string, h http.Header) (context.Context, error) {
+	// MCP 在进程内调用接口，用户已经按令牌核对过（见 WithInternalUser）。
+	if u, ok := ctx.Value(internalUserKey{}).(User); ok {
+		return context.WithValue(ctx, userKey{}, u), nil
+	}
 	if i.public[procedure] {
 		return ctx, nil
 	}

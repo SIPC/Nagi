@@ -686,8 +686,8 @@ func (q *Queries) ClearUserTOTP(ctx context.Context, id int64) error {
 }
 
 const insertActivity = `-- name: InsertActivity :exec
-INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO activity (created_at, kind, actor, action, project_id, target, detail, failed, via)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertActivityParams struct {
@@ -699,6 +699,7 @@ type InsertActivityParams struct {
 	Target    string
 	Detail    string
 	Failed    int64
+	Via       string
 }
 
 func (q *Queries) InsertActivity(ctx context.Context, arg InsertActivityParams) error {
@@ -711,6 +712,7 @@ func (q *Queries) InsertActivity(ctx context.Context, arg InsertActivityParams) 
 		arg.Target,
 		arg.Detail,
 		arg.Failed,
+		arg.Via,
 	)
 	return err
 }
@@ -725,7 +727,7 @@ func (q *Queries) PruneActivity(ctx context.Context, keep interface{}) error {
 }
 
 const listActivity = `-- name: ListActivity :many
-SELECT id, created_at, kind, actor, action, project_id, target, detail, failed FROM activity
+SELECT id, created_at, kind, actor, action, project_id, target, detail, failed, via FROM activity
 WHERE (?1 = '' OR kind = ?1) AND (?2 = 0 OR id < ?2)
 ORDER BY id DESC LIMIT ?3
 `
@@ -755,6 +757,7 @@ func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]A
 			&i.Target,
 			&i.Detail,
 			&i.Failed,
+			&i.Via,
 		); err != nil {
 			return nil, err
 		}
@@ -770,7 +773,7 @@ func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]A
 }
 
 const listContainerActivity = `-- name: ListContainerActivity :many
-SELECT id, created_at, kind, actor, action, project_id, target, detail, failed FROM activity
+SELECT id, created_at, kind, actor, action, project_id, target, detail, failed, via FROM activity
 WHERE project_id = ?1 AND (target = ?2 OR ',' || replace(target, ' ', '') || ',' LIKE '%,' || ?2 || ',%')
 ORDER BY id DESC LIMIT ?3
 `
@@ -801,6 +804,7 @@ func (q *Queries) ListContainerActivity(ctx context.Context, arg ListContainerAc
 			&i.Target,
 			&i.Detail,
 			&i.Failed,
+			&i.Via,
 		); err != nil {
 			return nil, err
 		}

@@ -62,6 +62,12 @@ const (
 	// AuthServiceUpdateProfileProcedure is the fully-qualified name of the AuthService's UpdateProfile
 	// RPC.
 	AuthServiceUpdateProfileProcedure = "/nagi.v1.AuthService/UpdateProfile"
+	// AuthServiceGetOAuthRequestProcedure is the fully-qualified name of the AuthService's
+	// GetOAuthRequest RPC.
+	AuthServiceGetOAuthRequestProcedure = "/nagi.v1.AuthService/GetOAuthRequest"
+	// AuthServiceApproveOAuthProcedure is the fully-qualified name of the AuthService's ApproveOAuth
+	// RPC.
+	AuthServiceApproveOAuthProcedure = "/nagi.v1.AuthService/ApproveOAuth"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
@@ -220,6 +226,15 @@ const (
 	// SettingsServiceRevokeSessionProcedure is the fully-qualified name of the SettingsService's
 	// RevokeSession RPC.
 	SettingsServiceRevokeSessionProcedure = "/nagi.v1.SettingsService/RevokeSession"
+	// SettingsServiceListAccessTokensProcedure is the fully-qualified name of the SettingsService's
+	// ListAccessTokens RPC.
+	SettingsServiceListAccessTokensProcedure = "/nagi.v1.SettingsService/ListAccessTokens"
+	// SettingsServiceCreateAccessTokenProcedure is the fully-qualified name of the SettingsService's
+	// CreateAccessToken RPC.
+	SettingsServiceCreateAccessTokenProcedure = "/nagi.v1.SettingsService/CreateAccessToken"
+	// SettingsServiceRevokeAccessTokenProcedure is the fully-qualified name of the SettingsService's
+	// RevokeAccessToken RPC.
+	SettingsServiceRevokeAccessTokenProcedure = "/nagi.v1.SettingsService/RevokeAccessToken"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -477,6 +492,10 @@ type AuthServiceClient interface {
 	SetLanguage(context.Context, *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error)
 	// 保存自己的个人资料（显示名称和头像），整份覆盖。
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
+	// OAuth 授权页（见 docs/mcp.md#oauth）：检查授权请求，返回客户端的名称和回调地址的域名。
+	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
+	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
+	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -532,18 +551,32 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
 			connect.WithClientOptions(opts...),
 		),
+		getOAuthRequest: connect.NewClient[v1.OAuthRequest, v1.GetOAuthRequestResponse](
+			httpClient,
+			baseURL+AuthServiceGetOAuthRequestProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetOAuthRequest")),
+			connect.WithClientOptions(opts...),
+		),
+		approveOAuth: connect.NewClient[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse](
+			httpClient,
+			baseURL+AuthServiceApproveOAuthProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login          *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout         *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	me             *connect.Client[v1.MeRequest, v1.MeResponse]
-	elevate        *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
-	changePassword *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
-	setLanguage    *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
-	updateProfile  *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	login           *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout          *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	me              *connect.Client[v1.MeRequest, v1.MeResponse]
+	elevate         *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
+	changePassword  *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	setLanguage     *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
+	updateProfile   *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	getOAuthRequest *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
+	approveOAuth    *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -581,6 +614,16 @@ func (c *authServiceClient) UpdateProfile(ctx context.Context, req *connect.Requ
 	return c.updateProfile.CallUnary(ctx, req)
 }
 
+// GetOAuthRequest calls nagi.v1.AuthService.GetOAuthRequest.
+func (c *authServiceClient) GetOAuthRequest(ctx context.Context, req *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error) {
+	return c.getOAuthRequest.CallUnary(ctx, req)
+}
+
+// ApproveOAuth calls nagi.v1.AuthService.ApproveOAuth.
+func (c *authServiceClient) ApproveOAuth(ctx context.Context, req *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error) {
+	return c.approveOAuth.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -595,6 +638,10 @@ type AuthServiceHandler interface {
 	SetLanguage(context.Context, *connect.Request[v1.SetLanguageRequest]) (*connect.Response[v1.SetLanguageResponse], error)
 	// 保存自己的个人资料（显示名称和头像），整份覆盖。
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
+	// OAuth 授权页（见 docs/mcp.md#oauth）：检查授权请求，返回客户端的名称和回调地址的域名。
+	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
+	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
+	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -646,6 +693,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("UpdateProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetOAuthRequestHandler := connect.NewUnaryHandler(
+		AuthServiceGetOAuthRequestProcedure,
+		svc.GetOAuthRequest,
+		connect.WithSchema(authServiceMethods.ByName("GetOAuthRequest")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceApproveOAuthHandler := connect.NewUnaryHandler(
+		AuthServiceApproveOAuthProcedure,
+		svc.ApproveOAuth,
+		connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -662,6 +721,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceSetLanguageHandler.ServeHTTP(w, r)
 		case AuthServiceUpdateProfileProcedure:
 			authServiceUpdateProfileHandler.ServeHTTP(w, r)
+		case AuthServiceGetOAuthRequestProcedure:
+			authServiceGetOAuthRequestHandler.ServeHTTP(w, r)
+		case AuthServiceApproveOAuthProcedure:
+			authServiceApproveOAuthHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -697,6 +760,14 @@ func (UnimplementedAuthServiceHandler) SetLanguage(context.Context, *connect.Req
 
 func (UnimplementedAuthServiceHandler) UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.UpdateProfile is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.GetOAuthRequest is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ApproveOAuth is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
@@ -1531,6 +1602,11 @@ type SettingsServiceClient interface {
 	// 当前用户自己的登录会话。
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
 	RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error)
+	// 访问令牌（见 docs/mcp.md#登录）。user_id 为 0 时是自己的；管理员可以查看、吊销其他成员的。
+	ListAccessTokens(context.Context, *connect.Request[v1.ListAccessTokensRequest]) (*connect.Response[v1.ListAccessTokensResponse], error)
+	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
+	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
+	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -1712,6 +1788,24 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RevokeSession")),
 			connect.WithClientOptions(opts...),
 		),
+		listAccessTokens: connect.NewClient[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse](
+			httpClient,
+			baseURL+SettingsServiceListAccessTokensProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListAccessTokens")),
+			connect.WithClientOptions(opts...),
+		),
+		createAccessToken: connect.NewClient[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse](
+			httpClient,
+			baseURL+SettingsServiceCreateAccessTokenProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CreateAccessToken")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeAccessToken: connect.NewClient[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse](
+			httpClient,
+			baseURL+SettingsServiceRevokeAccessTokenProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1745,6 +1839,9 @@ type settingsServiceClient struct {
 	deleteUser        *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
 	listSessions      *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
 	revokeSession     *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
+	listAccessTokens  *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
+	createAccessToken *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
+	revokeAccessToken *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -1887,6 +1984,21 @@ func (c *settingsServiceClient) RevokeSession(ctx context.Context, req *connect.
 	return c.revokeSession.CallUnary(ctx, req)
 }
 
+// ListAccessTokens calls nagi.v1.SettingsService.ListAccessTokens.
+func (c *settingsServiceClient) ListAccessTokens(ctx context.Context, req *connect.Request[v1.ListAccessTokensRequest]) (*connect.Response[v1.ListAccessTokensResponse], error) {
+	return c.listAccessTokens.CallUnary(ctx, req)
+}
+
+// CreateAccessToken calls nagi.v1.SettingsService.CreateAccessToken.
+func (c *settingsServiceClient) CreateAccessToken(ctx context.Context, req *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error) {
+	return c.createAccessToken.CallUnary(ctx, req)
+}
+
+// RevokeAccessToken calls nagi.v1.SettingsService.RevokeAccessToken.
+func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, req *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error) {
+	return c.revokeAccessToken.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -1935,6 +2047,11 @@ type SettingsServiceHandler interface {
 	// 当前用户自己的登录会话。
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
 	RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error)
+	// 访问令牌（见 docs/mcp.md#登录）。user_id 为 0 时是自己的；管理员可以查看、吊销其他成员的。
+	ListAccessTokens(context.Context, *connect.Request[v1.ListAccessTokensRequest]) (*connect.Response[v1.ListAccessTokensResponse], error)
+	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
+	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
+	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2112,6 +2229,24 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RevokeSession")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListAccessTokensHandler := connect.NewUnaryHandler(
+		SettingsServiceListAccessTokensProcedure,
+		svc.ListAccessTokens,
+		connect.WithSchema(settingsServiceMethods.ByName("ListAccessTokens")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceCreateAccessTokenHandler := connect.NewUnaryHandler(
+		SettingsServiceCreateAccessTokenProcedure,
+		svc.CreateAccessToken,
+		connect.WithSchema(settingsServiceMethods.ByName("CreateAccessToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceRevokeAccessTokenHandler := connect.NewUnaryHandler(
+		SettingsServiceRevokeAccessTokenProcedure,
+		svc.RevokeAccessToken,
+		connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2170,6 +2305,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceListSessionsHandler.ServeHTTP(w, r)
 		case SettingsServiceRevokeSessionProcedure:
 			settingsServiceRevokeSessionHandler.ServeHTTP(w, r)
+		case SettingsServiceListAccessTokensProcedure:
+			settingsServiceListAccessTokensHandler.ServeHTTP(w, r)
+		case SettingsServiceCreateAccessTokenProcedure:
+			settingsServiceCreateAccessTokenHandler.ServeHTTP(w, r)
+		case SettingsServiceRevokeAccessTokenProcedure:
+			settingsServiceRevokeAccessTokenHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2289,6 +2430,18 @@ func (UnimplementedSettingsServiceHandler) ListSessions(context.Context, *connec
 
 func (UnimplementedSettingsServiceHandler) RevokeSession(context.Context, *connect.Request[v1.RevokeSessionRequest]) (*connect.Response[v1.RevokeSessionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeSession is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListAccessTokens(context.Context, *connect.Request[v1.ListAccessTokensRequest]) (*connect.Response[v1.ListAccessTokensResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListAccessTokens is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CreateAccessToken is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeAccessToken is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

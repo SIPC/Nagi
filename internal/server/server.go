@@ -26,7 +26,9 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/mcp"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/oauth"
 	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/standby"
@@ -308,7 +310,8 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.auth.CleanupLoop(ctx)
 
 	mux := http.NewServeMux()
-	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, Panel: &api.PanelInfo{
+	oauthServer := oauth.New(s.q, s.log)
+	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, OAuth: oauthServer, Panel: &api.PanelInfo{
 		Q:           s.q,
 		DataDir:     s.cfg.DataDir,
 		Port:        s.port,
@@ -329,6 +332,11 @@ func (s *Server) Run(ctx context.Context) error {
 		Promote: s.Promote,
 	}}
 	a.Mount(mux)
+	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
+	mcp.Mount(mux, mcp.Options{
+		Handler: mux, Auth: s.auth, OAuth: oauthServer, Exec: a.RunCommand,
+		Version: s.cfg.Version, Standby: s.standby != nil, Log: s.log,
+	})
 	if s.primary != nil {
 		mux.HandleFunc("/api/standby/pair", s.primary.HandlePair)
 	}

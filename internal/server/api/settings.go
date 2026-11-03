@@ -204,8 +204,10 @@ func (s *settingsService) security(ctx context.Context) *nagiv1.Security {
 	u := auth.CurrentUser(ctx)
 	sec := &nagiv1.Security{TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID)}
 	// 安全入口的路径本身是秘密，只给管理员看。
+	entrance := s.Auth.Entrance(ctx)
+	sec.EntranceEnabled = entrance != ""
 	if u.Role == auth.RoleAdmin {
-		sec.Entrance = s.Auth.Entrance(ctx)
+		sec.Entrance = entrance
 	}
 	return sec
 }

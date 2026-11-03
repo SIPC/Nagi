@@ -18,6 +18,8 @@ func ValidRole(role string) bool {
 var selfMethods = map[string]bool{
 	"GetSecurity": true, "BeginTOTP": true, "EnableTOTP": true, "DisableTOTP": true,
 	"ListSessions": true, "RevokeSession": true,
+	// 访问令牌：只能管自己的，管理员才能看、吊销别人的（处理函数里检查）。
+	"ListAccessTokens": true, "CreateAccessToken": true, "RevokeAccessToken": true,
 }
 
 // adminReads 是只有管理员能用的查询：内容涉及整个面板或者含有密钥。
@@ -41,6 +43,16 @@ func isRead(method string) bool {
 		}
 	}
 	return false
+}
+
+// TokenAllowed 判断访问令牌（MCP）能不能调用接口：只能用项目和节点的接口，没勾「可修改」时只能查询
+// （见 docs/mcp.md#权限）。角色的限制另由 Allowed 检查。
+func TokenAllowed(u User, procedure string) bool {
+	parts := strings.Split(strings.TrimPrefix(procedure, "/"), "/")
+	if len(parts) != 2 || parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {
+		return false
+	}
+	return u.AllowWrite || isRead(parts[1])
 }
 
 // Allowed 判断角色能不能调用接口（procedure 形如 /nagi.v1.ProjectService/Deploy）。

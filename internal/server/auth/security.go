@@ -173,9 +173,27 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		p := r.URL.Path
+		// MCP 和 OAuth 的地址带着入口：拿到地址的客户端能用，其他人仍然看到 404（见 docs/mcp.md#入口）。
+		if rest, ok := strings.CutPrefix(p, "/"+path); ok && strings.HasPrefix(rest, "/") {
+			if rest == "/oauth/authorize" {
+				// 授权页是网页：和打开入口一样记下 cookie，再转到不带入口的授权页。
+				setEntranceCookie(w, path)
+				http.Redirect(w, r, "/oauth/authorize?"+r.URL.RawQuery, http.StatusFound)
+				return
+			}
+			if agentPath(rest) {
+				next.ServeHTTP(w, withBasePath(r, rest, "/"+path))
+				return
+			}
+		}
+		for _, wk := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"} {
+			if rest, ok := strings.CutPrefix(p, wk+"/"+path); ok && (rest == "" || strings.HasPrefix(rest, "/")) {
+				next.ServeHTTP(w, withBasePath(r, wk+rest, "/"+path))
+				return
+			}
+		}
 		if p == "/"+path || p == "/"+path+"/" {
-			http.SetCookie(w, &http.Cookie{Name: entranceCookie, Value: entranceToken(path), Path: "/",
-				MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+			setEntranceCookie(w, path)
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
@@ -193,4 +211,31 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+}
+
+func setEntranceCookie(w http.ResponseWriter, path string) {
+	http.SetCookie(w, &http.Cookie{Name: entranceCookie, Value: entranceToken(path), Path: "/",
+		MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+}
+
+// agentPath 判断是不是 MCP 和 OAuth 用的地址（授权页除外，那是网页）。
+func agentPath(p string) bool {
+	return p == "/mcp" || strings.HasPrefix(p, "/oauth/") && p != "/oauth/authorize" || strings.HasPrefix(p, "/.well-known/")
+}
+
+type basePathKey struct{}
+
+// withBasePath 把请求的路径换成去掉入口的路径，并记下入口前缀。
+func withBasePath(r *http.Request, path, base string) *http.Request {
+	r2 := r.WithContext(context.WithValue(r.Context(), basePathKey{}, base))
+	u := *r.URL
+	u.Path, u.RawPath = path, ""
+	r2.URL = &u
+	return r2
+}
+
+// BasePath 返回 MCP 和 OAuth 地址的前缀：经安全入口访问时是 /<入口>，否则为空（见 docs/mcp.md#入口）。
+func BasePath(ctx context.Context) string {
+	b, _ := ctx.Value(basePathKey{}).(string)
+	return b
 }

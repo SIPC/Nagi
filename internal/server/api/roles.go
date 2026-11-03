@@ -25,6 +25,9 @@ func permissionDenied() error {
 // 公开接口（登录、初始化）没有当前用户，由登录检查决定放不放行。
 func roleAllowed(ctx context.Context, procedure string) bool {
 	u := auth.CurrentUser(ctx)
+	if u.TokenID != 0 && !auth.TokenAllowed(u, procedure) {
+		return false
+	}
 	return u.ID == 0 || auth.Allowed(u.Role, procedure)
 }
 
@@ -274,8 +277,11 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: u.ID}); err != nil {
 			return nil, err
 		}
-		// 别人重置了密码，这个用户已有的登录都要失效。
+		// 别人重置了密码，这个用户已有的登录和访问令牌都要失效。
 		if err := s.Q.DeleteUserSessions(ctx, u.ID); err != nil {
+			return nil, err
+		}
+		if err := s.Q.DeleteUserAccessTokens(ctx, u.ID); err != nil {
 			return nil, err
 		}
 	}

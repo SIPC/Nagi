@@ -22,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/oauth"
 	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -53,6 +54,8 @@ type API struct {
 	Sealer   *sealer.Sealer
 	Panel    *PanelInfo
 	Log      *slog.Logger
+	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
+	OAuth *oauth.Server
 
 	updates panelUpdates
 }
