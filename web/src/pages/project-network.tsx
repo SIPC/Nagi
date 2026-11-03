@@ -736,7 +736,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
               className="min-h-14 py-2"
               title={<span className="min-w-0 wrap-anywhere">{a.name}</span>}
               sub={i === 0 && !a.placeholder ? m.portsRowSub(a.name) : undefined}
-              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <Status>{nodeName(a.node)}</Status>, phone: true }]}
+              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}><Status>{nodeName(a.node)}</Status></span>, width: "w-32", phone: true }]}
               actions={
                 a.placeholder ? null : (
                   <Input
