@@ -324,7 +324,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		Name: c.Name, Revision: c.Revision, LatestVersion: v.Version, DeployedVersion: c.DeployedVersion,
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
-		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID,
+		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName,
 	}
 	if cfg := failoverOf(c); cfg != nil {
 		mem.Failover = cfg

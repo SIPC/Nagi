@@ -39,6 +39,7 @@ type Container struct {
 	Failover        []byte
 	FailoverEpoch   int64
 	DeclaredPorts   string
+	DisplayName     string
 }
 
 type Deployment struct {

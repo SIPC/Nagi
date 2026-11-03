@@ -524,6 +524,8 @@ service ProjectService {
   // 备份节点、迁移（按容器，见 docs/failover.md）。
   // 设置或取消备份节点（node_id 为空表示取消）。
   rpc SetBackupNode(SetBackupNodeRequest) returns (Project);
+  // 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
+  rpc SetContainerDisplayName(SetContainerDisplayNameRequest) returns (Project);
   // 立即同步到备份节点，同步完才返回。
   rpc SyncBackup(ContainerRef) returns (Project);
   // 备份节点上副本里的快照。
@@ -577,6 +579,12 @@ message SetBackupNodeRequest {
   string node_id = 3;
   // 取消时同时删除备份节点上的副本。
   bool delete_replica = 4;
+}
+
+message SetContainerDisplayNameRequest {
+  string project_id = 1;
+  string container = 2;
+  string display_name = 3;
 }
 
 message SetFailoverApiRequest {

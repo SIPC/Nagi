@@ -258,6 +258,11 @@ func (s *projectService) SetBackupNode(ctx context.Context, req *connect.Request
 	return reply(s.Projects.SetBackupNode(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDeleteReplica()))
 }
 
+func (s *projectService) SetContainerDisplayName(ctx context.Context, req *connect.Request[nagiv1.SetContainerDisplayNameRequest]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SetDisplayName(ctx, m.GetProjectId(), m.GetContainer(), m.GetDisplayName()))
+}
+
 func (s *projectService) SyncBackup(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.Project], error) {
 	return reply(s.Projects.SyncBackup(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer()))
 }

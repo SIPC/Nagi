@@ -236,6 +236,9 @@ UPDATE containers SET imported_ports = ? WHERE project_id = ? AND name = ?;
 -- name: DeleteContainer :exec
 DELETE FROM containers WHERE project_id = ? AND name = ?;
 
+-- name: SetContainerDisplayName :exec
+UPDATE containers SET display_name = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
 -- name: SetContainerBackupNode :exec
 UPDATE containers SET backup_node_id = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
 

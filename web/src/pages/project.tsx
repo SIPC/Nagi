@@ -8,7 +8,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { containerUsage, projectMetricNodes, UsageRings, useProjectMetrics } from "@/components/metrics";
 import { ActiveBox, Badge, ButtonLink, dotColor, Loading, QueryError, Roll, Slide, Tabs, useActiveBox } from "@/components/ui";
-import { containerKind, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
+import { containerKind, containerLabel, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
 import { SettingsTab } from "@/pages/project-settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -186,7 +186,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
           <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: search.view }} className={item(m.name === container)} title={st.label}>
             <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
             <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
-            <span className="min-w-0 truncate">{m.name}</span>
+            <span className="min-w-0 truncate">{containerLabel(m)}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
             <span className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
           </Link>
@@ -273,7 +273,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
               <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
                 <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
-                <span className={cn("truncate", active && "font-medium")}>{m.name}</span>
+                <span className={cn("truncate", active && "font-medium")}>{containerLabel(m)}</span>
                 {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
                 {imageUpdates.some((x) => x.container === m.name) && <ArrowUpCircle aria-label={t.projectContainers.imageUpdates.title} className="size-3.5 shrink-0 text-info" />}

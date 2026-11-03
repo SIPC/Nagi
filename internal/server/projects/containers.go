@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -224,6 +225,42 @@ func (s *Service) deleteOnNode(ctx context.Context, c store.Container, deleteDir
 }
 
 // SaveDraft 保存容器的草稿。草稿要先通过校验，部署时才会成为新版本。
+// checkDisplayName 检查容器的显示名称：去掉首尾空白，不超过 32 个字符，为空表示显示容器名。
+func checkDisplayName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if utf8.RuneCountInString(name) > 32 {
+		return "", invalid("显示名称不能超过 32 个字符")
+	}
+	return name, nil
+}
+
+// SetDisplayName 修改容器的显示名称。只用于界面显示，不影响容器名、目录和项目内网地址；
+// 推给节点缓存，换面板时据此拼回。节点不在线时等它上线后由 Sync 补推。
+func (s *Service) SetDisplayName(ctx context.Context, projectID, name, display string) (*nagiv1.Project, error) {
+	display, err := checkDisplayName(display)
+	if err != nil {
+		return nil, err
+	}
+	if display == name {
+		display = ""
+	}
+	l := s.lock(projectID)
+	l.Lock()
+	defer l.Unlock()
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	if display == c.DisplayName {
+		return s.reload(ctx, projectID)
+	}
+	if err := s.Q.SetContainerDisplayName(ctx, store.SetContainerDisplayNameParams{DisplayName: display, ProjectID: projectID, Name: name}); err != nil {
+		return nil, err
+	}
+	_ = s.push(context.WithoutCancel(ctx), projectID, name)
+	return s.reload(ctx, projectID)
+}
+
 func (s *Service) SaveDraft(ctx context.Context, projectID, name string, base int64, cfg *nagiv1.ContainerConfig) (*nagiv1.Project, error) {
 	if cfg == nil {
 		return nil, invalid("缺少容器配置")

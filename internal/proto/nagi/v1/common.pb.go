@@ -398,8 +398,10 @@ type Container struct {
 	FailoverStandby *FailoverStatus `protobuf:"bytes,23,opt,name=failover_standby,json=failoverStandby,proto3" json:"failover_standby,omitempty"`
 	// 见证人是面板时，是不是本面板（不是时是换面板以前的旧面板，本面板会自动换成自己）。
 	FailoverWitnessSelf bool `protobuf:"varint,24,opt,name=failover_witness_self,json=failoverWitnessSelf,proto3" json:"failover_witness_self,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 显示名称：只用于界面显示，可以随时改；为空时显示容器名。
+	DisplayName   string `protobuf:"bytes,25,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Container) Reset() {
@@ -598,6 +600,13 @@ func (x *Container) GetFailoverWitnessSelf() bool {
 		return x.FailoverWitnessSelf
 	}
 	return false
+}
+
+func (x *Container) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -1835,6 +1844,8 @@ type ContainerSpec struct {
 	Panel string `protobuf:"bytes,20,opt,name=panel,proto3" json:"panel,omitempty"`
 	// 项目设置里的内部端口（换面板时据此拼回项目设置）。
 	InternalPorts []string `protobuf:"bytes,21,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
+	// 容器的显示名称（换面板时据此拼回）。
+	DisplayName   string `protobuf:"bytes,22,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2014,6 +2025,13 @@ func (x *ContainerSpec) GetInternalPorts() []string {
 		return x.InternalPorts
 	}
 	return nil
+}
+
+func (x *ContainerSpec) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 // BackupTarget 是接收副本的节点。
@@ -4755,7 +4773,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"shared_env\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\tsharedEnv\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x02 \x01(\rR\x17snapshotIntervalMinutes\x12%\n" +
-	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\"\xdc\a\n" +
+	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\"\xff\a\n" +
 	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -4784,7 +4802,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bfailover\x18\x15 \x01(\v2\x17.nagi.v1.FailoverConfigR\bfailover\x12@\n" +
 	"\x0ffailover_holder\x18\x16 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0efailoverHolder\x12B\n" +
 	"\x10failover_standby\x18\x17 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0ffailoverStandby\x122\n" +
-	"\x15failover_witness_self\x18\x18 \x01(\bR\x13failoverWitnessSelf\"\xb1\x03\n" +
+	"\x15failover_witness_self\x18\x18 \x01(\bR\x13failoverWitnessSelf\x12!\n" +
+	"\fdisplay_name\x18\x19 \x01(\tR\vdisplayName\"\xb1\x03\n" +
 	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +
@@ -4900,7 +4919,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd6\x06\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xf9\x06\n" +
 	"\rContainerSpec\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -4926,7 +4945,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bstateful\x18\x12 \x01(\bR\bstateful\x12-\n" +
 	"\x06backup\x18\x13 \x01(\v2\x15.nagi.v1.BackupTargetR\x06backup\x12\x14\n" +
 	"\x05panel\x18\x14 \x01(\tR\x05panel\x12%\n" +
-	"\x0einternal_ports\x18\x15 \x03(\tR\rinternalPorts\x1a9\n" +
+	"\x0einternal_ports\x18\x15 \x03(\tR\rinternalPorts\x12!\n" +
+	"\fdisplay_name\x18\x16 \x01(\tR\vdisplayName\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +

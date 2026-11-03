@@ -69,7 +69,9 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   else if (projectId) {
     const name = project.data?.project?.name ?? t.app.nav.projects;
     bar = project.data?.project?.name ?? "";
-    title = parts[2] === "c" && parts[3] ? `${decodeURIComponent(parts[3])} · ${name}` : name;
+    const container = parts[2] === "c" && parts[3] ? decodeURIComponent(parts[3]) : "";
+    const display = project.data?.project?.containers.find((c) => c.name === container)?.displayName || container;
+    title = container ? `${display} · ${name}` : name;
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {

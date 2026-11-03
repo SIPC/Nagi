@@ -290,6 +290,9 @@ const (
 	// ProjectServiceSetBackupNodeProcedure is the fully-qualified name of the ProjectService's
 	// SetBackupNode RPC.
 	ProjectServiceSetBackupNodeProcedure = "/nagi.v1.ProjectService/SetBackupNode"
+	// ProjectServiceSetContainerDisplayNameProcedure is the fully-qualified name of the
+	// ProjectService's SetContainerDisplayName RPC.
+	ProjectServiceSetContainerDisplayNameProcedure = "/nagi.v1.ProjectService/SetContainerDisplayName"
 	// ProjectServiceSyncBackupProcedure is the fully-qualified name of the ProjectService's SyncBackup
 	// RPC.
 	ProjectServiceSyncBackupProcedure = "/nagi.v1.ProjectService/SyncBackup"
@@ -2331,6 +2334,8 @@ type ProjectServiceClient interface {
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
+	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照。
@@ -2528,6 +2533,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
 			connect.WithClientOptions(opts...),
 		),
+		setContainerDisplayName: connect.NewClient[v1.SetContainerDisplayNameRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetContainerDisplayNameProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetContainerDisplayName")),
+			connect.WithClientOptions(opts...),
+		),
 		syncBackup: connect.NewClient[v1.ContainerRef, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceSyncBackupProcedure,
@@ -2677,54 +2688,55 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
-	listProjects          *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	createProject         *connect.Client[v1.CreateProjectRequest, v1.Project]
-	getProject            *connect.Client[v1.ProjectRef, v1.ProjectSummary]
-	updateProjectSettings *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
-	saveSharedEnv         *connect.Client[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse]
-	discardSharedEnv      *connect.Client[v1.ProjectRevisionRef, v1.Project]
-	deleteProject         *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
-	addContainer          *connect.Client[v1.AddContainerRequest, v1.Project]
-	deleteContainer       *connect.Client[v1.DeleteContainerApiRequest, v1.Project]
-	controlContainer      *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
-	saveDraft             *connect.Client[v1.SaveDraftRequest, v1.Project]
-	discardDraft          *connect.Client[v1.ContainerRevisionRef, v1.Project]
-	deploy                *connect.Client[v1.DeployRequest, v1.DeployEvent]
-	listVersions          *connect.Client[v1.ContainerRef, v1.ListVersionsResponse]
-	listContainerEvents   *connect.Client[v1.ContainerRef, v1.ListActivityResponse]
-	rollback              *connect.Client[v1.RollbackRequest, v1.DeployEvent]
-	listDeployments       *connect.Client[v1.ProjectRef, v1.ListDeploymentsResponse]
-	restoreDeployment     *connect.Client[v1.RestoreDeploymentRequest, v1.DeployEvent]
-	streamLogs            *connect.Client[v1.StreamLogsApiRequest, v1.LogLine]
-	saveRoute             *connect.Client[v1.SaveRouteRequest, v1.Project]
-	deleteRoute           *connect.Client[v1.DeleteRouteRequest, v1.Project]
-	checkDomains          *connect.Client[v1.CheckDomainsRequest, v1.CheckDomainsResponse]
-	retryDomainCert       *connect.Client[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse]
-	setBackupNode         *connect.Client[v1.SetBackupNodeRequest, v1.Project]
-	syncBackup            *connect.Client[v1.ContainerRef, v1.Project]
-	listBackupSnapshots   *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
-	restoreFromBackup     *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
-	migrateContainer      *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
-	redeployElsewhere     *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
-	setFailover           *connect.Client[v1.SetFailoverApiRequest, v1.Project]
-	clearFailover         *connect.Client[v1.ContainerRef, v1.Project]
-	changeWitness         *connect.Client[v1.ChangeWitnessRequest, v1.Project]
-	confirmTakeover       *connect.Client[v1.ContainerRef, v1.Project]
-	connectProject        *connect.Client[v1.ConnectProjectRequest, v1.Project]
-	disconnectProject     *connect.Client[v1.ConnectProjectRequest, v1.Project]
-	listVolumes           *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
-	listVolumeFiles       *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
-	deleteVolumeFile      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	createVolumeDir       *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	restoreVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
-	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
-	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
-	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
-	getBackupKey          *connect.Client[v1.ContainerRef, v1.GetBackupKeyResponse]
-	listRegistries        *connect.Client[v1.ProjectRef, v1.RegistriesResponse]
-	loginRegistry         *connect.Client[v1.LoginRegistryApiRequest, v1.RegistriesResponse]
-	logoutRegistry        *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
-	checkImages           *connect.Client[v1.ProjectRef, v1.CheckImagesResponse]
+	listProjects            *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	createProject           *connect.Client[v1.CreateProjectRequest, v1.Project]
+	getProject              *connect.Client[v1.ProjectRef, v1.ProjectSummary]
+	updateProjectSettings   *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
+	saveSharedEnv           *connect.Client[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse]
+	discardSharedEnv        *connect.Client[v1.ProjectRevisionRef, v1.Project]
+	deleteProject           *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
+	addContainer            *connect.Client[v1.AddContainerRequest, v1.Project]
+	deleteContainer         *connect.Client[v1.DeleteContainerApiRequest, v1.Project]
+	controlContainer        *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
+	saveDraft               *connect.Client[v1.SaveDraftRequest, v1.Project]
+	discardDraft            *connect.Client[v1.ContainerRevisionRef, v1.Project]
+	deploy                  *connect.Client[v1.DeployRequest, v1.DeployEvent]
+	listVersions            *connect.Client[v1.ContainerRef, v1.ListVersionsResponse]
+	listContainerEvents     *connect.Client[v1.ContainerRef, v1.ListActivityResponse]
+	rollback                *connect.Client[v1.RollbackRequest, v1.DeployEvent]
+	listDeployments         *connect.Client[v1.ProjectRef, v1.ListDeploymentsResponse]
+	restoreDeployment       *connect.Client[v1.RestoreDeploymentRequest, v1.DeployEvent]
+	streamLogs              *connect.Client[v1.StreamLogsApiRequest, v1.LogLine]
+	saveRoute               *connect.Client[v1.SaveRouteRequest, v1.Project]
+	deleteRoute             *connect.Client[v1.DeleteRouteRequest, v1.Project]
+	checkDomains            *connect.Client[v1.CheckDomainsRequest, v1.CheckDomainsResponse]
+	retryDomainCert         *connect.Client[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse]
+	setBackupNode           *connect.Client[v1.SetBackupNodeRequest, v1.Project]
+	setContainerDisplayName *connect.Client[v1.SetContainerDisplayNameRequest, v1.Project]
+	syncBackup              *connect.Client[v1.ContainerRef, v1.Project]
+	listBackupSnapshots     *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	restoreFromBackup       *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
+	migrateContainer        *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
+	redeployElsewhere       *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
+	setFailover             *connect.Client[v1.SetFailoverApiRequest, v1.Project]
+	clearFailover           *connect.Client[v1.ContainerRef, v1.Project]
+	changeWitness           *connect.Client[v1.ChangeWitnessRequest, v1.Project]
+	confirmTakeover         *connect.Client[v1.ContainerRef, v1.Project]
+	connectProject          *connect.Client[v1.ConnectProjectRequest, v1.Project]
+	disconnectProject       *connect.Client[v1.ConnectProjectRequest, v1.Project]
+	listVolumes             *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
+	listVolumeFiles         *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
+	deleteVolumeFile        *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	createVolumeDir         *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	restoreVolumeFile       *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	listSnapshots           *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	createSnapshot          *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	restoreSnapshot         *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	getBackupKey            *connect.Client[v1.ContainerRef, v1.GetBackupKeyResponse]
+	listRegistries          *connect.Client[v1.ProjectRef, v1.RegistriesResponse]
+	loginRegistry           *connect.Client[v1.LoginRegistryApiRequest, v1.RegistriesResponse]
+	logoutRegistry          *connect.Client[v1.LogoutRegistryRequest, v1.RegistriesResponse]
+	checkImages             *connect.Client[v1.ProjectRef, v1.CheckImagesResponse]
 }
 
 // ListProjects calls nagi.v1.ProjectService.ListProjects.
@@ -2845,6 +2857,11 @@ func (c *projectServiceClient) RetryDomainCert(ctx context.Context, req *connect
 // SetBackupNode calls nagi.v1.ProjectService.SetBackupNode.
 func (c *projectServiceClient) SetBackupNode(ctx context.Context, req *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
 	return c.setBackupNode.CallUnary(ctx, req)
+}
+
+// SetContainerDisplayName calls nagi.v1.ProjectService.SetContainerDisplayName.
+func (c *projectServiceClient) SetContainerDisplayName(ctx context.Context, req *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error) {
+	return c.setContainerDisplayName.CallUnary(ctx, req)
 }
 
 // SyncBackup calls nagi.v1.ProjectService.SyncBackup.
@@ -3010,6 +3027,8 @@ type ProjectServiceHandler interface {
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
+	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照。
@@ -3201,6 +3220,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceSetBackupNodeProcedure,
 		svc.SetBackupNode,
 		connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSetContainerDisplayNameHandler := connect.NewUnaryHandler(
+		ProjectServiceSetContainerDisplayNameProcedure,
+		svc.SetContainerDisplayName,
+		connect.WithSchema(projectServiceMethods.ByName("SetContainerDisplayName")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSyncBackupHandler := connect.NewUnaryHandler(
@@ -3397,6 +3422,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceRetryDomainCertHandler.ServeHTTP(w, r)
 		case ProjectServiceSetBackupNodeProcedure:
 			projectServiceSetBackupNodeHandler.ServeHTTP(w, r)
+		case ProjectServiceSetContainerDisplayNameProcedure:
+			projectServiceSetContainerDisplayNameHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncBackupProcedure:
 			projectServiceSyncBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceListBackupSnapshotsProcedure:
@@ -3548,6 +3575,10 @@ func (UnimplementedProjectServiceHandler) RetryDomainCert(context.Context, *conn
 
 func (UnimplementedProjectServiceHandler) SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetBackupNode is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetContainerDisplayName is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {

@@ -2791,54 +2791,55 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ProjectService_ListProjects_FullMethodName          = "/nagi.v1.ProjectService/ListProjects"
-	ProjectService_CreateProject_FullMethodName         = "/nagi.v1.ProjectService/CreateProject"
-	ProjectService_GetProject_FullMethodName            = "/nagi.v1.ProjectService/GetProject"
-	ProjectService_UpdateProjectSettings_FullMethodName = "/nagi.v1.ProjectService/UpdateProjectSettings"
-	ProjectService_SaveSharedEnv_FullMethodName         = "/nagi.v1.ProjectService/SaveSharedEnv"
-	ProjectService_DiscardSharedEnv_FullMethodName      = "/nagi.v1.ProjectService/DiscardSharedEnv"
-	ProjectService_DeleteProject_FullMethodName         = "/nagi.v1.ProjectService/DeleteProject"
-	ProjectService_AddContainer_FullMethodName          = "/nagi.v1.ProjectService/AddContainer"
-	ProjectService_DeleteContainer_FullMethodName       = "/nagi.v1.ProjectService/DeleteContainer"
-	ProjectService_ControlContainer_FullMethodName      = "/nagi.v1.ProjectService/ControlContainer"
-	ProjectService_SaveDraft_FullMethodName             = "/nagi.v1.ProjectService/SaveDraft"
-	ProjectService_DiscardDraft_FullMethodName          = "/nagi.v1.ProjectService/DiscardDraft"
-	ProjectService_Deploy_FullMethodName                = "/nagi.v1.ProjectService/Deploy"
-	ProjectService_ListVersions_FullMethodName          = "/nagi.v1.ProjectService/ListVersions"
-	ProjectService_ListContainerEvents_FullMethodName   = "/nagi.v1.ProjectService/ListContainerEvents"
-	ProjectService_Rollback_FullMethodName              = "/nagi.v1.ProjectService/Rollback"
-	ProjectService_ListDeployments_FullMethodName       = "/nagi.v1.ProjectService/ListDeployments"
-	ProjectService_RestoreDeployment_FullMethodName     = "/nagi.v1.ProjectService/RestoreDeployment"
-	ProjectService_StreamLogs_FullMethodName            = "/nagi.v1.ProjectService/StreamLogs"
-	ProjectService_SaveRoute_FullMethodName             = "/nagi.v1.ProjectService/SaveRoute"
-	ProjectService_DeleteRoute_FullMethodName           = "/nagi.v1.ProjectService/DeleteRoute"
-	ProjectService_CheckDomains_FullMethodName          = "/nagi.v1.ProjectService/CheckDomains"
-	ProjectService_RetryDomainCert_FullMethodName       = "/nagi.v1.ProjectService/RetryDomainCert"
-	ProjectService_SetBackupNode_FullMethodName         = "/nagi.v1.ProjectService/SetBackupNode"
-	ProjectService_SyncBackup_FullMethodName            = "/nagi.v1.ProjectService/SyncBackup"
-	ProjectService_ListBackupSnapshots_FullMethodName   = "/nagi.v1.ProjectService/ListBackupSnapshots"
-	ProjectService_RestoreFromBackup_FullMethodName     = "/nagi.v1.ProjectService/RestoreFromBackup"
-	ProjectService_MigrateContainer_FullMethodName      = "/nagi.v1.ProjectService/MigrateContainer"
-	ProjectService_RedeployElsewhere_FullMethodName     = "/nagi.v1.ProjectService/RedeployElsewhere"
-	ProjectService_SetFailover_FullMethodName           = "/nagi.v1.ProjectService/SetFailover"
-	ProjectService_ClearFailover_FullMethodName         = "/nagi.v1.ProjectService/ClearFailover"
-	ProjectService_ChangeWitness_FullMethodName         = "/nagi.v1.ProjectService/ChangeWitness"
-	ProjectService_ConfirmTakeover_FullMethodName       = "/nagi.v1.ProjectService/ConfirmTakeover"
-	ProjectService_ConnectProject_FullMethodName        = "/nagi.v1.ProjectService/ConnectProject"
-	ProjectService_DisconnectProject_FullMethodName     = "/nagi.v1.ProjectService/DisconnectProject"
-	ProjectService_ListVolumes_FullMethodName           = "/nagi.v1.ProjectService/ListVolumes"
-	ProjectService_ListVolumeFiles_FullMethodName       = "/nagi.v1.ProjectService/ListVolumeFiles"
-	ProjectService_DeleteVolumeFile_FullMethodName      = "/nagi.v1.ProjectService/DeleteVolumeFile"
-	ProjectService_CreateVolumeDir_FullMethodName       = "/nagi.v1.ProjectService/CreateVolumeDir"
-	ProjectService_RestoreVolumeFile_FullMethodName     = "/nagi.v1.ProjectService/RestoreVolumeFile"
-	ProjectService_ListSnapshots_FullMethodName         = "/nagi.v1.ProjectService/ListSnapshots"
-	ProjectService_CreateSnapshot_FullMethodName        = "/nagi.v1.ProjectService/CreateSnapshot"
-	ProjectService_RestoreSnapshot_FullMethodName       = "/nagi.v1.ProjectService/RestoreSnapshot"
-	ProjectService_GetBackupKey_FullMethodName          = "/nagi.v1.ProjectService/GetBackupKey"
-	ProjectService_ListRegistries_FullMethodName        = "/nagi.v1.ProjectService/ListRegistries"
-	ProjectService_LoginRegistry_FullMethodName         = "/nagi.v1.ProjectService/LoginRegistry"
-	ProjectService_LogoutRegistry_FullMethodName        = "/nagi.v1.ProjectService/LogoutRegistry"
-	ProjectService_CheckImages_FullMethodName           = "/nagi.v1.ProjectService/CheckImages"
+	ProjectService_ListProjects_FullMethodName            = "/nagi.v1.ProjectService/ListProjects"
+	ProjectService_CreateProject_FullMethodName           = "/nagi.v1.ProjectService/CreateProject"
+	ProjectService_GetProject_FullMethodName              = "/nagi.v1.ProjectService/GetProject"
+	ProjectService_UpdateProjectSettings_FullMethodName   = "/nagi.v1.ProjectService/UpdateProjectSettings"
+	ProjectService_SaveSharedEnv_FullMethodName           = "/nagi.v1.ProjectService/SaveSharedEnv"
+	ProjectService_DiscardSharedEnv_FullMethodName        = "/nagi.v1.ProjectService/DiscardSharedEnv"
+	ProjectService_DeleteProject_FullMethodName           = "/nagi.v1.ProjectService/DeleteProject"
+	ProjectService_AddContainer_FullMethodName            = "/nagi.v1.ProjectService/AddContainer"
+	ProjectService_DeleteContainer_FullMethodName         = "/nagi.v1.ProjectService/DeleteContainer"
+	ProjectService_ControlContainer_FullMethodName        = "/nagi.v1.ProjectService/ControlContainer"
+	ProjectService_SaveDraft_FullMethodName               = "/nagi.v1.ProjectService/SaveDraft"
+	ProjectService_DiscardDraft_FullMethodName            = "/nagi.v1.ProjectService/DiscardDraft"
+	ProjectService_Deploy_FullMethodName                  = "/nagi.v1.ProjectService/Deploy"
+	ProjectService_ListVersions_FullMethodName            = "/nagi.v1.ProjectService/ListVersions"
+	ProjectService_ListContainerEvents_FullMethodName     = "/nagi.v1.ProjectService/ListContainerEvents"
+	ProjectService_Rollback_FullMethodName                = "/nagi.v1.ProjectService/Rollback"
+	ProjectService_ListDeployments_FullMethodName         = "/nagi.v1.ProjectService/ListDeployments"
+	ProjectService_RestoreDeployment_FullMethodName       = "/nagi.v1.ProjectService/RestoreDeployment"
+	ProjectService_StreamLogs_FullMethodName              = "/nagi.v1.ProjectService/StreamLogs"
+	ProjectService_SaveRoute_FullMethodName               = "/nagi.v1.ProjectService/SaveRoute"
+	ProjectService_DeleteRoute_FullMethodName             = "/nagi.v1.ProjectService/DeleteRoute"
+	ProjectService_CheckDomains_FullMethodName            = "/nagi.v1.ProjectService/CheckDomains"
+	ProjectService_RetryDomainCert_FullMethodName         = "/nagi.v1.ProjectService/RetryDomainCert"
+	ProjectService_SetBackupNode_FullMethodName           = "/nagi.v1.ProjectService/SetBackupNode"
+	ProjectService_SetContainerDisplayName_FullMethodName = "/nagi.v1.ProjectService/SetContainerDisplayName"
+	ProjectService_SyncBackup_FullMethodName              = "/nagi.v1.ProjectService/SyncBackup"
+	ProjectService_ListBackupSnapshots_FullMethodName     = "/nagi.v1.ProjectService/ListBackupSnapshots"
+	ProjectService_RestoreFromBackup_FullMethodName       = "/nagi.v1.ProjectService/RestoreFromBackup"
+	ProjectService_MigrateContainer_FullMethodName        = "/nagi.v1.ProjectService/MigrateContainer"
+	ProjectService_RedeployElsewhere_FullMethodName       = "/nagi.v1.ProjectService/RedeployElsewhere"
+	ProjectService_SetFailover_FullMethodName             = "/nagi.v1.ProjectService/SetFailover"
+	ProjectService_ClearFailover_FullMethodName           = "/nagi.v1.ProjectService/ClearFailover"
+	ProjectService_ChangeWitness_FullMethodName           = "/nagi.v1.ProjectService/ChangeWitness"
+	ProjectService_ConfirmTakeover_FullMethodName         = "/nagi.v1.ProjectService/ConfirmTakeover"
+	ProjectService_ConnectProject_FullMethodName          = "/nagi.v1.ProjectService/ConnectProject"
+	ProjectService_DisconnectProject_FullMethodName       = "/nagi.v1.ProjectService/DisconnectProject"
+	ProjectService_ListVolumes_FullMethodName             = "/nagi.v1.ProjectService/ListVolumes"
+	ProjectService_ListVolumeFiles_FullMethodName         = "/nagi.v1.ProjectService/ListVolumeFiles"
+	ProjectService_DeleteVolumeFile_FullMethodName        = "/nagi.v1.ProjectService/DeleteVolumeFile"
+	ProjectService_CreateVolumeDir_FullMethodName         = "/nagi.v1.ProjectService/CreateVolumeDir"
+	ProjectService_RestoreVolumeFile_FullMethodName       = "/nagi.v1.ProjectService/RestoreVolumeFile"
+	ProjectService_ListSnapshots_FullMethodName           = "/nagi.v1.ProjectService/ListSnapshots"
+	ProjectService_CreateSnapshot_FullMethodName          = "/nagi.v1.ProjectService/CreateSnapshot"
+	ProjectService_RestoreSnapshot_FullMethodName         = "/nagi.v1.ProjectService/RestoreSnapshot"
+	ProjectService_GetBackupKey_FullMethodName            = "/nagi.v1.ProjectService/GetBackupKey"
+	ProjectService_ListRegistries_FullMethodName          = "/nagi.v1.ProjectService/ListRegistries"
+	ProjectService_LoginRegistry_FullMethodName           = "/nagi.v1.ProjectService/LoginRegistry"
+	ProjectService_LogoutRegistry_FullMethodName          = "/nagi.v1.ProjectService/LogoutRegistry"
+	ProjectService_CheckImages_FullMethodName             = "/nagi.v1.ProjectService/CheckImages"
 )
 
 // ProjectServiceClient is the client API for ProjectService service.
@@ -2886,6 +2887,8 @@ type ProjectServiceClient interface {
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error)
+	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
+	SetContainerDisplayName(ctx context.Context, in *SetContainerDisplayNameRequest, opts ...grpc.CallOption) (*Project, error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
 	// 备份节点上副本里的快照。
@@ -3215,6 +3218,16 @@ func (c *projectServiceClient) SetBackupNode(ctx context.Context, in *SetBackupN
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_SetBackupNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SetContainerDisplayName(ctx context.Context, in *SetContainerDisplayNameRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetContainerDisplayName_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3551,6 +3564,8 @@ type ProjectServiceServer interface {
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
 	// 设置或取消备份节点（node_id 为空表示取消）。
 	SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error)
+	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
+	SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *ContainerRef) (*Project, error)
 	// 备份节点上副本里的快照。
@@ -3672,6 +3687,9 @@ func (UnimplementedProjectServiceServer) RetryDomainCert(context.Context, *Retry
 }
 func (UnimplementedProjectServiceServer) SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetBackupNode not implemented")
+}
+func (UnimplementedProjectServiceServer) SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetContainerDisplayName not implemented")
 }
 func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *ContainerRef) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
@@ -4163,6 +4181,24 @@ func _ProjectService_SetBackupNode_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_SetContainerDisplayName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetContainerDisplayNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetContainerDisplayName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetContainerDisplayName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetContainerDisplayName(ctx, req.(*SetContainerDisplayNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -4642,6 +4678,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetBackupNode",
 			Handler:    _ProjectService_SetBackupNode_Handler,
+		},
+		{
+			MethodName: "SetContainerDisplayName",
+			Handler:    _ProjectService_SetContainerDisplayName_Handler,
 		},
 		{
 			MethodName: "SyncBackup",

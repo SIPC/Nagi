@@ -57,6 +57,7 @@ export default {
     SaveRoute: "Save port mapping",
     DeleteRoute: "Delete port mapping",
     RetryDomainCert: "Retry certificate",
+    SetContainerDisplayName: "Rename container",
     SetBackupNode: "Set backup node",
     SyncBackup: "Sync backup",
     RestoreFromBackup: "Restore from backup",

@@ -73,6 +73,13 @@ export default {
     projects: "Projects",
     notFound: (name) => `Container ${name} does not exist in this project. It may have been deleted.`,
   },
+  rename: {
+    action: "Rename",
+    title: "Rename container",
+    description: "For display only. Other containers in the project still use the container name.",
+    label: "Display name",
+    hint: (name) => `Container name: ${name}. Leave empty to use it.`,
+  },
   detail: {
     uploading: (name, size) => `Uploading ${name} (${size} MB)`,
     uploadFailed: (msg) => `Upload failed: ${msg}`,

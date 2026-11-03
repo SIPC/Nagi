@@ -56,6 +56,7 @@ export default {
     SaveRoute: "保存端口映射",
     DeleteRoute: "删除端口映射",
     RetryDomainCert: "重试申请证书",
+    SetContainerDisplayName: "重命名容器",
     SetBackupNode: "设置备份节点",
     SyncBackup: "同步备份",
     RestoreFromBackup: "从备份恢复",

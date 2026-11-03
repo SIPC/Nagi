@@ -23,6 +23,8 @@ import {
   Alert,
   Badge,
   Button,
+  Dialog,
+  DialogActions,
   ButtonLink,
   EmptyRow,
   Field,
@@ -184,6 +186,11 @@ function shortImage(image: string) {
 }
 
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
+// containerLabel：界面上显示的名称。设了显示名称时用它，否则用容器名（容器名创建后不能改）。
+export function containerLabel(m: Container) {
+  return m.displayName || m.name;
+}
+
 export function containerKind(m: Container) {
   return m.kind === "group" ? t.projectContainers.kind.group : t.projectContainers.kind.container;
 }
@@ -246,7 +253,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
               title={
                 // 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；after 让整行可点。
                 <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: m.name }} className="rounded-sm outline-none after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring/40">
-                  {m.name}
+                  {containerLabel(m)}
                 </Link>
               }
               sub={
@@ -307,7 +314,7 @@ export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAut
   const imageUpdates = (project.data.status?.imageUpdates ?? []).filter((u) => u.container === name);
   return (
     <>
-      <Breadcrumb items={[...crumbs, { label: name }]} className="max-md:hidden xl:hidden" />
+      <Breadcrumb items={[...crumbs, { label: containerLabel(container) }]} className="max-md:hidden xl:hidden" />
       <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
     </>
   );
@@ -409,6 +416,7 @@ function ContainerDetail({
   // 只读角色没有配置和终端，直接打开这些地址时显示概览。
   const view = isViewer && (viewProp === "config" || viewProp === "terminal") ? "overview" : viewProp;
   const fileRef = useRef<HTMLInputElement>(null);
+  const [renaming, setRenaming] = useState(false);
   // 换了容器时，上一个容器的部署输出不再显示。
   useEffect(() => {
     if (!busy) setLines([]);
@@ -508,7 +516,8 @@ function ContainerDetail({
         actionsClassName="max-md:w-full max-md:flex-nowrap max-md:[&>button:not(:last-child)]:flex-1"
         title={
           <>
-            {container.name}
+            {containerLabel(container)}
+            {container.displayName && <span className="font-mono text-sm font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
             {offlineNodeNames([container], nodes.data?.nodes).length > 0 ? <Status tone="warning">{t.common.status.unknown}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
@@ -586,6 +595,7 @@ function ContainerDetail({
               items={[
                 ...(mobile && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy }] : []),
                 ...(mobile && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy }] : []),
+                { label: t.projectContainers.rename.action, onSelect: () => setRenaming(true) },
                 { label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline },
                 // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
                 ...(deployed && running && stopped ? [{ label: d.start, onSelect: () => control(ContainerAction.START), disabled: busy || !nodeOnline }] : []),
@@ -614,6 +624,9 @@ function ContainerDetail({
           </>
         }
       />
+      <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.projectContainers.rename.title} description={t.projectContainers.rename.description}>
+        <RenameContainer project={project} container={container} onDone={() => setRenaming(false)} />
+      </Dialog>
       <Tabs
         className={cn("mb-6 max-md:mb-4", browsing && "max-md:hidden")}
         value={view}
@@ -661,6 +674,53 @@ function ContainerDetail({
 }
 
 // uptime：把 Docker 的「Up 2 hours」换成界面语言。不是运行中时是「—」。
+// RenameContainer：修改容器的显示名称（放在对话框里）。容器名不变，项目内网仍用它访问。
+function RenameContainer({ project, container, onDone }: { project: Project; container: Container; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(containerLabel(container));
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const r = t.projectContainers.rename;
+  const save = async () => {
+    const trimmed = name.trim();
+    if (trimmed === containerLabel(container)) return onDone();
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.setContainerDisplayName({ projectId: project.id, container: container.name, displayName: trimmed });
+      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field label={r.label} htmlFor="container-display-name" hint={r.hint(container.name)}>
+        <Input id="container-display-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} placeholder={container.name} autoFocus />
+      </Field>
+      {error && <Alert>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
 function uptime(services: ServiceStatus[]) {
   const up = t.projectContainers.overview.uptime;
   const m = /^Up\s+(.+)$/.exec(serviceDetail(services.find((s) => s.state === "running")?.status ?? ""));

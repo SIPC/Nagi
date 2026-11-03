@@ -72,6 +72,13 @@ export default {
     projects: "项目",
     notFound: (name: string) => `项目中不存在容器 ${name}，可能已被删除。`,
   },
+  rename: {
+    action: "重命名",
+    title: "重命名容器",
+    description: "仅用于显示。项目内其他容器仍通过容器名访问。",
+    label: "显示名称",
+    hint: (name: string) => `容器名：${name}。留空显示容器名。`,
+  },
   detail: {
     uploading: (name: string, size: string) => `上传 ${name}（${size} MB）`,
     uploadFailed: (msg: string) => `上传失败：${msg}`,
