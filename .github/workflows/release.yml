@@ -1,6 +1,9 @@
 # 推送 v* 标签时发布：编译 linux/amd64、linux/arm64 的 nagi（前端打包在内），
 # 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
+#
+# 测试和两个架构的编译同时进行，都通过后才发布。Go 的编译缓存用 main 上 ci.yml 存下的：
+# 标签上的流程只能读当前标签和默认分支的缓存（GitHub 的限制），所以缓存要靠 main 预热。
 name: release
 
 on:
@@ -11,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +22,48 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-test-${{ hashFiles('go.sum') }}-
+            go-test-
+
+      # 没写更新日志就别白编译：先检查，正文在 release 里再生成一次。
+      - name: Check release notes
+        run: sh scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+
+      # web/dist 里有占位文件，测试不用等前端构建。
+      - name: Test
+        run: go test ./...
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-
+            go-build-${{ matrix.arch }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -35,17 +80,33 @@ jobs:
           pnpm -C web install --frozen-lockfile
           pnpm -C web build
 
-      - name: Test
-        run: go test ./...
-
-      - name: Build binaries
+      - name: Build binary
         run: |
           mkdir -p dist
-          for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
-              -o dist/nagi-linux-$arch ./cmd/nagi
-          done
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} go build -trimpath \
+            -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+            -o dist/nagi-linux-${{ matrix.arch }} ./cmd/nagi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nagi-linux-${{ matrix.arch }}
+          path: dist/nagi-linux-${{ matrix.arch }}
+          retention-days: 1
+
+  release:
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: nagi-linux-*
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
           cp scripts/install.sh scripts/uninstall.sh dist/
           cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh > SHA256SUMS
 

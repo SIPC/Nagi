@@ -1,0 +1,63 @@
+# 推送到 main 时跑测试、编译两个架构。除了提前发现问题，也在 main 上存下最新的 Go 编译缓存：
+# 打标签发布时（release.yml）只能读默认分支的缓存，有了它发布只需编译改过的包。
+# 缓存的键和 release.yml 的一致，改了要两边一起改。
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-test-${{ hashFiles('go.sum') }}-
+            go-test-
+
+      - name: Test
+        run: go test ./...
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-
+            go-build-${{ matrix.arch }}-
+
+      # 只为缓存编译 Go：前端用占位的 web/dist，和发布时编译的是同一批包。
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} go build -trimpath \
+            -ldflags "-s -w -X main.version=ci" -o /tmp/nagi ./cmd/nagi
