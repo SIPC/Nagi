@@ -72,7 +72,12 @@ func Mount(mux *http.ServeMux, o Options) {
 		projects: nagiv1connect.NewProjectServiceClient(hc, base),
 		nodes:    nagiv1connect.NewNodeServiceClient(hc, base),
 	}
-	h.http = mcp.NewStreamableHTTPHandler(h.server, &mcp.StreamableHTTPOptions{Logger: o.Log})
+	h.http = mcp.NewStreamableHTTPHandler(h.server, &mcp.StreamableHTTPOptions{
+		Logger: o.Log,
+		// SDK 默认拒绝「从本机地址进来、Host 不是 localhost」的请求（防 DNS 重绑定）。面板绑定域名时请求都由本机的
+		// Caddy 转发，正是这种情况。/mcp 只认请求头里的令牌，浏览器不会自动带上，DNS 重绑定拿不到权限，所以关掉。
+		DisableLocalhostProtection: true,
+	})
 	mux.Handle("/mcp", h)
 	o.OAuth.Mount(mux)
 }
