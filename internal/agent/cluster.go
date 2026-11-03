@@ -247,6 +247,7 @@ var readOnlyRPCs = map[string]bool{
 	nagiv1.AgentService_CheckPorts_FullMethodName:           true,
 	nagiv1.AgentService_GetCache_FullMethodName:             true,
 	nagiv1.AgentService_QueryMetrics_FullMethodName:         true,
+	nagiv1.AgentService_GetStorage_FullMethodName:           true,
 	nagiv1.AgentService_ListPanels_FullMethodName:           true,
 	nagiv1.AgentService_GetMeshStatus_FullMethodName:        true,
 	nagiv1.AgentService_MeshPing_FullMethodName:             true,

@@ -612,3 +612,11 @@ func (d *Client) AnonymousVolumes(ctx context.Context, id string) ([]string, err
 
 // anonymousVolume 是匿名卷的名字：64 位十六进制。
 var anonymousVolume = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// DiskUsage 是 docker system df 的结果。
+type DiskUsage = client.DiskUsageResult
+
+// DiskUsage 返回镜像、容器、数据卷、构建缓存的磁盘占用。
+func (d *Client) DiskUsage(ctx context.Context) (DiskUsage, error) {
+	return d.c.DiskUsage(ctx, client.DiskUsageOptions{Containers: true, Images: true, Volumes: true, BuildCache: true, Verbose: true})
+}

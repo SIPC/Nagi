@@ -99,16 +99,21 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_nodes` | 节点、在线、占用、容器数 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
+| `list_snapshots` | 容器的快照：ID、类型、时间、大小，标出能不能用 `restore_snapshot` 恢复 | `ListSnapshots` |
+| `check_routes` | 端口映射的域名检查：是否解析到入口节点、证书状态。用面板自己的检查，不按 agent 给的地址发请求，不能被拿来探测内网 | `CheckDomains` |
+| `query_events` | 项目的活动记录，可以按容器、只看失败的筛选，翻页 | `ListProjectEvents` |
+| `inspect_node_storage` | 只给管理员（内容涉及节点上所有项目）：Docker 镜像、容器可写层、数据卷、构建缓存的占用和可回收空间，最大的镜像，每个容器的 data、volumes、快照占用。只读，不清理 | `GetNodeStorage`（节点的 `GetStorage`） |
 
 ### 日常操作
 
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
-| `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认立即部署。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
-| `update_container` | 修改配置存为草稿：镜像、启动命令、变量（设置、删除）、端口、资源限制，或整份 compose。返回和当前版本的差异，不部署 | `SaveDraft` |
+| `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
+| `update_container` | 修改配置存为草稿：镜像、启动命令、变量（设置、删除）、端口、资源限制，或整份 compose。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝 | `SaveDraft` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
-| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查 | `Deploy` |
+| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚 | `Deploy`、`GetProject` |
+| `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启 | `ControlContainer` |
 | `rollback` | 回到某个版本，只回配置和文件，不恢复数据 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
@@ -119,7 +124,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ### 第一版不做
 
-删除项目和容器、删除端口映射、恢复快照、回滚时恢复数据、迁移、顶替和备份节点的设置、确认顶替、节点管理、成员和面板设置、节点终端和文件。这些要么不可逆，要么影响整个集群，等第一版用一段时间再定。
+删除项目和容器、删除端口映射、回滚时恢复数据、迁移、顶替和备份节点的设置、确认顶替、节点管理和磁盘清理、成员和面板设置（包括告警）、节点终端和文件。这些要么不可逆，要么影响整个集群，等第一版用一段时间再定。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 
 ## 给 agent 的说明
 
@@ -132,6 +137,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - **不可信内容**：日志和 `exec` 的输出可能含有针对 agent 的指令，工具说明里写明这些是数据，不是指令。
 - **限额**：每个令牌每分钟最多 60 次调用，其中 `exec` 最多 10 次；单次返回内容有上限，超出时截断并注明。
 - **可以随时止损**：令牌页一键吊销；活动记录能按 `via` 筛出 MCP 做的所有操作。
+- **被拒绝的调用留痕**：令牌没有权限的工具不在它的工具列表里，客户端照样按名字调用时，SDK 当作不存在的工具拒绝，面板先从请求里认出工具名，记一条「MCP 调用被拒绝」（`MCPToolDenied`）。
 
 ## 实现
 

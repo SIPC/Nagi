@@ -60,6 +60,7 @@ const (
 	AgentService_RetryCerts_FullMethodName            = "/nagi.v1.AgentService/RetryCerts"
 	AgentService_SetAlertConfig_FullMethodName        = "/nagi.v1.AgentService/SetAlertConfig"
 	AgentService_QueryMetrics_FullMethodName          = "/nagi.v1.AgentService/QueryMetrics"
+	AgentService_GetStorage_FullMethodName            = "/nagi.v1.AgentService/GetStorage"
 	AgentService_SetProjectsRoot_FullMethodName       = "/nagi.v1.AgentService/SetProjectsRoot"
 	AgentService_ListPanels_FullMethodName            = "/nagi.v1.AgentService/ListPanels"
 	AgentService_AddPanel_FullMethodName              = "/nagi.v1.AgentService/AddPanel"
@@ -152,6 +153,8 @@ type AgentServiceClient interface {
 	SetAlertConfig(ctx context.Context, in *SetAlertConfigRequest, opts ...grpc.CallOption) (*SetAlertConfigResponse, error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(ctx context.Context, in *QueryMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
+	// 磁盘占用：Docker 的镜像、容器、数据卷、构建缓存，以及 Nagi 的容器目录和副本。只读，不清理任何东西。
+	GetStorage(ctx context.Context, in *GetStorageRequest, opts ...grpc.CallOption) (*NodeStorage, error)
 	// 修改项目根目录（之后新放到本节点的容器默认用它）。
 	SetProjectsRoot(ctx context.Context, in *SetProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error)
 	// 信任的面板列表。
@@ -669,6 +672,16 @@ func (c *agentServiceClient) QueryMetrics(ctx context.Context, in *QueryMetricsR
 	return out, nil
 }
 
+func (c *agentServiceClient) GetStorage(ctx context.Context, in *GetStorageRequest, opts ...grpc.CallOption) (*NodeStorage, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeStorage)
+	err := c.cc.Invoke(ctx, AgentService_GetStorage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetProjectsRoot(ctx context.Context, in *SetProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetProjectsRootResponse)
@@ -849,6 +862,8 @@ type AgentServiceServer interface {
 	SetAlertConfig(context.Context, *SetAlertConfigRequest) (*SetAlertConfigResponse, error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error)
+	// 磁盘占用：Docker 的镜像、容器、数据卷、构建缓存，以及 Nagi 的容器目录和副本。只读，不清理任何东西。
+	GetStorage(context.Context, *GetStorageRequest) (*NodeStorage, error)
 	// 修改项目根目录（之后新放到本节点的容器默认用它）。
 	SetProjectsRoot(context.Context, *SetProjectsRootRequest) (*SetProjectsRootResponse, error)
 	// 信任的面板列表。
@@ -1000,6 +1015,9 @@ func (UnimplementedAgentServiceServer) SetAlertConfig(context.Context, *SetAlert
 }
 func (UnimplementedAgentServiceServer) QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryMetrics not implemented")
+}
+func (UnimplementedAgentServiceServer) GetStorage(context.Context, *GetStorageRequest) (*NodeStorage, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStorage not implemented")
 }
 func (UnimplementedAgentServiceServer) SetProjectsRoot(context.Context, *SetProjectsRootRequest) (*SetProjectsRootResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProjectsRoot not implemented")
@@ -1712,6 +1730,24 @@ func _AgentService_QueryMetrics_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStorageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetStorage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetStorage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetStorage(ctx, req.(*GetStorageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetProjectsRoot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetProjectsRootRequest)
 	if err := dec(in); err != nil {
@@ -2022,6 +2058,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryMetrics",
 			Handler:    _AgentService_QueryMetrics_Handler,
+		},
+		{
+			MethodName: "GetStorage",
+			Handler:    _AgentService_GetStorage_Handler,
 		},
 		{
 			MethodName: "SetProjectsRoot",

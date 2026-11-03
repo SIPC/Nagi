@@ -60,6 +60,7 @@ export default {
     RetryDomainCert: "Retry certificate",
     SetContainerDisplayName: "Rename container",
     ExecCommand: "Run command in container",
+    MCPToolDenied: "MCP call denied",
     CreateAccessToken: "Create access token",
     RevokeAccessToken: "Revoke access token",
     ApproveOAuth: "OAuth authorization",

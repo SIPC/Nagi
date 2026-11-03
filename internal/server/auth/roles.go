@@ -27,6 +27,8 @@ var adminReads = map[string]bool{
 	"GetAlertConfig": true, "ListInvites": true, "ListActivity": true, "ListUsers": true, "GetNodeMirrors": true, "GetUpdateStatus": true,
 	// 节点上的文件（见 docs/node-access.md）：看到的是整个节点。
 	"ListNodeDir": true, "ListNodeFileBackups": true,
+	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
+	"GetNodeStorage": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

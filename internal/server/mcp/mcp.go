@@ -31,6 +31,8 @@ type Options struct {
 	// Exec 在容器里执行一条命令（api.API.RunCommand）。
 	Exec    func(ctx context.Context, projectID, container, service string, command []string, timeout time.Duration) (api.ExecResult, error)
 	Version string
+	// Record 把被拒绝的工具调用记进活动记录（api.API.RecordMCPDenied）。
+	Record func(ctx context.Context, u auth.User, tool, reason string)
 	// Standby 表示这是备用面板：只给查看类的工具。
 	Standby bool
 	Log     *slog.Logger
@@ -114,7 +116,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		AllowMissingExpiration: true,
 	})
 	rec := &statusRecorder{ResponseWriter: w}
-	mw(h.http).ServeHTTP(rec, r)
+	mw(h.watchDenied(h.http)).ServeHTTP(rec, r)
 	// 被拒绝的请求记一条，排查客户端连不上时看面板日志就知道原因。没带令牌的 401 是 OAuth 发现流程的第一步，不记。
 	if rec.status >= 400 && rec.status != http.StatusUnauthorized {
 		h.o.Log.Warn("MCP 请求被拒绝", "method", r.Method, "status", rec.status, "ip", auth.RequestIP(r.RemoteAddr, r.Header), "host", auth.RequestHost(r))

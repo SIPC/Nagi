@@ -320,6 +320,21 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 	return connect.NewResponse(resp), nil
 }
 
+// GetNodeStorage 返回节点的磁盘占用明细（只读，只有管理员能调用）。
+func (s *nodeService) GetNodeStorage(ctx context.Context, req *connect.Request[nagiv1.NodeRef]) (*connect.Response[nagiv1.NodeStorage], error) {
+	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	resp, err := conn.Agent.GetStorage(ctx, &nagiv1.GetStorageRequest{})
+	if status.Code(err) == codes.Unimplemented {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点版本过旧，升级节点后才能查看磁盘明细"))
+	} else if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 // nodeAddress 返回在线节点的地址：面板看到的来源 IP，面板自带的节点用面板的对外地址。
 func (a *API) nodeAddress(ctx context.Context, conn *nodes.Conn) string {
 	if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !conn.LastReport().GetNode().GetEmbedded() {

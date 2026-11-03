@@ -33,8 +33,16 @@ func TestToolDeclarations(t *testing.T) {
 			if !exists(p) {
 				t.Errorf("工具 %s 用到的接口 %s 不存在", tl.name, p)
 			}
-			if !auth.Allowed(auth.RoleOperator, p) {
-				t.Errorf("工具 %s 用到的接口 %s 操作员不能调用", tl.name, p)
+			role := auth.RoleOperator
+			if tl.adminOnly {
+				role = auth.RoleAdmin
+			}
+			if !auth.Allowed(role, p) {
+				t.Errorf("工具 %s 用到的接口 %s %s 不能调用", tl.name, p, role)
+			}
+			// 管理员专用的接口，工具也要声明为管理员专用。
+			if !tl.adminOnly && !auth.Allowed(auth.RoleOperator, p) {
+				t.Errorf("工具 %s 用到只有管理员能调用的接口 %s，要声明 adminOnly", tl.name, p)
 			}
 			if !auth.TokenAllowed(readOnly, p) {
 				writes++
@@ -81,6 +89,49 @@ func TestImageName(t *testing.T) {
 	} {
 		if got := imageName(image); got != want {
 			t.Errorf("imageName(%q) = %q，想要 %q", image, got, want)
+		}
+	}
+}
+
+func TestCalledTools(t *testing.T) {
+	one := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"exec","arguments":{}}}`
+	batch := `[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"deploy"}}]`
+	if got := calledTools([]byte(one)); len(got) != 1 || got[0] != "exec" {
+		t.Errorf("单个请求：%v", got)
+	}
+	if got := calledTools([]byte(batch)); len(got) != 1 || got[0] != "deploy" {
+		t.Errorf("批量请求：%v", got)
+	}
+	if got := calledTools([]byte("not json")); len(got) != 0 {
+		t.Errorf("不是 JSON：%v", got)
+	}
+}
+
+// 只读令牌、非管理员看不到的工具，各自的判断要对。
+func TestAllowedFor(t *testing.T) {
+	byName := map[string]tool{}
+	for _, tl := range allTools {
+		byName[tl.name] = tl
+	}
+	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}
+	admin := auth.User{Role: auth.RoleAdmin, TokenID: 1}
+	cases := []struct {
+		tool    string
+		u       auth.User
+		standby bool
+		want    bool
+	}{
+		{"deploy", op, false, true},
+		{"deploy", op, true, false},
+		{"exec", op, false, false},
+		{"restore_snapshot", auth.User{Role: auth.RoleOperator, TokenID: 1}, false, false},
+		{"inspect_node_storage", op, false, false},
+		{"inspect_node_storage", admin, false, true},
+		{"list_snapshots", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, true},
+	}
+	for _, c := range cases {
+		if got := byName[c.tool].allowedFor(c.u, c.standby); got != c.want {
+			t.Errorf("%s 对 %+v（备用面板 %v）= %v，想要 %v", c.tool, c.u, c.standby, got, c.want)
 		}
 	}
 }

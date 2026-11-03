@@ -184,6 +184,8 @@ service NodeService {
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
+  // 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
+  rpc GetNodeStorage(NodeRef) returns (NodeStorage);
   // 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
   rpc RemoveNode(RemoveNodeRequest) returns (RemoveNodeResponse);
   // 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
@@ -597,6 +599,8 @@ service ProjectService {
   rpc ListVersions(ContainerRef) returns (ListVersionsResponse);
   // 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
   rpc ListContainerEvents(ContainerRef) returns (ListActivityResponse);
+  // 项目的活动记录（操作和告警），新的在前，可以按容器、只看失败的筛选，用 before 翻页。
+  rpc ListProjectEvents(ListProjectEventsRequest) returns (ListActivityResponse);
   // 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
   rpc Rollback(RollbackRequest) returns (stream DeployEvent);
   rpc ListDeployments(ProjectRef) returns (ListDeploymentsResponse);
@@ -1132,4 +1136,15 @@ message LoginRegistryApiRequest {
 message LogoutRegistryRequest {
   string project_id = 1;
   string registry = 2;
+}
+
+message ListProjectEventsRequest {
+  string project_id = 1;
+  // 为空表示项目里的所有容器。
+  string container = 2;
+  // 默认 50，最多 200。
+  int32 limit = 3;
+  // 只要 ID 比它小的（翻页），0 表示从最新的开始。
+  int64 before = 4;
+  bool failed_only = 5;
 }

@@ -602,6 +602,7 @@ const (
 	NodeService_SetNodeProjectsRoot_FullMethodName   = "/nagi.v1.NodeService/SetNodeProjectsRoot"
 	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
+	NodeService_GetNodeStorage_FullMethodName        = "/nagi.v1.NodeService/GetNodeStorage"
 	NodeService_RemoveNode_FullMethodName            = "/nagi.v1.NodeService/RemoveNode"
 	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
 	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
@@ -649,6 +650,8 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
+	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
+	GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
@@ -898,6 +901,16 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, in *QueryNodeM
 	return out, nil
 }
 
+func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeStorage)
+	err := c.cc.Invoke(ctx, NodeService_GetNodeStorage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*RemoveNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveNodeResponse)
@@ -979,6 +992,8 @@ type NodeServiceServer interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
+	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
+	GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
@@ -1066,6 +1081,9 @@ func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *Crea
 }
 func (UnimplementedNodeServiceServer) QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryNodeMetrics not implemented")
+}
+func (UnimplementedNodeServiceServer) GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeStorage not implemented")
 }
 func (UnimplementedNodeServiceServer) RemoveNode(context.Context, *RemoveNodeRequest) (*RemoveNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveNode not implemented")
@@ -1514,6 +1532,24 @@ func _NodeService_QueryNodeMetrics_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_GetNodeStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).GetNodeStorage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_GetNodeStorage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).GetNodeStorage(ctx, req.(*NodeRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_RemoveNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveNodeRequest)
 	if err := dec(in); err != nil {
@@ -1684,6 +1720,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryNodeMetrics",
 			Handler:    _NodeService_QueryNodeMetrics_Handler,
+		},
+		{
+			MethodName: "GetNodeStorage",
+			Handler:    _NodeService_GetNodeStorage_Handler,
 		},
 		{
 			MethodName: "RemoveNode",
@@ -3004,6 +3044,7 @@ const (
 	ProjectService_Deploy_FullMethodName                  = "/nagi.v1.ProjectService/Deploy"
 	ProjectService_ListVersions_FullMethodName            = "/nagi.v1.ProjectService/ListVersions"
 	ProjectService_ListContainerEvents_FullMethodName     = "/nagi.v1.ProjectService/ListContainerEvents"
+	ProjectService_ListProjectEvents_FullMethodName       = "/nagi.v1.ProjectService/ListProjectEvents"
 	ProjectService_Rollback_FullMethodName                = "/nagi.v1.ProjectService/Rollback"
 	ProjectService_ListDeployments_FullMethodName         = "/nagi.v1.ProjectService/ListDeployments"
 	ProjectService_RestoreDeployment_FullMethodName       = "/nagi.v1.ProjectService/RestoreDeployment"
@@ -3069,6 +3110,8 @@ type ProjectServiceClient interface {
 	ListVersions(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVersionsResponse, error)
 	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
 	ListContainerEvents(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListActivityResponse, error)
+	// 项目的活动记录（操作和告警），新的在前，可以按容器、只看失败的筛选，用 before 翻页。
+	ListProjectEvents(ctx context.Context, in *ListProjectEventsRequest, opts ...grpc.CallOption) (*ListActivityResponse, error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListDeployments(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
@@ -3299,6 +3342,16 @@ func (c *projectServiceClient) ListContainerEvents(ctx context.Context, in *Cont
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListActivityResponse)
 	err := c.cc.Invoke(ctx, ProjectService_ListContainerEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ListProjectEvents(ctx context.Context, in *ListProjectEventsRequest, opts ...grpc.CallOption) (*ListActivityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListActivityResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListProjectEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3746,6 +3799,8 @@ type ProjectServiceServer interface {
 	ListVersions(context.Context, *ContainerRef) (*ListVersionsResponse, error)
 	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
 	ListContainerEvents(context.Context, *ContainerRef) (*ListActivityResponse, error)
+	// 项目的活动记录（操作和告警），新的在前，可以按容器、只看失败的筛选，用 before 翻页。
+	ListProjectEvents(context.Context, *ListProjectEventsRequest) (*ListActivityResponse, error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListDeployments(context.Context, *ProjectRef) (*ListDeploymentsResponse, error)
@@ -3858,6 +3913,9 @@ func (UnimplementedProjectServiceServer) ListVersions(context.Context, *Containe
 }
 func (UnimplementedProjectServiceServer) ListContainerEvents(context.Context, *ContainerRef) (*ListActivityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListContainerEvents not implemented")
+}
+func (UnimplementedProjectServiceServer) ListProjectEvents(context.Context, *ListProjectEventsRequest) (*ListActivityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProjectEvents not implemented")
 }
 func (UnimplementedProjectServiceServer) Rollback(*RollbackRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method Rollback not implemented")
@@ -4234,6 +4292,24 @@ func _ProjectService_ListContainerEvents_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).ListContainerEvents(ctx, req.(*ContainerRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ListProjectEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProjectEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListProjectEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListProjectEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListProjectEvents(ctx, req.(*ListProjectEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4852,6 +4928,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListContainerEvents",
 			Handler:    _ProjectService_ListContainerEvents_Handler,
+		},
+		{
+			MethodName: "ListProjectEvents",
+			Handler:    _ProjectService_ListProjectEvents_Handler,
 		},
 		{
 			MethodName: "ListDeployments",

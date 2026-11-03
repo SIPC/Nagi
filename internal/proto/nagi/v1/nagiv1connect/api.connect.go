@@ -133,6 +133,9 @@ const (
 	// NodeServiceQueryNodeMetricsProcedure is the fully-qualified name of the NodeService's
 	// QueryNodeMetrics RPC.
 	NodeServiceQueryNodeMetricsProcedure = "/nagi.v1.NodeService/QueryNodeMetrics"
+	// NodeServiceGetNodeStorageProcedure is the fully-qualified name of the NodeService's
+	// GetNodeStorage RPC.
+	NodeServiceGetNodeStorageProcedure = "/nagi.v1.NodeService/GetNodeStorage"
 	// NodeServiceRemoveNodeProcedure is the fully-qualified name of the NodeService's RemoveNode RPC.
 	NodeServiceRemoveNodeProcedure = "/nagi.v1.NodeService/RemoveNode"
 	// NodeServiceApproveNodeProcedure is the fully-qualified name of the NodeService's ApproveNode RPC.
@@ -279,6 +282,9 @@ const (
 	// ProjectServiceListContainerEventsProcedure is the fully-qualified name of the ProjectService's
 	// ListContainerEvents RPC.
 	ProjectServiceListContainerEventsProcedure = "/nagi.v1.ProjectService/ListContainerEvents"
+	// ProjectServiceListProjectEventsProcedure is the fully-qualified name of the ProjectService's
+	// ListProjectEvents RPC.
+	ProjectServiceListProjectEventsProcedure = "/nagi.v1.ProjectService/ListProjectEvents"
 	// ProjectServiceRollbackProcedure is the fully-qualified name of the ProjectService's Rollback RPC.
 	ProjectServiceRollbackProcedure = "/nagi.v1.ProjectService/Rollback"
 	// ProjectServiceListDeploymentsProcedure is the fully-qualified name of the ProjectService's
@@ -809,6 +815,8 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
+	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
@@ -969,6 +977,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeStorage: connect.NewClient[v1.NodeRef, v1.NodeStorage](
+			httpClient,
+			baseURL+NodeServiceGetNodeStorageProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNodeStorage")),
+			connect.WithClientOptions(opts...),
+		),
 		removeNode: connect.NewClient[v1.RemoveNodeRequest, v1.RemoveNodeResponse](
 			httpClient,
 			baseURL+NodeServiceRemoveNodeProcedure,
@@ -1021,6 +1035,7 @@ type nodeServiceClient struct {
 	setNodeProjectsRoot   *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
 	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
+	getNodeStorage        *connect.Client[v1.NodeRef, v1.NodeStorage]
 	removeNode            *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
 	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
@@ -1142,6 +1157,11 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, req *connect.R
 	return c.queryNodeMetrics.CallUnary(ctx, req)
 }
 
+// GetNodeStorage calls nagi.v1.NodeService.GetNodeStorage.
+func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
+	return c.getNodeStorage.CallUnary(ctx, req)
+}
+
 // RemoveNode calls nagi.v1.NodeService.RemoveNode.
 func (c *nodeServiceClient) RemoveNode(ctx context.Context, req *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
 	return c.removeNode.CallUnary(ctx, req)
@@ -1201,6 +1221,8 @@ type NodeServiceHandler interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
+	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
 	RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error)
 	// 批准用接入码加入的节点。接入码可以多次使用、还会经过别的面板转交，泄露了别人也能用它加入节点，
@@ -1357,6 +1379,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceGetNodeStorageHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeStorageProcedure,
+		svc.GetNodeStorage,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNodeStorage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceRemoveNodeHandler := connect.NewUnaryHandler(
 		NodeServiceRemoveNodeProcedure,
 		svc.RemoveNode,
@@ -1429,6 +1457,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
 			nodeServiceQueryNodeMetricsHandler.ServeHTTP(w, r)
+		case NodeServiceGetNodeStorageProcedure:
+			nodeServiceGetNodeStorageHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodeProcedure:
 			nodeServiceRemoveNodeHandler.ServeHTTP(w, r)
 		case NodeServiceApproveNodeProcedure:
@@ -1536,6 +1566,10 @@ func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *con
 
 func (UnimplementedNodeServiceHandler) QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryNodeMetrics is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetNodeStorage is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) RemoveNode(context.Context, *connect.Request[v1.RemoveNodeRequest]) (*connect.Response[v1.RemoveNodeResponse], error) {
@@ -2471,6 +2505,8 @@ type ProjectServiceClient interface {
 	ListVersions(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error)
 	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
 	ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error)
+	// 项目的活动记录（操作和告警），新的在前，可以按容器、只看失败的筛选，用 before 翻页。
+	ListProjectEvents(context.Context, *connect.Request[v1.ListProjectEventsRequest]) (*connect.Response[v1.ListActivityResponse], error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	ListDeployments(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -2630,6 +2666,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceListContainerEventsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListContainerEvents")),
+			connect.WithClientOptions(opts...),
+		),
+		listProjectEvents: connect.NewClient[v1.ListProjectEventsRequest, v1.ListActivityResponse](
+			httpClient,
+			baseURL+ProjectServiceListProjectEventsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListProjectEvents")),
 			connect.WithClientOptions(opts...),
 		),
 		rollback: connect.NewClient[v1.RollbackRequest, v1.DeployEvent](
@@ -2856,6 +2898,7 @@ type projectServiceClient struct {
 	deploy                  *connect.Client[v1.DeployRequest, v1.DeployEvent]
 	listVersions            *connect.Client[v1.ContainerRef, v1.ListVersionsResponse]
 	listContainerEvents     *connect.Client[v1.ContainerRef, v1.ListActivityResponse]
+	listProjectEvents       *connect.Client[v1.ListProjectEventsRequest, v1.ListActivityResponse]
 	rollback                *connect.Client[v1.RollbackRequest, v1.DeployEvent]
 	listDeployments         *connect.Client[v1.ProjectRef, v1.ListDeploymentsResponse]
 	restoreDeployment       *connect.Client[v1.RestoreDeploymentRequest, v1.DeployEvent]
@@ -2965,6 +3008,11 @@ func (c *projectServiceClient) ListVersions(ctx context.Context, req *connect.Re
 // ListContainerEvents calls nagi.v1.ProjectService.ListContainerEvents.
 func (c *projectServiceClient) ListContainerEvents(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error) {
 	return c.listContainerEvents.CallUnary(ctx, req)
+}
+
+// ListProjectEvents calls nagi.v1.ProjectService.ListProjectEvents.
+func (c *projectServiceClient) ListProjectEvents(ctx context.Context, req *connect.Request[v1.ListProjectEventsRequest]) (*connect.Response[v1.ListActivityResponse], error) {
+	return c.listProjectEvents.CallUnary(ctx, req)
 }
 
 // Rollback calls nagi.v1.ProjectService.Rollback.
@@ -3164,6 +3212,8 @@ type ProjectServiceHandler interface {
 	ListVersions(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVersionsResponse], error)
 	// 这个容器最近的事件：操作和告警，新的在前。所有角色都能看；只读角色看不到失败的详细信息。
 	ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error)
+	// 项目的活动记录（操作和告警），新的在前，可以按容器、只看失败的筛选，用 before 翻页。
+	ListProjectEvents(context.Context, *connect.Request[v1.ListProjectEventsRequest]) (*connect.Response[v1.ListActivityResponse], error)
 	// 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的新版本并部署，可选同时恢复数据。
 	Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error
 	ListDeployments(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -3319,6 +3369,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceListContainerEventsProcedure,
 		svc.ListContainerEvents,
 		connect.WithSchema(projectServiceMethods.ByName("ListContainerEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListProjectEventsHandler := connect.NewUnaryHandler(
+		ProjectServiceListProjectEventsProcedure,
+		svc.ListProjectEvents,
+		connect.WithSchema(projectServiceMethods.ByName("ListProjectEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceRollbackHandler := connect.NewServerStreamHandler(
@@ -3557,6 +3613,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceListVersionsHandler.ServeHTTP(w, r)
 		case ProjectServiceListContainerEventsProcedure:
 			projectServiceListContainerEventsHandler.ServeHTTP(w, r)
+		case ProjectServiceListProjectEventsProcedure:
+			projectServiceListProjectEventsHandler.ServeHTTP(w, r)
 		case ProjectServiceRollbackProcedure:
 			projectServiceRollbackHandler.ServeHTTP(w, r)
 		case ProjectServiceListDeploymentsProcedure:
@@ -3692,6 +3750,10 @@ func (UnimplementedProjectServiceHandler) ListVersions(context.Context, *connect
 
 func (UnimplementedProjectServiceHandler) ListContainerEvents(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListActivityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListContainerEvents is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListProjectEvents(context.Context, *connect.Request[v1.ListProjectEventsRequest]) (*connect.Response[v1.ListActivityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListProjectEvents is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) Rollback(context.Context, *connect.Request[v1.RollbackRequest], *connect.ServerStream[v1.DeployEvent]) error {

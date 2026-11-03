@@ -1,6 +1,6 @@
 package store
 
-// 访问令牌和 OAuth 客户端的查询（见 docs/mcp.md）。手写的：sqlc 在这套表结构上生成失败，
+// 访问令牌、OAuth 客户端和 MCP 用到的活动记录查询（见 docs/mcp.md）。手写的：sqlc 在这套表结构上生成失败，
 // 这些查询不放进 queries.sql，免得以后能生成时重复。
 
 import (
@@ -185,4 +185,27 @@ func (q *Queries) CountOAuthClients(ctx context.Context) (int64, error) {
 func (q *Queries) DeleteStaleOAuthClients(ctx context.Context, before int64) error {
 	_, err := q.db.ExecContext(ctx, `DELETE FROM oauth_clients WHERE authorized_at = 0 AND created_at < ?`, before)
 	return err
+}
+
+// ListProjectActivity 返回项目的活动记录（见 ListProjectEvents），新的在前。container 为空表示所有容器；
+// 部署的目标可能是逗号分隔的几个容器，和 ListContainerActivity 一样匹配。
+func (q *Queries) ListProjectActivity(ctx context.Context, projectID, container string, before int64, failedOnly bool, limit int64) ([]Activity, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT id, created_at, kind, actor, action, project_id, target, detail, failed, via FROM activity
+		WHERE project_id = ?1
+		AND (?2 = '' OR target = ?2 OR ',' || replace(target, ' ', '') || ',' LIKE '%,' || ?2 || ',%')
+		AND (?3 = 0 OR id < ?3) AND (?4 = 0 OR failed = 1)
+		ORDER BY id DESC LIMIT ?5`, projectID, container, before, flag(failedOnly), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Activity
+	for rows.Next() {
+		var i Activity
+		if err := rows.Scan(&i.ID, &i.CreatedAt, &i.Kind, &i.Actor, &i.Action, &i.ProjectID, &i.Target, &i.Detail, &i.Failed, &i.Via); err != nil {
+			return nil, err
+		}
+		out = append(out, i)
+	}
+	return out, rows.Err()
 }

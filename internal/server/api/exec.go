@@ -101,6 +101,17 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	return res, nil
 }
 
+// RecordMCPDenied 记一条被拒绝的 MCP 工具调用（见 docs/mcp.md#安全）：令牌没有这个工具的权限。
+func (a *API) RecordMCPDenied(ctx context.Context, u auth.User, tool, reason string) {
+	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
+		CreatedAt: time.Now().Unix(), Kind: "operation", Actor: clipActivity(u.Name, 64), Action: "MCPToolDenied",
+		Target: clipActivity(tool, 200), Detail: clipActivity(reason, 500), Failed: 1, Via: clipActivity(u.Via, 80),
+	})
+	if err != nil {
+		a.Log.Warn("写入活动记录失败", "err", err)
+	}
+}
+
 // recordExec 记一条执行命令的活动：详情是命令，失败时后面接原因。
 func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure string) {
 	detail := command

@@ -141,7 +141,7 @@ type AddContainerArgs struct {
 	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file"`
 	Volumes []string          `json:"volumes,omitempty" jsonschema:"paths inside an image container to persist, e.g. /var/lib/postgresql/data"`
 	Node    string            `json:"node,omitempty" jsonschema:"node name or ID; default is the online node running most of the project's containers"`
-	Deploy  *bool             `json:"deploy,omitempty" jsonschema:"deploy right away, default true"`
+	Deploy  bool              `json:"deploy,omitempty" jsonschema:"deploy right away; default false (call deploy separately)"`
 }
 
 var nameChars = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -260,7 +260,7 @@ func toolAddContainer(c *call, in AddContainerArgs) (any, error) {
 		Node      string    `json:"node"`
 		Deploy    *opResult `json:"deploy,omitempty"`
 	}{Container: name, Node: node.GetName()}
-	if in.Deploy == nil || *in.Deploy {
+	if in.Deploy {
 		r, err := c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 			return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: pid, Targets: []*nagiv1.DeployTarget{{Container: name}}}))
 		})
@@ -276,14 +276,15 @@ func toolAddContainer(c *call, in AddContainerArgs) (any, error) {
 
 type UpdateContainerArgs struct {
 	ContainerArg
-	Image    *string           `json:"image,omitempty" jsonschema:"image-form containers only"`
-	Command  *string           `json:"command,omitempty" jsonschema:"image-form containers only; empty string clears it"`
-	Ports    []portArg         `json:"ports,omitempty" jsonschema:"image-form containers only; replaces all ports"`
-	Env      map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES})"`
-	EnvUnset []string          `json:"env_unset,omitempty" jsonschema:"remove these variables"`
-	MemoryMB *uint32           `json:"memory_mb,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
-	CPUs     *float64          `json:"cpus,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
-	Compose  string            `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file"`
+	ExpectedRevision int64             `json:"expected_revision,omitempty" jsonschema:"the container's revision from get_container; the change is refused if someone changed the container since"`
+	Image            *string           `json:"image,omitempty" jsonschema:"image-form containers only"`
+	Command          *string           `json:"command,omitempty" jsonschema:"image-form containers only; empty string clears it"`
+	Ports            []portArg         `json:"ports,omitempty" jsonschema:"image-form containers only; replaces all ports"`
+	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES})"`
+	EnvUnset         []string          `json:"env_unset,omitempty" jsonschema:"remove these variables"`
+	MemoryMB         *uint32           `json:"memory_mb,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
+	CPUs             *float64          `json:"cpus,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
+	Compose          string            `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file"`
 }
 
 // patchEnv 设置、删除变量，保留没提到的变量（以及它们是否为密钥）。
@@ -369,15 +370,29 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 		return map[string]any{"changed": []string{}, "note": "nothing changed"}, nil
 	}
 	if _, err := c.h.clients.projects.SaveDraft(c.ctx, connect.NewRequest(&nagiv1.SaveDraftRequest{
-		ProjectId: s.GetProject().GetId(), Container: m.GetName(), BaseRevision: m.GetRevision(), Config: cfg,
+		ProjectId: s.GetProject().GetId(), Container: m.GetName(), BaseRevision: baseRevision(in.ExpectedRevision, m), Config: cfg,
 	})); err != nil {
 		return nil, err
 	}
 	return map[string]any{"changed": changed, "note": "saved as a draft; call deploy to apply it"}, nil
 }
 
-func toolDiscardDraft(c *call, in ContainerArg) (any, error) {
-	s, m, err := c.container(in)
+// baseRevision 是修改基于的修订号：agent 给了就用它（面板上已经不是这个修订号时拒绝，免得覆盖别人刚做的修改），
+// 没给就用刚读到的。
+func baseRevision(expected int64, m *nagiv1.Container) int64 {
+	if expected > 0 {
+		return expected
+	}
+	return m.GetRevision()
+}
+
+type DiscardArgs struct {
+	ContainerArg
+	ExpectedRevision int64 `json:"expected_revision,omitempty" jsonschema:"the container's revision from get_container"`
+}
+
+func toolDiscardDraft(c *call, in DiscardArgs) (any, error) {
+	s, m, err := c.container(in.ContainerArg)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +400,7 @@ func toolDiscardDraft(c *call, in ContainerArg) (any, error) {
 		return map[string]string{"note": "the container has no draft"}, nil
 	}
 	if _, err := c.h.clients.projects.DiscardDraft(c.ctx, connect.NewRequest(&nagiv1.ContainerRevisionRef{
-		ProjectId: s.GetProject().GetId(), Container: m.GetName(), BaseRevision: m.GetRevision(),
+		ProjectId: s.GetProject().GetId(), Container: m.GetName(), BaseRevision: baseRevision(in.ExpectedRevision, m),
 	})); err != nil {
 		return nil, err
 	}
@@ -399,6 +414,9 @@ type DeployArgs struct {
 	Containers []string `json:"containers,omitempty" jsonschema:"containers to deploy; default: every container with a draft"`
 	PullImages bool     `json:"pull_images,omitempty" jsonschema:"pull the newest images first (update images)"`
 	PullGit    bool     `json:"pull_git,omitempty" jsonschema:"pull files from the git repository first"`
+	// 修订号：部署的是 agent 看过的那份草稿，期间被别人改过就拒绝。
+	ExpectedRevisions  map[string]int64 `json:"expected_revisions,omitempty" jsonschema:"container name to its revision from get_container; the deploy is refused if one of them changed since"`
+	WaitHealthySeconds int              `json:"wait_healthy_seconds,omitempty" jsonschema:"after a successful deploy, wait up to this many seconds (at most 300) for the containers to be running and, if they have a Docker health check, healthy"`
 }
 
 func toolDeploy(c *call, in DeployArgs) (any, error) {
@@ -425,9 +443,80 @@ func toolDeploy(c *call, in DeployArgs) (any, error) {
 		}
 		targets = append(targets, &nagiv1.DeployTarget{Container: m.GetName()})
 	}
-	return c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
+	for _, t := range targets {
+		t.BaseRevision = in.ExpectedRevisions[t.GetContainer()]
+	}
+	res, err := c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 		return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: p.GetId(), Targets: targets, PullImages: in.PullImages, Pull: in.PullGit}))
 	})
+	if err != nil || !res.Success || in.WaitHealthySeconds <= 0 {
+		return res, err
+	}
+	names := make([]string, 0, len(targets))
+	for _, t := range targets {
+		names = append(names, t.GetContainer())
+	}
+	health, err := c.waitHealthy(p.GetId(), names, time.Duration(min(in.WaitHealthySeconds, 300))*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"deploy": res, "health": health}, nil
+}
+
+type healthResult struct {
+	Passed   bool          `json:"passed"`
+	TimedOut bool          `json:"timed_out,omitempty"`
+	Reason   string        `json:"reason,omitempty"`
+	Services []serviceView `json:"services"`
+}
+
+// waitHealthy 等部署的容器都在运行，有健康检查的变成 healthy。有服务 unhealthy 或者不在运行就不算通过。
+// 只回报结果，不自动回滚：有状态的容器回滚配置不等于回滚数据，由 agent 和用户决定。
+func (c *call) waitHealthy(projectID string, containers []string, wait time.Duration) (healthResult, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		s, err := c.getProject(projectID)
+		if err != nil {
+			return healthResult{}, err
+		}
+		out := healthResult{Passed: true, Services: []serviceView{}}
+		pending := false
+		for _, name := range containers {
+			svcs := services(s, name)
+			if len(svcs) == 0 {
+				pending = true
+				out.Reason = name + ": no running service yet"
+			}
+			for _, v := range svcs {
+				out.Services = append(out.Services, v)
+				switch {
+				case v.State != "running":
+					out.Passed, out.Reason = false, fmt.Sprintf("%s/%s is %s (%s)", name, v.Name, v.State, v.Status)
+				case v.Health == "unhealthy":
+					out.Passed, out.Reason = false, fmt.Sprintf("%s/%s health check is failing", name, v.Name)
+				case v.Health == "starting":
+					pending = true
+					out.Reason = fmt.Sprintf("%s/%s health check is still starting", name, v.Name)
+				}
+			}
+		}
+		if !out.Passed {
+			return out, nil
+		}
+		if !pending {
+			out.Reason = ""
+			return out, nil
+		}
+		if time.Now().After(deadline) {
+			out.Passed, out.TimedOut = false, true
+			return out, nil
+		}
+		select {
+		case <-c.ctx.Done():
+			return healthResult{}, c.ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
+	}
 }
 
 type ControlArgs struct {

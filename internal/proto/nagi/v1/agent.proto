@@ -89,6 +89,8 @@ service AgentService {
   rpc SetAlertConfig(SetAlertConfigRequest) returns (SetAlertConfigResponse);
   // 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
   rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
+  // 磁盘占用：Docker 的镜像、容器、数据卷、构建缓存，以及 Nagi 的容器目录和副本。只读，不清理任何东西。
+  rpc GetStorage(GetStorageRequest) returns (NodeStorage);
   // 修改项目根目录（之后新放到本节点的容器默认用它）。
   rpc SetProjectsRoot(SetProjectsRootRequest) returns (SetProjectsRootResponse);
   // 信任的面板列表。
@@ -552,4 +554,51 @@ message QueryMetricsRequest {
 
 message QueryMetricsResponse {
   repeated MetricSeries series = 1;
+}
+
+message GetStorageRequest {}
+
+// StorageTotal 是 Docker 一类对象（镜像、容器、数据卷、构建缓存）的合计（docker system df）。
+message StorageTotal {
+  int64 count = 1;
+  int64 active = 2;
+  int64 bytes = 3;
+  // Docker 认为可以回收的部分（没被用到的）。数据卷里可能是业务数据，不能据此清理。
+  int64 reclaimable_bytes = 4;
+}
+
+message StorageImage {
+  string name = 1;
+  int64 bytes = 2;
+  // 有容器在用。
+  int64 containers = 3;
+}
+
+// ContainerDirUsage 是本节点上一个容器的目录占用（见 docs/agent.md#容器目录）。
+message ContainerDirUsage {
+  string project_id = 1;
+  string project_name = 2;
+  string container = 3;
+  string dir = 4;
+  int64 data_bytes = 5;
+  int64 volumes_bytes = 6;
+  // 快照仓库（backups/）。
+  int64 backups_bytes = 7;
+  // 文件太多或太慢，没算完。
+  bool partial = 8;
+}
+
+message NodeStorage {
+  repeated DiskUsage disks = 1;
+  StorageTotal images = 2;
+  StorageTotal containers = 3;
+  StorageTotal volumes = 4;
+  StorageTotal build_cache = 5;
+  // 最大的几个镜像。
+  repeated StorageImage largest_images = 6;
+  repeated ContainerDirUsage container_dirs = 7;
+  // 作为备份节点、热备收到的副本。
+  int64 replicas_bytes = 8;
+  // 取 Docker 的统计失败时的原因，其余部分照常返回。
+  string docker_error = 9;
 }

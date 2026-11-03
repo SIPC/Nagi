@@ -238,6 +238,29 @@ func (s *projectService) ListContainerEvents(ctx context.Context, req *connect.R
 	return connect.NewResponse(out), nil
 }
 
+// ListProjectEvents 是项目的活动记录。按项目核对访问范围（请求里有 project_id）；只读角色和容器事件一样看不到失败的详情。
+func (s *projectService) ListProjectEvents(ctx context.Context, req *connect.Request[nagiv1.ListProjectEventsRequest]) (*connect.Response[nagiv1.ListActivityResponse], error) {
+	m := req.Msg
+	limit := int64(m.GetLimit())
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.Q.ListProjectActivity(ctx, m.GetProjectId(), m.GetContainer(), m.GetBefore(), m.GetFailedOnly(), limit)
+	if err != nil {
+		return nil, err
+	}
+	viewer := auth.CurrentUser(ctx).Role == auth.RoleViewer
+	out := &nagiv1.ListActivityResponse{}
+	for _, r := range rows {
+		e := activityEntry(r)
+		if viewer && e.Kind == "operation" {
+			e.Detail = ""
+		}
+		out.Entries = append(out.Entries, e)
+	}
+	return connect.NewResponse(out), nil
+}
+
 func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request[nagiv1.ListActivityRequest]) (*connect.Response[nagiv1.ListActivityResponse], error) {
 	limit := int64(req.Msg.GetLimit())
 	if limit <= 0 || limit > 200 {

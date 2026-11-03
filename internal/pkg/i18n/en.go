@@ -325,4 +325,5 @@ var en = map[string]string{
 	"有效期不能超过 10 年":              "Expiration cannot be more than 10 years",
 	"访问令牌已达上限（%d 个），请先吊销不用的":    "You have reached the limit of %d access tokens. Revoke unused ones first",
 	"访问令牌无效或已过期":                "The access token is invalid or has expired",
+	"节点版本过旧，升级节点后才能查看磁盘明细":      "The node is out of date. Upgrade it to see disk usage details",
 }

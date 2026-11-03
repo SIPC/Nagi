@@ -147,6 +147,8 @@ const (
 	// AgentServiceQueryMetricsProcedure is the fully-qualified name of the AgentService's QueryMetrics
 	// RPC.
 	AgentServiceQueryMetricsProcedure = "/nagi.v1.AgentService/QueryMetrics"
+	// AgentServiceGetStorageProcedure is the fully-qualified name of the AgentService's GetStorage RPC.
+	AgentServiceGetStorageProcedure = "/nagi.v1.AgentService/GetStorage"
 	// AgentServiceSetProjectsRootProcedure is the fully-qualified name of the AgentService's
 	// SetProjectsRoot RPC.
 	AgentServiceSetProjectsRootProcedure = "/nagi.v1.AgentService/SetProjectsRoot"
@@ -248,6 +250,8 @@ type AgentServiceClient interface {
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 磁盘占用：Docker 的镜像、容器、数据卷、构建缓存，以及 Nagi 的容器目录和副本。只读，不清理任何东西。
+	GetStorage(context.Context, *connect.Request[v1.GetStorageRequest]) (*connect.Response[v1.NodeStorage], error)
 	// 修改项目根目录（之后新放到本节点的容器默认用它）。
 	SetProjectsRoot(context.Context, *connect.Request[v1.SetProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 信任的面板列表。
@@ -526,6 +530,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("QueryMetrics")),
 			connect.WithClientOptions(opts...),
 		),
+		getStorage: connect.NewClient[v1.GetStorageRequest, v1.NodeStorage](
+			httpClient,
+			baseURL+AgentServiceGetStorageProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("GetStorage")),
+			connect.WithClientOptions(opts...),
+		),
 		setProjectsRoot: connect.NewClient[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse](
 			httpClient,
 			baseURL+AgentServiceSetProjectsRootProcedure,
@@ -632,6 +642,7 @@ type agentServiceClient struct {
 	retryCerts            *connect.Client[v1.RetryCertsRequest, v1.RetryCertsResponse]
 	setAlertConfig        *connect.Client[v1.SetAlertConfigRequest, v1.SetAlertConfigResponse]
 	queryMetrics          *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	getStorage            *connect.Client[v1.GetStorageRequest, v1.NodeStorage]
 	setProjectsRoot       *connect.Client[v1.SetProjectsRootRequest, v1.SetProjectsRootResponse]
 	listPanels            *connect.Client[v1.ListPanelsRequest, v1.ListPanelsResponse]
 	addPanel              *connect.Client[v1.AddPanelRequest, v1.AddPanelResponse]
@@ -849,6 +860,11 @@ func (c *agentServiceClient) QueryMetrics(ctx context.Context, req *connect.Requ
 	return c.queryMetrics.CallUnary(ctx, req)
 }
 
+// GetStorage calls nagi.v1.AgentService.GetStorage.
+func (c *agentServiceClient) GetStorage(ctx context.Context, req *connect.Request[v1.GetStorageRequest]) (*connect.Response[v1.NodeStorage], error) {
+	return c.getStorage.CallUnary(ctx, req)
+}
+
 // SetProjectsRoot calls nagi.v1.AgentService.SetProjectsRoot.
 func (c *agentServiceClient) SetProjectsRoot(ctx context.Context, req *connect.Request[v1.SetProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error) {
 	return c.setProjectsRoot.CallUnary(ctx, req)
@@ -974,6 +990,8 @@ type AgentServiceHandler interface {
 	SetAlertConfig(context.Context, *connect.Request[v1.SetAlertConfigRequest]) (*connect.Response[v1.SetAlertConfigResponse], error)
 	// 查询监控数据。24 小时以内是 10 秒精度，更长是 5 分钟精度。
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 磁盘占用：Docker 的镜像、容器、数据卷、构建缓存，以及 Nagi 的容器目录和副本。只读，不清理任何东西。
+	GetStorage(context.Context, *connect.Request[v1.GetStorageRequest]) (*connect.Response[v1.NodeStorage], error)
 	// 修改项目根目录（之后新放到本节点的容器默认用它）。
 	SetProjectsRoot(context.Context, *connect.Request[v1.SetProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 信任的面板列表。
@@ -1248,6 +1266,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("QueryMetrics")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceGetStorageHandler := connect.NewUnaryHandler(
+		AgentServiceGetStorageProcedure,
+		svc.GetStorage,
+		connect.WithSchema(agentServiceMethods.ByName("GetStorage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetProjectsRootHandler := connect.NewUnaryHandler(
 		AgentServiceSetProjectsRootProcedure,
 		svc.SetProjectsRoot,
@@ -1392,6 +1416,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetAlertConfigHandler.ServeHTTP(w, r)
 		case AgentServiceQueryMetricsProcedure:
 			agentServiceQueryMetricsHandler.ServeHTTP(w, r)
+		case AgentServiceGetStorageProcedure:
+			agentServiceGetStorageHandler.ServeHTTP(w, r)
 		case AgentServiceSetProjectsRootProcedure:
 			agentServiceSetProjectsRootHandler.ServeHTTP(w, r)
 		case AgentServiceListPanelsProcedure:
@@ -1583,6 +1609,10 @@ func (UnimplementedAgentServiceHandler) SetAlertConfig(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.QueryMetrics is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) GetStorage(context.Context, *connect.Request[v1.GetStorageRequest]) (*connect.Response[v1.NodeStorage], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetStorage is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetProjectsRoot(context.Context, *connect.Request[v1.SetProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error) {
