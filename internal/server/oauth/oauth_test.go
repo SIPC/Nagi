@@ -79,12 +79,12 @@ func authorize(t *testing.T, s *Server, client, redirect string, write bool) str
 	t.Helper()
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, State: "xyz",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, true, 30, write, false)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, write, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	u, err := url.Parse(to)
-	if err != nil || u.Query().Get("state") != "xyz" || u.Query().Get("code") == "" {
+	if err != nil || u.Query().Get("state") != "xyz" || u.Query().Get("code") == "" || u.Query().Get("iss") != "https://panel.example.com" {
 		t.Fatalf("回调地址不对：%s", to)
 	}
 	return u.Query().Get("code")
@@ -163,11 +163,12 @@ func TestOAuthDeny(t *testing.T) {
 	// 本机回调可以换端口。
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: "http://127.0.0.1:50000/callback", State: "s",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, false, 0, true, true)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u, _ := url.Parse(to); u.Query().Get("error") != "access_denied" || u.Query().Get("code") != "" {
+	// 拒绝时也带 iss（RFC 9207）。
+	if u, _ := url.Parse(to); u.Query().Get("error") != "access_denied" || u.Query().Get("code") != "" || u.Query().Get("iss") != "https://panel.example.com" {
 		t.Errorf("拒绝时应该带 access_denied：%s", to)
 	}
 }

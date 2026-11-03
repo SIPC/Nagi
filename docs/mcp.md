@@ -60,6 +60,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 - 令牌只能用于本面板的 `/mcp`（检查 `resource` 参数，RFC 8707）。
 - 回调地址必须是 https 或本机地址，和注册时的严格一致。授权码 5 分钟内有效，只能用一次。
+- 回调地址里带 `iss`（RFC 9207），成功和拒绝都带，和元数据里的 `issuer` 完全一样（`auth.IssuerOf`）。ChatGPT 只有服务器声明支持 iss 时才用它客户端元数据里登记的固定回调地址。
 - 动态注册是公开接口：注册过的客户端在有人授权之前什么也做不了；最多 100 个，注册后 24 小时没有被授权的自动删除；按来源地址限速。
 - 授权页的权限选项默认是最小的（只读、不能执行命令），成员要主动勾选。
 
@@ -114,7 +115,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP） | `SaveRoute` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`idempotentHint`）。`deploy`、`control_container`、`rollback`、`exec` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`exec` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 第一版不做
 

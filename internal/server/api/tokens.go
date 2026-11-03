@@ -136,7 +136,7 @@ func (s *authService) ApproveOAuth(ctx context.Context, req *connect.Request[nag
 	if m.GetDays() > 3650 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("有效期不能超过 10 年"))
 	}
-	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), m.GetAllow(), m.GetDays(), m.GetAllowWrite(), m.GetAllowExec())
+	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), s.Auth.IssuerOf(ctx), m.GetAllow(), m.GetDays(), m.GetAllowWrite(), m.GetAllowExec())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

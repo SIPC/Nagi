@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/oauth"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -27,6 +28,17 @@ type tool struct {
 	// procedures 是用到的面板接口。
 	procedures []string
 	add        func(h *handler, s *mcp.Server, t *mcp.Tool)
+}
+
+// scope 是这个工具需要的 OAuth 范围，写在工具的 securitySchemes 里（ChatGPT 按它判断要不要授权、要什么权限）。
+func (t tool) scope() string {
+	switch {
+	case t.exec:
+		return oauth.ScopeExec
+	case t.write:
+		return oauth.ScopeWrite
+	}
+	return oauth.ScopeRead
 }
 
 // call 是一次工具调用。
@@ -95,7 +107,7 @@ func (h *handler) server(r *http.Request) *mcp.Server {
 		mt := &mcp.Tool{Name: t.name, Title: t.title, Description: t.description, Annotations: &mcp.ToolAnnotations{
 			Title: t.title, ReadOnlyHint: !t.write && !t.exec, DestructiveHint: boolPtr(t.destructive), IdempotentHint: t.idempotent,
 			OpenWorldHint: boolPtr(false),
-		}}
+		}, Meta: mcp.Meta{"securitySchemes": []map[string]any{{"type": "oauth2", "scopes": []string{t.scope()}}}}}
 		t.add(h, s, mt)
 	}
 	addResources(s)

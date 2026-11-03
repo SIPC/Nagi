@@ -202,13 +202,14 @@ func RedirectHost(raw string) string {
 	return u.Scheme + ":"
 }
 
-// Approve 处理成员在授权页上的选择，返回浏览器要转去的回调地址。
-func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, allow bool, days uint32, write, exec bool) (string, error) {
+// Approve 处理成员在授权页上的选择，返回浏览器要转去的回调地址。issuer 写进回调地址的 iss（RFC 9207），
+// 客户端据此确认授权码来自它找的授权服务器；ChatGPT 只有服务器支持 iss 时才用它登记过的固定回调地址。
+func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, issuer string, allow bool, days uint32, write, exec bool) (string, error) {
 	c, err := s.Check(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	q := url.Values{}
+	q := url.Values{"iss": {issuer}}
 	if req.GetState() != "" {
 		q.Set("state", req.GetState())
 	}
@@ -336,6 +337,7 @@ func (s *Server) handleServerMetadata(w http.ResponseWriter, r *http.Request) {
 		"token_endpoint_auth_methods_supported": []string{"none"},
 		"scopes_supported":                      []string{ScopeRead, ScopeWrite, ScopeExec},
 		"client_id_metadata_document_supported": true,
+		"authorization_response_iss_parameter_supported": true,
 	})
 }
 

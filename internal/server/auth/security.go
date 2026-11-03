@@ -167,6 +167,8 @@ func entranceToken(path string) string { return HashToken("entrance/" + path)[:3
 // 节点安装脚本和旧版节点升级用的二进制下载不受影响（节点的控制连接按 ALPN 分流，不经过这里）。
 func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 记下客户端访问的主机：OAuth 授权页的接口要用它拼 iss（见 IssuerOf），Connect 的处理函数拿不到请求本身。
+		r = r.WithContext(context.WithValue(r.Context(), hostKey{}, RequestHost(r)))
 		path := s.Entrance(r.Context())
 		if path == "" {
 			next.ServeHTTP(w, r)
@@ -224,6 +226,19 @@ func agentPath(p string) bool {
 }
 
 type basePathKey struct{}
+
+type hostKey struct{}
+
+// IssuerOf 返回 OAuth 授权服务器的地址（issuer）：客户端访问的主机，开了安全入口时带着入口（见 docs/mcp.md#入口）。
+// 给 Connect 的处理函数用；HTTP 处理函数里用 oauth.BaseURL。开了入口时，没登录的人只能经入口访问 OAuth 的地址，
+// 所以元数据里的 issuer 一定带着入口，这里和它一致。
+func (s *Service) IssuerOf(ctx context.Context) string {
+	host, _ := ctx.Value(hostKey{}).(string)
+	if e := s.Entrance(ctx); e != "" {
+		return "https://" + host + "/" + e
+	}
+	return "https://" + host
+}
 
 // withBasePath 把请求的路径换成去掉入口的路径，并记下入口前缀。
 func withBasePath(r *http.Request, path, base string) *http.Request {
