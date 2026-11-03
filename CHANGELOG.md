@@ -8,6 +8,37 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.14.0
+
+### 新功能
+
+- **MCP 快照恢复**：新增 `list_snapshots` 和 `restore_snapshot`。恢复分两步：先返回预览，说明将发生的变化；再次调用并填入快照 ID 后才执行。执行前自动为当前数据创建保护快照，创建失败则不恢复。仅支持定时快照和手动快照。
+- **MCP 文件读写**：新增 `list_files`、`read_file` 和 `write_file`，可浏览容器的卷并读写其中的文本文件。
+  - 归入「执行命令」权限：只读成员不能使用，令牌需允许执行命令。
+  - 读取上限 256 KB，写入上限 1 MB，不支持二进制文件，不提供删除。
+  - 覆盖已有文件时须提供读取时返回的 SHA-256，文件在此期间被修改则拒绝写入。
+  - 读写操作记入日志，注明卷和路径。
+- **MCP 排查工具**：
+  - `check_routes`：检查端口映射的域名解析和证书状态。仅使用面板自身的域名检查，不向 agent 指定的地址发起请求。
+  - `query_events`：按项目查询日志，可按容器和失败记录筛选，支持翻页。
+  - `inspect_node_storage`：查看节点的磁盘占用明细，包括 Docker 镜像、容器层、数据卷、构建缓存，以及各容器的数据和快照。仅限管理员，只读，不执行清理。
+- **部署健康等待**：`deploy` 新增 `wait_healthy_seconds`。部署成功后等待容器运行，配置了健康检查的容器须变为 healthy，最长 300 秒。结果仅作报告，不自动回滚。
+
+### 改进
+
+- **日志页**：日志从设置中独立出来，在左侧导航中位于「设置」之上，仅管理员可见。告警设置移至「设置 → 面板」。原地址 `/settings?tab=activity` 自动跳转到新页面。
+- **修改冲突保护**：`update_container`、`discard_draft` 支持 `expected_revision`，`deploy` 支持 `expected_revisions`。容器在此期间被他人修改时拒绝操作，避免覆盖他人的修改。
+- **拒绝记录**：令牌调用无权使用的工具时，记一条「MCP 调用被拒绝」，注明工具和原因。
+
+### 行为变更
+
+- **`add_container` 默认不再部署**：添加容器后仅保存配置。需要立即部署时，传入 `deploy: true` 或另行调用 `deploy`。
+
+### 升级说明
+
+- 更新面板后，在「节点」页升级各节点。`inspect_node_storage` 需要节点升级到 v0.14.0，其余功能仅需更新面板。
+- 依赖 `add_container` 自动部署的 agent 流程，请改为显式部署。
+
 ## v0.13.3
 
 ### 修复
