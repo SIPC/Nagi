@@ -21,6 +21,7 @@ import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages
 import { AddContainerPage, ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
+import { ActivityPage } from "@/pages/activity";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
 import { ConfirmHost } from "@/components/confirm";
@@ -228,21 +229,34 @@ const nodeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/settings",
-  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab; kind?: "operation" | "alert" } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab; activity?: "" | "operation" | "alert" } => ({
     tab: settingsTabs.some((t) => t.value === search.tab) ? (search.tab as SettingsTab) : undefined,
-    kind: search.kind === "operation" || search.kind === "alert" ? search.kind : undefined,
+    // 日志以前是设置里的一项（?tab=activity），旧地址由 beforeLoad 跳到日志页。路由会拿结果再校验一次，所以 activity 本身也要认。
+    activity: search.tab === "activity" ? (search.kind === "operation" || search.kind === "alert" ? search.kind : "") : search.activity === "" || search.activity === "operation" || search.activity === "alert" ? search.activity : undefined,
   }),
+  beforeLoad: ({ search }) => {
+    if (search.activity !== undefined) throw redirect({ to: "/activity", search: { kind: search.activity || undefined }, replace: true });
+  },
   component: function Settings() {
     const { tab } = settingsRoute.useSearch();
     return <SettingsPage tab={tab ?? "access"} />;
   },
 });
 
+const activityRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/activity",
+  validateSearch: (search: Record<string, unknown>): { kind?: "operation" | "alert" } => ({
+    kind: search.kind === "operation" || search.kind === "alert" ? search.kind : undefined,
+  }),
+  component: ActivityPage,
+});
+
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   oauthRoute,
-  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, activityRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent", defaultNotFoundComponent: NotFound });

@@ -1,6 +1,7 @@
 import type zh from "../zh/activity";
 
 export default {
+  description: "Operations on this panel and alerts sent. The latest 5,000 entries are kept.",
   all: "All",
   operations: "Operations",
   alerts: "Alerts",

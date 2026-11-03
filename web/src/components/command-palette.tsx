@@ -1,14 +1,15 @@
-// 全局搜索（Cmd/Ctrl + K）：跳转到项目、容器、节点和设置。
+// 全局搜索（Cmd/Ctrl + K）：跳转到项目、容器、节点、日志和设置。
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Activity, Box, Boxes, Plus, Search, Server, Settings } from "lucide-react";
+import { Activity, Box, Boxes, Plus, ScrollText, Search, Server, Settings } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui";
 import { nodeClient, projectClient } from "@/lib/api";
 import { settingsTabs } from "@/pages/settings";
+import { useRole } from "@/components/role";
 import { t } from "@/i18n";
 
 const isMac = /mac/i.test(navigator.platform);
@@ -36,6 +37,7 @@ export function SearchButton({ compact }: { compact?: boolean }) {
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: open });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: open });
 
@@ -74,6 +76,12 @@ export function CommandPalette() {
                   <Activity />
                   {t.app.nav.overview}
                 </CommandItem>
+                {isAdmin && (
+                  <CommandItem value="logs" keywords={[t.app.nav.logs]} onSelect={() => go(() => navigate({ to: "/activity" }))}>
+                    <ScrollText />
+                    {t.app.nav.logs}
+                  </CommandItem>
+                )}
               </CommandGroup>
               {list.length > 0 && (
                 <CommandGroup heading={t.app.nav.projects}>

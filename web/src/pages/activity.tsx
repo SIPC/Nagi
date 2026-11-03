@@ -1,7 +1,9 @@
-// 活动记录：用户在面板上的操作和节点、面板发出的告警。
+// 日志：用户在面板上的操作和节点、面板发出的告警。只有管理员能看（接口也会拒绝）。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Segmented, Slide, Spinner, Status } from "@/components/ui";
+import { Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Button, EmptyRow, List, QueryError, Row, RowsSkeleton, Segmented, Slide, Spinner, Status } from "@/components/ui";
+import { PageHeader } from "@/pages/layout";
+import { useRole } from "@/components/role";
 import type { ActivityEntry } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, projectClient, settingsClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
@@ -33,9 +35,15 @@ function result(e: ActivityEntry) {
   return <Status tone="success">{t.activity.succeeded}</Status>;
 }
 
-export function ActivityCard() {
-  const kind = useSearch({ from: "/app/settings" }).kind ?? "all";
-  const navigate = useNavigate({ from: "/settings" });
+export function ActivityPage() {
+  const { isAdmin } = useRole();
+  if (!isAdmin) return <Navigate to="/overview" replace />;
+  return <ActivityList />;
+}
+
+function ActivityList() {
+  const kind = useSearch({ from: "/app/activity" }).kind ?? "all";
+  const navigate = useNavigate({ from: "/activity" });
   const setKind = (v: "all" | "operation" | "alert") => navigate({ search: (s) => ({ ...s, kind: v === "all" ? undefined : v }), replace: true });
   const list = useInfiniteQuery({
     queryKey: ["activity", kind],
@@ -49,8 +57,10 @@ export function ActivityCard() {
   const entries = list.data?.pages.flatMap((p) => p.entries) ?? [];
 
   return (
-    <Section
-      title={<span title={t.settings.tabs.activity.description}>{t.settings.tabs.activity.label}</span>}
+    <>
+    <PageHeader
+      title={t.app.nav.logs}
+      description={t.activity.description}
       actions={
         <Segmented
           value={kind}
@@ -62,7 +72,8 @@ export function ActivityCard() {
           ]}
         />
       }
-    >
+    />
+    <div className="grid gap-4">
       <Slide id={kind} index={["all", "operation", "alert"].indexOf(kind)} inner="grid gap-4 max-md:gap-2">
       {list.isPending ? (
         <RowsSkeleton count={5} />
@@ -111,6 +122,7 @@ export function ActivityCard() {
           </Button>
         </div>
       )}
-    </Section>
+    </div>
+    </>
   );
 }

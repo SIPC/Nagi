@@ -889,6 +889,8 @@ function mergeEvents<E extends { kind: string; action: string; actor: string; fa
 // ContainerEvents：这个容器最近的操作和告警，一行一条：时间、状态、详情、操作者。
 function ContainerEvents({ project, container }: { project: Project; container: Container }) {
   const ev = t.projectContainers.events;
+  // 日志页只给管理员。
+  const { isAdmin } = useRole();
   const events = useQuery({
     queryKey: ["container-events", project.id, container.name],
     queryFn: () => projectClient.listContainerEvents({ projectId: project.id, container: container.name }),
@@ -899,9 +901,11 @@ function ContainerEvents({ project, container }: { project: Project; container: 
     <Section
       title={ev.title}
       actions={
-        <ButtonLink to="/settings" search={{ tab: "activity" }} variant="ghost" readOnlyOk className="-mr-3">
-          {ev.viewAll}
-        </ButtonLink>
+        isAdmin && (
+          <ButtonLink to="/activity" variant="ghost" readOnlyOk className="-mr-3">
+            {ev.viewAll}
+          </ButtonLink>
+        )
       }
     >
       {events.isPending ? (

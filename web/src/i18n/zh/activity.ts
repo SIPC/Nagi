@@ -1,5 +1,6 @@
 // 活动记录。
 export default {
+  description: "面板上的操作和发出的告警，保留最近 5000 条。",
   all: "全部",
   operations: "操作",
   alerts: "告警",

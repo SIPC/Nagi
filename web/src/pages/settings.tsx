@@ -12,7 +12,6 @@ import { Link, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { ActiveBox, Slide, useActiveBox } from "@/components/ui";
 import { t } from "@/i18n";
-import { ActivityCard } from "@/pages/activity";
 import { MembersCard } from "@/pages/members";
 import { ProfileCard } from "@/components/account";
 import { useRole } from "@/components/role";
@@ -30,7 +29,6 @@ export const settingsTabs = [
   { value: "invite", label: t.settings.tabs.invite.label },
   { value: "mesh", label: t.settings.tabs.mesh.label },
   { value: "alerts", label: t.settings.tabs.alerts.label },
-  { value: "activity", label: t.settings.tabs.activity.label },
   { value: "about", label: t.settings.tabs.about.label },
 ] as const;
 
@@ -43,9 +41,8 @@ const aboutGroup = { label: "", tabs: ["about"] as SettingsTab[] };
 
 const menuGroups = [
   accountGroup,
-  { label: t.settings.groups.panel, tabs: ["access", "members", "update", "standby"] as SettingsTab[] },
+  { label: t.settings.groups.panel, tabs: ["access", "members", "alerts", "update", "standby"] as SettingsTab[] },
   { label: t.settings.groups.nodes, tabs: ["invite", "mesh"] as SettingsTab[] },
-  { label: t.settings.groups.records, tabs: ["alerts", "activity"] as SettingsTab[] },
   aboutGroup,
 ];
 
@@ -103,7 +100,6 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
           {cur === "security" && <SecurityCard />}
           {cur === "members" && <MembersCard />}
           {cur === "alerts" && <AlertSettings />}
-          {cur === "activity" && <ActivityCard />}
           {cur === "standby" && <StandbyCard />}
           {cur === "invite" && <InviteCard />}
           {cur === "mesh" && <PanelMeshCard />}

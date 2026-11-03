@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, Server, SlidersHorizontal, X } from "lucide-react";
+import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, ScrollText, Server, SlidersHorizontal, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -65,6 +65,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   // bar：手机标题栏上的字。项目里是项目名（灰字），其他是当前页。
   let bar: string | undefined;
   if (parts[0] === "overview") title = t.app.nav.overview;
+  else if (parts[0] === "activity") title = t.app.nav.logs;
   else if (parts[0] === "projects" && parts[1] === "new") title = t.app.search.newProject;
   else if (projectId) {
     const name = project.data?.project?.name ?? t.app.nav.projects;
@@ -153,6 +154,8 @@ const navItems = [
   { to: "/overview", label: t.app.nav.overview, icon: OverviewIcon },
   { to: "/projects", label: t.app.nav.projects, icon: Box },
   { to: "/nodes", label: t.app.nav.nodes, icon: Server },
+  // 日志只给管理员。
+  { to: "/activity", label: t.app.nav.logs, icon: ScrollText, adminOnly: true },
   { to: "/settings", label: t.app.nav.settings, icon: SlidersHorizontal },
 ] as const;
 
@@ -179,7 +182,7 @@ export function AppLayout() {
   // 换了页面（例如用户菜单里的「安全」）就收起导航。
   useEffect(() => setNavOpen(false), [href]);
   // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
-  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
+  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && !pathname.startsWith("/activity") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
   const navBox = useActiveBox();
@@ -195,7 +198,7 @@ export function AppLayout() {
       <Waves className="h-4 w-7 text-wave" />
     </Link>
   );
-  const nav = (className: string) => navItems.map((it) => (
+  const nav = (className: string) => navItems.filter((it) => isAdmin || !("adminOnly" in it)).map((it) => (
     <Link key={it.to} to={it.to} data-active={pathname.startsWith(it.to) || undefined} className={className}>
       <it.icon />
       {it.label}
