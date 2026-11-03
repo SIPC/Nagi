@@ -525,7 +525,8 @@ export function Section({
 // List / Row：细分页的基本单位（见 docs/ui.md「列表行」）。主信息在左，灰色信息是靠右的定宽列，最后是操作。
 // 所有内容对齐第一行；悬停整行变底色，所以 List 左右各外扩 8，让文字和页面边缘对齐。
 export function List({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("-mx-2 grid animate-fade-in", className)} {...props} />;
+  // 列宽不超过容器：行里的长文字截断，不把整个区块撑宽。
+  return <div className={cn("-mx-2 grid grid-cols-[minmax(0,1fr)] animate-fade-in", className)} {...props} />;
 }
 
 export type RowCol = {
