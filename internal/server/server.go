@@ -335,6 +335,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
 	mcp.Mount(mux, mcp.Options{
 		Handler: mux, Auth: s.auth, OAuth: oauthServer, Exec: a.RunCommand, Record: a.RecordMCPDenied,
+		Files:   mcp.FileAccess{Read: a.ReadVolumeFile, Write: a.WriteVolumeFile},
 		Version: s.cfg.Version, Standby: s.standby != nil, Log: s.log,
 	})
 	if s.primary != nil {

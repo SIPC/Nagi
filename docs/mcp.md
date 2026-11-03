@@ -120,11 +120,23 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP） | `SaveRoute` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`exec` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+### 文件
+
+读写容器卷里的文件，和网页的文件管理走同一条路：经 mesh 传给容器所在的节点，节点把操作限制在卷里。归在「执行命令」权限下（能执行命令本来就能读写容器里的文件）：只读成员不能用，令牌要勾「执行命令」，访问范围外的项目不能用，备用面板不能写。
+
+| 工具 | 内容 | 用到的接口 |
+| --- | --- | --- |
+| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录 | `ListVolumes`、`ListVolumeFiles` |
+| `read_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256。二进制文件和目录拒绝 | 节点的 `VolumeDownload` |
+| `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+
+不提供删除和改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`），带着卷和路径。文件内容和日志一样当作不可信数据。
+
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`exec`、`write_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 第一版不做
 
-删除项目和容器、删除端口映射、回滚时恢复数据、迁移、顶替和备份节点的设置、确认顶替、节点管理和磁盘清理、成员和面板设置（包括告警）、节点终端和文件。这些要么不可逆，要么影响整个集群，等第一版用一段时间再定。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
+删除项目和容器、删除端口映射、回滚时恢复数据、迁移、顶替和备份节点的设置、确认顶替、节点管理和磁盘清理、成员和面板设置（包括告警）、节点终端和节点上的文件、删除卷里的文件。这些要么不可逆，要么影响整个集群，等第一版用一段时间再定。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 
 ## 给 agent 的说明
 
@@ -141,8 +153,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 实现
 
-- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用。
+- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
-- `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。
+- `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
 - `internal/server/store`：`api_tokens`、`oauth_clients` 表，`activity.via` 列（迁移 0010）。查询手写在 `tokens.go`，不放进 `queries.sql`。
 - 界面：账号安全里的「访问令牌」（`pages/tokens.tsx`），成员行的 ⋯ 里的「访问令牌」（管理员查看和吊销），授权页 `/oauth/authorize`（没登录时记下地址，登录后回来），活动记录显示来源。

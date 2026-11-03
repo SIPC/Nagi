@@ -31,6 +31,8 @@ type Options struct {
 	// Exec 在容器里执行一条命令（api.API.RunCommand）。
 	Exec    func(ctx context.Context, projectID, container, service string, command []string, timeout time.Duration) (api.ExecResult, error)
 	Version string
+	// Files 读写卷里的文件。
+	Files FileAccess
 	// Record 把被拒绝的工具调用记进活动记录（api.API.RecordMCPDenied）。
 	Record func(ctx context.Context, u auth.User, tool, reason string)
 	// Standby 表示这是备用面板：只给查看类的工具。
