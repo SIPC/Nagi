@@ -12,8 +12,9 @@ export function AlertDialogContent({ className, children, ...props }: React.Comp
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-overlay data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
       <AlertDialogPrimitive.Content
+        data-slot="dialog-body"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-popover p-6 shadow-popover outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-fade-out max-md:data-[state=open]:animate-sheet-in max-md:data-[state=closed]:animate-sheet-out max-md:top-auto max-md:bottom-4 max-md:max-h-[calc(100dvh-2rem)] max-md:max-w-none max-md:translate-y-0 max-md:p-4",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg bg-popover p-6 shadow-popover outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-fade-out max-md:data-[state=open]:animate-sheet-in max-md:data-[state=closed]:animate-sheet-out max-md:top-auto max-md:bottom-4 max-md:max-h-[calc(100dvh-2rem)] max-md:max-w-none max-md:translate-y-0 max-md:p-4",
           className,
         )}
         {...props}

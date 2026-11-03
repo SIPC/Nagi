@@ -18,7 +18,7 @@ export function Toaster() {
         {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-border": "transparent",
           "--border-radius": "var(--radius-lg)",
         } as React.CSSProperties
       }

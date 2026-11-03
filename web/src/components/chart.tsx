@@ -176,7 +176,7 @@ export function TimeChart({
         {hover !== null && (
           <div
             className={cn(
-              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-1.5 rounded-lg border bg-popover shadow-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap shadow-xl",
+              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-1.5 rounded-lg bg-popover shadow-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap shadow-xl",
               tipLeft ? "-translate-x-full" : "",
             )}
             style={{ left: x(hover) + (tipLeft ? -8 : 8) }}

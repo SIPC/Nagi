@@ -278,8 +278,10 @@ export function FormActions({ className, ...props }: React.ComponentProps<"div">
 // ---- 区块 ----
 
 // DialogActions：对话框底部的按钮，靠右，主要操作在最后；手机上等宽撑满。
+// 在对话框和确认框里和上面的内容多隔 8，靠留白分组，不加底栏和分隔线。
+const inDialog = "in-data-[slot=dialog-body]:mt-2";
 export function DialogActions({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex items-center justify-end gap-2 max-md:[&>*]:flex-1", className)} {...props} />;
+  return <div data-slot="dialog-actions" className={cn("flex items-center justify-end gap-2 max-md:[&>*]:flex-1", inDialog, className)} {...props} />;
 }
 
 // Section：页面上的一组内容，没有外框。区块之间一条细线，线上下各 24，所以父级不要再加间距（Sections 排列）。
@@ -367,7 +369,7 @@ export function Roll({ value, n, className }: { value: string; n?: number; class
 
 // AutoHeight：内容高度变了（数据加载完、列表增减）不直接跳，外层过渡到新高度，下面的内容跟着平滑移动。
 // 窗口变宽变窄引起的高度变化、拖动输入框时不过渡。可以嵌套：里面的组件自己过渡时外层自然跟着，组件新出现或消失时才由外层过渡。
-export function AutoHeight({ className, children }: { className?: string; children: React.ReactNode }) {
+export function AutoHeight({ className, children, slot }: { className?: string; children: React.ReactNode; slot?: string }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -431,7 +433,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
   }, []);
   return (
     <div ref={outer} className="min-w-0">
-      <div ref={inner} data-auto-height="" className={className}>
+      <div ref={inner} data-auto-height="" data-slot={slot} className={className}>
         {children}
       </div>
     </div>
@@ -1156,20 +1158,30 @@ export function Dialog({
 }) {
   return (
     <DialogRoot open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className={className} {...(description ? {} : { "aria-describedby": undefined })}>
+      <DialogContent
+        className={cn("group/dialog", className)}
+        {...(description ? {} : { "aria-describedby": undefined })}
+        // 默认焦点给第一个输入框；没有输入框时给对话框本身。默认的第一个可聚焦元素常是问号，焦点一落上去说明就弹出来盖住标题。
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          const box = e.currentTarget as HTMLElement;
+          if (box.contains(document.activeElement) && document.activeElement?.matches("input, textarea")) return;
+          (box.querySelector<HTMLElement>("input:not([type=hidden]):not([disabled]):not([readonly]), textarea:not([disabled])") ?? box).focus();
+        }}
+      >
         <div className="relative px-6 pt-6 pb-4 max-md:px-4 max-md:pt-4">
           <div className="grid min-w-0 gap-1 [&>h2]:pr-6">
             <DialogTitle>{title}</DialogTitle>
             {description && <DialogDescription>{description}</DialogDescription>}
           </div>
           <DialogClose asChild>
-            <Button size="icon" variant="ghost" className="absolute top-4 right-4 size-8 text-muted-foreground hover:text-foreground max-md:top-2 max-md:right-2 max-md:size-10" aria-label={t.common.actions.close} readOnlyOk>
+            <Button size="icon" variant="ghost" className="absolute top-4 right-4 size-8 text-muted-foreground group-has-[[data-slot=dialog-actions]]/dialog:hidden hover:text-foreground max-md:top-2 max-md:right-2 max-md:size-10" aria-label={t.common.actions.close} readOnlyOk>
               <X />
             </Button>
           </DialogClose>
         </div>
         {/* 内容变了（切换选项多出一块、出现错误提示）时高度过渡，不直接跳。 */}
-        <AutoHeight className="grid gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4">{children}</AutoHeight>
+        <AutoHeight className="grid gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4" slot="dialog-body">{children}</AutoHeight>
       </DialogContent>
     </DialogRoot>
   );
