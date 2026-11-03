@@ -163,7 +163,11 @@ type Run = ReturnType<typeof useRun>;
 
 // ---- 卷 ----
 
-const volumeLabel = (v: VolumeInfo) => (v.kind === "data" ? "data/" : v.name);
+// volumeLabel：卷的标题。应用文件叫「应用文件」；单个容器的卷名是按容器内路径自动起的，直接显示容器内路径。
+const volumeLabel = (v: VolumeInfo, kind?: string) =>
+  v.kind === "data" ? t.projectData.volumes.appFiles : kind !== "group" && v.kind === "managed" && v.mounts.length === 1 ? v.mounts[0].target : v.name;
+// 没有文件、也没有挂进容器的应用文件目录不显示（只用镜像、不带文件的容器用不到它）。
+const shownVolume = (v: VolumeInfo) => v.kind !== "data" || v.mounts.length > 0 || v.files > 0n;
 
 // useVolumes：卷的统计和持久化目录。数据在节点上，所以每次打开都去节点统计一次。
 function useVolumes(project: Project, container: Container, nodes: Nodes) {
@@ -225,7 +229,7 @@ function BrowseVolume({ project, container, volume, onClose }: { project: Projec
         project={project}
         container={container}
         volume={volume}
-        label={info ? volumeLabel(info) : volume}
+        label={info ? volumeLabel(info, container.kind) : volume}
         onClose={onClose}
         unmount={mount && { disabled: v.busy, onSelect: () => v.remove(mount.target) }}
       />
@@ -255,9 +259,12 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
     const mounts = v.mounts.map((x) => (container.kind === "group" ? `${x.service}: ${x.target}` : x.target)).join(", ");
     const files = m.files(Number(v.files));
     const removing = form && v.kind === "managed" && v.mounts.length > 0 && !removableMount(v);
+    const titled = volumeLabel(v, container.kind) !== v.name;
     const parts =
       v.kind === "data"
-        ? [m.appFiles, mounts, files]
+        ? ["data/", mounts, files]
+        : v.kind === "managed" && titled
+          ? [removing ? m.pendingRemove : "", files]
         : v.kind === "unmanaged"
           ? [mounts, m.kinds.unmanagedSub]
           : v.kind === "orphan"
@@ -320,16 +327,16 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
         <RowsSkeleton />
       ) : volumes.error ? (
         <QueryError error={errorMessage(volumes.error)} onRetry={() => volumes.refetch()} />
-      ) : volumes.data.volumes.length === 0 && pendingAdd.length === 0 ? (
+      ) : volumes.data.volumes.filter(shownVolume).length === 0 && pendingAdd.length === 0 ? (
         <EmptyRow>{m.empty}</EmptyRow>
       ) : (
         <List>
-          {volumes.data.volumes.map((v) => (
+          {volumes.data.volumes.filter(shownVolume).map((v) => (
             <Row
               key={v.name}
               title={
                 <span className="truncate" title={v.hostPath}>
-                  {volumeLabel(v)}
+                  {volumeLabel(v, container.kind)}
                 </span>
               }
               sub={
