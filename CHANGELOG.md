@@ -8,6 +8,20 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.13.2
+
+### 修复
+
+- **MCP 接入**：面板绑定域名后，客户端完成授权，但无法获取工具列表（提示 "action discovery failed"）。原因是经本机 Caddy 转发的请求被误判为 DNS 重绑定而被拒绝，现已修复。
+
+### 改进
+
+- **发布流程**：测试和各架构的编译并行进行，并复用主分支的编译缓存，发布耗时缩短。
+
+### 升级说明
+
+- 更新面板即可，面板自带的节点随面板一起更新。节点无需单独升级。
+
 ## v0.13.1
 
 ### 修复
