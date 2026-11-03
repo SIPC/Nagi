@@ -58,7 +58,7 @@ SELECT * FROM users WHERE username = ?;
 INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?);
 
 -- name: GetSession :one
-SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role
+SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role, u.all_projects, u.all_nodes
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?;
@@ -348,3 +348,26 @@ SELECT * FROM standby_panels WHERE server_fp = ?;
 -- name: DeleteStandbyPanelByServerFP :exec
 DELETE FROM standby_panels WHERE server_fp = ?;
 
+-- name: SetUserScope :exec
+UPDATE users SET all_projects = ?, all_nodes = ? WHERE id = ?;
+
+-- name: ListUserProjects :many
+SELECT project_id FROM user_projects WHERE user_id = ? ORDER BY project_id;
+
+-- name: ListUserNodes :many
+SELECT node_id FROM user_nodes WHERE user_id = ? ORDER BY node_id;
+
+-- name: ClearUserProjects :exec
+DELETE FROM user_projects WHERE user_id = ?;
+
+-- name: ClearUserNodes :exec
+DELETE FROM user_nodes WHERE user_id = ?;
+
+-- name: AddUserProject :exec
+INSERT OR IGNORE INTO user_projects (user_id, project_id) VALUES (?, ?);
+
+-- name: AddUserNode :exec
+INSERT OR IGNORE INTO user_nodes (user_id, node_id) VALUES (?, ?);
+
+-- name: DeleteNodeFromScopes :exec
+DELETE FROM user_nodes WHERE node_id = ?;

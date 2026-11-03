@@ -100,6 +100,7 @@ export default {
     },
     example: (networkName: string) => `容器.${networkName}`,
     disconnect: "断开",
+    otherProject: "另一个项目",
     addressesIntro: "已连接的项目访问本项目容器时使用的地址：",
     noCandidates: "无可连接的其他项目。",
     project: "项目",

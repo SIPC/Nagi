@@ -21,7 +21,7 @@ const themeIcons = { light: Sun, dark: Moon, system: Monitor };
 const avatarSize = 128;
 const maxImageBytes = 20 << 20;
 
-function avatarSrc(avatar: Uint8Array | undefined, type: string | undefined) {
+export function avatarSrc(avatar: Uint8Array | undefined, type: string | undefined) {
   if (!avatar?.length || !type) return undefined;
   let binary = "";
   for (const b of avatar) binary += String.fromCharCode(b);
@@ -41,7 +41,7 @@ async function cropAvatar(file: File) {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), type: blob.type };
 }
 
-function UserAvatar({ name, src, className }: { name: string; src?: string; className?: string }) {
+export function UserAvatar({ name, src, className }: { name: string; src?: string; className?: string }) {
   return (
     <Avatar className={className}>
       {src && <AvatarImage src={src} alt="" />}

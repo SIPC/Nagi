@@ -145,6 +145,18 @@ type User struct {
 	Role         string
 	DisplayName  string
 	Avatar       []byte
+	AllProjects  int64
+	AllNodes     int64
+}
+
+type UserNode struct {
+	UserID int64
+	NodeID string
+}
+
+type UserProject struct {
+	UserID    int64
+	ProjectID string
 }
 
 type Version struct {

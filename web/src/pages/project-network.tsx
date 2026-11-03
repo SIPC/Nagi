@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Plus } from "lucide-react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Button, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
@@ -171,7 +171,7 @@ function useRouteNodes(project: Project) {
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
-  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
   // 映射开在它的入口节点上（默认是容器所在的节点），访问地址用这些节点的地址。
   const entriesOf = (r: Route) => {
     const own = project.containers.find((c) => c.name === r.container)?.nodeId ?? "";
@@ -662,7 +662,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
-  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
   // 只记改过的行，没改的取项目里的值，服务列表后到时也分得对。
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [othersEdit, setOthersEdit] = useState<string>();
@@ -888,14 +888,17 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       ) : (
         <List>
           {project.links.map((l) => (
+            // 对方不在访问范围内时没有名称，只能看，不能断开（见 docs/panel.md#访问范围）。
             <Row
               key={l.projectId}
-              title={<span className="min-w-0 wrap-anywhere">{l.name}</span>}
+              title={<span className={cn("min-w-0 wrap-anywhere", !l.name && "text-muted-foreground")}>{l.name || m.otherProject}</span>}
               sub={`${l.networkName} · ${m.columns.example} ${exampleOf(l.projectId, l.networkName)}`}
               actions={
-                <Button size="row" variant="ghost" onClick={() => disconnect(l.projectId, l.name)}>
-                  {m.disconnect}
-                </Button>
+                l.name ? (
+                  <Button size="row" variant="ghost" onClick={() => disconnect(l.projectId, l.name)}>
+                    {m.disconnect}
+                  </Button>
+                ) : null
               }
             />
           ))}

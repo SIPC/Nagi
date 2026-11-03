@@ -49,6 +49,10 @@ func (a *API) VolumeFileHandler() http.Handler {
 			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
 			return
 		}
+		if err := a.projectAllowed(r.Context(), u, r.URL.Query().Get("project")); err != nil {
+			fail(http.StatusNotFound, err)
+			return
+		}
 		q := r.URL.Query()
 		ref := &nagiv1.VolumeFileRef{
 			ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot"),

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpCircle, ChevronLeft, Plus } from "lucide-react";
-import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
@@ -51,7 +51,7 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
 
 function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable<ProjectData["project"]>; services: NonNullable<ProjectData["status"]>["services"]; imageUpdates: NonNullable<ProjectData["status"]>["imageUpdates"]; tab: ProjectTab; onTab: (t: ProjectTab) => void }) {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const nodeName = (id: string) => nodes.data?.nodes.find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
   const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
   const { actions, deploy, busy, output, hasOutput } = useProjectActions(p, imageUpdates);
 
@@ -66,7 +66,7 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
               <span className="hidden font-medium! tracking-tight! max-md:inline xl:inline">{t.project.sections.overview}</span>
               <span className="max-md:hidden xl:hidden">{p.name}</span>
               <span className="flex items-center gap-3 max-md:hidden xl:hidden">
-                <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
+                <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
               </span>
             </>
           }
@@ -180,7 +180,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
         <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
       </div>
       {p.containers.map((m) => {
-        const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
+        const node = knownNodes(nodes.data).find((n) => n.id === m.nodeId);
         const st = navState(m, node, project.data.status?.services ?? []);
         return (
           <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: search.view }} className={item(m.name === container)} title={st.label}>
@@ -237,7 +237,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
         <h2 className="truncate text-base leading-6 font-semibold">{p.name}</h2>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
           <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
-          <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, nodes.data?.nodes)} />
+          <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
           </span>
           <span className="font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</span>
         </div>
@@ -257,7 +257,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
           </ButtonLink>
         </div>
         {p.containers.map((m) => {
-          const node = nodes.data?.nodes.find((n) => n.id === m.nodeId);
+          const node = knownNodes(nodes.data).find((n) => n.id === m.nodeId);
           const st = navState(m, node, services);
           const active = m.name === container;
           const u = node?.online === false ? undefined : usage.get(m.name);

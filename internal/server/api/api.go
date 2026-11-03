@@ -69,7 +69,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	if a.Panel.Standby != nil {
 		chain = append(chain, readOnly{a})
 	}
-	chain = append(chain, activityLog{a}, roleCheck{}, elevationCheck{})
+	chain = append(chain, activityLog{a}, roleCheck{}, scopeCheck{a}, elevationCheck{})
 	interceptors := connect.WithHandlerOptions(
 		connect.WithInterceptors(chain...),
 		// 请求体在检查登录之前就会被读进内存并解析（包括解压后的大小），所以要限制大小。
@@ -348,6 +348,9 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 // forgetNode 让面板忘记节点：拒绝它再连接。
 func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 	if err := s.Q.RevokeNode(ctx, id); err != nil {
+		return err
+	}
+	if err := s.Q.DeleteNodeFromScopes(ctx, id); err != nil {
 		return err
 	}
 	s.Projects.ForgetEntryNode(ctx, id)

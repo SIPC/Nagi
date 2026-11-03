@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Collapsible } from "radix-ui";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { useRun } from "@/components/run";
@@ -57,6 +57,7 @@ function useNodes() {
     refetchInterval: 10000,
   });
   const list = nodes.data?.nodes ?? [];
+  const known = knownNodes(nodes.data);
   return {
     list,
     // pending、loadError：还不知道节点在不在线，这时不能下「节点离线」的结论。
@@ -64,8 +65,8 @@ function useNodes() {
     loadError: nodes.data ? null : nodes.error,
     refetch: nodes.refetch,
     // fallback：顶替设置里记的名字。节点改过名时设置里的是旧名字，所以先按 ID 查当前的名字。
-    name: (id: string, fallback?: string) => list.find((n) => n.id === id)?.name ?? fallback ?? id,
-    online: (id: string) => list.find((n) => n.id === id)?.online === true,
+    name: (id: string, fallback?: string) => known.find((n) => n.id === id)?.name ?? fallback ?? id,
+    online: (id: string) => known.find((n) => n.id === id)?.online === true,
     usable: list.filter((n) => n.online && !n.pending),
   };
 }

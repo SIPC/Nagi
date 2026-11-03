@@ -39,6 +39,10 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
 			return
 		}
+		if err := a.projectAllowed(r.Context(), u, r.URL.Query().Get("project")); err != nil {
+			fail(http.StatusNotFound, err)
+			return
+		}
 		if r.Header.Get("X-Nagi-Upload") != "1" {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return

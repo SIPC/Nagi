@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowUpCircle, Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
@@ -173,7 +173,7 @@ export function ContainersTab({
       {hasOutput && <div className="mb-8">{output}</div>}
       <ContainerList project={project} services={services} deploy={deploy} busy={busy} />
       <Section className="xl:mt-0 xl:border-t-0 xl:pt-0" title={t.projectContainers.monitoring} actions={picker}>
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, nodes.data?.nodes)} httpRoutes={project.routes.filter((r) => r.protocol === "http").map((r) => r.name)} />
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, knownNodes(nodes.data))} httpRoutes={project.routes.filter((r) => r.protocol === "http").map((r) => r.name)} />
       </Section>
     </div>
   );
@@ -201,7 +201,7 @@ export function containerKind(m: Container) {
 function ContainerList({ project, services, deploy, busy }: { project: Project; services: ServiceStatus[]; deploy: (containers: Container[]) => void; busy: boolean }) {
   const pc = t.projectContainers;
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const nodeOf = (id: string) => nodes.data?.nodes.find((n) => n.id === id);
+  const nodeOf = (id: string) => knownNodes(nodes.data).find((n) => n.id === id);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const targets = project.containers.filter((m) => checked[m.name]);
   const usage = containerUsage(useProjectMetrics(project.id, projectMetricNodes(project)).data);
@@ -494,7 +494,7 @@ function ContainerDetail({
   };
 
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
+  const node = knownNodes(nodes.data).find((n) => n.id === container.nodeId);
   const nodeOnline = node?.online !== false;
   const navigate = useNavigate();
   const mobile = useIsMobile();
@@ -519,7 +519,7 @@ function ContainerDetail({
             {containerLabel(container)}
             {container.displayName && <span className="font-mono text-sm font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
-            {offlineNodeNames([container], nodes.data?.nodes).length > 0 ? <Status tone="warning">{t.common.status.unknown}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
+            {offlineNodeNames([container], knownNodes(nodes.data)).length > 0 ? <Status tone="warning">{t.common.status.unknown}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {hasImageUpdate &&
@@ -760,7 +760,7 @@ function Overview({ project, container, services }: { project: Project; containe
   const o = pc.overview;
   const { range, picker } = useRange();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const node = nodes.data?.nodes.find((n) => n.id === container.nodeId);
+  const node = knownNodes(nodes.data).find((n) => n.id === container.nodeId);
   const offline = !!node && !node.online;
   const isGroup = container.kind === "group";
   const images = [...new Set(services.map((s) => shortImage(s.image)).filter(Boolean))];

@@ -36,6 +36,10 @@ func (a *API) TerminalHandler() http.Handler {
 			http.Error(w, i18n.Sprintf(lang, "当前账号没有权限执行这个操作"), http.StatusForbidden)
 			return
 		}
+		if err := a.projectAllowed(r.Context(), u, r.URL.Query().Get("project")); err != nil {
+			http.Error(w, i18n.Localize(lang, err), http.StatusNotFound)
+			return
+		}
 		q := r.URL.Query()
 		cols, _ := strconv.Atoi(q.Get("cols"))
 		rows, _ := strconv.Atoi(q.Get("rows"))

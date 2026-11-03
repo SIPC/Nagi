@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { authClient, errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
+import { authClient, errorMessage, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -298,7 +298,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
               <EmptyRow>{t.projects.filter.empty}</EmptyRow>
             ) : (
               <div className={projectGrid}>
-                {shownProjects.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={nodes.data?.nodes} />)}
+                {shownProjects.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}
               </div>
             )}
           </div>

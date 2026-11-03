@@ -101,6 +101,7 @@ export default {
     },
     example: (networkName) => `container.${networkName}`,
     disconnect: "Unlink",
+    otherProject: "Another project",
     addressesIntro: "Addresses linked projects use to reach this project's containers:",
     noCandidates: "No other projects to link.",
     project: "Project",

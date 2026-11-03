@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
+import { avatarSrc, UserAvatar } from "@/components/account";
+import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
-import { errorMessage, settingsClient, toDate } from "@/lib/api";
+import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 
@@ -29,12 +30,162 @@ const roleOptions = roles.map((r) => (
   </option>
 ));
 
+// 访问范围（见 docs/panel.md#访问范围）。
+type Scope = { allProjects: boolean; allNodes: boolean; projectIds: string[]; nodeIds: string[] };
+const fullScope: Scope = { allProjects: true, allNodes: true, projectIds: [], nodeIds: [] };
+
+function scopeOf(u: PanelUser): Scope {
+  return u.scope ? { allProjects: u.scope.allProjects, allNodes: u.scope.allNodes, projectIds: u.scope.projectIds, nodeIds: u.scope.nodeIds } : fullScope;
+}
+
+// memberSummary：第二行灰字。用户名（设置了显示名称时）、角色，限定了范围时再写范围。
+function memberSummary(u: PanelUser) {
+  const s = scopeOf(u);
+  const parts = [u.displayName ? u.username : "", t.members.roles[u.role as (typeof roles)[number]] ?? u.role];
+  if (u.role !== "admin" && !(s.allProjects && s.allNodes)) {
+    parts.push(s.allProjects ? t.members.scope.allProjects : t.members.scope.projectCount(s.projectIds.length));
+    parts.push(s.allNodes ? t.members.scope.allNodes : t.members.scope.nodeCount(s.nodeIds.length));
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+
+// ScopePick：全部或指定的一组，指定时勾选。
+function ScopePick({
+  label,
+  hint,
+  all,
+  ids,
+  options,
+  empty,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  all: boolean;
+  ids: string[];
+  options: { id: string; name: React.ReactNode }[] | undefined;
+  empty: string;
+  onChange: (all: boolean, ids: string[]) => void;
+}) {
+  const picked = new Set(ids);
+  return (
+    <Field label={label} hint={hint}>
+      <div className="grid">
+        <div>
+          <Segmented
+            label={label}
+            value={all ? "all" : "some"}
+            onChange={(v) => onChange(v === "all", ids)}
+            items={[
+              { value: "all", label: t.members.scope.all },
+              { value: "some", label: t.members.scope.some },
+            ]}
+          />
+        </div>
+        {/* 选「指定」时勾选列表展开，选「全部」时收起，下面的内容跟着平滑移动。 */}
+        <Collapse open={!all}>
+          <div className="pt-2">
+            {!options ? (
+              <RowsSkeleton count={1} />
+            ) : options.length === 0 ? (
+              <p className="text-muted-foreground">{empty}</p>
+            ) : (
+              <div className="grid max-h-44 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
+                {options.map((o) => (
+                  <Check key={o.id} checked={picked.has(o.id)} onChange={(v) => onChange(false, v ? [...ids, o.id] : ids.filter((x) => x !== o.id))}>
+                    {o.name}
+                  </Check>
+                ))}
+              </div>
+            )}
+          </div>
+        </Collapse>
+      </div>
+    </Field>
+  );
+}
+
+function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) => void }) {
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  return (
+    <>
+      <ScopePick
+        label={t.members.scope.projects}
+        hint={t.members.scope.projectsHint}
+        all={scope.allProjects}
+        ids={scope.projectIds}
+        empty={t.members.scope.noProjects}
+        options={projects.data?.projects.map((p) => ({
+          id: p.project!.id,
+          name: (
+            <>
+              {p.project!.name}
+              <span className="text-[13px] text-muted-foreground">{p.project!.networkName}</span>
+            </>
+          ),
+        }))}
+        onChange={(allProjects, projectIds) => onChange({ ...scope, allProjects, projectIds })}
+      />
+      <ScopePick
+        label={t.members.scope.nodes}
+        hint={t.members.scope.nodesHint}
+        all={scope.allNodes}
+        ids={scope.nodeIds}
+        empty={t.members.scope.noNodes}
+        options={nodes.data?.nodes.filter((n) => !n.pending).map((n) => ({ id: n.id, name: n.name }))}
+        onChange={(allNodes, nodeIds) => onChange({ ...scope, allNodes, nodeIds })}
+      />
+    </>
+  );
+}
+
+// EditAccess：角色和访问范围。参考 Apple「用户与群组」：列表只显示身份，修改都在详情里。
+function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
+  const [role, setRole] = useState(user.role);
+  const [scope, setScope] = useState(() => scopeOf(user));
+  const save = useMutation({
+    mutationFn: () => settingsClient.updateUser({ id: user.id, role: role === user.role ? "" : role, scope: role === "admin" ? undefined : scope }),
+    onSuccess: () => {
+      toast.success(t.common.feedback.saved);
+      onDone();
+    },
+  });
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <Field label={t.members.role} htmlFor="member-edit-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
+        <Select id="member-edit-role" value={role} onChange={(e) => setRole(e.target.value)}>
+          {roleOptions}
+        </Select>
+      </Field>
+      {role !== "admin" && <ScopeFields scope={scope} onChange={setScope} />}
+      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+      <DialogActions>
+        <Button variant="outline" onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
 function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<string>("operator");
+  const [scope, setScope] = useState(fullScope);
   const add = useMutation({
-    mutationFn: () => settingsClient.createUser({ username, password, role }),
+    mutationFn: () => settingsClient.createUser({ username, password, role, scope: role === "admin" ? fullScope : scope }),
     onSuccess: () => {
       toast.success(t.members.added(username));
       onDone();
@@ -59,6 +210,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
           {roleOptions}
         </Select>
       </Field>
+      {role !== "admin" && <ScopeFields scope={scope} onChange={setScope} />}
       {add.error && <Alert>{errorMessage(add.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>
@@ -112,6 +264,7 @@ export function MembersCard() {
   const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}) });
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<PanelUser | null>(null);
+  const [editing, setEditing] = useState<PanelUser | null>(null);
   const [error, setError] = useState("");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
   const call = async (fn: () => Promise<unknown>, done: string) => {
@@ -147,58 +300,49 @@ export function MembersCard() {
           {users.data.users.map((u) => (
             <Row
               key={String(u.id)}
+              icon={<UserAvatar name={u.displayName || u.username} src={avatarSrc(u.avatar, u.avatarType)} className="-mt-0.5 [&>span]:bg-foreground/10" />}
+              center
               title={
                 <>
-                  <span className="truncate">{u.username}</span>
-                  {u.isSelf && <span className="shrink-0 text-muted-foreground">{t.members.you}</span>}
+                  <span className="truncate font-medium">{u.displayName || u.username}</span>
+                  {u.isSelf && <span className="shrink-0 text-[13px] text-muted-foreground">{t.members.you}</span>}
                 </>
               }
-              sub={<span title={formatDateTime(toDate(u.createdAt))}>{t.members.createdOn(shortDate(toDate(u.createdAt)))}</span>}
-              cols={[{ content: u.totpEnabled ? t.members.totpOnShort : t.members.totpOffShort }]}
-              actionsWidth="w-40"
+              sub={<span className="block truncate">{memberSummary(u)}</span>}
+              // 只写开了两步验证的，每行都写「未开」是重复的噪音。
+              cols={[{ content: u.totpEnabled ? <Status tone="success">{t.members.totpOn}</Status> : null, width: "w-28" }]}
+              actionsWidth="w-9"
               actions={
-                <span className="flex items-center gap-1">
-                  <Select
-                    aria-label={t.members.role}
-                    className="h-8 w-[104px]"
-                    value={u.role}
-                    onChange={async (e) => {
-                      const role = e.target.value;
-                      if (await confirmAction(t.members.roleConfirm(u.username, t.members.roles[role as (typeof roles)[number]]), { action: t.members.changeRole }))
-                        call(() => settingsClient.updateUser({ id: u.id, role }), t.common.feedback.saved);
-                    }}
-                  >
-                    {roleOptions}
-                  </Select>
-                  <RowMenu
-                    items={[
-                      { label: t.members.resetPassword, onSelect: () => setResetting(u) },
-                      ...(u.totpEnabled && !u.isSelf
-                        ? [
-                            {
-                              label: t.members.clearTotp,
-                              onSelect: async () => {
-                                if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
-                                  call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.common.feedback.done);
-                              },
+                <RowMenu
+                  className="size-9 last:mr-0 [&_svg]:size-5"
+                  items={[
+                    { label: t.members.editAccess, onSelect: () => setEditing(u) },
+                    { label: t.members.resetPassword, onSelect: () => setResetting(u) },
+                    ...(u.totpEnabled && !u.isSelf
+                      ? [
+                          {
+                            label: t.members.clearTotp,
+                            onSelect: async () => {
+                              if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
+                                call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.common.feedback.done);
                             },
-                          ]
-                        : []),
-                      ...(!u.isSelf
-                        ? [
-                            {
-                              label: t.common.actions.delete,
-                              danger: true,
-                              onSelect: async () => {
-                                if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.common.actions.delete, danger: true }))
-                                  call(() => settingsClient.deleteUser({ id: u.id }), t.common.feedback.done);
-                              },
+                          },
+                        ]
+                      : []),
+                    ...(!u.isSelf
+                      ? [
+                          {
+                            label: t.common.actions.delete,
+                            danger: true,
+                            onSelect: async () => {
+                              if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.common.actions.delete, danger: true }))
+                                call(() => settingsClient.deleteUser({ id: u.id }), t.common.feedback.done);
                             },
-                          ]
-                        : []),
-                    ]}
-                  />
-                </span>
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
               }
             />
           ))}
@@ -215,6 +359,18 @@ export function MembersCard() {
       </Dialog>
       <Dialog open={!!resetting} onClose={() => setResetting(null)} title={t.members.resetPassword} description={resetting?.username}>
         {resetting && <ResetPassword user={resetting} onCancel={() => setResetting(null)} onDone={() => setResetting(null)} />}
+      </Dialog>
+      <Dialog open={!!editing} onClose={() => setEditing(null)} title={t.members.editAccess} description={editing?.username}>
+        {editing && (
+          <EditAccess
+            user={editing}
+            onCancel={() => setEditing(null)}
+            onDone={() => {
+              setEditing(null);
+              refresh();
+            }}
+          />
+        )}
       </Dialog>
     </Section>
   );

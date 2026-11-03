@@ -100,12 +100,91 @@ func (s *settingsService) ListUsers(ctx context.Context, _ *connect.Request[nagi
 	}
 	out := &nagiv1.ListUsersResponse{}
 	for _, r := range rows {
+		scope, err := s.userScope(ctx, r)
+		if err != nil {
+			return nil, err
+		}
 		out.Users = append(out.Users, &nagiv1.PanelUser{
 			Id: r.ID, Username: r.Username, Role: r.Role, TotpEnabled: r.TotpSecret != "",
-			CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0)), IsSelf: r.ID == auth.CurrentUser(ctx).ID,
+			CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0)), IsSelf: r.ID == auth.CurrentUser(ctx).ID, Scope: scope,
+			DisplayName: r.DisplayName, Avatar: r.Avatar, AvatarType: avatarType(r.Avatar),
 		})
 	}
 	return connect.NewResponse(out), nil
+}
+
+// userScope 读出成员的访问范围（见 docs/panel.md#访问范围）。
+func (s *settingsService) userScope(ctx context.Context, u store.User) (*nagiv1.UserScope, error) {
+	sc := &nagiv1.UserScope{AllProjects: u.AllProjects != 0, AllNodes: u.AllNodes != 0}
+	var err error
+	if !sc.AllProjects {
+		if sc.ProjectIds, err = s.Q.ListUserProjects(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
+	if !sc.AllNodes {
+		if sc.NodeIds, err = s.Q.ListUserNodes(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
+	return sc, nil
+}
+
+// checkScope 检查指定的项目、节点都存在。
+func (s *settingsService) checkScope(ctx context.Context, sc *nagiv1.UserScope) error {
+	if !sc.GetAllProjects() {
+		for _, id := range sc.GetProjectIds() {
+			if _, err := s.Q.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
+				return connect.NewError(connect.CodeInvalidArgument, i18n.New("项目不存在"))
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+	if !sc.GetAllNodes() {
+		for _, id := range sc.GetNodeIds() {
+			if n, err := s.Q.GetNode(ctx, id); errors.Is(err, sql.ErrNoRows) || err == nil && n.Revoked != 0 {
+				return connect.NewError(connect.CodeInvalidArgument, i18n.New("节点不存在"))
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// saveScope 保存成员的访问范围。先用 checkScope 检查过。
+func (s *settingsService) saveScope(ctx context.Context, id int64, sc *nagiv1.UserScope) error {
+	flag := func(all bool) int64 {
+		if all {
+			return 1
+		}
+		return 0
+	}
+	if err := s.Q.SetUserScope(ctx, store.SetUserScopeParams{AllProjects: flag(sc.GetAllProjects()), AllNodes: flag(sc.GetAllNodes()), ID: id}); err != nil {
+		return err
+	}
+	if err := s.Q.ClearUserProjects(ctx, id); err != nil {
+		return err
+	}
+	if err := s.Q.ClearUserNodes(ctx, id); err != nil {
+		return err
+	}
+	if !sc.GetAllProjects() {
+		for _, p := range sc.GetProjectIds() {
+			if err := s.Q.AddUserProject(ctx, store.AddUserProjectParams{UserID: id, ProjectID: p}); err != nil {
+				return err
+			}
+		}
+	}
+	if !sc.GetAllNodes() {
+		for _, n := range sc.GetNodeIds() {
+			if err := s.Q.AddUserNode(ctx, store.AddUserNodeParams{UserID: id, NodeID: n}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func checkNewPassword(password string) error {
@@ -127,6 +206,13 @@ func (s *settingsService) CreateUser(ctx context.Context, req *connect.Request[n
 	if err := checkNewPassword(m.GetPassword()); err != nil {
 		return nil, err
 	}
+	scope := m.GetScope()
+	if scope == nil {
+		scope = &nagiv1.UserScope{AllProjects: true, AllNodes: true}
+	}
+	if err := s.checkScope(ctx, scope); err != nil {
+		return nil, err
+	}
 	if _, err := s.Q.GetUserByUsername(ctx, username); err == nil {
 		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.New("用户名已存在"))
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -136,7 +222,10 @@ func (s *settingsService) CreateUser(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&nagiv1.PanelUser{Id: id, Username: username, Role: m.GetRole(), CreatedAt: timestamppb.Now()}), nil
+	if err := s.saveScope(ctx, id, scope); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.PanelUser{Id: id, Username: username, Role: m.GetRole(), CreatedAt: timestamppb.Now(), Scope: scope}), nil
 }
 
 // lastAdmin 判断这个用户是不是最后一个管理员：面板不能没有管理员。
@@ -153,6 +242,11 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	u, err := s.Q.GetUserByID(ctx, m.GetId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("用户不存在"))
+	}
+	if sc := m.GetScope(); sc != nil {
+		if err := s.checkScope(ctx, sc); err != nil {
+			return nil, err
+		}
 	}
 	if role := m.GetRole(); role != "" && role != u.Role {
 		if !auth.ValidRole(role) {
@@ -187,6 +281,11 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	}
 	if m.GetClearTotp() {
 		if err := s.Q.ClearUserTOTP(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
+	if sc := m.GetScope(); sc != nil {
+		if err := s.saveScope(ctx, u.ID, sc); err != nil {
 			return nil, err
 		}
 	}

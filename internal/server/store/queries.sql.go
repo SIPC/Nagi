@@ -10,6 +10,34 @@ import (
 	"database/sql"
 )
 
+const addUserNode = `-- name: AddUserNode :exec
+INSERT OR IGNORE INTO user_nodes (user_id, node_id) VALUES (?, ?)
+`
+
+type AddUserNodeParams struct {
+	UserID int64
+	NodeID string
+}
+
+func (q *Queries) AddUserNode(ctx context.Context, arg AddUserNodeParams) error {
+	_, err := q.db.ExecContext(ctx, addUserNode, arg.UserID, arg.NodeID)
+	return err
+}
+
+const addUserProject = `-- name: AddUserProject :exec
+INSERT OR IGNORE INTO user_projects (user_id, project_id) VALUES (?, ?)
+`
+
+type AddUserProjectParams struct {
+	UserID    int64
+	ProjectID string
+}
+
+func (q *Queries) AddUserProject(ctx context.Context, arg AddUserProjectParams) error {
+	_, err := q.db.ExecContext(ctx, addUserProject, arg.UserID, arg.ProjectID)
+	return err
+}
+
 const approveNode = `-- name: ApproveNode :execrows
 UPDATE nodes SET pending = 0 WHERE id = ? AND revoked = 0
 `
@@ -42,6 +70,24 @@ UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE totp_secret != ''
 
 func (q *Queries) ClearTOTPSecrets(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, clearTOTPSecrets)
+	return err
+}
+
+const clearUserNodes = `-- name: ClearUserNodes :exec
+DELETE FROM user_nodes WHERE user_id = ?
+`
+
+func (q *Queries) ClearUserNodes(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, clearUserNodes, userID)
+	return err
+}
+
+const clearUserProjects = `-- name: ClearUserProjects :exec
+DELETE FROM user_projects WHERE user_id = ?
+`
+
+func (q *Queries) ClearUserProjects(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, clearUserProjects, userID)
 	return err
 }
 
@@ -279,6 +325,15 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) er
 	return err
 }
 
+const deleteNodeFromScopes = `-- name: DeleteNodeFromScopes :exec
+DELETE FROM user_nodes WHERE node_id = ?
+`
+
+func (q *Queries) DeleteNodeFromScopes(ctx context.Context, nodeID string) error {
+	_, err := q.db.ExecContext(ctx, deleteNodeFromScopes, nodeID)
+	return err
+}
+
 const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
 DELETE FROM sessions WHERE user_id = ? AND token_hash != ?
 `
@@ -500,7 +555,7 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role
+SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role, u.all_projects, u.all_nodes
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = ?
@@ -512,6 +567,8 @@ type GetSessionRow struct {
 	ElevatedUntil int64
 	Username      string
 	Role          string
+	AllProjects   int64
+	AllNodes      int64
 }
 
 func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionRow, error) {
@@ -523,6 +580,8 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionR
 		&i.ElevatedUntil,
 		&i.Username,
 		&i.Role,
+		&i.AllProjects,
+		&i.AllNodes,
 	)
 	return i, err
 }
@@ -802,7 +861,7 @@ func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users WHERE id = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -819,12 +878,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.DisplayName,
 		&i.Avatar,
+		&i.AllProjects,
+		&i.AllNodes,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -841,6 +902,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Role,
 		&i.DisplayName,
 		&i.Avatar,
+		&i.AllProjects,
+		&i.AllNodes,
 	)
 	return i, err
 }
@@ -1505,8 +1568,62 @@ func (q *Queries) ListStandbyPanels(ctx context.Context) ([]StandbyPanel, error)
 	return items, nil
 }
 
+const listUserNodes = `-- name: ListUserNodes :many
+SELECT node_id FROM user_nodes WHERE user_id = ? ORDER BY node_id
+`
+
+func (q *Queries) ListUserNodes(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listUserNodes, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var nodeID string
+		if err := rows.Scan(&nodeID); err != nil {
+			return nil, err
+		}
+		items = append(items, nodeID)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserProjects = `-- name: ListUserProjects :many
+SELECT project_id FROM user_projects WHERE user_id = ? ORDER BY project_id
+`
+
+func (q *Queries) ListUserProjects(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listUserProjects, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var projectID string
+		if err := rows.Scan(&projectID); err != nil {
+			return nil, err
+		}
+		items = append(items, projectID)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar FROM users ORDER BY id
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -1529,6 +1646,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.DisplayName,
 			&i.Avatar,
+			&i.AllProjects,
+			&i.AllNodes,
 		); err != nil {
 			return nil, err
 		}
@@ -1991,6 +2110,21 @@ type SetUserProfileParams struct {
 
 func (q *Queries) SetUserProfile(ctx context.Context, arg SetUserProfileParams) error {
 	_, err := q.db.ExecContext(ctx, setUserProfile, arg.DisplayName, arg.Avatar, arg.ID)
+	return err
+}
+
+const setUserScope = `-- name: SetUserScope :exec
+UPDATE users SET all_projects = ?, all_nodes = ? WHERE id = ?
+`
+
+type SetUserScopeParams struct {
+	AllProjects int64
+	AllNodes    int64
+	ID          int64
+}
+
+func (q *Queries) SetUserScope(ctx context.Context, arg SetUserScopeParams) error {
+	_, err := q.db.ExecContext(ctx, setUserScope, arg.AllProjects, arg.AllNodes, arg.ID)
 	return err
 }
 

@@ -3,6 +3,7 @@ import { createConnectTransport } from "@connectrpc/connect-web";
 import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
   AuthService,
+  type ListNodesResponse,
   NodeService,
   ProjectService,
   SettingsService,
@@ -27,6 +28,10 @@ export const authClient = createClient(AuthService, transport);
 export const nodeClient = createClient(NodeService, transport);
 export const projectClient = createClient(ProjectService, transport);
 export const settingsClient = createClient(SettingsService, transport);
+
+// knownNodes：节点列表加上访问范围外、但项目里的容器用到的节点（只有名称和是否在线，见 docs/panel.md#访问范围）。
+// 查节点名称和在线状态用；列出、选择节点只用 nodes。
+export const knownNodes = (res: ListNodesResponse | undefined) => (res ? [...res.nodes, ...res.otherNodes] : []);
 
 // errorMessage 返回给人看的错误信息。面板返回的错误原样显示；连不上面板、接口不存在这类没有说明的错误换成一句话。
 export function errorMessage(err: unknown): string {

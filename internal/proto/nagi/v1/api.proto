@@ -477,6 +477,9 @@ message ListNodesRequest {}
 
 message ListNodesResponse {
   repeated Node nodes = 1;
+  // 访问范围外、但范围内项目的容器用到的节点（所在节点、备份节点、热备、见证人）：只有 ID、名称和是否在线，
+  // 用来在项目页显示节点名称。成员能访问全部节点时为空。见 docs/panel.md#访问范围。
+  repeated Node other_nodes = 2;
 }
 
 service ProjectService {
@@ -664,6 +667,20 @@ message PanelUser {
   google.protobuf.Timestamp created_at = 5;
   // 是不是当前登录的用户。
   bool is_self = 6;
+  UserScope scope = 7;
+  // 显示名称和头像（见 MeResponse），没有设置时为空。
+  string display_name = 8;
+  bytes avatar = 9;
+  string avatar_type = 10;
+}
+
+// UserScope 是成员能访问的项目和节点（见 docs/panel.md#访问范围）。管理员不受限制。
+message UserScope {
+  bool all_projects = 1;
+  bool all_nodes = 2;
+  // all_projects、all_nodes 为 false 时才有用。
+  repeated string project_ids = 3;
+  repeated string node_ids = 4;
 }
 
 message ListUsersRequest {}
@@ -676,6 +693,8 @@ message CreateUserRequest {
   string username = 1;
   string password = 2;
   string role = 3;
+  // 为空表示全部。
+  UserScope scope = 4;
 }
 
 message UpdateUserRequest {
@@ -685,6 +704,8 @@ message UpdateUserRequest {
   // 空表示不改。
   string password = 3;
   bool clear_totp = 4;
+  // 为空表示不改。
+  UserScope scope = 5;
 }
 
 message UpdateUserResponse {}
