@@ -11,7 +11,7 @@
 
 ## 入口
 
-面板在自己的端口上提供 `/mcp`（MCP 的 Streamable HTTP），和网页同一个地址和证书，不另开端口、不另起进程。Go 用官方的 SDK（`github.com/modelcontextprotocol/go-sdk`），代码在 `internal/server/mcp`。
+面板在自己的端口上提供 `/mcp`（MCP 的 Streamable HTTP），和网页同一个地址和证书，不另开端口、不另起进程。不保存会话（Streamable HTTP 的无状态模式）：每个请求单独处理，面板更新、重启后客户端照常接着用；`GET /mcp` 返回 405。被拒绝的请求（401 以外的 4xx）记进面板日志。Go 用官方的 SDK（`github.com/modelcontextprotocol/go-sdk`），代码在 `internal/server/mcp`。
 
 「设置 → 账号安全 → 访问令牌」显示 MCP 地址，生成令牌后给出可以复制的配置。两种接法：
 

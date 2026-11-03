@@ -74,6 +74,9 @@ func Mount(mux *http.ServeMux, o Options) {
 	}
 	h.http = mcp.NewStreamableHTTPHandler(h.server, &mcp.StreamableHTTPOptions{
 		Logger: o.Log,
+		// 不保存会话：每个请求单独处理。面板更新、重启以后客户端拿着旧会话来也能接着用，内存里也不会攒下不再用的会话。
+		// 部署这类工具的进度通知在请求的响应流里发，不受影响。
+		Stateless: true,
 		// SDK 默认拒绝「从本机地址进来、Host 不是 localhost」的请求（防 DNS 重绑定）。面板绑定域名时请求都由本机的
 		// Caddy 转发，正是这种情况。/mcp 只认请求头里的令牌，浏览器不会自动带上，DNS 重绑定拿不到权限，所以关掉。
 		DisableLocalhostProtection: true,
@@ -110,8 +113,41 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// 个人访问令牌可以不过期。
 		AllowMissingExpiration: true,
 	})
-	mw(h.http).ServeHTTP(w, r)
+	rec := &statusRecorder{ResponseWriter: w}
+	mw(h.http).ServeHTTP(rec, r)
+	// 被拒绝的请求记一条，排查客户端连不上时看面板日志就知道原因。没带令牌的 401 是 OAuth 发现流程的第一步，不记。
+	if rec.status >= 400 && rec.status != http.StatusUnauthorized {
+		h.o.Log.Warn("MCP 请求被拒绝", "method", r.Method, "status", rec.status, "ip", auth.RequestIP(r.RemoteAddr, r.Header), "host", auth.RequestHost(r))
+	}
 }
+
+// statusRecorder 记下响应的状态码，Flush 照常传下去（SSE 要用）。
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusRecorder) WriteHeader(code int) {
+	if w.status == 0 {
+		w.status = code
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusRecorder) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusRecorder) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *statusRecorder) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 const userExtra = "nagi.user"
 

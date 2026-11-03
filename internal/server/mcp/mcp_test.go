@@ -38,19 +38,28 @@ func TestBehindLocalProxy(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(
-		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`))
-	req.Host = "panel.example.com"
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+secret)
-	res, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
+	post := func(body string, header map[string]string) (int, string) {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(body))
+		req.Host = "panel.example.com"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+secret)
+		for k, v := range header {
+			req.Header.Set(k, v)
+		}
+		res, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
 	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), `"name":"nagi"`) {
-		t.Fatalf("经本机代理、Host 是域名的请求应该能初始化：%d %s", res.StatusCode, body)
+	if st, body := post(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`, nil); st != http.StatusOK || !strings.Contains(body, `"name":"nagi"`) {
+		t.Fatalf("经本机代理、Host 是域名的请求应该能初始化：%d %s", st, body)
+	}
+	// 不保存会话：面板重启后客户端带着旧的会话 ID 来列工具，也要能拿到。
+	if st, body := post(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, map[string]string{"Mcp-Session-Id": "gone-after-restart", "MCP-Protocol-Version": "2025-06-18"}); st != http.StatusOK || !strings.Contains(body, `"overview"`) {
+		t.Fatalf("带着旧会话 ID 列工具应该成功：%d %s", st, body)
 	}
 }
