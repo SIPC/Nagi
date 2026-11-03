@@ -16,7 +16,7 @@ export function Toaster() {
       duration={3000}
       style={
         {
-          "--normal-bg": "var(--card)",
+          "--normal-bg": "var(--popover)",
           "--normal-text": "var(--foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius-lg)",

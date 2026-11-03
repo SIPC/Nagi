@@ -40,10 +40,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary font-medium text-primary-foreground not-disabled:hover:bg-primary/88",
-        outline: "border-input bg-background not-disabled:hover:bg-accent",
+        outline: "border-input bg-transparent not-disabled:hover:bg-accent",
         ghost: "not-disabled:hover:bg-accent",
-        destructive: "bg-destructive text-white not-disabled:hover:bg-destructive/90",
-        "destructive-outline": "border-input bg-background text-destructive not-disabled:hover:bg-accent",
+        // 深色下 destructive 是给文字用的浅红，白字放在上面对比度不够，按钮底色换深一档。
+        destructive: "bg-destructive text-white not-disabled:hover:bg-destructive/90 dark:bg-red-600 dark:not-disabled:hover:bg-red-600/90",
+        "destructive-outline": "border-input bg-transparent text-destructive not-disabled:hover:bg-accent",
       },
       size: {
         // 手机上控件高 40、字号 16（iOS 聚焦不缩放），其余 32。
@@ -1162,7 +1163,7 @@ export function Dialog({
             {description && <DialogDescription>{description}</DialogDescription>}
           </div>
           <DialogClose asChild>
-            <Button size="icon" variant="ghost" className="absolute top-4 right-4 size-8 max-md:top-2 max-md:right-2 max-md:size-10" aria-label={t.common.actions.close} readOnlyOk>
+            <Button size="icon" variant="ghost" className="absolute top-4 right-4 size-8 text-muted-foreground hover:text-foreground max-md:top-2 max-md:right-2 max-md:size-10" aria-label={t.common.actions.close} readOnlyOk>
               <X />
             </Button>
           </DialogClose>

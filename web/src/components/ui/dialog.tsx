@@ -9,10 +9,10 @@ export const DialogClose = DialogPrimitive.Close;
 export function DialogContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-overlay data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background shadow-lg outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-fade-out max-md:data-[state=open]:animate-sheet-in max-md:data-[state=closed]:animate-sheet-out max-md:top-auto max-md:bottom-4 max-md:max-h-[calc(100dvh-2rem)] max-md:max-w-none max-md:translate-y-0",
+          "fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-popover shadow-popover outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-fade-out max-md:data-[state=open]:animate-sheet-in max-md:data-[state=closed]:animate-sheet-out max-md:top-auto max-md:bottom-4 max-md:max-h-[calc(100dvh-2rem)] max-md:max-w-none max-md:translate-y-0",
           className,
         )}
         {...props}
