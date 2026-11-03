@@ -379,6 +379,31 @@ func SessionToken(h http.Header) string {
 	return ""
 }
 
+// fromLocalProxy 判断请求是不是面板自带节点的 Caddy 转发的：来自本机，并且带着正确的 X-Nagi-Proxy。
+func fromLocalProxy(addr string, h http.Header) bool {
+	secret, _ := proxySecret.Load().(string)
+	if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("X-Nagi-Proxy")), []byte(secret)) != 1 {
+		return false
+	}
+	p := net.ParseIP(ClientIP(addr))
+	return p != nil && p.IsLoopback()
+}
+
+// RequestHost 返回客户端访问面板用的主机名（MCP 和 OAuth 的地址用它拼，见 docs/mcp.md#入口）。
+// 本机 Caddy 用 HTTPS 连面板时会把 Host 换成上游地址（127.0.0.1:<面板端口>），原来的域名在 X-Forwarded-Host 里；
+// 只有确认是它转发的请求才采用这个头，别人填的不算。
+func RequestHost(r *http.Request) string {
+	if fromLocalProxy(r.RemoteAddr, r.Header) {
+		if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+			first, _, _ := strings.Cut(xfh, ",")
+			if host := strings.TrimSpace(first); host != "" {
+				return host
+			}
+		}
+	}
+	return r.Host
+}
+
 // ClientIP 从 "ip:port" 形式的地址中取出 IP。
 // proxySecret 是面板自带节点的 Caddy 反代面板时带的 X-Nagi-Proxy 请求头的值（见 SetProxySecret）。
 var proxySecret atomic.Value
@@ -391,9 +416,7 @@ func SetProxySecret(s string) { proxySecret.Store(s) }
 // 只看来源是不是本机不够：本机上的其他程序（例如 host 网络的容器）可以随便填 X-Forwarded-For，绕过登录限速。
 func RequestIP(addr string, h http.Header) string {
 	ip := ClientIP(addr)
-	secret, _ := proxySecret.Load().(string)
-	fromProxy := secret != "" && subtle.ConstantTimeCompare([]byte(h.Get("X-Nagi-Proxy")), []byte(secret)) == 1
-	if p := net.ParseIP(ip); p != nil && p.IsLoopback() && fromProxy {
+	if fromLocalProxy(addr, h) {
 		if xff := h.Get("X-Forwarded-For"); xff != "" {
 			first, _, _ := strings.Cut(xff, ",")
 			if fp := net.ParseIP(strings.TrimSpace(first)); fp != nil {

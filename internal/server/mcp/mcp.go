@@ -9,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -89,7 +88,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	verify := func(ctx context.Context, token string, r *http.Request) (*mcpauth.TokenInfo, error) {
-		u, t, err := h.o.Auth.TokenUser(ctx, token, remoteIP(r))
+		u, t, err := h.o.Auth.TokenUser(ctx, token, auth.RequestIP(r.RemoteAddr, r.Header))
 		if errors.Is(err, auth.ErrInvalidToken) {
 			return nil, mcpauth.ErrInvalidToken
 		} else if err != nil {
@@ -102,7 +101,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return info, nil
 	}
 	mw := mcpauth.RequireBearerToken(verify, &mcpauth.RequireBearerTokenOptions{
-		ResourceMetadataURL: "https://" + r.Host + "/.well-known/oauth-protected-resource" + auth.BasePath(r.Context()) + "/mcp",
+		ResourceMetadataURL: "https://" + auth.RequestHost(r) + "/.well-known/oauth-protected-resource" + auth.BasePath(r.Context()) + "/mcp",
 		// 个人访问令牌可以不过期。
 		AllowMissingExpiration: true,
 	})
@@ -110,14 +109,6 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 const userExtra = "nagi.user"
-
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
 
 // userOf 取请求对应的成员。每次请求都重新核对令牌，成员的角色、范围改了立即生效。
 func userOf(req *mcp.CallToolRequest) (auth.User, bool) {

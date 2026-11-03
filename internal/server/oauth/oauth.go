@@ -85,11 +85,16 @@ type Client struct {
 
 // BaseURL 是授权服务器的地址（issuer）：面板地址，经安全入口访问时带着入口（见 docs/mcp.md#入口）。
 func BaseURL(r *http.Request) string {
-	return "https://" + r.Host + auth.BasePath(r.Context())
+	return "https://" + auth.RequestHost(r) + auth.BasePath(r.Context())
 }
 
 // ResourceURL 是 MCP 的地址，令牌只能用于它。
 func ResourceURL(r *http.Request) string { return BaseURL(r) + "/mcp" }
+
+// sameResource 比较客户端给的 resource 和本面板的 MCP 地址：客户端照着用户填的地址传，末尾可能多一个 /。
+func sameResource(got, want string) bool {
+	return strings.TrimSuffix(got, "/") == want
+}
 
 func scopesOf(write, exec bool) string {
 	s := []string{ScopeRead}
@@ -334,14 +339,6 @@ func (s *Server) handleServerMetadata(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if cors(w, r) {
 		return
@@ -350,7 +347,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusMethodNotAllowed, "invalid_request", "POST only")
 		return
 	}
-	ip := clientIP(r)
+	// 经面板自带的 Caddy 转发时来源都是本机，要用它转发来的客户端地址，否则所有人共用一份注册限额。
+	ip := auth.RequestIP(r.RemoteAddr, r.Header)
 	s.mu.Lock()
 	recent := s.register[ip][:0]
 	for _, t := range s.register[ip] {
@@ -438,7 +436,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
 		return
 	}
-	if res := r.PostForm.Get("resource"); res != "" && res != ResourceURL(r) {
+	if res := r.PostForm.Get("resource"); res != "" && !sameResource(res, ResourceURL(r)) {
 		oauthError(w, http.StatusBadRequest, "invalid_target", "this server only issues tokens for "+ResourceURL(r))
 		return
 	}
@@ -482,7 +480,7 @@ func (s *Server) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	case !pkceOK(f.Get("code_verifier"), g.challenge):
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "PKCE verification failed")
 		return
-	case g.resource != "" && g.resource != ResourceURL(r):
+	case g.resource != "" && !sameResource(g.resource, ResourceURL(r)):
 		oauthError(w, http.StatusBadRequest, "invalid_target", "this server only issues tokens for "+ResourceURL(r))
 		return
 	}

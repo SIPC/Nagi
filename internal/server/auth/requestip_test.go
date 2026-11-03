@@ -26,3 +26,23 @@ func TestRequestIPTrustsOnlyOwnProxy(t *testing.T) {
 		t.Fatalf("不是来自本机的请求不应采用 X-Forwarded-For，得到 %s", got)
 	}
 }
+
+// 只有自带节点的 Caddy 转发的请求才采用 X-Forwarded-Host（拼 MCP 和 OAuth 的地址用）。
+func TestRequestHostTrustsOnlyOwnProxy(t *testing.T) {
+	SetProxySecret("s3cret")
+	defer SetProxySecret("")
+	r, _ := http.NewRequest(http.MethodGet, "https://127.0.0.1:41547/mcp", nil)
+	r.RemoteAddr = "127.0.0.1:5000"
+	r.Header.Set("X-Forwarded-Host", "panel.example.com")
+	if got := RequestHost(r); got != "127.0.0.1:41547" {
+		t.Fatalf("没有 X-Nagi-Proxy 时不应采用 X-Forwarded-Host，得到 %s", got)
+	}
+	r.Header.Set("X-Nagi-Proxy", "s3cret")
+	if got := RequestHost(r); got != "panel.example.com" {
+		t.Fatalf("自带节点的 Caddy 转发的请求应采用 X-Forwarded-Host，得到 %s", got)
+	}
+	r.RemoteAddr = "198.51.100.7:5000"
+	if got := RequestHost(r); got != "127.0.0.1:41547" {
+		t.Fatalf("不是来自本机的请求不应采用 X-Forwarded-Host，得到 %s", got)
+	}
+}

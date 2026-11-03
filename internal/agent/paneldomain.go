@@ -70,13 +70,14 @@ func (a *agent) panelRoutes() []proxy.Route {
 	}}
 }
 
-// proxyHeaders 是反代面板时加的请求头（客户端自己带的同名请求头会被覆盖）。
+// proxyHeaders 是反代面板时加的请求头（客户端自己带的同名请求头会被覆盖）。Host 保持客户端用的域名：
+// Caddy 用 HTTPS 连上游时默认把它换成上游地址，面板拼 OAuth 地址要用原来的域名（见 docs/mcp.md#入口）。
 func (a *agent) proxyHeaders() map[string]string {
-	b, err := os.ReadFile(a.proxySecretFile())
-	if err != nil || strings.TrimSpace(string(b)) == "" {
-		return nil
+	headers := map[string]string{"Host": "{http.request.host}"}
+	if b, err := os.ReadFile(a.proxySecretFile()); err == nil && strings.TrimSpace(string(b)) != "" {
+		headers["X-Nagi-Proxy"] = strings.TrimSpace(string(b))
 	}
-	return map[string]string{"X-Nagi-Proxy": strings.TrimSpace(string(b))}
+	return headers
 }
 
 func (s *agentService) SetPanelDomain(_ context.Context, req *nagiv1.SetPanelDomainRequest) (*nagiv1.SetPanelDomainResponse, error) {
