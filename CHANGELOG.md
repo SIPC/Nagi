@@ -8,6 +8,12 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.16.1
+
+### 新功能
+
+- OAuth 授权页支持勾选「节点终端」，ChatGPT、Claude 网页版等客户端也可以使用 `node_exec`。仅限管理员。
+
 ## v0.16.0
 
 ### 新功能
