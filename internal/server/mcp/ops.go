@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -921,12 +924,25 @@ type NodeExecArgs struct {
 	Command        string `json:"command" jsonschema:"shell command, run as root with the login shell (sh -lc)"`
 	Cwd            string `json:"cwd,omitempty" jsonschema:"working directory; default root's home"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"default 30, at most 120; the whole process group is killed at the timeout"`
+	// 为什么要用节点命令：现有的工具做不到，或者用户明确要求。写进预览给用户看。
+	Reason  string `json:"reason" jsonschema:"why the other tools cannot do this, or that the user asked for a command on the node; shown to the user in the preview"`
+	Confirm string `json:"confirm,omitempty" jsonschema:"omit to get a preview; after the user agreed, call again with the same node, command, cwd and timeout and confirm set to the code from the preview"`
 }
 
-// toolNodeExec 在节点上执行一条命令（见 docs/mcp.md#节点命令）。权限在 api.RunNodeCommand 里再查一遍。
+// nodeExecCode 是节点命令的确认码：由节点、工作目录、超时和命令算出，预览之后改了其中任何一项都对不上。
+func nodeExecCode(nodeID, cwd, command string, timeout time.Duration) string {
+	sum := sha256.Sum256([]byte(nodeID + "\x00" + cwd + "\x00" + timeout.String() + "\x00" + command))
+	return hex.EncodeToString(sum[:6])
+}
+
+// toolNodeExec 在节点上执行一条命令（见 docs/mcp.md#节点命令）。每次都分两步：先预览，用户同意后带确认码执行。
+// 权限在 api.RunNodeCommand 里再查一遍。
 func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 	if strings.TrimSpace(in.Command) == "" {
 		return nil, errors.New("command is empty")
+	}
+	if strings.TrimSpace(in.Reason) == "" {
+		return nil, errors.New("reason is required: say why the container and project tools cannot do this, or that the user asked for a command on the node")
 	}
 	nodes, err := c.nodes()
 	if err != nil {
@@ -939,6 +955,17 @@ func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 	timeout := 30 * time.Second
 	if in.TimeoutSeconds > 0 {
 		timeout = time.Duration(min(in.TimeoutSeconds, 120)) * time.Second
+	}
+	if code := nodeExecCode(n.GetId(), in.Cwd, in.Command, timeout); in.Confirm != code {
+		out := preview("node_exec", code, fmt.Sprintf("this command runs as root on node %s, with full control of the machine. Nothing runs until the user agrees.", n.GetName()),
+			map[string]any{"node": n.GetName(), "command": in.Command, "cwd": cmp.Or(in.Cwd, "(root's home)"), "timeout_seconds": int(timeout / time.Second), "reason": in.Reason})
+		if in.Confirm != "" {
+			out["note"] = "the confirm code does not match this node, command, cwd and timeout; show this preview to the user again"
+		}
+		if note := inContainerNote(n); note != "" {
+			out["in_container"] = note
+		}
+		return out, nil
 	}
 	res, err := c.h.o.NodeExec(auth.WithUser(c.ctx, c.u), n.GetId(), in.Command, in.Cwd, timeout)
 	if err != nil {
@@ -957,7 +984,7 @@ func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 // inContainerNote：节点跑在容器里时，命令进的是这个容器，不是主机。
 func inContainerNote(n *nagiv1.Node) string {
 	if n.GetInfo().GetInContainer() {
-		return "this node runs inside a container: the command ran in that container, not on the host"
+		return "this node runs inside a container: commands run in that container, not on the host"
 	}
 	return ""
 }

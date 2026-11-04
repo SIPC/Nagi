@@ -3,6 +3,7 @@ package mcp
 import (
 	"strings"
 	"testing"
+	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
@@ -162,6 +163,24 @@ func TestNodeExecAllowed(t *testing.T) {
 	for i, c := range cases {
 		if got := ne.allowedFor(c.u, c.standby); got != c.want {
 			t.Errorf("case %d: allowedFor = %v，想要 %v", i, got, c.want)
+		}
+	}
+}
+
+// 节点命令的确认码绑定节点、工作目录、超时和命令：预览之后改了哪一项都不能用原来的确认码执行。
+func TestNodeExecCode(t *testing.T) {
+	base := nodeExecCode("n1", "/tmp", "ls", 30*time.Second)
+	if base != nodeExecCode("n1", "/tmp", "ls", 30*time.Second) {
+		t.Fatal("同样的参数应该得到同样的确认码")
+	}
+	for i, other := range []string{
+		nodeExecCode("n2", "/tmp", "ls", 30*time.Second),
+		nodeExecCode("n1", "/", "ls", 30*time.Second),
+		nodeExecCode("n1", "/tmp", "ls", 60*time.Second),
+		nodeExecCode("n1", "/tmp", "ls; rm -rf /", 30*time.Second),
+	} {
+		if other == base {
+			t.Errorf("case %d: 参数变了，确认码却一样", i)
 		}
 	}
 }
