@@ -29,8 +29,10 @@ type Options struct {
 	Auth    *auth.Service
 	OAuth   *oauth.Server
 	// Exec 在容器里执行一条命令（api.API.RunCommand）。
-	Exec    func(ctx context.Context, projectID, container, service string, command []string, timeout time.Duration) (api.ExecResult, error)
-	Version string
+	Exec func(ctx context.Context, projectID, container, service string, command []string, timeout time.Duration) (api.ExecResult, error)
+	// NodeExec 在节点上执行一条命令（api.API.RunNodeCommand）。
+	NodeExec func(ctx context.Context, nodeID, command, cwd string, timeout time.Duration) (api.ExecResult, error)
+	Version  string
 	// Files 读写卷里的文件。
 	Files FileAccess
 	// Record 把被拒绝的工具调用记进活动记录（api.API.RecordMCPDenied）。

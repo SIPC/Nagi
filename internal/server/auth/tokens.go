@@ -67,6 +67,8 @@ func (s *Service) TokenUser(ctx context.Context, token, ip string) (User, store.
 		// 只读成员本来就不能修改、不能打开终端，令牌上的选项也不放开。
 		AllowWrite: t.AllowWrite && row.Role != RoleViewer,
 		AllowExec:  t.AllowExec && row.Role != RoleViewer,
+		// 节点命令等于节点的 root，只给管理员；成员被降级后令牌上的这一项随之失效。
+		AllowNodeExec: t.AllowNodeExec && row.Role == RoleAdmin,
 	}
 	return u, t, nil
 }

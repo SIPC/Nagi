@@ -135,3 +135,33 @@ func TestAllowedFor(t *testing.T) {
 		}
 	}
 }
+
+// node_exec 等于节点的 root：只给管理员、令牌勾了节点终端，备用面板上也没有。
+func TestNodeExecAllowed(t *testing.T) {
+	var ne tool
+	for _, tl := range allTools {
+		if tl.name == "node_exec" {
+			ne = tl
+		}
+	}
+	admin := auth.User{TokenID: 1, Role: auth.RoleAdmin, AllowWrite: true, AllowExec: true}
+	full := admin
+	full.AllowNodeExec = true
+	operator := full
+	operator.Role = auth.RoleOperator
+	cases := []struct {
+		u       auth.User
+		standby bool
+		want    bool
+	}{
+		{admin, false, false},
+		{full, false, true},
+		{full, true, false},
+		{operator, false, false},
+	}
+	for i, c := range cases {
+		if got := ne.allowedFor(c.u, c.standby); got != c.want {
+			t.Errorf("case %d: allowedFor = %v，想要 %v", i, got, c.want)
+		}
+	}
+}

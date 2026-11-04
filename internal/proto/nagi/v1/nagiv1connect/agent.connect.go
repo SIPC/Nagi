@@ -78,6 +78,8 @@ const (
 	AgentServiceExecProcedure = "/nagi.v1.AgentService/Exec"
 	// AgentServiceNodeShellProcedure is the fully-qualified name of the AgentService's NodeShell RPC.
 	AgentServiceNodeShellProcedure = "/nagi.v1.AgentService/NodeShell"
+	// AgentServiceNodeExecProcedure is the fully-qualified name of the AgentService's NodeExec RPC.
+	AgentServiceNodeExecProcedure = "/nagi.v1.AgentService/NodeExec"
 	// AgentServiceListNodeDirProcedure is the fully-qualified name of the AgentService's ListNodeDir
 	// RPC.
 	AgentServiceListNodeDirProcedure = "/nagi.v1.AgentService/ListNodeDir"
@@ -209,6 +211,8 @@ type AgentServiceClient interface {
 	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
 	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
 	NodeShell(context.Context) *connect.BidiStreamForClient[v1.NodeShellInput, v1.ExecOutput]
+	// 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
+	NodeExec(context.Context, *connect.Request[v1.NodeExecRequest]) (*connect.ServerStreamForClient[v1.ExecOutput], error)
 	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
 	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
 	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
@@ -383,6 +387,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceNodeShellProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("NodeShell")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeExec: connect.NewClient[v1.NodeExecRequest, v1.ExecOutput](
+			httpClient,
+			baseURL+AgentServiceNodeExecProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("NodeExec")),
 			connect.WithClientOptions(opts...),
 		),
 		listNodeDir: connect.NewClient[v1.NodeFileRef, v1.ListNodeDirResponse](
@@ -628,6 +638,7 @@ type agentServiceClient struct {
 	streamLogs            *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 	exec                  *connect.Client[v1.ExecInput, v1.ExecOutput]
 	nodeShell             *connect.Client[v1.NodeShellInput, v1.ExecOutput]
+	nodeExec              *connect.Client[v1.NodeExecRequest, v1.ExecOutput]
 	listNodeDir           *connect.Client[v1.NodeFileRef, v1.ListNodeDirResponse]
 	readNodeFile          *connect.Client[v1.NodeFileRef, v1.ReadNodeFileResponse]
 	writeNodeFile         *connect.Client[v1.WriteNodeFileRequest, v1.WriteNodeFileResponse]
@@ -745,6 +756,11 @@ func (c *agentServiceClient) Exec(ctx context.Context) *connect.BidiStreamForCli
 // NodeShell calls nagi.v1.AgentService.NodeShell.
 func (c *agentServiceClient) NodeShell(ctx context.Context) *connect.BidiStreamForClient[v1.NodeShellInput, v1.ExecOutput] {
 	return c.nodeShell.CallBidiStream(ctx)
+}
+
+// NodeExec calls nagi.v1.AgentService.NodeExec.
+func (c *agentServiceClient) NodeExec(ctx context.Context, req *connect.Request[v1.NodeExecRequest]) (*connect.ServerStreamForClient[v1.ExecOutput], error) {
+	return c.nodeExec.CallServerStream(ctx, req)
 }
 
 // ListNodeDir calls nagi.v1.AgentService.ListNodeDir.
@@ -963,6 +979,8 @@ type AgentServiceHandler interface {
 	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
 	// ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
 	NodeShell(context.Context, *connect.BidiStream[v1.NodeShellInput, v1.ExecOutput]) error
+	// 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
+	NodeExec(context.Context, *connect.Request[v1.NodeExecRequest], *connect.ServerStream[v1.ExecOutput]) error
 	ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error)
 	ReadNodeFile(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ReadNodeFileResponse], error)
 	WriteNodeFile(context.Context, *connect.Request[v1.WriteNodeFileRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
@@ -1133,6 +1151,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceNodeShellProcedure,
 		svc.NodeShell,
 		connect.WithSchema(agentServiceMethods.ByName("NodeShell")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceNodeExecHandler := connect.NewServerStreamHandler(
+		AgentServiceNodeExecProcedure,
+		svc.NodeExec,
+		connect.WithSchema(agentServiceMethods.ByName("NodeExec")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceListNodeDirHandler := connect.NewUnaryHandler(
@@ -1391,6 +1415,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceExecHandler.ServeHTTP(w, r)
 		case AgentServiceNodeShellProcedure:
 			agentServiceNodeShellHandler.ServeHTTP(w, r)
+		case AgentServiceNodeExecProcedure:
+			agentServiceNodeExecHandler.ServeHTTP(w, r)
 		case AgentServiceListNodeDirProcedure:
 			agentServiceListNodeDirHandler.ServeHTTP(w, r)
 		case AgentServiceReadNodeFileProcedure:
@@ -1536,6 +1562,10 @@ func (UnimplementedAgentServiceHandler) Exec(context.Context, *connect.BidiStrea
 
 func (UnimplementedAgentServiceHandler) NodeShell(context.Context, *connect.BidiStream[v1.NodeShellInput, v1.ExecOutput]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.NodeShell is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) NodeExec(context.Context, *connect.Request[v1.NodeExecRequest], *connect.ServerStream[v1.ExecOutput]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.NodeExec is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) ListNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeDirResponse], error) {

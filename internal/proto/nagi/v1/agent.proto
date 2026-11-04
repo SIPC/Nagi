@@ -40,6 +40,8 @@ service AgentService {
 
   // ---- 节点访问：节点的终端和文件（见 docs/node-access.md） ----
   rpc NodeShell(stream NodeShellInput) returns (stream ExecOutput);
+  // 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
+  rpc NodeExec(NodeExecRequest) returns (stream ExecOutput);
   rpc ListNodeDir(NodeFileRef) returns (ListNodeDirResponse);
   rpc ReadNodeFile(NodeFileRef) returns (ReadNodeFileResponse);
   rpc WriteNodeFile(WriteNodeFileRequest) returns (WriteNodeFileResponse);
@@ -435,6 +437,17 @@ message NodeShellInput {
     bytes stdin = 2;
     TerminalSize resize = 3;
   }
+}
+
+message NodeExecRequest {
+  // 用 shell -lc 执行。
+  string command = 1;
+  // 工作目录，不存在时用 root 的主目录。
+  string cwd = 2;
+  // 超时（秒），到时结束整个进程组。
+  uint32 timeout_seconds = 3;
+  // 面板上的用户名和令牌名，只用于节点本地日志。
+  string actor = 4;
 }
 
 message NodeShellStart {

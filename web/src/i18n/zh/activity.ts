@@ -60,6 +60,7 @@ export default {
     RetryDomainCert: "重试申请证书",
     SetContainerDisplayName: "重命名容器",
     ExecCommand: "在容器里执行命令",
+    NodeExec: "在节点上执行命令",
     MCPToolDenied: "MCP 调用被拒绝",
     CreateAccessToken: "生成访问令牌",
     RevokeAccessToken: "吊销访问令牌",

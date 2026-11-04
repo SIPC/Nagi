@@ -19,7 +19,7 @@ import (
 
 func accessTokenInfo(t store.AccessToken) *nagiv1.AccessToken {
 	out := &nagiv1.AccessToken{
-		Id: t.ID, Name: t.Name, Source: t.Source, AllowWrite: t.AllowWrite, AllowExec: t.AllowExec,
+		Id: t.ID, Name: t.Name, Source: t.Source, AllowWrite: t.AllowWrite, AllowExec: t.AllowExec, AllowNodeExec: t.AllowNodeExec,
 		CreatedAt: timestamppb.New(time.Unix(t.CreatedAt, 0)), LastIp: t.LastIP,
 	}
 	// OAuth 的访问令牌 1 小时就换，显示的是整个授权的有效期。
@@ -85,6 +85,16 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 	t := store.AccessToken{
 		UserID: u.ID, Name: name, Source: auth.TokenSourcePersonal, TokenHash: auth.HashToken(secret),
 		AllowWrite: m.GetAllowWrite() && !viewer, AllowExec: m.GetAllowExec() && !viewer, CreatedAt: now.Unix(),
+	}
+	// 节点终端等于节点的 root：只有管理员能给令牌勾上（创建令牌本身已经要求确认过身份）。
+	if m.GetAllowNodeExec() {
+		if u.Role != auth.RoleAdmin {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可以在节点上执行命令的令牌"))
+		}
+		if !t.AllowExec {
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点终端需要同时允许执行命令"))
+		}
+		t.AllowNodeExec = true
 	}
 	if m.GetDays() > 0 {
 		t.ExpiresAt = now.Add(time.Duration(m.GetDays()) * 24 * time.Hour).Unix()

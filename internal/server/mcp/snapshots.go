@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -60,15 +61,28 @@ func toolSyncBackup(c *call, in ContainerArg) (any, error) {
 	if m.GetBackupNodeId() == "" {
 		return nil, errors.New("the container has no backup node")
 	}
-	res, err := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}))
-	if err != nil {
+	start := time.Now().Add(-time.Second)
+	if _, err := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()})); err != nil {
 		return nil, err
 	}
-	after, err := findContainer(res.Msg, m.GetName())
-	if err != nil {
-		return nil, err
+	// 同步状态由节点上报，同步完以后过一会儿才到面板上。
+	var b *nagiv1.BackupStatus
+	for i := 0; i < 10; i++ {
+		p, err := c.getProject(s.GetProject().GetId())
+		if err != nil {
+			return nil, err
+		}
+		if after, err := findContainer(p.GetProject(), m.GetName()); err == nil {
+			b = after.GetBackup()
+		}
+		if b.GetLastError() != "" || b.GetLastSync().AsTime().After(start) {
+			break
+		}
+		time.Sleep(time.Second)
 	}
-	b := after.GetBackup()
+	if b.GetLastError() == "" && !b.GetLastSync().AsTime().After(start) {
+		return map[string]any{"note": "sync finished; the node has not reported the new state yet, check get_container in a moment"}, nil
+	}
 	return map[string]any{"backup_node": b.GetTargetName(), "last_sync": ts(b.GetLastSync()), "error": b.GetLastError()}, nil
 }
 
@@ -90,7 +104,7 @@ func toolListBackupSnapshots(c *call, in ContainerArg) (any, error) {
 		v.Restorable, v.Deletable = false, false
 		out = append(out, v)
 	}
-	return map[string]any{"snapshots": out, "note": "snapshots in the copy on the backup node, as of its last sync. Restoring from the backup node is done in the web UI"}, nil
+	return map[string]any{"snapshots": out, "note": "snapshots in the copy on the backup node, as of its last sync. If the container's node is offline, restore_from_backup starts it from one of them"}, nil
 }
 
 func (c *call) snapshots(ref *nagiv1.ContainerRef) ([]*nagiv1.Snapshot, error) {

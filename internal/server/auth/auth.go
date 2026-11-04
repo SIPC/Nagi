@@ -238,11 +238,12 @@ type User struct {
 	ElevatedUntil int64
 	// LimitProjects、LimitNodes 表示只能访问指定的项目、节点（见 docs/panel.md#访问范围）。管理员不受限制。
 	LimitProjects, LimitNodes bool
-	// 用访问令牌（MCP）调用时：令牌的 ID、活动记录里的来源（mcp:<令牌名>），以及令牌是否允许修改、执行命令
-	// （见 docs/mcp.md#权限）。网页的会话这几项为空。
+	// 用访问令牌（MCP）调用时：令牌的 ID、活动记录里的来源（mcp:<令牌名>），以及令牌是否允许修改、执行命令、
+	// 在节点上执行命令（见 docs/mcp.md#权限）。网页的会话这几项为空。
 	TokenID               int64
 	Via                   string
 	AllowWrite, AllowExec bool
+	AllowNodeExec         bool
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。

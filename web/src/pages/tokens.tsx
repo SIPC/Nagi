@@ -31,6 +31,7 @@ function tokenSummary(tk: AccessToken) {
     tk.source === "oauth" ? k.sourceOAuth : k.sourcePersonal,
     tk.allowWrite ? k.write : k.readOnly,
     ...(tk.allowExec ? [k.exec] : []),
+    ...(tk.allowNodeExec ? [k.nodeExec] : []),
     !expires ? k.neverExpires : expires.getTime() < Date.now() ? k.expired : k.expiresOn(formatDate(expires) ?? ""),
   ];
   return parts.join(" · ");
@@ -90,14 +91,15 @@ export function AccessTokenList({ userId = 0n }: { userId?: bigint }) {
 }
 
 function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResponse) => void; onCancel: () => void }) {
-  const { isViewer } = useRole();
+  const { isViewer, isAdmin } = useRole();
   const [name, setName] = useState("");
   const [days, setDays] = useState(90);
   const [write, setWrite] = useState(false);
   const [exec, setExec] = useState(false);
+  const [nodeExec, setNodeExec] = useState(false);
   const create = useMutation({
     mutationFn: async () => {
-      const req = { name, days, allowWrite: write, allowExec: exec };
+      const req = { name, days, allowWrite: write, allowExec: exec, allowNodeExec: isAdmin && nodeExec };
       try {
         return await settingsClient.createAccessToken(req);
       } catch (err) {
@@ -133,9 +135,29 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
           <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
             {t.tokens.allowWrite}
           </Check>
-          <Check checked={exec} onChange={setExec} help={t.tokens.allowExecHelp}>
+          <Check
+            checked={exec}
+            onChange={(v) => {
+              setExec(v);
+              if (!v) setNodeExec(false);
+            }}
+            help={t.tokens.allowExecHelp}
+          >
             {t.tokens.allowExec}
           </Check>
+          {isAdmin && (
+            <Check
+              checked={nodeExec}
+              onChange={(v) => {
+                // 节点终端也是执行命令，一起勾上。
+                setNodeExec(v);
+                if (v) setExec(true);
+              }}
+              help={t.tokens.allowNodeExecHelp}
+            >
+              {t.tokens.allowNodeExec}
+            </Check>
+          )}
         </div>
       )}
       {create.error && <Alert>{errorMessage(create.error)}</Alert>}

@@ -5,6 +5,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
@@ -80,8 +82,8 @@ func systemdScope() []string {
 	return scopeArgs
 }
 
-// startShell 启动节点上的 shell。不继承节点进程的环境变量。
-func startShell(cwd string, cols, rows uint16) (*shellSession, error) {
+// shellCommand 建一个节点上的 shell 命令：root 的登录 shell，放进单独的 scope，不继承节点进程的环境变量。
+func shellCommand(ctx context.Context, cwd, term string, args ...string) *exec.Cmd {
 	// 查不到用户时（容器里没有登记的 uid）照常打开，只是没有用户名和主目录。
 	u, err := user.Current()
 	if err != nil {
@@ -92,16 +94,22 @@ func startShell(cwd string, cols, rows uint16) (*shellSession, error) {
 	if lang == "" {
 		lang = "C.UTF-8"
 	}
-	argv := append(systemdScope(), shell, "-l")
-	cmd := exec.Command(argv[0], argv[1:]...)
+	argv := append(append(systemdScope(), shell), args...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Env = []string{
 		"PATH=" + shellPath, "HOME=" + u.HomeDir, "USER=" + u.Username, "LOGNAME=" + u.Username, "SHELL=" + shell,
-		"TERM=xterm-256color", "LANG=" + lang, "NAGI_NODE_SHELL=1",
+		"TERM=" + term, "LANG=" + lang, "NAGI_NODE_SHELL=1",
 	}
 	cmd.Dir = u.HomeDir
 	if info, err := os.Stat(cwd); cwd != "" && filepath.IsAbs(cwd) && err == nil && info.IsDir() {
 		cmd.Dir = cwd
 	}
+	return cmd
+}
+
+// startShell 启动节点上的交互式 shell。
+func startShell(cwd string, cols, rows uint16) (*shellSession, error) {
+	cmd := shellCommand(context.Background(), cwd, "xterm-256color", "-l")
 	if cols == 0 || rows == 0 {
 		cols, rows = 80, 24
 	}
@@ -157,4 +165,27 @@ func (s *shellSession) Close() {
 			}
 		}()
 	})
+}
+
+// runNodeCommand 在节点上执行一条命令（MCP 的 node_exec）：shell -lc，stdout 和 stderr 合在一起交给 out，没有输入。
+// ctx 结束时杀掉整个进程组（包括命令启动的子进程），返回 -1。
+func runNodeCommand(ctx context.Context, cwd, command string, out io.Writer) int {
+	cmd := shellCommand(ctx, cwd, "dumb", "-lc", command)
+	cmd.Stdout, cmd.Stderr = out, out
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	// 后台进程拿着输出不放时，不要一直等。
+	cmd.WaitDelay = 2 * time.Second
+	err := cmd.Run()
+	var ee *exec.ExitError
+	switch {
+	case ctx.Err() != nil:
+		return -1
+	case errors.As(err, &ee):
+		return ee.ExitCode()
+	case err != nil:
+		fmt.Fprintf(out, "nagi: %v\n", err)
+		return -1
+	}
+	return 0
 }

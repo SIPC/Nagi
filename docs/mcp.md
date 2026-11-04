@@ -39,7 +39,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面两个选项收窄。成员的角色、范围改了，令牌立即跟着变。
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
-- 高权限操作（节点终端、节点文件，见 [node-access.md](node-access.md#权限)）一律不能用令牌。
+  - **节点终端**：默认不勾，只有管理员的个人访问令牌能勾，要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）。OAuth 授权没有这一项。成员降为操作员后，令牌上的这一项随之失效。
+- 节点文件（见 [node-access.md](node-access.md#权限)）一律不能用令牌。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
 ### 个人访问令牌
@@ -80,13 +81,13 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 工具不直接调用业务代码，而是在进程内调用面板自己的 Connect 接口：MCP 层验证令牌后，把令牌对应的成员放进请求的 ctx，通过内存里的传输调用同一个 mux（不经过网络，所以不能伪造）。这样现有的拦截器全部照常生效，不用为 MCP 再写一遍：
 
 - 角色检查、访问范围、高权限确认（令牌没有高权限，相关接口一律拒绝）、备用面板只读。
-- 活动记录：`activity` 加一列 `via`，网页为空，MCP 写 `mcp:<令牌名>`，活动记录页显示「通过 MCP（令牌名）」。`exec` 不走接口，单独记一条，详情是命令本身，退出码不为 0 时接在后面。
+- 活动记录：`activity` 加一列 `via`，网页为空，MCP 写 `mcp:<令牌名>`，活动记录页显示「通过 MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条，详情是命令本身，退出码不为 0 时接在后面。
 - 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行。
 - 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec`。
 
 ## 工具
 
-按任务设计，不把 90 多个接口一一暴露：工具太多 agent 选不准。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具和 `exec`。
+按任务设计，不把 90 多个接口一一暴露：工具太多 agent 选不准。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具、`exec` 和 `node_exec`。
 
 ### 查看
 
@@ -125,7 +126,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启 | `ControlContainer` |
-| `rollback` | 回到某个版本，只回配置和文件，不恢复数据 | `Rollback` |
+| `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、跨节点入口） | `SaveRoute` |
@@ -133,6 +134,25 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 立即同步到备份节点，同步完才返回 | `SyncBackup` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
+
+### 不可逆或会中断服务的操作
+
+都分两步：不带 `confirm` 只返回预览（会发生什么、会丢什么），agent 给用户看过、用户同意后，再把 `confirm` 原样填成说明里写的值调用一次才执行。都标为 `destructiveHint`。
+
+| 工具 | 内容 | `confirm` 填 | 用到的接口 |
+| --- | --- | --- | --- |
+| `delete_container` | 停止并删除容器，连同版本和端口映射。容器目录默认保留，`delete_dir` 时一起删除。预览列出相关的端口映射和依赖它的容器 | 容器名 | `DeleteContainer` |
+| `delete_project` | 删除项目和全部容器。容器目录默认保留，`delete_dirs` 时一起删除 | 项目名 | `DeleteProject` |
+| `restore_deployment` | 回到某次部署时的状态：版本不一样的容器回滚到那次的版本，一起部署，不恢复数据。预览列出每个容器的版本变化 | 部署记录 ID | `ListDeployments`、`RestoreDeployment` |
+| `set_backup_node` | 设置备份节点（立即生效，不用确认）；`node` 留空时取消，取消要先预览，`delete_replica` 时同时删除备份节点上的副本 | 容器名（取消时） | `SetBackupNode` |
+| `restore_from_backup` | 原节点离线时，在备份节点上用副本里的快照把容器恢复出来，之后写入的数据会丢。预览写明会用哪一份快照 | 容器名 | `ListBackupSnapshots`、`RestoreFromBackup` |
+| `migrate_container` | 把容器迁移到另一个节点，不丢数据，最后一次同步时短暂停止。两个节点都要在线 | 目标节点名 | `MigrateContainer` |
+| `redeploy_elsewhere` | 原节点离线、又没有副本时的最后手段：在另一个节点上重新部署，数据为空、旧版本不能回滚 | 目标节点名 | `RedeployElsewhere` |
+| `set_failover` | 设置顶替节点和见证人。有状态的容器默认等 `confirm_takeover` | 顶替节点名 | `SetFailover` |
+| `clear_failover` | 取消顶替 | 容器名 | `ClearFailover` |
+| `confirm_takeover` | 有状态容器的节点失联、热备在等确认时，让热备用最近同步的数据顶替 | 容器名 | `ConfirmTakeover` |
+
+`change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
 
 ### 文件
 
@@ -145,14 +165,24 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
 | `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
+| `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |
 
-不提供删除和改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`），带着卷和路径。`create_dir`、`restore_file` 会修改卷，令牌还要勾「可修改」。文件内容和日志一样当作不可信数据。
+不提供改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file` 会修改卷，令牌还要勾「可修改」。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`write_file`、`restore_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+### 节点命令
+
+`node_exec` 以 root 身份在节点上执行一条命令，等它结束，返回输出（最多 64 KB）和退出码。默认 30 秒、最长 120 秒超时，到时结束整个进程组。这等于把整台机器交给 agent，所以比网页的节点终端还多几道限制：
+
+- 只有管理员能用，令牌要勾「节点终端」（只有管理员的个人访问令牌能勾，生成前要做高权限确认）。没勾的令牌看不到这个工具。
+- 节点在本地关闭了节点访问（`nagi node access disable`）时拒绝，面板没法替节点打开。备用面板上没有这个工具。
+- 每次执行都记进活动记录（`NodeExec`，详情是命令和退出码），并向告警配置里的渠道发一条通知（不带命令内容）；节点也记一条本地日志，带面板指纹、用户名和令牌名。
+- shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
+- 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。文件内容和日志一样当作不可信数据。
+
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 
-- 不可逆或会中断服务的操作，计划下一步加上，统一先预览、确认后执行：删除项目和容器、回到某次部署、回滚时恢复数据、删除卷里的文件、设置备份节点、迁移、重新部署到其他节点、从备份节点恢复、顶替的设置和确认顶替。
 - 整个集群和面板的管理，计划之后只给管理员：节点管理和磁盘清理、节点上的文件、面板设置（包括告警）、成员。
 - 一直不提供：初始化、登录、提升权限、改密码、两步验证、会话、OAuth 授权、访问令牌，以及会把凭据放进对话的操作（邀请链接、节点加入命令、备用面板配对码、备份密钥）、安全入口。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 

@@ -387,6 +387,8 @@ message AccessToken {
   // 没用过时为空。
   google.protobuf.Timestamp last_used_at = 8;
   string last_ip = 9;
+  // 可以在节点上执行命令（MCP 的 node_exec），只有管理员的个人访问令牌能有。
+  bool allow_node_exec = 10;
 }
 
 message ListAccessTokensRequest {
@@ -403,6 +405,8 @@ message CreateAccessTokenRequest {
   uint32 days = 2;
   bool allow_write = 3;
   bool allow_exec = 4;
+  // 可以在节点上执行命令（等于节点的 root）。只有管理员能勾选。
+  bool allow_node_exec = 5;
 }
 
 message CreateAccessTokenResponse {

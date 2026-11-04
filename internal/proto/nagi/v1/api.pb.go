@@ -2508,8 +2508,10 @@ type AccessToken struct {
 	// 为空表示不过期。OAuth 是整个授权的有效期。
 	ExpiresAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	// 没用过时为空。
-	LastUsedAt    *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_used_at,json=lastUsedAt,proto3" json:"last_used_at,omitempty"`
-	LastIp        string                 `protobuf:"bytes,9,opt,name=last_ip,json=lastIp,proto3" json:"last_ip,omitempty"`
+	LastUsedAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_used_at,json=lastUsedAt,proto3" json:"last_used_at,omitempty"`
+	LastIp     string                 `protobuf:"bytes,9,opt,name=last_ip,json=lastIp,proto3" json:"last_ip,omitempty"`
+	// 可以在节点上执行命令（MCP 的 node_exec），只有管理员的个人访问令牌能有。
+	AllowNodeExec bool `protobuf:"varint,10,opt,name=allow_node_exec,json=allowNodeExec,proto3" json:"allow_node_exec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2607,6 +2609,13 @@ func (x *AccessToken) GetLastIp() string {
 	return ""
 }
 
+func (x *AccessToken) GetAllowNodeExec() bool {
+	if x != nil {
+		return x.AllowNodeExec
+	}
+	return false
+}
+
 type ListAccessTokensRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2699,9 +2708,11 @@ type CreateAccessTokenRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// 有效期（天），0 表示不过期。
-	Days          uint32 `protobuf:"varint,2,opt,name=days,proto3" json:"days,omitempty"`
-	AllowWrite    bool   `protobuf:"varint,3,opt,name=allow_write,json=allowWrite,proto3" json:"allow_write,omitempty"`
-	AllowExec     bool   `protobuf:"varint,4,opt,name=allow_exec,json=allowExec,proto3" json:"allow_exec,omitempty"`
+	Days       uint32 `protobuf:"varint,2,opt,name=days,proto3" json:"days,omitempty"`
+	AllowWrite bool   `protobuf:"varint,3,opt,name=allow_write,json=allowWrite,proto3" json:"allow_write,omitempty"`
+	AllowExec  bool   `protobuf:"varint,4,opt,name=allow_exec,json=allowExec,proto3" json:"allow_exec,omitempty"`
+	// 可以在节点上执行命令（等于节点的 root）。只有管理员能勾选。
+	AllowNodeExec bool `protobuf:"varint,5,opt,name=allow_node_exec,json=allowNodeExec,proto3" json:"allow_node_exec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2760,6 +2771,13 @@ func (x *CreateAccessTokenRequest) GetAllowWrite() bool {
 func (x *CreateAccessTokenRequest) GetAllowExec() bool {
 	if x != nil {
 		return x.AllowExec
+	}
+	return false
+}
+
+func (x *CreateAccessTokenRequest) GetAllowNodeExec() bool {
+	if x != nil {
+		return x.AllowNodeExec
 	}
 	return false
 }
@@ -8966,7 +8984,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x1bCreateEnrollCommandResponse\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x129\n" +
 	"\n" +
-	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xd6\x02\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xfe\x02\n" +
 	"\vAccessToken\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -8981,18 +8999,21 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12<\n" +
 	"\flast_used_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastUsedAt\x12\x17\n" +
-	"\alast_ip\x18\t \x01(\tR\x06lastIp\"2\n" +
+	"\alast_ip\x18\t \x01(\tR\x06lastIp\x12&\n" +
+	"\x0fallow_node_exec\x18\n" +
+	" \x01(\bR\rallowNodeExec\"2\n" +
 	"\x17ListAccessTokensRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\"H\n" +
 	"\x18ListAccessTokensResponse\x12,\n" +
-	"\x06tokens\x18\x01 \x03(\v2\x14.nagi.v1.AccessTokenR\x06tokens\"\x82\x01\n" +
+	"\x06tokens\x18\x01 \x03(\v2\x14.nagi.v1.AccessTokenR\x06tokens\"\xaa\x01\n" +
 	"\x18CreateAccessTokenRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04days\x18\x02 \x01(\rR\x04days\x12\x1f\n" +
 	"\vallow_write\x18\x03 \x01(\bR\n" +
 	"allowWrite\x12\x1d\n" +
 	"\n" +
-	"allow_exec\x18\x04 \x01(\bR\tallowExec\"_\n" +
+	"allow_exec\x18\x04 \x01(\bR\tallowExec\x12&\n" +
+	"\x0fallow_node_exec\x18\x05 \x01(\bR\rallowNodeExec\"_\n" +
 	"\x19CreateAccessTokenResponse\x12*\n" +
 	"\x05token\x18\x01 \x01(\v2\x14.nagi.v1.AccessTokenR\x05token\x12\x16\n" +
 	"\x06secret\x18\x02 \x01(\tR\x06secret\"*\n" +

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -675,6 +676,9 @@ func toolControl(c *call, in ControlArgs) (any, error) {
 type RollbackArgs struct {
 	ContainerArg
 	Version int64 `json:"version" jsonschema:"version to go back to (see get_container's recent_versions)"`
+	// 同时恢复数据：用这个版本被替换前拍的部署前快照，之后写入的数据会丢，所以要先预览。
+	RestoreData bool   `json:"restore_data,omitempty" jsonschema:"also restore the data (volumes and preserved paths) to how it was before this version was replaced, from the predeploy snapshot; data written since is lost. Needs confirm"`
+	Confirm     string `json:"confirm,omitempty" jsonschema:"with restore_data: omit to get a preview, then repeat the version here (as text) after the user agreed"`
 }
 
 func toolRollback(c *call, in RollbackArgs) (any, error) {
@@ -682,8 +686,12 @@ func toolRollback(c *call, in RollbackArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if v := strconv.FormatInt(in.Version, 10); in.RestoreData && in.Confirm != v {
+		return preview("rollback", v, fmt.Sprintf("container %s goes back to version %d (configuration, files and image) and its data is restored to how it was before version %d was replaced. Data written since then is lost. The container is stopped during the restore.",
+			m.GetName(), in.Version, in.Version), nil), nil
+	}
 	return c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
-		return c.h.clients.projects.Rollback(ctx, connect.NewRequest(&nagiv1.RollbackRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Version: in.Version}))
+		return c.h.clients.projects.Rollback(ctx, connect.NewRequest(&nagiv1.RollbackRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Version: in.Version, RestoreData: in.RestoreData}))
 	})
 }
 
@@ -904,4 +912,52 @@ func toolExec(c *call, in ExecArgs) (any, error) {
 		Truncated bool   `json:"output_truncated,omitempty"`
 		Output    string `json:"output"`
 	}{res.ExitCode, res.TimedOut, res.Truncated, res.Output}, nil
+}
+
+// ---- 节点命令 ----
+
+type NodeExecArgs struct {
+	Node           string `json:"node" jsonschema:"node name or ID (see list_nodes)"`
+	Command        string `json:"command" jsonschema:"shell command, run as root with the login shell (sh -lc)"`
+	Cwd            string `json:"cwd,omitempty" jsonschema:"working directory; default root's home"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"default 30, at most 120; the whole process group is killed at the timeout"`
+}
+
+// toolNodeExec 在节点上执行一条命令（见 docs/mcp.md#节点命令）。权限在 api.RunNodeCommand 里再查一遍。
+func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
+	if strings.TrimSpace(in.Command) == "" {
+		return nil, errors.New("command is empty")
+	}
+	nodes, err := c.nodes()
+	if err != nil {
+		return nil, err
+	}
+	n, err := findNode(nodes, in.Node)
+	if err != nil {
+		return nil, err
+	}
+	timeout := 30 * time.Second
+	if in.TimeoutSeconds > 0 {
+		timeout = time.Duration(min(in.TimeoutSeconds, 120)) * time.Second
+	}
+	res, err := c.h.o.NodeExec(auth.WithUser(c.ctx, c.u), n.GetId(), in.Command, in.Cwd, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return struct {
+		Node      string `json:"node"`
+		ExitCode  int32  `json:"exit_code"`
+		TimedOut  bool   `json:"timed_out,omitempty"`
+		Truncated bool   `json:"output_truncated,omitempty"`
+		Output    string `json:"output"`
+		Note      string `json:"note,omitempty"`
+	}{n.GetName(), res.ExitCode, res.TimedOut, res.Truncated, res.Output, inContainerNote(n)}, nil
+}
+
+// inContainerNote：节点跑在容器里时，命令进的是这个容器，不是主机。
+func inContainerNote(n *nagiv1.Node) string {
+	if n.GetInfo().GetInContainer() {
+		return "this node runs inside a container: the command ran in that container, not on the host"
+	}
+	return ""
 }

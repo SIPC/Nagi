@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -88,6 +89,51 @@ func (a *agent) newNodeFiles() *nodefiles.Service {
 		BackupDir:  filepath.Join(a.cfg.DataDir, "file-backups"),
 		StagingDir: filepath.Join(a.cfg.DataDir, "node-files-staging"),
 	}
+}
+
+// nodeExecMax 是节点命令最长的执行时间，面板给的超时不会超过它。
+const nodeExecMax = 10 * time.Minute
+
+// streamWriter 把命令的输出按块发给面板。
+type streamWriter struct {
+	mu   sync.Mutex
+	send func(*nagiv1.ExecOutput) error
+}
+
+func (w *streamWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if err := w.send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_Stdout{Stdout: append([]byte(nil), p...)}}); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// NodeExec 在节点上执行一条命令（MCP 的 node_exec）。和终端共用节点访问的开关和数量上限，也记一条本地日志。
+func (s *agentService) NodeExec(req *nagiv1.NodeExecRequest, stream nagiv1.AgentService_NodeExecServer) error {
+	if err := s.node.checkNodeAccess(); err != nil {
+		return err
+	}
+	if req.GetCommand() == "" {
+		return status.Error(codes.InvalidArgument, "命令不能为空")
+	}
+	if activeNodeShells.Add(1) > maxNodeShells {
+		activeNodeShells.Add(-1)
+		return status.Errorf(codes.ResourceExhausted, "终端数量已达上限（%d 个）", maxNodeShells)
+	}
+	defer activeNodeShells.Add(-1)
+	timeout := min(time.Duration(req.GetTimeoutSeconds())*time.Second, nodeExecMax)
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(stream.Context(), timeout)
+	defer cancel()
+	// 面板的记录被篡改时还能在节点上查。命令本身也记下。
+	log := s.node.log.With("panel", s.panel, "user", req.GetActor())
+	log.Info("在节点上执行命令", "command", req.GetCommand())
+	code := runNodeCommand(ctx, req.GetCwd(), req.GetCommand(), &streamWriter{send: stream.Send})
+	log.Info("节点命令结束", "exit_code", code)
+	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
 }
 
 func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) error {

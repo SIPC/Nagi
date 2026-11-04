@@ -20,6 +20,8 @@ type AccessToken struct {
 	PrevRefreshHash  string
 	AllowWrite       bool
 	AllowExec        bool
+	// AllowNodeExec：可以在节点上执行命令（只给管理员的个人访问令牌）。
+	AllowNodeExec    bool
 	CreatedAt        int64
 	ExpiresAt        int64
 	RefreshExpiresAt int64
@@ -28,14 +30,14 @@ type AccessToken struct {
 }
 
 const accessTokenColumns = `id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash,
-	allow_write, allow_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip`
+	allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip`
 
 func scanAccessToken(row interface{ Scan(...any) error }) (AccessToken, error) {
 	var t AccessToken
-	var write, exec int64
+	var write, exec, nodeExec int64
 	err := row.Scan(&t.ID, &t.UserID, &t.Name, &t.Source, &t.ClientID, &t.TokenHash, &t.RefreshHash, &t.PrevRefreshHash,
-		&write, &exec, &t.CreatedAt, &t.ExpiresAt, &t.RefreshExpiresAt, &t.LastUsedAt, &t.LastIP)
-	t.AllowWrite, t.AllowExec = write != 0, exec != 0
+		&write, &exec, &nodeExec, &t.CreatedAt, &t.ExpiresAt, &t.RefreshExpiresAt, &t.LastUsedAt, &t.LastIP)
+	t.AllowWrite, t.AllowExec, t.AllowNodeExec = write != 0, exec != 0, nodeExec != 0
 	return t, err
 }
 
@@ -49,8 +51,8 @@ func flag(b bool) int64 {
 // InsertAccessToken 保存新令牌，返回 ID。
 func (q *Queries) InsertAccessToken(ctx context.Context, t AccessToken) (int64, error) {
 	res, err := q.db.ExecContext(ctx, `INSERT INTO api_tokens (user_id, name, source, client_id, token_hash, refresh_hash,
-		allow_write, allow_exec, created_at, expires_at, refresh_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.UserID, t.Name, t.Source, t.ClientID, t.TokenHash, t.RefreshHash, flag(t.AllowWrite), flag(t.AllowExec),
+		allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.UserID, t.Name, t.Source, t.ClientID, t.TokenHash, t.RefreshHash, flag(t.AllowWrite), flag(t.AllowExec), flag(t.AllowNodeExec),
 		t.CreatedAt, t.ExpiresAt, t.RefreshExpiresAt)
 	if err != nil {
 		return 0, err
