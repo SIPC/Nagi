@@ -5,14 +5,16 @@
 package nodestore
 
 type Container struct {
-	ProjectID       string
-	Name            string
-	Dir             string
-	Spec            []byte
-	FilesRoot       string
-	LastSnapshot    int64
-	LastMaintenance int64
-	CreatedAt       int64
+	ProjectID        string
+	Name             string
+	Dir              string
+	Spec             []byte
+	FilesRoot        string
+	LastSnapshot     int64
+	LastMaintenance  int64
+	CreatedAt        int64
+	SnapshotFailures int64
+	SnapshotRetryAt  int64
 }
 
 type MetricsM5 struct {

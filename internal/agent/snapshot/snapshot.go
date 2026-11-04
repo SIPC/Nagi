@@ -175,7 +175,10 @@ func (r *Repo) CreateWithRoot(ctx context.Context, kind Kind, dirs []Dir, ignore
 
 	var id manifest.ID
 	var rootID string
-	err := repo.WriteSession(ctx, r.rep, repo.WriteSessionOptions{Purpose: "nagi snapshot"}, func(ctx context.Context, w repo.RepositoryWriter) error {
+	// 失败（超时、取消）时也提交已经写好的内容：下次重试直接复用，不会每次重新上传、留下一批新的数据包
+	// （见 docs/snapshot.md#失败与退避）。会话用不随调用方取消的 ctx，否则超时以后提交也会失败；上传和读写记录用调用方的 ctx。
+	// 快照记录和保留规则在上传完整以后才写，所以失败时不会留下不完整的快照。
+	err := repo.WriteSession(context.WithoutCancel(ctx), r.rep, repo.WriteSessionOptions{Purpose: "nagi snapshot", FlushOnFailure: true}, func(_ context.Context, w repo.RepositoryWriter) error {
 		prev, err := snapshot.ListSnapshots(ctx, w, si)
 		if err != nil {
 			return err

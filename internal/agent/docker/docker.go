@@ -6,6 +6,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/netip"
 	"regexp"
@@ -359,30 +361,57 @@ func (e *Exec) ExitCode(ctx context.Context) int {
 func (e *Exec) Close() { e.conn.Close() }
 
 // Pause 暂停带某个标签的所有正在运行的容器，返回恢复函数。用于快照时保证数据一致。
-func (d *Client) Pause(ctx context.Context, label string) (func(), error) {
+// 恢复函数可以调用多次，只有第一次生效，之后返回同样的结果：快照到时间时先恢复，函数返回时再兜底调用一次。
+func (d *Client) Pause(ctx context.Context, label string) (func() error, error) {
 	containers, err := d.Instances(ctx, label)
 	if err != nil {
 		return nil, err
 	}
 	var paused []string
-	resume := func() {
-		// 恢复不受调用方 ctx 取消的影响，一定要执行。
-		bg := context.WithoutCancel(ctx)
-		for _, id := range paused {
-			_, _ = d.c.ContainerUnpause(bg, id, client.ContainerUnpauseOptions{})
-		}
+	var once sync.Once
+	var resumeErr error
+	resume := func() error {
+		once.Do(func() { resumeErr = d.unpause(context.WithoutCancel(ctx), paused) })
+		return resumeErr
 	}
 	for _, c := range containers {
 		if c.State != "running" {
 			continue
 		}
 		if _, err := d.c.ContainerPause(ctx, c.ID, client.ContainerPauseOptions{}); err != nil {
-			resume()
-			return nil, err
+			return nil, errors.Join(err, resume())
 		}
 		paused = append(paused, c.ID)
 	}
 	return resume, nil
+}
+
+// unpause 恢复暂停的容器并确认：每个容器最多试 3 次，每次限时 20 秒；恢复不了的报错，不能当作已经恢复。
+// ctx 不应随调用方取消（恢复一定要做）。
+func (d *Client) unpause(ctx context.Context, ids []string) error {
+	var errs []error
+	for _, id := range ids {
+		var err error
+		for i := 0; i < 3; i++ {
+			c, cancel := context.WithTimeout(ctx, 20*time.Second)
+			_, err = d.c.ContainerUnpause(c, id, client.ContainerUnpauseOptions{})
+			if err == nil || strings.Contains(err.Error(), "is not paused") {
+				var st client.ContainerInspectResult
+				if st, err = d.c.ContainerInspect(c, id, client.ContainerInspectOptions{}); err == nil && st.Container.State != nil && st.Container.State.Paused {
+					err = errors.New("容器仍处于暂停状态")
+				}
+			}
+			cancel()
+			if err == nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("恢复容器 %.12s 失败：%w", id, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ProjectImages 返回项目每个服务正在使用的镜像，优先用带摘要的形式（repo@sha256:...），

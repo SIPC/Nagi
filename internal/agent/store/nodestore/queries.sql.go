@@ -89,7 +89,7 @@ func (q *Queries) DeleteSubnet(ctx context.Context, owner string) error {
 }
 
 const getContainer = `-- name: GetContainer :one
-SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers WHERE project_id = ? AND name = ?
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at, snapshot_failures, snapshot_retry_at FROM containers WHERE project_id = ? AND name = ?
 `
 
 type GetContainerParams struct {
@@ -109,6 +109,8 @@ func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Con
 		&i.LastSnapshot,
 		&i.LastMaintenance,
 		&i.CreatedAt,
+		&i.SnapshotFailures,
+		&i.SnapshotRetryAt,
 	)
 	return i, err
 }
@@ -169,7 +171,7 @@ func (q *Queries) InsertSubnet(ctx context.Context, arg InsertSubnetParams) erro
 }
 
 const listContainers = `-- name: ListContainers :many
-SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers ORDER BY created_at, project_id, name
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at, snapshot_failures, snapshot_retry_at FROM containers ORDER BY created_at, project_id, name
 `
 
 func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
@@ -190,6 +192,8 @@ func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
 			&i.LastSnapshot,
 			&i.LastMaintenance,
 			&i.CreatedAt,
+			&i.SnapshotFailures,
+			&i.SnapshotRetryAt,
 		); err != nil {
 			return nil, err
 		}
@@ -205,7 +209,7 @@ func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
 }
 
 const listProjectContainers = `-- name: ListProjectContainers :many
-SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at FROM containers WHERE project_id = ? ORDER BY created_at, name
+SELECT project_id, name, dir, spec, files_root, last_snapshot, last_maintenance, created_at, snapshot_failures, snapshot_retry_at FROM containers WHERE project_id = ? ORDER BY created_at, name
 `
 
 func (q *Queries) ListProjectContainers(ctx context.Context, projectID string) ([]Container, error) {
@@ -226,6 +230,8 @@ func (q *Queries) ListProjectContainers(ctx context.Context, projectID string) (
 			&i.LastSnapshot,
 			&i.LastMaintenance,
 			&i.CreatedAt,
+			&i.SnapshotFailures,
+			&i.SnapshotRetryAt,
 		); err != nil {
 			return nil, err
 		}
@@ -365,8 +371,29 @@ func (q *Queries) SetContainerMaintenanceTime(ctx context.Context, arg SetContai
 	return err
 }
 
+const setContainerSnapshotRetry = `-- name: SetContainerSnapshotRetry :exec
+UPDATE containers SET snapshot_failures = ?, snapshot_retry_at = ? WHERE project_id = ? AND name = ?
+`
+
+type SetContainerSnapshotRetryParams struct {
+	SnapshotFailures int64
+	SnapshotRetryAt  int64
+	ProjectID        string
+	Name             string
+}
+
+func (q *Queries) SetContainerSnapshotRetry(ctx context.Context, arg SetContainerSnapshotRetryParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerSnapshotRetry,
+		arg.SnapshotFailures,
+		arg.SnapshotRetryAt,
+		arg.ProjectID,
+		arg.Name,
+	)
+	return err
+}
+
 const setContainerSnapshotTime = `-- name: SetContainerSnapshotTime :exec
-UPDATE containers SET last_snapshot = ? WHERE project_id = ? AND name = ?
+UPDATE containers SET last_snapshot = ?, snapshot_failures = 0, snapshot_retry_at = 0 WHERE project_id = ? AND name = ?
 `
 
 type SetContainerSnapshotTimeParams struct {

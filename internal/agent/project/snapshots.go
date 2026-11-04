@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/compose"
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -26,7 +27,18 @@ const (
 	pauseLimit          = 30 * time.Second
 	failoverSnapshotGap = 15 * time.Minute
 	maintainGap         = 24 * time.Hour
+	// maintainRetry 是仓库维护失败以后多久再试。
+	maintainRetry = time.Hour
+	// 磁盘剩余空间低于这两个值之一时跳过定时快照，免得把磁盘写满（见 docs/snapshot.md#失败与退避）。
+	minFreeBytes   = 2 << 30
+	minFreePercent = 5
 )
+
+// snapshotBackoff 是定时快照连续失败以后的重试间隔：第 1、2、3 次及以后。不会超过快照间隔本身。
+var snapshotBackoff = []time.Duration{5 * time.Minute, 15 * time.Minute, 30 * time.Minute, 60 * time.Minute}
+
+// errNotDue：拿到锁以后再看，已经不用做了（例如刚做过一份手动快照）。
+var errNotDue = errors.New("还没到时间")
 
 var snapshotIgnore = []string{"/data/.checkout/", "/data/.restore/"}
 
@@ -40,7 +52,8 @@ func (m *Manager) openRepo(ctx context.Context, s *nagiv1.ContainerSpec) (*snaps
 	return rep, nil
 }
 
-// snapshotWithPause 做一份快照。有状态时暂停 label 选出的容器，超过 30 秒就放弃本次快照并恢复容器。
+// snapshotWithPause 做一份快照。有状态时暂停 label 选出的容器，30 秒内没做完就放弃本次快照。
+// 到 30 秒就恢复容器，不等快照返回：本地读写不一定马上响应取消。恢复失败要报出来，不能当作已经恢复。
 func (m *Manager) snapshotWithPause(ctx context.Context, rep *snapshot.Repo, label string, kind snapshot.Kind, dirs []snapshot.Dir, ignore []string, tags map[string]string, stateful bool, onLine func(string)) (string, error) {
 	if !stateful {
 		return rep.Create(ctx, kind, dirs, ignore, tags)
@@ -49,13 +62,24 @@ func (m *Manager) snapshotWithPause(ctx context.Context, rep *snapshot.Repo, lab
 	if err != nil {
 		return "", fmt.Errorf("暂停容器: %w", err)
 	}
-	defer resume()
+	began := time.Now()
 	onLine("已暂停容器，正在保存快照")
 	sctx, cancel := context.WithTimeout(ctx, pauseLimit)
 	defer cancel()
+	timer := time.AfterFunc(pauseLimit, func() { _ = resume() })
 	sid, err := rep.Create(sctx, kind, dirs, ignore, tags)
+	timer.Stop()
+	resumeErr := resume()
 	if errors.Is(sctx.Err(), context.DeadlineExceeded) {
-		return "", fmt.Errorf("暂停超过 %d 秒，已放弃本次快照并恢复容器", int(pauseLimit.Seconds()))
+		// 超时以后才写完的快照，后半段是在容器恢复以后读的，数据可能不一致，不留。
+		if sid != "" {
+			_ = rep.Delete(context.WithoutCancel(ctx), sid)
+		}
+		err = fmt.Errorf("暂停达到 %d 秒仍未完成，已放弃本次快照（用时 %s，已写入的内容下次复用）", int(pauseLimit.Seconds()), time.Since(began).Round(time.Second))
+		sid = ""
+	}
+	if resumeErr != nil {
+		return "", errors.Join(fmt.Errorf("恢复容器失败，请立即检查容器状态：%w", resumeErr), err)
 	}
 	return sid, err
 }
@@ -90,39 +114,104 @@ func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string,
 	if err != nil {
 		return "", err
 	}
-	_ = m.nodeQ.SetContainerSnapshotTime(ctx, nodestore.SetContainerSnapshotTimeParams{LastSnapshot: time.Now().Unix(), ProjectID: projectID, Name: container})
+	// 记下时间并清掉失败退避。记不下来时，下一分钟会被当成还没做，所以要报出来。
+	if err := m.nodeQ.SetContainerSnapshotTime(ctx, nodestore.SetContainerSnapshotTimeParams{LastSnapshot: time.Now().Unix(), ProjectID: projectID, Name: container}); err != nil {
+		return sid, fmt.Errorf("快照已保存，但记录快照时间失败：%w", err)
+	}
 	onLine("快照已保存")
 	return sid, nil
 }
 
-// SnapshotDue 给到了间隔时间、部署过的容器做定时快照。由节点每分钟调用一次。
-func (m *Manager) SnapshotDue(ctx context.Context, onResult func(projectID, container string, err error)) {
+// snapshotGap 是容器的定时快照间隔。设置了顶替的容器每 15 分钟一次（与同步给热备的频率一致），除非用户设得更短。
+func (m *Manager) snapshotGap(s *nagiv1.ContainerSpec) time.Duration {
+	gap := time.Duration(spec.SnapshotIntervalMinutes(s.GetSnapshotIntervalMinutes())) * time.Minute
+	if m.FastSnapshot != nil && m.FastSnapshot(s.GetProjectId(), s.GetName()) && gap > failoverSnapshotGap {
+		gap = failoverSnapshotGap
+	}
+	return gap
+}
+
+// snapshotDue：到了间隔时间，而且不在失败退避里。
+func (m *Manager) snapshotDue(c *Cached, now time.Time) bool {
+	return now.Sub(c.LastSnapshot) >= m.snapshotGap(c.Spec) && !now.Before(c.SnapshotRetryAt)
+}
+
+// retryDelay 是第 failures 次连续失败以后等多久再试：按 snapshotBackoff 逐级拉长，不超过快照间隔（至少 5 分钟）。
+func retryDelay(failures int64, gap time.Duration) time.Duration {
+	d := snapshotBackoff[min(int(max(failures, 1))-1, len(snapshotBackoff)-1)]
+	return min(d, max(gap, snapshotBackoff[0]))
+}
+
+// lowDisk 检查容器目录所在磁盘的剩余空间，不够时返回原因。读不到时不拦。
+func lowDisk(dir string) string {
+	total, free := metrics.DiskSpace(dir)
+	if total <= 0 || free >= minFreeBytes && free*100 >= total*minFreePercent {
+		return ""
+	}
+	return fmt.Sprintf("磁盘剩余空间不足（剩余 %.1f GiB，共 %.1f GiB），已跳过定时快照", float64(free)/(1<<30), float64(total)/(1<<30))
+}
+
+// scheduledSnapshot 做一份定时快照。拿到锁以后重新核对是否到期，失败时记下次数和下次重试的时间（存在节点数据库里，重启后照样生效）。
+func (m *Manager) scheduledSnapshot(ctx context.Context, projectID, container string) error {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
+	c, err := m.Get(ctx, projectID, container)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	if c.Spec.GetVersion() == 0 || !m.snapshotDue(c, now) {
+		return errNotDue
+	}
+	if msg := lowDisk(c.Spec.GetDir()); msg != "" {
+		err = errors.New(msg)
+	} else {
+		_, err = m.takeSnapshot(ctx, projectID, container, snapshot.Scheduled, nil, func(string) {})
+	}
+	if err == nil {
+		return nil
+	}
+	failures := c.SnapshotFailures + 1
+	delay := retryDelay(failures, m.snapshotGap(c.Spec))
+	if serr := m.nodeQ.SetContainerSnapshotRetry(ctx, nodestore.SetContainerSnapshotRetryParams{
+		SnapshotFailures: failures, SnapshotRetryAt: now.Add(delay).Unix(), ProjectID: projectID, Name: container,
+	}); serr != nil {
+		err = errors.Join(err, fmt.Errorf("记录重试时间失败：%w", serr))
+	}
+	return fmt.Errorf("%w（连续第 %d 次失败，%d 分钟后重试）", err, failures, int(delay.Minutes()))
+}
+
+// SnapshotDue 由节点每分钟调用一次：给到期的容器做定时快照，再给到期的仓库做维护。两件事各自判断：
+// 快照一直失败时维护照样做，失败留下的数据才能回收。task 是 "snapshot" 或 "maintain"。
+func (m *Manager) SnapshotDue(ctx context.Context, onResult func(projectID, container, task string, err error)) {
 	for _, c := range m.List(ctx) {
 		s := c.Spec
 		if s.GetVersion() == 0 {
 			continue
 		}
-		gap := time.Duration(spec.SnapshotIntervalMinutes(s.GetSnapshotIntervalMinutes())) * time.Minute
-		// 设置了顶替的容器每 15 分钟一次（与同步给热备的频率一致），除非用户设得更短。
-		if m.FastSnapshot != nil && m.FastSnapshot(s.GetProjectId(), s.GetName()) && gap > failoverSnapshotGap {
-			gap = failoverSnapshotGap
-		}
-		if time.Since(c.LastSnapshot) < gap {
-			continue
-		}
-		_, err := m.TakeSnapshot(ctx, s.GetProjectId(), s.GetName(), snapshot.Scheduled, func(string) {})
-		if err == nil && time.Since(c.LastMaintain) >= maintainGap {
-			if err = m.maintain(ctx, s); err != nil {
-				err = fmt.Errorf("快照仓库维护: %w", err)
+		if m.snapshotDue(c, time.Now()) {
+			if err := m.scheduledSnapshot(ctx, s.GetProjectId(), s.GetName()); !errors.Is(err, errNotDue) && onResult != nil {
+				onResult(s.GetProjectId(), s.GetName(), "snapshot", err)
 			}
 		}
-		if onResult != nil {
-			onResult(s.GetProjectId(), s.GetName(), err)
+		if time.Since(c.LastMaintain) >= maintainGap {
+			err := m.maintain(ctx, s)
+			if err != nil {
+				// 失败了过一小时再试：把上次维护的时间记成「再过 maintainRetry 就满 24 小时」。
+				_ = m.nodeQ.SetContainerMaintenanceTime(ctx, nodestore.SetContainerMaintenanceTimeParams{
+					LastMaintenance: time.Now().Add(maintainRetry - maintainGap).Unix(), ProjectID: s.GetProjectId(), Name: s.GetName(),
+				})
+				err = fmt.Errorf("快照仓库维护: %w", err)
+			}
+			if onResult != nil {
+				onResult(s.GetProjectId(), s.GetName(), "maintain", err)
+			}
 		}
 	}
 }
 
-// maintain 运行快照仓库维护，回收过期快照占用的空间。每个容器每天一次。
+// maintain 运行快照仓库维护，回收过期快照和失败的快照留下的空间。每个容器每天一次，不依赖快照成功。
 func (m *Manager) maintain(ctx context.Context, s *nagiv1.ContainerSpec) error {
 	l := m.lock(s.GetProjectId(), s.GetName())
 	l.Lock()

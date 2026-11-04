@@ -18,7 +18,10 @@ DELETE FROM containers WHERE project_id = ? AND name = ?;
 UPDATE containers SET files_root = ? WHERE project_id = ? AND name = ?;
 
 -- name: SetContainerSnapshotTime :exec
-UPDATE containers SET last_snapshot = ? WHERE project_id = ? AND name = ?;
+UPDATE containers SET last_snapshot = ?, snapshot_failures = 0, snapshot_retry_at = 0 WHERE project_id = ? AND name = ?;
+
+-- name: SetContainerSnapshotRetry :exec
+UPDATE containers SET snapshot_failures = ?, snapshot_retry_at = ? WHERE project_id = ? AND name = ?;
 
 -- name: SetContainerMaintenanceTime :exec
 UPDATE containers SET last_maintenance = ? WHERE project_id = ? AND name = ?;

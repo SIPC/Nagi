@@ -190,6 +190,9 @@ type Cached struct {
 	FilesRoot    string
 	LastSnapshot time.Time
 	LastMaintain time.Time
+	// 定时快照的失败退避：连续失败次数，到这个时间以前不再重试。
+	SnapshotFailures int64
+	SnapshotRetryAt  time.Time
 }
 
 func fromRow(r nodestore.Container) (*Cached, error) {
@@ -197,7 +200,8 @@ func fromRow(r nodestore.Container) (*Cached, error) {
 	if err := proto.Unmarshal(r.Spec, s); err != nil {
 		return nil, fmt.Errorf("读取容器 %s 的配置缓存: %w", r.Name, err)
 	}
-	return &Cached{Spec: s, FilesRoot: r.FilesRoot, LastSnapshot: time.Unix(r.LastSnapshot, 0), LastMaintain: time.Unix(r.LastMaintenance, 0)}, nil
+	return &Cached{Spec: s, FilesRoot: r.FilesRoot, LastSnapshot: time.Unix(r.LastSnapshot, 0), LastMaintain: time.Unix(r.LastMaintenance, 0),
+		SnapshotFailures: r.SnapshotFailures, SnapshotRetryAt: time.Unix(r.SnapshotRetryAt, 0)}, nil
 }
 
 // Get 返回缓存的容器。

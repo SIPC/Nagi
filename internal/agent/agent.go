@@ -694,7 +694,17 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		a.projects.SnapshotDue(ctx, func(projectID, container string, err error) {
+		a.projects.SnapshotDue(ctx, func(projectID, container, task string, err error) {
+			if task == "maintain" {
+				key := "maintain:" + projectID + "/" + container
+				if err == nil {
+					a.alerts.Resolve(ctx, key)
+					return
+				}
+				a.log.Warn("快照仓库维护失败", "project", projectID, "container", container, "err", err)
+				a.alerts.Fire(ctx, key, "容器 "+container+" 快照仓库维护失败", err.Error(), projectID)
+				return
+			}
 			key := "snapshot:" + projectID + "/" + container
 			if err == nil {
 				a.alerts.Resolve(ctx, key)
