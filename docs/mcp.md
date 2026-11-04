@@ -94,8 +94,12 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | --- | --- | --- |
 | `overview` | 节点在线数、容器运行数、需要处理的事（离线节点、没在运行的容器、可更新的镜像、从未部署的容器数） | `ListNodes`、`ListProjects` |
 | `list_projects` | 项目和每个容器的状态、所在节点 | `ListProjects` |
-| `get_project` | 容器、端口映射、已连接项目、共享变量名 | `GetProject` |
-| `get_container` | 配置（变量只给名称）、草稿差异、最近 5 个版本、最近 20 条事件、运行状态 | `GetProject`、`ListVersions`、`ListContainerEvents` |
+| `get_project` | 修订号、快照间隔和份数上限、内部端口、容器、端口映射、已连接项目、共享变量名（有草稿时另列草稿里的变量名） | `GetProject` |
+| `get_container` | 配置（变量只给名称，另列哪些是密钥）、草稿差异、最近 5 个版本、最近 20 条事件、运行状态 | `GetProject`、`ListVersions`、`ListContainerEvents` |
+| `list_deployments` | 项目的部署记录：时间、来源、涉及的容器和版本、是否成功 | `ListDeployments` |
+| `check_images` | 立即检查项目里的镜像有没有新版本 | `CheckImages` |
+| `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
+| `list_backup_snapshots` | 备份节点上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
 | `list_nodes` | 节点、在线、占用、容器数 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
@@ -109,16 +113,25 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
+| `update_project` | 修改项目名称、网络名、快照间隔、份数上限、内部端口，立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
+| `update_shared_env` | 设置、删除共享变量，或标为密钥，存为草稿，返回引用了改动变量的容器。用 `deploy` 的 `apply_shared_env` 生效 | `SaveSharedEnv` |
+| `discard_shared_env` | 丢弃共享变量的草稿 | `DiscardSharedEnv` |
+| `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效 | `ConnectProject`、`DisconnectProject` |
+| `login_registry`、`logout_registry` | 登录、退出项目的私有镜像仓库。密码存在面板上，不返回 | `LoginRegistry`、`LogoutRegistry` |
 | `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
-| `update_container` | 修改配置存为草稿：镜像、启动命令、变量（设置、删除）、端口、资源限制，或整份 compose。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝 | `SaveDraft` |
+| `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项 | `SaveDraft` |
+| `set_display_name` | 修改容器的显示名称 | `SetContainerDisplayName` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
-| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚 | `Deploy`、`GetProject` |
+| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启 | `ControlContainer` |
 | `rollback` | 回到某个版本，只回配置和文件，不恢复数据 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
-| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP） | `SaveRoute` |
+| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、跨节点入口） | `SaveRoute` |
+| `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
+| `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
+| `sync_backup` | 立即同步到备份节点，同步完才返回 | `SyncBackup` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
 ### 文件
@@ -127,17 +140,21 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
-| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录 | `ListVolumes`、`ListVolumeFiles` |
+| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的 | `ListVolumes`、`ListVolumeFiles` |
 | `read_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256。二进制文件和目录拒绝 | 节点的 `VolumeDownload` |
 | `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+| `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
+| `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 
-不提供删除和改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`），带着卷和路径。文件内容和日志一样当作不可信数据。
+不提供删除和改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`），带着卷和路径。`create_dir`、`restore_file` 会修改卷，令牌还要勾「可修改」。文件内容和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`exec`、`write_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`write_file`、`restore_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
-### 第一版不做
+### 还没有的
 
-删除项目和容器、删除端口映射、回滚时恢复数据、迁移、顶替和备份节点的设置、确认顶替、节点管理和磁盘清理、成员和面板设置（包括告警）、节点终端和节点上的文件、删除卷里的文件。这些要么不可逆，要么影响整个集群，等第一版用一段时间再定。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
+- 不可逆或会中断服务的操作，计划下一步加上，统一先预览、确认后执行：删除项目和容器、回到某次部署、回滚时恢复数据、删除卷里的文件、设置备份节点、迁移、重新部署到其他节点、从备份节点恢复、顶替的设置和确认顶替。
+- 整个集群和面板的管理，计划之后只给管理员：节点管理和磁盘清理、节点上的文件、面板设置（包括告警）、成员。
+- 一直不提供：初始化、登录、提升权限、改密码、两步验证、会话、OAuth 授权、访问令牌，以及会把凭据放进对话的操作（邀请链接、节点加入命令、备用面板配对码、备份密钥）、安全入口。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 
 ## 给 agent 的说明
 

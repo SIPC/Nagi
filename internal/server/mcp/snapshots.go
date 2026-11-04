@@ -50,6 +50,49 @@ func pushedOut(list []*nagiv1.Snapshot, sn *nagiv1.Snapshot, limit uint32) bool 
 	return false
 }
 
+// ---- 备份节点 ----
+
+func toolSyncBackup(c *call, in ContainerArg) (any, error) {
+	s, m, err := c.container(in)
+	if err != nil {
+		return nil, err
+	}
+	if m.GetBackupNodeId() == "" {
+		return nil, errors.New("the container has no backup node")
+	}
+	res, err := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}))
+	if err != nil {
+		return nil, err
+	}
+	after, err := findContainer(res.Msg, m.GetName())
+	if err != nil {
+		return nil, err
+	}
+	b := after.GetBackup()
+	return map[string]any{"backup_node": b.GetTargetName(), "last_sync": ts(b.GetLastSync()), "error": b.GetLastError()}, nil
+}
+
+func toolListBackupSnapshots(c *call, in ContainerArg) (any, error) {
+	s, m, err := c.container(in)
+	if err != nil {
+		return nil, err
+	}
+	if m.GetBackupNodeId() == "" {
+		return nil, errors.New("the container has no backup node")
+	}
+	res, err := c.h.clients.projects.ListBackupSnapshots(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}))
+	if err != nil {
+		return nil, err
+	}
+	out := []snapshotView{}
+	for _, sn := range res.Msg.GetSnapshots() {
+		v := view(sn)
+		v.Restorable, v.Deletable = false, false
+		out = append(out, v)
+	}
+	return map[string]any{"snapshots": out, "note": "snapshots in the copy on the backup node, as of its last sync. Restoring from the backup node is done in the web UI"}, nil
+}
+
 func (c *call) snapshots(ref *nagiv1.ContainerRef) ([]*nagiv1.Snapshot, error) {
 	res, err := c.h.clients.projects.ListSnapshots(c.ctx, connect.NewRequest(ref))
 	if err != nil {

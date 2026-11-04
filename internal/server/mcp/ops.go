@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -141,7 +142,93 @@ type AddContainerArgs struct {
 	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file"`
 	Volumes []string          `json:"volumes,omitempty" jsonschema:"paths inside an image container to persist, e.g. /var/lib/postgresql/data"`
 	Node    string            `json:"node,omitempty" jsonschema:"node name or ID; default is the online node running most of the project's containers"`
+	Dir     string            `json:"dir,omitempty" jsonschema:"container directory on the node; default <projects root>/<network name>/<container>"`
 	Deploy  bool              `json:"deploy,omitempty" jsonschema:"deploy right away; default false (call deploy separately)"`
+	configArgs
+}
+
+// configArgs 是添加和修改容器共用的配置项（update_container 里省略表示不变）。
+type configArgs struct {
+	Workdir               *string  `json:"workdir,omitempty" jsonschema:"image-form containers only: mount the container's data/ at this path inside the container as its working directory; empty string stops mounting it"`
+	MemoryMB              *uint32  `json:"memory_mb,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
+	CPUs                  *float64 `json:"cpus,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
+	HealthCommand         *string  `json:"health_command,omitempty" jsonschema:"image-form containers only: command run with sh -c inside the container, exit code 0 means healthy; empty string removes the check"`
+	HealthIntervalSeconds *uint32  `json:"health_interval_seconds,omitempty" jsonschema:"image-form containers only; 0 means the default (30)"`
+	GitURL                *string  `json:"git_url,omitempty" jsonschema:"git repository whose files go into the container's data/ (SSH with the container's deploy key, or public HTTPS); empty string removes the source"`
+	GitRef                *string  `json:"git_ref,omitempty" jsonschema:"branch or tag; empty means the repository's default branch"`
+	Preserve              []string `json:"preserved_paths,omitempty" jsonschema:"paths relative to data/ kept when files are updated, e.g. uploads/; replaces the list, [] clears it"`
+	Stateful              string   `json:"stateful,omitempty" jsonschema:"auto (default: named volumes or preserved paths make it stateful), yes or no. Stateful containers are paused for snapshots and get a predeploy snapshot"`
+	DependsOn             []string `json:"depends_on,omitempty" jsonschema:"containers deployed first when deployed together; replaces the list, [] clears it"`
+}
+
+var statefulValues = map[string]nagiv1.Stateful{"auto": nagiv1.Stateful_STATEFUL_AUTO, "yes": nagiv1.Stateful_STATEFUL_YES, "no": nagiv1.Stateful_STATEFUL_NO}
+
+// apply 把配置项写进 cfg，返回改了什么。
+func (a configArgs) apply(cfg *nagiv1.ContainerConfig) ([]string, error) {
+	var changed []string
+	if f := cfg.GetForm(); f != nil {
+		if a.Workdir != nil && *a.Workdir != f.GetWorkdir() {
+			f.Workdir = *a.Workdir
+			changed = append(changed, "workdir → "+*a.Workdir)
+		}
+		if a.MemoryMB != nil && *a.MemoryMB != f.GetMemoryMb() {
+			f.MemoryMb = *a.MemoryMB
+			changed = append(changed, fmt.Sprintf("memory_mb → %d", *a.MemoryMB))
+		}
+		if a.CPUs != nil && *a.CPUs != f.GetCpus() {
+			f.Cpus = *a.CPUs
+			changed = append(changed, fmt.Sprintf("cpus → %g", *a.CPUs))
+		}
+		if a.HealthCommand != nil && *a.HealthCommand != f.GetHealthCommand() {
+			f.HealthCommand = *a.HealthCommand
+			changed = append(changed, "health_command")
+		}
+		if a.HealthIntervalSeconds != nil && *a.HealthIntervalSeconds != f.GetHealthIntervalSeconds() {
+			f.HealthIntervalSeconds = *a.HealthIntervalSeconds
+			changed = append(changed, fmt.Sprintf("health_interval_seconds → %d", *a.HealthIntervalSeconds))
+		}
+	} else if a.Workdir != nil || a.MemoryMB != nil || a.CPUs != nil || a.HealthCommand != nil || a.HealthIntervalSeconds != nil {
+		return nil, errors.New("workdir, memory_mb, cpus and health checks are for image-form containers; write them in the compose file of a container group")
+	}
+	if a.GitURL != nil || a.GitRef != nil {
+		src := &nagiv1.Source{GitUrl: cfg.GetSource().GetGitUrl(), GitRef: cfg.GetSource().GetGitRef()}
+		if a.GitURL != nil {
+			src.GitUrl = *a.GitURL
+		}
+		if a.GitRef != nil {
+			src.GitRef = *a.GitRef
+		}
+		if src.GetGitUrl() == "" {
+			src = nil
+		}
+		if sourceText(src) != sourceText(cfg.GetSource()) {
+			cfg.Source = src
+			if src == nil {
+				changed = append(changed, "source removed")
+			} else {
+				changed = append(changed, "source → "+sourceText(src))
+			}
+		}
+	}
+	if a.Preserve != nil && !slices.Equal(a.Preserve, cfg.GetPreserve()) {
+		cfg.Preserve = a.Preserve
+		changed = append(changed, "preserved_paths")
+	}
+	if a.Stateful != "" {
+		v, ok := statefulValues[strings.ToLower(a.Stateful)]
+		if !ok {
+			return nil, fmt.Errorf("stateful must be auto, yes or no, not %q", a.Stateful)
+		}
+		if v != cfg.GetStateful() {
+			cfg.Stateful = v
+			changed = append(changed, "stateful → "+strings.ToLower(a.Stateful))
+		}
+	}
+	if a.DependsOn != nil && !slices.Equal(a.DependsOn, cfg.GetDependsOn()) {
+		cfg.DependsOn = a.DependsOn
+		changed = append(changed, "depends_on")
+	}
+	return changed, nil
 }
 
 var nameChars = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -249,9 +336,12 @@ func toolAddContainer(c *call, in AddContainerArgs) (any, error) {
 	default:
 		return nil, errors.New("give an image or a compose file")
 	}
+	if _, err := in.configArgs.apply(cfg); err != nil {
+		return nil, err
+	}
 	pid := s.GetProject().GetId()
 	if _, err := c.h.clients.projects.AddContainer(c.ctx, connect.NewRequest(&nagiv1.AddContainerRequest{
-		ProjectId: pid, Name: name, Config: cfg, NodeId: node.GetId(),
+		ProjectId: pid, Name: name, Config: cfg, NodeId: node.GetId(), Dir: in.Dir,
 	})); err != nil {
 		return nil, err
 	}
@@ -280,11 +370,15 @@ type UpdateContainerArgs struct {
 	Image            *string           `json:"image,omitempty" jsonschema:"image-form containers only"`
 	Command          *string           `json:"command,omitempty" jsonschema:"image-form containers only; empty string clears it"`
 	Ports            []portArg         `json:"ports,omitempty" jsonschema:"image-form containers only; replaces all ports"`
+	Volumes          []string          `json:"volumes,omitempty" jsonschema:"image-form containers only: paths inside the container to persist; replaces the list. Removing a path does not delete its data"`
 	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES})"`
 	EnvUnset         []string          `json:"env_unset,omitempty" jsonschema:"remove these variables"`
-	MemoryMB         *uint32           `json:"memory_mb,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
-	CPUs             *float64          `json:"cpus,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
-	Compose          string            `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file"`
+	EnvSecret        []string          `json:"env_secret,omitempty" jsonschema:"mark these variables as secret (hidden by default in the web UI)"`
+	// 服务级环境变量（容器组）：只注入对应服务。
+	ServiceEnv      map[string]map[string]string `json:"service_env,omitempty" jsonschema:"container groups only: service name to environment variables injected only into that service"`
+	ServiceEnvUnset map[string][]string          `json:"service_env_unset,omitempty" jsonschema:"container groups only: service name to service environment variables to remove"`
+	Compose         string                       `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file"`
+	configArgs
 }
 
 // patchEnv 设置、删除变量，保留没提到的变量（以及它们是否为密钥）。
@@ -343,19 +437,22 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 			f.Ports = portList(in.Ports)
 			changed = append(changed, "ports")
 		}
-		if in.MemoryMB != nil && *in.MemoryMB != f.GetMemoryMb() {
-			f.MemoryMb = *in.MemoryMB
-			changed = append(changed, fmt.Sprintf("memory_mb → %d", *in.MemoryMB))
+		if in.Volumes != nil && !slices.Equal(in.Volumes, f.GetVolumes()) {
+			f.Volumes = in.Volumes
+			changed = append(changed, "volumes")
 		}
-		if in.CPUs != nil && *in.CPUs != f.GetCpus() {
-			f.Cpus = *in.CPUs
-			changed = append(changed, fmt.Sprintf("cpus → %g", *in.CPUs))
+		if in.ServiceEnv != nil || in.ServiceEnvUnset != nil {
+			return nil, errors.New("this is an image-form container: use env instead of service_env")
 		}
 		var envChanged []string
 		f.Env, envChanged = patchEnv(f.GetEnv(), in.Env, in.EnvUnset)
 		changed = append(changed, envChanged...)
+		if f.Env, envChanged, err = markSecret(f.Env, in.EnvSecret); err != nil {
+			return nil, err
+		}
+		changed = append(changed, envChanged...)
 	} else {
-		if in.Image != nil || in.Command != nil || in.Ports != nil || in.MemoryMB != nil || in.CPUs != nil {
+		if in.Image != nil || in.Command != nil || in.Ports != nil || in.Volumes != nil {
 			return nil, errors.New("this is a container group: change its compose file instead")
 		}
 		if in.Compose != "" && in.Compose != cfg.GetCompose() {
@@ -365,7 +462,37 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 		var envChanged []string
 		cfg.Env, envChanged = patchEnv(cfg.GetEnv(), in.Env, in.EnvUnset)
 		changed = append(changed, envChanged...)
+		if cfg.Env, envChanged, err = markSecret(cfg.Env, in.EnvSecret); err != nil {
+			return nil, err
+		}
+		changed = append(changed, envChanged...)
+		services := map[string]bool{}
+		for svc := range in.ServiceEnv {
+			services[svc] = true
+		}
+		for svc := range in.ServiceEnvUnset {
+			services[svc] = true
+		}
+		if len(services) > 0 && cfg.ServiceEnv == nil {
+			cfg.ServiceEnv = map[string]*nagiv1.EnvList{}
+		}
+		for _, svc := range slices.Sorted(maps.Keys(services)) {
+			vars, svcChanged := patchEnv(cfg.GetServiceEnv()[svc].GetVars(), in.ServiceEnv[svc], in.ServiceEnvUnset[svc])
+			for _, ch := range svcChanged {
+				changed = append(changed, svc+": "+ch)
+			}
+			if len(vars) == 0 {
+				delete(cfg.ServiceEnv, svc)
+			} else {
+				cfg.ServiceEnv[svc] = &nagiv1.EnvList{Vars: vars}
+			}
+		}
 	}
+	more, err := in.configArgs.apply(cfg)
+	if err != nil {
+		return nil, err
+	}
+	changed = append(changed, more...)
 	if len(changed) == 0 {
 		return map[string]any{"changed": []string{}, "note": "nothing changed"}, nil
 	}
@@ -414,6 +541,9 @@ type DeployArgs struct {
 	Containers []string `json:"containers,omitempty" jsonschema:"containers to deploy; default: every container with a draft"`
 	PullImages bool     `json:"pull_images,omitempty" jsonschema:"pull the newest images first (update images)"`
 	PullGit    bool     `json:"pull_git,omitempty" jsonschema:"pull files from the git repository first"`
+	// 共享变量的草稿（update_shared_env）随这次部署生效。
+	ApplySharedEnv          bool  `json:"apply_shared_env,omitempty" jsonschema:"apply the shared variables draft first (see update_shared_env); name the affected containers to redeploy them, or none to only apply it"`
+	ExpectedProjectRevision int64 `json:"expected_project_revision,omitempty" jsonschema:"with apply_shared_env: the project's revision from get_project"`
 	// 修订号：部署的是 agent 看过的那份草稿，期间被别人改过就拒绝。
 	ExpectedRevisions  map[string]int64 `json:"expected_revisions,omitempty" jsonschema:"container name to its revision from get_container; the deploy is refused if one of them changed since"`
 	WaitHealthySeconds int              `json:"wait_healthy_seconds,omitempty" jsonschema:"after a successful deploy, wait up to this many seconds (at most 300) for the containers to be running and, if they have a Docker health check, healthy"`
@@ -426,7 +556,7 @@ func toolDeploy(c *call, in DeployArgs) (any, error) {
 	}
 	p := s.GetProject()
 	var targets []*nagiv1.DeployTarget
-	if len(in.Containers) == 0 {
+	if len(in.Containers) == 0 && !in.ApplySharedEnv {
 		for _, m := range p.GetContainers() {
 			if m.GetHasDraft() {
 				targets = append(targets, &nagiv1.DeployTarget{Container: m.GetName()})
@@ -447,9 +577,10 @@ func toolDeploy(c *call, in DeployArgs) (any, error) {
 		t.BaseRevision = in.ExpectedRevisions[t.GetContainer()]
 	}
 	res, err := c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
-		return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: p.GetId(), Targets: targets, PullImages: in.PullImages, Pull: in.PullGit}))
+		return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: p.GetId(), Targets: targets, PullImages: in.PullImages, Pull: in.PullGit,
+			ApplySharedEnv: in.ApplySharedEnv, SettingsRevision: projectRevision(in.ExpectedProjectRevision, p)}))
 	})
-	if err != nil || !res.Success || in.WaitHealthySeconds <= 0 {
+	if err != nil || !res.Success || in.WaitHealthySeconds <= 0 || len(targets) == 0 {
 		return res, err
 	}
 	names := make([]string, 0, len(targets))
@@ -578,6 +709,9 @@ type RouteArgs struct {
 	Domains   []string `json:"domains,omitempty" jsonschema:"domains for http; HTTPS certificates are issued automatically"`
 	Published uint32   `json:"published_port,omitempty" jsonschema:"public port for tcp/udp"`
 	HTTPOnly  *bool    `json:"http_only,omitempty" jsonschema:"serve plain HTTP without HTTPS"`
+	// 跨节点入口（见 docs/exposure.md#跨节点入口）。
+	EntryNodes   []string `json:"entry_nodes,omitempty" jsonschema:"also take traffic in on these nodes (names or IDs) besides the container's own node; replaces the list, [] clears it"`
+	NoLocalEntry *bool    `json:"no_local_entry,omitempty" jsonschema:"take traffic in only on entry_nodes, not on the container's own node"`
 }
 
 func toolSaveRoute(c *call, in RouteArgs) (any, error) {
@@ -620,6 +754,23 @@ func toolSaveRoute(c *call, in RouteArgs) (any, error) {
 	if in.HTTPOnly != nil {
 		r.HttpOnly = *in.HTTPOnly
 	}
+	if in.EntryNodes != nil {
+		nodes, err := c.nodes()
+		if err != nil {
+			return nil, err
+		}
+		r.EntryNodes = []string{}
+		for _, ref := range in.EntryNodes {
+			n, err := findNode(nodes, ref)
+			if err != nil {
+				return nil, err
+			}
+			r.EntryNodes = append(r.EntryNodes, n.GetId())
+		}
+	}
+	if in.NoLocalEntry != nil {
+		r.NoLocalEntry = *in.NoLocalEntry
+	}
 	if r.GetContainer() == "" || r.GetTarget() == 0 {
 		return nil, errors.New("container and port are required for a new mapping")
 	}
@@ -634,6 +785,90 @@ func toolSaveRoute(c *call, in RouteArgs) (any, error) {
 		}
 	}
 	return map[string]any{"routes": out}, nil
+}
+
+type DeleteRouteArgs struct {
+	ProjectArg
+	Name    string `json:"name" jsonschema:"port mapping name from get_project"`
+	Confirm string `json:"confirm,omitempty" jsonschema:"omit to get a preview; repeat the name here to delete after the user agreed"`
+}
+
+func toolDeleteRoute(c *call, in DeleteRouteArgs) (any, error) {
+	s, err := c.project(in.Project)
+	if err != nil {
+		return nil, err
+	}
+	p := s.GetProject()
+	i := slices.IndexFunc(p.GetRoutes(), func(x *nagiv1.Exposure) bool { return x.GetName() == in.Name })
+	if i < 0 {
+		return nil, fmt.Errorf("port mapping %q not found", in.Name)
+	}
+	r := p.GetRoutes()[i]
+	if in.Confirm != in.Name {
+		return map[string]any{"preview": "this port mapping will be removed immediately; its domains and ports stop reaching the container", "route": routeOf(r),
+			"next": "show this to the user; after they agree, call delete_route again with confirm set to the name"}, nil
+	}
+	if _, err := c.h.clients.projects.DeleteRoute(c.ctx, connect.NewRequest(&nagiv1.DeleteRouteRequest{ProjectId: p.GetId(), Name: in.Name})); err != nil {
+		return nil, err
+	}
+	return map[string]string{"note": "port mapping deleted"}, nil
+}
+
+type RetryCertArgs struct {
+	ProjectArg
+	Route  string `json:"route" jsonschema:"port mapping name from check_routes"`
+	Domain string `json:"domain"`
+	Node   string `json:"node,omitempty" jsonschema:"entry node name or ID; default: every entry node where the certificate is not obtained"`
+}
+
+func toolRetryCert(c *call, in RetryCertArgs) (any, error) {
+	s, err := c.project(in.Project)
+	if err != nil {
+		return nil, err
+	}
+	p := s.GetProject()
+	var nodeIDs []string
+	if in.Node != "" {
+		nodes, err := c.nodes()
+		if err != nil {
+			return nil, err
+		}
+		n, err := findNode(nodes, in.Node)
+		if err != nil {
+			return nil, err
+		}
+		nodeIDs = []string{n.GetId()}
+	} else {
+		i := slices.IndexFunc(p.GetRoutes(), func(x *nagiv1.Exposure) bool { return x.GetName() == in.Route })
+		if i < 0 {
+			return nil, fmt.Errorf("port mapping %q not found", in.Route)
+		}
+		res, err := c.h.clients.projects.CheckDomains(c.ctx, connect.NewRequest(&nagiv1.CheckDomainsRequest{ProjectId: p.GetId(), Routes: []*nagiv1.Exposure{p.GetRoutes()[i]}}))
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range res.Msg.GetDomains() {
+			if d.GetDomain() != in.Domain {
+				continue
+			}
+			for _, e := range d.GetEntries() {
+				if e.GetCert() == "pending" || e.GetCert() == "failed" {
+					nodeIDs = append(nodeIDs, e.GetNodeId())
+				}
+			}
+		}
+		if len(nodeIDs) == 0 {
+			return map[string]string{"note": "no entry node is waiting for this certificate; see check_routes"}, nil
+		}
+	}
+	for _, id := range nodeIDs {
+		if _, err := c.h.clients.projects.RetryDomainCert(c.ctx, connect.NewRequest(&nagiv1.RetryDomainCertRequest{
+			ProjectId: p.GetId(), Route: in.Route, Domain: in.Domain, NodeId: id,
+		})); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"retried_on": nodeIDs, "note": "the entry nodes are requesting the certificate again; check_routes shows the result in a minute. Let's Encrypt allows 5 failed validations per domain per hour"}, nil
 }
 
 // ---- 执行命令 ----

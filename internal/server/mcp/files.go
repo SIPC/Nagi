@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -35,6 +36,8 @@ type ListFilesArgs struct {
 	ContainerArg
 	Volume string `json:"volume,omitempty" jsonschema:"omit to list the container's volumes; .data is the container's data/ directory"`
 	Path   string `json:"path,omitempty" jsonschema:"directory inside the volume, empty for its root"`
+	// 浏览快照里的卷（用于 restore_file）。
+	SnapshotID string `json:"snapshot_id,omitempty" jsonschema:"list the directory as it is in this scheduled, manual or predeploy snapshot (see list_snapshots)"`
 }
 
 func toolListFiles(c *call, in ListFilesArgs) (any, error) {
@@ -67,7 +70,7 @@ func toolListFiles(c *call, in ListFilesArgs) (any, error) {
 			"note": "kind data (.data) is the app files directory: it is replaced on the next deploy except preserved paths. managed volumes keep their data. unmanaged volumes cannot be browsed."}, nil
 	}
 	res, err := c.h.clients.projects.ListVolumeFiles(c.ctx, connect.NewRequest(&nagiv1.VolumeFileRef{
-		ProjectId: ref.GetProjectId(), Container: ref.GetContainer(), Volume: in.Volume, Path: in.Path,
+		ProjectId: ref.GetProjectId(), Container: ref.GetContainer(), Volume: in.Volume, Path: in.Path, SnapshotId: in.SnapshotID,
 	}))
 	if err != nil {
 		return nil, err
@@ -84,6 +87,51 @@ func toolListFiles(c *call, in ListFilesArgs) (any, error) {
 		out = append(out, entry{Name: e.GetName(), Dir: e.GetIsDir(), Symlink: e.GetIsSymlink(), Bytes: e.GetSize(), Modified: ts(e.GetModified())})
 	}
 	return map[string]any{"entries": out, "truncated": res.Msg.GetTruncated()}, nil
+}
+
+func toolCreateDir(c *call, in FileArg) (any, error) {
+	ref, err := c.fileRef(in)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.h.clients.projects.CreateVolumeDir(c.ctx, connect.NewRequest(ref)); err != nil {
+		return nil, err
+	}
+	return map[string]string{"note": "directory created"}, nil
+}
+
+type RestoreFileArgs struct {
+	FileArg
+	SnapshotID string `json:"snapshot_id" jsonschema:"scheduled, manual or predeploy snapshot to restore from (see list_snapshots; browse it with list_files)"`
+	Confirm    string `json:"confirm,omitempty" jsonschema:"omit to get a preview; repeat snapshot_id here to restore after the user agreed"`
+}
+
+// toolRestoreFile 把快照里的一个文件或目录恢复到卷里原来的位置。只覆盖快照里有的文件，别的不动，不用停容器。
+func toolRestoreFile(c *call, in RestoreFileArgs) (any, error) {
+	ref, err := c.fileRef(in.FileArg)
+	if err != nil {
+		return nil, err
+	}
+	list, err := c.snapshots(&nagiv1.ContainerRef{ProjectId: ref.GetProjectId(), Container: ref.GetContainer()})
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(list, func(x *nagiv1.Snapshot) bool { return x.GetId() == in.SnapshotID })
+	if i < 0 {
+		return nil, fmt.Errorf("snapshot %q not found for container %s", in.SnapshotID, ref.GetContainer())
+	}
+	if !deletable(list[i].GetKind()) {
+		return nil, errors.New("files can only be restored from scheduled, manual or predeploy snapshots")
+	}
+	if in.Confirm != in.SnapshotID {
+		return map[string]any{"preview": fmt.Sprintf("%s in volume %s will be restored from the %s snapshot of %s: files in the snapshot overwrite the current ones, other files stay. The container keeps running", ref.GetPath(), ref.GetVolume(), list[i].GetKind(), ts(list[i].GetTime())),
+			"next": "show this to the user; after they agree, call restore_file again with confirm set to the snapshot_id"}, nil
+	}
+	ref.SnapshotId = in.SnapshotID
+	if _, err := c.h.clients.projects.RestoreVolumeFile(c.ctx, connect.NewRequest(ref)); err != nil {
+		return nil, err
+	}
+	return map[string]string{"note": "restored"}, nil
 }
 
 func (c *call) fileRef(in FileArg) (*nagiv1.VolumeFileRef, error) {
