@@ -8,6 +8,13 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.16.2
+
+### 改进
+
+- `node_exec` 每次执行前先返回预览，经用户确认后才执行。确认后命令和参数不能再改。
+- `node_exec` 需填写使用理由，MCP 会引导 agent 优先使用其他工具。
+
 ## v0.16.1
 
 ### 新功能
