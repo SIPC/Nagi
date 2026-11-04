@@ -114,7 +114,15 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 面板和节点可能暂时不是同一版本（面板先升级，节点随后在界面上升级），proto 只新增字段，不删除、不改编号。
 - 节点上缓存的配置、状态文件要能被新版本读取。
 
-发版前先在 `CHANGELOG.md` 顶部写好这个版本的说明（`## v<版本>`，面向用户，分新功能、改进、修复、升级说明），提交后再打标签：Release 的正文由 `scripts/release-notes.sh` 从这里取，没写则发布失败。之后修改 `CHANGELOG.md`，`release-notes.yml` 会把改动同步到已发布的 Release。
+发版前先在 `CHANGELOG.md` 顶部写好这个版本的说明（`## v<版本>`，写法见下），提交后再打标签：Release 的正文由 `scripts/release-notes.sh` 从这里取，没写则发布失败。之后修改 `CHANGELOG.md`，`release-notes.yml` 会把改动同步到已发布的 Release。
+
+更新日志参考 Apple 的更新说明，面向用户，简短正式：
+
+- 按「新功能」「改进」「修复」「行为变更」「升级说明」分组，没有内容的组不写。
+- 每条一到两句，写用户能做什么、有什么变化，不写实现方式、内部字段和设计理由。细节放在文档里。
+- 用书面语，句子完整，句末加句号。不用口语，不用加粗小标题，不分多级列表，括号只用于必要的限定（例如「仅限管理员」）。
+- 用「支持」「新增」「修复」「移至」等动词开头，例如「支持删除快照。」「修复面板重启后 MCP 客户端无法获取工具列表的问题。」
+- 升级说明只写用户需要做的事，例如「需将节点升级到 v0.14.1。」
 
 推送 `v*` 标签时，`.github/workflows/release.yml` 构建前端、运行 `go test ./...`，编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh` 和 `SHA256SUMS` 上传到 GitHub Release。
 
