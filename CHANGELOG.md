@@ -8,7 +8,7 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## 未发布
+## v0.15.0
 
 ### 新功能
 
@@ -28,7 +28,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### 升级说明
 
-- 新的默认值需将节点升级到该版本。如需保留更多快照，请在升级节点前于项目设置中调高份数上限。
+- 新的默认值需将节点升级到 v0.15.0。如需保留更多快照，请在升级节点前于项目设置中调高份数上限。
 
 ## v0.14.1
 
