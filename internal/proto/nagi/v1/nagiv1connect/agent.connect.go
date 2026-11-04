@@ -69,6 +69,9 @@ const (
 	// AgentServiceRestoreSnapshotProcedure is the fully-qualified name of the AgentService's
 	// RestoreSnapshot RPC.
 	AgentServiceRestoreSnapshotProcedure = "/nagi.v1.AgentService/RestoreSnapshot"
+	// AgentServiceDeleteSnapshotProcedure is the fully-qualified name of the AgentService's
+	// DeleteSnapshot RPC.
+	AgentServiceDeleteSnapshotProcedure = "/nagi.v1.AgentService/DeleteSnapshot"
 	// AgentServiceStreamLogsProcedure is the fully-qualified name of the AgentService's StreamLogs RPC.
 	AgentServiceStreamLogsProcedure = "/nagi.v1.AgentService/StreamLogs"
 	// AgentServiceExecProcedure is the fully-qualified name of the AgentService's Exec RPC.
@@ -199,6 +202,8 @@ type AgentServiceClient interface {
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest]) (*connect.ServerStreamForClient[v1.LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context) *connect.BidiStreamForClient[v1.ExecInput, v1.ExecOutput]
@@ -354,6 +359,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceRestoreSnapshotProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSnapshot: connect.NewClient[v1.RestoreSnapshotRequest, v1.VolumeFileOpResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteSnapshotProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
 		streamLogs: connect.NewClient[v1.StreamLogsRequest, v1.LogLine](
@@ -613,6 +624,7 @@ type agentServiceClient struct {
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	deleteSnapshot        *connect.Client[v1.RestoreSnapshotRequest, v1.VolumeFileOpResponse]
 	streamLogs            *connect.Client[v1.StreamLogsRequest, v1.LogLine]
 	exec                  *connect.Client[v1.ExecInput, v1.ExecOutput]
 	nodeShell             *connect.Client[v1.NodeShellInput, v1.ExecOutput]
@@ -713,6 +725,11 @@ func (c *agentServiceClient) CreateSnapshot(ctx context.Context, req *connect.Re
 // RestoreSnapshot calls nagi.v1.AgentService.RestoreSnapshot.
 func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, req *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.restoreSnapshot.CallServerStream(ctx, req)
+}
+
+// DeleteSnapshot calls nagi.v1.AgentService.DeleteSnapshot.
+func (c *agentServiceClient) DeleteSnapshot(ctx context.Context, req *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return c.deleteSnapshot.CallUnary(ctx, req)
 }
 
 // StreamLogs calls nagi.v1.AgentService.StreamLogs.
@@ -939,6 +956,8 @@ type AgentServiceHandler interface {
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(context.Context, *connect.BidiStream[v1.ExecInput, v1.ExecOutput]) error
@@ -1090,6 +1109,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceRestoreSnapshotProcedure,
 		svc.RestoreSnapshot,
 		connect.WithSchema(agentServiceMethods.ByName("RestoreSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteSnapshotHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteSnapshotProcedure,
+		svc.DeleteSnapshot,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceStreamLogsHandler := connect.NewServerStreamHandler(
@@ -1358,6 +1383,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateSnapshotHandler.ServeHTTP(w, r)
 		case AgentServiceRestoreSnapshotProcedure:
 			agentServiceRestoreSnapshotHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteSnapshotProcedure:
+			agentServiceDeleteSnapshotHandler.ServeHTTP(w, r)
 		case AgentServiceStreamLogsProcedure:
 			agentServiceStreamLogsHandler.ServeHTTP(w, r)
 		case AgentServiceExecProcedure:
@@ -1493,6 +1520,10 @@ func (UnimplementedAgentServiceHandler) CreateSnapshot(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreSnapshot is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.VolumeFileOpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteSnapshot is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) StreamLogs(context.Context, *connect.Request[v1.StreamLogsRequest], *connect.ServerStream[v1.LogLine]) error {

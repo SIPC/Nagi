@@ -294,6 +294,8 @@ type ProjectSettings struct {
 	SnapshotIntervalMinutes uint32 `protobuf:"varint,2,opt,name=snapshot_interval_minutes,json=snapshotIntervalMinutes,proto3" json:"snapshot_interval_minutes,omitempty"`
 	// 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
 	InternalPorts []string `protobuf:"bytes,3,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
+	// 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示不限。
+	SnapshotLimit uint32 `protobuf:"varint,4,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -347,6 +349,13 @@ func (x *ProjectSettings) GetInternalPorts() []string {
 		return x.InternalPorts
 	}
 	return nil
+}
+
+func (x *ProjectSettings) GetSnapshotLimit() uint32 {
+	if x != nil {
+		return x.SnapshotLimit
+	}
+	return 0
 }
 
 // Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
@@ -1845,7 +1854,9 @@ type ContainerSpec struct {
 	// 项目设置里的内部端口（换面板时据此拼回项目设置）。
 	InternalPorts []string `protobuf:"bytes,21,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
 	// 容器的显示名称（换面板时据此拼回）。
-	DisplayName   string `protobuf:"bytes,22,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	DisplayName string `protobuf:"bytes,22,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// 项目设置里的快照份数上限，0 表示不限。
+	SnapshotLimit uint32 `protobuf:"varint,23,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2032,6 +2043,13 @@ func (x *ContainerSpec) GetDisplayName() string {
 		return x.DisplayName
 	}
 	return ""
+}
+
+func (x *ContainerSpec) GetSnapshotLimit() uint32 {
+	if x != nil {
+		return x.SnapshotLimit
+	}
+	return 0
 }
 
 // BackupTarget 是接收副本的节点。
@@ -4768,12 +4786,13 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
-	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\xa4\x01\n" +
+	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\xcb\x01\n" +
 	"\x0fProjectSettings\x12.\n" +
 	"\n" +
 	"shared_env\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\tsharedEnv\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x02 \x01(\rR\x17snapshotIntervalMinutes\x12%\n" +
-	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\"\xff\a\n" +
+	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\x12%\n" +
+	"\x0esnapshot_limit\x18\x04 \x01(\rR\rsnapshotLimit\"\xff\a\n" +
 	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -4919,7 +4938,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xf9\x06\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xa0\a\n" +
 	"\rContainerSpec\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -4946,7 +4965,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x06backup\x18\x13 \x01(\v2\x15.nagi.v1.BackupTargetR\x06backup\x12\x14\n" +
 	"\x05panel\x18\x14 \x01(\tR\x05panel\x12%\n" +
 	"\x0einternal_ports\x18\x15 \x03(\tR\rinternalPorts\x12!\n" +
-	"\fdisplay_name\x18\x16 \x01(\tR\vdisplayName\x1a9\n" +
+	"\fdisplay_name\x18\x16 \x01(\tR\vdisplayName\x12%\n" +
+	"\x0esnapshot_limit\x18\x17 \x01(\rR\rsnapshotLimit\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +

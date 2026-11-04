@@ -60,7 +60,7 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		ProjectId: p.ID, ProjectName: p.Name, NetworkName: p.NetworkName, Name: c.Name, Dir: c.Dir,
 		Revision: c.Revision, ProjectRevision: p.Revision, Version: version,
 		DeployKey: sec.DeployKey, DeployKeyPub: c.DeployKeyPub, DockerConfig: docker, BackupPassword: sec.BackupPassword,
-		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(), InternalPorts: settings.GetInternalPorts(),
+		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(), SnapshotLimit: settings.GetSnapshotLimit(), InternalPorts: settings.GetInternalPorts(),
 		DisplayName: c.DisplayName,
 	}
 	var v store.Version

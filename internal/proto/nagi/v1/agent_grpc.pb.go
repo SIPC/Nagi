@@ -31,6 +31,7 @@ const (
 	AgentService_ListSnapshots_FullMethodName         = "/nagi.v1.AgentService/ListSnapshots"
 	AgentService_CreateSnapshot_FullMethodName        = "/nagi.v1.AgentService/CreateSnapshot"
 	AgentService_RestoreSnapshot_FullMethodName       = "/nagi.v1.AgentService/RestoreSnapshot"
+	AgentService_DeleteSnapshot_FullMethodName        = "/nagi.v1.AgentService/DeleteSnapshot"
 	AgentService_StreamLogs_FullMethodName            = "/nagi.v1.AgentService/StreamLogs"
 	AgentService_Exec_FullMethodName                  = "/nagi.v1.AgentService/Exec"
 	AgentService_NodeShell_FullMethodName             = "/nagi.v1.AgentService/NodeShell"
@@ -102,6 +103,8 @@ type AgentServiceClient interface {
 	CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error)
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error)
@@ -339,6 +342,16 @@ func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSna
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_RestoreSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) DeleteSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*VolumeFileOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeFileOpResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -811,6 +824,8 @@ type AgentServiceServer interface {
 	CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
 	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *RestoreSnapshotRequest) (*VolumeFileOpResponse, error)
 	StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error
 	// 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
 	Exec(grpc.BidiStreamingServer[ExecInput, ExecOutput]) error
@@ -928,6 +943,9 @@ func (UnimplementedAgentServiceServer) CreateSnapshot(*ContainerRef, grpc.Server
 }
 func (UnimplementedAgentServiceServer) RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method RestoreSnapshot not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteSnapshot(context.Context, *RestoreSnapshotRequest) (*VolumeFileOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSnapshot not implemented")
 }
 func (UnimplementedAgentServiceServer) StreamLogs(*StreamLogsRequest, grpc.ServerStreamingServer[LogLine]) error {
 	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
@@ -1257,6 +1275,24 @@ func _AgentService_RestoreSnapshot_Handler(srv interface{}, stream grpc.ServerSt
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_RestoreSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_DeleteSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteSnapshot(ctx, req.(*RestoreSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _AgentService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamLogsRequest)
@@ -1966,6 +2002,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSnapshots",
 			Handler:    _AgentService_ListSnapshots_Handler,
+		},
+		{
+			MethodName: "DeleteSnapshot",
+			Handler:    _AgentService_DeleteSnapshot_Handler,
 		},
 		{
 			MethodName: "ListNodeDir",

@@ -50,6 +50,8 @@ message ProjectSettings {
   uint32 snapshot_interval_minutes = 2;
   // 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
   repeated string internal_ports = 3;
+  // 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示不限。
+  uint32 snapshot_limit = 4;
 }
 
 // Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
@@ -333,6 +335,8 @@ message ContainerSpec {
   repeated string internal_ports = 21;
   // 容器的显示名称（换面板时据此拼回）。
   string display_name = 22;
+  // 项目设置里的快照份数上限，0 表示不限。
+  uint32 snapshot_limit = 23;
 }
 
 // BackupTarget 是接收副本的节点。

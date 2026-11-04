@@ -99,7 +99,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_nodes` | 节点、在线、占用、容器数 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
-| `list_snapshots` | 容器的快照：ID、类型、时间、大小，标出能不能用 `restore_snapshot` 恢复 | `ListSnapshots` |
+| `list_snapshots` | 容器的快照：ID、类型、时间、大小，标出能不能用 `restore_snapshot` 恢复、能不能删除，以及项目的份数上限 | `ListSnapshots` |
 | `check_routes` | 端口映射的域名检查：是否解析到入口节点、证书状态。用面板自己的检查，不按 agent 给的地址发请求，不能被拿来探测内网 | `CheckDomains` |
 | `query_events` | 项目的活动记录，可以按容器、只看失败的筛选，翻页 | `ListProjectEvents` |
 | `inspect_node_storage` | 只给管理员（内容涉及节点上所有项目）：Docker 镜像、容器可写层、数据卷、构建缓存的占用和可回收空间，最大的镜像，每个容器的 data、volumes、快照占用。只读，不清理 | `GetNodeStorage`（节点的 `GetStorage`） |
@@ -113,10 +113,11 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `update_container` | 修改配置存为草稿：镜像、启动命令、变量（设置、删除）、端口、资源限制，或整份 compose。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝 | `SaveDraft` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚 | `Deploy`、`GetProject` |
-| `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
+| `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启 | `ControlContainer` |
 | `rollback` | 回到某个版本，只回配置和文件，不恢复数据 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
+| `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP） | `SaveRoute` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
@@ -132,7 +133,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 不提供删除和改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`），带着卷和路径。文件内容和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`exec`、`write_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`exec`、`write_file` 标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 第一版不做
 

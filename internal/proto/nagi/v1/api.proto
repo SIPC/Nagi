@@ -657,6 +657,8 @@ service ProjectService {
   // 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
   rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
+  // 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+  rpc DeleteSnapshot(RestoreSnapshotRequest) returns (ListSnapshotsResponse);
   // 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
   rpc GetBackupKey(ContainerRef) returns (GetBackupKeyResponse);
 

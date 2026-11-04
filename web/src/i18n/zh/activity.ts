@@ -77,6 +77,7 @@ export default {
     DisconnectProject: "断开项目连接",
     CreateSnapshot: "创建快照",
     RestoreSnapshot: "恢复快照",
+    DeleteSnapshot: "删除快照",
     LoginRegistry: "登录镜像仓库",
     HandoverNodes: "移交节点",
     RemoveNodePanel: "移除受信面板",

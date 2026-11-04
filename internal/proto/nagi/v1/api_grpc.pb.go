@@ -3074,6 +3074,7 @@ const (
 	ProjectService_ListSnapshots_FullMethodName           = "/nagi.v1.ProjectService/ListSnapshots"
 	ProjectService_CreateSnapshot_FullMethodName          = "/nagi.v1.ProjectService/CreateSnapshot"
 	ProjectService_RestoreSnapshot_FullMethodName         = "/nagi.v1.ProjectService/RestoreSnapshot"
+	ProjectService_DeleteSnapshot_FullMethodName          = "/nagi.v1.ProjectService/DeleteSnapshot"
 	ProjectService_GetBackupKey_FullMethodName            = "/nagi.v1.ProjectService/GetBackupKey"
 	ProjectService_ListRegistries_FullMethodName          = "/nagi.v1.ProjectService/ListRegistries"
 	ProjectService_LoginRegistry_FullMethodName           = "/nagi.v1.ProjectService/LoginRegistry"
@@ -3162,6 +3163,8 @@ type ProjectServiceClient interface {
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
 	CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetBackupKey(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*GetBackupKeyResponse, error)
 	// 私有仓库认证：每个项目自己的登录信息。
@@ -3720,6 +3723,16 @@ func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreS
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_RestoreSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *projectServiceClient) DeleteSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, ProjectService_DeleteSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) GetBackupKey(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*GetBackupKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetBackupKeyResponse)
@@ -3851,6 +3864,8 @@ type ProjectServiceServer interface {
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
 	CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
 	RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *RestoreSnapshotRequest) (*ListSnapshotsResponse, error)
 	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetBackupKey(context.Context, *ContainerRef) (*GetBackupKeyResponse, error)
 	// 私有仓库认证：每个项目自己的登录信息。
@@ -4003,6 +4018,9 @@ func (UnimplementedProjectServiceServer) CreateSnapshot(*ContainerRef, grpc.Serv
 }
 func (UnimplementedProjectServiceServer) RestoreSnapshot(*RestoreSnapshotRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method RestoreSnapshot not implemented")
+}
+func (UnimplementedProjectServiceServer) DeleteSnapshot(context.Context, *RestoreSnapshotRequest) (*ListSnapshotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSnapshot not implemented")
 }
 func (UnimplementedProjectServiceServer) GetBackupKey(context.Context, *ContainerRef) (*GetBackupKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBackupKey not implemented")
@@ -4780,6 +4798,24 @@ func _ProjectService_RestoreSnapshot_Handler(srv interface{}, stream grpc.Server
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProjectService_RestoreSnapshotServer = grpc.ServerStreamingServer[DeployEvent]
 
+func _ProjectService_DeleteSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).DeleteSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_DeleteSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).DeleteSnapshot(ctx, req.(*RestoreSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_GetBackupKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -5016,6 +5052,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSnapshots",
 			Handler:    _ProjectService_ListSnapshots_Handler,
+		},
+		{
+			MethodName: "DeleteSnapshot",
+			Handler:    _ProjectService_DeleteSnapshot_Handler,
 		},
 		{
 			MethodName: "GetBackupKey",

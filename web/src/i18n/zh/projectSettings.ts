@@ -8,6 +8,9 @@ export default {
     networkNameHelp: "可用小写字母、数字和 -。修改后须同步更新这些项目中引用的地址。已有容器的目录不变。",
     snapshotInterval: "定时快照间隔（分钟）",
     snapshotIntervalHint: "留空则为 60 分钟。",
+    snapshotLimit: "快照份数上限",
+    snapshotLimitHint: "每个容器的定时、手动和部署前快照合计，超出时删除最早的。版本文件不计入。留空则不限。",
+    snapshotLimitNone: "不限",
   },
   sharedEnv: {
     title: "共享变量",

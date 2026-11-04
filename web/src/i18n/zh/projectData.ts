@@ -86,6 +86,7 @@ export default {
     schedule: (min: number) => `每 ${min} 分钟定时快照。`,
     scheduleLink: "修改间隔",
     scheduleShort: (min: number) => `每 ${min} 分钟自动`,
+    limitShort: (n: number) => `，最多 ${n} 份`,
     scheduleEdit: "修改",
     today: (time: string) => `今天 ${time}`,
     viaVersion: "随版本回滚",
@@ -105,6 +106,8 @@ export default {
     restoreConfirm: (container: string) =>
       `从此快照恢复容器 ${container} 的 data/ 和 volumes/？恢复前将停止容器，当前数据将被覆盖。`,
     restore: "恢复",
+    deleteConfirm: "删除这份快照？删除后无法从它恢复。",
+    deleted: "快照已删除",
   },
   backup: {
     title: "备份节点",

@@ -25,6 +25,7 @@ import {
   QueryError,
   Roll,
   Row,
+  RowMenu,
   RowsSkeleton,
   Section,
   Select,
@@ -399,7 +400,8 @@ function Snapshots({
       actions={
         <>
           <span>
-            {s.scheduleShort(project.settings?.snapshotIntervalMinutes || 60)} ·{" "}
+            {s.scheduleShort(project.settings?.snapshotIntervalMinutes || 60)}
+            {project.settings?.snapshotLimit ? s.limitShort(project.settings.snapshotLimit) : ""} ·{" "}
             <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="hover:underline">
               {s.scheduleEdit}
             </Link>
@@ -440,6 +442,7 @@ function Snapshots({
 }
 
 // SnapshotRows：一行是绝对时间加相对时间、类型、大小、版本和操作。卷和快照共用一套列位。
+// action 返回 null 的行（不能在这里操作的快照）显示「随版本回滚」。
 function SnapshotRows({
   snapshots,
   action,
@@ -451,7 +454,7 @@ function SnapshotRows({
     version: bigint;
     size: bigint;
   }[];
-  action: (id: string) => React.ReactNode;
+  action: (id: string, kind: string) => React.ReactNode;
 }) {
   const s = t.projectData.snapshots;
   // 默认只列最近几份，其余收起。
@@ -478,9 +481,7 @@ function SnapshotRows({
               { content: sn.version > 0n ? `v${sn.version}` : "" },
             ]}
             actions={
-              sn.kind === "scheduled" || sn.kind === "manual" ? (
-                action(sn.id)
-              ) : (
+              action(sn.id, sn.kind) ?? (
                 <span className="text-muted-foreground" title={s.viaVersionHint}>
                   {s.viaVersion}
                 </span>
@@ -512,36 +513,50 @@ function SnapshotList({
   run: Run["run"];
 }) {
   const container = c.name;
+  const s = t.projectData.snapshots;
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
   // 容器换了节点（目录）以后是另一个快照仓库。
+  const queryKey = ["snapshots", project.id, container, c.nodeId, c.dir];
   const snapshots = useQuery({
-    queryKey: ["snapshots", project.id, container, c.nodeId, c.dir],
+    queryKey,
     queryFn: () =>
       projectClient.listSnapshots({ projectId: project.id, container }),
   });
   if (snapshots.isPending) return <RowsSkeleton />;
   if (snapshots.error) return <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />;
+  const restore = async (id: string) =>
+    (await confirmAction(s.restoreConfirm(container), { action: s.restore, danger: true })) &&
+    run(() => projectClient.restoreSnapshot({ projectId: project.id, container, snapshotId: id }));
+  const remove = async (id: string) => {
+    if (!(await confirmAction(s.deleteConfirm, { action: t.common.actions.delete, danger: true }))) return;
+    setDeleting(true);
+    try {
+      const res = await projectClient.deleteSnapshot({ projectId: project.id, container, snapshotId: id });
+      queryClient.setQueryData(queryKey, res);
+      // 文件管理的来源选择单独缓存了一份列表。
+      queryClient.invalidateQueries({ queryKey: ["snapshots", project.id, container, "files"] });
+      toast.success(s.deleted);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+  // 版本文件不能删，也不在这里恢复；部署前数据只能删，恢复随版本回滚。
   return (
     <SnapshotRows
       snapshots={snapshots.data.snapshots}
-      action={(id) => (
-        <Button
-          variant="ghost"
-          size="row"
-          disabled={busy}
-          onClick={async () =>
-            (await confirmAction(t.projectData.snapshots.restoreConfirm(container), { action: t.projectData.snapshots.restore, danger: true })) &&
-            run(() =>
-              projectClient.restoreSnapshot({
-                projectId: project.id,
-                container,
-                snapshotId: id,
-              }),
-            )
-          }
-        >
-          {t.projectData.snapshots.restore}
-        </Button>
-      )}
+      action={(id, kind) =>
+        kind === "version" ? null : (
+          <RowMenu
+            items={[
+              ...(kind === "scheduled" || kind === "manual" ? [{ label: s.restore, disabled: busy || deleting, onSelect: () => restore(id) }] : []),
+              { label: t.common.actions.delete, danger: true, disabled: busy || deleting, onSelect: () => remove(id) },
+            ]}
+          />
+        )
+      }
     />
   );
 }
@@ -722,11 +737,13 @@ function RestorableSnapshots({ project, container, nodes, run }: { project: Proj
       ) : (
         <SnapshotRows
           snapshots={snapshots.data.snapshots}
-          action={(id) => (
-            <Button variant="ghost" size="row" disabled={run.busy} onClick={() => setRestoring(id)}>
-              {t.projectData.snapshots.restore}
-            </Button>
-          )}
+          action={(id, kind) =>
+            kind === "scheduled" || kind === "manual" ? (
+              <Button variant="ghost" size="row" disabled={run.busy} onClick={() => setRestoring(id)}>
+                {t.projectData.snapshots.restore}
+              </Button>
+            ) : null
+          }
         />
       )}
       {restoring !== null && <RestoreDialog project={project} container={container} nodes={nodes} run={run} snapshotId={restoring} onClose={() => setRestoring(null)} />}

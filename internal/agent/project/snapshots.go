@@ -32,7 +32,12 @@ var snapshotIgnore = []string{"/data/.checkout/", "/data/.restore/"}
 
 func (m *Manager) openRepo(ctx context.Context, s *nagiv1.ContainerSpec) (*snapshot.Repo, error) {
 	id := uid(s.GetProjectId(), s.GetName())
-	return snapshot.Open(ctx, id, containerPaths{root: s.GetDir()}.backupsDir(), s.GetBackupPassword(), filepath.Join(m.stateDir, id))
+	rep, err := snapshot.Open(ctx, id, containerPaths{root: s.GetDir()}.backupsDir(), s.GetBackupPassword(), filepath.Join(m.stateDir, id))
+	if err != nil {
+		return nil, err
+	}
+	rep.Limit = int(s.GetSnapshotLimit())
+	return rep, nil
 }
 
 // snapshotWithPause 做一份快照。有状态时暂停 label 选出的容器，超过 30 秒就放弃本次快照并恢复容器。
@@ -185,6 +190,30 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, projectID, container, sid
 	_ = m.SyncNetworks(ctx, projectID)
 	onLine("已从快照恢复")
 	return nil
+}
+
+// DeleteSnapshot 删除容器的一份定时、手动或部署前快照。
+func (m *Manager) DeleteSnapshot(ctx context.Context, projectID, container, sid string) error {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
+	c, err := m.Get(ctx, projectID, container)
+	if err != nil {
+		return err
+	}
+	rep, err := m.openRepo(ctx, c.Spec)
+	if err != nil {
+		return err
+	}
+	defer rep.Close(ctx)
+	if _, err := rep.Tags(ctx, sid); err != nil {
+		return invalid("快照不存在：%v", err)
+	}
+	err = rep.Delete(ctx, sid)
+	if errors.Is(err, snapshot.ErrNotDeletable) {
+		return invalid("版本文件不能删除，回滚要用")
+	}
+	return err
 }
 
 // Snapshots 列出容器的快照，最新的在前。

@@ -223,6 +223,16 @@ func (s *agentService) RestoreSnapshot(req *nagiv1.RestoreSnapshotRequest, strea
 	})
 }
 
+func (s *agentService) DeleteSnapshot(ctx context.Context, req *nagiv1.RestoreSnapshotRequest) (*nagiv1.VolumeFileOpResponse, error) {
+	if err := s.node.checkFileWrite(req.GetProjectId(), req.GetContainer()); err != nil {
+		return nil, toStatus(err)
+	}
+	if err := s.projects.DeleteSnapshot(ctx, req.GetProjectId(), req.GetContainer(), req.GetSnapshotId()); err != nil {
+		return nil, toStatus(err)
+	}
+	return &nagiv1.VolumeFileOpResponse{}, nil
+}
+
 func (s *agentService) LoginRegistry(ctx context.Context, req *nagiv1.LoginRegistryRequest) (*nagiv1.LoginRegistryResponse, error) {
 	cfg, err := s.projects.Login(ctx, req.GetRegistry(), req.GetUsername(), req.GetPassword())
 	if err != nil {

@@ -5016,7 +5016,7 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x1cCONTAINER_ACTION_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16CONTAINER_ACTION_START\x10\x01\x12\x19\n" +
 	"\x15CONTAINER_ACTION_STOP\x10\x02\x12\x1c\n" +
-	"\x18CONTAINER_ACTION_RESTART\x10\x032\x97\x1d\n" +
+	"\x18CONTAINER_ACTION_RESTART\x10\x032\xe9\x1d\n" +
 	"\fAgentService\x12K\n" +
 	"\fPutContainer\x12\x1c.nagi.v1.PutContainerRequest\x1a\x1d.nagi.v1.PutContainerResponse\x12J\n" +
 	"\x0fDeployContainer\x12\x1f.nagi.v1.DeployContainerRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12T\n" +
@@ -5029,7 +5029,8 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x11RestoreVolumeFile\x12\x16.nagi.v1.VolumeFileRef\x1a\x1d.nagi.v1.VolumeFileOpResponse\x12F\n" +
 	"\rListSnapshots\x12\x15.nagi.v1.ContainerRef\x1a\x1e.nagi.v1.ListSnapshotsResponse\x12?\n" +
 	"\x0eCreateSnapshot\x12\x15.nagi.v1.ContainerRef\x1a\x14.nagi.v1.DeployEvent0\x01\x12J\n" +
-	"\x0fRestoreSnapshot\x12\x1f.nagi.v1.RestoreSnapshotRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12<\n" +
+	"\x0fRestoreSnapshot\x12\x1f.nagi.v1.RestoreSnapshotRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12P\n" +
+	"\x0eDeleteSnapshot\x12\x1f.nagi.v1.RestoreSnapshotRequest\x1a\x1d.nagi.v1.VolumeFileOpResponse\x12<\n" +
 	"\n" +
 	"StreamLogs\x12\x1a.nagi.v1.StreamLogsRequest\x1a\x10.nagi.v1.LogLine0\x01\x123\n" +
 	"\x04Exec\x12\x12.nagi.v1.ExecInput\x1a\x13.nagi.v1.ExecOutput(\x010\x01\x12=\n" +
@@ -5255,100 +5256,102 @@ var file_nagi_v1_agent_proto_depIdxs = []int32{
 	17,  // 53: nagi.v1.AgentService.ListSnapshots:input_type -> nagi.v1.ContainerRef
 	17,  // 54: nagi.v1.AgentService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
 	34,  // 55: nagi.v1.AgentService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	36,  // 56: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
-	55,  // 57: nagi.v1.AgentService.Exec:input_type -> nagi.v1.ExecInput
-	59,  // 58: nagi.v1.AgentService.NodeShell:input_type -> nagi.v1.NodeShellInput
-	61,  // 59: nagi.v1.AgentService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
-	61,  // 60: nagi.v1.AgentService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
-	65,  // 61: nagi.v1.AgentService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
-	67,  // 62: nagi.v1.AgentService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
-	61,  // 63: nagi.v1.AgentService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
-	61,  // 64: nagi.v1.AgentService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
-	71,  // 65: nagi.v1.AgentService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
-	17,  // 66: nagi.v1.AgentService.CheckImages:input_type -> nagi.v1.ContainerRef
-	38,  // 67: nagi.v1.AgentService.LoginRegistry:input_type -> nagi.v1.LoginRegistryRequest
-	17,  // 68: nagi.v1.AgentService.SyncBackup:input_type -> nagi.v1.ContainerRef
-	9,   // 69: nagi.v1.AgentService.AcceptReplica:input_type -> nagi.v1.AcceptReplicaRequest
-	11,  // 70: nagi.v1.AgentService.ListReplicas:input_type -> nagi.v1.ListReplicasRequest
-	17,  // 71: nagi.v1.AgentService.ListReplicaSnapshots:input_type -> nagi.v1.ContainerRef
-	18,  // 72: nagi.v1.AgentService.CheckContainer:input_type -> nagi.v1.PutContainerRequest
-	14,  // 73: nagi.v1.AgentService.RestoreReplica:input_type -> nagi.v1.RestoreReplicaRequest
-	17,  // 74: nagi.v1.AgentService.DeleteReplica:input_type -> nagi.v1.ContainerRef
-	16,  // 75: nagi.v1.AgentService.MigrateOut:input_type -> nagi.v1.MigrateOutRequest
-	17,  // 76: nagi.v1.AgentService.MigrateResume:input_type -> nagi.v1.ContainerRef
-	8,   // 77: nagi.v1.AgentService.SetFailover:input_type -> nagi.v1.SetFailoverRequest
-	17,  // 78: nagi.v1.AgentService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
-	6,   // 79: nagi.v1.AgentService.GetCache:input_type -> nagi.v1.GetCacheRequest
-	85,  // 80: nagi.v1.AgentService.SetLinks:input_type -> nagi.v1.LinkPlan
-	2,   // 81: nagi.v1.AgentService.CheckPorts:input_type -> nagi.v1.CheckPortsRequest
-	4,   // 82: nagi.v1.AgentService.RetryCerts:input_type -> nagi.v1.RetryCertsRequest
-	73,  // 83: nagi.v1.AgentService.SetAlertConfig:input_type -> nagi.v1.SetAlertConfigRequest
-	75,  // 84: nagi.v1.AgentService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
-	77,  // 85: nagi.v1.AgentService.GetStorage:input_type -> nagi.v1.GetStorageRequest
-	40,  // 86: nagi.v1.AgentService.SetProjectsRoot:input_type -> nagi.v1.SetProjectsRootRequest
-	49,  // 87: nagi.v1.AgentService.ListPanels:input_type -> nagi.v1.ListPanelsRequest
-	51,  // 88: nagi.v1.AgentService.AddPanel:input_type -> nagi.v1.AddPanelRequest
-	53,  // 89: nagi.v1.AgentService.RemovePanel:input_type -> nagi.v1.RemovePanelRequest
-	48,  // 90: nagi.v1.AgentService.GetMeshStatus:input_type -> nagi.v1.MeshStatusRequest
-	96,  // 91: nagi.v1.AgentService.MeshPing:input_type -> nagi.v1.MeshPingRequest
-	46,  // 92: nagi.v1.AgentService.GetMirrors:input_type -> nagi.v1.GetMirrorsRequest
-	47,  // 93: nagi.v1.AgentService.SetMirrors:input_type -> nagi.v1.Mirrors
-	42,  // 94: nagi.v1.AgentService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainRequest
-	44,  // 95: nagi.v1.AgentService.Upgrade:input_type -> nagi.v1.UpgradeRequest
-	19,  // 96: nagi.v1.AgentService.PutContainer:output_type -> nagi.v1.PutContainerResponse
-	97,  // 97: nagi.v1.AgentService.DeployContainer:output_type -> nagi.v1.DeployEvent
-	22,  // 98: nagi.v1.AgentService.DeleteContainer:output_type -> nagi.v1.DeleteContainerResponse
-	97,  // 99: nagi.v1.AgentService.ControlContainer:output_type -> nagi.v1.DeployEvent
-	26,  // 100: nagi.v1.AgentService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
-	29,  // 101: nagi.v1.AgentService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
-	33,  // 102: nagi.v1.AgentService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	33,  // 103: nagi.v1.AgentService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
-	33,  // 104: nagi.v1.AgentService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	35,  // 105: nagi.v1.AgentService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	97,  // 106: nagi.v1.AgentService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
-	97,  // 107: nagi.v1.AgentService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
-	98,  // 108: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
-	58,  // 109: nagi.v1.AgentService.Exec:output_type -> nagi.v1.ExecOutput
-	58,  // 110: nagi.v1.AgentService.NodeShell:output_type -> nagi.v1.ExecOutput
-	63,  // 111: nagi.v1.AgentService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
-	64,  // 112: nagi.v1.AgentService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
-	66,  // 113: nagi.v1.AgentService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
-	68,  // 114: nagi.v1.AgentService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
-	68,  // 115: nagi.v1.AgentService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
-	70,  // 116: nagi.v1.AgentService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
-	66,  // 117: nagi.v1.AgentService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
-	37,  // 118: nagi.v1.AgentService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
-	39,  // 119: nagi.v1.AgentService.LoginRegistry:output_type -> nagi.v1.LoginRegistryResponse
-	99,  // 120: nagi.v1.AgentService.SyncBackup:output_type -> nagi.v1.BackupStatus
-	10,  // 121: nagi.v1.AgentService.AcceptReplica:output_type -> nagi.v1.AcceptReplicaResponse
-	12,  // 122: nagi.v1.AgentService.ListReplicas:output_type -> nagi.v1.ListReplicasResponse
-	35,  // 123: nagi.v1.AgentService.ListReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	13,  // 124: nagi.v1.AgentService.CheckContainer:output_type -> nagi.v1.CheckContainerResponse
-	97,  // 125: nagi.v1.AgentService.RestoreReplica:output_type -> nagi.v1.DeployEvent
-	15,  // 126: nagi.v1.AgentService.DeleteReplica:output_type -> nagi.v1.DeleteReplicaResponse
-	97,  // 127: nagi.v1.AgentService.MigrateOut:output_type -> nagi.v1.DeployEvent
-	97,  // 128: nagi.v1.AgentService.MigrateResume:output_type -> nagi.v1.DeployEvent
-	84,  // 129: nagi.v1.AgentService.SetFailover:output_type -> nagi.v1.FailoverStatus
-	84,  // 130: nagi.v1.AgentService.ConfirmTakeover:output_type -> nagi.v1.FailoverStatus
-	7,   // 131: nagi.v1.AgentService.GetCache:output_type -> nagi.v1.NodeCache
-	1,   // 132: nagi.v1.AgentService.SetLinks:output_type -> nagi.v1.SetLinksResponse
-	3,   // 133: nagi.v1.AgentService.CheckPorts:output_type -> nagi.v1.CheckPortsResponse
-	5,   // 134: nagi.v1.AgentService.RetryCerts:output_type -> nagi.v1.RetryCertsResponse
-	74,  // 135: nagi.v1.AgentService.SetAlertConfig:output_type -> nagi.v1.SetAlertConfigResponse
-	76,  // 136: nagi.v1.AgentService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	81,  // 137: nagi.v1.AgentService.GetStorage:output_type -> nagi.v1.NodeStorage
-	41,  // 138: nagi.v1.AgentService.SetProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
-	50,  // 139: nagi.v1.AgentService.ListPanels:output_type -> nagi.v1.ListPanelsResponse
-	52,  // 140: nagi.v1.AgentService.AddPanel:output_type -> nagi.v1.AddPanelResponse
-	54,  // 141: nagi.v1.AgentService.RemovePanel:output_type -> nagi.v1.RemovePanelResponse
-	100, // 142: nagi.v1.AgentService.GetMeshStatus:output_type -> nagi.v1.MeshStatus
-	101, // 143: nagi.v1.AgentService.MeshPing:output_type -> nagi.v1.MeshPingResponse
-	47,  // 144: nagi.v1.AgentService.GetMirrors:output_type -> nagi.v1.Mirrors
-	47,  // 145: nagi.v1.AgentService.SetMirrors:output_type -> nagi.v1.Mirrors
-	43,  // 146: nagi.v1.AgentService.SetPanelDomain:output_type -> nagi.v1.SetPanelDomainResponse
-	45,  // 147: nagi.v1.AgentService.Upgrade:output_type -> nagi.v1.UpgradeResponse
-	96,  // [96:148] is the sub-list for method output_type
-	44,  // [44:96] is the sub-list for method input_type
+	34,  // 56: nagi.v1.AgentService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	36,  // 57: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
+	55,  // 58: nagi.v1.AgentService.Exec:input_type -> nagi.v1.ExecInput
+	59,  // 59: nagi.v1.AgentService.NodeShell:input_type -> nagi.v1.NodeShellInput
+	61,  // 60: nagi.v1.AgentService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
+	61,  // 61: nagi.v1.AgentService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
+	65,  // 62: nagi.v1.AgentService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
+	67,  // 63: nagi.v1.AgentService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
+	61,  // 64: nagi.v1.AgentService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
+	61,  // 65: nagi.v1.AgentService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
+	71,  // 66: nagi.v1.AgentService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
+	17,  // 67: nagi.v1.AgentService.CheckImages:input_type -> nagi.v1.ContainerRef
+	38,  // 68: nagi.v1.AgentService.LoginRegistry:input_type -> nagi.v1.LoginRegistryRequest
+	17,  // 69: nagi.v1.AgentService.SyncBackup:input_type -> nagi.v1.ContainerRef
+	9,   // 70: nagi.v1.AgentService.AcceptReplica:input_type -> nagi.v1.AcceptReplicaRequest
+	11,  // 71: nagi.v1.AgentService.ListReplicas:input_type -> nagi.v1.ListReplicasRequest
+	17,  // 72: nagi.v1.AgentService.ListReplicaSnapshots:input_type -> nagi.v1.ContainerRef
+	18,  // 73: nagi.v1.AgentService.CheckContainer:input_type -> nagi.v1.PutContainerRequest
+	14,  // 74: nagi.v1.AgentService.RestoreReplica:input_type -> nagi.v1.RestoreReplicaRequest
+	17,  // 75: nagi.v1.AgentService.DeleteReplica:input_type -> nagi.v1.ContainerRef
+	16,  // 76: nagi.v1.AgentService.MigrateOut:input_type -> nagi.v1.MigrateOutRequest
+	17,  // 77: nagi.v1.AgentService.MigrateResume:input_type -> nagi.v1.ContainerRef
+	8,   // 78: nagi.v1.AgentService.SetFailover:input_type -> nagi.v1.SetFailoverRequest
+	17,  // 79: nagi.v1.AgentService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
+	6,   // 80: nagi.v1.AgentService.GetCache:input_type -> nagi.v1.GetCacheRequest
+	85,  // 81: nagi.v1.AgentService.SetLinks:input_type -> nagi.v1.LinkPlan
+	2,   // 82: nagi.v1.AgentService.CheckPorts:input_type -> nagi.v1.CheckPortsRequest
+	4,   // 83: nagi.v1.AgentService.RetryCerts:input_type -> nagi.v1.RetryCertsRequest
+	73,  // 84: nagi.v1.AgentService.SetAlertConfig:input_type -> nagi.v1.SetAlertConfigRequest
+	75,  // 85: nagi.v1.AgentService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
+	77,  // 86: nagi.v1.AgentService.GetStorage:input_type -> nagi.v1.GetStorageRequest
+	40,  // 87: nagi.v1.AgentService.SetProjectsRoot:input_type -> nagi.v1.SetProjectsRootRequest
+	49,  // 88: nagi.v1.AgentService.ListPanels:input_type -> nagi.v1.ListPanelsRequest
+	51,  // 89: nagi.v1.AgentService.AddPanel:input_type -> nagi.v1.AddPanelRequest
+	53,  // 90: nagi.v1.AgentService.RemovePanel:input_type -> nagi.v1.RemovePanelRequest
+	48,  // 91: nagi.v1.AgentService.GetMeshStatus:input_type -> nagi.v1.MeshStatusRequest
+	96,  // 92: nagi.v1.AgentService.MeshPing:input_type -> nagi.v1.MeshPingRequest
+	46,  // 93: nagi.v1.AgentService.GetMirrors:input_type -> nagi.v1.GetMirrorsRequest
+	47,  // 94: nagi.v1.AgentService.SetMirrors:input_type -> nagi.v1.Mirrors
+	42,  // 95: nagi.v1.AgentService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainRequest
+	44,  // 96: nagi.v1.AgentService.Upgrade:input_type -> nagi.v1.UpgradeRequest
+	19,  // 97: nagi.v1.AgentService.PutContainer:output_type -> nagi.v1.PutContainerResponse
+	97,  // 98: nagi.v1.AgentService.DeployContainer:output_type -> nagi.v1.DeployEvent
+	22,  // 99: nagi.v1.AgentService.DeleteContainer:output_type -> nagi.v1.DeleteContainerResponse
+	97,  // 100: nagi.v1.AgentService.ControlContainer:output_type -> nagi.v1.DeployEvent
+	26,  // 101: nagi.v1.AgentService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
+	29,  // 102: nagi.v1.AgentService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
+	33,  // 103: nagi.v1.AgentService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	33,  // 104: nagi.v1.AgentService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
+	33,  // 105: nagi.v1.AgentService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	35,  // 106: nagi.v1.AgentService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	97,  // 107: nagi.v1.AgentService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
+	97,  // 108: nagi.v1.AgentService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
+	33,  // 109: nagi.v1.AgentService.DeleteSnapshot:output_type -> nagi.v1.VolumeFileOpResponse
+	98,  // 110: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
+	58,  // 111: nagi.v1.AgentService.Exec:output_type -> nagi.v1.ExecOutput
+	58,  // 112: nagi.v1.AgentService.NodeShell:output_type -> nagi.v1.ExecOutput
+	63,  // 113: nagi.v1.AgentService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
+	64,  // 114: nagi.v1.AgentService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
+	66,  // 115: nagi.v1.AgentService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
+	68,  // 116: nagi.v1.AgentService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
+	68,  // 117: nagi.v1.AgentService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
+	70,  // 118: nagi.v1.AgentService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
+	66,  // 119: nagi.v1.AgentService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
+	37,  // 120: nagi.v1.AgentService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
+	39,  // 121: nagi.v1.AgentService.LoginRegistry:output_type -> nagi.v1.LoginRegistryResponse
+	99,  // 122: nagi.v1.AgentService.SyncBackup:output_type -> nagi.v1.BackupStatus
+	10,  // 123: nagi.v1.AgentService.AcceptReplica:output_type -> nagi.v1.AcceptReplicaResponse
+	12,  // 124: nagi.v1.AgentService.ListReplicas:output_type -> nagi.v1.ListReplicasResponse
+	35,  // 125: nagi.v1.AgentService.ListReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	13,  // 126: nagi.v1.AgentService.CheckContainer:output_type -> nagi.v1.CheckContainerResponse
+	97,  // 127: nagi.v1.AgentService.RestoreReplica:output_type -> nagi.v1.DeployEvent
+	15,  // 128: nagi.v1.AgentService.DeleteReplica:output_type -> nagi.v1.DeleteReplicaResponse
+	97,  // 129: nagi.v1.AgentService.MigrateOut:output_type -> nagi.v1.DeployEvent
+	97,  // 130: nagi.v1.AgentService.MigrateResume:output_type -> nagi.v1.DeployEvent
+	84,  // 131: nagi.v1.AgentService.SetFailover:output_type -> nagi.v1.FailoverStatus
+	84,  // 132: nagi.v1.AgentService.ConfirmTakeover:output_type -> nagi.v1.FailoverStatus
+	7,   // 133: nagi.v1.AgentService.GetCache:output_type -> nagi.v1.NodeCache
+	1,   // 134: nagi.v1.AgentService.SetLinks:output_type -> nagi.v1.SetLinksResponse
+	3,   // 135: nagi.v1.AgentService.CheckPorts:output_type -> nagi.v1.CheckPortsResponse
+	5,   // 136: nagi.v1.AgentService.RetryCerts:output_type -> nagi.v1.RetryCertsResponse
+	74,  // 137: nagi.v1.AgentService.SetAlertConfig:output_type -> nagi.v1.SetAlertConfigResponse
+	76,  // 138: nagi.v1.AgentService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	81,  // 139: nagi.v1.AgentService.GetStorage:output_type -> nagi.v1.NodeStorage
+	41,  // 140: nagi.v1.AgentService.SetProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
+	50,  // 141: nagi.v1.AgentService.ListPanels:output_type -> nagi.v1.ListPanelsResponse
+	52,  // 142: nagi.v1.AgentService.AddPanel:output_type -> nagi.v1.AddPanelResponse
+	54,  // 143: nagi.v1.AgentService.RemovePanel:output_type -> nagi.v1.RemovePanelResponse
+	100, // 144: nagi.v1.AgentService.GetMeshStatus:output_type -> nagi.v1.MeshStatus
+	101, // 145: nagi.v1.AgentService.MeshPing:output_type -> nagi.v1.MeshPingResponse
+	47,  // 146: nagi.v1.AgentService.GetMirrors:output_type -> nagi.v1.Mirrors
+	47,  // 147: nagi.v1.AgentService.SetMirrors:output_type -> nagi.v1.Mirrors
+	43,  // 148: nagi.v1.AgentService.SetPanelDomain:output_type -> nagi.v1.SetPanelDomainResponse
+	45,  // 149: nagi.v1.AgentService.Upgrade:output_type -> nagi.v1.UpgradeResponse
+	97,  // [97:150] is the sub-list for method output_type
+	44,  // [44:97] is the sub-list for method input_type
 	44,  // [44:44] is the sub-list for extension type_name
 	44,  // [44:44] is the sub-list for extension extendee
 	0,   // [0:44] is the sub-list for field type_name

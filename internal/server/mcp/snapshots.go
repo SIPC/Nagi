@@ -10,8 +10,8 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
-// 快照：列出和恢复（见 docs/mcp.md#快照）。恢复会停止容器、替换它的全部数据，所以分两步：
-// 不带确认时只返回预览；确认时原样带上快照 ID，先给当前数据拍一份保护快照，拍成功了才恢复。
+// 快照：列出、恢复和删除（见 docs/mcp.md#快照）。恢复会停止容器、替换它的全部数据，删除没法撤销，所以都分两步：
+// 不带确认时只返回预览；确认时原样带上快照 ID。恢复前先给当前数据拍一份保护快照，拍成功了才恢复。
 
 type snapshotView struct {
 	ID         string `json:"id"`
@@ -20,10 +20,37 @@ type snapshotView struct {
 	Bytes      int64  `json:"size_bytes"`
 	Version    int64  `json:"version,omitempty"`
 	Restorable bool   `json:"restorable"`
+	Deletable  bool   `json:"deletable"`
 }
 
 // restorable：只能从定时快照和手动快照恢复数据（见 docs/snapshot.md）。部署前的快照随回滚使用，版本文件随版本回滚。
 func restorable(kind string) bool { return kind == "scheduled" || kind == "manual" }
+
+// deletable：版本文件不能删，回滚要用。定时、手动、部署前快照也计入项目设置里的份数上限。
+func deletable(kind string) bool { return restorable(kind) || kind == "predeploy" }
+
+func view(sn *nagiv1.Snapshot) snapshotView {
+	return snapshotView{ID: sn.GetId(), Kind: sn.GetKind(), Time: ts(sn.GetTime()), Bytes: sn.GetSize(), Version: sn.GetVersion(),
+		Restorable: restorable(sn.GetKind()), Deletable: deletable(sn.GetKind())}
+}
+
+// pushedOut 判断再拍一份快照后，sn 会不会因为份数上限被删掉。list 是最新的在前。
+func pushedOut(list []*nagiv1.Snapshot, sn *nagiv1.Snapshot, limit uint32) bool {
+	if limit == 0 {
+		return false
+	}
+	n := 0
+	for _, x := range list {
+		if !deletable(x.GetKind()) {
+			continue
+		}
+		if x.GetId() == sn.GetId() {
+			return uint32(n+1) >= limit
+		}
+		n++
+	}
+	return false
+}
 
 func (c *call) snapshots(ref *nagiv1.ContainerRef) ([]*nagiv1.Snapshot, error) {
 	res, err := c.h.clients.projects.ListSnapshots(c.ctx, connect.NewRequest(ref))
@@ -44,9 +71,14 @@ func toolListSnapshots(c *call, in ContainerArg) (any, error) {
 	}
 	out := []snapshotView{}
 	for _, sn := range list {
-		out = append(out, snapshotView{ID: sn.GetId(), Kind: sn.GetKind(), Time: ts(sn.GetTime()), Bytes: sn.GetSize(), Version: sn.GetVersion(), Restorable: restorable(sn.GetKind())})
+		out = append(out, view(sn))
 	}
-	return map[string]any{"snapshots": out, "note": "only scheduled and manual snapshots can be restored with restore_snapshot; predeploy and version snapshots are used by rollback"}, nil
+	res := map[string]any{"snapshots": out, "note": "only scheduled and manual snapshots can be restored with restore_snapshot; predeploy and version snapshots are used by rollback. version snapshots cannot be deleted"}
+	if n := s.GetProject().GetSettings().GetSnapshotLimit(); n > 0 {
+		res["limit"] = n
+		res["limit_note"] = "scheduled, manual and predeploy snapshots together are kept up to this count; the oldest are deleted after each new snapshot"
+	}
+	return res, nil
 }
 
 type RestoreArgs struct {
@@ -72,6 +104,10 @@ func toolRestoreSnapshot(c *call, in RestoreArgs) (any, error) {
 	sn := list[i]
 	if !restorable(sn.GetKind()) {
 		return nil, fmt.Errorf("a %s snapshot cannot be restored here; use rollback for version and predeploy data", sn.GetKind())
+	}
+	// 保护快照会让份数超过上限时，最老的会被删掉；要恢复的正好是它就不做，免得把它删了。
+	if pushedOut(list, sn, s.GetProject().GetSettings().GetSnapshotLimit()) {
+		return nil, errors.New("this snapshot would be deleted by the project's snapshot limit when the protective snapshot is taken; ask the user to raise the limit in project settings or delete newer snapshots first")
 	}
 	if in.Confirm != in.SnapshotID {
 		nodes, err := c.nodes()
@@ -126,4 +162,50 @@ func toolRestoreSnapshot(c *call, in RestoreArgs) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"protective_snapshot": protectID, "restore": res}, nil
+}
+
+type DeleteSnapshotArgs struct {
+	ContainerArg
+	SnapshotID string `json:"snapshot_id" jsonschema:"snapshot to delete (see list_snapshots)"`
+	Confirm    string `json:"confirm,omitempty" jsonschema:"omit to get a preview; repeat snapshot_id here to delete after the user agreed"`
+}
+
+func toolDeleteSnapshot(c *call, in DeleteSnapshotArgs) (any, error) {
+	s, m, err := c.container(in.ContainerArg)
+	if err != nil {
+		return nil, err
+	}
+	ref := &nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}
+	list, err := c.snapshots(ref)
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(list, func(x *nagiv1.Snapshot) bool { return x.GetId() == in.SnapshotID })
+	if i < 0 {
+		return nil, fmt.Errorf("snapshot %q not found for container %s", in.SnapshotID, m.GetName())
+	}
+	sn := list[i]
+	if !deletable(sn.GetKind()) {
+		return nil, errors.New("version snapshots cannot be deleted; rollback needs them")
+	}
+	if in.Confirm != in.SnapshotID {
+		return map[string]any{
+			"preview":   true,
+			"snapshot":  view(sn),
+			"container": m.GetName(),
+			"effects": []string{
+				"the snapshot is deleted permanently and cannot be restored from afterwards",
+				"the container and its current data are not touched",
+				"disk space is freed by the daily maintenance, a day or two later",
+			},
+			"next": "show this preview to the user; after they agree, call delete_snapshot again with confirm set to the snapshot_id",
+		}, nil
+	}
+	res, err := c.h.clients.projects.DeleteSnapshot(c.ctx, connect.NewRequest(&nagiv1.RestoreSnapshotRequest{
+		ProjectId: ref.GetProjectId(), Container: ref.GetContainer(), SnapshotId: sn.GetId(),
+	}))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"deleted": sn.GetId(), "remaining": len(res.Msg.GetSnapshots())}, nil
 }

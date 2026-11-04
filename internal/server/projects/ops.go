@@ -133,6 +133,29 @@ func (s *Service) RestoreSnapshot(ctx context.Context, projectID, name, snapshot
 	return err
 }
 
+// DeleteSnapshot 删除容器的一份定时、手动或部署前快照，返回删除后的快照列表。
+func (s *Service) DeleteSnapshot(ctx context.Context, projectID, name, snapshotID string) ([]*nagiv1.Snapshot, error) {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	agent, err := s.agent(ctx, c.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = agent.DeleteSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{ProjectId: projectID, Container: name, SnapshotId: snapshotID})
+	if status.Code(err) == codes.Unimplemented {
+		return nil, i18n.New("节点版本过旧，升级节点后才能删除快照")
+	} else if err != nil {
+		return nil, err
+	}
+	resp, err := agent.ListSnapshots(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetSnapshots(), nil
+}
+
 // ControlContainer 手动启动、停止或重启容器。不改配置，不生成版本。
 func (s *Service) ControlContainer(ctx context.Context, projectID, name string, action nagiv1.ContainerAction, out Output) error {
 	ctx = context.WithoutCancel(ctx)

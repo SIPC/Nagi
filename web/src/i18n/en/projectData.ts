@@ -87,6 +87,7 @@ export default {
     schedule: (min) => `Scheduled every ${min} minutes.`,
     scheduleLink: "Change interval",
     scheduleShort: (min) => `Every ${min} minutes`,
+    limitShort: (n) => `, up to ${n}`,
     scheduleEdit: "Change",
     today: (time) => `Today ${time}`,
     viaVersion: "Used by rollback",
@@ -106,6 +107,8 @@ export default {
     restoreConfirm: (container) =>
       `Restore data/ and volumes/ of container ${container} from this snapshot? The container will be stopped first and current data will be overwritten.`,
     restore: "Restore",
+    deleteConfirm: "Delete this snapshot? It can't be restored from afterwards.",
+    deleted: "Snapshot deleted",
   },
   backup: {
     title: "Backup node",

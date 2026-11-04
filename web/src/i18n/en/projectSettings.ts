@@ -10,6 +10,9 @@ export default {
       "Use lowercase letters, digits and -. After changing it, update the addresses those projects use. Existing container directories don't change.",
     snapshotInterval: "Snapshot interval (minutes)",
     snapshotIntervalHint: "Defaults to 60 minutes if empty.",
+    snapshotLimit: "Snapshot limit",
+    snapshotLimitHint: "Scheduled, manual and pre-deploy snapshots per container. The oldest are deleted beyond this. Version files don't count. Unlimited if empty.",
+    snapshotLimitNone: "Unlimited",
   },
   sharedEnv: {
     deployConfirm: (n) => `Deploy the ${n === 1 ? "affected container" : `${n} affected containers`}? They are recreated. The service is briefly interrupted and new versions are created.`,

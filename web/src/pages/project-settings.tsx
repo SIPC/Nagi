@@ -38,7 +38,7 @@ function HelpParts({ parts }: { parts: React.ReactNode[] }) {
   );
 }
 
-// GeneralSettings 修改名称、网络名和快照间隔；内部端口照原样提交（接口每次提交完整的设置）。
+// GeneralSettings 修改名称、网络名、快照间隔和份数上限；内部端口照原样提交（接口每次提交完整的设置）。
 function GeneralSettings({ project }: { project: Project }) {
   const m = t.projectSettings.general;
   const queryClient = useQueryClient();
@@ -46,6 +46,7 @@ function GeneralSettings({ project }: { project: Project }) {
   const [name, setName] = useState(project.name);
   const [network, setNetwork] = useState(project.networkName);
   const [interval, setInterval] = useState(s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "");
+  const [limit, setLimit] = useState(s?.snapshotLimit ? String(s.snapshotLimit) : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +62,7 @@ function GeneralSettings({ project }: { project: Project }) {
         settings: {
           internalPorts: s?.internalPorts,
           snapshotIntervalMinutes: Number(interval) || 0,
+          snapshotLimit: Number(limit) || 0,
         },
       });
       toast.success(t.common.feedback.saved);
@@ -91,6 +93,9 @@ function GeneralSettings({ project }: { project: Project }) {
             </Field>
             <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint}>
               <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder="60" />
+            </Field>
+            <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint}>
+              <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={m.snapshotLimitNone} />
             </Field>
           </FormRow>
           {error && <Alert>{error}</Alert>}

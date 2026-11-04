@@ -286,7 +286,7 @@ func (s *Service) rebuildProject(ctx context.Context, specs []*nagiv1.ContainerS
 		internalPorts = newest.GetInternalPorts()
 	}
 	settings := &nagiv1.ProjectSettings{
-		SharedEnv: newest.GetSharedEnv(), SnapshotIntervalMinutes: newest.GetSnapshotIntervalMinutes(), InternalPorts: internalPorts,
+		SharedEnv: newest.GetSharedEnv(), SnapshotIntervalMinutes: newest.GetSnapshotIntervalMinutes(), SnapshotLimit: newest.GetSnapshotLimit(), InternalPorts: internalPorts,
 	}
 	sealed, err := s.seal(settings, settingsCtx(id))
 	if err != nil {

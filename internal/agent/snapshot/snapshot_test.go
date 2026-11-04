@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -165,5 +166,60 @@ func TestListAndWalkFiles(t *testing.T) {
 	})
 	if err != nil || single != "=y" {
 		t.Errorf("单个文件 = %q, %v", single, err)
+	}
+}
+
+func TestLimitAndDelete(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	r, err := Open(ctx, "p1", filepath.Join(root, "backups"), "test-password", filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(ctx)
+	data := filepath.Join(root, "data")
+	create := func(kind Kind, content string) string {
+		t.Helper()
+		write(t, filepath.Join(data, "app.js"), content)
+		id, err := r.Create(ctx, kind, []Dir{{"data", data}}, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	// 定时、手动、部署前合计超过上限时删除最老的，版本文件不算。
+	r.Limit = 3
+	oldest := create(Manual, "1")
+	create(PreDeploy, "2")
+	ver := create(Version, "3")
+	create(Scheduled, "4")
+	create(Manual, "5")
+	list, err := r.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counted := 0
+	for _, s := range list {
+		if s.ID == oldest {
+			t.Fatal("the oldest snapshot should be removed by the limit")
+		}
+		if s.Kind != Version {
+			counted++
+		}
+	}
+	if counted != 3 || len(list) != 4 {
+		t.Fatalf("kept %d counted of %d, want 3 of 4", counted, len(list))
+	}
+
+	// 手动删除：版本文件不能删。
+	if err := r.Delete(ctx, ver); !errors.Is(err, ErrNotDeletable) {
+		t.Fatalf("delete version = %v, want ErrNotDeletable", err)
+	}
+	if err := r.Delete(ctx, list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := r.List(ctx); len(after) != 3 {
+		t.Fatalf("after delete = %d, want 3", len(after))
 	}
 }

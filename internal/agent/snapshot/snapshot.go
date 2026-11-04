@@ -68,7 +68,18 @@ func retention(kind Kind) policy.RetentionPolicy {
 type Repo struct {
 	rep   repo.Repository
 	owner string
+	// Limit 是定时、手动、部署前快照合计最多保留的份数，0 表示不限。每次做完这三种快照后按它删除最老的。
+	Limit int
 }
+
+// limited 是计入份数上限、可以手动删除的快照种类。版本文件不算，回滚要用。
+var limited = []Kind{Scheduled, Manual, PreDeploy}
+
+// ErrNotDeletable 表示这份快照不能删除（版本文件）。
+var ErrNotDeletable = errors.New("snapshot not deletable")
+
+// Deletable 判断这种快照能不能删除。
+func Deletable(k Kind) bool { return k == Scheduled || k == Manual || k == PreDeploy }
 
 // Open 打开容器的快照仓库，不存在时创建。
 //   - owner：快照来源里的用户名，例如 <项目 ID>-<容器名>
@@ -193,10 +204,61 @@ func (r *Repo) CreateWithRoot(ctx context.Context, kind Kind, dirs []Dir, ignore
 		if err := policy.SetPolicy(ctx, w, si, pol); err != nil {
 			return err
 		}
-		_, err = policy.ApplyRetentionPolicy(ctx, w, si, true)
-		return err
+		if _, err = policy.ApplyRetentionPolicy(ctx, w, si, true); err != nil {
+			return err
+		}
+		if Deletable(kind) {
+			return r.applyLimit(ctx, w)
+		}
+		return nil
 	})
 	return string(id), rootID, err
+}
+
+// applyLimit 删除超出份数上限的最老的快照。
+func (r *Repo) applyLimit(ctx context.Context, w repo.RepositoryWriter) error {
+	if r.Limit <= 0 {
+		return nil
+	}
+	var all []*snapshot.Manifest
+	for _, k := range limited {
+		mans, err := snapshot.ListSnapshots(ctx, w, r.source(k))
+		if err != nil {
+			return err
+		}
+		all = append(all, mans...)
+	}
+	if len(all) <= r.Limit {
+		return nil
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].StartTime.After(all[j].StartTime) })
+	for _, m := range all[r.Limit:] {
+		if err := w.DeleteManifest(ctx, m.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Delete 删除一份定时、手动或部署前快照。占用的空间在之后的维护里回收。
+func (r *Repo) Delete(ctx context.Context, id string) error {
+	return repo.WriteSession(ctx, r.rep, repo.WriteSessionOptions{Purpose: "nagi delete snapshot"}, func(ctx context.Context, w repo.RepositoryWriter) error {
+		man, err := snapshot.LoadSnapshot(ctx, w, manifest.ID(id))
+		if err != nil {
+			return fmt.Errorf("读取快照: %w", err)
+		}
+		// 按快照来源判断种类，别的来源（版本文件）不能删。
+		var kind Kind
+		for _, k := range limited {
+			if man.Source == r.source(k) {
+				kind = k
+			}
+		}
+		if !Deletable(kind) {
+			return ErrNotDeletable
+		}
+		return w.DeleteManifest(ctx, man.ID)
+	})
 }
 
 // Info 是快照的摘要信息。

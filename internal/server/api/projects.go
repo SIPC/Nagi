@@ -409,6 +409,12 @@ func (s *projectService) RestoreSnapshot(ctx context.Context, req *connect.Reque
 	})
 }
 
+func (s *projectService) DeleteSnapshot(ctx context.Context, req *connect.Request[nagiv1.RestoreSnapshotRequest]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
+	m := req.Msg
+	list, err := s.Projects.DeleteSnapshot(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId())
+	return reply(&nagiv1.ListSnapshotsResponse{Snapshots: list}, err)
+}
+
 func (s *projectService) GetBackupKey(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.GetBackupKeyResponse], error) {
 	key, err := s.Projects.BackupKey(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
 	return reply(&nagiv1.GetBackupKeyResponse{Key: key}, err)

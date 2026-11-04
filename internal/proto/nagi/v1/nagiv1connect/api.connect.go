@@ -371,6 +371,9 @@ const (
 	// ProjectServiceRestoreSnapshotProcedure is the fully-qualified name of the ProjectService's
 	// RestoreSnapshot RPC.
 	ProjectServiceRestoreSnapshotProcedure = "/nagi.v1.ProjectService/RestoreSnapshot"
+	// ProjectServiceDeleteSnapshotProcedure is the fully-qualified name of the ProjectService's
+	// DeleteSnapshot RPC.
+	ProjectServiceDeleteSnapshotProcedure = "/nagi.v1.ProjectService/DeleteSnapshot"
 	// ProjectServiceGetBackupKeyProcedure is the fully-qualified name of the ProjectService's
 	// GetBackupKey RPC.
 	ProjectServiceGetBackupKeyProcedure = "/nagi.v1.ProjectService/GetBackupKey"
@@ -2557,6 +2560,8 @@ type ProjectServiceClient interface {
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetBackupKey(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.GetBackupKeyResponse], error)
 	// 私有仓库认证：每个项目自己的登录信息。
@@ -2848,6 +2853,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("RestoreSnapshot")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteSnapshot: connect.NewClient[v1.RestoreSnapshotRequest, v1.ListSnapshotsResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteSnapshotProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
 		getBackupKey: connect.NewClient[v1.ContainerRef, v1.GetBackupKeyResponse](
 			httpClient,
 			baseURL+ProjectServiceGetBackupKeyProcedure,
@@ -2928,6 +2939,7 @@ type projectServiceClient struct {
 	listSnapshots           *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot          *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot         *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
+	deleteSnapshot          *connect.Client[v1.RestoreSnapshotRequest, v1.ListSnapshotsResponse]
 	getBackupKey            *connect.Client[v1.ContainerRef, v1.GetBackupKeyResponse]
 	listRegistries          *connect.Client[v1.ProjectRef, v1.RegistriesResponse]
 	loginRegistry           *connect.Client[v1.LoginRegistryApiRequest, v1.RegistriesResponse]
@@ -3160,6 +3172,11 @@ func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, req *connect
 	return c.restoreSnapshot.CallServerStream(ctx, req)
 }
 
+// DeleteSnapshot calls nagi.v1.ProjectService.DeleteSnapshot.
+func (c *projectServiceClient) DeleteSnapshot(ctx context.Context, req *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return c.deleteSnapshot.CallUnary(ctx, req)
+}
+
 // GetBackupKey calls nagi.v1.ProjectService.GetBackupKey.
 func (c *projectServiceClient) GetBackupKey(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.GetBackupKeyResponse], error) {
 	return c.getBackupKey.CallUnary(ctx, req)
@@ -3264,6 +3281,8 @@ type ProjectServiceHandler interface {
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+	DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 面板保存的容器快照仓库密码。节点坏了只剩备份文件时，用 kopia 打开仓库要用到。
 	GetBackupKey(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.GetBackupKeyResponse], error)
 	// 私有仓库认证：每个项目自己的登录信息。
@@ -3551,6 +3570,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("RestoreSnapshot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceDeleteSnapshotHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteSnapshotProcedure,
+		svc.DeleteSnapshot,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceGetBackupKeyHandler := connect.NewUnaryHandler(
 		ProjectServiceGetBackupKeyProcedure,
 		svc.GetBackupKey,
@@ -3673,6 +3698,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceCreateSnapshotHandler.ServeHTTP(w, r)
 		case ProjectServiceRestoreSnapshotProcedure:
 			projectServiceRestoreSnapshotHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteSnapshotProcedure:
+			projectServiceDeleteSnapshotHandler.ServeHTTP(w, r)
 		case ProjectServiceGetBackupKeyProcedure:
 			projectServiceGetBackupKeyHandler.ServeHTTP(w, r)
 		case ProjectServiceListRegistriesProcedure:
@@ -3870,6 +3897,10 @@ func (UnimplementedProjectServiceHandler) CreateSnapshot(context.Context, *conne
 
 func (UnimplementedProjectServiceHandler) RestoreSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreSnapshot is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteSnapshot(context.Context, *connect.Request[v1.RestoreSnapshotRequest]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.DeleteSnapshot is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) GetBackupKey(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.GetBackupKeyResponse], error) {

@@ -416,8 +416,14 @@ func (s *Service) checkNetworkName(ctx context.Context, name, except string) err
 	return nil
 }
 
+// 快照份数上限的范围。下限留几份，免得一次部署前快照和手动快照就把能恢复的都挤掉。
+const (
+	minSnapshotLimit = 3
+	maxSnapshotLimit = 1000
+)
+
 func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) {
-	out := &nagiv1.ProjectSettings{SnapshotIntervalMinutes: in.GetSnapshotIntervalMinutes()}
+	out := &nagiv1.ProjectSettings{SnapshotIntervalMinutes: in.GetSnapshotIntervalMinutes(), SnapshotLimit: in.GetSnapshotLimit()}
 	ports, err := spec.CleanInternalPorts(in.GetInternalPorts())
 	if err != nil {
 		return nil, err
@@ -425,6 +431,9 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 	out.InternalPorts = ports
 	if out.SnapshotIntervalMinutes > 7*24*60 {
 		return nil, invalid("定时快照间隔不能超过 7 天")
+	}
+	if n := out.SnapshotLimit; n != 0 && (n < minSnapshotLimit || n > maxSnapshotLimit) {
+		return nil, invalid("快照份数上限须在 %d 到 %d 之间，留空表示不限", minSnapshotLimit, maxSnapshotLimit)
 	}
 	return out, nil
 }

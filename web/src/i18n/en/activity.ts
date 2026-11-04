@@ -78,6 +78,7 @@ export default {
     DisconnectProject: "Disconnect project",
     CreateSnapshot: "Create snapshot",
     RestoreSnapshot: "Restore snapshot",
+    DeleteSnapshot: "Delete snapshot",
     LoginRegistry: "Sign in to registry",
     HandoverNodes: "Hand over nodes",
     RemoveNodePanel: "Remove trusted panel",

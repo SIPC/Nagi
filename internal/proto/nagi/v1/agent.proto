@@ -32,6 +32,8 @@ service AgentService {
   rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
   // 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (stream DeployEvent);
+  // 删除一份定时、手动或部署前快照。版本文件不能删（回滚要用）。
+  rpc DeleteSnapshot(RestoreSnapshotRequest) returns (VolumeFileOpResponse);
   rpc StreamLogs(StreamLogsRequest) returns (stream LogLine);
   // 在服务的容器里打开一个交互式终端。第一条输入必须是 start。
   rpc Exec(stream ExecInput) returns (stream ExecOutput);
