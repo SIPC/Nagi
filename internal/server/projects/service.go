@@ -437,7 +437,7 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 		return nil, invalid("定时快照间隔不能超过 7 天")
 	}
 	if n := out.SnapshotLimit; n != 0 && (n < minSnapshotLimit || n > maxSnapshotLimit) {
-		return nil, invalid("快照份数上限须在 %d 到 %d 之间，留空表示不限", minSnapshotLimit, maxSnapshotLimit)
+		return nil, invalid("快照份数上限须在 %d 到 %d 之间", minSnapshotLimit, maxSnapshotLimit)
 	}
 	return out, nil
 }

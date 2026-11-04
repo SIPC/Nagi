@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { envToText, textToEnv } from "@/lib/config";
+import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { useRole } from "@/components/role";
 import { Alert, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
@@ -92,10 +92,10 @@ function GeneralSettings({ project }: { project: Project }) {
               <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required />
             </Field>
             <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint}>
-              <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder="60" />
+              <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotIntervalMinutes)} />
             </Field>
             <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint}>
-              <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={m.snapshotLimitNone} />
+              <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotLimit)} />
             </Field>
           </FormRow>
           {error && <Alert>{error}</Alert>}

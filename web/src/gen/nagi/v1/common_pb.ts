@@ -158,7 +158,7 @@ export type ProjectSettings = Message<"nagi.v1.ProjectSettings"> & {
   sharedEnv: EnvVar[];
 
   /**
-   * 定时快照间隔（分钟），0 表示默认（60 分钟）。对项目里的所有容器生效。
+   * 定时快照间隔（分钟），0 表示默认（720 分钟）。对项目里的所有容器生效。
    *
    * @generated from field: uint32 snapshot_interval_minutes = 2;
    */
@@ -172,7 +172,7 @@ export type ProjectSettings = Message<"nagi.v1.ProjectSettings"> & {
   internalPorts: string[];
 
   /**
-   * 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示不限。
+   * 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示默认（10 份）。
    *
    * @generated from field: uint32 snapshot_limit = 4;
    */
@@ -1156,7 +1156,7 @@ export type ContainerSpec = Message<"nagi.v1.ContainerSpec"> & {
   backupPassword: string;
 
   /**
-   * 定时快照间隔（分钟），0 表示默认 60。
+   * 定时快照间隔（分钟），0 表示默认 720。
    *
    * @generated from field: uint32 snapshot_interval_minutes = 17;
    */
@@ -1198,7 +1198,7 @@ export type ContainerSpec = Message<"nagi.v1.ContainerSpec"> & {
   displayName: string;
 
   /**
-   * 项目设置里的快照份数上限，0 表示不限。
+   * 项目设置里的快照份数上限，0 表示默认 10。
    *
    * @generated from field: uint32 snapshot_limit = 23;
    */

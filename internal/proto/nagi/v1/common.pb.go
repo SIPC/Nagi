@@ -290,11 +290,11 @@ type ProjectSettings struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
 	SharedEnv []*EnvVar `protobuf:"bytes,1,rep,name=shared_env,json=sharedEnv,proto3" json:"shared_env,omitempty"`
-	// 定时快照间隔（分钟），0 表示默认（60 分钟）。对项目里的所有容器生效。
+	// 定时快照间隔（分钟），0 表示默认（720 分钟）。对项目里的所有容器生效。
 	SnapshotIntervalMinutes uint32 `protobuf:"varint,2,opt,name=snapshot_interval_minutes,json=snapshotIntervalMinutes,proto3" json:"snapshot_interval_minutes,omitempty"`
 	// 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
 	InternalPorts []string `protobuf:"bytes,3,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
-	// 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示不限。
+	// 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示默认（10 份）。
 	SnapshotLimit uint32 `protobuf:"varint,4,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1843,7 +1843,7 @@ type ContainerSpec struct {
 	DockerConfig []byte `protobuf:"bytes,15,opt,name=docker_config,json=dockerConfig,proto3" json:"docker_config,omitempty"`
 	// 快照仓库的密码。
 	BackupPassword string `protobuf:"bytes,16,opt,name=backup_password,json=backupPassword,proto3" json:"backup_password,omitempty"`
-	// 定时快照间隔（分钟），0 表示默认 60。
+	// 定时快照间隔（分钟），0 表示默认 720。
 	SnapshotIntervalMinutes uint32 `protobuf:"varint,17,opt,name=snapshot_interval_minutes,json=snapshotIntervalMinutes,proto3" json:"snapshot_interval_minutes,omitempty"`
 	// 是否有状态（面板按配置判定）。
 	Stateful bool `protobuf:"varint,18,opt,name=stateful,proto3" json:"stateful,omitempty"`
@@ -1855,7 +1855,7 @@ type ContainerSpec struct {
 	InternalPorts []string `protobuf:"bytes,21,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
 	// 容器的显示名称（换面板时据此拼回）。
 	DisplayName string `protobuf:"bytes,22,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	// 项目设置里的快照份数上限，0 表示不限。
+	// 项目设置里的快照份数上限，0 表示默认 10。
 	SnapshotLimit uint32 `protobuf:"varint,23,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

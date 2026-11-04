@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -36,9 +37,6 @@ func view(sn *nagiv1.Snapshot) snapshotView {
 
 // pushedOut 判断再拍一份快照后，sn 会不会因为份数上限被删掉。list 是最新的在前。
 func pushedOut(list []*nagiv1.Snapshot, sn *nagiv1.Snapshot, limit uint32) bool {
-	if limit == 0 {
-		return false
-	}
 	n := 0
 	for _, x := range list {
 		if !deletable(x.GetKind()) {
@@ -74,10 +72,8 @@ func toolListSnapshots(c *call, in ContainerArg) (any, error) {
 		out = append(out, view(sn))
 	}
 	res := map[string]any{"snapshots": out, "note": "only scheduled and manual snapshots can be restored with restore_snapshot; predeploy and version snapshots are used by rollback. version snapshots cannot be deleted"}
-	if n := s.GetProject().GetSettings().GetSnapshotLimit(); n > 0 {
-		res["limit"] = n
-		res["limit_note"] = "scheduled, manual and predeploy snapshots together are kept up to this count; the oldest are deleted after each new snapshot"
-	}
+	res["limit"] = spec.SnapshotLimit(s.GetProject().GetSettings().GetSnapshotLimit())
+	res["limit_note"] = "scheduled, manual and predeploy snapshots together are kept up to this count; the oldest are deleted after each new snapshot"
 	return res, nil
 }
 
@@ -106,7 +102,7 @@ func toolRestoreSnapshot(c *call, in RestoreArgs) (any, error) {
 		return nil, fmt.Errorf("a %s snapshot cannot be restored here; use rollback for version and predeploy data", sn.GetKind())
 	}
 	// 保护快照会让份数超过上限时，最老的会被删掉；要恢复的正好是它就不做，免得把它删了。
-	if pushedOut(list, sn, s.GetProject().GetSettings().GetSnapshotLimit()) {
+	if pushedOut(list, sn, spec.SnapshotLimit(s.GetProject().GetSettings().GetSnapshotLimit())) {
 		return nil, errors.New("this snapshot would be deleted by the project's snapshot limit when the protective snapshot is taken; ask the user to raise the limit in project settings or delete newer snapshots first")
 	}
 	if in.Confirm != in.SnapshotID {

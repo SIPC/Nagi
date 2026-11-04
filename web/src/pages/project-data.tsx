@@ -40,6 +40,7 @@ import { confirmAction } from "@/components/confirm";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRole } from "@/components/role";
 import { snapshotTime, VolumeFiles } from "@/pages/volume-files";
+import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit } from "@/lib/config";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -400,8 +401,8 @@ function Snapshots({
       actions={
         <>
           <span>
-            {s.scheduleShort(project.settings?.snapshotIntervalMinutes || 60)}
-            {project.settings?.snapshotLimit ? s.limitShort(project.settings.snapshotLimit) : ""} ·{" "}
+            {s.scheduleShort(project.settings?.snapshotIntervalMinutes || defaultSnapshotIntervalMinutes)}
+            {s.limitShort(project.settings?.snapshotLimit || defaultSnapshotLimit)} ·{" "}
             <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="hover:underline">
               {s.scheduleEdit}
             </Link>

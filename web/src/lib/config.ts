@@ -3,6 +3,10 @@ import { create } from "@bufbuild/protobuf";
 import { EnvVarSchema, PortMappingSchema, type EnvVar, type PortMapping } from "@/gen/nagi/v1/common_pb";
 import { t } from "@/i18n";
 
+// 项目设置里快照间隔和份数上限留空时的默认值，和 internal/pkg/spec/snapshot.go 一致。
+export const defaultSnapshotIntervalMinutes = 720;
+export const defaultSnapshotLimit = 10;
+
 export function envToText(vars: EnvVar[] | undefined): string {
   return (vars ?? []).map((v) => `${v.key}=${v.value}`).join("\n");
 }

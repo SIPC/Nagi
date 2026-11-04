@@ -46,11 +46,11 @@ message LinkedProject {
 message ProjectSettings {
   // 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
   repeated EnvVar shared_env = 1;
-  // 定时快照间隔（分钟），0 表示默认（60 分钟）。对项目里的所有容器生效。
+  // 定时快照间隔（分钟），0 表示默认（720 分钟）。对项目里的所有容器生效。
   uint32 snapshot_interval_minutes = 2;
   // 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
   repeated string internal_ports = 3;
-  // 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示不限。
+  // 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示默认（10 份）。
   uint32 snapshot_limit = 4;
 }
 
@@ -323,7 +323,7 @@ message ContainerSpec {
   bytes docker_config = 15;
   // 快照仓库的密码。
   string backup_password = 16;
-  // 定时快照间隔（分钟），0 表示默认 60。
+  // 定时快照间隔（分钟），0 表示默认 720。
   uint32 snapshot_interval_minutes = 17;
   // 是否有状态（面板按配置判定）。
   bool stateful = 18;
@@ -335,7 +335,7 @@ message ContainerSpec {
   repeated string internal_ports = 21;
   // 容器的显示名称（换面板时据此拼回）。
   string display_name = 22;
-  // 项目设置里的快照份数上限，0 表示不限。
+  // 项目设置里的快照份数上限，0 表示默认 10。
   uint32 snapshot_limit = 23;
 }
 

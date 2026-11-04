@@ -12,6 +12,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -23,7 +24,6 @@ import (
 
 const (
 	pauseLimit          = 30 * time.Second
-	defaultSnapshotGap  = 60 * time.Minute
 	failoverSnapshotGap = 15 * time.Minute
 	maintainGap         = 24 * time.Hour
 )
@@ -36,7 +36,7 @@ func (m *Manager) openRepo(ctx context.Context, s *nagiv1.ContainerSpec) (*snaps
 	if err != nil {
 		return nil, err
 	}
-	rep.Limit = int(s.GetSnapshotLimit())
+	rep.Limit = int(spec.SnapshotLimit(s.GetSnapshotLimit()))
 	return rep, nil
 }
 
@@ -102,10 +102,7 @@ func (m *Manager) SnapshotDue(ctx context.Context, onResult func(projectID, cont
 		if s.GetVersion() == 0 {
 			continue
 		}
-		gap := defaultSnapshotGap
-		if n := s.GetSnapshotIntervalMinutes(); n > 0 {
-			gap = time.Duration(n) * time.Minute
-		}
+		gap := time.Duration(spec.SnapshotIntervalMinutes(s.GetSnapshotIntervalMinutes())) * time.Minute
 		// 设置了顶替的容器每 15 分钟一次（与同步给热备的频率一致），除非用户设得更短。
 		if m.FastSnapshot != nil && m.FastSnapshot(s.GetProjectId(), s.GetName()) && gap > failoverSnapshotGap {
 			gap = failoverSnapshotGap
