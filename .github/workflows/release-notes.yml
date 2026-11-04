@@ -5,7 +5,7 @@ name: release-notes
 on:
   push:
     branches: [main]
-    paths: [CHANGELOG.md, scripts/release-notes.sh]
+    paths: [CHANGELOG.md, scripts/release-notes.sh, .github/workflows/release-notes.yml]
   workflow_dispatch:
 
 permissions:
@@ -20,11 +20,31 @@ jobs:
       - name: Update release notes
         env:
           GH_TOKEN: ${{ github.token }}
+        # 只改内容变了的版本；GitHub 的接口偶尔返回 5xx，每次调用最多试 3 次，个别版本失败不影响其他版本。
         run: |
+          retry() {
+            for i in 1 2 3; do
+              "$@" && return 0
+              sleep $((i * 10))
+            done
+            return 1
+          }
+          retry gh release list --limit 1000 --json tagName -q '.[].tagName' > released.txt
+          failed=0
           for tag in $(sed -n 's/^## \(v[0-9][^ ]*\).*/\1/p' CHANGELOG.md); do
-            if gh release view "$tag" >/dev/null 2>&1; then
-              sh scripts/release-notes.sh "$tag" > notes.md
-              gh release edit "$tag" --notes-file notes.md
+            grep -qx "$tag" released.txt || continue
+            sh scripts/release-notes.sh "$tag" > notes.md
+            if ! retry gh release view "$tag" --json body -q .body > current.md; then
+              echo "::error::读取 $tag 失败"
+              failed=1
+              continue
+            fi
+            [ "$(cat current.md)" = "$(cat notes.md)" ] && continue
+            if retry gh release edit "$tag" --notes-file notes.md > /dev/null; then
               echo "updated $tag"
+            else
+              echo "::error::更新 $tag 失败"
+              failed=1
             fi
           done
+          exit $failed
