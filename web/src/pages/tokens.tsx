@@ -260,9 +260,10 @@ export function OAuthAuthorizePage() {
   const [days, setDays] = useState(90);
   const [write, setWrite] = useState(false);
   const [exec, setExec] = useState(false);
+  const [nodeExec, setNodeExec] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const approve = useMutation({
-    mutationFn: (allow: boolean) => authClient.approveOAuth({ request, allow, days, allowWrite: write, allowExec: exec }),
+    mutationFn: (allow: boolean) => authClient.approveOAuth({ request, allow, days, allowWrite: write, allowExec: exec, allowNodeExec: nodeExec }),
     onSuccess: (res) => {
       setLeaving(true);
       window.location.assign(res.redirectUrl);
@@ -320,9 +321,28 @@ export function OAuthAuthorizePage() {
             <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
               {t.tokens.allowWrite}
             </Check>
-            <Check checked={exec} onChange={setExec} help={t.tokens.allowExecHelp}>
+            <Check
+              checked={exec}
+              onChange={(v) => {
+                setExec(v);
+                if (!v) setNodeExec(false);
+              }}
+              help={t.tokens.allowExecHelp}
+            >
               {t.tokens.allowExec}
             </Check>
+            {c.role === "admin" && (
+              <Check
+                checked={nodeExec}
+                onChange={(v) => {
+                  setNodeExec(v);
+                  if (v) setExec(true);
+                }}
+                help={t.tokens.allowNodeExecHelp}
+              >
+                {t.tokens.allowNodeExec}
+              </Check>
+            )}
           </div>
         )}
         {approve.error && <Alert>{errorMessage(approve.error)}</Alert>}

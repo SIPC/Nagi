@@ -76,6 +76,8 @@ message ApproveOAuthRequest {
   uint32 days = 3;
   bool allow_write = 4;
   bool allow_exec = 5;
+  // 可以在节点上执行命令（MCP 的 node_exec）。只有管理员能勾，要同时勾 allow_exec。
+  bool allow_node_exec = 6;
 }
 
 message ApproveOAuthResponse {

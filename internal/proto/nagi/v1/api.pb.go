@@ -367,9 +367,11 @@ type ApproveOAuthRequest struct {
 	Request *OAuthRequest          `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Allow   bool                   `protobuf:"varint,2,opt,name=allow,proto3" json:"allow,omitempty"`
 	// 授权的有效期（天），0 表示不过期。
-	Days          uint32 `protobuf:"varint,3,opt,name=days,proto3" json:"days,omitempty"`
-	AllowWrite    bool   `protobuf:"varint,4,opt,name=allow_write,json=allowWrite,proto3" json:"allow_write,omitempty"`
-	AllowExec     bool   `protobuf:"varint,5,opt,name=allow_exec,json=allowExec,proto3" json:"allow_exec,omitempty"`
+	Days       uint32 `protobuf:"varint,3,opt,name=days,proto3" json:"days,omitempty"`
+	AllowWrite bool   `protobuf:"varint,4,opt,name=allow_write,json=allowWrite,proto3" json:"allow_write,omitempty"`
+	AllowExec  bool   `protobuf:"varint,5,opt,name=allow_exec,json=allowExec,proto3" json:"allow_exec,omitempty"`
+	// 可以在节点上执行命令（MCP 的 node_exec）。只有管理员能勾，要同时勾 allow_exec。
+	AllowNodeExec bool `protobuf:"varint,6,opt,name=allow_node_exec,json=allowNodeExec,proto3" json:"allow_node_exec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -435,6 +437,13 @@ func (x *ApproveOAuthRequest) GetAllowWrite() bool {
 func (x *ApproveOAuthRequest) GetAllowExec() bool {
 	if x != nil {
 		return x.AllowExec
+	}
+	return false
+}
+
+func (x *ApproveOAuthRequest) GetAllowNodeExec() bool {
+	if x != nil {
+		return x.AllowNodeExec
 	}
 	return false
 }
@@ -8870,7 +8879,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\vclient_name\x18\x01 \x01(\tR\n" +
 	"clientName\x12#\n" +
 	"\rredirect_host\x18\x02 \x01(\tR\fredirectHost\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\"\xb0\x01\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\"\xd8\x01\n" +
 	"\x13ApproveOAuthRequest\x12/\n" +
 	"\arequest\x18\x01 \x01(\v2\x15.nagi.v1.OAuthRequestR\arequest\x12\x14\n" +
 	"\x05allow\x18\x02 \x01(\bR\x05allow\x12\x12\n" +
@@ -8878,7 +8887,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\vallow_write\x18\x04 \x01(\bR\n" +
 	"allowWrite\x12\x1d\n" +
 	"\n" +
-	"allow_exec\x18\x05 \x01(\bR\tallowExec\"9\n" +
+	"allow_exec\x18\x05 \x01(\bR\tallowExec\x12&\n" +
+	"\x0fallow_node_exec\x18\x06 \x01(\bR\rallowNodeExec\"9\n" +
 	"\x14ApproveOAuthResponse\x12!\n" +
 	"\fredirect_url\x18\x01 \x01(\tR\vredirectUrl\"c\n" +
 	"\fLoginRequest\x12\x1a\n" +

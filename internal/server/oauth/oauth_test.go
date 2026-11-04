@@ -28,7 +28,7 @@ func testServer(t *testing.T) (*Server, *auth.Service, *httptest.Server) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	if _, err := d.ExecContext(ctx, `INSERT INTO users (id, username, password_hash, created_at, role) VALUES (2, 'op', 'x', 0, 'operator')`); err != nil {
+	if _, err := d.ExecContext(ctx, `INSERT INTO users (id, username, password_hash, created_at, role) VALUES (2, 'op', 'x', 0, 'operator'), (3, 'boss', 'x', 0, 'admin')`); err != nil {
 		t.Fatal(err)
 	}
 	q := store.New(d)
@@ -79,7 +79,7 @@ func authorize(t *testing.T, s *Server, client, redirect string, write bool) str
 	t.Helper()
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, State: "xyz",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, write, false)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, write, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestOAuthDeny(t *testing.T) {
 	// 本机回调可以换端口。
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: "http://127.0.0.1:50000/callback", State: "s",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, true, true)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, true, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,5 +201,40 @@ func TestMetadata(t *testing.T) {
 	host := strings.TrimPrefix(hs.URL, "https://")
 	if m["issuer"] != "https://"+host || m["token_endpoint"] != "https://"+host+"/oauth/token" {
 		t.Errorf("元数据不对：%v", m)
+	}
+}
+
+// 节点终端：只有管理员能授权，要同时允许执行命令；发出的令牌带 nagi:node，能用 node_exec。
+func TestOAuthNodeExec(t *testing.T) {
+	s, a, hs := testServer(t)
+	ctx := context.Background()
+	redirect := "https://claude.ai/api/mcp/auth_callback"
+	client := register(t, hs, redirect)
+	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
+	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, true, true, true); err == nil {
+		t.Error("操作员不能授权节点终端")
+	}
+	admin := auth.User{ID: 3, Role: auth.RoleAdmin}
+	if _, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, true, false, true); err == nil {
+		t.Error("没有允许执行命令时不能授权节点终端")
+	}
+	to, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, false, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(to)
+	st, tok := post(t, hs, "/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {u.Query().Get("code")}, "client_id": {client},
+		"redirect_uri": {redirect}, "code_verifier": {verifier}})
+	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeExec+" "+ScopeNode {
+		t.Fatalf("换令牌失败：%d %v", st, tok)
+	}
+	tu, _, err := a.TokenUser(ctx, tok["access_token"].(string), "1.2.3.4")
+	if err != nil || !tu.AllowNodeExec || !tu.AllowExec {
+		t.Fatalf("令牌应该能在节点上执行命令：%+v %v", tu, err)
+	}
+	// 刷新以后照样保留。
+	st, tok = post(t, hs, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client}})
+	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeExec+" "+ScopeNode {
+		t.Fatalf("刷新后权限不对：%d %v", st, tok)
 	}
 }

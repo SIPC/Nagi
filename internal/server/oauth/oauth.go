@@ -45,6 +45,8 @@ const (
 	ScopeRead  = "nagi:read"
 	ScopeWrite = "nagi:write"
 	ScopeExec  = "nagi:exec"
+	// ScopeNode：在节点上执行命令（node_exec）。
+	ScopeNode = "nagi:node"
 )
 
 // Server 是授权服务器。授权码只放在内存里：面板重启时进行到一半的授权要重新来。
@@ -72,6 +74,7 @@ type grant struct {
 	userID     int64
 	allowWrite bool
 	allowExec  bool
+	allowNode  bool
 	days       uint32
 	expires    time.Time
 }
@@ -96,13 +99,16 @@ func sameResource(got, want string) bool {
 	return strings.TrimSuffix(got, "/") == want
 }
 
-func scopesOf(write, exec bool) string {
+func scopesOf(write, exec, node bool) string {
 	s := []string{ScopeRead}
 	if write {
 		s = append(s, ScopeWrite)
 	}
 	if exec {
 		s = append(s, ScopeExec)
+	}
+	if node {
+		s = append(s, ScopeNode)
 	}
 	return strings.Join(s, " ")
 }
@@ -204,7 +210,7 @@ func RedirectHost(raw string) string {
 
 // Approve 处理成员在授权页上的选择，返回浏览器要转去的回调地址。issuer 写进回调地址的 iss（RFC 9207），
 // 客户端据此确认授权码来自它找的授权服务器；ChatGPT 只有服务器支持 iss 时才用它登记过的固定回调地址。
-func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, issuer string, allow bool, days uint32, write, exec bool) (string, error) {
+func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, issuer string, allow bool, days uint32, write, exec, node bool) (string, error) {
 	c, err := s.Check(ctx, req)
 	if err != nil {
 		return "", err
@@ -225,11 +231,18 @@ func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequ
 	if u.Role == auth.RoleViewer {
 		write, exec = false, false
 	}
+	// 节点终端等于节点的 root：只有管理员能授权，而且要同时允许执行命令（和个人访问令牌一样）。
+	if node && u.Role != auth.RoleAdmin {
+		return "", i18n.New("只有管理员能创建可以在节点上执行命令的令牌")
+	}
+	if node && !exec {
+		return "", i18n.New("节点终端需要同时允许执行命令")
+	}
 	code := randomHex(32)
 	s.mu.Lock()
 	s.prune()
 	s.codes[code] = grant{client: c, redirect: req.GetRedirectUri(), challenge: req.GetCodeChallenge(), resource: req.GetResource(),
-		userID: u.ID, allowWrite: write, allowExec: exec, days: days, expires: time.Now().Add(codeTTL)}
+		userID: u.ID, allowWrite: write, allowExec: exec, allowNode: node, days: days, expires: time.Now().Add(codeTTL)}
 	s.mu.Unlock()
 	if !strings.HasPrefix(c.ID, "https://") {
 		_ = s.Q.MarkOAuthClientAuthorized(ctx, c.ID, time.Now().Unix())
@@ -314,7 +327,7 @@ func (s *Server) handleResourceMetadata(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":                 ResourceURL(r),
 		"authorization_servers":    []string{BaseURL(r)},
-		"scopes_supported":         []string{ScopeRead, ScopeWrite, ScopeExec},
+		"scopes_supported":         []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode},
 		"bearer_methods_supported": []string{"header"},
 		"resource_name":            "Nagi",
 	})
@@ -335,7 +348,7 @@ func (s *Server) handleServerMetadata(w http.ResponseWriter, r *http.Request) {
 		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
-		"scopes_supported":                               []string{ScopeRead, ScopeWrite, ScopeExec},
+		"scopes_supported":                               []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode},
 		"client_id_metadata_document_supported":          true,
 		"authorization_response_iss_parameter_supported": true,
 	})
@@ -491,7 +504,7 @@ func (s *Server) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	t := store.AccessToken{
 		UserID: g.userID, Name: g.client.Name, Source: auth.TokenSourceOAuth, ClientID: g.client.ID,
 		TokenHash: auth.HashToken(access), RefreshHash: auth.HashToken(refresh),
-		AllowWrite: g.allowWrite, AllowExec: g.allowExec, CreatedAt: now.Unix(), ExpiresAt: now.Add(AccessTTL).Unix(),
+		AllowWrite: g.allowWrite, AllowExec: g.allowExec, AllowNodeExec: g.allowNode, CreatedAt: now.Unix(), ExpiresAt: now.Add(AccessTTL).Unix(),
 	}
 	if g.days > 0 {
 		t.RefreshExpiresAt = now.Add(time.Duration(g.days) * 24 * time.Hour).Unix()
@@ -501,16 +514,16 @@ func (s *Server) exchangeCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Info("OAuth 授权已发出令牌", "client", g.client.Name, "user", g.userID)
-	writeTokens(w, access, refresh, g.allowWrite, g.allowExec)
+	writeTokens(w, access, refresh, g.allowWrite, g.allowExec, g.allowNode)
 }
 
-func writeTokens(w http.ResponseWriter, access, refresh string, write, exec bool) {
+func writeTokens(w http.ResponseWriter, access, refresh string, write, exec, node bool) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token":  access,
 		"token_type":    "Bearer",
 		"expires_in":    int(AccessTTL / time.Second),
 		"refresh_token": refresh,
-		"scope":         scopesOf(write, exec),
+		"scope":         scopesOf(write, exec, node),
 	})
 }
 
@@ -545,7 +558,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
-	writeTokens(w, access, refresh, t.AllowWrite, t.AllowExec)
+	writeTokens(w, access, refresh, t.AllowWrite, t.AllowExec, t.AllowNodeExec)
 }
 
 // handleRevoke 吊销访问令牌或刷新令牌（RFC 7009）：不论令牌是否存在都返回成功。

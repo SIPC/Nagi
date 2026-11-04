@@ -39,7 +39,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面两个选项收窄。成员的角色、范围改了，令牌立即跟着变。
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
-  - **节点终端**：默认不勾，只有管理员的个人访问令牌能勾，要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）。OAuth 授权没有这一项。成员降为操作员后，令牌上的这一项随之失效。
+  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
 - 节点文件（见 [node-access.md](node-access.md#权限)）一律不能用令牌。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
@@ -63,7 +63,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 回调地址必须是 https 或本机地址，和注册时的严格一致。授权码 5 分钟内有效，只能用一次。
 - 回调地址里带 `iss`（RFC 9207），成功和拒绝都带，和元数据里的 `issuer` 完全一样（`auth.IssuerOf`）。ChatGPT 只有服务器声明支持 iss 时才用它客户端元数据里登记的固定回调地址。
 - 动态注册是公开接口：注册过的客户端在有人授权之前什么也做不了；最多 100 个，注册后 24 小时没有被授权的自动删除；按来源地址限速。
-- 授权页的权限选项默认是最小的（只读、不能执行命令），成员要主动勾选。
+- 授权页的权限选项默认是最小的（只读、不能执行命令、没有节点终端），成员要主动勾选。「节点终端」只有管理员看得到。
 
 ### 管理
 
@@ -167,19 +167,19 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 | `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |
 
-不提供改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file` 会修改卷，令牌还要勾「可修改」。
+不提供改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file` 会修改卷，令牌还要勾「可修改」。文件内容和日志一样当作不可信数据。
 
 ### 节点命令
 
 `node_exec` 以 root 身份在节点上执行一条命令，等它结束，返回输出（最多 64 KB）和退出码。默认 30 秒、最长 120 秒超时，到时结束整个进程组。这等于把整台机器交给 agent，所以比网页的节点终端还多几道限制：
 
-- 只有管理员能用，令牌要勾「节点终端」（只有管理员的个人访问令牌能勾，生成前要做高权限确认）。没勾的令牌看不到这个工具。
+- 只有管理员能用，令牌要勾「节点终端」：个人访问令牌生成时勾选（生成前要做高权限确认），或者在 OAuth 授权页勾选。没勾的令牌看不到这个工具。
 - 节点在本地关闭了节点访问（`nagi node access disable`）时拒绝，面板没法替节点打开。备用面板上没有这个工具。
 - 每次执行都记进活动记录（`NodeExec`，详情是命令和退出码），并向告警配置里的渠道发一条通知（不带命令内容）；节点也记一条本地日志，带面板指纹、用户名和令牌名。
 - shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
-- 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。文件内容和日志一样当作不可信数据。
+- 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。命令的输出和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec` 是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 

@@ -25,7 +25,7 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 - **接口命名**：`auth.Allowed` 按方法名前缀放行查询，所以 `ListNodeDir`、`ListNodeFileBackups` 必须登记在 `adminReads` 里。读文件内容叫 `ReadNodeFile`，不用查询前缀：默认只有管理员能调用，也会记入活动记录。
 - **节点本地开关**：`nagi node access disable` 在节点上关闭这个功能（标记文件 `identity/node-access-disabled`），终端和文件都拒绝，立即生效。面板没有接口能重新打开，所以面板被攻破也开不了；要打开得登录节点执行 `nagi node access enable`。节点随上报告诉面板当前状态，界面按它显示说明。
 - **备用面板**：不能打开终端，也不能访问节点文件。
-- **MCP**：节点文件不能用访问令牌。在节点上执行命令只能用 MCP 的 `node_exec`：管理员的个人访问令牌生成时单独勾了「节点终端」才有，每次执行都记录并告警，节点本地开关同样生效（见 [mcp.md](mcp.md#节点命令)）。
+- **MCP**：节点文件不能用访问令牌。在节点上执行命令只能用 MCP 的 `node_exec`：管理员生成访问令牌或者 OAuth 授权时单独勾了「节点终端」才有，每次执行都记录并告警，节点本地开关同样生效（见 [mcp.md](mcp.md#节点命令)）。
 
 ### 操作员不能借 compose 拿到节点 root
 

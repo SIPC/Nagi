@@ -43,6 +43,8 @@ func (t tool) allowedFor(u auth.User, standby bool) bool {
 // scope 是这个工具需要的 OAuth 范围，写在工具的 securitySchemes 里（ChatGPT 按它判断要不要授权、要什么权限）。
 func (t tool) scope() string {
 	switch {
+	case t.nodeExec:
+		return oauth.ScopeNode
 	case t.exec:
 		return oauth.ScopeExec
 	case t.write:
