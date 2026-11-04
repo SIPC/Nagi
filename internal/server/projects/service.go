@@ -146,7 +146,11 @@ func (s *Service) sharedEnvDraft(p store.Project) ([]*nagiv1.EnvVar, bool, error
 		return nil, false, nil
 	}
 	l := &nagiv1.EnvList{}
-	return l.GetVars(), true, s.open(p.SharedEnvDraft, sharedDraftCtx(p.ID), l)
+	// 先解密再取值：写成一个 return 时 l.GetVars() 会先于 s.open 求值，拿到的是空的。
+	if err := s.open(p.SharedEnvDraft, sharedDraftCtx(p.ID), l); err != nil {
+		return nil, false, err
+	}
+	return l.GetVars(), true, nil
 }
 
 func (s *Service) dockerConfig(p store.Project) ([]byte, error) {
