@@ -186,6 +186,15 @@ function shortImage(image: string) {
   return i < 0 ? image : image.slice(0, i + 7 + 12);
 }
 
+// displayImage 是概览里显示的镜像：有标签时去掉摘要（标签已经说明了版本，完整的放在悬停提示里），
+// 没有标签时保留 12 位摘要；省掉 Docker Hub 的默认前缀。
+function displayImage(image: string) {
+  let s = image.replace(/^docker\.io\/(library\/)?/, "");
+  const at = s.indexOf("@sha256:");
+  if (at >= 0) s = /:[^/]+$/.test(s.slice(0, at)) ? s.slice(0, at) : shortImage(s);
+  return s;
+}
+
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
 // containerLabel：界面上显示的名称。设了显示名称时用它，否则用容器名（容器名创建后不能改）。
 export function containerLabel(m: Container) {
@@ -767,6 +776,8 @@ function Overview({ project, container, services }: { project: Project; containe
   const isGroup = container.kind === "group";
   const images = [...new Set(services.map((s) => shortImage(s.image)).filter(Boolean))];
   const image = container.config?.form?.image || cfg?.form?.image || images.join(pc.listSeparator) || "—";
+  // 容器组每个服务一行：服务名和它正在用的镜像，按服务名排序。
+  const serviceImages = [...new Map(services.filter((s) => s.image).map((s) => [s.name, s.image] as const)).entries()].sort(([a], [b]) => a.localeCompare(b));
   const version =
     container.deployedVersion > 0n ? `v${container.deployedVersion}${container.latestVersion !== container.deployedVersion ? pc.table.latest(String(container.latestVersion)) : ""}` : "—";
   // 单个健康的容器，页头的状态已经说明了一切；多个服务或有问题时才列出每个服务。
@@ -798,10 +809,30 @@ function Overview({ project, container, services }: { project: Project; containe
       <Section>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
           {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
-          <KvItem mono k={pc.columns.image} v={image} />
+          {!isGroup && <KvItem mono k={pc.columns.image} v={<span title={image}>{displayImage(image)}</span>} />}
           <KvItem mono k={pc.columns.node} v={node?.name ?? container.nodeId} />
           <KvItem mono k={o.currentVersion} v={version} />
           <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
+          {isGroup && (
+            <KvItem
+              className="col-span-full"
+              k={pc.columns.image}
+              v={
+                serviceImages.length === 0 ? (
+                  "—"
+                ) : (
+                  <span className="grid gap-1">
+                    {serviceImages.map(([svc, img]) => (
+                      <span key={svc} className="flex min-w-0 gap-3" title={img}>
+                        <span className="w-40 flex-none truncate text-muted-foreground max-md:w-28">{svc}</span>
+                        <span className="min-w-0 font-mono text-[13px] wrap-anywhere">{displayImage(img)}</span>
+                      </span>
+                    ))}
+                  </span>
+                )
+              }
+            />
+          )}
           <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />
           {container.config?.projectDir && <KvItem mono className="col-span-2" k={o.projectDir} v={container.config.projectDir} />}
         </div>
