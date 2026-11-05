@@ -8,7 +8,7 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## 未发布
+## v0.18.0
 
 ### 新功能
 
@@ -21,7 +21,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### 升级说明
 
-- 现有目录需将节点升级到该版本。
+- 现有目录需将节点升级到 v0.18.0。
 
 ## v0.17.0
 
