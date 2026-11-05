@@ -138,10 +138,13 @@ func (r *Repo) source(kind Kind) snapshot.SourceInfo {
 	return snapshot.SourceInfo{Host: "nagi", UserName: r.owner, Path: "/" + string(kind)}
 }
 
-// Dir 是快照里的一个顶层目录：Name 是快照里的名字，Path 是节点上的实际路径。
+// Dir 是快照里的一个目录：Name 是快照里的名字，Path 是节点上的实际路径。
+// Name 可以是两级（例如 project/postgres），同一个前缀的放进快照里的同一个目录。
 type Dir struct {
 	Name string
 	Path string
+	// Existing：必须已经存在，不存在时报错，不替它创建（现有目录里的子目录不归 Nagi 管）。
+	Existing bool
 }
 
 // Create 给几个目录做一份快照。ignore 是忽略规则（gitignore 语法，相对快照根目录，例如 /data/uploads/）。
@@ -155,15 +158,32 @@ func (r *Repo) Create(ctx context.Context, kind Kind, dirs []Dir, ignore []strin
 // 可以用来判断文件有没有变化。
 func (r *Repo) CreateWithRoot(ctx context.Context, kind Kind, dirs []Dir, ignore []string, tags map[string]string) (string, string, error) {
 	var entries []fs.Entry
+	groups := map[string][]fs.Entry{}
+	var order []string
 	for _, d := range dirs {
-		if err := os.MkdirAll(d.Path, 0o755); err != nil {
+		if d.Existing {
+			if info, err := os.Stat(d.Path); err != nil || !info.IsDir() {
+				return "", "", fmt.Errorf("目录 %s 不存在", d.Path)
+			}
+		} else if err := os.MkdirAll(d.Path, 0o755); err != nil {
 			return "", "", err
 		}
 		dir, err := localfs.Directory(d.Path)
 		if err != nil {
 			return "", "", err
 		}
-		entries = append(entries, renamed{Directory: dir, name: d.Name})
+		parent, name, nested := strings.Cut(d.Name, "/")
+		if !nested {
+			entries = append(entries, renamed{Directory: dir, name: d.Name})
+			continue
+		}
+		if _, ok := groups[parent]; !ok {
+			order = append(order, parent)
+		}
+		groups[parent] = append(groups[parent], renamed{Directory: dir, name: name})
+	}
+	for _, parent := range order {
+		entries = append(entries, virtualfs.NewStaticDirectory(parent, groups[parent]))
 	}
 	root := virtualfs.NewStaticDirectory("root", entries)
 

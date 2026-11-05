@@ -640,7 +640,10 @@ type ContainerConfig struct {
 	DependsOn []string `protobuf:"bytes,10,rep,name=depends_on,json=dependsOn,proto3" json:"depends_on,omitempty"`
 	// 现有目录（容器组，见 docs/agent.md#现有目录）：compose 的项目目录是节点上的这个目录，相对路径以它为准，
 	// 数据留在原处，不在容器目录里。为空时是容器目录的 data/。只有管理员能设置。
-	ProjectDir    string `protobuf:"bytes,11,opt,name=project_dir,json=projectDir,proto3" json:"project_dir,omitempty"`
+	ProjectDir string `protobuf:"bytes,11,opt,name=project_dir,json=projectDir,proto3" json:"project_dir,omitempty"`
+	// 现有目录里纳入快照的子目录（一级目录名，例如 postgres），快照里放在 project/<子目录>。
+	// 设置了就算有状态（快照时暂停容器）。只有管理员能设置。
+	BackupPaths   []string `protobuf:"bytes,12,rep,name=backup_paths,json=backupPaths,proto3" json:"backup_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -736,6 +739,13 @@ func (x *ContainerConfig) GetProjectDir() string {
 		return x.ProjectDir
 	}
 	return ""
+}
+
+func (x *ContainerConfig) GetBackupPaths() []string {
+	if x != nil {
+		return x.BackupPaths
+	}
+	return nil
 }
 
 // Version 是容器的一次部署：配置 + 文件 + 镜像摘要。
@@ -4832,7 +4842,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0ffailover_holder\x18\x16 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0efailoverHolder\x12B\n" +
 	"\x10failover_standby\x18\x17 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0ffailoverStandby\x122\n" +
 	"\x15failover_witness_self\x18\x18 \x01(\bR\x13failoverWitnessSelf\x12!\n" +
-	"\fdisplay_name\x18\x19 \x01(\tR\vdisplayName\"\xd2\x03\n" +
+	"\fdisplay_name\x18\x19 \x01(\tR\vdisplayName\"\xf5\x03\n" +
 	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +
@@ -4846,7 +4856,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"depends_on\x18\n" +
 	" \x03(\tR\tdependsOn\x12\x1f\n" +
 	"\vproject_dir\x18\v \x01(\tR\n" +
-	"projectDir\x1aO\n" +
+	"projectDir\x12!\n" +
+	"\fbackup_paths\x18\f \x03(\tR\vbackupPaths\x1aO\n" +
 	"\x0fServiceEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
 	"\x05value\x18\x02 \x01(\v2\x10.nagi.v1.EnvListR\x05value:\x028\x01J\x04\b\x05\x10\x06J\x04\b\t\x10\n" +

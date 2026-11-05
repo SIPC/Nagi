@@ -527,7 +527,7 @@ function SnapshotList({
   if (snapshots.isPending) return <RowsSkeleton />;
   if (snapshots.error) return <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />;
   const restore = async (id: string) =>
-    (await confirmAction(s.restoreConfirm(container), { action: s.restore, danger: true })) &&
+    (await confirmAction(s.restoreConfirm(container, c.config?.backupPaths), { action: s.restore, danger: true })) &&
     run(() => projectClient.restoreSnapshot({ projectId: project.id, container, snapshotId: id }));
   const remove = async (id: string) => {
     if (!(await confirmAction(s.deleteConfirm, { action: t.common.actions.delete, danger: true }))) return;

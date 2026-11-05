@@ -103,8 +103,8 @@ export default {
     version: "版本",
     size: "大小",
     showAll: (n: number) => `显示全部 ${n} 份`,
-    restoreConfirm: (container: string) =>
-      `从此快照恢复容器 ${container} 的 data/ 和 volumes/？恢复前将停止容器，当前数据将被覆盖。`,
+    restoreConfirm: (container: string, extra: string[] = []) =>
+      `从此快照恢复容器 ${container} 的 data/、volumes/${extra.length ? `和现有目录里的 ${extra.join("、")}` : ""}？恢复前将停止容器，当前数据将被覆盖。`,
     restore: "恢复",
     deleteConfirm: "删除这份快照？删除后无法从它恢复。",
     deleted: "快照已删除",

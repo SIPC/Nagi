@@ -166,6 +166,8 @@ export default {
     preserve: "保留路径",
     preserveHint: "相对 data/，每行一个",
     preserveHelp: "更新文件（上传或 git 拉取）时保留这些路径，例如用户上传的文件。",
+    backupPaths: "快照包含的子目录",
+    backupPathsHelp: (dir: string) => `${dir} 下的一级目录名，逗号分隔，例如数据库目录 postgres。定时快照会一并保存，快照时暂停容器；照片库等大目录不建议纳入。`,
     dependsOn: "依赖",
     dependsOnHint: "容器名，逗号分隔",
     dependsOnHelp: "批量部署时，优先部署所列容器。",

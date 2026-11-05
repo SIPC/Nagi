@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/compose"
@@ -89,6 +90,37 @@ func dataDirs(mp containerPaths) []snapshot.Dir {
 	return []snapshot.Dir{{Name: "data", Path: mp.dataDir()}, {Name: "volumes", Path: mp.volumesDir()}}
 }
 
+// snapshotDirs 是定时、手动和部署前快照包含的目录：data/、volumes/，以及现有目录里选了的子目录
+// （快照里放在 project/<子目录>，见 docs/agent.md#现有目录）。
+func snapshotDirs(s *nagiv1.ContainerSpec) []snapshot.Dir {
+	dirs := dataDirs(containerPaths{root: s.GetDir()})
+	cfg := s.GetConfig()
+	for _, sub := range cfg.GetBackupPaths() {
+		dirs = append(dirs, snapshot.Dir{Name: "project/" + sub, Path: filepath.Join(cfg.GetProjectDir(), sub), Existing: true})
+	}
+	return dirs
+}
+
+// restoreDirs 把快照里的这些目录原地恢复。快照里没有的（例如设置子目录以前拍的）跳过并提示。
+func restoreDirs(ctx context.Context, rep *snapshot.Repo, sid string, dirs []snapshot.Dir, onLine func(string)) error {
+	for _, d := range dirs {
+		if d.Existing {
+			if _, err := rep.Stat(ctx, sid, d.Name); err != nil {
+				onLine("快照里没有 " + d.Path + "（拍这份快照时还没有纳入），保持不变")
+				continue
+			}
+		}
+		// 恢复是原地覆盖的，先删掉容器可能留下的符号链接（见 removeSymlinks）。
+		if err := removeSymlinks(d.Path); err != nil {
+			return err
+		}
+		if err := rep.Restore(ctx, sid, d.Name, d.Path); err != nil {
+			return fmt.Errorf("恢复 %s: %w", d.Name, err)
+		}
+	}
+	return nil
+}
+
 // TakeSnapshot 给容器做一份定时或手动快照：data/ 和 volumes/。有状态的容器快照时暂停。
 func (m *Manager) TakeSnapshot(ctx context.Context, projectID, container string, kind snapshot.Kind, onLine func(string)) (string, error) {
 	l := m.lock(projectID, container)
@@ -110,7 +142,7 @@ func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string,
 		return "", err
 	}
 	defer rep.Close(ctx)
-	sid, err := m.snapshotWithPause(ctx, rep, containerLabel(projectID, container), kind, dataDirs(containerPaths{root: c.Spec.GetDir()}),
+	sid, err := m.snapshotWithPause(ctx, rep, containerLabel(projectID, container), kind, snapshotDirs(c.Spec),
 		snapshotIgnore, tags, c.Spec.GetStateful(), onLine)
 	if err != nil {
 		return "", err
@@ -305,20 +337,17 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, projectID, container, sid
 		return invalid("只能从定时快照或手动快照恢复")
 	}
 	files := composeFiles(c.Spec)
-	mp := containerPaths{root: c.Spec.GetDir()}
 	onLine("停止容器 " + container)
 	if err := compose.Stop(ctx, files, onLine); err != nil {
 		return err
 	}
-	onLine("恢复 data/ 和 volumes/")
-	for _, d := range dataDirs(mp) {
-		// 恢复是原地覆盖的，先删掉容器可能留下的符号链接（见 removeSymlinks）。
-		if err := removeSymlinks(d.Path); err != nil {
-			return err
-		}
-		if err := rep.Restore(ctx, sid, d.Name, d.Path); err != nil {
-			return fmt.Errorf("恢复 %s: %w", d.Name, err)
-		}
+	if p := c.Spec.GetConfig().GetBackupPaths(); len(p) > 0 {
+		onLine("恢复 data/、volumes/ 和现有目录里的 " + strings.Join(p, "、"))
+	} else {
+		onLine("恢复 data/ 和 volumes/")
+	}
+	if err := restoreDirs(ctx, rep, sid, snapshotDirs(c.Spec), onLine); err != nil {
+		return err
 	}
 	onLine("重新启动容器 " + container)
 	if err := compose.Up(ctx, files, onLine); err != nil {

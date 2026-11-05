@@ -1018,6 +1018,8 @@ message ComposeDirPreview {
   repeated string notes = 8;
   // 建议的容器组名称（目录名）。
   string name = 9;
+  // 建议纳入快照的子目录：挂载到常见数据库数据目录的（例如 /var/lib/postgresql/data）。
+  repeated string backup_paths = 10;
 }
 
 message ImportComposeDirRequest {
@@ -1025,6 +1027,8 @@ message ImportComposeDirRequest {
   string node_id = 2;
   string dir = 3;
   string name = 4;
+  // 纳入快照的子目录（见 ContainerConfig.backup_paths）。
+  repeated string backup_paths = 5;
 }
 
 message AddContainerRequest {

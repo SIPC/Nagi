@@ -7457,7 +7457,9 @@ type ComposeDirPreview struct {
 	// 需要注意的地方，例如没有带上的叠加文件、改为引用原卷的命名卷。
 	Notes []string `protobuf:"bytes,8,rep,name=notes,proto3" json:"notes,omitempty"`
 	// 建议的容器组名称（目录名）。
-	Name          string `protobuf:"bytes,9,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,9,opt,name=name,proto3" json:"name,omitempty"`
+	// 建议纳入快照的子目录：挂载到常见数据库数据目录的（例如 /var/lib/postgresql/data）。
+	BackupPaths   []string `protobuf:"bytes,10,rep,name=backup_paths,json=backupPaths,proto3" json:"backup_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7555,12 +7557,21 @@ func (x *ComposeDirPreview) GetName() string {
 	return ""
 }
 
+func (x *ComposeDirPreview) GetBackupPaths() []string {
+	if x != nil {
+		return x.BackupPaths
+	}
+	return nil
+}
+
 type ImportComposeDirRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Dir           string                 `protobuf:"bytes,3,opt,name=dir,proto3" json:"dir,omitempty"`
-	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	NodeId    string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Dir       string                 `protobuf:"bytes,3,opt,name=dir,proto3" json:"dir,omitempty"`
+	Name      string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	// 纳入快照的子目录（见 ContainerConfig.backup_paths）。
+	BackupPaths   []string `protobuf:"bytes,5,rep,name=backup_paths,json=backupPaths,proto3" json:"backup_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7621,6 +7632,13 @@ func (x *ImportComposeDirRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *ImportComposeDirRequest) GetBackupPaths() []string {
+	if x != nil {
+		return x.BackupPaths
+	}
+	return nil
 }
 
 type AddContainerRequest struct {
@@ -9521,7 +9539,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"delete_dir\x18\x03 \x01(\bR\tdeleteDir\x12!\n" +
 	"\fconfirm_name\x18\x04 \x01(\tR\vconfirmName\"\x17\n" +
-	"\x15DeleteProjectResponse\"\x91\x02\n" +
+	"\x15DeleteProjectResponse\"\xb4\x02\n" +
 	"\x11ComposeDirPreview\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
 	"\fcompose_file\x18\x02 \x01(\tR\vcomposeFile\x12\x18\n" +
@@ -9533,13 +9551,16 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"containers\x18\a \x03(\tR\n" +
 	"containers\x12\x14\n" +
 	"\x05notes\x18\b \x03(\tR\x05notes\x12\x12\n" +
-	"\x04name\x18\t \x01(\tR\x04name\"w\n" +
+	"\x04name\x18\t \x01(\tR\x04name\x12!\n" +
+	"\fbackup_paths\x18\n" +
+	" \x03(\tR\vbackupPaths\"\x9a\x01\n" +
 	"\x17ImportComposeDirRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +
 	"\x03dir\x18\x03 \x01(\tR\x03dir\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\"\xa5\x01\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12!\n" +
+	"\fbackup_paths\x18\x05 \x03(\tR\vbackupPaths\"\xa5\x01\n" +
 	"\x13AddContainerRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +

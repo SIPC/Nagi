@@ -72,7 +72,7 @@ func TestFailedSnapshotReusesWrittenContent(t *testing.T) {
 				time.Sleep(2 * time.Millisecond)
 			}
 		}()
-		_, err := r.Create(actx, Manual, []Dir{{"data", data}}, nil, nil)
+		_, err := r.Create(actx, Manual, []Dir{{Name: "data", Path: data}}, nil, nil)
 		cancel()
 		if err == nil {
 			// 前面失败时写好的内容被复用，剩下的很快就写完了，取消前就做完了。
@@ -97,7 +97,7 @@ func TestFailedSnapshotReusesWrittenContent(t *testing.T) {
 	}
 	r := open()
 	defer r.Close(ctx)
-	if _, err := r.Create(ctx, Manual, []Dir{{"data", data}}, nil, nil); err != nil {
+	if _, err := r.Create(ctx, Manual, []Dir{{Name: "data", Path: data}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, n := packBytes(storage)
@@ -134,7 +134,7 @@ func TestReclaimRemovesOrphanPacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close(ctx)
-	if _, err := r.Create(ctx, Manual, []Dir{{"data", data}}, nil, nil); err != nil {
+	if _, err := r.Create(ctx, Manual, []Dir{{Name: "data", Path: data}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	kept, _ := packBytes(storage)

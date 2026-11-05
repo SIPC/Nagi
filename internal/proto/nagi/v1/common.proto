@@ -130,6 +130,9 @@ message ContainerConfig {
   // 现有目录（容器组，见 docs/agent.md#现有目录）：compose 的项目目录是节点上的这个目录，相对路径以它为准，
   // 数据留在原处，不在容器目录里。为空时是容器目录的 data/。只有管理员能设置。
   string project_dir = 11;
+  // 现有目录里纳入快照的子目录（一级目录名，例如 postgres），快照里放在 project/<子目录>。
+  // 设置了就算有状态（快照时暂停容器）。只有管理员能设置。
+  repeated string backup_paths = 12;
 }
 
 enum Stateful {

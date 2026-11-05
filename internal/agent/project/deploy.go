@@ -108,7 +108,7 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 	if stateful && o.Previous > 0 {
 		onLine("部署前保存数据快照")
 		if _, err := m.snapshotWithPause(ctx, rep, containerLabel(s.GetProjectId(), name), snapshot.PreDeploy,
-			[]snapshot.Dir{{Name: "data", Path: mp.dataDir()}, {Name: "volumes", Path: mp.volumesDir()}},
+			snapshotDirs(s),
 			nil, map[string]string{"container": name, "from_version": strconv.FormatInt(o.Previous, 10)}, true, onLine); err != nil {
 			onLine("警告：部署前数据快照失败，继续部署：" + err.Error())
 		}
@@ -133,6 +133,16 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 			return res, fmt.Errorf("恢复 volumes: %w", err)
 		}
 		if err := restorePreserved(ctx, rep, sid, mp, preserve); err != nil {
+			return res, err
+		}
+		// 现有目录里纳入快照的子目录（不在 data/ 里，上面的保留路径管不到）。
+		var project []snapshot.Dir
+		for _, d := range snapshotDirs(s) {
+			if d.Existing {
+				project = append(project, d)
+			}
+		}
+		if err := restoreDirs(ctx, rep, sid, project, onLine); err != nil {
 			return res, err
 		}
 	}

@@ -13,5 +13,6 @@ export default {
   nothingRunning: "No containers are running in this directory",
   replaceNotice: "Deploying stops these containers and deletes them once the new ones are up (data and volumes are kept). If the new ones fail to start, the old ones are restored.",
   limits: "The data is outside the container directory: snapshots don't include it, and it cannot be migrated, given failover or a backup node.",
+  limitsWithBackup: "The data is outside the container directory: snapshots include only the subdirectories entered above, so back up the rest yourself. It cannot be migrated, given failover or a backup node.",
   importAndDeploy: "Import and deploy",
 } satisfies typeof zh;

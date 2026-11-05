@@ -171,6 +171,8 @@ export default {
     preserve: "Preserved paths",
     preserveHint: "Relative to data/, one per line",
     preserveHelp: "Kept when files are updated (upload or Git pull), e.g. user-uploaded files.",
+    backupPaths: "Subdirectories in snapshots",
+    backupPathsHelp: (dir: string) => `Top-level directories under ${dir}, comma separated, such as the database directory postgres. Scheduled snapshots include them and pause the containers; leave out large ones like a photo library.`,
     dependsOn: "Dependencies",
     dependsOnHint: "Container names, comma-separated",
     dependsOnHelp: "Listed containers are deployed first in batch deployments.",

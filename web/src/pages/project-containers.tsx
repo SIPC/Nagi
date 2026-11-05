@@ -1094,6 +1094,9 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const [gitRef, setGitRef] = useState(base?.source?.gitRef ?? "");
   const [preserve, setPreserve] = useState((base?.preserve ?? []).join("\n"));
   const [dependsOn, setDependsOn] = useState((base?.dependsOn ?? []).join(", "));
+  const [backupPaths, setBackupPaths] = useState((base?.backupPaths ?? []).join(", "));
+  // 现有目录（见 docs/agent.md#现有目录）：没有文件来源和保留路径，多一项快照包含的子目录。
+  const projectDir = base?.projectDir ?? "";
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -1124,6 +1127,8 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
       env: textToEnv(env),
       dependsOn: dependsOn.split(/[\s,]+/).filter(Boolean),
       stateful: base?.stateful,
+      projectDir,
+      backupPaths: projectDir ? backupPaths.split(/[\s,]+/).filter(Boolean) : [],
     };
     return isForm
       ? { ...common, form: imageForm.build() }
@@ -1259,6 +1264,16 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
           </p>
         )}
         <ConfigGroup title={c.groupSource}>
+          {projectDir ? (
+          <FormRow>
+            <Field label={c.backupPaths} htmlFor="edit-backup-paths" help={c.backupPathsHelp(projectDir)}>
+              <Input id="edit-backup-paths" value={backupPaths} onChange={(e) => setBackupPaths(e.target.value)} placeholder="postgres" className={textField} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={c.dependsOn} htmlFor="edit-deps" help={`${c.dependsOnHint}${t.common.sentenceEnd}${c.dependsOnHelp}`}>
+              <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
+            </Field>
+          </FormRow>
+          ) : (
           <FormRow>
             <Field label={c.git} htmlFor="edit-git" help={c.gitHelp}>
               <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className={textField} autoComplete="off" spellCheck={false} />
@@ -1273,6 +1288,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
           </FormRow>
+          )}
         </ConfigGroup>
         {isForm && (
           <ConfigGroup title={c.groupLimits}>

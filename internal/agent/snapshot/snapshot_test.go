@@ -32,7 +32,7 @@ func TestCreateListRestore(t *testing.T) {
 	write(t, filepath.Join(data, "uploads", "a.png"), "user")
 	write(t, filepath.Join(vols, "db", "x"), "db1")
 
-	id, err := r.Create(ctx, Scheduled, []Dir{{"data", data}, {"volumes", vols}}, []string{"/data/uploads/"}, map[string]string{"version": "1"})
+	id, err := r.Create(ctx, Scheduled, []Dir{{Name: "data", Path: data}, {Name: "volumes", Path: vols}}, []string{"/data/uploads/"}, map[string]string{"version": "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestCreateListRestore(t *testing.T) {
 	// 版本文件只保留最近 20 份。
 	for i := 0; i < 22; i++ {
 		write(t, filepath.Join(data, "app.js"), strconv.Itoa(i))
-		if _, err := r.Create(ctx, Version, []Dir{{"data", data}}, nil, map[string]string{"version": strconv.Itoa(i)}); err != nil {
+		if _, err := r.Create(ctx, Version, []Dir{{Name: "data", Path: data}}, nil, map[string]string{"version": strconv.Itoa(i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -102,7 +102,7 @@ func TestListAndWalkFiles(t *testing.T) {
 	write(t, filepath.Join(vols, "db", "sub", "x"), "hello")
 	write(t, filepath.Join(vols, "db", "y"), "y")
 	write(t, filepath.Join(data, "app"), "app")
-	id, err := r.Create(ctx, Manual, []Dir{{"data", data}, {"volumes", vols}}, nil, nil)
+	id, err := r.Create(ctx, Manual, []Dir{{Name: "data", Path: data}, {Name: "volumes", Path: vols}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestLimitAndDelete(t *testing.T) {
 	create := func(kind Kind, content string) string {
 		t.Helper()
 		write(t, filepath.Join(data, "app.js"), content)
-		id, err := r.Create(ctx, kind, []Dir{{"data", data}}, nil, nil)
+		id, err := r.Create(ctx, kind, []Dir{{Name: "data", Path: data}}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

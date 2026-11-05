@@ -58,6 +58,9 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 	if cfg.GetProjectDir() != "" {
 		add(false, "project_dir")
 	}
+	if p := cfg.GetBackupPaths(); len(p) > 0 {
+		add(false, "backup_paths: %s", strings.Join(p, ", "))
+	}
 	sort.Strings(reasons)
 	return slices.Compact(reasons), dynamic
 }

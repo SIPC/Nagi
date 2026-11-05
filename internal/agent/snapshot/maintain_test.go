@@ -46,7 +46,7 @@ func TestMaintainKeepsStorageBounded(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(data, "blob.bin"), b, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := r.Create(ctx, Version, []Dir{{"data", data}}, nil, map[string]string{"version": strconv.Itoa(i)}); err != nil {
+		if _, err := r.Create(ctx, Version, []Dir{{Name: "data", Path: data}}, nil, map[string]string{"version": strconv.Itoa(i)}); err != nil {
 			t.Fatal(err)
 		}
 		if i%10 == 9 {

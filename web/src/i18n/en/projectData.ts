@@ -104,8 +104,8 @@ export default {
     version: "Version",
     size: "Size",
     showAll: (n) => (n === 1 ? "Show 1 snapshot" : `Show all ${n} snapshots`),
-    restoreConfirm: (container) =>
-      `Restore data/ and volumes/ of container ${container} from this snapshot? The container will be stopped first and current data will be overwritten.`,
+    restoreConfirm: (container, extra = []) =>
+      `Restore data/, volumes/${extra.length ? ` and ${extra.join(", ")} in the existing directory` : ""} of container ${container} from this snapshot? The container will be stopped first and current data will be overwritten.`,
     restore: "Restore",
     deleteConfirm: "Delete this snapshot? It can't be restored from afterwards.",
     deleted: "Snapshot deleted",

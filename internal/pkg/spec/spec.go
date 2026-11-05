@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -235,6 +236,14 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 		}
 		cfg.ProjectDir, dataDir = clean, clean
 	}
+	paths, err := CleanBackupPaths(cfg.GetBackupPaths())
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) > 0 && cfg.GetProjectDir() == "" {
+		return nil, Invalid("快照包含的子目录只用于现有目录")
+	}
+	cfg.BackupPaths = paths
 	for _, vars := range ServiceEnv(cfg, container) {
 		if err := CheckEnv(vars); err != nil {
 			return nil, err
@@ -362,6 +371,25 @@ func LoadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, dataDir
 	})
 }
 
+// CleanBackupPaths 规范现有目录里纳入快照的子目录：一级目录名，去重排序。
+func CleanBackupPaths(list []string) ([]string, error) {
+	var out []string
+	for _, p := range list {
+		p = strings.Trim(strings.TrimSpace(p), "/")
+		if p == "" {
+			continue
+		}
+		if strings.ContainsAny(p, `/\$~`) || p == "." || p == ".." {
+			return nil, Invalid("快照包含的子目录要写现有目录下的一级目录名，例如 postgres，不能是 %q", p)
+		}
+		if !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 // CleanProjectDir 检查现有目录的路径：节点上的绝对路径，不能是根目录。
 func CleanProjectDir(dir string) (string, error) {
 	d := strings.TrimSpace(dir)
@@ -447,7 +475,7 @@ func IsStateful(cfg *nagiv1.ContainerConfig, proj *types.Project, preserve []str
 	case nagiv1.Stateful_STATEFUL_NO:
 		return false
 	}
-	if len(preserve) > 0 {
+	if len(preserve) > 0 || len(cfg.GetBackupPaths()) > 0 {
 		return true
 	}
 	for _, v := range proj.Volumes {

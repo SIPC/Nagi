@@ -4,6 +4,7 @@ import (
 	"context"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -28,6 +29,21 @@ import (
 var secretName = regexp.MustCompile(`(?i)(PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE)`)
 
 var importNameRe = regexp.MustCompile(`[^a-z0-9-]+`)
+
+// databaseTargets 是常见数据库镜像的数据目录：挂载到这里的子目录，导入时推荐纳入快照。
+var databaseTargets = map[string]bool{
+	"/var/lib/postgresql/data": true, "/var/lib/postgresql": true, "/var/lib/mysql": true, "/data/db": true,
+	"/var/lib/mongodb": true, "/bitnami/postgresql": true, "/bitnami/mysql": true, "/bitnami/mariadb": true,
+}
+
+// filepathToSlash 把面板上解析出的路径统一成 /（面板可能跑在 Windows 上做开发，compose 解析出的路径带盘符和 \）。
+func filepathToSlash(p string) string {
+	p = strings.ReplaceAll(p, "\\", "/")
+	if len(p) > 1 && p[1] == ':' {
+		p = p[2:]
+	}
+	return p
+}
 
 // composeDir 读取节点上的现有目录，返回导入后的容器组配置和给用户看的预览。
 func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.ContainerConfig, *nagiv1.ComposeDirPreview, error) {
@@ -90,7 +106,17 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 		if svc.Build != nil {
 			return nil, nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("服务 %s 用了 build：节点上不构建镜像，先构建好镜像并推送到镜像仓库，再把 build 换成 image", svc.Name))
 		}
+		// 推荐纳入快照的子目录：直接挂载到数据库数据目录的一级子目录。照片库这类大目录不推荐。
+		for _, v := range svc.Volumes {
+			if v.Type != "bind" || !databaseTargets[path.Clean(v.Target)] {
+				continue
+			}
+			if sub, ok := strings.CutPrefix(filepathToSlash(v.Source), res.GetPath()+"/"); ok && sub != "" && !strings.Contains(sub, "/") && !slices.Contains(preview.BackupPaths, sub) {
+				preview.BackupPaths = append(preview.BackupPaths, sub)
+			}
+		}
 	}
+	sort.Strings(preview.BackupPaths)
 	return cfg, preview, nil
 }
 
@@ -171,6 +197,7 @@ func (s *projectService) ImportComposeDir(ctx context.Context, req *connect.Requ
 	if name == "" {
 		name = preview.GetName()
 	}
+	cfg.BackupPaths = m.GetBackupPaths()
 	p, err := s.Projects.AddContainer(ctx, projects.AddRequest{ProjectID: m.GetProjectId(), Name: name, Config: cfg, NodeID: m.GetNodeId()})
 	if err != nil {
 		return nil, toConnect(err)

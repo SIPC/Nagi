@@ -27,6 +27,7 @@ export function ImportDir({ project }: { project: Project }) {
   const navigate = useNavigate();
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
+  const [backupPaths, setBackupPaths] = useState("");
   const [preview, setPreview] = useState<ComposeDirPreview>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"" | "read" | "deploy" | "add">("");
@@ -39,6 +40,7 @@ export function ImportDir({ project }: { project: Project }) {
     try {
       const p = await elevated(() => nodeClient.inspectComposeDir({ nodeId: node.nodeId, path: dir.trim() }));
       setPreview(p);
+      setBackupPaths(p.backupPaths.join(", "));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -51,7 +53,9 @@ export function ImportDir({ project }: { project: Project }) {
     setBusy(deploy ? "deploy" : "add");
     setError("");
     try {
-      await elevated(() => projectClient.importComposeDir({ projectId: project.id, nodeId: node.nodeId, dir: preview.path, name: finalName }));
+      await elevated(() =>
+        projectClient.importComposeDir({ projectId: project.id, nodeId: node.nodeId, dir: preview.path, name: finalName, backupPaths: backupPaths.split(/[\s,]+/).filter(Boolean) }),
+      );
       await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       navigate({ to: "/projects/$projectId/c/$container", params: { projectId: project.id, container: finalName }, search: deploy ? { deploy: true } : {}, ignoreBlocker: true });
     } catch (err) {
@@ -91,6 +95,11 @@ export function ImportDir({ project }: { project: Project }) {
         <Field label={t.projects.create.groupName} htmlFor="import-name" help={t.containerForm.groupNameHelp}>
           <Input id="import-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={preview?.name || "app"} autoComplete="off" spellCheck={false} />
         </Field>
+        {preview && (
+          <Field label={t.projectContainers.config.backupPaths} htmlFor="import-backup" help={t.projectContainers.config.backupPathsHelp(preview.path)}>
+            <Input id="import-backup" value={backupPaths} onChange={(e) => setBackupPaths(e.target.value)} placeholder="postgres" autoComplete="off" spellCheck={false} />
+          </Field>
+        )}
       </FormRow>
       {preview && (
         <div className="grid gap-4">
@@ -105,7 +114,7 @@ export function ImportDir({ project }: { project: Project }) {
           {preview.notes.map((n) => (
             <Notice key={n}>{n}</Notice>
           ))}
-          <Notice>{k.limits}</Notice>
+          <Notice>{backupPaths.trim() ? k.limitsWithBackup : k.limits}</Notice>
           <LogBox className="max-h-72">{preview.compose}</LogBox>
         </div>
       )}
