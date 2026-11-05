@@ -8,11 +8,15 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## 未发布
+## v0.18.1
 
 ### 改进
 
 - 容器组概览中的镜像按服务逐行显示，并省略镜像摘要和 Docker Hub 的默认前缀，悬停可查看完整地址。
+
+### 修复
+
+- 修复了添加节点时，较长的安装命令使对话框出现横向滚动条的问题。
 
 ## v0.18.0
 
