@@ -557,6 +557,8 @@ message Node {
   // 节点上有、面板却不认识的容器（所属项目在面板上是建好的，不是从节点缓存拼回的，所以不自动加进去）。
   // 管理员确认是自己的以后可以加入项目（AdoptNodeContainer）。
   repeated UnknownContainer unknown_containers = 10;
+  // 本面板自带的节点：和本面板在同一台机器上。概览据此把节点和面板之间的流量算到这台机器上。
+  bool own_embedded = 11;
 }
 
 message UnknownContainer {

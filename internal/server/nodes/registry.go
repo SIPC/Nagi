@@ -428,6 +428,12 @@ func (c *Conn) ownEmbedded(req *nagiv1.ReportRequest) bool {
 	return req.GetNode().GetEmbedded() && c.remote.IsLoopback()
 }
 
+// OwnEmbedded 判断这是不是本面板自带的节点（和本面板在同一台机器上）。
+func (c *Conn) OwnEmbedded() bool {
+	r := c.LastReport()
+	return r != nil && c.ownEmbedded(r)
+}
+
 // PushAddress 把面板的新对外地址告诉在线的节点（节点只接受面板改自己的地址），之后节点用新地址重连。
 // 本机自带的节点从 127.0.0.1 连，不改。离线的节点要在节点上用 nagi panel add 更新地址。
 func (r *Registry) PushAddress(address, fingerprint string) {

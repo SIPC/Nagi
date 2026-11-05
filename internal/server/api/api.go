@@ -260,6 +260,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
 			n.Address = s.nodeAddress(ctx, conn)
+			n.OwnEmbedded = conn.OwnEmbedded()
 		} else if len(row.Info) > 0 {
 			info := &nagiv1.NodeInfo{}
 			if proto.Unmarshal(row.Info, info) == nil {

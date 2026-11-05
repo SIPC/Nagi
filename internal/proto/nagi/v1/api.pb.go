@@ -4145,8 +4145,10 @@ type Node struct {
 	// 节点上有、面板却不认识的容器（所属项目在面板上是建好的，不是从节点缓存拼回的，所以不自动加进去）。
 	// 管理员确认是自己的以后可以加入项目（AdoptNodeContainer）。
 	UnknownContainers []*UnknownContainer `protobuf:"bytes,10,rep,name=unknown_containers,json=unknownContainers,proto3" json:"unknown_containers,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 本面板自带的节点：和本面板在同一台机器上。概览据此把节点和面板之间的流量算到这台机器上。
+	OwnEmbedded   bool `protobuf:"varint,11,opt,name=own_embedded,json=ownEmbedded,proto3" json:"own_embedded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
@@ -4247,6 +4249,13 @@ func (x *Node) GetUnknownContainers() []*UnknownContainer {
 		return x.UnknownContainers
 	}
 	return nil
+}
+
+func (x *Node) GetOwnEmbedded() bool {
+	if x != nil {
+		return x.OwnEmbedded
+	}
+	return false
 }
 
 type UnknownContainer struct {
@@ -9289,7 +9298,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x15UpdateSettingsRequest\x12%\n" +
 	"\x0epublic_address\x18\x01 \x01(\tR\rpublicAddress\"L\n" +
 	"\x16UpdateSettingsResponse\x122\n" +
-	"\bsettings\x18\x01 \x01(\v2\x16.nagi.v1.PanelSettingsR\bsettings\"\xea\x02\n" +
+	"\bsettings\x18\x01 \x01(\v2\x16.nagi.v1.PanelSettingsR\bsettings\"\x8d\x03\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -9303,7 +9312,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"containers\x18\t \x01(\x05R\n" +
 	"containers\x12H\n" +
 	"\x12unknown_containers\x18\n" +
-	" \x03(\v2\x19.nagi.v1.UnknownContainerR\x11unknownContainers\"r\n" +
+	" \x03(\v2\x19.nagi.v1.UnknownContainerR\x11unknownContainers\x12!\n" +
+	"\fown_embedded\x18\v \x01(\bR\vownEmbedded\"r\n" +
 	"\x10UnknownContainer\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +

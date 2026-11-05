@@ -61,14 +61,28 @@ const newRates = (): MeshRates => ({ pairs: new Map(), rx: new Map(), tx: new Ma
 const inc = <K,>(m: Map<K, number>, k: K, v: number) => m.set(k, (m.get(k) ?? 0) + v);
 const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
-// addRate：把节点 node 上的一条 m: 序列的值记进 rates。keys 是成员公钥 → 节点 ID，面板不在里面。
-function addRate(rates: MeshRates, node: string, name: string, value: number, keys: Map<string, string>) {
+// 面板没有自带节点时，节点和面板之间的流量单独算一行。
+const panelRow = "__panel";
+
+// MeshKeys：成员公钥 → 节点 ID。panel 是面板自己的 mesh 公钥，对应到面板自带的节点（同一台机器），没有自带节点时对应到 panelRow。
+type MeshKeys = { peers: Map<string, string>; panel?: string };
+
+// addRate：把节点 node 上的一条 m: 序列的值记进 rates。
+// 节点之间只取发送方的数。面板自己不存指标，面板发出的（例如经面板下载节点上的文件）用节点这一端的接收量算；
+// 面板在自带节点那台机器上时，这部分也计入那台机器的收发，从它的对外流量里扣掉。
+function addRate(rates: MeshRates, node: string, name: string, value: number, keys: MeshKeys) {
   const m = /^m:([0-9a-f]+):(rx|tx)$/.exec(name);
   if (!m) return;
   const dir = m[2] as "rx" | "tx";
   inc(rates[dir], node, value);
-  const peer = keys.get(m[1]);
-  if (dir === "tx" && peer && peer !== node) inc(rates.pairs, `${node}|${peer}`, value);
+  const peer = keys.peers.get(m[1]);
+  if (!peer || peer === node) return;
+  if (m[1] === keys.panel) {
+    inc(rates.pairs, dir === "tx" ? `${node}|${peer}` : `${peer}|${node}`, value);
+    if (peer !== panelRow) inc(rates[dir === "tx" ? "rx" : "tx"], peer, value);
+    return;
+  }
+  if (dir === "tx") inc(rates.pairs, `${node}|${peer}`, value);
 }
 
 // ---- 桑基图 ----
@@ -498,7 +512,7 @@ const pairColors = ["text-foreground", "text-muted-foreground", "text-wave", "te
 const latest = (s: MetricSeries | undefined) => (s && s.values.length > 0 ? s.values[s.values.length - 1] : undefined);
 
 // liveRates：各节点 m: 序列最新的值合成当前速率。公钥对应还没取到时返回 undefined。
-function liveRates(ids: string[], parts: ({ series: MetricSeries[] } | null)[] | undefined, keys: Map<string, string> | undefined) {
+function liveRates(ids: string[], parts: ({ series: MetricSeries[] } | null)[] | undefined, keys: MeshKeys | undefined) {
   if (!parts || !keys) return undefined;
   const rates = newRates();
   parts.forEach((part, i) => {
@@ -536,12 +550,19 @@ export function OverviewPage() {
     placeholderData: (prev) => prev,
   });
 
-  // 成员公钥 → 节点 ID，把 m: 序列对应到节点。
+  // 成员公钥 → 节点 ID，把 m: 序列对应到节点和面板。
   const meshKeys = useQuery({
     queryKey: ["overview-mesh-keys", onlineKey],
-    queryFn: async () => {
-      const statuses = await Promise.all(online.map((n) => nodeClient.getNodeMesh({ nodeId: n.id }).catch(() => null)));
-      return new Map(statuses.flatMap((s, i) => (s ? [[toHex(s.publicKey), online[i].id] as const] : [])));
+    queryFn: async (): Promise<MeshKeys> => {
+      const [statuses, panel] = await Promise.all([
+        Promise.all(online.map((n) => nodeClient.getNodeMesh({ nodeId: n.id }).catch(() => null))),
+        nodeClient.getPanelMesh({}).catch(() => null),
+      ]);
+      const peers = new Map(statuses.flatMap((s, i) => (s ? [[toHex(s.publicKey), online[i].id] as const] : [])));
+      if (!panel) return { peers };
+      const key = toHex(panel.publicKey);
+      peers.set(key, online.find((n) => n.ownEmbedded)?.id ?? panelRow);
+      return { peers, panel: key };
     },
     enabled: online.length > 0,
     refetchInterval: 60_000,
@@ -627,7 +648,12 @@ export function OverviewPage() {
       if (rate >= 1) flows.push({ from, to, rate, kind: "mesh" });
     }
   }
-  const sankeyRows = [...(view === "mesh" ? [] : [{ id: external, name: o.flow.external }]), ...online.map((n) => ({ id: n.id, name: n.name }))];
+  const panelAlone = keys?.panel !== undefined && keys.peers.get(keys.panel) === panelRow;
+  const sankeyRows = [
+    ...(view === "mesh" ? [] : [{ id: external, name: o.flow.external }]),
+    ...online.map((n) => ({ id: n.id, name: n.name })),
+    ...(panelAlone ? [{ id: panelRow, name: o.flow.panel }] : []),
+  ];
 
   // ---- 趋势 ----
 
@@ -665,7 +691,7 @@ export function OverviewPage() {
     if (points.length > 1 && (count.get(points[points.length - 1][0]) ?? 0) < (count.get(points[points.length - 2][0]) ?? 0)) points.pop();
     return points;
   };
-  const nameOf = (id: string) => all.find((n) => n.id === id)?.name ?? id;
+  const nameOf = (id: string) => (id === panelRow ? o.flow.panel : (all.find((n) => n.id === id)?.name ?? id));
   const pairTotals = new Map<string, number>();
   for (const b of buckets.values()) for (const [k, v] of b.pairs) inc(pairTotals, k, v);
   const pairKeys = [...pairTotals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
