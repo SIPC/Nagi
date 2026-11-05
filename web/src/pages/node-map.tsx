@@ -5,7 +5,10 @@ import { Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { HelpTip, QueryError, Status, Waves } from "@/components/ui";
+import { HelpTip, QueryError, Section, Segmented, Status, Waves } from "@/components/ui";
+import { Legend as ChartLegend, TimeChart, type Pt as ChartPt } from "@/components/chart";
+import { metricRanges, type MetricRange } from "@/components/metrics";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { Container, MeshStatus, Project } from "@/gen/nagi/v1/common_pb";
@@ -455,6 +458,148 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
             ))}
           </ul>
         </div>
+      )}
+
+      <LatencyMatrix nodes={live} statuses={statuses} />
+    </div>
+  );
+}
+
+// ---- 延迟矩阵 ----
+
+type Cell = { path: string; rtt: number };
+
+const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+const fmtMs = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)} ms`;
+
+// heat：直连延迟的底色，越慢越深。只用灰度，有问题的连接（中转、不可达）才带颜色。
+function heat(rtt: number) {
+  if (rtt < 10) return "bg-foreground/[0.04]";
+  if (rtt < 50) return "bg-foreground/[0.08]";
+  if (rtt < 150) return "bg-foreground/[0.14]";
+  return "bg-foreground/[0.22]";
+}
+
+// LatencyMatrix：节点两两之间的当前延迟，每格是行所在节点测到列所在节点的值（来自各节点的 mesh 状态）。
+// 点选一格，下面显示这两个节点之间两个方向的延迟历史（节点存的 m:<成员公钥>:rtt 序列，见 docs/monitoring.md）。
+function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<string, MeshStatus> }) {
+  const k = t.nodes.latency;
+  const [pick, setPick] = useState<[string, string] | null>(null);
+  if (nodes.length < 2) return null;
+  const byAddr = new Map<string, string>();
+  for (const [id, s] of statuses) if (s.address) byAddr.set(s.address, id);
+  const cells = new Map<string, Cell>();
+  for (const [id, s] of statuses) {
+    for (const p of s.peers) {
+      const to = byAddr.get(p.address);
+      if (to) cells.set(id + "|" + to, { path: p.path, rtt: p.path === "direct" ? p.rttMs : 0 });
+    }
+  }
+  const selected = pick && nodes.some((n) => n.id === pick[0]) && nodes.some((n) => n.id === pick[1]) ? pick : null;
+  const isPicked = (a: string, b: string) => !!selected && ((selected[0] === a && selected[1] === b) || (selected[0] === b && selected[1] === a));
+
+  const cell = (from: Node, to: Node) => {
+    if (from.id === to.id) return <td key={to.id} aria-hidden className="h-9" />;
+    const c = cells.get(from.id + "|" + to.id);
+    const on = isPicked(from.id, to.id);
+    const relay = !!c && rankOf(c.path) > 0;
+    const text = c && c.rtt > 0 ? fmtMs(c.rtt) : relay ? (c!.path === "none" ? k.none : k.relay) : "—";
+    return (
+      <td key={to.id} className="p-0">
+        <button
+          type="button"
+          onClick={() => setPick(on ? null : [from.id, to.id])}
+          aria-pressed={on}
+          aria-label={`${k.direction(from.name, to.name)}：${text}`}
+          className={cn(
+            "h-9 w-full cursor-pointer rounded-md px-2 text-[13px] tabular-nums outline-none transition-shadow duration-150 focus-visible:ring-2 focus-visible:ring-ring/40",
+            c && c.rtt > 0 ? heat(c.rtt) : "bg-muted/40",
+            c?.path === "none" ? "text-destructive" : relay ? "text-warning-text" : c && c.rtt > 0 ? "text-foreground" : "text-muted-foreground",
+            on && "shadow-[0_0_0_1.5px_var(--foreground)]",
+          )}
+        >
+          {text}
+        </button>
+      </td>
+    );
+  };
+
+  return (
+    <Section title={k.title} help={k.help} className="mt-2 border-t pt-6 max-md:pt-4">
+      <div className="-mx-1 overflow-x-auto">
+        <table className="w-full table-fixed border-separate border-spacing-1 text-left" style={{ minWidth: 112 + nodes.length * 84 }}>
+          <colgroup>
+            <col className="w-28" />
+          </colgroup>
+          <thead>
+            <tr>
+              <td />
+              {nodes.map((n) => (
+                <th key={n.id} scope="col" className="truncate px-1 pb-1 text-center text-[13px] font-normal text-muted-foreground" title={n.name}>
+                  {n.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {nodes.map((from) => (
+              <tr key={from.id}>
+                <th scope="row" className="truncate pr-2 text-[13px] font-normal text-muted-foreground" title={from.name}>
+                  {from.name}
+                </th>
+                {nodes.map((to) => cell(from, to))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {selected ? (
+        <LatencyHistory a={nodes.find((n) => n.id === selected[0])!} b={nodes.find((n) => n.id === selected[1])!} statuses={statuses} />
+      ) : (
+        <p className="text-[13px] text-muted-foreground">{k.hint}</p>
+      )}
+    </Section>
+  );
+}
+
+// LatencyHistory：两个节点之间两个方向的延迟历史，各自从测量的那一端查。
+function LatencyHistory({ a, b, statuses }: { a: Node; b: Node; statuses: Map<string, MeshStatus> }) {
+  const k = t.nodes.latency;
+  const [range, setRange] = useState<MetricRange>("1h");
+  const r = metricRanges.find((x) => x.value === range)!;
+  const keyA = statuses.get(a.id)?.publicKey;
+  const keyB = statuses.get(b.id)?.publicKey;
+  const q = useQuery({
+    queryKey: ["latency-history", a.id, b.id, range],
+    queryFn: async () => {
+      const from = timestampFromDate(new Date(Date.now() - r.seconds * 1000));
+      const one = async (node: Node, peer: Uint8Array): Promise<ChartPt[]> => {
+        const name = `m:${toHex(peer)}:rtt`;
+        const res = await nodeClient.queryNodeMetrics({ nodeId: node.id, prefix: name, from, step: BigInt(r.step) });
+        const s = res.series.find((x) => x.name === name);
+        return s ? s.values.map((v, i) => [Number(s.times[i]), v]) : [];
+      };
+      return Promise.all([one(a, keyB!), one(b, keyA!)]);
+    },
+    enabled: !!keyA && !!keyB,
+    refetchInterval: 10000,
+    placeholderData: (prev) => prev,
+  });
+  const series = [
+    { label: k.direction(a.name, b.name), points: q.data?.[0] ?? [], className: "text-muted-foreground" },
+    { label: k.direction(b.name, a.name), points: q.data?.[1] ?? [], className: "text-wave" },
+  ];
+  const now = Date.now() / 1000;
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <ChartLegend series={series} />
+        <Segmented value={range} onChange={setRange} label={t.metrics.rangeLabel} items={metricRanges.map((x) => ({ value: x.value, label: t.metrics.rangesShort[x.value] }))} />
+      </div>
+      {q.error ? (
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
+      ) : (
+        <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={fmtMs} minMax={5} />
       )}
     </div>
   );

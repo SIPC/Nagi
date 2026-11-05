@@ -27,6 +27,14 @@ export default {
     help: "Lines are mesh (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed through the panel and the line bends through it. The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
     issues: "Connections that aren't direct",
   },
+  latency: {
+    title: "Latency between nodes",
+    help: "Each cell is the latency from the row's node to the column's node, measured every 10 seconds over direct connections. Relayed connections aren't measured. Select a cell to see the history in both directions; nodes need v0.19.0.",
+    relay: "Relayed",
+    none: "Unreachable",
+    hint: "Select a cell to see the latency history.",
+    direction: (from, to) => `${from} → ${to}`,
+  },
   ha: {
     failoverEdge: (n) => `Failover ${n}`,
     backupEdge: (n) => `Backup ${n}`,

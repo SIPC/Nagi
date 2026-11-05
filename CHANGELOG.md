@@ -8,6 +8,16 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## 未发布
+
+### 新功能
+
+- 节点页「网络」视图新增节点间延迟矩阵，显示每对节点之间的当前延迟；点选一格可查看两个方向的延迟历史，最长 30 天。
+
+### 升级说明
+
+- 延迟历史需将节点升级到 v0.19.0。
+
 ## v0.18.1
 
 ### 改进

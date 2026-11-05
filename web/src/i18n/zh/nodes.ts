@@ -26,6 +26,14 @@ export default {
     help: "线条是在线节点之间的 mesh（WireGuard）连接。无法直连时流量经面板中转，线条从面板绕过。节点外圈是 CPU、内存、磁盘中占用最高的一项。悬停节点查看延迟。",
     issues: "未直连的连接",
   },
+  latency: {
+    title: "节点间延迟",
+    help: "每格是行所在节点到列所在节点的延迟，直连时每 10 秒测一次，经面板中转时不测。点选一格查看两个方向的延迟历史，需将节点升级到 v0.19.0。",
+    relay: "中转",
+    none: "不可达",
+    hint: "点选一格查看延迟历史。",
+    direction: (from: string, to: string) => `${from} → ${to}`,
+  },
   ha: {
     failoverEdge: (n: number) => `顶替 ${n}`,
     backupEdge: (n: number) => `备份 ${n}`,

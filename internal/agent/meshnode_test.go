@@ -97,4 +97,17 @@ func TestMeshRates(t *testing.T) {
 	if got[name(a, "rx")] != 1 || got[name(a, "tx")] != 2 {
 		t.Fatalf("计数器重置后从新值算起：%v", got)
 	}
+
+	// 直连时记延迟，第一次见到也记；中转时不记。
+	d := st(b, 0, 0)
+	d.Path, d.RTT = "direct", 12500*time.Microsecond
+	r := st(a, 30, 30)
+	r.Path, r.RTT = "udp-relay", 0
+	got = meshRates(prev, []mesh.Status{d, r}, 10)
+	if got[name(b, "rtt")] != 12.5 {
+		t.Fatalf("直连的延迟：%v", got)
+	}
+	if _, ok := got[name(a, "rtt")]; ok {
+		t.Fatalf("中转不该记延迟：%v", got)
+	}
 }
