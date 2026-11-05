@@ -335,15 +335,14 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
             const w = now[`${key}:w`] ?? 0;
             const y1 = now[`${key}:y1`] ?? toY1;
             const y2 = now[`${key}:y2`] ?? toY2;
+            const d = `M${x0} ${y1} L${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2} L${x3} ${y2}`;
+            const op = now[`${key}:op`] ?? 0;
             return (
-              <g key={key} className="group" opacity={now[`${key}:op`] ?? 0}>
+              <g key={key} className="group" opacity={op} pointerEvents={op < 0.5 ? "none" : undefined}>
                 <title>{`${nameOf(f.from)} → ${nameOf(f.to)} ${fmtRate(f.rate)}`}</title>
-                <path
-                  d={`M${x0} ${y1} L${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2} L${x3} ${y2}`}
-                  fill="none"
-                  strokeWidth={w}
-                  className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")}
-                />
+                <path d={d} fill="none" strokeWidth={w} className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")} />
+                {/* 细线不好对准：叠一条看不见的宽线接鼠标，比线宽两边各多 8，至少 20。 */}
+                <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(w + 16, 20)} pointerEvents="stroke" />
               </g>
             );
           })}
