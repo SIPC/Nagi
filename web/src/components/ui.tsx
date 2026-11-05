@@ -1182,7 +1182,8 @@ export function Dialog({
           </DialogClose>
         </div>
         {/* 内容变了（切换选项多出一块、出现错误提示）时高度过渡，不直接跳。 */}
-        <AutoHeight className="grid gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4" slot="dialog-body">{children}</AutoHeight>
+        {/* 列宽不超过对话框：长命令、长路径不会把对话框撑宽。 */}
+        <AutoHeight className="grid grid-cols-[minmax(0,1fr)] gap-4 px-6 pb-6 max-md:px-4 max-md:pb-4" slot="dialog-body">{children}</AutoHeight>
       </DialogContent>
     </DialogRoot>
   );

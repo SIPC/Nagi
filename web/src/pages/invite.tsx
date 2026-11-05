@@ -9,7 +9,7 @@ import { t } from "@/i18n";
 // CodeBox：一行命令或接入码加复制按钮，放不下时截断，完整内容在悬停提示里。
 export function CodeBox({ text, title }: { text: string; title?: string }) {
   return (
-    <div className="flex min-h-10 items-center justify-between gap-2 rounded-md bg-accent pr-2 pl-3">
+    <div className="flex min-h-10 min-w-0 items-center justify-between gap-2 rounded-md bg-accent pr-2 pl-3">
       <span className="min-w-0 truncate font-mono text-[13px] leading-5" title={title ?? text}>
         {text}
       </span>

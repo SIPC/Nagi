@@ -697,7 +697,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
   if (settings.isPending) return <RowsSkeleton count={1} />;
   if (settings.error) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {error && <Alert>{error}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address">
