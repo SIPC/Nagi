@@ -24,5 +24,7 @@ export default {
   pingFailed: "Failed",
   rxTx: "Received / sent",
   noPeers: "No connections",
+  fec: (m) => `FEC ${m}/10`,
+  fecDetail: (loss, recovered) => `Peer loss ${loss}, ${recovered} packets recovered`,
   title: "Connections",
 } satisfies typeof zh;

@@ -36,7 +36,9 @@ type Config struct {
 	// Port 是 UDP 端口，0 表示随机。
 	Port uint16
 	// Relay 为 true 时替别的成员中转（面板）。
-	Relay  bool
+	Relay bool
+	// NoFEC 关掉 FEC（见 fec.go），只用于测试对比。
+	NoFEC  bool
 	Logger *slog.Logger
 }
 
@@ -67,7 +69,11 @@ func New(cfg Config) (*Mesh, error) {
 	if err != nil {
 		return nil, err
 	}
-	bind := newBind(cfg.PrivateKey, cfg.Relay, log)
+	var caps byte = capFEC
+	if cfg.NoFEC {
+		caps = 0
+	}
+	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, log)
 	dev := device.NewDevice(tun, bind, &device.Logger{
 		Verbosef: device.DiscardLogf,
 		Errorf:   func(f string, a ...any) { log.Debug("wireguard: " + fmt.Sprintf(f, a...)) },

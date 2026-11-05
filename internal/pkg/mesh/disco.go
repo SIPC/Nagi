@@ -17,6 +17,10 @@ import (
 //	pong:          NAGI 2 发送方公钥(32) 事务号(12) 看到的对方地址(18) MAC(16)
 //	relay send:    NAGI 3 目标公钥(32) WireGuard 包      节点 → 面板，面板按来源地址认出发送方
 //	relay deliver: NAGI 4 来源公钥(32) WireGuard 包      面板 → 节点
+//	caps:          NAGI 5 发送方公钥(32) 能力(1) 看到的对方丢包率(4) MAC(16)
+//
+// caps 随直连的 ping 一起发：告诉对方自己支持 FEC、QUIC 中的哪些（旧版本不认识，直接忽略），
+// 以及这段时间收到的对方的包丢了多少（百万分之几，0xffffffff 表示样本不够），对方据此调整 FEC 冗余。
 //
 // ping/pong 用双方 WireGuard 密钥协商出的共享密钥做 MAC，别人伪造不了，也就没法把流量引到别的地址。
 // 只有收到对自己 ping 的 pong（事务号对得上）才认为直连可用，所以重放旧包也没用。
@@ -27,12 +31,19 @@ const (
 	typePong         = 2
 	typeRelaySend    = 3
 	typeRelayDeliver = 4
+	typeCaps         = 5
 
 	headerLen = 4 + 1 + 32
 	txidLen   = 12
 	macLen    = 16
 	pingLen   = headerLen + txidLen + macLen
 	pongLen   = headerLen + txidLen + 18 + macLen
+	capsLen   = headerLen + 1 + 4 + macLen
+
+	capFEC  = 1
+	capQUIC = 2
+
+	lossUnknown = 0xffffffff
 )
 
 func isControl(pkt []byte) bool {
@@ -74,6 +85,12 @@ func encodePong(self Key, txid [txidLen]byte, observed netip.AddrPort, key [32]b
 	return append(b, sum(key, b)...)
 }
 
+func encodeCaps(self Key, caps byte, lossPPM uint32, key [32]byte) []byte {
+	b := append(header(typeCaps, self), caps)
+	b = binary.BigEndian.AppendUint32(b, lossPPM)
+	return append(b, sum(key, b)...)
+}
+
 func verify(pkt []byte, key [32]byte) bool {
 	n := len(pkt) - macLen
 	return n > 0 && hmac.Equal(pkt[n:], sum(key, pkt[:n]))
@@ -90,6 +107,8 @@ type parsed struct {
 	txid     [txidLen]byte
 	observed netip.AddrPort
 	payload  []byte
+	caps     byte
+	lossPPM  uint32
 }
 
 func parse(pkt []byte) (parsed, bool) {
@@ -117,6 +136,12 @@ func parse(pkt []byte) (parsed, bool) {
 		p.observed = netip.AddrPortFrom(netip.AddrFrom16(ip).Unmap(), port)
 	case typeRelaySend, typeRelayDeliver:
 		p.payload = rest
+	case typeCaps:
+		if len(pkt) != capsLen {
+			return p, false
+		}
+		p.caps = rest[0]
+		p.lossPPM = binary.BigEndian.Uint32(rest[1:])
 	default:
 		return p, false
 	}

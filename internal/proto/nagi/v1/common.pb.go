@@ -3493,6 +3493,14 @@ type MeshPeerStatus struct {
 	LastHandshake *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_handshake,json=lastHandshake,proto3" json:"last_handshake,omitempty"`
 	RxBytes       uint64                 `protobuf:"varint,9,opt,name=rx_bytes,json=rxBytes,proto3" json:"rx_bytes,omitempty"`
 	TxBytes       uint64                 `protobuf:"varint,10,opt,name=tx_bytes,json=txBytes,proto3" json:"tx_bytes,omitempty"`
+	// 和对方之间用着 FEC（双方都支持、直连，见 docs/mesh.md#抗丢包）。旧版本不报，为 false。
+	Fec bool `protobuf:"varint,11,opt,name=fec,proto3" json:"fec,omitempty"`
+	// 用 FEC 时发给对方的每 10 个包加的校验包个数。
+	FecParity int32 `protobuf:"varint,14,opt,name=fec_parity,json=fecParity,proto3" json:"fec_parity,omitempty"`
+	// 对方报告的、它收到这一端的包的丢包率（百万分之几）。
+	LossPpm uint32 `protobuf:"varint,12,opt,name=loss_ppm,json=lossPpm,proto3" json:"loss_ppm,omitempty"`
+	// 靠 FEC 恢复的、来自对方的包。
+	FecRecovered  uint64 `protobuf:"varint,13,opt,name=fec_recovered,json=fecRecovered,proto3" json:"fec_recovered,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3593,6 +3601,34 @@ func (x *MeshPeerStatus) GetRxBytes() uint64 {
 func (x *MeshPeerStatus) GetTxBytes() uint64 {
 	if x != nil {
 		return x.TxBytes
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetFec() bool {
+	if x != nil {
+		return x.Fec
+	}
+	return false
+}
+
+func (x *MeshPeerStatus) GetFecParity() int32 {
+	if x != nil {
+		return x.FecParity
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetLossPpm() uint32 {
+	if x != nil {
+		return x.LossPpm
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetFecRecovered() uint64 {
+	if x != nil {
+		return x.FecRecovered
 	}
 	return 0
 }
@@ -5118,7 +5154,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xaf\x02\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xa0\x03\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -5131,7 +5167,12 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0elast_handshake\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\rlastHandshake\x12\x19\n" +
 	"\brx_bytes\x18\t \x01(\x04R\arxBytes\x12\x19\n" +
 	"\btx_bytes\x18\n" +
-	" \x01(\x04R\atxBytes\"\xa6\x01\n" +
+	" \x01(\x04R\atxBytes\x12\x10\n" +
+	"\x03fec\x18\v \x01(\bR\x03fec\x12\x1d\n" +
+	"\n" +
+	"fec_parity\x18\x0e \x01(\x05R\tfecParity\x12\x19\n" +
+	"\bloss_ppm\x18\f \x01(\rR\alossPpm\x12#\n" +
+	"\rfec_recovered\x18\r \x01(\x04R\ffecRecovered\"\xa6\x01\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +

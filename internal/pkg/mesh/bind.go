@@ -25,6 +25,8 @@ const (
 	maxCandidates = 16
 	// pendingInitTTL 是没有路径时暂存的握手包留多久：再久 WireGuard 自己就重发了（REKEY_TIMEOUT 是 5 秒）。
 	pendingInitTTL = 5 * time.Second
+	// capsTimeout：这么久没收到对方的能力包，就当它不支持（例如换回了旧版本）。
+	capsTimeout = 45 * time.Second
 )
 
 // msgInitiation 是 WireGuard 握手发起包的类型（第一个字节）。
@@ -65,6 +67,16 @@ type peerState struct {
 	// 不补发的话要等 WireGuard 5 秒后重发，这期间对方还用着重启前的会话，发来的包都被丢掉。
 	pendingInit   []byte
 	pendingInitAt time.Time
+
+	caps    byte // 对方的能力（capFEC、capQUIC），capsAt 之后 capsTimeout 内有效
+	capsAt  time.Time
+	lossPPM uint32 // 对方报告的、它收到我们的包的丢包率
+	enc     *fecEncoder
+	dec     *fecDecoder
+}
+
+func (p *peerState) has(c byte, now time.Time) bool {
+	return p.caps&c != 0 && now.Sub(p.capsAt) < capsTimeout
 }
 
 func (p *peerState) directAlive(now time.Time) bool {
@@ -80,6 +92,7 @@ type delivery struct {
 type Bind struct {
 	priv, pub Key
 	relay     bool // 是否替别人中转（面板）
+	caps      byte // 自己启用的能力
 	log       *slog.Logger
 
 	mu        sync.Mutex
@@ -95,9 +108,9 @@ type Bind struct {
 	done      chan struct{}
 }
 
-func newBind(priv Key, relay bool, log *slog.Logger) *Bind {
+func newBind(priv Key, relay bool, caps byte, log *slog.Logger) *Bind {
 	return &Bind{
-		priv: priv, pub: PublicKey(priv), relay: relay, log: log,
+		priv: priv, pub: PublicKey(priv), relay: relay, caps: caps, log: log,
 		peers: map[Key]*peerState{}, byAddr: map[netip.AddrPort]Key{}, byMesh: map[netip.Addr]Key{},
 		relayKeys: map[Key]bool{}, links: map[Key]*Link{}, observed: map[netip.AddrPort]time.Time{},
 	}
@@ -135,7 +148,9 @@ func (b *Bind) Close() error {
 }
 
 func (b *Bind) SetMark(uint32) error { return nil }
-func (b *Bind) BatchSize() int       { return 1 }
+
+// BatchSize：一次最多交给 WireGuard 这么多个包。FEC 算回丢掉的包时，要和后面扣着的包按顺序一起交。
+func (b *Bind) BatchSize() int { return 32 }
 
 func (b *Bind) ParseEndpoint(s string) (conn.Endpoint, error) {
 	raw, err := hex.DecodeString(s)
@@ -185,18 +200,61 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			b.mu.Lock()
 			k, ok := b.byAddr[addr]
 			var ep *endpoint
-			if ok && b.peers[k] != nil {
-				ep = b.peers[k].ep
+			var dec *fecDecoder
+			if p := b.peers[k]; ok && p != nil {
+				ep, dec = p.ep, p.dec
 			}
 			b.mu.Unlock()
 			if ep == nil {
 				continue // 来源地址没确认过，丢弃
+			}
+			if pkt[0] == fecData || pkt[0] == fecParity {
+				out, waiting := dec.push(pkt, time.Now())
+				if waiting {
+					b.holdFEC(k, dec)
+				}
+				if n := b.fill(out, ep, packets, sizes, eps, k); n > 0 {
+					return n, nil
+				}
+				continue
 			}
 			sizes[0] = n
 			eps[0] = ep
 			return 1, nil
 		}
 	}
+}
+
+// fill 把 FEC 交出来的包按顺序放进 WireGuard 的缓冲区，放不下的经中转的通道交。
+func (b *Bind) fill(out [][]byte, ep *endpoint, packets [][]byte, sizes []int, eps []conn.Endpoint, k Key) int {
+	n := 0
+	for _, x := range out {
+		if n < len(packets) && len(x) <= len(packets[n]) {
+			sizes[n] = copy(packets[n], x)
+			eps[n] = ep
+			n++
+			continue
+		}
+		b.deliver(k, x)
+	}
+	return n
+}
+
+// holdFEC 在 fecHold 后放行扣着、还没等到的包。同一个对端同时只排一个。
+func (b *Bind) holdFEC(k Key, dec *fecDecoder) {
+	if !dec.timer.CompareAndSwap(false, true) {
+		return
+	}
+	time.AfterFunc(fecHold, func() {
+		dec.timer.Store(false)
+		out, waiting := dec.release(time.Now())
+		for _, x := range out {
+			b.deliver(k, x)
+		}
+		if waiting {
+			b.holdFEC(k, dec)
+		}
+	})
 }
 
 func (b *Bind) receiveRelayed(ch chan delivery, done chan struct{}) conn.ReceiveFunc {
@@ -233,8 +291,20 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 	}
 	if p.directAlive(now) {
 		addr := p.direct
+		var enc *fecEncoder
+		if b.caps&capFEC != 0 && p.has(capFEC, now) {
+			enc = p.enc
+		}
 		b.mu.Unlock()
-		b.write(c, pkt, addr)
+		if enc == nil {
+			b.write(c, pkt, addr)
+			return
+		}
+		data, parity := enc.frame(pkt, now, func() { b.flushFEC(dst) })
+		b.write(c, data, addr)
+		for _, x := range parity {
+			b.write(c, x, addr)
+		}
 		return
 	}
 	if link := b.links[dst]; link != nil {
@@ -261,6 +331,23 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		p.pendingInit, p.pendingInitAt = append([]byte(nil), pkt...), now
 	}
 	b.mu.Unlock()
+}
+
+// flushFEC 在一组没凑满、等了 fecFlush 以后发出这一组的校验包。
+func (b *Bind) flushFEC(dst Key) {
+	now := time.Now()
+	b.mu.Lock()
+	p := b.peers[dst]
+	c := b.conn
+	if p == nil || !p.directAlive(now) {
+		b.mu.Unlock()
+		return
+	}
+	addr, enc := p.direct, p.enc
+	b.mu.Unlock()
+	for _, x := range enc.flush(now) {
+		b.write(c, x, addr)
+	}
 }
 
 // flushPending 补发暂存的握手包。有新路径可用时调用；仍然没有路径的会被 sendTo 重新暂存。
@@ -420,10 +507,27 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 			b.observed[m.observed] = now
 		}
 		b.mu.Unlock()
-		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手。
+		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手，告诉对方自己的能力。
 		if newPath {
 			b.flushPending()
+			b.mu.Lock()
+			caps := b.capsPacket(p)
+			b.mu.Unlock()
+			b.write(c, caps, from)
 		}
+	case typeCaps:
+		b.mu.Lock()
+		p := b.peers[m.key]
+		if p == nil || !verify(pkt, p.mac) {
+			b.mu.Unlock()
+			return nil, nil
+		}
+		p.caps, p.capsAt = m.caps, now
+		if m.lossPPM != lossUnknown {
+			p.lossPPM = m.lossPPM
+			p.enc.adjust(m.lossPPM)
+		}
+		b.mu.Unlock()
 	case typeRelaySend:
 		if !b.relay {
 			return nil, nil
@@ -475,6 +579,8 @@ func (b *Bind) setPeers(peers []Peer) {
 				key: pe.Key, ep: &endpoint{key: pe.Key}, mac: macKey(b.priv, pe.Key),
 				learned: map[netip.AddrPort]time.Time{}, lastPing: map[netip.AddrPort]time.Time{},
 				pings: map[[txidLen]byte]pingInfo{},
+				// 一开始就加 1 个校验包，对方报告丢包很少时再关：等测出丢包再开，TCP 早就降速了。
+				enc: &fecEncoder{parity: 1}, dec: newFECDecoder(),
 			}
 			b.peers[pe.Key] = p
 		}
@@ -526,6 +632,8 @@ func (b *Bind) maintain(now time.Time) {
 			if now.Sub(p.lastPing[p.direct]) >= pingDirect {
 				sends = append(sends, out{b.newPing(p, p.direct, now), p.direct})
 			}
+			// 能力包每轮都发（2 秒一次）：丢包率变了，对方能很快调整冗余。
+			sends = append(sends, out{b.capsPacket(p), p.direct})
 			continue
 		}
 		if p.direct.IsValid() {
@@ -557,6 +665,15 @@ func (b *Bind) maintain(now time.Time) {
 	}
 }
 
+// capsPacket 是发给 p 的能力包，带上收到它的包的丢包率。调用时持有 b.mu。
+func (b *Bind) capsPacket(p *peerState) []byte {
+	loss := uint32(lossUnknown)
+	if ppm, ok := p.dec.lossPPM(); ok {
+		loss = ppm
+	}
+	return encodeCaps(b.pub, b.caps, loss, p.mac)
+}
+
 // PeerStatus 是到某个对端的当前路径。
 type PeerStatus struct {
 	Key Key
@@ -565,6 +682,11 @@ type PeerStatus struct {
 	Direct netip.AddrPort
 	Via    Key // 中转的面板
 	RTT    time.Duration
+	// FEC 是发给对方时每 10 个包加的校验包个数，-1 表示没用 FEC（对方不支持或不是直连）。
+	FEC int
+	// LossPPM 是对方报告的丢包率（百万分之几），Recovered 是靠 FEC 恢复的、来自对方的包。
+	LossPPM   uint32
+	Recovered uint64
 }
 
 func (b *Bind) status() []PeerStatus {
@@ -573,10 +695,13 @@ func (b *Bind) status() []PeerStatus {
 	defer b.mu.Unlock()
 	var out []PeerStatus
 	for _, p := range b.peers {
-		s := PeerStatus{Key: p.key, Path: "none"}
+		s := PeerStatus{Key: p.key, Path: "none", FEC: -1, LossPPM: p.lossPPM, Recovered: p.dec.recoveredCount()}
 		switch {
 		case p.directAlive(now):
 			s.Path, s.Direct, s.RTT = "direct", p.direct, p.rtt
+			if b.caps&capFEC != 0 && p.has(capFEC, now) {
+				s.FEC = p.enc.parityCount()
+			}
 		case b.links[p.key] != nil:
 			s.Path = "link"
 		default:

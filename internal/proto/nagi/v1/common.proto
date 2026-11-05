@@ -557,6 +557,14 @@ message MeshPeerStatus {
   google.protobuf.Timestamp last_handshake = 8;
   uint64 rx_bytes = 9;
   uint64 tx_bytes = 10;
+  // 和对方之间用着 FEC（双方都支持、直连，见 docs/mesh.md#抗丢包）。旧版本不报，为 false。
+  bool fec = 11;
+  // 用 FEC 时发给对方的每 10 个包加的校验包个数。
+  int32 fec_parity = 14;
+  // 对方报告的、它收到这一端的包的丢包率（百万分之几）。
+  uint32 loss_ppm = 12;
+  // 靠 FEC 恢复的、来自对方的包。
+  uint64 fec_recovered = 13;
 }
 
 message MeshStatus {
