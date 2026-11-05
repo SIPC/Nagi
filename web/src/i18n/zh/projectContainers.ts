@@ -127,6 +127,7 @@ export default {
     currentVersion: "当前版本",
     uptimeLabel: "已运行",
     directory: "目录",
+    projectDir: "现有目录",
     resources: "资源",
     uptime: {
       second: (n: number) => `${n} 秒`,

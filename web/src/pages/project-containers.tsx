@@ -8,6 +8,7 @@ import { cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
+import { ImportDir } from "@/pages/import-dir";
 import { ContainerMetrics, containerUsage, EmptyProjectMetrics, ProjectMetrics, projectMetricNodes, UsageRings, useProjectMetrics, useRange } from "@/components/metrics";
 import { offlineNodeNames, ProjectState, serviceDetail, ServiceState, stateOf } from "@/components/status";
 import { ask, confirmAction } from "@/components/confirm";
@@ -501,7 +502,8 @@ function ContainerDetail({
   // 手机上打开卷的文件页时，标题栏换成卷名，不再显示容器标题和标签。
   const { volume } = useSearch({ strict: false }) as { volume?: string };
   const browsing = view === "storage" && !!volume && !isViewer;
-  const uploadDeployable = !cfg?.form || !!cfg.form.workdir;
+  // 现有目录的容器文件在节点上的那个目录里，不经面板上传。
+  const uploadDeployable = !cfg?.projectDir && (!cfg?.form || !!cfg.form.workdir);
   const pullDeploy = () => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true });
 
   return (
@@ -801,6 +803,7 @@ function Overview({ project, container, services }: { project: Project; containe
           <KvItem mono k={o.currentVersion} v={version} />
           <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
           <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />
+          {container.config?.projectDir && <KvItem mono className="col-span-2" k={o.projectDir} v={container.config.projectDir} />}
         </div>
       </Section>
       <Section title={o.resources} actions={picker}>
@@ -1465,9 +1468,10 @@ function AddContainer({ project }: { project: Project }) {
       {node.nodeField}
     </FormRow>
   );
-  const form = useContainerForm(project.containers.length === 0, top, node.dirField);
+  const { isAdmin } = useRole();
+  const form = useContainerForm(project.containers.length === 0, top, node.dirField, isAdmin);
   formRef.current = form;
-  useUnsaved({ name, config: form.build() });
+  useUnsaved({ name, config: form.mode === "dir" ? {} : form.build() });
 
   const add = async () => {
     setBusy(true);
@@ -1488,6 +1492,13 @@ function AddContainer({ project }: { project: Project }) {
     }
   };
 
+  if (form.mode === "dir")
+    return (
+      <div className="grid max-w-[672px] gap-6 max-md:gap-4">
+        {form.fields}
+        <ImportDir project={project} />
+      </div>
+    );
   return (
     <form
       className="grid max-w-[672px] gap-6 max-md:gap-4"

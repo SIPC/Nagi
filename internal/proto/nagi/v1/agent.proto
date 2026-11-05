@@ -44,6 +44,9 @@ service AgentService {
   rpc NodeExec(NodeExecRequest) returns (stream ExecOutput);
   // 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
   rpc ReclaimSnapshots(ReclaimSnapshotsRequest) returns (stream DeployEvent);
+  // 读取节点上一个现有的 compose 目录（导入用，见 docs/agent.md#现有目录）：compose 文件、.env，
+  // 以及在这个目录里运行着的 compose 项目。只读。
+  rpc InspectComposeDir(InspectComposeDirRequest) returns (InspectComposeDirResponse);
   rpc ListNodeDir(NodeFileRef) returns (ListNodeDirResponse);
   rpc ReadNodeFile(NodeFileRef) returns (ReadNodeFileResponse);
   rpc WriteNodeFile(WriteNodeFileRequest) returns (WriteNodeFileResponse);
@@ -442,6 +445,33 @@ message NodeShellInput {
 }
 
 message ReclaimSnapshotsRequest {}
+
+message InspectComposeDirRequest {
+  string path = 1;
+}
+
+message InspectComposeDirResponse {
+  // 规范后的绝对路径。
+  string path = 1;
+  // 找到的 compose 文件名（按 compose 的顺序：compose.yaml、compose.yml、docker-compose.yaml、docker-compose.yml）和内容。
+  string compose_file = 2;
+  string compose = 3;
+  // 目录里的 .env 原文，没有时为空。
+  string env = 4;
+  // compose 会自动叠加、但导入时不会带上的文件，例如 docker-compose.override.yml。
+  repeated string ignored_files = 5;
+  // 在这个目录里运行过的 compose 项目（不含 Nagi 自己的），以及它的容器。
+  string project = 6;
+  repeated ComposeDirContainer containers = 7;
+  // 这个项目的命名卷：compose 里的名字到 Docker 里的名字。
+  map<string, string> volumes = 8;
+}
+
+message ComposeDirContainer {
+  string name = 1;
+  string service = 2;
+  string state = 3;
+}
 
 message NodeExecRequest {
   // 用 shell -lc 执行。

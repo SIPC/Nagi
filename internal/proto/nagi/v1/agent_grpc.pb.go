@@ -37,6 +37,7 @@ const (
 	AgentService_NodeShell_FullMethodName             = "/nagi.v1.AgentService/NodeShell"
 	AgentService_NodeExec_FullMethodName              = "/nagi.v1.AgentService/NodeExec"
 	AgentService_ReclaimSnapshots_FullMethodName      = "/nagi.v1.AgentService/ReclaimSnapshots"
+	AgentService_InspectComposeDir_FullMethodName     = "/nagi.v1.AgentService/InspectComposeDir"
 	AgentService_ListNodeDir_FullMethodName           = "/nagi.v1.AgentService/ListNodeDir"
 	AgentService_ReadNodeFile_FullMethodName          = "/nagi.v1.AgentService/ReadNodeFile"
 	AgentService_WriteNodeFile_FullMethodName         = "/nagi.v1.AgentService/WriteNodeFile"
@@ -116,6 +117,9 @@ type AgentServiceClient interface {
 	NodeExec(ctx context.Context, in *NodeExecRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecOutput], error)
 	// 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
 	ReclaimSnapshots(ctx context.Context, in *ReclaimSnapshotsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 读取节点上一个现有的 compose 目录（导入用，见 docs/agent.md#现有目录）：compose 文件、.env，
+	// 以及在这个目录里运行着的 compose 项目。只读。
+	InspectComposeDir(ctx context.Context, in *InspectComposeDirRequest, opts ...grpc.CallOption) (*InspectComposeDirResponse, error)
 	ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error)
 	ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error)
 	WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
@@ -441,6 +445,16 @@ func (c *agentServiceClient) ReclaimSnapshots(ctx context.Context, in *ReclaimSn
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReclaimSnapshotsClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) InspectComposeDir(ctx context.Context, in *InspectComposeDirRequest, opts ...grpc.CallOption) (*InspectComposeDirResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InspectComposeDirResponse)
+	err := c.cc.Invoke(ctx, AgentService_InspectComposeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *agentServiceClient) ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -879,6 +893,9 @@ type AgentServiceServer interface {
 	NodeExec(*NodeExecRequest, grpc.ServerStreamingServer[ExecOutput]) error
 	// 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
 	ReclaimSnapshots(*ReclaimSnapshotsRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 读取节点上一个现有的 compose 目录（导入用，见 docs/agent.md#现有目录）：compose 文件、.env，
+	// 以及在这个目录里运行着的 compose 项目。只读。
+	InspectComposeDir(context.Context, *InspectComposeDirRequest) (*InspectComposeDirResponse, error)
 	ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error)
 	ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error)
 	WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error)
@@ -1009,6 +1026,9 @@ func (UnimplementedAgentServiceServer) NodeExec(*NodeExecRequest, grpc.ServerStr
 }
 func (UnimplementedAgentServiceServer) ReclaimSnapshots(*ReclaimSnapshotsRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method ReclaimSnapshots not implemented")
+}
+func (UnimplementedAgentServiceServer) InspectComposeDir(context.Context, *InspectComposeDirRequest) (*InspectComposeDirResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
 }
 func (UnimplementedAgentServiceServer) ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodeDir not implemented")
@@ -1394,6 +1414,24 @@ func _AgentService_ReclaimSnapshots_Handler(srv interface{}, stream grpc.ServerS
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReclaimSnapshotsServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_InspectComposeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectComposeDirRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).InspectComposeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_InspectComposeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).InspectComposeDir(ctx, req.(*InspectComposeDirRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _AgentService_ListNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeFileRef)
@@ -2082,6 +2120,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSnapshot",
 			Handler:    _AgentService_DeleteSnapshot_Handler,
+		},
+		{
+			MethodName: "InspectComposeDir",
+			Handler:    _AgentService_InspectComposeDir_Handler,
 		},
 		{
 			MethodName: "ListNodeDir",

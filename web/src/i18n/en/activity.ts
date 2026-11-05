@@ -49,6 +49,8 @@ export default {
     DiscardSharedEnv: "Discard shared variable draft",
     DeleteProject: "Delete project",
     AddContainer: "Add container",
+    ImportComposeDir: "Import existing directory",
+    InspectComposeDir: "Read existing directory",
     DeleteContainer: "Delete container",
     ControlContainer: "Start, stop or restart container",
     SaveDraft: "Save draft",

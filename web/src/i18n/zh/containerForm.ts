@@ -38,6 +38,7 @@ export default {
   type: "类型",
   typeImage: "容器",
   typeCompose: "容器组（compose）",
+  typeDir: "现有目录",
   composeHelp: "compose 文件整体作为一个容器组，适用于自带数据库等依赖的应用。组内容器通过 compose 中的服务名互相访问。",
   dependsOn: "依赖",
   dependsOnHint: "容器名，逗号分隔",

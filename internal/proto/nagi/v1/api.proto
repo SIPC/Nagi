@@ -199,6 +199,8 @@ service NodeService {
   rpc RenameNode(RenameNodeRequest) returns (RenameNodeResponse);
   // 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
   rpc AdoptNodeContainer(AdoptNodeContainerRequest) returns (AdoptNodeContainerResponse);
+  // 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
+  rpc InspectComposeDir(NodeFileRef) returns (ComposeDirPreview);
 }
 
 message NodeRef {
@@ -595,6 +597,9 @@ service ProjectService {
 
   // 往项目里加一个容器（只保存，不部署）。
   rpc AddContainer(AddContainerRequest) returns (Project);
+  // 把节点上一个现有的 compose 目录导入为容器组，数据留在原处（见 docs/agent.md#现有目录）。只保存，不部署；
+  // 部署时停掉目录里原来运行的容器，由面板接管。只有管理员能用，要先确认身份。
+  rpc ImportComposeDir(ImportComposeDirRequest) returns (Project);
   // 删除容器：停止并删除它，目录默认保留。
   rpc DeleteContainer(DeleteContainerApiRequest) returns (Project);
   // 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
@@ -997,6 +1002,30 @@ message DeleteProjectRequest {
 }
 
 message DeleteProjectResponse {}
+
+message ComposeDirPreview {
+  string path = 1;
+  string compose_file = 2;
+  // 导入后的 compose（原来的命名卷改成引用原卷）。
+  string compose = 3;
+  // 从 .env 导入的变量名，和其中标为密钥的。值不返回。
+  repeated string variables = 4;
+  repeated string secret_variables = 5;
+  // 原来运行着的 compose 项目和它的容器（「名称 状态」），部署时会被替换。
+  string project = 6;
+  repeated string containers = 7;
+  // 需要注意的地方，例如没有带上的叠加文件、改为引用原卷的命名卷。
+  repeated string notes = 8;
+  // 建议的容器组名称（目录名）。
+  string name = 9;
+}
+
+message ImportComposeDirRequest {
+  string project_id = 1;
+  string node_id = 2;
+  string dir = 3;
+  string name = 4;
+}
 
 message AddContainerRequest {
   string project_id = 1;

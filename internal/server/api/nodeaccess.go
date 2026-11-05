@@ -49,6 +49,9 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.NodeServiceCreateNodeDirProcedure:         true,
 	nagiv1connect.NodeServiceListNodeFileBackupsProcedure:   true,
 	nagiv1connect.NodeServiceRestoreNodeFileBackupProcedure: true,
+	// 导入现有目录：读主机上的文件（见 docs/agent.md#现有目录）。
+	nagiv1connect.NodeServiceInspectComposeDirProcedure:   true,
+	nagiv1connect.ProjectServiceImportComposeDirProcedure: true,
 	// 访问令牌是长期有效的凭据（见 docs/mcp.md#个人访问令牌）。
 	nagiv1connect.SettingsServiceCreateAccessTokenProcedure: true,
 }

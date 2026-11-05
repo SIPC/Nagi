@@ -48,6 +48,8 @@ export default {
     DiscardSharedEnv: "放弃共享变量草稿",
     DeleteProject: "删除项目",
     AddContainer: "添加容器",
+    ImportComposeDir: "导入现有目录",
+    InspectComposeDir: "读取现有目录",
     DeleteContainer: "删除容器",
     ControlContainer: "启动、停止或重启容器",
     SaveDraft: "保存草稿",

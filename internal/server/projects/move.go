@@ -89,8 +89,29 @@ func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nag
 }
 
 // SetBackupNode 设置或取消容器的备份节点（nodeID 为空表示取消）。
+// checkMovable 拒绝用现有目录的容器：数据在节点上的那个目录里，不在容器目录里，迁移、顶替、备份节点都带不走。
+func (s *Service) checkMovable(ctx context.Context, projectID, name string) error {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return err
+	}
+	cfg, err := s.currentConfig(ctx, c)
+	if err != nil {
+		return err
+	}
+	if cfg.GetProjectDir() != "" {
+		return invalid("容器 %s 使用节点上的现有目录 %s，数据不在容器目录里，不能迁移、顶替或设置备份节点", name, cfg.GetProjectDir())
+	}
+	return nil
+}
+
 func (s *Service) SetBackupNode(ctx context.Context, projectID, name, nodeID string, deleteReplica bool) (*nagiv1.Project, error) {
 	ctx = context.WithoutCancel(ctx)
+	if nodeID != "" {
+		if err := s.checkMovable(ctx, projectID, name); err != nil {
+			return nil, err
+		}
+	}
 	l := s.lock(projectID)
 	l.Lock()
 	defer l.Unlock()
@@ -215,6 +236,9 @@ func (s *Service) moved(ctx context.Context, projectID, name, nodeID, dir string
 // 原节点之后回来时，由 Sync 让它停止并删除这个容器（目录改名保留）。
 func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapshotID, dir string, out Output) error {
 	ctx = context.WithoutCancel(ctx)
+	if err := s.checkMovable(ctx, projectID, name); err != nil {
+		return err
+	}
 	l := s.lock(projectID)
 	l.Lock()
 	defer l.Unlock()
@@ -270,6 +294,9 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 // 任何一步失败都撤销：删除目标节点上的副本，源节点重新启动容器。
 func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir string, out Output) error {
 	ctx = context.WithoutCancel(ctx) // 开始了就做完：浏览器断开也会走完撤销
+	if err := s.checkMovable(ctx, projectID, name); err != nil {
+		return err
+	}
 	l := s.lock(projectID)
 	l.Lock()
 	defer l.Unlock()
@@ -385,6 +412,9 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 // 从 git 拉文件的、或者不用 data/ 里文件的容器直接部署；要用 data/ 里的文件又没有文件来源的，提示先上传文件。
 func (s *Service) RedeployElsewhere(ctx context.Context, projectID, name, nodeID, dir string, out Output) error {
 	ctx = context.WithoutCancel(ctx)
+	if err := s.checkMovable(ctx, projectID, name); err != nil {
+		return err
+	}
 	deploy, opts, err := s.redeployMove(ctx, projectID, name, nodeID, dir, out)
 	if err != nil || !deploy {
 		return err

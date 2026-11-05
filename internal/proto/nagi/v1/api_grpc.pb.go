@@ -608,6 +608,7 @@ const (
 	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
 	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
 	NodeService_AdoptNodeContainer_FullMethodName    = "/nagi.v1.NodeService/AdoptNodeContainer"
+	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -664,6 +665,8 @@ type NodeServiceClient interface {
 	RenameNode(ctx context.Context, in *RenameNodeRequest, opts ...grpc.CallOption) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error)
+	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
+	InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error)
 }
 
 type nodeServiceClient struct {
@@ -973,6 +976,16 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, in *AdoptNod
 	return out, nil
 }
 
+func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ComposeDirPreview)
+	err := c.cc.Invoke(ctx, NodeService_InspectComposeDir_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -1027,6 +1040,8 @@ type NodeServiceServer interface {
 	RenameNode(context.Context, *RenameNodeRequest) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error)
+	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
+	InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -1123,6 +1138,9 @@ func (UnimplementedNodeServiceServer) RenameNode(context.Context, *RenameNodeReq
 }
 func (UnimplementedNodeServiceServer) AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdoptNodeContainer not implemented")
+}
+func (UnimplementedNodeServiceServer) InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -1660,6 +1678,24 @@ func _NodeService_AdoptNodeContainer_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_InspectComposeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeFileRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).InspectComposeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_InspectComposeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).InspectComposeDir(ctx, req.(*NodeFileRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1778,6 +1814,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdoptNodeContainer",
 			Handler:    _NodeService_AdoptNodeContainer_Handler,
+		},
+		{
+			MethodName: "InspectComposeDir",
+			Handler:    _NodeService_InspectComposeDir_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -3081,6 +3121,7 @@ const (
 	ProjectService_DiscardSharedEnv_FullMethodName        = "/nagi.v1.ProjectService/DiscardSharedEnv"
 	ProjectService_DeleteProject_FullMethodName           = "/nagi.v1.ProjectService/DeleteProject"
 	ProjectService_AddContainer_FullMethodName            = "/nagi.v1.ProjectService/AddContainer"
+	ProjectService_ImportComposeDir_FullMethodName        = "/nagi.v1.ProjectService/ImportComposeDir"
 	ProjectService_DeleteContainer_FullMethodName         = "/nagi.v1.ProjectService/DeleteContainer"
 	ProjectService_ControlContainer_FullMethodName        = "/nagi.v1.ProjectService/ControlContainer"
 	ProjectService_SaveDraft_FullMethodName               = "/nagi.v1.ProjectService/SaveDraft"
@@ -3143,6 +3184,9 @@ type ProjectServiceClient interface {
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	// 往项目里加一个容器（只保存，不部署）。
 	AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*Project, error)
+	// 把节点上一个现有的 compose 目录导入为容器组，数据留在原处（见 docs/agent.md#现有目录）。只保存，不部署；
+	// 部署时停掉目录里原来运行的容器，由面板接管。只有管理员能用，要先确认身份。
+	ImportComposeDir(ctx context.Context, in *ImportComposeDirRequest, opts ...grpc.CallOption) (*Project, error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(ctx context.Context, in *DeleteContainerApiRequest, opts ...grpc.CallOption) (*Project, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
@@ -3301,6 +3345,16 @@ func (c *projectServiceClient) AddContainer(ctx context.Context, in *AddContaine
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_AddContainer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) ImportComposeDir(ctx context.Context, in *ImportComposeDirRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_ImportComposeDir_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3844,6 +3898,9 @@ type ProjectServiceServer interface {
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	// 往项目里加一个容器（只保存，不部署）。
 	AddContainer(context.Context, *AddContainerRequest) (*Project, error)
+	// 把节点上一个现有的 compose 目录导入为容器组，数据留在原处（见 docs/agent.md#现有目录）。只保存，不部署；
+	// 部署时停掉目录里原来运行的容器，由面板接管。只有管理员能用，要先确认身份。
+	ImportComposeDir(context.Context, *ImportComposeDirRequest) (*Project, error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
@@ -3951,6 +4008,9 @@ func (UnimplementedProjectServiceServer) DeleteProject(context.Context, *DeleteP
 }
 func (UnimplementedProjectServiceServer) AddContainer(context.Context, *AddContainerRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddContainer not implemented")
+}
+func (UnimplementedProjectServiceServer) ImportComposeDir(context.Context, *ImportComposeDirRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportComposeDir not implemented")
 }
 func (UnimplementedProjectServiceServer) DeleteContainer(context.Context, *DeleteContainerApiRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteContainer not implemented")
@@ -4242,6 +4302,24 @@ func _ProjectService_AddContainer_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).AddContainer(ctx, req.(*AddContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_ImportComposeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportComposeDirRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ImportComposeDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ImportComposeDir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ImportComposeDir(ctx, req.(*ImportComposeDirRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4988,6 +5066,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddContainer",
 			Handler:    _ProjectService_AddContainer_Handler,
+		},
+		{
+			MethodName: "ImportComposeDir",
+			Handler:    _ProjectService_ImportComposeDir_Handler,
 		},
 		{
 			MethodName: "DeleteContainer",

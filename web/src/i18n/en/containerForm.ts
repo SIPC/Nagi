@@ -41,6 +41,7 @@ export default {
   type: "Type",
   typeImage: "Container",
   typeCompose: "Container group (compose)",
+  typeDir: "Existing directory",
   composeHelp:
     "The whole compose file becomes one container group, suited to apps that bundle dependencies such as a database. Containers in the group reach each other by compose service name.",
   dependsOn: "Dependencies",

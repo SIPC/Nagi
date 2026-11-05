@@ -87,6 +87,9 @@ type SetFailoverRequest struct {
 // 任何一方失败就撤销已经下发的。之后 A 把快照同步给 B，B 提前拉好镜像。
 func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nagiv1.Project, error) {
 	ctx = context.WithoutCancel(ctx)
+	if err := s.checkMovable(ctx, req.ProjectID, req.Container); err != nil {
+		return nil, err
+	}
 	l := s.lock(req.ProjectID)
 	l.Lock()
 	defer l.Unlock()

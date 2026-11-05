@@ -190,6 +190,10 @@ func composeFiles(s *nagiv1.ContainerSpec) compose.Files {
 		Override:    mp.overrideFile(),
 		EnvFiles:    []string{mp.sharedEnvFile(), mp.envFile()},
 	}
+	// 现有目录：相对路径以它为准，数据留在原处（见 docs/agent.md#现有目录）。
+	if d := s.GetConfig().GetProjectDir(); d != "" {
+		f.ProjectDir = d
+	}
 	// 项目登录过私有仓库时用它自己的 docker 配置；没有时用机器全局的（节点上全局 docker login 过的照常能用）。
 	if len(s.GetDockerConfig()) > 0 {
 		f.DockerConfig = mp.dockerConfigDir()

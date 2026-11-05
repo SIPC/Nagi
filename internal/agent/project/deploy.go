@@ -202,12 +202,21 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 		}
 		m.clearImageUpdates(s.GetProjectId(), name)
 	}
+	// 现有目录：先停掉目录里原来用 docker compose 运行的容器，新的起不来就恢复它们。
+	commit, undo := func() {}, func() {}
+	if dir := s.GetConfig().GetProjectDir(); dir != "" {
+		if commit, undo, err = m.takeOver(ctx, dir, files, onLine); err != nil {
+			return res, err
+		}
+	}
 	if err := compose.Up(ctx, files, onLine); err != nil {
+		undo()
 		return res, err
 	}
 	if svcs := spec.DataServices(cp, mp.dataDir()); filesChanged && len(svcs) > 0 {
 		onLine("文件已更新，重建容器：" + strings.Join(svcs, "、"))
 		if err := compose.Recreate(ctx, files, svcs, onLine); err != nil {
+			undo()
 			return res, err
 		}
 	}
@@ -215,8 +224,10 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 		onLine("警告：接入项目内网失败：" + err.Error())
 	}
 	if err := m.watchStart(ctx, files.ProjectName, o.Previous > 0, onLine); err != nil {
+		undo()
 		return res, err
 	}
+	commit()
 
 	// 7. 记下镜像摘要，缓存这份配置。
 	res.Images, _ = m.docker.ProjectImages(ctx, files.ProjectName)
@@ -237,6 +248,7 @@ func (m *Manager) writeOverride(ctx context.Context, s *nagiv1.ContainerSpec, cp
 		proj: cp, mp: containerPaths{root: s.GetDir()}, projectID: s.GetProjectId(), container: s.GetName(), version: s.GetVersion(),
 		single: spec.IsSingle(s.GetConfig()), pins: s.GetImages(), senv: spec.ServiceEnv(s.GetConfig(), s.GetName()),
 		managedRestart: m.ManagedRestart != nil && m.ManagedRestart(s.GetProjectId(), s.GetName()),
+		projectDir:     s.GetConfig().GetProjectDir(),
 	}
 	if in.single {
 		if err := m.ensureProjectNetwork(ctx, s.GetProjectId()); err != nil {

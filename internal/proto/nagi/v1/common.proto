@@ -127,6 +127,9 @@ message ContainerConfig {
   reserved 9;
   // 一起部署时要先部署的容器（例如后端依赖数据库）。
   repeated string depends_on = 10;
+  // 现有目录（容器组，见 docs/agent.md#现有目录）：compose 的项目目录是节点上的这个目录，相对路径以它为准，
+  // 数据留在原处，不在容器目录里。为空时是容器目录的 data/。只有管理员能设置。
+  string project_dir = 11;
 }
 
 enum Stateful {

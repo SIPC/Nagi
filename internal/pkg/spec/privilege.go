@@ -54,6 +54,10 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 		checkService(name, svc, add)
 	}
 	checkTopLevel(doc, add)
+	// 现有目录：compose 在节点上的任意目录里运行，相对路径都指向那里。
+	if cfg.GetProjectDir() != "" {
+		add(false, "project_dir")
+	}
 	sort.Strings(reasons)
 	return slices.Compact(reasons), dynamic
 }

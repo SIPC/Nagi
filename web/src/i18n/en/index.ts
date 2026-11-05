@@ -24,6 +24,7 @@ import projectData from "./projectData";
 import projectNetwork from "./projectNetwork";
 import projectSettings from "./projectSettings";
 import containerForm from "./containerForm";
+import importDir from "./importDir";
 import metrics from "./metrics";
 import overview from "./overview";
 import about from "./about";
@@ -54,6 +55,7 @@ export default {
   projectNetwork,
   projectSettings,
   containerForm,
+  importDir,
   metrics,
   overview,
   about,

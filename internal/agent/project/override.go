@@ -34,6 +34,20 @@ type overrideInput struct {
 	senv           map[string][]*nagiv1.EnvVar
 	pins           map[string]string
 	managedRestart bool
+	// projectDir 是现有目录（见 docs/agent.md#现有目录），为空时不是。
+	projectDir string
+}
+
+// replaceDotEnv 把 env_file 里的 dotEnv 换成 ours，返回新列表；没有引用 dotEnv 时 ok 为 false。
+func replaceDotEnv(files []types.EnvFile, dotEnv, ours string) (out []string, ok bool) {
+	for _, f := range files {
+		if filepath.Clean(f.Path) == dotEnv {
+			out, ok = append(out, ours), true
+			continue
+		}
+		out = append(out, f.Path)
+	}
+	return out, ok
 }
 
 // buildOverride 生成 Nagi 的叠加配置。override 里写的值会覆盖用户的值，
@@ -83,6 +97,20 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 		}
 		if len(in.senv[name]) > 0 {
 			s["env_file"] = []string{filepath.ToSlash(in.mp.serviceEnvFile(name))}
+		}
+		// 现有目录：compose 里的 env_file: .env 改读面板的变量（导入时从这份 .env 复制过来，之后以面板为准），
+		// 原来的 .env 不再使用。要整个替换列表，所以用 !override。
+		if in.projectDir != "" {
+			if files, ok := replaceDotEnv(svc.EnvFiles, filepath.Join(in.projectDir, ".env"), in.mp.envFile()); ok {
+				if len(in.senv[name]) > 0 {
+					files = append(files, in.mp.serviceEnvFile(name))
+				}
+				seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!override"}
+				for _, f := range files {
+					seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: filepath.ToSlash(f)})
+				}
+				s["env_file"] = seq
+			}
 		}
 		if joinIntranet && svc.NetworkMode == "" {
 			s["networks"] = []string{"nagi"}

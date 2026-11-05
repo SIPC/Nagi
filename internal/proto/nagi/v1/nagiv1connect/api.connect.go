@@ -148,6 +148,9 @@ const (
 	// NodeServiceAdoptNodeContainerProcedure is the fully-qualified name of the NodeService's
 	// AdoptNodeContainer RPC.
 	NodeServiceAdoptNodeContainerProcedure = "/nagi.v1.NodeService/AdoptNodeContainer"
+	// NodeServiceInspectComposeDirProcedure is the fully-qualified name of the NodeService's
+	// InspectComposeDir RPC.
+	NodeServiceInspectComposeDirProcedure = "/nagi.v1.NodeService/InspectComposeDir"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -265,6 +268,9 @@ const (
 	// ProjectServiceAddContainerProcedure is the fully-qualified name of the ProjectService's
 	// AddContainer RPC.
 	ProjectServiceAddContainerProcedure = "/nagi.v1.ProjectService/AddContainer"
+	// ProjectServiceImportComposeDirProcedure is the fully-qualified name of the ProjectService's
+	// ImportComposeDir RPC.
+	ProjectServiceImportComposeDirProcedure = "/nagi.v1.ProjectService/ImportComposeDir"
 	// ProjectServiceDeleteContainerProcedure is the fully-qualified name of the ProjectService's
 	// DeleteContainer RPC.
 	ProjectServiceDeleteContainerProcedure = "/nagi.v1.ProjectService/DeleteContainer"
@@ -834,6 +840,8 @@ type NodeServiceClient interface {
 	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
+	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
+	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1021,6 +1029,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("AdoptNodeContainer")),
 			connect.WithClientOptions(opts...),
 		),
+		inspectComposeDir: connect.NewClient[v1.NodeFileRef, v1.ComposeDirPreview](
+			httpClient,
+			baseURL+NodeServiceInspectComposeDirProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1055,6 +1069,7 @@ type nodeServiceClient struct {
 	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
 	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
 	adoptNodeContainer    *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
+	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -1202,6 +1217,11 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, req *connect
 	return c.adoptNodeContainer.CallUnary(ctx, req)
 }
 
+// InspectComposeDir calls nagi.v1.NodeService.InspectComposeDir.
+func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
+	return c.inspectComposeDir.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1254,6 +1274,8 @@ type NodeServiceHandler interface {
 	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
+	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
+	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1437,6 +1459,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("AdoptNodeContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceInspectComposeDirHandler := connect.NewUnaryHandler(
+		NodeServiceInspectComposeDirProcedure,
+		svc.InspectComposeDir,
+		connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -1497,6 +1525,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceRenameNodeHandler.ServeHTTP(w, r)
 		case NodeServiceAdoptNodeContainerProcedure:
 			nodeServiceAdoptNodeContainerHandler.ServeHTTP(w, r)
+		case NodeServiceInspectComposeDirProcedure:
+			nodeServiceInspectComposeDirHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1620,6 +1650,10 @@ func (UnimplementedNodeServiceHandler) RenameNode(context.Context, *connect.Requ
 
 func (UnimplementedNodeServiceHandler) AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AdoptNodeContainer is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.InspectComposeDir is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.
@@ -2527,6 +2561,9 @@ type ProjectServiceClient interface {
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	// 往项目里加一个容器（只保存，不部署）。
 	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error)
+	// 把节点上一个现有的 compose 目录导入为容器组，数据留在原处（见 docs/agent.md#现有目录）。只保存，不部署；
+	// 部署时停掉目录里原来运行的容器，由面板接管。只有管理员能用，要先确认身份。
+	ImportComposeDir(context.Context, *connect.Request[v1.ImportComposeDirRequest]) (*connect.Response[v1.Project], error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
@@ -2660,6 +2697,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceAddContainerProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("AddContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		importComposeDir: connect.NewClient[v1.ImportComposeDirRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceImportComposeDirProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ImportComposeDir")),
 			connect.WithClientOptions(opts...),
 		),
 		deleteContainer: connect.NewClient[v1.DeleteContainerApiRequest, v1.Project](
@@ -2933,6 +2976,7 @@ type projectServiceClient struct {
 	discardSharedEnv        *connect.Client[v1.ProjectRevisionRef, v1.Project]
 	deleteProject           *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
 	addContainer            *connect.Client[v1.AddContainerRequest, v1.Project]
+	importComposeDir        *connect.Client[v1.ImportComposeDirRequest, v1.Project]
 	deleteContainer         *connect.Client[v1.DeleteContainerApiRequest, v1.Project]
 	controlContainer        *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
 	saveDraft               *connect.Client[v1.SaveDraftRequest, v1.Project]
@@ -3016,6 +3060,11 @@ func (c *projectServiceClient) DeleteProject(ctx context.Context, req *connect.R
 // AddContainer calls nagi.v1.ProjectService.AddContainer.
 func (c *projectServiceClient) AddContainer(ctx context.Context, req *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error) {
 	return c.addContainer.CallUnary(ctx, req)
+}
+
+// ImportComposeDir calls nagi.v1.ProjectService.ImportComposeDir.
+func (c *projectServiceClient) ImportComposeDir(ctx context.Context, req *connect.Request[v1.ImportComposeDirRequest]) (*connect.Response[v1.Project], error) {
+	return c.importComposeDir.CallUnary(ctx, req)
 }
 
 // DeleteContainer calls nagi.v1.ProjectService.DeleteContainer.
@@ -3248,6 +3297,9 @@ type ProjectServiceHandler interface {
 	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
 	// 往项目里加一个容器（只保存，不部署）。
 	AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error)
+	// 把节点上一个现有的 compose 目录导入为容器组，数据留在原处（见 docs/agent.md#现有目录）。只保存，不部署；
+	// 部署时停掉目录里原来运行的容器，由面板接管。只有管理员能用，要先确认身份。
+	ImportComposeDir(context.Context, *connect.Request[v1.ImportComposeDirRequest]) (*connect.Response[v1.Project], error)
 	// 删除容器：停止并删除它，目录默认保留。
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
@@ -3377,6 +3429,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceAddContainerProcedure,
 		svc.AddContainer,
 		connect.WithSchema(projectServiceMethods.ByName("AddContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceImportComposeDirHandler := connect.NewUnaryHandler(
+		ProjectServiceImportComposeDirProcedure,
+		svc.ImportComposeDir,
+		connect.WithSchema(projectServiceMethods.ByName("ImportComposeDir")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceDeleteContainerHandler := connect.NewUnaryHandler(
@@ -3655,6 +3713,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceDeleteProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceAddContainerProcedure:
 			projectServiceAddContainerHandler.ServeHTTP(w, r)
+		case ProjectServiceImportComposeDirProcedure:
+			projectServiceImportComposeDirHandler.ServeHTTP(w, r)
 		case ProjectServiceDeleteContainerProcedure:
 			projectServiceDeleteContainerHandler.ServeHTTP(w, r)
 		case ProjectServiceControlContainerProcedure:
@@ -3780,6 +3840,10 @@ func (UnimplementedProjectServiceHandler) DeleteProject(context.Context, *connec
 
 func (UnimplementedProjectServiceHandler) AddContainer(context.Context, *connect.Request[v1.AddContainerRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.AddContainer is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ImportComposeDir(context.Context, *connect.Request[v1.ImportComposeDirRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ImportComposeDir is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerApiRequest]) (*connect.Response[v1.Project], error) {

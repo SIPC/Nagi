@@ -163,8 +163,14 @@ export function formToCompose(service: string, f: ImageFormInit) {
 // 添加容器的表单：一个容器（镜像表单）或一个容器组（一份 compose）。
 // first 表示项目里的第一个容器（没有别的容器可依赖，不显示"依赖"）。
 // top 和 moreTop 由调用方给：名称和节点、容器目录。
-export function useContainerForm(first = false, top?: (mode: "compose" | "image") => ReactNode, moreTop?: ReactNode): { fields: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image"; image: () => string } {
-  const [mode, setMode] = useState<"compose" | "image">("image");
+// dir 时多一个类型「现有目录」（只给管理员）：选中时这里只显示类型切换，表单由调用方画。
+export function useContainerForm(
+  first = false,
+  top?: (mode: "compose" | "image") => ReactNode,
+  moreTop?: ReactNode,
+  dir = false,
+): { fields: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" | "dir"; image: () => string } {
+  const [mode, setMode] = useState<"compose" | "image" | "dir">("image");
   const [compose, setCompose] = useState(exampleCompose);
   const [dependsOn, setDependsOn] = useState("");
   const deps = !first && (
@@ -197,9 +203,11 @@ export function useContainerForm(first = false, top?: (mode: "compose" | "image"
           items={[
             { value: "image", label: t.containerForm.typeImage },
             { value: "compose", label: t.containerForm.typeCompose },
+            ...(dir ? [{ value: "dir" as const, label: t.containerForm.typeDir }] : []),
           ]}
         />
       </div>
+      {mode !== "dir" && (
       <Slide id={mode} index={mode === "compose" ? 1 : 0} inner="grid gap-6 max-md:gap-4">
       {mode === "compose" ? (
         <>
@@ -218,6 +226,7 @@ export function useContainerForm(first = false, top?: (mode: "compose" | "image"
         imageForm.fields
       )}
       </Slide>
+      )}
     </>
   );
   return { fields, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };

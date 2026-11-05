@@ -225,6 +225,16 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 	if err := CheckEnv(cfg.GetEnv()); err != nil {
 		return nil, err
 	}
+	if d := cfg.GetProjectDir(); d != "" {
+		clean, err := CleanProjectDir(d)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.GetForm() != nil || cfg.GetSource().GetGitUrl() != "" {
+			return nil, Invalid("现有目录只用于容器组，也不能再设置文件来源")
+		}
+		cfg.ProjectDir, dataDir = clean, clean
+	}
 	for _, vars := range ServiceEnv(cfg, container) {
 		if err := CheckEnv(vars); err != nil {
 			return nil, err
@@ -271,6 +281,9 @@ func Load(ctx context.Context, cfg *nagiv1.ContainerConfig, container string, sh
 	text, err := ComposeText(cfg, container)
 	if err != nil {
 		return nil, err
+	}
+	if d := cfg.GetProjectDir(); d != "" {
+		dataDir = d
 	}
 	return LoadCompose(ctx, text, MergeEnv(shared, cfg.GetEnv()), dataDir, composeProject)
 }
@@ -344,7 +357,22 @@ func LoadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, dataDir
 	}, func(o *loader.Options) {
 		o.SetProjectName(composeProject, true)
 		o.ResolvePaths = true
+		// 不读 env_file 的内容：面板上校验时文件不在，节点上 compose 运行时自己会读。
+		o.SkipResolveEnvironment = true
 	})
+}
+
+// CleanProjectDir 检查现有目录的路径：节点上的绝对路径，不能是根目录。
+func CleanProjectDir(dir string) (string, error) {
+	d := strings.TrimSpace(dir)
+	if !path.IsAbs(d) || strings.ContainsAny(d, `\$~`) {
+		return "", Invalid("现有目录要写节点上的绝对路径，例如 /opt/immich")
+	}
+	d = path.Clean(d)
+	if d == "/" {
+		return "", Invalid("现有目录不能是根目录")
+	}
+	return d, nil
 }
 
 // IsSSHURL 判断 git 地址是不是 SSH 地址。

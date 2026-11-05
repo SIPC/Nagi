@@ -131,6 +131,7 @@ export default {
     currentVersion: "Current version",
     uptimeLabel: "Uptime",
     directory: "Directory",
+    projectDir: "Existing directory",
     resources: "Resources",
     uptime: {
       second: (n) => (n === 1 ? "1 second" : `${n} seconds`),
