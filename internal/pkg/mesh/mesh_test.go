@@ -17,11 +17,14 @@ type testNode struct {
 	port uint16
 }
 
+// testNoQUIC 为 true 时 newNode 建的成员不用 QUIC（测 WireGuard 里的 TCP、FEC 时用）。
+var testNoQUIC bool
+
 func newNode(t *testing.T, relay bool) testNode {
 	t.Helper()
 	var priv Key
 	_, _ = rand.Read(priv[:])
-	m, err := New(Config{PrivateKey: priv, Relay: relay, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	m, err := New(Config{PrivateKey: priv, Relay: relay, NoQUIC: testNoQUIC, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### 改进
 
+- 节点之间直连时，容器跨节点访问、流量转移、快照同步和文件上传改走 QUIC，延迟高、有丢包的线路上速度大幅提升。
 - 节点之间直连时会根据丢包情况自动纠错，跨境等有丢包的线路上传输速度明显提升。节点页「网络」标签显示当前的纠错强度。
 - 概览的实时流量图扩大了悬停范围，较细的连线也更容易高亮。
 
@@ -26,7 +27,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### 升级说明
 
 - 延迟历史需将节点升级到 v0.19.0。
-- 自动纠错需将两端的节点（或面板）都升级到 v0.19.0。
+- QUIC 和自动纠错需将两端的节点（或面板）都升级到 v0.19.0。
 
 ## v0.18.1
 

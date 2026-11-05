@@ -24,6 +24,8 @@ export default {
   rxTx: "接收 / 发送",
   noPeers: "暂无连接",
   fec: (m: number) => `纠错 ${m}/10`,
+  quic: "QUIC",
+  quicHint: "TCP 连接走 QUIC（BBR）",
   fecDetail: (loss: string, recovered: string) => `对方丢包 ${loss}，已恢复 ${recovered} 个包`,
   title: "连接",
 };

@@ -118,19 +118,62 @@ func TestFECFlush(t *testing.T) {
 // TestFECAdjust：丢包变多立刻加校验包，变少要连续几次报告才减。
 func TestFECAdjust(t *testing.T) {
 	enc := &fecEncoder{parity: 1}
-	enc.adjust(30000)
+	enc.adjust(30000, time.Now())
 	if enc.parityCount() != 3 {
 		t.Fatal("丢包变多应该立刻加校验包")
 	}
 	for i := 1; i < fecLowerAfter; i++ {
-		enc.adjust(0)
+		enc.adjust(0, time.Now())
 		if enc.parityCount() != 3 {
 			t.Fatalf("第 %d 次报告丢包少就减了", i)
 		}
 	}
-	enc.adjust(0)
+	enc.adjust(0, time.Now())
 	if enc.parityCount() != 0 {
 		t.Fatal("连续几次丢包少以后应该减到 0")
+	}
+}
+
+// TestFECUseless：成串地丢（一组丢 3 个）时报告校验包没用，发送方暂停 fecPause。
+func TestFECUseless(t *testing.T) {
+	enc := &fecEncoder{parity: 1}
+	dec := newFECDecoder()
+	for g := 0; g < 300; g++ {
+		for i := 0; i < fecGroup; i++ {
+			data, parity := enc.frame([]byte("x"), time.Now(), func() {})
+			if g%5 != 0 || i > 2 {
+				dec.push(data, time.Now())
+			}
+			for _, x := range parity {
+				dec.push(x, time.Now())
+			}
+		}
+	}
+	if _, ok, useless := dec.lossPPM(); !ok || !useless {
+		t.Fatal("成串丢包时应该报告校验包没用")
+	}
+	// 随机丢包（一组最多丢 1 个）不算。
+	dec = newFECDecoder()
+	for g := 0; g < 300; g++ {
+		for i := 0; i < fecGroup; i++ {
+			data, _ := enc.frame([]byte("x"), time.Now(), func() {})
+			if g%3 != 0 || i != 4 {
+				dec.push(data, time.Now())
+			}
+		}
+	}
+	if _, ok, useless := dec.lossPPM(); !ok || useless {
+		t.Fatal("零散的丢包不应该算成校验包没用")
+	}
+	now := time.Now()
+	enc.giveUp(now)
+	enc.adjust(30000, now.Add(fecPause/2))
+	if enc.parityCount() != 0 {
+		t.Fatal("暂停期间不应该加校验包")
+	}
+	enc.adjust(30000, now.Add(fecPause))
+	if enc.parityCount() != 3 {
+		t.Fatal("暂停结束后应该按丢包率加回来")
 	}
 }
 
@@ -168,7 +211,7 @@ func TestFECLoss(t *testing.T) {
 			}
 		}
 	}
-	ppm, ok := dec.lossPPM()
+	ppm, ok, _ := dec.lossPPM()
 	if !ok || ppm < 15000 || ppm > 25000 {
 		t.Fatalf("丢包率应该在 2%% 左右，实际 %d ppm（ok=%v）", ppm, ok)
 	}
@@ -179,7 +222,8 @@ func TestFECLoss(t *testing.T) {
 
 // TestFECLossyLink：直连随机丢 2% 的包，FEC 自动开启并恢复丢包，数据原样到达。
 func TestFECLossyLink(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	testNoQUIC = true // QUIC 不经过 WireGuard，也就没有 FEC
+	defer func() { dropUDP, testNoQUIC = nil, false }()
 	_, a, b := setupWith(t, func(_, a, b testNode) {
 		dropUDP = func(from uint16, to netip.AddrPort) bool {
 			between := (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)

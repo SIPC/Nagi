@@ -20,7 +20,7 @@ import (
 //	caps:          NAGI 5 发送方公钥(32) 能力(1) 看到的对方丢包率(4) MAC(16)
 //
 // caps 随直连的 ping 一起发：告诉对方自己支持 FEC、QUIC 中的哪些（旧版本不认识，直接忽略），
-// 以及这段时间收到的对方的包丢了多少（百万分之几，0xffffffff 表示样本不够），对方据此调整 FEC 冗余。
+// 以及这段时间收到的对方的包丢了多少（百万分之几，0xffffffff 表示样本不够，0xfffffffe 表示校验包没用），对方据此调整 FEC 冗余。
 //
 // ping/pong 用双方 WireGuard 密钥协商出的共享密钥做 MAC，别人伪造不了，也就没法把流量引到别的地址。
 // 只有收到对自己 ping 的 pong（事务号对得上）才认为直连可用，所以重放旧包也没用。
@@ -44,6 +44,8 @@ const (
 	capQUIC = 2
 
 	lossUnknown = 0xffffffff
+	// lossUseless：校验包救不回丢掉的包（成串地丢，多半是线路拥堵），请对方先别加。
+	lossUseless = 0xfffffffe
 )
 
 func isControl(pkt []byte) bool {

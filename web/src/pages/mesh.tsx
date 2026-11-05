@@ -46,13 +46,13 @@ function pingFailure(err: unknown): Ping {
   return { text: t.mesh.pingFailed, failed: true, detail };
 }
 
-// PeerSub：第二行写路径、纠错（FEC，见 docs/mesh.md#抗丢包）和最近握手；Ping 失败的原因也写在这里，定宽的列放不下。
+// PeerSub：第二行写路径、QUIC、纠错（FEC，见 docs/mesh.md#抗丢包）和最近握手；Ping 失败的原因也写在这里，定宽的列放不下。
 // 完整的地址、丢包率在 title。
 function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
   const handshake = toDate(p.lastHandshake);
   const fecDetail = p.fec && t.mesh.fecDetail(`${(p.lossPpm / 10000).toFixed(2)}%`, p.fecRecovered.toLocaleString(locale));
-  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, p.address, p.endpoint || p.via, fecDetail].filter(Boolean).join(" · ");
-  const path = [pathShort[p.path] ?? p.path, p.fec && p.fecParity > 0 && t.mesh.fec(p.fecParity)].filter(Boolean).join(" · ");
+  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, p.address, p.endpoint || p.via, p.quic && t.mesh.quicHint, fecDetail].filter(Boolean).join(" · ");
+  const path = [pathShort[p.path] ?? p.path, p.quic && t.mesh.quic, p.fec && p.fecParity > 0 && t.mesh.fec(p.fecParity)].filter(Boolean).join(" · ");
   const color = pathClass(p.path);
   const rest = handshake ? t.mesh.lastHandshakeAgo(timeAgo(handshake)) : t.mesh.noHandshake;
   return (

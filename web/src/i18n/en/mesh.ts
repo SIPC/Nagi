@@ -25,6 +25,8 @@ export default {
   rxTx: "Received / sent",
   noPeers: "No connections",
   fec: (m) => `FEC ${m}/10`,
+  quic: "QUIC",
+  quicHint: "TCP connections use QUIC (BBR)",
   fecDetail: (loss, recovered) => `Peer loss ${loss}, ${recovered} packets recovered`,
   title: "Connections",
 } satisfies typeof zh;

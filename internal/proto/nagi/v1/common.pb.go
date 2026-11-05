@@ -3497,6 +3497,8 @@ type MeshPeerStatus struct {
 	Fec bool `protobuf:"varint,11,opt,name=fec,proto3" json:"fec,omitempty"`
 	// 用 FEC 时发给对方的每 10 个包加的校验包个数。
 	FecParity int32 `protobuf:"varint,14,opt,name=fec_parity,json=fecParity,proto3" json:"fec_parity,omitempty"`
+	// 和对方之间有建好的 QUIC 连接，mesh 上的 TCP 连接走它（见 docs/mesh.md#quic-快速通道）。
+	Quic bool `protobuf:"varint,15,opt,name=quic,proto3" json:"quic,omitempty"`
 	// 对方报告的、它收到这一端的包的丢包率（百万分之几）。
 	LossPpm uint32 `protobuf:"varint,12,opt,name=loss_ppm,json=lossPpm,proto3" json:"loss_ppm,omitempty"`
 	// 靠 FEC 恢复的、来自对方的包。
@@ -3617,6 +3619,13 @@ func (x *MeshPeerStatus) GetFecParity() int32 {
 		return x.FecParity
 	}
 	return 0
+}
+
+func (x *MeshPeerStatus) GetQuic() bool {
+	if x != nil {
+		return x.Quic
+	}
+	return false
 }
 
 func (x *MeshPeerStatus) GetLossPpm() uint32 {
@@ -5154,7 +5163,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xa0\x03\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xb4\x03\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -5170,7 +5179,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	" \x01(\x04R\atxBytes\x12\x10\n" +
 	"\x03fec\x18\v \x01(\bR\x03fec\x12\x1d\n" +
 	"\n" +
-	"fec_parity\x18\x0e \x01(\x05R\tfecParity\x12\x19\n" +
+	"fec_parity\x18\x0e \x01(\x05R\tfecParity\x12\x12\n" +
+	"\x04quic\x18\x0f \x01(\bR\x04quic\x12\x19\n" +
 	"\bloss_ppm\x18\f \x01(\rR\alossPpm\x12#\n" +
 	"\rfec_recovered\x18\r \x01(\x04R\ffecRecovered\"\xa6\x01\n" +
 	"\n" +

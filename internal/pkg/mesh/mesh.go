@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -37,8 +38,9 @@ type Config struct {
 	Port uint16
 	// Relay 为 true 时替别的成员中转（面板）。
 	Relay bool
-	// NoFEC 关掉 FEC（见 fec.go），只用于测试对比。
+	// NoFEC、NoQUIC 关掉 FEC（见 fec.go）、QUIC（见 quic.go），只用于测试对比。
 	NoFEC  bool
+	NoQUIC bool
 	Logger *slog.Logger
 }
 
@@ -47,6 +49,7 @@ type Mesh struct {
 	bind *Bind
 	dev  *device.Device
 	tnet *netstack.Net
+	quic *quicNet // 为 nil 时不用 QUIC
 	self Key
 	addr netip.Addr
 	log  *slog.Logger
@@ -69,9 +72,12 @@ func New(cfg Config) (*Mesh, error) {
 	if err != nil {
 		return nil, err
 	}
-	var caps byte = capFEC
-	if cfg.NoFEC {
-		caps = 0
+	var caps byte
+	if !cfg.NoFEC {
+		caps |= capFEC
+	}
+	if !cfg.NoQUIC {
+		caps |= capQUIC
 	}
 	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, log)
 	dev := device.NewDevice(tun, bind, &device.Logger{
@@ -88,6 +94,23 @@ func New(cfg Config) (*Mesh, error) {
 	}
 	m := &Mesh{bind: bind, dev: dev, tnet: tnet, self: self, addr: addr, log: log,
 		configured: map[Key]bool{}, done: make(chan struct{})}
+	if !cfg.NoQUIC {
+		q, err := newQUICNet(m, cfg.PrivateKey)
+		if err != nil {
+			dev.Close()
+			return nil, err
+		}
+		m.quic = q
+		bind.mu.Lock()
+		bind.quic = q.pc
+		// 对方支持 QUIC 时提前建好连接，第一个 Dial 不用等。两边只由公钥小的一方去建，免得同时建两条。
+		bind.onCaps = func(k Key) {
+			if bytes.Compare(self[:], k[:]) < 0 {
+				q.conn(context.Background(), k)
+			}
+		}
+		bind.mu.Unlock()
+	}
 	go m.loop()
 	return m, nil
 }
@@ -109,6 +132,9 @@ func (m *Mesh) loop() {
 func (m *Mesh) Close() {
 	m.closeOnce.Do(func() {
 		close(m.done)
+		if m.quic != nil {
+			m.quic.close()
+		}
 		m.dev.Close()
 	})
 }
@@ -150,6 +176,9 @@ func (m *Mesh) SetPeers(peers []Peer) error {
 	}
 	m.configured = want
 	m.mu.Unlock()
+	if m.quic != nil {
+		m.quic.forget(want)
+	}
 	if b.Len() == 0 {
 		return nil
 	}
@@ -163,13 +192,34 @@ func (m *Mesh) SetPeers(peers []Peer) error {
 func (m *Mesh) AttachLink(k Key, l Link) (detach func()) { return m.bind.AttachLink(k, l) }
 func (m *Mesh) HandleLink(src, dst Key, payload []byte)  { m.bind.HandleLink(src, dst, payload) }
 
-// Listen 在自己的 mesh 地址上监听 TCP。
+// Listen 在自己的 mesh 地址上监听 TCP。经 QUIC 来的连接（见 quic.go）也从这里收。
 func (m *Mesh) Listen(port uint16) (net.Listener, error) {
-	return m.tnet.ListenTCPAddrPort(netip.AddrPortFrom(m.addr, port))
+	ln, err := m.tnet.ListenTCPAddrPort(netip.AddrPortFrom(m.addr, port))
+	if err != nil || m.quic == nil {
+		return ln, err
+	}
+	q := m.quic
+	var l *meshListener
+	l = newMeshListener(ln, func() {
+		q.mu.Lock()
+		if q.listeners[port] == l {
+			delete(q.listeners, port)
+		}
+		q.mu.Unlock()
+	})
+	q.mu.Lock()
+	q.listeners[port] = l
+	q.mu.Unlock()
+	return l, nil
 }
 
-// Dial 经 mesh 连接某个成员的 TCP 端口。
+// Dial 经 mesh 连接某个成员的 TCP 端口：能走 QUIC 就走 QUIC，否则走 WireGuard 里的 TCP。
 func (m *Mesh) Dial(ctx context.Context, k Key, port uint16) (net.Conn, error) {
+	if m.quic != nil {
+		if c, err := m.quic.open(ctx, k, port); err == nil {
+			return c, nil
+		}
+	}
 	return m.tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(Address(k), port))
 }
 
@@ -275,6 +325,7 @@ func (m *Mesh) Status() []Status {
 		}
 	}
 	for _, s := range stats {
+		s.QUIC = m.quic != nil && m.quic.has(s.Key)
 		out = append(out, *s)
 	}
 	return out

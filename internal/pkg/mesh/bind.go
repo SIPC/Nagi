@@ -103,6 +103,8 @@ type Bind struct {
 	byMesh    map[netip.Addr]Key     // mesh 地址 → 对端
 	relayKeys map[Key]bool
 	links     map[Key]*Link
+	quic      *quicPacketConn              // 收到的 QUIC 包交给它（见 quic.go）
+	onCaps    func(Key)                    // 对方刚表示支持 QUIC 时调用
 	observed  map[netip.AddrPort]time.Time // 别人看到的我们的地址
 	recv      chan delivery
 	done      chan struct{}
@@ -190,12 +192,15 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			addr = netip.AddrPortFrom(addr.Addr().Unmap(), addr.Port())
 			pkt := packets[0][:n]
 			if isControl(pkt) {
-				if ep, payload := b.handleControl(c, addr, pkt); ep != nil {
-					sizes[0] = copy(packets[0], payload)
-					eps[0] = ep
-					return 1, nil
+				if _, ok := parse(pkt); ok {
+					if ep, payload := b.handleControl(c, addr, pkt); ep != nil {
+						sizes[0] = copy(packets[0], payload)
+						eps[0] = ep
+						return 1, nil
+					}
+					continue
 				}
-				continue
+				// 不是控制包：碰巧以 "NAGI" 开头的 QUIC 包，往下走。
 			}
 			b.mu.Lock()
 			k, ok := b.byAddr[addr]
@@ -207,6 +212,15 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			b.mu.Unlock()
 			if ep == nil {
 				continue // 来源地址没确认过，丢弃
+			}
+			if isQUIC(pkt) {
+				b.mu.Lock()
+				q := b.quic
+				b.mu.Unlock()
+				if q != nil {
+					q.deliver(pkt, addr)
+				}
+				continue
 			}
 			if pkt[0] == fecData || pkt[0] == fecParity {
 				out, waiting := dec.push(pkt, time.Now())
@@ -235,7 +249,7 @@ func (b *Bind) fill(out [][]byte, ep *endpoint, packets [][]byte, sizes []int, e
 			n++
 			continue
 		}
-		b.deliver(k, x)
+		b.queue(k, x, true)
 	}
 	return n
 }
@@ -249,7 +263,7 @@ func (b *Bind) holdFEC(k Key, dec *fecDecoder) {
 		dec.timer.Store(false)
 		out, waiting := dec.release(time.Now())
 		for _, x := range out {
-			b.deliver(k, x)
+			b.queue(k, x, true)
 		}
 		if waiting {
 			b.holdFEC(k, dec)
@@ -396,7 +410,11 @@ func (b *Bind) forward(src, dst Key, payload []byte) {
 }
 
 // deliver 把经中转收到的包交给 WireGuard。
-func (b *Bind) deliver(from Key, data []byte) {
+func (b *Bind) deliver(from Key, data []byte) { b.queue(from, data, false) }
+
+// queue 把包放进交给 WireGuard 的队列。wait 为 false 时队列满了就丢（中转的包，WireGuard 会重传）；
+// 为 true 时排队等（FEC 扣下又放行的包，一次可能有上千个，丢了 TCP 会一下子降到底）。
+func (b *Bind) queue(from Key, data []byte, wait bool) {
 	b.mu.Lock()
 	ch, done := b.recv, b.done
 	var ep *endpoint
@@ -407,10 +425,18 @@ func (b *Bind) deliver(from Key, data []byte) {
 	if ch == nil || ep == nil {
 		return
 	}
+	d := delivery{ep: ep, data: append([]byte(nil), data...)}
+	if wait {
+		select {
+		case ch <- d:
+		case <-done:
+		}
+		return
+	}
 	select {
-	case ch <- delivery{ep: ep, data: append([]byte(nil), data...)}:
+	case ch <- d:
 	case <-done:
-	default: // 队列满了就丢，WireGuard 会重传
+	default:
 	}
 }
 
@@ -522,12 +548,21 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 			b.mu.Unlock()
 			return nil, nil
 		}
+		newQUIC := m.caps&capQUIC != 0 && !p.has(capQUIC, now)
 		p.caps, p.capsAt = m.caps, now
-		if m.lossPPM != lossUnknown {
+		switch m.lossPPM {
+		case lossUnknown:
+		case lossUseless:
+			p.enc.giveUp(now)
+		default:
 			p.lossPPM = m.lossPPM
-			p.enc.adjust(m.lossPPM)
+			p.enc.adjust(m.lossPPM, now)
 		}
+		onCaps := b.onCaps
 		b.mu.Unlock()
+		if newQUIC && onCaps != nil {
+			go onCaps(m.key)
+		}
 	case typeRelaySend:
 		if !b.relay {
 			return nil, nil
@@ -668,7 +703,9 @@ func (b *Bind) maintain(now time.Time) {
 // capsPacket 是发给 p 的能力包，带上收到它的包的丢包率。调用时持有 b.mu。
 func (b *Bind) capsPacket(p *peerState) []byte {
 	loss := uint32(lossUnknown)
-	if ppm, ok := p.dec.lossPPM(); ok {
+	if ppm, ok, useless := p.dec.lossPPM(); useless {
+		loss = lossUseless
+	} else if ok {
 		loss = ppm
 	}
 	return encodeCaps(b.pub, b.caps, loss, p.mac)
@@ -687,6 +724,8 @@ type PeerStatus struct {
 	// LossPPM 是对方报告的丢包率（百万分之几），Recovered 是靠 FEC 恢复的、来自对方的包。
 	LossPPM   uint32
 	Recovered uint64
+	// QUIC：和对方之间有建好的 QUIC 连接，mesh 上的 TCP 连接走它（见 quic.go）。
+	QUIC bool
 }
 
 func (b *Bind) status() []PeerStatus {

@@ -88,7 +88,7 @@ func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 		ps := &nagiv1.MeshPeerStatus{
 			PublicKey: k[:], Name: name(k), Address: Address(k).String(), Path: s.Path,
 			RttMs: float64(s.RTT.Microseconds()) / 1000, RxBytes: s.RxBytes, TxBytes: s.TxBytes,
-			Fec: s.FEC >= 0, FecParity: int32(max(s.FEC, 0)), LossPpm: s.LossPPM, FecRecovered: s.Recovered,
+			Fec: s.FEC >= 0, FecParity: int32(max(s.FEC, 0)), LossPpm: s.LossPPM, FecRecovered: s.Recovered, Quic: s.QUIC,
 		}
 		if s.Direct.IsValid() {
 			ps.Endpoint = s.Direct.String()

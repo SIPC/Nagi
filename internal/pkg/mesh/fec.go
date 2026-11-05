@@ -38,6 +38,7 @@ const (
 	fecProtect = 0x80
 	// fecLossSamples：攒够这么多个包才报一次丢包率（约 2.5 MB）。0.2% 的丢包在几百个包里经常一个都碰不上。
 	fecLossSamples = 2000
+	fecBurst       = 3
 )
 
 // parityFor 由丢包率（百万分之几）决定每组加几个校验包。
@@ -92,7 +93,19 @@ type fecEncoder struct {
 	m       int      // 当前组的校验包个数：一组开始时定下，组内不变
 	pkts    [][]byte // 当前组的包，只在有校验包时留着
 	started time.Time
-	lower   int // 连续几次报告的丢包率要求更少的校验包
+	lower   int       // 连续几次报告的丢包率要求更少的校验包
+	pause   time.Time // 这之前不加校验包（对方说校验包没用）
+}
+
+// fecPause：对方说校验包救不回丢的包时，这么久内不加。线路拥堵时成串地丢包，校验包救不回来，
+// 反而多占本来就不够的带宽，丢得更多。
+const fecPause = time.Minute
+
+// giveUp 在对方说校验包没用时调用：先不加，fecPause 后再按丢包率试。
+func (e *fecEncoder) giveUp(now time.Time) {
+	e.mu.Lock()
+	e.parity, e.lower, e.pause = 0, 0, now.Add(fecPause)
+	e.mu.Unlock()
 }
 
 func (e *fecEncoder) setParity(m int) {
@@ -106,11 +119,12 @@ func (e *fecEncoder) setParity(m int) {
 const fecLowerAfter = 3
 
 // adjust 按对方报告的丢包率调整校验包个数。
-func (e *fecEncoder) adjust(lossPPM uint32) {
+func (e *fecEncoder) adjust(lossPPM uint32, now time.Time) {
 	m := parityFor(lossPPM)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	switch {
+	case now.Before(e.pause):
 	case m >= e.parity:
 		e.parity, e.lower = m, 0
 	case e.lower+1 >= fecLowerAfter:
@@ -245,7 +259,9 @@ type fecDecoder struct {
 	timer   atomic.Bool // 已经安排了 release
 	// 统计窗口：已经结束的组里应该收到、实际收到的数据包个数（不算恢复出来的）。
 	expected, received uint64
-	recovered          uint64
+	// 丢了的包里，有多少是一组里丢了 fecBurst 个以上的：成串地丢多半是线路拥堵，校验包救不回来。
+	lost, burstLost uint64
+	recovered       uint64
 }
 
 func newFECDecoder() *fecDecoder {
@@ -397,6 +413,12 @@ func (d *fecDecoder) count(g *fecGroupState) {
 	if size := g.k; size > 0 {
 		d.expected += uint64(size)
 		d.received += uint64(min(g.have, size))
+		if n := uint64(size - min(g.have, size)); n > 0 {
+			d.lost += n
+			if n >= fecBurst {
+				d.burstLost += n
+			}
+		}
 	}
 }
 
@@ -516,14 +538,17 @@ func (d *fecDecoder) recoveredCount() uint64 {
 }
 
 // lossPPM 返回上次调用以来的丢包率（百万分之几），并开始新的统计窗口。样本太少时返回 ok=false。
-func (d *fecDecoder) lossPPM() (ppm uint32, ok bool) {
+// useless 表示丢的包大多是成串丢的（一半以上在一组丢 fecBurst 个以上的组里）：多半是线路拥堵，
+// 校验包救不回来，还多占本来就不够的带宽。随机丢包时一组丢 3 个以上很少见（丢包 2% 时约千分之一）。
+func (d *fecDecoder) lossPPM() (ppm uint32, ok, useless bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.expected < fecLossSamples {
-		return 0, false
+		return 0, false, false
 	}
 	lost := d.expected - d.received
 	ppm = uint32(lost * 1_000_000 / d.expected)
-	d.expected, d.received = 0, 0
-	return ppm, true
+	useless = d.lost >= 20 && d.burstLost*2 > d.lost
+	d.expected, d.received, d.lost, d.burstLost = 0, 0, 0, 0
+	return ppm, true, useless
 }
