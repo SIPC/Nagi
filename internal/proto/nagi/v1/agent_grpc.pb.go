@@ -36,6 +36,7 @@ const (
 	AgentService_Exec_FullMethodName                  = "/nagi.v1.AgentService/Exec"
 	AgentService_NodeShell_FullMethodName             = "/nagi.v1.AgentService/NodeShell"
 	AgentService_NodeExec_FullMethodName              = "/nagi.v1.AgentService/NodeExec"
+	AgentService_ReclaimSnapshots_FullMethodName      = "/nagi.v1.AgentService/ReclaimSnapshots"
 	AgentService_ListNodeDir_FullMethodName           = "/nagi.v1.AgentService/ListNodeDir"
 	AgentService_ReadNodeFile_FullMethodName          = "/nagi.v1.AgentService/ReadNodeFile"
 	AgentService_WriteNodeFile_FullMethodName         = "/nagi.v1.AgentService/WriteNodeFile"
@@ -113,6 +114,8 @@ type AgentServiceClient interface {
 	NodeShell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NodeShellInput, ExecOutput], error)
 	// 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
 	NodeExec(ctx context.Context, in *NodeExecRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecOutput], error)
+	// 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
+	ReclaimSnapshots(ctx context.Context, in *ReclaimSnapshotsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error)
 	ReadNodeFile(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ReadNodeFileResponse, error)
 	WriteNodeFile(ctx context.Context, in *WriteNodeFileRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
@@ -420,6 +423,25 @@ func (c *agentServiceClient) NodeExec(ctx context.Context, in *NodeExecRequest, 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_NodeExecClient = grpc.ServerStreamingClient[ExecOutput]
 
+func (c *agentServiceClient) ReclaimSnapshots(ctx context.Context, in *ReclaimSnapshotsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_ReclaimSnapshots_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReclaimSnapshotsRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ReclaimSnapshotsClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) ListNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeDirResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListNodeDirResponse)
@@ -562,7 +584,7 @@ func (c *agentServiceClient) CheckContainer(ctx context.Context, in *PutContaine
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +613,7 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +632,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[11], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -855,6 +877,8 @@ type AgentServiceServer interface {
 	NodeShell(grpc.BidiStreamingServer[NodeShellInput, ExecOutput]) error
 	// 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
 	NodeExec(*NodeExecRequest, grpc.ServerStreamingServer[ExecOutput]) error
+	// 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
+	ReclaimSnapshots(*ReclaimSnapshotsRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error)
 	ReadNodeFile(context.Context, *NodeFileRef) (*ReadNodeFileResponse, error)
 	WriteNodeFile(context.Context, *WriteNodeFileRequest) (*WriteNodeFileResponse, error)
@@ -982,6 +1006,9 @@ func (UnimplementedAgentServiceServer) NodeShell(grpc.BidiStreamingServer[NodeSh
 }
 func (UnimplementedAgentServiceServer) NodeExec(*NodeExecRequest, grpc.ServerStreamingServer[ExecOutput]) error {
 	return status.Error(codes.Unimplemented, "method NodeExec not implemented")
+}
+func (UnimplementedAgentServiceServer) ReclaimSnapshots(*ReclaimSnapshotsRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method ReclaimSnapshots not implemented")
 }
 func (UnimplementedAgentServiceServer) ListNodeDir(context.Context, *NodeFileRef) (*ListNodeDirResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodeDir not implemented")
@@ -1356,6 +1383,17 @@ func _AgentService_NodeExec_Handler(srv interface{}, stream grpc.ServerStream) e
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_NodeExecServer = grpc.ServerStreamingServer[ExecOutput]
+
+func _AgentService_ReclaimSnapshots_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReclaimSnapshotsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).ReclaimSnapshots(m, &grpc.GenericServerStream[ReclaimSnapshotsRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ReclaimSnapshotsServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _AgentService_ListNodeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeFileRef)
@@ -2223,6 +2261,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "NodeExec",
 			Handler:       _AgentService_NodeExec_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ReclaimSnapshots",
+			Handler:       _AgentService_ReclaimSnapshots_Handler,
 			ServerStreams: true,
 		},
 		{

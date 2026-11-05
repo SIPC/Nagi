@@ -55,6 +55,7 @@ import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { confirmAction, notify } from "@/components/confirm";
 import { updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
+import { useRun } from "@/components/run";
 import { toast } from "sonner";
 import { stateOf } from "@/components/status";
 import { NodeFiles, NodeTerminal, nodeAccessBlock } from "@/pages/node-access";
@@ -538,6 +539,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <>
                 <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
                 <NodeMirrors nodeId={n.id} />
+                <NodeReclaim nodeId={n.id} online={n.online} />
               </>
             ) : (
               <NodePanels nodeId={n.id} />
@@ -806,6 +808,33 @@ function NodeMirrors({ nodeId }: { nodeId: string }) {
       ) : (
         <MirrorsForm nodeId={nodeId} mirrors={q.data} />
       )}
+    </Section>
+  );
+}
+
+// NodeReclaim：立即清理节点上的快照仓库（见 docs/snapshot.md#立即清理），逐个容器输出结果。
+function NodeReclaim({ nodeId, online }: { nodeId: string; online: boolean }) {
+  const { isAdmin } = useRole();
+  const { run, busy, output } = useRun("");
+  const m = t.nodes.reclaim;
+  const start = async () => {
+    if (!(await confirmAction(m.confirm, { action: m.action }))) return;
+    await run(() => nodeClient.reclaimNodeSnapshots({ nodeId }));
+  };
+  return (
+    <Section
+      title={m.title}
+      description={m.description}
+      actions={
+        isAdmin && (
+          <Button variant="outline" disabled={busy || !online} onClick={start}>
+            {busy && <Spinner />}
+            {m.action}
+          </Button>
+        )
+      }
+    >
+      {!isAdmin ? <Notice title={m.adminOnly} /> : output}
     </Section>
   );
 }

@@ -402,6 +402,8 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 
 // syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用。
 func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
+	// 同步期间仓库的文件不能被立即清理删掉，否则备份节点会收到不完整的一套文件。
+	defer a.projects.ReadRepo(projectID, container)()
 	if a.mesh == nil {
 		return 0, errors.New("mesh 没有启动")
 	}

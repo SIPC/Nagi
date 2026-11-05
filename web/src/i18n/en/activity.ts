@@ -87,6 +87,7 @@ export default {
     UpgradeNode: "Upgrade node",
     UpgradeAllNodes: "Upgrade all nodes",
     SetNodeMirrors: "Set registry mirrors",
+    ReclaimNodeSnapshots: "Clean up snapshot repositories",
     SetNodeProjectsRoot: "Set projects root",
     CreateEnrollCommand: "Generate node install command",
     RemoveNode: "Remove node",

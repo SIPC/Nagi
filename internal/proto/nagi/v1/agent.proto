@@ -42,6 +42,8 @@ service AgentService {
   rpc NodeShell(stream NodeShellInput) returns (stream ExecOutput);
   // 在节点上执行一条命令并等它结束（MCP 的 node_exec）：和终端一样的 shell 和环境变量，不分配终端、没有输入。
   rpc NodeExec(NodeExecRequest) returns (stream ExecOutput);
+  // 立即清理本节点上每个容器的快照仓库，回收没有快照用到的数据（见 docs/snapshot.md#立即清理）。
+  rpc ReclaimSnapshots(ReclaimSnapshotsRequest) returns (stream DeployEvent);
   rpc ListNodeDir(NodeFileRef) returns (ListNodeDirResponse);
   rpc ReadNodeFile(NodeFileRef) returns (ReadNodeFileResponse);
   rpc WriteNodeFile(WriteNodeFileRequest) returns (WriteNodeFileResponse);
@@ -438,6 +440,8 @@ message NodeShellInput {
     TerminalSize resize = 3;
   }
 }
+
+message ReclaimSnapshotsRequest {}
 
 message NodeExecRequest {
   // 用 shell -lc 执行。

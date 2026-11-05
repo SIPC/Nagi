@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -211,6 +212,56 @@ func (m *Manager) SnapshotDue(ctx context.Context, onResult func(projectID, cont
 	}
 }
 
+// ReclaimSpace 立即清理容器的快照仓库：回收没有快照用到的数据（过期、删除的快照，失败的快照留下的），
+// 返回释放的字节数。不用 kopia 的安全等待期，所以期间独占仓库：同一容器的部署、快照、恢复（lock），
+// 以及读快照和同步副本（repoLock）都要等它结束。清理完检查每份快照的数据都还在，缺了就报错。
+func (m *Manager) ReclaimSpace(ctx context.Context, projectID, container string) (int64, error) {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
+	rl := m.repoLock(projectID, container)
+	rl.Lock()
+	defer rl.Unlock()
+	c, err := m.Get(ctx, projectID, container)
+	if err != nil {
+		return 0, err
+	}
+	dir := containerPaths{root: c.Spec.GetDir()}.backupsDir()
+	before := dirSize(dir)
+	rep, err := m.openRepo(ctx, c.Spec)
+	if err != nil {
+		return 0, err
+	}
+	defer rep.Close(ctx)
+	// kopia 的时间精确到秒：刚删除的快照，要过一秒才算过期。
+	time.Sleep(time.Second)
+	if err := rep.Maintain(ctx, true); err != nil {
+		return 0, err
+	}
+	_ = m.nodeQ.SetContainerMaintenanceTime(ctx, nodestore.SetContainerMaintenanceTimeParams{
+		LastMaintenance: time.Now().Unix(), ProjectID: projectID, Name: container,
+	})
+	freed := max(before-dirSize(dir), 0)
+	if err := rep.Verify(ctx); err != nil {
+		return freed, fmt.Errorf("清理后检查快照：%w", err)
+	}
+	return freed, nil
+}
+
+// dirSize 是目录里文件的总大小。
+func dirSize(dir string) int64 {
+	var n int64
+	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if info, err := d.Info(); err == nil {
+				n += info.Size()
+			}
+		}
+		return nil
+	})
+	return n
+}
+
 // maintain 运行快照仓库维护，回收过期快照和失败的快照留下的空间。每个容器每天一次，不依赖快照成功。
 func (m *Manager) maintain(ctx context.Context, s *nagiv1.ContainerSpec) error {
 	l := m.lock(s.GetProjectId(), s.GetName())
@@ -308,6 +359,7 @@ func (m *Manager) Snapshots(ctx context.Context, projectID, container string) ([
 	if err != nil {
 		return nil, err
 	}
+	defer m.ReadRepo(projectID, container)()
 	rep, err := m.openRepo(ctx, c.Spec)
 	if err != nil {
 		return nil, err

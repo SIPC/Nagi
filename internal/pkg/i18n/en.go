@@ -298,6 +298,7 @@ var en = map[string]string{
 	"节点版本过旧，升级节点后才能查看存储":       "The node is out of date. Upgrade it to view storage",
 	"节点版本过旧，升级节点后才能删除快照":       "The node is out of date. Upgrade it to delete snapshots",
 	"节点版本过旧，升级节点后才能执行节点命令":     "The node is out of date. Upgrade it to run commands on it",
+	"节点版本过旧，升级节点后才能清理快照仓库":     "The node is out of date. Upgrade it to clean up snapshot repositories",
 	"只有管理员能创建可以在节点上执行命令的令牌":    "Only administrators can create tokens that run commands on nodes",
 	"节点终端需要同时允许执行命令":           "The node terminal permission also needs the run commands permission",
 	"版本文件不能删除，回滚要用":            "Version files cannot be deleted; rollback needs them",

@@ -181,6 +181,8 @@ service NodeService {
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
+  // 立即清理节点上每个容器的快照仓库，回收没有快照用到的数据。只有管理员能用。
+  rpc ReclaimNodeSnapshots(NodeRef) returns (stream DeployEvent);
   // 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
   rpc SetNodeProjectsRoot(SetNodeProjectsRootRequest) returns (SetProjectsRootResponse);
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。

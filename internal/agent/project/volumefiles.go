@@ -117,6 +117,7 @@ func (m *Manager) ListVolumeFiles(ctx context.Context, ref *nagiv1.VolumeFileRef
 		if _, err := volumeDir(c.Spec, ref.GetVolume()); err != nil {
 			return nil, err
 		}
+		defer m.ReadRepo(ref.GetProjectId(), ref.GetContainer())()
 		rep, err := m.openRepo(ctx, c.Spec)
 		if err != nil {
 			return nil, err
@@ -242,6 +243,7 @@ func (m *Manager) readSnapshotFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	if _, err := volumeDir(c.Spec, ref.GetVolume()); err != nil {
 		return err
 	}
+	defer m.ReadRepo(ref.GetProjectId(), ref.GetContainer())()
 	rep, err := m.openRepo(ctx, c.Spec)
 	if err != nil {
 		return err

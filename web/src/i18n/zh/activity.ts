@@ -86,6 +86,7 @@ export default {
     UpgradeNode: "升级节点",
     UpgradeAllNodes: "升级全部节点",
     SetNodeMirrors: "设置镜像加速",
+    ReclaimNodeSnapshots: "清理快照仓库",
     SetNodeProjectsRoot: "设置项目根目录",
     CreateEnrollCommand: "生成节点安装命令",
     RemoveNode: "移除节点",

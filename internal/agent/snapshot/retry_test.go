@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"math/rand"
 	"os"
@@ -9,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kopia/kopia/repo"
+	"github.com/kopia/kopia/repo/object"
 )
 
 // packBytes 是仓库里数据包的总大小和个数。
@@ -112,5 +116,63 @@ func TestFailedSnapshotReusesWrittenContent(t *testing.T) {
 	restored, err := os.ReadFile(filepath.Join(root, "restore", "blob.bin"))
 	if err != nil || len(restored) != size || string(restored[:1024]) != string(b[:1024]) || string(restored[size-1024:]) != string(b[size-1024:]) {
 		t.Fatalf("restored file does not match (%d bytes, %v)", len(restored), err)
+	}
+}
+
+// 立即清理（节点设置里的「清理快照仓库」）：旧版本失败时留下、没有写进索引的数据包要删掉，已有的快照照样完好、能恢复。
+func TestReclaimRemovesOrphanPacks(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	storage := filepath.Join(root, "backups")
+	data := filepath.Join(root, "data")
+	os.MkdirAll(data, 0o755)
+	if err := os.WriteFile(filepath.Join(data, "a.txt"), []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Open(ctx, "p1", storage, "test-password", filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(ctx)
+	if _, err := r.Create(ctx, Manual, []Dir{{"data", data}}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	kept, _ := packBytes(storage)
+
+	// 像旧版本那样：写了 64 MB 以后失败，没有提交索引。
+	junk := make([]byte, 64<<20)
+	rand.New(rand.NewSource(2)).Read(junk)
+	_ = repo.WriteSession(ctx, r.rep, repo.WriteSessionOptions{}, func(ctx context.Context, w repo.RepositoryWriter) error {
+		ow := w.NewObjectWriter(ctx, object.WriterOptions{})
+		ow.Write(junk)
+		ow.Close()
+		return errors.New("simulated failure")
+	})
+	before, _ := packBytes(storage)
+	if before < kept+(32<<20) {
+		t.Fatalf("the failed write left only %d bytes of packs", before-kept)
+	}
+
+	time.Sleep(1100 * time.Millisecond) // kopia 的时间戳精确到秒
+	if err := r.Maintain(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := packBytes(storage)
+	t.Logf("packs: kept %d, with orphans %d, after reclaim %d", kept, before, after)
+	if after > kept+(1<<20) {
+		t.Fatalf("orphan packs were not reclaimed: %d bytes left, %d expected", after, kept)
+	}
+	if err := r.Verify(ctx); err != nil {
+		t.Fatalf("verify after reclaim: %v", err)
+	}
+	list, err := r.List(ctx, Manual)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list = %d %v", len(list), err)
+	}
+	if err := r.Restore(ctx, list[0].ID, "data", filepath.Join(root, "restore")); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "restore", "a.txt")); err != nil || string(b) != "keep me" {
+		t.Fatalf("restored %q %v", b, err)
 	}
 }

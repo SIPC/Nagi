@@ -20,6 +20,7 @@ import (
 	"github.com/kopia/kopia/fs/localfs"
 	"github.com/kopia/kopia/fs/virtualfs"
 	"github.com/kopia/kopia/repo"
+	"github.com/kopia/kopia/repo/blob"
 	"github.com/kopia/kopia/repo/blob/filesystem"
 	"github.com/kopia/kopia/repo/content"
 	"github.com/kopia/kopia/repo/maintenance"
@@ -420,6 +421,47 @@ func (r *Repo) Restore(ctx context.Context, id, name, target string) error {
 	// RestoreDirEntryAtDepth 默认 0 表示"浅恢复"（只生成占位文件），这里要完整恢复。
 	_, err = restore.Entry(ctx, r.rep, out, child, restore.Options{Parallel: 4, DeleteExtra: true, RestoreDirEntryAtDepth: math.MaxInt32})
 	return err
+}
+
+// Verify 检查仓库里每份快照的目录和文件都还在：每个对象的内容都在索引里，所在的数据包也都在。不读文件内容。
+func (r *Repo) Verify(ctx context.Context) error {
+	dr, ok := r.rep.(repo.DirectRepository)
+	if !ok {
+		return errors.New("快照仓库不支持检查")
+	}
+	blobs, err := blob.ReadBlobMap(ctx, dr.BlobReader())
+	if err != nil {
+		return err
+	}
+	ids, err := snapshot.ListSnapshotManifests(ctx, r.rep, nil, nil)
+	if err != nil {
+		return err
+	}
+	mans, err := snapshot.LoadSnapshots(ctx, r.rep, ids)
+	if err != nil {
+		return err
+	}
+	v := snapshotfs.NewVerifier(ctx, r.rep, snapshotfs.VerifierOptions{Parallelism: 4, MaxErrors: 10, FileQueueLength: 1000, BlobMap: blobs})
+	res, err := v.InParallel(ctx, func(tw *snapshotfs.TreeWalker) error {
+		for _, m := range mans {
+			if m.RootEntry == nil {
+				continue
+			}
+			root, err := snapshotfs.SnapshotRoot(r.rep, m)
+			if err != nil {
+				return err
+			}
+			tw.Process(ctx, root, string(m.ID))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if res.ErrorCount > 0 {
+		return fmt.Errorf("%d 处数据缺失，例如：%v", res.ErrorCount, res.Errors[0])
+	}
+	return nil
 }
 
 // Maintain 运行 kopia 的完整维护：回收已经没有快照引用的数据，释放磁盘空间。

@@ -599,6 +599,7 @@ const (
 	NodeService_UpgradeAllNodes_FullMethodName       = "/nagi.v1.NodeService/UpgradeAllNodes"
 	NodeService_GetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/GetNodeMirrors"
 	NodeService_SetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/SetNodeMirrors"
+	NodeService_ReclaimNodeSnapshots_FullMethodName  = "/nagi.v1.NodeService/ReclaimNodeSnapshots"
 	NodeService_SetNodeProjectsRoot_FullMethodName   = "/nagi.v1.NodeService/SetNodeProjectsRoot"
 	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
@@ -645,6 +646,8 @@ type NodeServiceClient interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
+	// 立即清理节点上每个容器的快照仓库，回收没有快照用到的数据。只有管理员能用。
+	ReclaimNodeSnapshots(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(ctx context.Context, in *SetNodeProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
@@ -871,6 +874,25 @@ func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, in *SetNodeMirro
 	return out, nil
 }
 
+func (c *nodeServiceClient) ReclaimNodeSnapshots(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_ReclaimNodeSnapshots_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeRef, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_ReclaimNodeSnapshotsClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *nodeServiceClient) SetNodeProjectsRoot(ctx context.Context, in *SetNodeProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetProjectsRootResponse)
@@ -987,6 +1009,8 @@ type NodeServiceServer interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
+	// 立即清理节点上每个容器的快照仓库，回收没有快照用到的数据。只有管理员能用。
+	ReclaimNodeSnapshots(*NodeRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
@@ -1072,6 +1096,9 @@ func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *NodeRef) 
 }
 func (UnimplementedNodeServiceServer) SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeMirrors not implemented")
+}
+func (UnimplementedNodeServiceServer) ReclaimNodeSnapshots(*NodeRef, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method ReclaimNodeSnapshots not implemented")
 }
 func (UnimplementedNodeServiceServer) SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectsRoot not implemented")
@@ -1478,6 +1505,17 @@ func _NodeService_SetNodeMirrors_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_ReclaimNodeSnapshots_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeRef)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).ReclaimNodeSnapshots(m, &grpc.GenericServerStream[NodeRef, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_ReclaimNodeSnapshotsServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _NodeService_SetNodeProjectsRoot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetNodeProjectsRootRequest)
 	if err := dec(in); err != nil {
@@ -1742,7 +1780,13 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_AdoptNodeContainer_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ReclaimNodeSnapshots",
+			Handler:       _NodeService_ReclaimNodeSnapshots_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/api.proto",
 }
 

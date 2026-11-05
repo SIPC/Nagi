@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/alerts"
@@ -231,6 +233,43 @@ func (s *agentService) DeleteSnapshot(ctx context.Context, req *nagiv1.RestoreSn
 		return nil, toStatus(err)
 	}
 	return &nagiv1.VolumeFileOpResponse{}, nil
+}
+
+// ReclaimSnapshots 立即清理本节点上每个容器的快照仓库（节点设置里的「清理快照仓库」）。逐个容器做，
+// 一个失败不影响其他的；本节点没有持有顶替租约的容器跳过。开始了就做完，浏览器断开也不中断。
+func (s *agentService) ReclaimSnapshots(_ *nagiv1.ReclaimSnapshotsRequest, stream nagiv1.AgentService_ReclaimSnapshotsServer) error {
+	ctx := context.WithoutCancel(stream.Context())
+	return runStream(stream.Send, func(onLine func(string)) error {
+		var total int64
+		var done int
+		var failed []string
+		for _, c := range s.projects.List(ctx) {
+			sp := c.Spec
+			if sp.GetVersion() == 0 {
+				continue
+			}
+			name := s.projects.ProjectName(ctx, sp.GetProjectId()) + " / " + sp.GetName()
+			if err := s.node.checkFileWrite(sp.GetProjectId(), sp.GetName()); err != nil {
+				onLine(name + "：跳过，" + err.Error())
+				continue
+			}
+			onLine(name + "：正在清理")
+			freed, err := s.projects.ReclaimSpace(ctx, sp.GetProjectId(), sp.GetName())
+			total += freed
+			if err != nil {
+				onLine(name + "：失败，" + err.Error())
+				failed = append(failed, name)
+				continue
+			}
+			done++
+			onLine(name + "：释放 " + humanBytes(freed))
+		}
+		onLine(fmt.Sprintf("共清理 %d 个容器，释放 %s", done, humanBytes(total)))
+		if len(failed) > 0 {
+			return fmt.Errorf("这些容器清理失败：%s", strings.Join(failed, "、"))
+		}
+		return nil
+	})
 }
 
 func (s *agentService) LoginRegistry(ctx context.Context, req *nagiv1.LoginRegistryRequest) (*nagiv1.LoginRegistryResponse, error) {

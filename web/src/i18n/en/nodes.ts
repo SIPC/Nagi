@@ -118,6 +118,13 @@ export default {
     rootHelp:
       "New containers on this node default to <projects root>/<network name>/<container name>. Existing container directories don't change.",
   },
+  reclaim: {
+    title: "Snapshot repositories",
+    description: "Reclaim the data in this node's snapshot repositories that no snapshot uses, such as deleted, expired or failed snapshots.",
+    action: "Clean up now",
+    confirm: "Clean up this node's snapshot repositories? Each container's repository is cleaned up in turn; meanwhile its snapshots, restores and backup syncs wait. The snapshots are checked afterwards.",
+    adminOnly: "Only administrators can clean up snapshot repositories",
+  },
   mirrors: {
     title: "Registry mirrors",
     description: "Mirrors Docker uses to pull images from Docker Hub. Useful for nodes in mainland China.",

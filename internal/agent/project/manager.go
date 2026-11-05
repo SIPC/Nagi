@@ -60,6 +60,8 @@ type Manager struct {
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+	// repoLocks 让立即清理独占快照仓库：读快照和同步副本拿读锁，清理拿写锁（见 ReclaimSpace）。
+	repoLocks map[string]*sync.RWMutex
 
 	// ManagedRestart 返回 true 的容器由节点代管重启，重启策略写成 no（设置了顶替的容器）。
 	ManagedRestart func(projectID, container string) bool
@@ -86,12 +88,13 @@ func NewManager(nodeDB *sql.DB, dc *docker.Client, pool, stateDir string) (*Mana
 		return nil, fmt.Errorf("容器网段池 %q 必须是 IPv4 且不小于 /%d", pool, projectSubnetBits)
 	}
 	return &Manager{
-		nodeDB:   nodeDB,
-		nodeQ:    nodestore.New(nodeDB),
-		docker:   dc,
-		pool:     pfx.Masked(),
-		stateDir: stateDir,
-		locks:    map[string]*sync.Mutex{},
+		nodeDB:    nodeDB,
+		nodeQ:     nodestore.New(nodeDB),
+		docker:    dc,
+		pool:      pfx.Masked(),
+		stateDir:  stateDir,
+		locks:     map[string]*sync.Mutex{},
+		repoLocks: map[string]*sync.RWMutex{},
 	}, nil
 }
 
@@ -110,6 +113,26 @@ func (m *Manager) lock(projectID, container string) *sync.Mutex {
 		m.locks[k] = l
 	}
 	return l
+}
+
+// repoLock 返回某个容器快照仓库的读写锁。两个锁都要拿时先拿 lock，再拿它。
+func (m *Manager) repoLock(projectID, container string) *sync.RWMutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := uid(projectID, container)
+	l, ok := m.repoLocks[k]
+	if !ok {
+		l = &sync.RWMutex{}
+		m.repoLocks[k] = l
+	}
+	return l
+}
+
+// ReadRepo 在读容器快照仓库之前调用（同步副本、浏览快照），返回解锁函数。立即清理时会等它们结束。
+func (m *Manager) ReadRepo(projectID, container string) func() {
+	l := m.repoLock(projectID, container)
+	l.RLock()
+	return l.RUnlock
 }
 
 // ---- 容器目录 ----

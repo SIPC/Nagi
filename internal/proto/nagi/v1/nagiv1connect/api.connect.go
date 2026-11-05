@@ -124,6 +124,9 @@ const (
 	// NodeServiceSetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// SetNodeMirrors RPC.
 	NodeServiceSetNodeMirrorsProcedure = "/nagi.v1.NodeService/SetNodeMirrors"
+	// NodeServiceReclaimNodeSnapshotsProcedure is the fully-qualified name of the NodeService's
+	// ReclaimNodeSnapshots RPC.
+	NodeServiceReclaimNodeSnapshotsProcedure = "/nagi.v1.NodeService/ReclaimNodeSnapshots"
 	// NodeServiceSetNodeProjectsRootProcedure is the fully-qualified name of the NodeService's
 	// SetNodeProjectsRoot RPC.
 	NodeServiceSetNodeProjectsRootProcedure = "/nagi.v1.NodeService/SetNodeProjectsRoot"
@@ -813,6 +816,8 @@ type NodeServiceClient interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	// 立即清理节点上每个容器的快照仓库，回收没有快照用到的数据。只有管理员能用。
+	ReclaimNodeSnapshots(context.Context, *connect.Request[v1.NodeRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
@@ -962,6 +967,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
 			connect.WithClientOptions(opts...),
 		),
+		reclaimNodeSnapshots: connect.NewClient[v1.NodeRef, v1.DeployEvent](
+			httpClient,
+			baseURL+NodeServiceReclaimNodeSnapshotsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ReclaimNodeSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
 		setNodeProjectsRoot: connect.NewClient[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse](
 			httpClient,
 			baseURL+NodeServiceSetNodeProjectsRootProcedure,
@@ -1035,6 +1046,7 @@ type nodeServiceClient struct {
 	upgradeAllNodes       *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
 	getNodeMirrors        *connect.Client[v1.NodeRef, v1.Mirrors]
 	setNodeMirrors        *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
+	reclaimNodeSnapshots  *connect.Client[v1.NodeRef, v1.DeployEvent]
 	setNodeProjectsRoot   *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
 	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
@@ -1145,6 +1157,11 @@ func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, req *connect.Req
 	return c.setNodeMirrors.CallUnary(ctx, req)
 }
 
+// ReclaimNodeSnapshots calls nagi.v1.NodeService.ReclaimNodeSnapshots.
+func (c *nodeServiceClient) ReclaimNodeSnapshots(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.reclaimNodeSnapshots.CallServerStream(ctx, req)
+}
+
 // SetNodeProjectsRoot calls nagi.v1.NodeService.SetNodeProjectsRoot.
 func (c *nodeServiceClient) SetNodeProjectsRoot(ctx context.Context, req *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error) {
 	return c.setNodeProjectsRoot.CallUnary(ctx, req)
@@ -1219,6 +1236,8 @@ type NodeServiceHandler interface {
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
+	// 立即清理节点上每个容器的快照仓库，回收没有快照用到的数据。只有管理员能用。
+	ReclaimNodeSnapshots(context.Context, *connect.Request[v1.NodeRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
@@ -1364,6 +1383,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("SetNodeMirrors")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceReclaimNodeSnapshotsHandler := connect.NewServerStreamHandler(
+		NodeServiceReclaimNodeSnapshotsProcedure,
+		svc.ReclaimNodeSnapshots,
+		connect.WithSchema(nodeServiceMethods.ByName("ReclaimNodeSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceSetNodeProjectsRootHandler := connect.NewUnaryHandler(
 		NodeServiceSetNodeProjectsRootProcedure,
 		svc.SetNodeProjectsRoot,
@@ -1454,6 +1479,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
 			nodeServiceSetNodeMirrorsHandler.ServeHTTP(w, r)
+		case NodeServiceReclaimNodeSnapshotsProcedure:
+			nodeServiceReclaimNodeSnapshotsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeProjectsRootProcedure:
 			nodeServiceSetNodeProjectsRootHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
@@ -1557,6 +1584,10 @@ func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.
 
 func (UnimplementedNodeServiceHandler) SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeMirrors is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ReclaimNodeSnapshots(context.Context, *connect.Request[v1.NodeRef], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ReclaimNodeSnapshots is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error) {
