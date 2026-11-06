@@ -1660,9 +1660,12 @@ func (x *GetNodeMeshRequest) GetNodeId() string {
 }
 
 type PingNodeMeshRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	NodeId    string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	PublicKey []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// 只用于测速，界面分步测：path 只走当前的路径，wireguard 只经 WireGuard 隧道（用来和 QUIC 对比）。
+	// 为空时先走当前的路径，走的是 QUIC 再经 WireGuard 测一次。v0.20.0 以前的节点不认识，按为空处理。
+	SpeedVia      string `protobuf:"bytes,3,opt,name=speed_via,json=speedVia,proto3" json:"speed_via,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1709,6 +1712,13 @@ func (x *PingNodeMeshRequest) GetPublicKey() []byte {
 		return x.PublicKey
 	}
 	return nil
+}
+
+func (x *PingNodeMeshRequest) GetSpeedVia() string {
+	if x != nil {
+		return x.SpeedVia
+	}
+	return ""
 }
 
 type SetNodeMeshOptionsRequest struct {
@@ -9290,11 +9300,12 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x12RemoveNodeResponse\"\x1c\n" +
 	"\x1aCreateEnrollCommandRequest\"-\n" +
 	"\x12GetNodeMeshRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"M\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"j\n" +
 	"\x13PingNodeMeshRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"public_key\x18\x02 \x01(\fR\tpublicKey\"d\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\x12\x1b\n" +
+	"\tspeed_via\x18\x03 \x01(\tR\bspeedVia\"d\n" +
 	"\x19SetNodeMeshOptionsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12.\n" +
 	"\aoptions\x18\x02 \x01(\v2\x14.nagi.v1.MeshOptionsR\aoptions\"\x15\n" +

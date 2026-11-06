@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
-import type { MeshPeerStatus, MeshSpeedResponse, MeshStatus } from "@/gen/nagi/v1/common_pb";
+import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
-import { Button, EmptyRow, List, QueryError, Roll, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowsSkeleton, Section, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
@@ -49,21 +49,24 @@ function pingFailure(err: unknown): Ping {
   return { text: t.mesh.pingFailed, failed: true, detail };
 }
 
-// Speed：测速结果。tip 是有更快的走法时的提示（见 docs/mesh.md#测速），写在第二行。
-type Speed = { text: string; failed?: boolean; detail?: string; title?: string; tip?: string };
+// ---- 测速（见 docs/mesh.md#测速） ----
 
-// speedTip：另一种走法快 20% 以上、或者有一端关了 QUIC、或者经面板中转时，提示怎么改。
-function speedTip(p: MeshPeerStatus, r: MeshSpeedResponse) {
+// SpeedStep：测速的一步。path 走平时的路；wireguard 经 WireGuard 隧道，平时走 QUIC 时用来对比。
+type SpeedStep = { via: "path" | "wireguard"; state: "wait" | "run" | "done" | "fail"; quic?: boolean; up?: number; down?: number; error?: string; started?: number };
+// SpeedRun：和一个成员的一次测速，关掉对话框也接着测，列表里留最近一次的结果。
+type SpeedRun = { steps: SpeedStep[]; quicOffHere?: boolean; quicOffPeer?: boolean };
+
+const speedRunning = (r?: SpeedRun) => !!r && r.steps.some((s) => s.state === "run" || s.state === "wait");
+
+// speedTip：有更快的走法时提示怎么改：经面板中转、有一端关了 QUIC、WireGuard 隧道比 QUIC 快 20% 以上。
+function speedTip(p: MeshPeerStatus, r: SpeedRun) {
   if (p.path === "udp-relay" || p.path === "tls-relay") return t.mesh.tipRelay;
   if (r.quicOffHere) return t.mesh.tipQuicOffHere;
   if (r.quicOffPeer) return t.mesh.tipQuicOffPeer;
-  if (r.quic && r.wireguardTested && r.wireguardUpload + r.wireguardDownload > 1.2 * (r.upload + r.download)) {
-    return t.mesh.tipWireGuard(rates(r.wireguardUpload, r.wireguardDownload));
-  }
+  const [a, b] = r.steps;
+  if (a?.quic && a.state === "done" && b?.state === "done" && b.up! + b.down! > 1.2 * (a.up! + a.down!)) return t.mesh.tipWireGuard;
   return undefined;
 }
-
-const rates = (up: number, down: number) => `↑ ${fmtRate(up)} ↓ ${fmtRate(down)}`;
 
 const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 
@@ -78,7 +81,7 @@ function lossText(p: MeshPeerStatus) {
 
 // PeerSub：第二行写路径、QUIC、纠错（FEC，见 docs/mesh.md#抗丢包）和最近握手；Ping 失败的原因也写在这里，定宽的列放不下。
 // 完整的地址、丢包率在 title。
-function PeerSub({ peer: p, ping, speed }: { peer: MeshPeerStatus; ping?: Ping; speed?: Speed }) {
+function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
   const handshake = toDate(p.lastHandshake);
   const fecDetail = p.fec && t.mesh.fecDetail(p.fecRecovered.toLocaleString(locale));
   const loss = lossText(p);
@@ -102,16 +105,10 @@ function PeerSub({ peer: p, ping, speed }: { peer: MeshPeerStatus; ping?: Ping; 
           <Roll value={rest} />
         </>
       )}
-      {[ping?.detail, speed?.detail].filter(Boolean).map((d) => (
-        <span key={d}>
-          {" · "}
-          <span className="text-destructive">{d}</span>
-        </span>
-      ))}
-      {speed?.tip && (
+      {ping?.detail && (
         <>
           {" · "}
-          <span className="text-warning-text">{speed.tip}</span>
+          <span className="text-destructive">{ping.detail}</span>
         </>
       )}
     </span>
@@ -122,78 +119,209 @@ function PeerSub({ peer: p, ping, speed }: { peer: MeshPeerStatus; ping?: Ping; 
 function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) {
   const { isAdmin } = useRole();
   const [ping, setPing] = useState<Record<string, Ping>>({});
-  const [speed, setSpeed] = useState<Record<string, Speed>>({});
+  const [speed, setSpeed] = useState<Record<string, SpeedRun>>({});
+  const [open, setOpen] = useState<string | null>(null);
   // 测过之后才多一列结果，平时不留空列。
   const pinged = Object.keys(ping).length > 0;
   const tested = Object.keys(speed).length > 0;
-  const testing = Object.values(speed).some((s) => s.text === t.mesh.speedTesting);
+  // 同一时间只测一个：对方同时只接受一个测速。
+  const testing = Object.values(speed).some(speedRunning);
   const canSpeed = !!nodeId && isAdmin;
+  // runSpeed 先走平时的路测；走的是 QUIC 再经 WireGuard 隧道测一次对比。每一步测完就显示。
   const runSpeed = async (key: string, p: MeshPeerStatus) => {
     if (!nodeId) return;
-    setSpeed((x) => ({ ...x, [key]: { text: t.mesh.speedTesting } }));
+    const set = (fn: (r: SpeedRun) => SpeedRun) => setSpeed((x) => ({ ...x, [key]: fn(x[key]) }));
+    const first: SpeedStep = { via: "path", state: "run", quic: p.quic, started: Date.now() };
+    setSpeed((x) => ({ ...x, [key]: { steps: p.quic ? [first, { via: "wireguard", state: "wait" }] : [first] } }));
+    let r;
     try {
-      const r = await nodeClient.testNodeMeshSpeed({ nodeId, publicKey: p.publicKey });
-      const title = [t.mesh.speedResult(r.quic ? t.mesh.viaQuic : t.mesh.viaWireGuard), r.wireguardTested && t.mesh.speedCompare(rates(r.wireguardUpload, r.wireguardDownload))]
-        .filter(Boolean)
-        .join(" · ");
-      setSpeed((x) => ({ ...x, [key]: { text: rates(r.upload, r.download), title, tip: speedTip(p, r) } }));
+      r = await nodeClient.testNodeMeshSpeed({ nodeId, publicKey: p.publicKey, speedVia: "path" });
     } catch (err) {
-      const f = pingFailure(err);
-      setSpeed((x) => ({ ...x, [key]: { ...f } }));
+      set(() => ({ steps: [{ via: "path", state: "fail", quic: p.quic, error: speedFailure(err) }] }));
+      return;
     }
+    const done: SpeedStep = { via: "path", state: "done", quic: r.quic, up: r.upload, down: r.download };
+    const base = { quicOffHere: r.quicOffHere, quicOffPeer: r.quicOffPeer };
+    // v0.20.0 以前的节点不分步，一次就带着对比的结果。
+    if (r.wireguardTested) {
+      set(() => ({ ...base, steps: [done, { via: "wireguard", state: "done", up: r.wireguardUpload, down: r.wireguardDownload }] }));
+      return;
+    }
+    if (!r.quic) {
+      set(() => ({ ...base, steps: [done] }));
+      return;
+    }
+    set(() => ({ ...base, steps: [done, { via: "wireguard", state: "run", started: Date.now() }] }));
+    let last: SpeedStep;
+    try {
+      const w = await nodeClient.testNodeMeshSpeed({ nodeId, publicKey: p.publicKey, speedVia: "wireguard" });
+      last = { via: "wireguard", state: "done", up: w.upload, down: w.download };
+    } catch (err) {
+      last = { via: "wireguard", state: "fail", error: speedFailure(err) };
+    }
+    set(() => ({ ...base, steps: [done, last] }));
   };
   if (status.peers.length === 0) return <EmptyRow>{t.mesh.noPeers}</EmptyRow>;
+  const openPeer = status.peers.find((p) => p.address === open);
   return (
-    <List>
-      {status.peers.map((p) => {
-        const key = p.address;
-        const result = ping[key];
-        const sp = speed[key];
+    <>
+      <List>
+        {status.peers.map((p) => {
+          const key = p.address;
+          const result = ping[key];
+          return (
+            <Row
+              key={key}
+              title={<span className="truncate">{p.name}</span>}
+              sub={<PeerSub peer={p} ping={result} />}
+              cols={[
+                { content: <span title={t.mesh.rxTx}>{`↓ ${fmtBytes(Number(p.rxBytes))}`}</span>, num: true },
+                { content: <span title={t.mesh.rxTx}>{`↑ ${fmtBytes(Number(p.txBytes))}`}</span> },
+                ...(nodeId && pinged ? [{ content: result && <span className={cn(result.failed && "text-destructive")}>{result.text}</span>, num: true, phone: true }] : []),
+                ...(canSpeed && tested ? [{ content: speed[key] && <SpeedSummary run={speed[key]} />, num: true, phone: true, width: "w-40" }] : []),
+              ]}
+              actionsWidth={canSpeed ? "w-36" : undefined}
+              actions={
+                nodeId ? (
+                  <div className="flex justify-end gap-1">
+                    {canSpeed && (
+                      <Button
+                        size="row"
+                        variant="ghost"
+                        disabled={testing && !speedRunning(speed[key])}
+                        onClick={() => {
+                          setOpen(key);
+                          if (!speedRunning(speed[key])) void runSpeed(key, p);
+                        }}
+                      >
+                        {t.mesh.speedTest}
+                      </Button>
+                    )}
+                    <Button
+                      readOnlyOk
+                      size="row"
+                      variant="ghost"
+                      onClick={async () => {
+                        setPing((x) => ({ ...x, [key]: { text: "…" } }));
+                        try {
+                          const r = await nodeClient.pingNodeMesh({ nodeId, publicKey: p.publicKey });
+                          setPing((x) => ({ ...x, [key]: { text: `${r.rttMs.toFixed(1)} ms` } }));
+                        } catch (err) {
+                          setPing((x) => ({ ...x, [key]: pingFailure(err) }));
+                        }
+                      }}
+                    >
+                      Ping
+                    </Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </List>
+      {openPeer && speed[openPeer.address] && (
+        <SpeedDialog peer={openPeer} run={speed[openPeer.address]} onRetry={() => runSpeed(openPeer.address, openPeer)} onClose={() => setOpen(null)} />
+      )}
+    </>
+  );
+}
+
+function speedFailure(err: unknown) {
+  return err instanceof ConnectError && err.code === Code.DeadlineExceeded ? t.mesh.speedTimeout : errorMessage(err);
+}
+
+// SpeedSummary：列表里的测速结果：测速中，或者平时那条路最近一次的上传（↑，和丢包率的箭头一致）、下载。
+function SpeedSummary({ run }: { run: SpeedRun }) {
+  const a = run.steps[0];
+  if (speedRunning(run)) return <span className="text-muted-foreground">{t.mesh.speedTesting}</span>;
+  if (a.state !== "done") return <span className="text-destructive">{t.mesh.speedFailed}</span>;
+  return <span title={t.mesh.speedLast}>{ratePair(a.up!, a.down!)}</span>;
+}
+
+// ratePair：↑ 31.9 ↓ 31.5 MB/s，单位一样时只写一次。
+function ratePair(up: number, down: number) {
+  const [u, uu] = fmtRate(up).split(" ");
+  const [d, du] = fmtRate(down).split(" ");
+  return uu === du ? `↑ ${u} ↓ ${d} ${du}` : `↑ ${u} ${uu} ↓ ${d} ${du}`;
+}
+
+// useSeconds：测速进行中时每秒刷新一次，显示已经测了几秒。
+function useSeconds(active: boolean) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+}
+
+// SpeedDialog：测速的进度和结果。一行一种走法，测完一步就显示；下面是这条连接的路径、延迟、丢包和建议。
+function SpeedDialog({ peer: p, run, onRetry, onClose }: { peer: MeshPeerStatus; run: SpeedRun; onRetry: () => void; onClose: () => void }) {
+  const busy = speedRunning(run);
+  useSeconds(busy);
+  const tip = busy ? undefined : speedTip(p, run);
+  const facts = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, lossText(p)].filter(Boolean).join(" · ");
+  const label = (s: SpeedStep) => (s.via === "wireguard" ? t.mesh.viaWireGuardCompare : `${s.quic ? t.mesh.viaQuic : t.mesh.viaWireGuardShort}${t.mesh.speedCurrent}`);
+  const status = (s: SpeedStep) => {
+    switch (s.state) {
+      case "run":
         return (
-          <Row
-            key={key}
-            title={<span className="truncate">{p.name}</span>}
-            sub={<PeerSub peer={p} ping={result} speed={sp} />}
-            cols={[
-              { content: <span title={t.mesh.rxTx}>{`↓ ${fmtBytes(Number(p.rxBytes))}`}</span>, num: true },
-              { content: <span title={t.mesh.rxTx}>{`↑ ${fmtBytes(Number(p.txBytes))}`}</span> },
-              ...(nodeId && pinged ? [{ content: result && <span className={cn(result.failed && "text-destructive")}>{result.text}</span>, num: true, phone: true }] : []),
-              ...(canSpeed && tested
-                ? [{ content: sp && <span className={cn(sp.failed && "text-destructive")} title={sp.title}>{sp.text}</span>, num: true, width: "w-52" }]
-                : []),
-            ]}
-            actionsWidth={canSpeed ? "w-36" : undefined}
-            actions={
-              nodeId ? (
-                <div className="flex justify-end gap-1">
-                {canSpeed && (
-                  <Button size="row" variant="ghost" disabled={testing} onClick={() => runSpeed(key, p)}>
-                    {t.mesh.speedTest}
-                  </Button>
-                )}
-                <Button
-                  readOnlyOk
-                  size="row"
-                  variant="ghost"
-                  onClick={async () => {
-                    setPing((x) => ({ ...x, [key]: { text: "…" } }));
-                    try {
-                      const r = await nodeClient.pingNodeMesh({ nodeId, publicKey: p.publicKey });
-                      setPing((x) => ({ ...x, [key]: { text: `${r.rttMs.toFixed(1)} ms` } }));
-                    } catch (err) {
-                      setPing((x) => ({ ...x, [key]: pingFailure(err) }));
-                    }
-                  }}
-                >
-                  Ping
-                </Button>
-                </div>
-              ) : undefined
-            }
-          />
+          <span className="inline-flex items-center gap-2">
+            <Spinner />
+            {t.mesh.speedRunning(Math.floor((Date.now() - (s.started ?? Date.now())) / 1000))}
+          </span>
         );
-      })}
-    </List>
+      case "wait":
+        return t.mesh.speedWaiting;
+      default:
+        return s.via === "wireguard" ? t.mesh.speedCompareFailed : t.mesh.speedFailed;
+    }
+  };
+  const errors = run.steps.filter((s) => s.state === "fail" && s.error);
+  return (
+    <Dialog open onClose={onClose} title={t.mesh.speedTitle(p.name)} description={t.mesh.speedDescription} className="max-w-[520px]">
+      <Table>
+        <thead>
+          <tr>
+            <Th>{t.mesh.speedVia}</Th>
+            <Th className="w-28 text-right max-md:w-auto">{t.mesh.speedUp}</Th>
+            <Th className="w-28 text-right max-md:w-auto">{t.mesh.speedDown}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {run.steps.map((s) => (
+            <tr key={s.via} className="whitespace-nowrap">
+              <Td>{label(s)}</Td>
+              {s.state === "done" ? (
+                <>
+                  <Td className="text-right tabular-nums">{fmtRate(s.up!)}</Td>
+                  <Td className="text-right tabular-nums">{fmtRate(s.down!)}</Td>
+                </>
+              ) : (
+                <Td colSpan={2} className={cn("text-right tabular-nums", s.state === "fail" ? "text-destructive" : "text-muted-foreground")}>
+                  {status(s)}
+                </Td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <p className="text-[13px] text-muted-foreground">{facts}</p>
+      {errors.map((s) => (
+        <Alert key={s.via}>{s.error}</Alert>
+      ))}
+      {tip && <Notice tone="warning" title={tip} />}
+      <DialogActions>
+        <Button variant="outline" onClick={onClose} readOnlyOk>
+          {t.common.actions.close}
+        </Button>
+        <Button onClick={onRetry} disabled={busy}>
+          {busy && <Spinner />}
+          {busy ? t.mesh.speedTesting : t.mesh.speedRetest}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

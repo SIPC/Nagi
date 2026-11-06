@@ -261,7 +261,7 @@ func (s *nodeService) TestNodeMeshSpeed(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	resp, err := agent.MeshSpeedTest(ctx, &nagiv1.MeshPingRequest{PublicKey: req.Msg.GetPublicKey()})
+	resp, err := agent.MeshSpeedTest(ctx, &nagiv1.MeshPingRequest{PublicKey: req.Msg.GetPublicKey(), SpeedVia: req.Msg.GetSpeedVia()})
 	if err != nil {
 		return nil, fromGRPC(err)
 	}

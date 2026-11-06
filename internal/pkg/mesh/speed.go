@@ -113,6 +113,21 @@ func SpeedTest(ctx context.Context, m *Mesh, k Key, d time.Duration) (SpeedResul
 	return r, nil
 }
 
+// SpeedTestVia 只测一种走法：wireguard 为 false 时走平时的路，为 true 时经 WireGuard 隧道（用来和 QUIC 对比）。
+// 界面分步测时用，每一步测完就能显示。
+func SpeedTestVia(ctx context.Context, m *Mesh, k Key, d time.Duration, wireguard bool) (SpeedResult, error) {
+	dial := m.Dial
+	if wireguard {
+		dial = m.dialWireGuard
+	}
+	r, err := speedPair(ctx, m, k, d, dial)
+	if err != nil {
+		return r, err
+	}
+	r.QUICOffHere, r.QUICOffPeer = m.quicOff(k)
+	return r, nil
+}
+
 func speedPair(ctx context.Context, m *Mesh, k Key, d time.Duration, dial dialer) (SpeedResult, error) {
 	d = min(d, speedMax)
 	var r SpeedResult

@@ -16,6 +16,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### 改进
 
+- 测速改为在对话框中分步显示，QUIC 和 WireGuard 隧道的结果分别列出，并显示进度和建议。
 - 经面板中转的节点间流量在概览中以虚线显示。
 
 ### 修复
@@ -32,7 +33,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### 升级说明
 
 - 取消正在下载的升级需将节点升级到 v0.20.0；更早版本的节点只能取消排队中的升级。
-- 纠错流量的统计需将节点升级到 v0.20.0；中转流量的统计需将面板升级到 v0.20.0。
+- 纠错流量的统计和分步测速需将节点升级到 v0.20.0；中转流量的统计需将面板升级到 v0.20.0。
 
 ## v0.19.0
 

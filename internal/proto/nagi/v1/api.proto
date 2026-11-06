@@ -256,6 +256,9 @@ message GetNodeMeshRequest {
 message PingNodeMeshRequest {
   string node_id = 1;
   bytes public_key = 2;
+  // 只用于测速，界面分步测：path 只走当前的路径，wireguard 只经 WireGuard 隧道（用来和 QUIC 对比）。
+  // 为空时先走当前的路径，走的是 QUIC 再经 WireGuard 测一次。v0.20.0 以前的节点不认识，按为空处理。
+  string speed_via = 3;
 }
 
 message SetNodeMeshOptionsRequest {

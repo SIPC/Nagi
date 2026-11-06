@@ -442,7 +442,15 @@ func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRe
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	r, err := mesh.SpeedTest(ctx, n.m, k, meshSpeedDuration)
+	var r mesh.SpeedResult
+	switch req.GetSpeedVia() {
+	case "":
+		r, err = mesh.SpeedTest(ctx, n.m, k, meshSpeedDuration)
+	case "path", "wireguard":
+		r, err = mesh.SpeedTestVia(ctx, n.m, k, meshSpeedDuration, req.GetSpeedVia() == "wireguard")
+	default:
+		return nil, status.Error(codes.InvalidArgument, "speed_via 只能是 path 或 wireguard")
+	}
 	switch {
 	case errors.Is(err, mesh.ErrSpeedBusy):
 		return nil, status.Error(codes.Unavailable, "对方正在测速，请稍后再试")

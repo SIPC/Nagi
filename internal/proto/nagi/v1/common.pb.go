@@ -3762,8 +3762,10 @@ func (x *MeshStatus) GetQuicOff() bool {
 }
 
 type MeshPingRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// 只用于测速，见 PingNodeMeshRequest.speed_via。
+	SpeedVia      string `protobuf:"bytes,2,opt,name=speed_via,json=speedVia,proto3" json:"speed_via,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3803,6 +3805,13 @@ func (x *MeshPingRequest) GetPublicKey() []byte {
 		return x.PublicKey
 	}
 	return nil
+}
+
+func (x *MeshPingRequest) GetSpeedVia() string {
+	if x != nil {
+		return x.SpeedVia
+	}
+	return ""
 }
 
 type MeshPingResponse struct {
@@ -5390,10 +5399,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\rR\x04port\x12\x1c\n" +
 	"\tendpoints\x18\x04 \x03(\tR\tendpoints\x12-\n" +
 	"\x05peers\x18\x05 \x03(\v2\x17.nagi.v1.MeshPeerStatusR\x05peers\x12\x19\n" +
-	"\bquic_off\x18\x06 \x01(\bR\aquicOff\"0\n" +
+	"\bquic_off\x18\x06 \x01(\bR\aquicOff\"M\n" +
 	"\x0fMeshPingRequest\x12\x1d\n" +
 	"\n" +
-	"public_key\x18\x01 \x01(\fR\tpublicKey\")\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1b\n" +
+	"\tspeed_via\x18\x02 \x01(\tR\bspeedVia\")\n" +
 	"\x10MeshPingResponse\x12\x15\n" +
 	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs\"\xa8\x02\n" +
 	"\x11MeshSpeedResponse\x12\x16\n" +
