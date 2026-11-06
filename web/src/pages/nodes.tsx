@@ -11,7 +11,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { NodeUsageBars, fmtBytes, fmtBytesShort, metricRanges, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
-import { NodeMesh } from "@/pages/mesh";
+import { NodeMesh, NodeQUIC } from "@/pages/mesh";
 import { CodeBox } from "@/pages/invite";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
@@ -539,6 +539,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <>
                 <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
                 <NodeMirrors nodeId={n.id} />
+                <NodeQUIC nodeId={n.id} online={n.online} />
                 <NodeReclaim nodeId={n.id} online={n.online} />
               </>
             ) : (

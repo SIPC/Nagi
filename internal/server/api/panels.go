@@ -256,6 +256,30 @@ func (s *nodeService) PingNodeMesh(ctx context.Context, req *connect.Request[nag
 	return connect.NewResponse(resp), nil
 }
 
+func (s *nodeService) TestNodeMeshSpeed(ctx context.Context, req *connect.Request[nagiv1.PingNodeMeshRequest]) (*connect.Response[nagiv1.MeshSpeedResponse], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.MeshSpeedTest(ctx, &nagiv1.MeshPingRequest{PublicKey: req.Msg.GetPublicKey()})
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *nodeService) SetNodeMeshOptions(ctx context.Context, req *connect.Request[nagiv1.SetNodeMeshOptionsRequest]) (*connect.Response[nagiv1.MeshOptions], error) {
+	agent, err := s.agent(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := agent.SetMeshOptions(ctx, req.Msg.GetOptions())
+	if err != nil {
+		return nil, fromGRPC(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetPanelMeshRequest]) (*connect.Response[nagiv1.MeshStatus], error) {
 	m := s.Nodes.Mesh()
 	if m == nil {

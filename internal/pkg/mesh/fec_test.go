@@ -279,6 +279,23 @@ func TestFECLossyLink(t *testing.T) {
 	if recoveredFrom(b.m, a.m.PublicKey()) == 0 {
 		t.Fatal("开了 FEC 但一个包都没恢复")
 	}
+	// 两个方向的丢包率：A 发给 B 的（B 报告的）、B 收 A 的（B 自己算的），都应该在 2% 左右。
+	tx, rx := int64(-1), int64(-1)
+	for _, s := range a.m.Status() {
+		if s.Key == b.m.PublicKey() {
+			tx = s.TxLoss
+		}
+	}
+	for _, s := range b.m.Status() {
+		if s.Key == a.m.PublicKey() {
+			rx = s.RxLoss
+		}
+	}
+	for name, v := range map[string]int64{"A 发出": tx, "B 收到": rx} {
+		if v < 5_000 || v > 50_000 {
+			t.Errorf("%s的丢包率应该在 2%% 左右，实际 %d ppm", name, v)
+		}
+	}
 }
 
 // TestFECOldPeer：对端不支持 FEC（旧版本）时不加 FEC 包头，照常能通。

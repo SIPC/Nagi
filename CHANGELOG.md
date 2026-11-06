@@ -13,6 +13,9 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### 新功能
 
 - 节点页「网络」视图新增节点间延迟矩阵，显示每对节点之间的当前延迟；点选一格可查看两个方向的延迟历史，最长 30 天。
+- 节点页「网络」标签新增测速，可测量与其他节点或面板之间的上传、下载速度。
+- 节点设置新增「QUIC 快速通道」开关，所在网络限制 UDP 时可关闭。
+- 节点页「网络」标签显示与每个节点、面板之间两个方向的丢包率。
 
 ### 改进
 
@@ -27,7 +30,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### 升级说明
 
 - 延迟历史需将节点升级到 v0.19.0。
-- QUIC 和自动纠错需将两端的节点（或面板）都升级到 v0.19.0。
+- QUIC、自动纠错、测速和丢包率需将两端的节点（或面板）都升级到 v0.19.0。
 
 ## v0.18.1
 

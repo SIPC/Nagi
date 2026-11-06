@@ -13,10 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ServicePort 是每个成员在 mesh 地址上提供 MeshService 的 TCP 端口。
+// ServicePort 是每个成员在 mesh 地址上提供 MeshService 的 TCP 端口。mesh 上的其他端口：
+// 7001 是节点之间的项目内网（agent/intranet.go），7002 是测速（SpeedPort）。
 const ServicePort = 7000
 
-// Serve 在 mesh 上提供 MeshService，直到 ctx 取消。impl 为 nil 时只提供 Ping。
+// Serve 在 mesh 上提供 MeshService 和测速（见 speed.go），直到 ctx 取消。impl 为 nil 时只提供 Ping。
 // mesh 上的流量已经由 WireGuard 加密和认证，gRPC 本身不再加 TLS；调用方身份由来源 mesh 地址确定。
 func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 	ln, err := m.Listen(ServicePort)
@@ -26,6 +27,11 @@ func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 	if impl == nil {
 		impl = &Service{M: m}
 	}
+	go func() {
+		if err := serveSpeed(ctx, m); err != nil && ctx.Err() == nil {
+			m.log.Warn("mesh 测速服务停止", "err", err)
+		}
+	}()
 	srv := grpc.NewServer()
 	nagiv1.RegisterMeshServiceServer(srv, impl)
 	go func() {
@@ -79,7 +85,7 @@ func Ping(ctx context.Context, m *Mesh, k Key) (time.Duration, error) {
 // StatusProto 把 mesh 状态转成接口格式。name 返回成员的显示名称。
 func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 	self := m.PublicKey()
-	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port())}
+	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port()), QuicOff: !m.QUIC()}
 	for _, e := range m.Endpoints() {
 		out.Endpoints = append(out.Endpoints, e.String())
 	}
@@ -89,6 +95,7 @@ func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 			PublicKey: k[:], Name: name(k), Address: Address(k).String(), Path: s.Path,
 			RttMs: float64(s.RTT.Microseconds()) / 1000, RxBytes: s.RxBytes, TxBytes: s.TxBytes,
 			Fec: s.FEC >= 0, FecParity: int32(max(s.FEC, 0)), LossPpm: s.LossPPM, FecRecovered: s.Recovered, Quic: s.QUIC,
+			TxLossKnown: s.TxLoss >= 0, TxLossPpm: uint32(max(s.TxLoss, 0)), RxLossKnown: s.RxLoss >= 0, RxLossPpm: uint32(max(s.RxLoss, 0)),
 		}
 		if s.Direct.IsValid() {
 			ps.Endpoint = s.Direct.String()

@@ -175,6 +175,12 @@ const (
 	AgentServiceGetMeshStatusProcedure = "/nagi.v1.AgentService/GetMeshStatus"
 	// AgentServiceMeshPingProcedure is the fully-qualified name of the AgentService's MeshPing RPC.
 	AgentServiceMeshPingProcedure = "/nagi.v1.AgentService/MeshPing"
+	// AgentServiceMeshSpeedTestProcedure is the fully-qualified name of the AgentService's
+	// MeshSpeedTest RPC.
+	AgentServiceMeshSpeedTestProcedure = "/nagi.v1.AgentService/MeshSpeedTest"
+	// AgentServiceSetMeshOptionsProcedure is the fully-qualified name of the AgentService's
+	// SetMeshOptions RPC.
+	AgentServiceSetMeshOptionsProcedure = "/nagi.v1.AgentService/SetMeshOptions"
 	// AgentServiceGetMirrorsProcedure is the fully-qualified name of the AgentService's GetMirrors RPC.
 	AgentServiceGetMirrorsProcedure = "/nagi.v1.AgentService/GetMirrors"
 	// AgentServiceSetMirrorsProcedure is the fully-qualified name of the AgentService's SetMirrors RPC.
@@ -284,6 +290,10 @@ type AgentServiceClient interface {
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 经 mesh 和某个成员互传数据，测两个方向的吞吐。对方正在测时返回 Unavailable。
+	MeshSpeedTest(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
+	// 修改组网设置，返回修改后的设置。
+	SetMeshOptions(context.Context, *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
@@ -616,6 +626,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
 			connect.WithClientOptions(opts...),
 		),
+		meshSpeedTest: connect.NewClient[v1.MeshPingRequest, v1.MeshSpeedResponse](
+			httpClient,
+			baseURL+AgentServiceMeshSpeedTestProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MeshSpeedTest")),
+			connect.WithClientOptions(opts...),
+		),
+		setMeshOptions: connect.NewClient[v1.MeshOptions, v1.MeshOptions](
+			httpClient,
+			baseURL+AgentServiceSetMeshOptionsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetMeshOptions")),
+			connect.WithClientOptions(opts...),
+		),
 		getMirrors: connect.NewClient[v1.GetMirrorsRequest, v1.Mirrors](
 			httpClient,
 			baseURL+AgentServiceGetMirrorsProcedure,
@@ -697,6 +719,8 @@ type agentServiceClient struct {
 	removePanel           *connect.Client[v1.RemovePanelRequest, v1.RemovePanelResponse]
 	getMeshStatus         *connect.Client[v1.MeshStatusRequest, v1.MeshStatus]
 	meshPing              *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
+	meshSpeedTest         *connect.Client[v1.MeshPingRequest, v1.MeshSpeedResponse]
+	setMeshOptions        *connect.Client[v1.MeshOptions, v1.MeshOptions]
 	getMirrors            *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
 	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
 	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
@@ -963,6 +987,16 @@ func (c *agentServiceClient) MeshPing(ctx context.Context, req *connect.Request[
 	return c.meshPing.CallUnary(ctx, req)
 }
 
+// MeshSpeedTest calls nagi.v1.AgentService.MeshSpeedTest.
+func (c *agentServiceClient) MeshSpeedTest(ctx context.Context, req *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error) {
+	return c.meshSpeedTest.CallUnary(ctx, req)
+}
+
+// SetMeshOptions calls nagi.v1.AgentService.SetMeshOptions.
+func (c *agentServiceClient) SetMeshOptions(ctx context.Context, req *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error) {
+	return c.setMeshOptions.CallUnary(ctx, req)
+}
+
 // GetMirrors calls nagi.v1.AgentService.GetMirrors.
 func (c *agentServiceClient) GetMirrors(ctx context.Context, req *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
 	return c.getMirrors.CallUnary(ctx, req)
@@ -1081,6 +1115,10 @@ type AgentServiceHandler interface {
 	GetMeshStatus(context.Context, *connect.Request[v1.MeshStatusRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 经 mesh 和某个成员互传数据，测两个方向的吞吐。对方正在测时返回 Unavailable。
+	MeshSpeedTest(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
+	// 修改组网设置，返回修改后的设置。
+	SetMeshOptions(context.Context, *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
@@ -1409,6 +1447,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("MeshPing")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceMeshSpeedTestHandler := connect.NewUnaryHandler(
+		AgentServiceMeshSpeedTestProcedure,
+		svc.MeshSpeedTest,
+		connect.WithSchema(agentServiceMethods.ByName("MeshSpeedTest")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetMeshOptionsHandler := connect.NewUnaryHandler(
+		AgentServiceSetMeshOptionsProcedure,
+		svc.SetMeshOptions,
+		connect.WithSchema(agentServiceMethods.ByName("SetMeshOptions")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceGetMirrorsHandler := connect.NewUnaryHandler(
 		AgentServiceGetMirrorsProcedure,
 		svc.GetMirrors,
@@ -1539,6 +1589,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetMeshStatusHandler.ServeHTTP(w, r)
 		case AgentServiceMeshPingProcedure:
 			agentServiceMeshPingHandler.ServeHTTP(w, r)
+		case AgentServiceMeshSpeedTestProcedure:
+			agentServiceMeshSpeedTestHandler.ServeHTTP(w, r)
+		case AgentServiceSetMeshOptionsProcedure:
+			agentServiceSetMeshOptionsHandler.ServeHTTP(w, r)
 		case AgentServiceGetMirrorsProcedure:
 			agentServiceGetMirrorsHandler.ServeHTTP(w, r)
 		case AgentServiceSetMirrorsProcedure:
@@ -1762,6 +1816,14 @@ func (UnimplementedAgentServiceHandler) GetMeshStatus(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) MeshPing(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshPingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MeshPing is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MeshSpeedTest(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MeshSpeedTest is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetMeshOptions(context.Context, *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMeshOptions is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {

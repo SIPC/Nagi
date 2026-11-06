@@ -71,6 +71,8 @@ const (
 	AgentService_RemovePanel_FullMethodName           = "/nagi.v1.AgentService/RemovePanel"
 	AgentService_GetMeshStatus_FullMethodName         = "/nagi.v1.AgentService/GetMeshStatus"
 	AgentService_MeshPing_FullMethodName              = "/nagi.v1.AgentService/MeshPing"
+	AgentService_MeshSpeedTest_FullMethodName         = "/nagi.v1.AgentService/MeshSpeedTest"
+	AgentService_SetMeshOptions_FullMethodName        = "/nagi.v1.AgentService/SetMeshOptions"
 	AgentService_GetMirrors_FullMethodName            = "/nagi.v1.AgentService/GetMirrors"
 	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
 	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
@@ -180,6 +182,10 @@ type AgentServiceClient interface {
 	GetMeshStatus(ctx context.Context, in *MeshStatusRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
+	// 经 mesh 和某个成员互传数据，测两个方向的吞吐。对方正在测时返回 Unavailable。
+	MeshSpeedTest(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshSpeedResponse, error)
+	// 修改组网设置，返回修改后的设置。
+	SetMeshOptions(ctx context.Context, in *MeshOptions, opts ...grpc.CallOption) (*MeshOptions, error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(ctx context.Context, in *GetMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
 	SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error)
@@ -813,6 +819,26 @@ func (c *agentServiceClient) MeshPing(ctx context.Context, in *MeshPingRequest, 
 	return out, nil
 }
 
+func (c *agentServiceClient) MeshSpeedTest(ctx context.Context, in *MeshPingRequest, opts ...grpc.CallOption) (*MeshSpeedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshSpeedResponse)
+	err := c.cc.Invoke(ctx, AgentService_MeshSpeedTest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) SetMeshOptions(ctx context.Context, in *MeshOptions, opts ...grpc.CallOption) (*MeshOptions, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshOptions)
+	err := c.cc.Invoke(ctx, AgentService_SetMeshOptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) GetMirrors(ctx context.Context, in *GetMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
@@ -956,6 +982,10 @@ type AgentServiceServer interface {
 	GetMeshStatus(context.Context, *MeshStatusRequest) (*MeshStatus, error)
 	// 经 mesh 连一下某个成员，测往返时间。
 	MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error)
+	// 经 mesh 和某个成员互传数据，测两个方向的吞吐。对方正在测时返回 Unavailable。
+	MeshSpeedTest(context.Context, *MeshPingRequest) (*MeshSpeedResponse, error)
+	// 修改组网设置，返回修改后的设置。
+	SetMeshOptions(context.Context, *MeshOptions) (*MeshOptions, error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *GetMirrorsRequest) (*Mirrors, error)
 	SetMirrors(context.Context, *Mirrors) (*Mirrors, error)
@@ -1128,6 +1158,12 @@ func (UnimplementedAgentServiceServer) GetMeshStatus(context.Context, *MeshStatu
 }
 func (UnimplementedAgentServiceServer) MeshPing(context.Context, *MeshPingRequest) (*MeshPingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MeshPing not implemented")
+}
+func (UnimplementedAgentServiceServer) MeshSpeedTest(context.Context, *MeshPingRequest) (*MeshSpeedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MeshSpeedTest not implemented")
+}
+func (UnimplementedAgentServiceServer) SetMeshOptions(context.Context, *MeshOptions) (*MeshOptions, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMeshOptions not implemented")
 }
 func (UnimplementedAgentServiceServer) GetMirrors(context.Context, *GetMirrorsRequest) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMirrors not implemented")
@@ -2006,6 +2042,42 @@ func _AgentService_MeshPing_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_MeshSpeedTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshPingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).MeshSpeedTest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_MeshSpeedTest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).MeshSpeedTest(ctx, req.(*MeshPingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_SetMeshOptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MeshOptions)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetMeshOptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetMeshOptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetMeshOptions(ctx, req.(*MeshOptions))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_GetMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMirrorsRequest)
 	if err := dec(in); err != nil {
@@ -2244,6 +2316,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MeshPing",
 			Handler:    _AgentService_MeshPing_Handler,
+		},
+		{
+			MethodName: "MeshSpeedTest",
+			Handler:    _AgentService_MeshSpeedTest_Handler,
+		},
+		{
+			MethodName: "SetMeshOptions",
+			Handler:    _AgentService_SetMeshOptions_Handler,
 		},
 		{
 			MethodName: "GetMirrors",

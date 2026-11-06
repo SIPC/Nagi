@@ -89,6 +89,8 @@ export default {
     UpgradeNode: "Upgrade node",
     UpgradeAllNodes: "Upgrade all nodes",
     SetNodeMirrors: "Set registry mirrors",
+    SetNodeMeshOptions: "Change mesh settings",
+    TestNodeMeshSpeed: "Test node speed",
     ReclaimNodeSnapshots: "Clean up snapshot repositories",
     SetNodeProjectsRoot: "Set projects root",
     CreateEnrollCommand: "Generate node install command",

@@ -594,6 +594,8 @@ const (
 	NodeService_DeleteNodeReplica_FullMethodName     = "/nagi.v1.NodeService/DeleteNodeReplica"
 	NodeService_GetNodeMesh_FullMethodName           = "/nagi.v1.NodeService/GetNodeMesh"
 	NodeService_PingNodeMesh_FullMethodName          = "/nagi.v1.NodeService/PingNodeMesh"
+	NodeService_TestNodeMeshSpeed_FullMethodName     = "/nagi.v1.NodeService/TestNodeMeshSpeed"
+	NodeService_SetNodeMeshOptions_FullMethodName    = "/nagi.v1.NodeService/SetNodeMeshOptions"
 	NodeService_GetPanelMesh_FullMethodName          = "/nagi.v1.NodeService/GetPanelMesh"
 	NodeService_UpgradeNode_FullMethodName           = "/nagi.v1.NodeService/UpgradeNode"
 	NodeService_UpgradeAllNodes_FullMethodName       = "/nagi.v1.NodeService/UpgradeAllNodes"
@@ -638,6 +640,10 @@ type NodeServiceClient interface {
 	GetNodeMesh(ctx context.Context, in *GetNodeMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshPingResponse, error)
+	// 让节点经 mesh 和某个成员测速（见 docs/mesh.md#测速）。只有管理员能用。
+	TestNodeMeshSpeed(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshSpeedResponse, error)
+	// 修改节点的组网设置（关闭 QUIC 快速通道）。
+	SetNodeMeshOptions(ctx context.Context, in *SetNodeMeshOptionsRequest, opts ...grpc.CallOption) (*MeshOptions, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
@@ -821,6 +827,26 @@ func (c *nodeServiceClient) PingNodeMesh(ctx context.Context, in *PingNodeMeshRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MeshPingResponse)
 	err := c.cc.Invoke(ctx, NodeService_PingNodeMesh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) TestNodeMeshSpeed(ctx context.Context, in *PingNodeMeshRequest, opts ...grpc.CallOption) (*MeshSpeedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshSpeedResponse)
+	err := c.cc.Invoke(ctx, NodeService_TestNodeMeshSpeed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) SetNodeMeshOptions(ctx context.Context, in *SetNodeMeshOptionsRequest, opts ...grpc.CallOption) (*MeshOptions, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeshOptions)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeMeshOptions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,6 +1039,10 @@ type NodeServiceServer interface {
 	GetNodeMesh(context.Context, *GetNodeMeshRequest) (*MeshStatus, error)
 	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error)
+	// 让节点经 mesh 和某个成员测速（见 docs/mesh.md#测速）。只有管理员能用。
+	TestNodeMeshSpeed(context.Context, *PingNodeMeshRequest) (*MeshSpeedResponse, error)
+	// 修改节点的组网设置（关闭 QUIC 快速通道）。
+	SetNodeMeshOptions(context.Context, *SetNodeMeshOptionsRequest) (*MeshOptions, error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
@@ -1096,6 +1126,12 @@ func (UnimplementedNodeServiceServer) GetNodeMesh(context.Context, *GetNodeMeshR
 }
 func (UnimplementedNodeServiceServer) PingNodeMesh(context.Context, *PingNodeMeshRequest) (*MeshPingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PingNodeMesh not implemented")
+}
+func (UnimplementedNodeServiceServer) TestNodeMeshSpeed(context.Context, *PingNodeMeshRequest) (*MeshSpeedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestNodeMeshSpeed not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeMeshOptions(context.Context, *SetNodeMeshOptionsRequest) (*MeshOptions, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeMeshOptions not implemented")
 }
 func (UnimplementedNodeServiceServer) GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPanelMesh not implemented")
@@ -1433,6 +1469,42 @@ func _NodeService_PingNodeMesh_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_TestNodeMeshSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingNodeMeshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).TestNodeMeshSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_TestNodeMeshSpeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).TestNodeMeshSpeed(ctx, req.(*PingNodeMeshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_SetNodeMeshOptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeMeshOptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeMeshOptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeMeshOptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeMeshOptions(ctx, req.(*SetNodeMeshOptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_GetPanelMesh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPanelMeshRequest)
 	if err := dec(in); err != nil {
@@ -1762,6 +1834,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PingNodeMesh",
 			Handler:    _NodeService_PingNodeMesh_Handler,
+		},
+		{
+			MethodName: "TestNodeMeshSpeed",
+			Handler:    _NodeService_TestNodeMeshSpeed_Handler,
+		},
+		{
+			MethodName: "SetNodeMeshOptions",
+			Handler:    _NodeService_SetNodeMeshOptions_Handler,
 		},
 		{
 			MethodName: "GetPanelMesh",

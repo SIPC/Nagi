@@ -172,6 +172,10 @@ service NodeService {
   rpc GetNodeMesh(GetNodeMeshRequest) returns (MeshStatus);
   // 让节点经 mesh 连一下某个成员。
   rpc PingNodeMesh(PingNodeMeshRequest) returns (MeshPingResponse);
+  // 让节点经 mesh 和某个成员测速（见 docs/mesh.md#测速）。只有管理员能用。
+  rpc TestNodeMeshSpeed(PingNodeMeshRequest) returns (MeshSpeedResponse);
+  // 修改节点的组网设置（关闭 QUIC 快速通道）。
+  rpc SetNodeMeshOptions(SetNodeMeshOptionsRequest) returns (MeshOptions);
   // 面板自己的 mesh 状态。
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
   // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
@@ -249,6 +253,11 @@ message GetNodeMeshRequest {
 message PingNodeMeshRequest {
   string node_id = 1;
   bytes public_key = 2;
+}
+
+message SetNodeMeshOptionsRequest {
+  string node_id = 1;
+  MeshOptions options = 2;
 }
 
 message GetPanelMeshRequest {}

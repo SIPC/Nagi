@@ -17,10 +17,13 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/mesh/bbr"
 	"github.com/apernet/quic-go"
+	"github.com/apernet/quic-go/congestion"
+	"github.com/apernet/quic-go/monotime"
 )
 
 // QUIC 快速通道（见 docs/mesh.md#quic-快速通道）：两端都支持、并且直连时，mesh 上的 TCP 连接改走 QUIC，
@@ -77,6 +80,11 @@ func (c *quicPacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	ap = netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
 	c.b.mu.Lock()
 	conn := c.b.conn
+	if k, ok := c.b.byAddr[ap]; ok {
+		if peer := c.b.peers[k]; peer != nil {
+			peer.quicTx += uint64(len(p))
+		}
+	}
 	c.b.mu.Unlock()
 	c.b.write(conn, p, ap)
 	return len(p), nil
@@ -119,11 +127,24 @@ type quicNet struct {
 
 	mu        sync.Mutex
 	conns     map[Key]*quic.Conn
+	all       map[*quic.Conn]Key // 包括同时建起来、没放进 conns 的那一条
 	dialing   map[Key]chan struct{}
 	failed    map[Key]time.Time
 	listeners map[uint16]*meshListener
 	closed    bool
+	loss      map[Key]*quicLoss
+	counters  map[*quic.Conn]*countingCC
 }
+
+// quicLoss 按窗口算到某个对端的 QUIC 丢包率：发够 quicLossSamples 个包算一次。
+type quicLoss struct {
+	conn       *quic.Conn
+	sent, lost uint64
+	ppm        uint32
+	at         time.Time // ppm 算出的时间，零值表示还没算过
+}
+
+const quicLossSamples = 1000
 
 func quicConfig() *quic.Config {
 	return &quic.Config{
@@ -152,8 +173,8 @@ func newQUICNet(m *Mesh, priv Key) (*quicNet, error) {
 			InsecureSkipVerify: true, // 不靠证书认人，见上面的说明
 			MinVersion:         tls.VersionTLS13,
 		},
-		conns: map[Key]*quic.Conn{}, dialing: map[Key]chan struct{}{}, failed: map[Key]time.Time{},
-		listeners: map[uint16]*meshListener{},
+		conns: map[Key]*quic.Conn{}, all: map[*quic.Conn]Key{}, dialing: map[Key]chan struct{}{}, failed: map[Key]time.Time{},
+		listeners: map[uint16]*meshListener{}, loss: map[Key]*quicLoss{}, counters: map[*quic.Conn]*countingCC{},
 	}
 	// 无状态重置的密钥由私钥推出：重启以后还是同一个，对方发来旧连接的包时能直接告诉它连接没了，
 	// 不用等 MaxIdleTimeout。
@@ -170,12 +191,8 @@ func newQUICNet(m *Mesh, priv Key) (*quicNet, error) {
 func (q *quicNet) close() {
 	q.mu.Lock()
 	q.closed = true
-	conns := q.conns
-	q.conns = map[Key]*quic.Conn{}
 	q.mu.Unlock()
-	for _, c := range conns {
-		_ = c.CloseWithError(0, "")
-	}
+	q.closeAll()
 	_ = q.ln.Close()
 	// 先关包连接：Transport.Close 要等它的收包循环退出，收包循环停在 ReadFrom 上。
 	_ = q.pc.Close()
@@ -195,13 +212,40 @@ func ephemeralCert() (tls.Certificate, error) {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, nil
 }
 
-// useBBR 把一条 QUIC 连接的拥塞控制换成 BBR。
-func useBBR(c *quic.Conn) {
+// useBBR 把一条 QUIC 连接的拥塞控制换成 BBR，并在外面包一层数发出和丢掉的包（quic-go 换了拥塞控制以后
+// ConnectionStats 里不再统计丢包）。
+func (q *quicNet) useBBR(c *quic.Conn) {
 	size := bbr.GetInitialPacketSize(c.RemoteAddr())
 	if s := c.InitialPacketSize(); s > 0 && s < size {
 		size = s
 	}
-	c.SetCongestionControl(bbr.NewBbrSender(bbr.DefaultClock{}, size, bbr.Profile("")))
+	cc := &countingCC{CongestionControlEx: bbr.NewBbrSender(bbr.DefaultClock{}, size, bbr.Profile(""))}
+	c.SetCongestionControl(cc)
+	q.mu.Lock()
+	q.counters[c] = cc
+	q.mu.Unlock()
+	go func() {
+		<-c.Context().Done()
+		q.mu.Lock()
+		delete(q.counters, c)
+		q.mu.Unlock()
+	}()
+}
+
+// countingCC 数一条连接发出、丢掉的包（用来算丢包率），其余交给 BBR。
+type countingCC struct {
+	congestion.CongestionControlEx
+	sent, lost atomic.Uint64
+}
+
+func (c *countingCC) OnPacketSent(t monotime.Time, inFlight congestion.ByteCount, pn congestion.PacketNumber, n congestion.ByteCount, retransmittable bool) {
+	c.sent.Add(1)
+	c.CongestionControlEx.OnPacketSent(t, inFlight, pn, n, retransmittable)
+}
+
+func (c *countingCC) OnCongestionEvent(pn congestion.PacketNumber, lost, priorInFlight congestion.ByteCount) {
+	c.lost.Add(1)
+	c.CongestionControlEx.OnCongestionEvent(pn, lost, priorInFlight)
 }
 
 // proof 是一端对这条 QUIC 连接的身份证明：HMAC(和对方的共享密钥, 角色 || TLS 导出的会话值)。
@@ -287,7 +331,7 @@ func (q *quicNet) dial(ctx context.Context, k Key, addr netip.AddrPort, mac [32]
 		_ = c.CloseWithError(1, "")
 		return nil, err
 	}
-	useBBR(c)
+	q.useBBR(c)
 	s, err := c.OpenStreamSync(ctx)
 	if err != nil {
 		return fail(err)
@@ -360,7 +404,7 @@ func (q *quicNet) handshake(c *quic.Conn) {
 		return
 	}
 	_ = s.Close()
-	useBBR(c)
+	q.useBBR(c)
 	q.register(k, c)
 }
 
@@ -375,6 +419,7 @@ func (q *quicNet) register(k Key, c *quic.Conn) {
 	if q.conns[k] == nil {
 		q.conns[k] = c
 	}
+	q.all[c] = k
 	delete(q.failed, k)
 	q.mu.Unlock()
 	go func() {
@@ -383,6 +428,7 @@ func (q *quicNet) register(k Key, c *quic.Conn) {
 		if q.conns[k] == c {
 			delete(q.conns, k)
 		}
+		delete(q.all, c)
 		q.mu.Unlock()
 	}()
 	go q.serve(k, c)
@@ -438,6 +484,40 @@ func (q *quicNet) open(ctx context.Context, k Key, port uint16) (net.Conn, error
 
 var errNoQUIC = errors.New("不能走 QUIC")
 
+// txLoss 返回最近一个窗口里发给 k 的 QUIC 包的丢包率（百万分之几）和算出的时间，没算过时时间为零。
+func (q *quicNet) txLoss(k Key) (uint32, time.Time) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	c := q.conns[k]
+	l := q.loss[k]
+	if c == nil {
+		if l != nil {
+			return l.ppm, l.at
+		}
+		return 0, time.Time{}
+	}
+	cc := q.counters[c]
+	if cc == nil {
+		return 0, time.Time{}
+	}
+	sentNow, lostNow := cc.sent.Load(), cc.lost.Load()
+	if l == nil || l.conn != c {
+		// 新连接：从连接建立时算起（计数本来就从 0 开始）；上一条连接算出的值留着。
+		old := l
+		l = &quicLoss{conn: c}
+		if old != nil {
+			l.ppm, l.at = old.ppm, old.at
+		}
+		q.loss[k] = l
+	}
+	if sent := sentNow - l.sent; sent >= quicLossSamples {
+		lost := min(lostNow-l.lost, sent)
+		l.ppm, l.at = uint32(lost*1_000_000/sent), time.Now()
+		l.sent, l.lost = sentNow, lostNow
+	}
+	return l.ppm, l.at
+}
+
 // has 返回到 k 有没有建好的 QUIC 连接。
 func (q *quicNet) has(k Key) bool {
 	q.mu.Lock()
@@ -445,13 +525,38 @@ func (q *quicNet) has(k Key) bool {
 	return q.conns[k] != nil
 }
 
+// unfail 清掉到 k 连不上的记录，下次马上可以再试。
+func (q *quicNet) unfail(k Key) {
+	q.mu.Lock()
+	delete(q.failed, k)
+	q.mu.Unlock()
+}
+
+// closeAll 断开所有 QUIC 连接（关闭 QUIC 时）。
+func (q *quicNet) closeAll() {
+	q.mu.Lock()
+	all := q.all
+	q.conns, q.all = map[Key]*quic.Conn{}, map[*quic.Conn]Key{}
+	q.failed = map[Key]time.Time{}
+	q.mu.Unlock()
+	for c := range all {
+		_ = c.CloseWithError(0, "")
+	}
+}
+
 // forget 关掉已经不在成员列表里的对端的连接。
 func (q *quicNet) forget(keep map[Key]bool) {
 	q.mu.Lock()
 	var gone []*quic.Conn
-	for k, c := range q.conns {
+	for k := range q.loss {
+		if !keep[k] {
+			delete(q.loss, k)
+		}
+	}
+	for c, k := range q.all {
 		if !keep[k] {
 			gone = append(gone, c)
+			delete(q.all, c)
 			delete(q.conns, k)
 		}
 	}

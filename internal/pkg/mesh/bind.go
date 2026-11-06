@@ -71,8 +71,14 @@ type peerState struct {
 	caps    byte // 对方的能力（capFEC、capQUIC），capsAt 之后 capsTimeout 内有效
 	capsAt  time.Time
 	lossPPM uint32 // 对方报告的、它收到我们的包的丢包率
-	enc     *fecEncoder
-	dec     *fecDecoder
+	lossAt  time.Time
+	// rxLoss：上一次算出的、我们收到对方的包的丢包率（经 WireGuard 的，按 FEC 序号算）。
+	rxLoss   uint32
+	rxLossAt time.Time
+	enc      *fecEncoder
+	dec      *fecDecoder
+	// quicRx、quicTx：和对方之间收发的 QUIC 包的字节数。QUIC 不经过 WireGuard，要另外算进流量里。
+	quicRx, quicTx uint64
 }
 
 func (p *peerState) has(c byte, now time.Time) bool {
@@ -206,17 +212,19 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			k, ok := b.byAddr[addr]
 			var ep *endpoint
 			var dec *fecDecoder
-			if p := b.peers[k]; ok && p != nil {
+			p := b.peers[k]
+			if ok && p != nil {
 				ep, dec = p.ep, p.dec
+			}
+			q := b.quic
+			if ep != nil && q != nil && isQUIC(pkt) {
+				p.quicRx += uint64(len(pkt))
 			}
 			b.mu.Unlock()
 			if ep == nil {
 				continue // 来源地址没确认过，丢弃
 			}
 			if isQUIC(pkt) {
-				b.mu.Lock()
-				q := b.quic
-				b.mu.Unlock()
 				if q != nil {
 					q.deliver(pkt, addr)
 				}
@@ -555,7 +563,7 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 		case lossUseless:
 			p.enc.giveUp(now)
 		default:
-			p.lossPPM = m.lossPPM
+			p.lossPPM, p.lossAt = m.lossPPM, now
 			p.enc.adjust(m.lossPPM, now)
 		}
 		onCaps := b.onCaps
@@ -700,10 +708,38 @@ func (b *Bind) maintain(now time.Time) {
 	}
 }
 
+// announce 马上给所有直连的成员发能力包（能力变了时），不等下一轮 maintain。
+func (b *Bind) announce() {
+	now := time.Now()
+	type out struct {
+		pkt  []byte
+		addr netip.AddrPort
+	}
+	var sends []out
+	b.mu.Lock()
+	for _, p := range b.peers {
+		if p.directAlive(now) {
+			sends = append(sends, out{b.capsPacket(p), p.direct})
+		}
+	}
+	c := b.conn
+	b.mu.Unlock()
+	for _, s := range sends {
+		b.write(c, s.pkt, s.addr)
+	}
+}
+
+// lossFresh：丢包率这么久没有更新（没什么流量）就不再显示。
+const lossFresh = 5 * time.Minute
+
 // capsPacket 是发给 p 的能力包，带上收到它的包的丢包率。调用时持有 b.mu。
 func (b *Bind) capsPacket(p *peerState) []byte {
 	loss := uint32(lossUnknown)
-	if ppm, ok, useless := p.dec.lossPPM(); useless {
+	ppm, ok, useless := p.dec.lossPPM()
+	if ok {
+		p.rxLoss, p.rxLossAt = ppm, time.Now()
+	}
+	if useless {
 		loss = lossUseless
 	} else if ok {
 		loss = ppm
@@ -724,8 +760,14 @@ type PeerStatus struct {
 	// LossPPM 是对方报告的丢包率（百万分之几），Recovered 是靠 FEC 恢复的、来自对方的包。
 	LossPPM   uint32
 	Recovered uint64
+	// TxLoss、RxLoss 是最近测到的两个方向的丢包率（百万分之几）：TxLoss 是发给对方的包丢了多少
+	// （对方的 FEC 报告或 QUIC 的统计，取新的），RxLoss 是收对方的包丢了多少（FEC 序号）。没测到时为 -1。
+	TxLoss, RxLoss int64
+	txLossAt       time.Time
 	// QUIC：和对方之间有建好的 QUIC 连接，mesh 上的 TCP 连接走它（见 quic.go）。
 	QUIC bool
+	// quicBytes：收、发的 QUIC 字节数，Status 把它加进 RxBytes、TxBytes。
+	quicBytes [2]uint64
 }
 
 func (b *Bind) status() []PeerStatus {
@@ -734,7 +776,16 @@ func (b *Bind) status() []PeerStatus {
 	defer b.mu.Unlock()
 	var out []PeerStatus
 	for _, p := range b.peers {
-		s := PeerStatus{Key: p.key, Path: "none", FEC: -1, LossPPM: p.lossPPM, Recovered: p.dec.recoveredCount()}
+		s := PeerStatus{Key: p.key, Path: "none", FEC: -1, LossPPM: p.lossPPM, Recovered: p.dec.recoveredCount(), quicBytes: [2]uint64{p.quicRx, p.quicTx},
+			TxLoss: -1, RxLoss: -1}
+		if p.directAlive(now) {
+			if now.Sub(p.lossAt) < lossFresh {
+				s.TxLoss, s.txLossAt = int64(p.lossPPM), p.lossAt
+			}
+			if now.Sub(p.rxLossAt) < lossFresh {
+				s.RxLoss = int64(p.rxLoss)
+			}
+		}
 		switch {
 		case p.directAlive(now):
 			s.Path, s.Direct, s.RTT = "direct", p.direct, p.rtt

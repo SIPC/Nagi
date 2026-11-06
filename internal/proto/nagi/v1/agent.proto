@@ -112,6 +112,10 @@ service AgentService {
   rpc GetMeshStatus(MeshStatusRequest) returns (MeshStatus);
   // 经 mesh 连一下某个成员，测往返时间。
   rpc MeshPing(MeshPingRequest) returns (MeshPingResponse);
+  // 经 mesh 和某个成员互传数据，测两个方向的吞吐。对方正在测时返回 Unavailable。
+  rpc MeshSpeedTest(MeshPingRequest) returns (MeshSpeedResponse);
+  // 修改组网设置，返回修改后的设置。
+  rpc SetMeshOptions(MeshOptions) returns (MeshOptions);
   // 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);

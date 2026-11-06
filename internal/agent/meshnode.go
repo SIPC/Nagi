@@ -116,6 +116,11 @@ func (n *meshNode) load() {
 // meshPortFile 记住第一次随机选的 UDP 端口，以后重启不变。
 func meshPortFile(dataDir string) string { return filepath.Join(dataDir, "identity", "mesh-port") }
 
+// meshQUICOffFile 存在时关闭 QUIC 快速通道（组网设置，见 docs/mesh.md#quic-快速通道）。
+func meshQUICOffFile(dataDir string) string {
+	return filepath.Join(dataDir, "identity", "mesh-quic-off")
+}
+
 // startMesh 启动 mesh。port 为 0 时用上次记住的端口，第一次随机选；记住的端口被占用时重新随机选。
 func (a *agent) startMesh(ctx context.Context, port uint16) error {
 	file := meshPortFile(a.cfg.DataDir)
@@ -143,7 +148,10 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 	}
 	a.mesh.file = filepath.Join(a.cfg.DataDir, "identity", "mesh-peers.json")
 	a.mesh.load()
-	log.Info("mesh 已启动", "address", m.Addr(), "udp_port", m.Port())
+	if _, err := os.Stat(meshQUICOffFile(a.cfg.DataDir)); err == nil {
+		m.SetQUIC(false)
+	}
+	log.Info("mesh 已启动", "address", m.Addr(), "udp_port", m.Port(), "quic", m.QUIC())
 	go func() {
 		<-ctx.Done()
 		m.Close()
@@ -421,6 +429,54 @@ func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	return &nagiv1.MeshPingResponse{RttMs: float64(rtt.Microseconds()) / 1000}, nil
+}
+
+func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRequest) (*nagiv1.MeshSpeedResponse, error) {
+	n := s.node.mesh
+	if n == nil {
+		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+	}
+	k, err := mesh.ParseKey(req.GetPublicKey())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	r, err := mesh.SpeedTest(ctx, n.m, k, meshSpeedDuration)
+	switch {
+	case errors.Is(err, mesh.ErrSpeedBusy):
+		return nil, status.Error(codes.Unavailable, "对方正在测速，请稍后再试")
+	case errors.Is(err, mesh.ErrSpeedUnsupported):
+		return nil, status.Error(codes.FailedPrecondition, "对方版本较旧，不支持测速")
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return nil, status.Error(codes.DeadlineExceeded, "测速超时")
+	case err != nil:
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	return &nagiv1.MeshSpeedResponse{Upload: r.Upload, Download: r.Download, Quic: r.QUIC}, nil
+}
+
+// meshSpeedDuration：测速时每个方向传这么久。
+const meshSpeedDuration = 5 * time.Second
+
+func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions) (*nagiv1.MeshOptions, error) {
+	n := s.node.mesh
+	if n == nil {
+		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+	}
+	file := meshQUICOffFile(s.node.cfg.DataDir)
+	var err error
+	if req.GetQuicOff() {
+		err = os.WriteFile(file, nil, 0o600)
+	} else if err = os.Remove(file); errors.Is(err, os.ErrNotExist) {
+		err = nil
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	n.m.SetQUIC(!req.GetQuicOff())
+	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC())
+	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC()}, nil
 }
 
 // meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。

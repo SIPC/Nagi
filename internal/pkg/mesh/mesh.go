@@ -104,7 +104,9 @@ func New(cfg Config) (*Mesh, error) {
 		bind.mu.Lock()
 		bind.quic = q.pc
 		// 对方支持 QUIC 时提前建好连接，第一个 Dial 不用等。两边只由公钥小的一方去建，免得同时建两条。
+		// 对方刚打开 QUIC 时，之前连不上的记录作废。
 		bind.onCaps = func(k Key) {
+			q.unfail(k)
 			if bytes.Compare(self[:], k[:]) < 0 {
 				q.conn(context.Background(), k)
 			}
@@ -126,6 +128,62 @@ func (m *Mesh) loop() {
 			m.bind.maintain(now)
 		}
 	}
+}
+
+// SetQUIC 打开或关闭 QUIC 快速通道（见 quic.go）。关闭时断开已有的 QUIC 连接，并告诉各成员不再支持，
+// 之后双方的 TCP 连接都走 WireGuard。用 NoQUIC 启动的 mesh 打不开。
+func (m *Mesh) SetQUIC(on bool) {
+	if m.quic == nil {
+		return
+	}
+	b := m.bind
+	now := time.Now()
+	var peers []Key
+	b.mu.Lock()
+	was := b.caps&capQUIC != 0
+	if on {
+		b.caps |= capQUIC
+		for k, p := range b.peers {
+			if p.has(capQUIC, now) {
+				peers = append(peers, k)
+			}
+		}
+	} else {
+		b.caps &^= capQUIC
+	}
+	onCaps := b.onCaps
+	b.mu.Unlock()
+	if was == on {
+		return
+	}
+	if !on {
+		m.quic.closeAll()
+	}
+	b.announce()
+	if !on {
+		return
+	}
+	// 对方收到能力包才接受连接，等一会儿再建（公钥大的一方由对方来建）。
+	go func() {
+		select {
+		case <-time.After(time.Second):
+		case <-m.done:
+			return
+		}
+		for _, k := range peers {
+			go onCaps(k)
+		}
+	}()
+}
+
+// QUIC 返回 QUIC 快速通道是否打开。
+func (m *Mesh) QUIC() bool {
+	if m.quic == nil {
+		return false
+	}
+	m.bind.mu.Lock()
+	defer m.bind.mu.Unlock()
+	return m.bind.caps&capQUIC != 0
 }
 
 // Close 停止 mesh。可以重复调用。
@@ -280,7 +338,7 @@ func skipInterface(name string) bool {
 	return false
 }
 
-// Status 是到一个成员的连接状态。
+// Status 是到一个成员的连接状态。RxBytes、TxBytes 包括经 WireGuard 和经 QUIC 的。
 type Status struct {
 	PeerStatus
 	LastHandshake time.Time
@@ -326,6 +384,13 @@ func (m *Mesh) Status() []Status {
 	}
 	for _, s := range stats {
 		s.QUIC = m.quic != nil && m.quic.has(s.Key)
+		s.RxBytes += s.quicBytes[0]
+		s.TxBytes += s.quicBytes[1]
+		if m.quic != nil && s.Path == "direct" {
+			if ppm, at := m.quic.txLoss(s.Key); time.Since(at) < lossFresh && at.After(s.txLossAt) {
+				s.TxLoss = int64(ppm)
+			}
+		}
 		out = append(out, *s)
 	}
 	return out

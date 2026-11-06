@@ -110,6 +110,12 @@ const (
 	// NodeServicePingNodeMeshProcedure is the fully-qualified name of the NodeService's PingNodeMesh
 	// RPC.
 	NodeServicePingNodeMeshProcedure = "/nagi.v1.NodeService/PingNodeMesh"
+	// NodeServiceTestNodeMeshSpeedProcedure is the fully-qualified name of the NodeService's
+	// TestNodeMeshSpeed RPC.
+	NodeServiceTestNodeMeshSpeedProcedure = "/nagi.v1.NodeService/TestNodeMeshSpeed"
+	// NodeServiceSetNodeMeshOptionsProcedure is the fully-qualified name of the NodeService's
+	// SetNodeMeshOptions RPC.
+	NodeServiceSetNodeMeshOptionsProcedure = "/nagi.v1.NodeService/SetNodeMeshOptions"
 	// NodeServiceGetPanelMeshProcedure is the fully-qualified name of the NodeService's GetPanelMesh
 	// RPC.
 	NodeServiceGetPanelMeshProcedure = "/nagi.v1.NodeService/GetPanelMesh"
@@ -813,6 +819,10 @@ type NodeServiceClient interface {
 	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 让节点经 mesh 和某个成员测速（见 docs/mesh.md#测速）。只有管理员能用。
+	TestNodeMeshSpeed(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
+	// 修改节点的组网设置（关闭 QUIC 快速通道）。
+	SetNodeMeshOptions(context.Context, *connect.Request[v1.SetNodeMeshOptionsRequest]) (*connect.Response[v1.MeshOptions], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
@@ -945,6 +955,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("PingNodeMesh")),
 			connect.WithClientOptions(opts...),
 		),
+		testNodeMeshSpeed: connect.NewClient[v1.PingNodeMeshRequest, v1.MeshSpeedResponse](
+			httpClient,
+			baseURL+NodeServiceTestNodeMeshSpeedProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("TestNodeMeshSpeed")),
+			connect.WithClientOptions(opts...),
+		),
+		setNodeMeshOptions: connect.NewClient[v1.SetNodeMeshOptionsRequest, v1.MeshOptions](
+			httpClient,
+			baseURL+NodeServiceSetNodeMeshOptionsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeMeshOptions")),
+			connect.WithClientOptions(opts...),
+		),
 		getPanelMesh: connect.NewClient[v1.GetPanelMeshRequest, v1.MeshStatus](
 			httpClient,
 			baseURL+NodeServiceGetPanelMeshProcedure,
@@ -1055,6 +1077,8 @@ type nodeServiceClient struct {
 	deleteNodeReplica     *connect.Client[v1.DeleteNodeReplicaRequest, v1.DeleteNodeReplicaResponse]
 	getNodeMesh           *connect.Client[v1.GetNodeMeshRequest, v1.MeshStatus]
 	pingNodeMesh          *connect.Client[v1.PingNodeMeshRequest, v1.MeshPingResponse]
+	testNodeMeshSpeed     *connect.Client[v1.PingNodeMeshRequest, v1.MeshSpeedResponse]
+	setNodeMeshOptions    *connect.Client[v1.SetNodeMeshOptionsRequest, v1.MeshOptions]
 	getPanelMesh          *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
 	upgradeNode           *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
 	upgradeAllNodes       *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
@@ -1145,6 +1169,16 @@ func (c *nodeServiceClient) GetNodeMesh(ctx context.Context, req *connect.Reques
 // PingNodeMesh calls nagi.v1.NodeService.PingNodeMesh.
 func (c *nodeServiceClient) PingNodeMesh(ctx context.Context, req *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error) {
 	return c.pingNodeMesh.CallUnary(ctx, req)
+}
+
+// TestNodeMeshSpeed calls nagi.v1.NodeService.TestNodeMeshSpeed.
+func (c *nodeServiceClient) TestNodeMeshSpeed(ctx context.Context, req *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshSpeedResponse], error) {
+	return c.testNodeMeshSpeed.CallUnary(ctx, req)
+}
+
+// SetNodeMeshOptions calls nagi.v1.NodeService.SetNodeMeshOptions.
+func (c *nodeServiceClient) SetNodeMeshOptions(ctx context.Context, req *connect.Request[v1.SetNodeMeshOptionsRequest]) (*connect.Response[v1.MeshOptions], error) {
+	return c.setNodeMeshOptions.CallUnary(ctx, req)
 }
 
 // GetPanelMesh calls nagi.v1.NodeService.GetPanelMesh.
@@ -1247,6 +1281,10 @@ type NodeServiceHandler interface {
 	GetNodeMesh(context.Context, *connect.Request[v1.GetNodeMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 让节点经 mesh 连一下某个成员。
 	PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error)
+	// 让节点经 mesh 和某个成员测速（见 docs/mesh.md#测速）。只有管理员能用。
+	TestNodeMeshSpeed(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
+	// 修改节点的组网设置（关闭 QUIC 快速通道）。
+	SetNodeMeshOptions(context.Context, *connect.Request[v1.SetNodeMeshOptionsRequest]) (*connect.Response[v1.MeshOptions], error)
 	// 面板自己的 mesh 状态。
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
@@ -1375,6 +1413,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("PingNodeMesh")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceTestNodeMeshSpeedHandler := connect.NewUnaryHandler(
+		NodeServiceTestNodeMeshSpeedProcedure,
+		svc.TestNodeMeshSpeed,
+		connect.WithSchema(nodeServiceMethods.ByName("TestNodeMeshSpeed")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceSetNodeMeshOptionsHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeMeshOptionsProcedure,
+		svc.SetNodeMeshOptions,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeMeshOptions")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetPanelMeshHandler := connect.NewUnaryHandler(
 		NodeServiceGetPanelMeshProcedure,
 		svc.GetPanelMesh,
@@ -1497,6 +1547,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceGetNodeMeshHandler.ServeHTTP(w, r)
 		case NodeServicePingNodeMeshProcedure:
 			nodeServicePingNodeMeshHandler.ServeHTTP(w, r)
+		case NodeServiceTestNodeMeshSpeedProcedure:
+			nodeServiceTestNodeMeshSpeedHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeMeshOptionsProcedure:
+			nodeServiceSetNodeMeshOptionsHandler.ServeHTTP(w, r)
 		case NodeServiceGetPanelMeshProcedure:
 			nodeServiceGetPanelMeshHandler.ServeHTTP(w, r)
 		case NodeServiceUpgradeNodeProcedure:
@@ -1594,6 +1648,14 @@ func (UnimplementedNodeServiceHandler) GetNodeMesh(context.Context, *connect.Req
 
 func (UnimplementedNodeServiceHandler) PingNodeMesh(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshPingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.PingNodeMesh is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) TestNodeMeshSpeed(context.Context, *connect.Request[v1.PingNodeMeshRequest]) (*connect.Response[v1.MeshSpeedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.TestNodeMeshSpeed is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeMeshOptions(context.Context, *connect.Request[v1.SetNodeMeshOptionsRequest]) (*connect.Response[v1.MeshOptions], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeMeshOptions is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error) {
