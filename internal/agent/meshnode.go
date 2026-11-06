@@ -485,13 +485,24 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 
 // meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。
 // 成员包括面板。历史和其他监控一样存在节点上，刷新页面、面板重启都不丢。
+// 面板自带的节点另外记面板替节点中转的速率 m:relay:rx、:tx。
 func (a *agent) meshMetrics() metrics.Source {
 	prev := map[mesh.Key]meshCounter{}
+	var relay *meshCounter
 	return func(elapsed float64) map[string]float64 {
 		if a.mesh == nil {
 			return nil
 		}
-		return meshRates(prev, a.mesh.m.Status(), elapsed)
+		out := meshRates(prev, a.mesh.m.Status(), elapsed)
+		if f := a.cfg.PanelRelay; f != nil {
+			rx, tx := f()
+			if relay != nil && rx >= relay.rx && tx >= relay.tx {
+				out["m:relay:rx"] = float64(rx-relay.rx) / elapsed
+				out["m:relay:tx"] = float64(tx-relay.tx) / elapsed
+			}
+			relay = &meshCounter{rx, tx}
+		}
+		return out
 	}
 }
 

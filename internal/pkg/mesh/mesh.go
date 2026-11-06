@@ -406,8 +406,8 @@ func (m *Mesh) Status() []Status {
 	}
 	for _, s := range stats {
 		s.QUIC = m.quic != nil && m.quic.has(s.Key)
-		s.RxBytes += s.quicBytes[0]
-		s.TxBytes += s.quicBytes[1]
+		s.RxBytes = addBytes(s.RxBytes+s.quicBytes[0], s.fecBytes[0])
+		s.TxBytes = addBytes(s.TxBytes+s.quicBytes[1], s.fecBytes[1])
 		if m.quic != nil && s.Path == "direct" {
 			if ppm, at := m.quic.txLoss(s.Key); time.Since(at) < lossFresh && at.After(s.txLossAt) {
 				s.TxLoss = int64(ppm)
@@ -417,3 +417,14 @@ func (m *Mesh) Status() []Status {
 	}
 	return out
 }
+
+// addBytes 把 FEC 多出（可能为负，见 fecDecoder.overhead）的字节数加到计数上，不小于 0。
+func addBytes(n uint64, d int64) uint64 {
+	if d < 0 && uint64(-d) > n {
+		return 0
+	}
+	return uint64(int64(n) + d)
+}
+
+// RelayBytes 返回替别人中转（面板）收到、转出的累计字节数，不含包头。
+func (m *Mesh) RelayBytes() (rx, tx uint64) { return m.bind.relayRx.Load(), m.bind.relayTx.Load() }

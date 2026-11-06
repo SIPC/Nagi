@@ -65,17 +65,26 @@ const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2,
 const panelRow = "__panel";
 
 // MeshKeys：成员公钥 → 节点 ID。panel 是面板自己的 mesh 公钥，对应到面板自带的节点（同一台机器），没有自带节点时对应到 panelRow。
-type MeshKeys = { peers: Map<string, string>; panel?: string };
+// relayed 是经面板中转的 "节点|节点"（两个方向都有）。
+type MeshKeys = { peers: Map<string, string>; panel?: string; relayed?: Set<string> };
 
 // addRate：把节点 node 上的一条 m: 序列的值记进 rates。
 // 节点之间只取发送方的数。面板自己不存指标，面板发出的（例如经面板下载节点上的文件）用节点这一端的接收量算；
 // 面板在自带节点那台机器上时，这部分也计入那台机器的收发，从它的对外流量里扣掉。
+// m:relay 是面板替节点中转的量（只有自带节点记）：经过这台机器的网卡，不是对外流量；节点之间的那条已经由发送方记了。
 function addRate(rates: MeshRates, node: string, name: string, value: number, keys: MeshKeys) {
+  const relay = /^m:relay:(rx|tx)$/.exec(name);
+  if (relay) {
+    inc(rates[relay[1] as "rx" | "tx"], node, value);
+    return;
+  }
   const m = /^m:([0-9a-f]+):(rx|tx)$/.exec(name);
   if (!m) return;
   const dir = m[2] as "rx" | "tx";
-  inc(rates[dir], node, value);
   const peer = keys.peers.get(m[1]);
+  // 自带节点和面板之间走本机回环，不经过网卡：既不算节点之间，也不从对外流量里扣。
+  if (m[1] === keys.panel && peer === node) return;
+  inc(rates[dir], node, value);
   if (!peer || peer === node) return;
   if (m[1] === keys.panel) {
     inc(rates.pairs, dir === "tx" ? `${node}|${peer}` : `${peer}|${node}`, value);
@@ -92,7 +101,8 @@ const other = "__other";
 // 节点超过这个数时只留流量最大的几个，其余合并成「其他」。
 const sankeyMaxNodes = 8;
 
-type Flow = { from: string; to: string; rate: number; kind: "ext" | "mesh" };
+// relay：经面板中转的节点之间的流量，画成虚线。
+type Flow = { from: string; to: string; rate: number; kind: "ext" | "mesh"; relay?: boolean };
 type FlowView = "all" | "ext" | "mesh";
 
 function useWidth() {
@@ -339,8 +349,8 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
             const op = now[`${key}:op`] ?? 0;
             return (
               <g key={key} className="group" opacity={op} pointerEvents={op < 0.5 ? "none" : undefined}>
-                <title>{`${nameOf(f.from)} → ${nameOf(f.to)} ${fmtRate(f.rate)}`}</title>
-                <path d={d} fill="none" strokeWidth={w} className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")} />
+                <title>{`${nameOf(f.from)} → ${nameOf(f.to)} ${fmtRate(f.rate)}${f.relay ? ` · ${o.flow.relayed}` : ""}`}</title>
+                <path d={d} fill="none" strokeWidth={w} strokeDasharray={f.relay ? `${Math.max(w, 4)} 4` : undefined} className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")} />
                 {/* 细线不好对准：叠一条看不见的宽线接鼠标，比线宽两边各多 8，至少 20。 */}
                 <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(w + 16, 20)} pointerEvents="stroke" />
               </g>
@@ -558,10 +568,17 @@ export function OverviewPage() {
         nodeClient.getPanelMesh({}).catch(() => null),
       ]);
       const peers = new Map(statuses.flatMap((s, i) => (s ? [[toHex(s.publicKey), online[i].id] as const] : [])));
-      if (!panel) return { peers };
+      const relayed = new Set<string>();
+      statuses.forEach((s, i) => {
+        for (const p of s?.peers ?? []) {
+          const to = peers.get(toHex(p.publicKey));
+          if (to && (p.path === "udp-relay" || p.path === "tls-relay")) relayed.add(`${online[i].id}|${to}`).add(`${to}|${online[i].id}`);
+        }
+      });
+      if (!panel) return { peers, relayed };
       const key = toHex(panel.publicKey);
       peers.set(key, online.find((n) => n.ownEmbedded)?.id ?? panelRow);
-      return { peers, panel: key };
+      return { peers, panel: key, relayed };
     },
     enabled: online.length > 0,
     refetchInterval: 60_000,
@@ -644,7 +661,7 @@ export function OverviewPage() {
     }
     for (const [key, rate] of sample.pairs) {
       const [from, to] = key.split("|");
-      if (rate >= 1) flows.push({ from, to, rate, kind: "mesh" });
+      if (rate >= 1) flows.push({ from, to, rate, kind: "mesh", relay: keys?.relayed?.has(key) });
     }
   }
   const panelAlone = keys?.panel !== undefined && keys.peers.get(keys.panel) === panelRow;

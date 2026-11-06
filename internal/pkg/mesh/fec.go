@@ -95,6 +95,8 @@ type fecEncoder struct {
 	started time.Time
 	lower   int       // 连续几次报告的丢包率要求更少的校验包
 	pause   time.Time // 这之前不加校验包（对方说校验包没用）
+	// overhead：FEC 多发的字节数（包头和校验包）。WireGuard 只算它交来的包，这部分要另外算进流量。
+	overhead uint64
 }
 
 // fecPause：对方说校验包救不回丢的包时，这么久内不加。线路拥堵时成串地丢包，校验包救不回来，
@@ -160,6 +162,7 @@ func (e *fecEncoder) frame(pkt []byte, now time.Time, later func()) (data []byte
 		data[6] |= fecProtect
 	}
 	copy(data[fecDataHeader:], pkt)
+	e.overhead += fecDataHeader
 	if e.m > 0 {
 		e.pkts = append(e.pkts, data[fecDataHeader:])
 	}
@@ -219,8 +222,16 @@ func (e *fecEncoder) finish() [][]byte {
 		b[7] = byte(m)
 		copy(b[fecParityHeader:], shards[k+i])
 		out[i] = b
+		e.overhead += uint64(len(b))
 	}
 	return out
+}
+
+// overheadBytes 返回 FEC 到现在多发的字节数。
+func (e *fecEncoder) overheadBytes() uint64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.overhead
 }
 
 // ---- 接收 ----
@@ -262,6 +273,9 @@ type fecDecoder struct {
 	// 丢了的包里，有多少是一组里丢了 fecBurst 个以上的：成串地丢多半是线路拥堵，校验包救不回来。
 	lost, burstLost uint64
 	recovered       uint64
+	// overhead：收到的 FEC 包的字节数减去交给 WireGuard 的字节数：包头、校验包、来晚了的重复包，减去恢复出来的包
+	// （WireGuard 算了，线上没有）。加进流量里才和网卡上的一致。
+	overhead int64
 }
 
 func newFECDecoder() *fecDecoder {
@@ -273,12 +287,14 @@ func newFECDecoder() *fecDecoder {
 func (d *fecDecoder) push(pkt []byte, now time.Time) (out [][]byte, waiting bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.overhead += int64(len(pkt))
 	switch pkt[0] {
 	case fecData:
 		s, payload, protected := d.data(pkt)
 		if payload == nil {
 			return nil, len(d.held) > 0
 		}
+		d.overhead -= int64(len(payload))
 		if !protected {
 			return [][]byte{payload}, len(d.held) > 0
 		}
@@ -286,6 +302,7 @@ func (d *fecDecoder) push(pkt []byte, now time.Time) (out [][]byte, waiting bool
 	case fecParity:
 		gid, rec := d.parity(pkt)
 		for idx, p := range rec {
+			d.overhead -= int64(len(p))
 			out = d.order(seq{gid, idx}, p, out)
 		}
 	}
@@ -529,6 +546,13 @@ func (d *fecDecoder) reconstruct(g *fecGroupState) map[int][]byte {
 		d.recovered++
 	}
 	return out
+}
+
+// overheadBytes 返回收到的 FEC 包比交给 WireGuard 的多出的字节数，见 fecDecoder.overhead。
+func (d *fecDecoder) overheadBytes() int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.overhead
 }
 
 func (d *fecDecoder) recoveredCount() uint64 {

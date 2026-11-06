@@ -51,8 +51,11 @@ type Config struct {
 	MeshPort uint16
 	// Embedded 表示这是面板自带的节点：随面板一起升级，不能单独升级。
 	Embedded bool
-	Version  string
-	Logger   *slog.Logger
+	// PanelRelay 只给面板自带的节点：面板替节点中转的累计字节数（收、发），记成 m:relay:rx、:tx。
+	// 这些流量经过本机网卡，但不是本机和谁之间的，不记就会算成对外流量。
+	PanelRelay func() (rx, tx uint64)
+	Version    string
+	Logger     *slog.Logger
 }
 
 // Enrolled 判断节点是否已经信任某个面板，用于决定是否需要生成加入令牌。

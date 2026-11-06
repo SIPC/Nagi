@@ -60,7 +60,9 @@ const (
 
 // Server 是面板。New 之后端口已经监听，可以先取 Addr、Fingerprint 再调用 Run。
 type Server struct {
-	cfg  Config
+	cfg Config
+	// mesh 是面板的 mesh，启动失败时为 nil。
+	mesh *mesh.Mesh
 	log  *slog.Logger
 	db   *sql.DB
 	q    *store.Queries
@@ -224,9 +226,18 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	} else {
+		s.mesh = m
 		s.nodes.SetMesh(m, "面板 "+s.publicAddress)
 	}
 	return s, nil
+}
+
+// RelayBytes 返回面板替节点中转的累计字节数（收、发），面板自带的节点把它记进监控（见 docs/monitoring.md）。
+func (s *Server) RelayBytes() (rx, tx uint64) {
+	if s.mesh == nil {
+		return 0, 0
+	}
+	return s.mesh.RelayBytes()
 }
 
 // startMesh 启动面板的 mesh：UDP 用和面板端口相同的号码，同时替节点中转。

@@ -56,6 +56,40 @@ func TestFECRecover(t *testing.T) {
 	}
 }
 
+// TestFECOverhead：两端记下的 FEC 多出的字节数加上交给 WireGuard 的字节数，等于线上实际收发的字节数。
+func TestFECOverhead(t *testing.T) {
+	enc := &fecEncoder{parity: 2}
+	pkts, frames := group(enc, fecGroup)
+	sent, plain := 0, 0
+	for _, f := range frames {
+		sent += len(f)
+	}
+	for _, p := range pkts {
+		plain += len(p)
+	}
+	if got := enc.overheadBytes(); got != uint64(sent-plain) {
+		t.Fatalf("发送方多出的字节数应该是 %d，实际 %d", sent-plain, got)
+	}
+	dec := newFECDecoder()
+	wire, delivered := 0, 0
+	for i, f := range frames {
+		if i == 3 { // 丢一个数据包，由校验包恢复：WireGuard 收到了，线上没有
+			continue
+		}
+		wire += len(f)
+		out, _ := dec.push(f, time.Now())
+		for _, x := range out {
+			delivered += len(x)
+		}
+	}
+	if delivered != plain {
+		t.Fatalf("应该交出 %d 字节，实际 %d", plain, delivered)
+	}
+	if got := dec.overheadBytes(); got != int64(wire-delivered) {
+		t.Fatalf("接收方多出的字节数应该是 %d，实际 %d", wire-delivered, got)
+	}
+}
+
 // TestFECRelease：丢得太多、算不回来时，扣着的包等 fecHold 后按顺序放行。
 func TestFECRelease(t *testing.T) {
 	pkts, frames := group(&fecEncoder{parity: 1}, fecGroup)

@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
@@ -98,8 +99,10 @@ type delivery struct {
 type Bind struct {
 	priv, pub Key
 	relay     bool // 是否替别人中转（面板）
-	caps      byte // 自己启用的能力
-	log       *slog.Logger
+	// relayRx、relayTx：替别人中转收到、转出的字节数（面板），不属于任何一个对端，Status 里没有。
+	relayRx, relayTx atomic.Uint64
+	caps             byte // 自己启用的能力
+	log              *slog.Logger
 
 	mu        sync.Mutex
 	conn      *net.UDPConn
@@ -397,6 +400,7 @@ func (b *Bind) flushPending() {
 
 // forward 替 src 把包转给 dst（面板）。
 func (b *Bind) forward(src, dst Key, payload []byte) {
+	b.relayRx.Add(uint64(len(payload)))
 	now := time.Now()
 	b.mu.Lock()
 	p := b.peers[dst]
@@ -414,7 +418,10 @@ func (b *Bind) forward(src, dst Key, payload []byte) {
 		b.write(c, encodeRelay(typeRelayDeliver, src, payload), addr)
 	case link != nil:
 		_ = (*link)(src, dst, payload)
+	default:
+		return
 	}
+	b.relayTx.Add(uint64(len(payload)))
 }
 
 // deliver 把经中转收到的包交给 WireGuard。
@@ -768,6 +775,8 @@ type PeerStatus struct {
 	QUIC bool
 	// quicBytes：收、发的 QUIC 字节数，Status 把它加进 RxBytes、TxBytes。
 	quicBytes [2]uint64
+	// fecBytes：FEC 在收、发两个方向上比 WireGuard 统计的多出的字节数，Status 同样加进去。
+	fecBytes [2]int64
 }
 
 func (b *Bind) status() []PeerStatus {
@@ -777,7 +786,8 @@ func (b *Bind) status() []PeerStatus {
 	var out []PeerStatus
 	for _, p := range b.peers {
 		s := PeerStatus{Key: p.key, Path: "none", FEC: -1, LossPPM: p.lossPPM, Recovered: p.dec.recoveredCount(), quicBytes: [2]uint64{p.quicRx, p.quicTx},
-			TxLoss: -1, RxLoss: -1}
+			fecBytes: [2]int64{p.dec.overheadBytes(), int64(p.enc.overheadBytes())},
+			TxLoss:   -1, RxLoss: -1}
 		if p.directAlive(now) {
 			if now.Sub(p.lossAt) < lossFresh {
 				s.TxLoss, s.txLossAt = int64(p.lossPPM), p.lossAt
