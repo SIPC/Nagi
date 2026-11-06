@@ -38,4 +38,12 @@ export default {
     done: "Done",
     notice: "The data directory must be empty. The pairing code is valid for 1 hour and can be used once. Once started, the standby panel connects to this panel, starts syncing and appears in the list.",
   },
+  down: {
+    title: "This panel is unavailable",
+    withStandby: "The panel's machine may be offline. You can continue on a standby panel.",
+    noStandby: "The panel's machine may be offline. This notice disappears when it comes back.",
+    open: "Open",
+    note: "Standby panels are read-only. If the primary panel can't be recovered, promote a standby panel to make changes. Sign in to each panel separately; if a security entry is enabled, add its path to the address.",
+    retry: "Retry",
+  },
 } satisfies typeof zh;

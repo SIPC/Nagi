@@ -8,6 +8,12 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## 未发布
+
+### 新功能
+
+- 主面板无法访问时，页面提示转到备用面板，并列出备用面板的地址，可复制或打开。绑定域名后，主面板所在机器离线时新打开或刷新页面也会显示此提示。
+
 ## v0.20.0
 
 ### 新功能

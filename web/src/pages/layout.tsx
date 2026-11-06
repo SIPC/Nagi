@@ -16,6 +16,8 @@ import { settingsTabs } from "@/pages/settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { useRole } from "@/components/role";
 import { MobileProjectNav } from "@/pages/project";
+import { PanelDown } from "@/components/panel-down";
+import { forgetStandbys, registerOfflinePage, rememberStandbys } from "@/lib/offline";
 
 function readTheme(): ThemeMode {
   try {
@@ -187,8 +189,16 @@ export function AppLayout() {
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
   const navBox = useActiveBox();
 
+  // 面板所在机器挂了时提示转到备用面板（见 docs/standby.md#面板不可用时）：记下备用面板的地址，注册离线页。
+  useEffect(registerOfflinePage, []);
+  const standbyAddresses = standby && !standby.isStandby ? JSON.stringify(standby.standbys.map((s) => ({ name: s.name, address: s.address }))) : undefined;
+  useEffect(() => {
+    if (standbyAddresses !== undefined) rememberStandbys(JSON.parse(standbyAddresses));
+  }, [standbyAddresses]);
+
   const logout = async () => {
     await authClient.logout({});
+    forgetStandbys();
     queryClient.clear();
     navigate({ to: "/login" });
   };
@@ -297,6 +307,7 @@ export function AppLayout() {
           </ReadOnlyContext.Provider>
         </main>
       </div>
+      <PanelDown />
     </div>
   );
 }

@@ -34,7 +34,7 @@ export function useIsMobile() {
 
 // ---- 按钮与输入 ----
 
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md border border-transparent text-sm whitespace-nowrap transition-colors outline-none not-disabled:active:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
