@@ -8,7 +8,7 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## 未发布
+## v0.21.0
 
 ### 新功能
 
@@ -25,6 +25,10 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 - 开启两步验证前，以及在授权页允许 OAuth 访问前，需先验证身份。
 - 操作员保存的 compose 中，`network_mode`、`pid`、`ipc` 等只能指向同一 compose 中的服务；为 volume 或网络指定 `name` 仅限管理员。
+
+### 升级说明
+
+- 副本恢复的修复需将节点升级到 v0.21.0。
 
 ## v0.20.0
 
