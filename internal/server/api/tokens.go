@@ -146,6 +146,10 @@ func (s *authService) ApproveOAuth(ctx context.Context, req *connect.Request[nag
 	if m.GetDays() > 3650 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("有效期不能超过 10 年"))
 	}
+	// 授权签发的和个人令牌一样是长期有效的凭据，同样要先做高权限确认（见 docs/mcp.md#个人访问令牌）。拒绝不用。
+	if m.GetAllow() && !auth.CurrentUser(ctx).Elevated() {
+		return nil, elevationError()
+	}
 	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), s.Auth.IssuerOf(ctx), m.GetAllow(), m.GetDays(), m.GetAllowWrite(), m.GetAllowExec(), m.GetAllowNodeExec())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)

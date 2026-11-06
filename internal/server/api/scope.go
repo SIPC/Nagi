@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -132,6 +134,40 @@ func (a *API) checkRequest(ctx context.Context, x *access, procedure string, msg
 		}
 	case *nagiv1.PingNodeMeshRequest:
 		if owner := a.meshNodes(ctx)[hex.EncodeToString(m.GetPublicKey())]; owner != "" && !x.node(owner) {
+			return nodeNotFound()
+		}
+	// 映射的入口节点在 route 里面，上面只看最外层，这里单独核对。
+	case *nagiv1.SaveRouteRequest:
+		return a.checkEntryNodes(ctx, x, m.GetProjectId(), m.GetRoute())
+	case *nagiv1.CheckDomainsRequest:
+		for _, r := range m.GetRoutes() {
+			if err := a.checkEntryNodes(ctx, x, m.GetProjectId(), r); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// checkEntryNodes 核对映射的入口节点。这个映射原来就有的入口节点（管理员设的）可以留着，改别的设置不受影响。
+func (a *API) checkEntryNodes(ctx context.Context, x *access, projectID string, r *nagiv1.Exposure) error {
+	var kept []string
+	for _, id := range r.GetEntryNodes() {
+		if x.node(id) {
+			continue
+		}
+		if kept == nil && r.GetName() != "" {
+			routes, err := a.Q.ListRoutes(ctx, projectID)
+			if err != nil {
+				return err
+			}
+			for _, old := range routes {
+				if old.Name == r.GetName() {
+					kept = projects.RouteProto(old).GetEntryNodes()
+				}
+			}
+		}
+		if !slices.Contains(kept, id) {
 			return nodeNotFound()
 		}
 	}

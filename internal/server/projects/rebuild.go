@@ -216,16 +216,23 @@ func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool)
 			s.Log.Info("已从节点缓存拼回容器", "project", id, "container", sp.GetName(), "node", conn.NodeID)
 		}
 	}
-	// 项目连接：节点代理计划里为另一个项目的容器放的代理。
-	for _, px := range cache.GetLinks().GetProxies() {
+	if s.restoreLinks(ctx, conn.NodeID, cache.GetLinks().GetProxies()) {
+		changed = true
+	}
+	if changed {
+		s.refreshLinks()
+	}
+}
+
+// restoreLinks 按节点代理计划里为另一个项目的容器放的代理把项目连接连回去，返回是否连了新的。
+// 只认两边都是刚从节点缓存拼回的项目（rebuildWindow 内），而且代理所属的项目在面板记录里就在这个节点上
+// （节点的代理计划只给它上面的项目放代理）。否则一个节点只要知道两个项目的 ID，
+// 就能让面板把它们连起来，打破项目之间的隔离（见 docs/mesh.md#一个节点被攻破时）。
+func (s *Service) restoreLinks(ctx context.Context, nodeID string, proxies []*nagiv1.LinkProxy) bool {
+	changed := false
+	for _, px := range proxies {
 		a, b := px.GetProjectId(), px.GetTargetProject()
-		if a == b {
-			continue
-		}
-		if _, err := s.project(ctx, a); err != nil {
-			continue
-		}
-		if _, err := s.project(ctx, b); err != nil {
+		if a == b || !s.recentlyRebuilt(ctx, a) || !s.recentlyRebuilt(ctx, b) || !s.onNode(ctx, a, nodeID) {
 			continue
 		}
 		linked, err := s.linkedMap(ctx)
@@ -237,9 +244,27 @@ func (s *Service) rebuildFrom(ctx context.Context, conn *nodes.Conn, force bool)
 			changed = true
 		}
 	}
-	if changed {
-		s.refreshLinks()
+	return changed
+}
+
+// recentlyRebuilt 判断项目是不是 rebuildWindow 内从节点缓存拼回的。
+func (s *Service) recentlyRebuilt(ctx context.Context, id string) bool {
+	p, err := s.project(ctx, id)
+	return err == nil && p.RebuiltAt > 0 && time.Since(time.Unix(p.RebuiltAt, 0)) <= rebuildWindow
+}
+
+// onNode 判断面板记录里项目有没有容器在这个节点上（包括顶替的另一方）。
+func (s *Service) onNode(ctx context.Context, projectID, nodeID string) bool {
+	rows, err := s.Q.ListContainers(ctx, projectID)
+	if err != nil {
+		return false
 	}
+	for _, c := range rows {
+		if slices.Contains(failoverNodes(c), nodeID) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsString(list []string, x string) bool {

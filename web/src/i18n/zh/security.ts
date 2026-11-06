@@ -29,6 +29,7 @@ export default {
     description: "登录时额外校验验证器应用生成的 6 位验证码。",
     help: "丢失验证器时，在面板所在机器上执行 nagi reset 2fa。",
     enable: "开启两步验证",
+    elevate: "开启两步验证前需验证身份，验证后 15 分钟内有效。",
     qrCode: "两步验证二维码",
     scanHint: "使用验证器应用（如 Google Authenticator、1Password）扫描二维码；无法扫码时可手动输入密钥。",
     code: "验证码",

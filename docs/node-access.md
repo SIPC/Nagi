@@ -21,7 +21,7 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 ## 权限
 
 - **只有管理员**：终端和文件接口都在服务端判断角色。操作员、只读账号的节点页看不到入口，接口也拒绝。
-- **高权限确认**：打开终端、浏览文件前要再验证一次身份：开了两步验证的账号输验证码，没开的输密码。验证通过后这个会话 15 分钟内不再询问（`sessions.elevated_until`，只记在服务端）。失败次数和登录共用限速。已经打开的终端不因为确认过期而断开。
+- **高权限确认**：打开终端、浏览文件前要再验证一次身份：开了两步验证的账号输验证码，没开的输密码。验证通过后这个会话 15 分钟内不再询问（`sessions.elevated_until`，只记在服务端）。失败次数和登录共用限速。已经打开的终端不因为确认过期而断开。同样要先确认的还有：导入现有目录、生成访问令牌、OAuth 授权页上点允许、开启两步验证（否则拿到会话的人能换上自己的密钥，再用它通过确认，账号主人也登不上了；已开启时确认用的是当前的验证码）。
 - **接口命名**：`auth.Allowed` 按方法名前缀放行查询，所以 `ListNodeDir`、`ListNodeFileBackups` 必须登记在 `adminReads` 里。读文件内容叫 `ReadNodeFile`，不用查询前缀：默认只有管理员能调用，也会记入活动记录。
 - **节点本地开关**：`nagi node access disable` 在节点上关闭这个功能（标记文件 `identity/node-access-disabled`），终端和文件都拒绝，立即生效。面板没有接口能重新打开，所以面板被攻破也开不了；要打开得登录节点执行 `nagi node access enable`。节点随上报告诉面板当前状态，界面按它显示说明。
 - **备用面板**：不能打开终端，也不能访问节点文件。
@@ -29,12 +29,13 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 
 ### 操作员不能借 compose 拿到节点 root
 
-只给管理员的前提是操作员没有别的路拿到 root。容器能以特权运行或者挂载主机目录时，就等于拿到了 root，所以这类配置只有管理员能保存（`spec.PrivilegeReasons`）：
+只给管理员的前提是操作员没有别的路拿到 root。容器能以特权运行或者挂载主机目录时，就等于拿到了 root，所以这类配置只有管理员能保存（`spec.PrivilegeReasons`）。能碰到别的项目的容器、卷和网络的写法也一样（限定了项目范围的操作员不能借此越过范围）：
 
 - `privileged`，`cap_add`、`devices`、`security_opt` 等扩大权限的字段
-- `network_mode`、`pid`、`ipc`、`uts`、`userns_mode`、`cgroup` 设为 `host`
+- `network_mode`、`pid`、`ipc`、`uts`、`userns_mode`、`cgroup` 设为 `none`、`bridge`、`default`、`private`、`shareable` 和指向同一个 compose 里的服务的 `service:<服务>` 以外的值：`host` 和节点共用，`container:<名字>` 和节点上任意一个容器（包括别的项目的）共用，`network_mode` 写网络名时直接接进那个网络
+- `volumes_from`
 - 挂载绝对路径、`~`、带 `..` 的路径（包括 `docker.sock`）；`env_file`、`secrets`、`configs` 读取容器目录以外的文件
-- `include`、`extends` 引用文件，`build`，指定了 driver 的 volume，`external` 的 volume 和网络
+- `include`、`extends` 引用文件，`build`，指定了 driver 的 volume，`external` 的 volume 和网络，指定了 `name` 的 volume 和网络（不加 compose 项目的前缀，节点上有同名的就直接用它）
 - 上面这些字段的值里有变量：变量的值操作员能改
 
 规则按"读不懂就当作有特权"判断。管理员保存过的配置，操作员可以部署和回滚，也可以改和这些字段无关的部分；但配置里的特权字段用了变量时，操作员不能改容器变量和项目共享变量。操作员也不能把容器目录放到节点的项目根目录以外。已有的配置不受影响。

@@ -47,6 +47,7 @@ export default {
     account: (name) => `As ${name}. Access never exceeds your role and access scope.`,
     allow: "Allow",
     deny: "Deny",
+    elevate: "Authorized access stays valid for a long time, so confirm your identity first. Valid for 15 minutes.",
     invalid: "Invalid authorization request",
     loading: "Checking the authorization request",
     redirecting: "Returning to the client",

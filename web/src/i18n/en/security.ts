@@ -30,6 +30,7 @@ export default {
     description: "Require a 6-digit code from an authenticator app when signing in.",
     help: "If you lose your authenticator, run nagi reset 2fa on the panel machine.",
     enable: "Enable 2FA",
+    elevate: "Confirm your identity before enabling two-factor authentication. Valid for 15 minutes.",
     qrCode: "Two-factor authentication QR code",
     scanHint: "Scan the QR code with an authenticator app (such as Google Authenticator or 1Password), or enter the secret manually.",
     code: "Verification code",

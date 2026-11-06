@@ -46,6 +46,7 @@ export default {
     account: (name: string) => `以 ${name} 的身份，权限不超过你的角色和访问范围。`,
     allow: "允许",
     deny: "拒绝",
+    elevate: "授权后的访问长期有效，允许前需验证身份，验证后 15 分钟内有效。",
     invalid: "授权请求无效",
     loading: "正在检查授权请求",
     redirecting: "正在返回客户端",

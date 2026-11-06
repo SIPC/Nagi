@@ -54,6 +54,9 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.ProjectServiceImportComposeDirProcedure: true,
 	// 访问令牌是长期有效的凭据（见 docs/mcp.md#个人访问令牌）。
 	nagiv1connect.SettingsServiceCreateAccessTokenProcedure: true,
+	// 开启两步验证：否则拿到会话的人能换上自己的密钥，再用它通过高权限确认，账号主人也登不上了。
+	// 已开启时确认要用当前的验证码，相当于换密钥前先验证旧的。EnableTOTP 只认这里发出的密钥，不用再拦。
+	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
 }
 
 func elevationError() error {

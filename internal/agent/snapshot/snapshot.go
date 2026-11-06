@@ -347,7 +347,8 @@ func (r *Repo) entry(ctx context.Context, id, name string) (fs.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	var child fs.Entry = root
+	// 经过 safeDir：快照里的文件名不可信（见 safename.go）。
+	child := safeEntry(root)
 	for _, part := range strings.Split(name, "/") {
 		dir, ok := child.(fs.Directory)
 		if !ok {

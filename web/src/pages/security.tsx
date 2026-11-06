@@ -4,6 +4,7 @@ import { renderSVG } from "uqr";
 import { toast } from "sonner";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { Alert, Button, CopyButton, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
@@ -166,7 +167,13 @@ export function SecurityCard() {
     setBusy("totp");
     setError("");
     try {
-      setSetup(await settingsClient.beginTOTP({}));
+      try {
+        setSetup(await settingsClient.beginTOTP({}));
+      } catch (err) {
+        // 开启前要先再验证一次身份。
+        if (!isElevationRequired(err) || !(await requireElevation(t.security.totp.elevate))) throw err;
+        setSetup(await settingsClient.beginTOTP({}));
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {

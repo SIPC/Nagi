@@ -263,7 +263,16 @@ export function OAuthAuthorizePage() {
   const [nodeExec, setNodeExec] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const approve = useMutation({
-    mutationFn: (allow: boolean) => authClient.approveOAuth({ request, allow, days, allowWrite: write, allowExec: exec, allowNodeExec: nodeExec }),
+    mutationFn: async (allow: boolean) => {
+      const req = { request, allow, days, allowWrite: write, allowExec: exec, allowNodeExec: nodeExec };
+      try {
+        return await authClient.approveOAuth(req);
+      } catch (err) {
+        // 允许授权前要先再验证一次身份。
+        if (!isElevationRequired(err) || !(await requireElevation(t.tokens.oauth.elevate))) throw err;
+        return authClient.approveOAuth(req);
+      }
+    },
     onSuccess: (res) => {
       setLeaving(true);
       window.location.assign(res.redirectUrl);

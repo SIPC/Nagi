@@ -44,7 +44,8 @@ func TestScopeCoversMethods(t *testing.T) {
 	}
 }
 
-func scopeTestAPI(t *testing.T) (*API, *store.Queries) {
+// extra 是额外的建表数据。
+func scopeTestAPI(t *testing.T, extra ...string) (*API, *store.Queries) {
 	t.Helper()
 	ctx := context.Background()
 	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
@@ -52,13 +53,13 @@ func scopeTestAPI(t *testing.T) (*API, *store.Queries) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	for _, q := range []string{
+	for _, q := range append([]string{
 		`INSERT INTO users (id, username, password_hash, created_at, role, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'operator', 0, 0)`,
 		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n1', 'a', 0, x'01'), ('n2', 'b', 0, x'02')`,
 		`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p1', 'one', 'one', 1, 0, x''), ('p2', 'two', 'two', 1, 0, x'')`,
 		`INSERT INTO user_projects (user_id, project_id) VALUES (2, 'p1')`,
 		`INSERT INTO user_nodes (user_id, node_id) VALUES (2, 'n1')`,
-	} {
+	}, extra...) {
 		if _, err := d.ExecContext(ctx, q); err != nil {
 			t.Fatal(err)
 		}
@@ -102,6 +103,44 @@ func TestScopeCheckRequest(t *testing.T) {
 		err := a.checkRequest(ctx, x, c.procedure, c.msg)
 		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
 			t.Errorf("%s %v：得到 %v，想要 %v", c.procedure, c.msg, err, c.want)
+		}
+	}
+}
+
+// 映射的入口节点藏在 route 里面，也要按范围核对；映射原来就有的入口节点（管理员设的）可以留着。
+func TestScopeEntryNodes(t *testing.T) {
+	a, _ := scopeTestAPI(t,
+		`INSERT INTO containers (project_id, name, position, node_id, dir, revision, created_at, webhook_hash, secrets, deploy_key_pub)
+		 VALUES ('p1', 'web', 1, 'n1', '/srv/web', 1, 0, 'h', x'', '')`,
+		`INSERT INTO routes (project_id, name, container, service, target, protocol, entry_nodes) VALUES ('p1', 'web-80', 'web', '', 80, 'tcp', '["n2"]')`,
+	)
+	ctx := context.Background()
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true})
+	if err != nil || x == nil {
+		t.Fatal(x, err)
+	}
+	route := func(name string, nodes ...string) *nagiv1.Exposure {
+		return &nagiv1.Exposure{Name: name, Container: "web", Target: 80, Protocol: "tcp", EntryNodes: nodes}
+	}
+	cases := []struct {
+		name string
+		msg  proto.Message
+		want connect.Code
+	}{
+		{"范围内", &nagiv1.SaveRouteRequest{ProjectId: "p1", Route: route("", "n1")}, 0},
+		{"新映射用范围外的节点", &nagiv1.SaveRouteRequest{ProjectId: "p1", Route: route("", "n2")}, connect.CodeNotFound},
+		{"别的映射用范围外的节点", &nagiv1.SaveRouteRequest{ProjectId: "p1", Route: route("other", "n2")}, connect.CodeNotFound},
+		{"原来就有的入口节点", &nagiv1.SaveRouteRequest{ProjectId: "p1", Route: route("web-80", "n2", "n1")}, 0},
+		{"检查域名", &nagiv1.CheckDomainsRequest{ProjectId: "p1", Routes: []*nagiv1.Exposure{route("", "n2")}}, connect.CodeNotFound},
+	}
+	for _, c := range cases {
+		procedure := "/nagi.v1.ProjectService/SaveRoute"
+		if _, ok := c.msg.(*nagiv1.CheckDomainsRequest); ok {
+			procedure = "/nagi.v1.ProjectService/CheckDomains"
+		}
+		err := a.checkRequest(ctx, x, procedure, c.msg)
+		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
+			t.Errorf("%s：得到 %v，想要 %v", c.name, err, c.want)
 		}
 	}
 }

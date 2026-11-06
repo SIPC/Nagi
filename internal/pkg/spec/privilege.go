@@ -20,8 +20,13 @@ var privilegedFields = []string{
 	"runtime", "volumes_from", "build", "extends",
 }
 
-// hostModeFields 是设为 host 时就和节点共用命名空间的服务字段。
+// hostModeFields 是能和别处共用命名空间的服务字段：设为 host 时和节点共用，设为 container:<名字> 时和节点上任意一个容器共用
+// （包括别的项目的容器，能进它的网络、看它的进程），network_mode 写网络名时直接接进那个网络。
+// 所以只放行 safeModes 和指向同一个 compose 里的服务的 service:<服务>，其他的都算有特权。
 var hostModeFields = []string{"network_mode", "pid", "ipc", "uts", "userns_mode", "cgroup"}
+
+// safeModes 是 hostModeFields 里不碰别处的值。
+var safeModes = []string{"none", "bridge", "default", "private", "shareable"}
 
 // PrivilegeReasons 返回配置里只有管理员能保存的内容，例如 "web: privileged"。没有时为空。
 // dynamic 表示其中有写法用了变量：变量的值能改变它的含义，所以有特权的配置里，不是管理员也不能改变量。
@@ -51,7 +56,7 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 			add(false, "%s", name)
 			continue
 		}
-		checkService(name, svc, add)
+		checkService(name, svc, services, add)
 	}
 	checkTopLevel(doc, add)
 	// 现有目录：compose 在节点上的任意目录里运行，相对路径都指向那里。
@@ -65,7 +70,7 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 	return slices.Compact(reasons), dynamic
 }
 
-func checkService(name string, svc map[string]any, add func(bool, string, ...any)) {
+func checkService(name string, svc map[string]any, services map[string]any, add func(bool, string, ...any)) {
 	for _, field := range privilegedFields {
 		v, ok := svc[field]
 		if !ok || v == nil || v == false {
@@ -79,9 +84,14 @@ func checkService(name string, svc map[string]any, add func(bool, string, ...any
 			continue
 		}
 		s, isStr := v.(string)
+		other, isService := strings.CutPrefix(s, "service:")
+		_, sameCompose := services[other]
 		switch {
-		case !isStr, s == "host", strings.Contains(s, "$"):
+		case !isStr, strings.Contains(s, "$"):
 			add(hasVar(v), "%s: %s", name, field)
+		case s == "", slices.Contains(safeModes, s), isService && sameCompose:
+		default:
+			add(false, "%s: %s", name, field)
 		}
 	}
 	for _, v := range listOf(svc["env_file"]) {
@@ -118,10 +128,11 @@ func checkTopLevel(doc map[string]any, add func(bool, string, ...any)) {
 			}
 		}
 	}
+	// 写了 name 的卷和网络不加 compose 项目的前缀，节点上已经有同名的（别的项目的卷、网络）就直接用它。
 	volumes, _ := doc["volumes"].(map[string]any)
 	for name, raw := range volumes {
 		e, _ := raw.(map[string]any)
-		for _, field := range []string{"driver", "driver_opts", "external"} {
+		for _, field := range []string{"driver", "driver_opts", "external", "name"} {
 			if v, has := e[field]; has && v != nil && v != false {
 				add(hasVar(v), "volumes: %s", name)
 			}
@@ -130,8 +141,10 @@ func checkTopLevel(doc map[string]any, add func(bool, string, ...any)) {
 	networks, _ := doc["networks"].(map[string]any)
 	for name, raw := range networks {
 		e, _ := raw.(map[string]any)
-		if v, has := e["external"]; has && v != nil && v != false {
-			add(hasVar(v), "networks: %s", name)
+		for _, field := range []string{"external", "name"} {
+			if v, has := e[field]; has && v != nil && v != false {
+				add(hasVar(v), "networks: %s", name)
+			}
 		}
 	}
 }
