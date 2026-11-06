@@ -31,10 +31,15 @@ func TestSpeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Upload <= 0 || r.Download <= 0 || !r.QUIC {
+	if r.Upload <= 0 || r.Download <= 0 || !r.QUIC || r.QUICOffHere || r.QUICOffPeer {
 		t.Fatalf("结果不对：%+v", r)
 	}
-	t.Logf("上传 %.1f MB/s，下载 %.1f MB/s", r.Upload/1e6, r.Download/1e6)
+	// 走 QUIC 时还经 WireGuard 测一次对比。
+	if wg := r.WireGuard; wg == nil || wg.QUIC || wg.Upload <= 0 || wg.Download <= 0 {
+		t.Fatalf("没有经 WireGuard 对比：%+v", r.WireGuard)
+	}
+	t.Logf("QUIC 上传 %.1f MB/s，下载 %.1f MB/s；WireGuard 上传 %.1f MB/s，下载 %.1f MB/s",
+		r.Upload/1e6, r.Download/1e6, r.WireGuard.Upload/1e6, r.WireGuard.Download/1e6)
 	// 经 QUIC 的流量也算进收发字节（概览的流量图靠它）。
 	for _, s := range a.m.Status() {
 		if s.Key == b.m.PublicKey() && (s.TxBytes < 1<<20 || s.RxBytes < 1<<20) {
@@ -63,8 +68,14 @@ func TestSpeedNoQUIC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.QUIC || r.Upload <= 0 || r.Download <= 0 {
+	if r.QUIC || r.Upload <= 0 || r.Download <= 0 || r.WireGuard != nil {
 		t.Fatalf("应该走 WireGuard：%+v", r)
+	}
+	if !r.QUICOffPeer || r.QUICOffHere {
+		t.Fatalf("应该说对方关了 QUIC：%+v", r)
+	}
+	if rb, err := SpeedTest(ctx, b.m, a.m.PublicKey(), 500*time.Millisecond); err == nil && !rb.QUICOffHere {
+		t.Fatalf("B 应该说自己关了 QUIC：%+v", rb)
 	}
 
 	b.m.SetQUIC(true)

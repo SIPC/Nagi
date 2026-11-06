@@ -453,7 +453,11 @@ func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRe
 	case err != nil:
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
-	return &nagiv1.MeshSpeedResponse{Upload: r.Upload, Download: r.Download, Quic: r.QUIC}, nil
+	out := &nagiv1.MeshSpeedResponse{Upload: r.Upload, Download: r.Download, Quic: r.QUIC, QuicOffHere: r.QUICOffHere, QuicOffPeer: r.QUICOffPeer}
+	if wg := r.WireGuard; wg != nil {
+		out.WireguardTested, out.WireguardUpload, out.WireguardDownload = true, wg.Upload, wg.Download
+	}
+	return out, nil
 }
 
 // meshSpeedDuration：测速时每个方向传这么久。

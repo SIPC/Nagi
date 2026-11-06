@@ -601,6 +601,13 @@ message MeshSpeedResponse {
   double download = 2;
   // 这次测速走的是 QUIC。
   bool quic = 3;
+  // 走 QUIC 时再经 WireGuard 测一次的结果，用来对比（见 docs/mesh.md#测速）。没测成时 wireguard_tested 为 false。
+  bool wireguard_tested = 4;
+  double wireguard_upload = 5;
+  double wireguard_download = 6;
+  // 直连时这一端、对方关闭了 QUIC 快速通道。
+  bool quic_off_here = 7;
+  bool quic_off_peer = 8;
 }
 
 // MeshOptions 是节点的组网设置，保存在节点上。

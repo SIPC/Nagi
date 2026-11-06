@@ -176,6 +176,28 @@ func (m *Mesh) SetQUIC(on bool) {
 	}()
 }
 
+// dialWireGuard 经 WireGuard 里的 TCP 连接，不走 QUIC（测速对比用）。
+func (m *Mesh) dialWireGuard(ctx context.Context, k Key, port uint16) (net.Conn, error) {
+	return m.tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(Address(k), port))
+}
+
+// quicOff 返回直连的 k 和这一端之间是不是有一端关了 QUIC：here 是这一端，peer 是对方。
+// 对方支持 FEC（和 QUIC 同一个版本加的）却没声明 QUIC，才算对方关了，否则可能只是旧版本。
+func (m *Mesh) quicOff(k Key) (here, peer bool) {
+	if m.quic == nil {
+		return false, false
+	}
+	now := time.Now()
+	b := m.bind
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p := b.peers[k]
+	if p == nil || !p.directAlive(now) {
+		return false, false
+	}
+	return b.caps&capQUIC == 0, p.has(capFEC, now) && !p.has(capQUIC, now)
+}
+
 // QUIC 返回 QUIC 快速通道是否打开。
 func (m *Mesh) QUIC() bool {
 	if m.quic == nil {

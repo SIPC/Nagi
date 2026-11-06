@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
-import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
+import type { MeshPeerStatus, MeshSpeedResponse, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
 import { Button, EmptyRow, List, QueryError, Roll, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
 import { useRole } from "@/components/role";
@@ -49,7 +49,21 @@ function pingFailure(err: unknown): Ping {
   return { text: t.mesh.pingFailed, failed: true, detail };
 }
 
-type Speed = { text: string; failed?: boolean; detail?: string; title?: string };
+// Speed：测速结果。tip 是有更快的走法时的提示（见 docs/mesh.md#测速），写在第二行。
+type Speed = { text: string; failed?: boolean; detail?: string; title?: string; tip?: string };
+
+// speedTip：另一种走法快 20% 以上、或者有一端关了 QUIC、或者经面板中转时，提示怎么改。
+function speedTip(p: MeshPeerStatus, r: MeshSpeedResponse) {
+  if (p.path === "udp-relay" || p.path === "tls-relay") return t.mesh.tipRelay;
+  if (r.quicOffHere) return t.mesh.tipQuicOffHere;
+  if (r.quicOffPeer) return t.mesh.tipQuicOffPeer;
+  if (r.quic && r.wireguardTested && r.wireguardUpload + r.wireguardDownload > 1.2 * (r.upload + r.download)) {
+    return t.mesh.tipWireGuard(rates(r.wireguardUpload, r.wireguardDownload));
+  }
+  return undefined;
+}
+
+const rates = (up: number, down: number) => `↑ ${fmtRate(up)} ↓ ${fmtRate(down)}`;
 
 const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 
@@ -94,6 +108,12 @@ function PeerSub({ peer: p, ping, speed }: { peer: MeshPeerStatus; ping?: Ping; 
           <span className="text-destructive">{d}</span>
         </span>
       ))}
+      {speed?.tip && (
+        <>
+          {" · "}
+          <span className="text-warning-text">{speed.tip}</span>
+        </>
+      )}
     </span>
   );
 }
@@ -113,7 +133,10 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
     setSpeed((x) => ({ ...x, [key]: { text: t.mesh.speedTesting } }));
     try {
       const r = await nodeClient.testNodeMeshSpeed({ nodeId, publicKey: p.publicKey });
-      setSpeed((x) => ({ ...x, [key]: { text: `↑ ${fmtRate(r.upload)} ↓ ${fmtRate(r.download)}`, title: t.mesh.speedResult(r.quic ? "QUIC" : "WireGuard") } }));
+      const title = [t.mesh.speedResult(r.quic ? t.mesh.viaQuic : t.mesh.viaWireGuard), r.wireguardTested && t.mesh.speedCompare(rates(r.wireguardUpload, r.wireguardDownload))]
+        .filter(Boolean)
+        .join(" · ");
+      setSpeed((x) => ({ ...x, [key]: { text: rates(r.upload, r.download), title, tip: speedTip(p, r) } }));
     } catch (err) {
       const f = pingFailure(err);
       setSpeed((x) => ({ ...x, [key]: { ...f } }));

@@ -40,7 +40,13 @@ type SpeedResult struct {
 	Upload, Download float64
 	// QUIC：这次测速走的是 QUIC。
 	QUIC bool
+	// WireGuard：当前走 QUIC 时，再经 WireGuard 测一次的结果，用来对比；没测成时为 nil。
+	WireGuard *SpeedResult
+	// QUICOffHere、QUICOffPeer：直连时这一端、对方关闭了 QUIC 快速通道（对方是旧版本时不算）。
+	QUICOffHere, QUICOffPeer bool
 }
+
+type dialer func(ctx context.Context, k Key, port uint16) (net.Conn, error)
 
 // serveSpeed 在 SpeedPort 上接受测速，同一时间只测一个，直到 ctx 取消。
 func serveSpeed(ctx context.Context, m *Mesh) error {
@@ -91,23 +97,38 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 	}
 }
 
-// SpeedTest 和 k 互传数据，先上传再下载，每个方向 d（最长 speedMax）。
+// SpeedTest 和 k 互传数据，先上传再下载，每个方向 d（最长 speedMax）。走的是平时的路（Dial）；
+// 走的是 QUIC 时再经 WireGuard 测一次对比，对比没测成不算失败。
 func SpeedTest(ctx context.Context, m *Mesh, k Key, d time.Duration) (SpeedResult, error) {
-	d = min(d, speedMax)
-	var r SpeedResult
-	up, viaQUIC, err := speedRound(ctx, m, k, 'u', d)
+	r, err := speedPair(ctx, m, k, d, m.Dial)
 	if err != nil {
 		return r, err
 	}
-	down, _, err := speedRound(ctx, m, k, 'd', d)
+	if r.QUIC {
+		if wg, err := speedPair(ctx, m, k, d, m.dialWireGuard); err == nil && !wg.QUIC {
+			r.WireGuard = &wg
+		}
+	}
+	r.QUICOffHere, r.QUICOffPeer = m.quicOff(k)
+	return r, nil
+}
+
+func speedPair(ctx context.Context, m *Mesh, k Key, d time.Duration, dial dialer) (SpeedResult, error) {
+	d = min(d, speedMax)
+	var r SpeedResult
+	up, viaQUIC, err := speedRound(ctx, dial, k, 'u', d)
+	if err != nil {
+		return r, err
+	}
+	down, _, err := speedRound(ctx, dial, k, 'd', d)
 	if err != nil {
 		return r, err
 	}
 	return SpeedResult{Upload: up, Download: down, QUIC: viaQUIC}, nil
 }
 
-func speedRound(ctx context.Context, m *Mesh, k Key, dir byte, d time.Duration) (float64, bool, error) {
-	c, err := m.Dial(ctx, k, SpeedPort)
+func speedRound(ctx context.Context, dial dialer, k Key, dir byte, d time.Duration) (float64, bool, error) {
+	c, err := dial(ctx, k, SpeedPort)
 	if err != nil {
 		if strings.Contains(err.Error(), "refused") {
 			return 0, false, ErrSpeedUnsupported

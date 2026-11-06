@@ -3857,7 +3857,14 @@ type MeshSpeedResponse struct {
 	// 对方发给这一端。
 	Download float64 `protobuf:"fixed64,2,opt,name=download,proto3" json:"download,omitempty"`
 	// 这次测速走的是 QUIC。
-	Quic          bool `protobuf:"varint,3,opt,name=quic,proto3" json:"quic,omitempty"`
+	Quic bool `protobuf:"varint,3,opt,name=quic,proto3" json:"quic,omitempty"`
+	// 走 QUIC 时再经 WireGuard 测一次的结果，用来对比（见 docs/mesh.md#测速）。没测成时 wireguard_tested 为 false。
+	WireguardTested   bool    `protobuf:"varint,4,opt,name=wireguard_tested,json=wireguardTested,proto3" json:"wireguard_tested,omitempty"`
+	WireguardUpload   float64 `protobuf:"fixed64,5,opt,name=wireguard_upload,json=wireguardUpload,proto3" json:"wireguard_upload,omitempty"`
+	WireguardDownload float64 `protobuf:"fixed64,6,opt,name=wireguard_download,json=wireguardDownload,proto3" json:"wireguard_download,omitempty"`
+	// 直连时这一端、对方关闭了 QUIC 快速通道。
+	QuicOffHere   bool `protobuf:"varint,7,opt,name=quic_off_here,json=quicOffHere,proto3" json:"quic_off_here,omitempty"`
+	QuicOffPeer   bool `protobuf:"varint,8,opt,name=quic_off_peer,json=quicOffPeer,proto3" json:"quic_off_peer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3909,6 +3916,41 @@ func (x *MeshSpeedResponse) GetDownload() float64 {
 func (x *MeshSpeedResponse) GetQuic() bool {
 	if x != nil {
 		return x.Quic
+	}
+	return false
+}
+
+func (x *MeshSpeedResponse) GetWireguardTested() bool {
+	if x != nil {
+		return x.WireguardTested
+	}
+	return false
+}
+
+func (x *MeshSpeedResponse) GetWireguardUpload() float64 {
+	if x != nil {
+		return x.WireguardUpload
+	}
+	return 0
+}
+
+func (x *MeshSpeedResponse) GetWireguardDownload() float64 {
+	if x != nil {
+		return x.WireguardDownload
+	}
+	return 0
+}
+
+func (x *MeshSpeedResponse) GetQuicOffHere() bool {
+	if x != nil {
+		return x.QuicOffHere
+	}
+	return false
+}
+
+func (x *MeshSpeedResponse) GetQuicOffPeer() bool {
+	if x != nil {
+		return x.QuicOffPeer
 	}
 	return false
 }
@@ -5353,11 +5395,16 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\")\n" +
 	"\x10MeshPingResponse\x12\x15\n" +
-	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs\"[\n" +
+	"\x06rtt_ms\x18\x01 \x01(\x01R\x05rttMs\"\xa8\x02\n" +
 	"\x11MeshSpeedResponse\x12\x16\n" +
 	"\x06upload\x18\x01 \x01(\x01R\x06upload\x12\x1a\n" +
 	"\bdownload\x18\x02 \x01(\x01R\bdownload\x12\x12\n" +
-	"\x04quic\x18\x03 \x01(\bR\x04quic\"(\n" +
+	"\x04quic\x18\x03 \x01(\bR\x04quic\x12)\n" +
+	"\x10wireguard_tested\x18\x04 \x01(\bR\x0fwireguardTested\x12)\n" +
+	"\x10wireguard_upload\x18\x05 \x01(\x01R\x0fwireguardUpload\x12-\n" +
+	"\x12wireguard_download\x18\x06 \x01(\x01R\x11wireguardDownload\x12\"\n" +
+	"\rquic_off_here\x18\a \x01(\bR\vquicOffHere\x12\"\n" +
+	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"(\n" +
 	"\vMeshOptions\x12\x19\n" +
 	"\bquic_off\x18\x01 \x01(\bR\aquicOff\"\xc7\x01\n" +
 	"\fBackupStatus\x12$\n" +
