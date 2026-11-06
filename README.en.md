@@ -13,9 +13,26 @@
 
 > Calm waters.
 
-Nagi is an open-source, self-hosted container deployment platform with multi-node support and high availability. It aims to be simple, good-looking and easy to deploy, and is ready for production out of the box.
+Nagi is an open-source, self-hosted container deployment platform: one web panel to manage Docker containers across many Linux servers. It is built on Docker and Docker Compose, supports multiple nodes and high availability, and aims to be simple, good-looking and easy to deploy. It is ready for production out of the box.
 
 The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
+
+## How it works
+
+- **Built on Docker Compose**: every app is a standard compose file plus environment variables and secrets. A single container created from the image form also gets a generated compose file. Deployments, versions and rollbacks all work per compose file, and Nagi never rewrites your compose files.
+- **One panel, many nodes**: the panel is the web console and holds project configuration. Nodes are the servers that run containers; they connect out to the panel, so no inbound ports are needed. The panel has a built-in node by default, so a single server is enough to start.
+- **Nodes form a network automatically**: nodes are connected by encrypted WireGuard links, and containers in the same project reach each other by name, whichever server they run on.
+- **Public access**: Caddy is built in. Bind a domain and HTTPS certificates are issued automatically, or open TCP / UDP ports directly.
+- **Data protection**: per-container scheduled snapshots with kopia, which can be synced to another node as an off-site copy. When a node fails, a node chosen in advance can take over automatically.
+- **A single program**: written in Go. The panel and nodes are the same program, data lives in a built-in SQLite database, and nothing is needed besides Docker.
+
+### Core concepts
+
+| Concept | Meaning |
+| --- | --- |
+| Node | A Linux server running the Nagi node program. Containers run on nodes |
+| Project | A group of containers that work together, such as a frontend, a backend and a database. Projects live on the panel, and their containers can be spread across nodes. Projects are isolated from each other by default |
+| Container | The unit deployed on its own within a project: a single container, or a container group defined by one compose file. Each is deployed, rolled back, snapshotted and migrated on its own |
 
 ## Features
 
