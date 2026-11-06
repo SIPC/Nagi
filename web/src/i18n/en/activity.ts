@@ -88,6 +88,7 @@ export default {
     DeleteNodeReplica: "Delete replica",
     UpgradeNode: "Upgrade node",
     UpgradeAllNodes: "Upgrade all nodes",
+    CancelNodeUpgrade: "Cancel node upgrade",
     SetNodeMirrors: "Set registry mirrors",
     SetNodeMeshOptions: "Change mesh settings",
     TestNodeMeshSpeed: "Test node speed",

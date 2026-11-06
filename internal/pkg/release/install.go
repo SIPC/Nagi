@@ -46,37 +46,62 @@ func IsUnusable(err error) bool {
 // Install 从 base 下载 want 版本的 nagi，按 SHA256SUMS 核对，试运行确认能用、版本对得上，替换当前的可执行文件，
 // 返回它的路径。之后用 Reexec 原地重启。
 func Install(ctx context.Context, base, want string) (string, error) {
+	p, err := Prepare(ctx, base, want)
+	if err != nil {
+		return "", err
+	}
+	return p.Commit()
+}
+
+// Prepared 是下载好、核对过的新版本，还没有替换。
+type Prepared struct {
+	exe, tmp string
+}
+
+// Prepare 做 Install 替换之前的部分：下载、核对、试运行。之后用 Commit 替换，或者 Discard 放弃。
+func Prepare(ctx context.Context, base, want string) (*Prepared, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if exe, err = filepath.EvalSymlinks(exe); err != nil {
-		return "", err
+		return nil, err
 	}
-	tmp := exe + ".new"
-	if err := Download(ctx, base, tmp); err != nil {
-		os.Remove(tmp)
-		return "", err
+	p := &Prepared{exe: exe, tmp: exe + ".new"}
+	if err := Download(ctx, base, p.tmp); err != nil {
+		p.Discard()
+		return nil, err
 	}
 	vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	out, err := exec.CommandContext(vctx, tmp, "version").Output()
+	out, err := exec.CommandContext(vctx, p.tmp, "version").Output()
 	cancel()
 	if err != nil {
-		os.Remove(tmp)
-		return "", unusable{i18n.Errorf("新版本在这台机器上运行不了：%w", err)}
+		p.Discard()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, unusable{i18n.Errorf("新版本在这台机器上运行不了：%w", err)}
 	}
 	version := strings.TrimSpace(string(out))
 	if version != want {
 		// 镜像地址不分版本，里面放的可能不是要求的版本。
-		os.Remove(tmp)
-		return "", unusable{i18n.Errorf("下载到的是 %s，不是要求的 %s（检查镜像地址 %s）", version, want, base)}
+		p.Discard()
+		return nil, unusable{i18n.Errorf("下载到的是 %s，不是要求的 %s（检查镜像地址 %s）", version, want, base)}
 	}
-	if err := os.Rename(tmp, exe); err != nil {
-		os.Remove(tmp)
+	return p, nil
+}
+
+// Commit 用新版本替换当前的可执行文件，返回它的路径。
+func (p *Prepared) Commit() (string, error) {
+	if err := os.Rename(p.tmp, p.exe); err != nil {
+		p.Discard()
 		return "", err
 	}
-	return exe, nil
+	return p.exe, nil
 }
+
+// Discard 删掉下载的新版本。
+func (p *Prepared) Discard() { os.Remove(p.tmp) }
 
 // Download 从 base 下载 nagi-linux-<架构> 到 dst，并按同一地址下的 SHA256SUMS 核对。
 func Download(ctx context.Context, base, dst string) error {

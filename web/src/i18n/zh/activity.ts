@@ -87,6 +87,7 @@ export default {
     DeleteNodeReplica: "删除副本",
     UpgradeNode: "升级节点",
     UpgradeAllNodes: "升级全部节点",
+    CancelNodeUpgrade: "取消升级节点",
     SetNodeMirrors: "设置镜像加速",
     SetNodeMeshOptions: "修改组网设置",
     TestNodeMeshSpeed: "节点测速",

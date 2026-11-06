@@ -77,6 +77,7 @@ const (
 	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
 	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
+	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -193,6 +194,9 @@ type AgentServiceClient interface {
 	SetPanelDomain(ctx context.Context, in *SetPanelDomainRequest, opts ...grpc.CallOption) (*SetPanelDomainResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
+	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
+	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
+	CancelUpgrade(ctx context.Context, in *CancelUpgradeRequest, opts ...grpc.CallOption) (*CancelUpgradeResponse, error)
 }
 
 type agentServiceClient struct {
@@ -879,6 +883,16 @@ func (c *agentServiceClient) Upgrade(ctx context.Context, in *UpgradeRequest, op
 	return out, nil
 }
 
+func (c *agentServiceClient) CancelUpgrade(ctx context.Context, in *CancelUpgradeRequest, opts ...grpc.CallOption) (*CancelUpgradeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelUpgradeResponse)
+	err := c.cc.Invoke(ctx, AgentService_CancelUpgrade_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -993,6 +1007,9 @@ type AgentServiceServer interface {
 	SetPanelDomain(context.Context, *SetPanelDomainRequest) (*SetPanelDomainResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error)
+	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
+	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
+	CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -1176,6 +1193,9 @@ func (UnimplementedAgentServiceServer) SetPanelDomain(context.Context, *SetPanel
 }
 func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Upgrade not implemented")
+}
+func (UnimplementedAgentServiceServer) CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelUpgrade not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -2150,6 +2170,24 @@ func _AgentService_Upgrade_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_CancelUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelUpgradeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CancelUpgrade(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_CancelUpgrade_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CancelUpgrade(ctx, req.(*CancelUpgradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2340,6 +2378,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Upgrade",
 			Handler:    _AgentService_Upgrade_Handler,
+		},
+		{
+			MethodName: "CancelUpgrade",
+			Handler:    _AgentService_CancelUpgrade_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

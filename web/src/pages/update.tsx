@@ -36,6 +36,24 @@ export function upgradeTarget(n: Node, panelVersion: string) {
   return isOlder(n.info.version, panelVersion) ? panelVersion : "";
 }
 
+// canStopDownload：节点能不能停止正在进行的下载（agent 的 CancelUpgrade，v0.20.0 起，预发布版也算）。
+// 更早的节点只能取消排队中的升级。不是正式版本号（本地编译的 dev）时当作支持。
+export function canStopDownload(version: string) {
+  const x = versionRe.exec(version);
+  if (!x) return true;
+  const since = [0, 20, 0];
+  for (let i = 0; i < 3; i++) {
+    const p = Number(x[i + 1]);
+    if (p !== since[i]) return p > since[i];
+  }
+  return true;
+}
+
+// cancelable：这条升级能不能取消。已经替换、正在重启的不能。
+export function cancelable(s: UpdateState | undefined, n: Node | undefined) {
+  return s?.phase === "queued" || (s?.phase === "installing" && canStopDownload(n?.info?.version ?? ""));
+}
+
 export function updateActive(s: UpdateState | undefined) {
   return !!s && s.phase !== "failed";
 }

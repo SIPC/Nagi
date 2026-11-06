@@ -599,6 +599,7 @@ const (
 	NodeService_GetPanelMesh_FullMethodName          = "/nagi.v1.NodeService/GetPanelMesh"
 	NodeService_UpgradeNode_FullMethodName           = "/nagi.v1.NodeService/UpgradeNode"
 	NodeService_UpgradeAllNodes_FullMethodName       = "/nagi.v1.NodeService/UpgradeAllNodes"
+	NodeService_CancelNodeUpgrade_FullMethodName     = "/nagi.v1.NodeService/CancelNodeUpgrade"
 	NodeService_GetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/GetNodeMirrors"
 	NodeService_SetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_ReclaimNodeSnapshots_FullMethodName  = "/nagi.v1.NodeService/ReclaimNodeSnapshots"
@@ -648,8 +649,11 @@ type NodeServiceClient interface {
 	GetPanelMesh(ctx context.Context, in *GetPanelMeshRequest, opts ...grpc.CallOption) (*MeshStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(ctx context.Context, in *UpgradeNodeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
-	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	// 把所有落后于面板的节点逐个升级到面板的版本：下载阶段失败的记下原因接着升下一个，替换后没回来就停下。
+	// 在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeAllNodes(ctx context.Context, in *UpgradeAllNodesRequest, opts ...grpc.CallOption) (*UpgradeAllNodesResponse, error)
+	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
+	CancelNodeUpgrade(ctx context.Context, in *CancelNodeUpgradeRequest, opts ...grpc.CallOption) (*CancelNodeUpgradeResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
@@ -883,6 +887,16 @@ func (c *nodeServiceClient) UpgradeAllNodes(ctx context.Context, in *UpgradeAllN
 	return out, nil
 }
 
+func (c *nodeServiceClient) CancelNodeUpgrade(ctx context.Context, in *CancelNodeUpgradeRequest, opts ...grpc.CallOption) (*CancelNodeUpgradeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelNodeUpgradeResponse)
+	err := c.cc.Invoke(ctx, NodeService_CancelNodeUpgrade_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
@@ -1047,8 +1061,11 @@ type NodeServiceServer interface {
 	GetPanelMesh(context.Context, *GetPanelMeshRequest) (*MeshStatus, error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *UpgradeNodeRequest) (*UpgradeResponse, error)
-	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	// 把所有落后于面板的节点逐个升级到面板的版本：下载阶段失败的记下原因接着升下一个，替换后没回来就停下。
+	// 在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeAllNodes(context.Context, *UpgradeAllNodesRequest) (*UpgradeAllNodesResponse, error)
+	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
+	CancelNodeUpgrade(context.Context, *CancelNodeUpgradeRequest) (*CancelNodeUpgradeResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
@@ -1141,6 +1158,9 @@ func (UnimplementedNodeServiceServer) UpgradeNode(context.Context, *UpgradeNodeR
 }
 func (UnimplementedNodeServiceServer) UpgradeAllNodes(context.Context, *UpgradeAllNodesRequest) (*UpgradeAllNodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpgradeAllNodes not implemented")
+}
+func (UnimplementedNodeServiceServer) CancelNodeUpgrade(context.Context, *CancelNodeUpgradeRequest) (*CancelNodeUpgradeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelNodeUpgrade not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
@@ -1559,6 +1579,24 @@ func _NodeService_UpgradeAllNodes_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_CancelNodeUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelNodeUpgradeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).CancelNodeUpgrade(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_CancelNodeUpgrade_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).CancelNodeUpgrade(ctx, req.(*CancelNodeUpgradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_GetNodeMirrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeRef)
 	if err := dec(in); err != nil {
@@ -1854,6 +1892,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpgradeAllNodes",
 			Handler:    _NodeService_UpgradeAllNodes_Handler,
+		},
+		{
+			MethodName: "CancelNodeUpgrade",
+			Handler:    _NodeService_CancelNodeUpgrade_Handler,
 		},
 		{
 			MethodName: "GetNodeMirrors",

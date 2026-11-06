@@ -106,7 +106,10 @@ export default {
     all: "Upgrade all",
     allCount: (n) => `Upgrade all nodes (${n})`,
     allRunning: (n) => `Upgrading, ${n} left`,
-    allConfirm: (n, version) => `Upgrade ${n} ${n === 1 ? "node" : "nodes"} to ${version} one at a time? Nodes that are only standbys or backups go first, and each must come back on the new version before the next starts. If one fails, the rest are left alone.`,
+    allConfirm: (n, version) => `Upgrade ${n} ${n === 1 ? "node" : "nodes"} to ${version} one at a time? Nodes that are only standbys or backups go first, and each must come back on the new version before the next starts. A node that fails to download the new version is skipped; if a node doesn't come back after being replaced, the rest are left alone.`,
+    cancel: "Cancel upgrade",
+    canceling: "Canceling…",
+    noCancel: " This node's version can't cancel a download.",
   },
   add: {
     publicAddress: "Panel public address",

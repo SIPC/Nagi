@@ -123,6 +123,9 @@ service AgentService {
   rpc SetPanelDomain(SetPanelDomainRequest) returns (SetPanelDomainResponse);
   // 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
+  // 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
+  // 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
+  rpc CancelUpgrade(CancelUpgradeRequest) returns (CancelUpgradeResponse);
 }
 
 message SetLinksResponse {}
@@ -378,6 +381,10 @@ message UpgradeResponse {
   // 新二进制的版本号，节点替换完成后重启。
   string version = 1;
 }
+
+message CancelUpgradeRequest {}
+
+message CancelUpgradeResponse {}
 
 message GetMirrorsRequest {}
 

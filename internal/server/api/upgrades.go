@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
 	"time"
 
 	"connectrpc.com/connect"
@@ -13,6 +15,8 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -25,8 +29,8 @@ const (
 	updateRestarting = "restarting" // 已经替换，等它用新版本回来
 	updateFailed     = "failed"
 
-	// updateInstallTimeout 是下载和替换的时间上限。
-	updateInstallTimeout = 15 * time.Minute
+	// updateInstallTimeout 是下载和替换的时间上限，和 release.Download 的上限一致。
+	updateInstallTimeout = 10 * time.Minute
 	// updateRestartTimeout：替换好以后等这么久还没回来就算失败。
 	updateRestartTimeout = 3 * time.Minute
 )
@@ -116,6 +120,9 @@ func (a *API) withUpdates(ctx context.Context, fn func(*updateRecords)) {
 	}
 	if u.state.Nodes == nil {
 		u.state.Nodes = map[string]*updateState{}
+	}
+	if u.cancels == nil {
+		u.cancels = map[*updateState]context.CancelFunc{}
 	}
 	fn(&u.state)
 	raw, err := json.Marshal(u.state)
@@ -223,8 +230,24 @@ func (a *API) upgradableNode(id string) error {
 	return nil
 }
 
-// runNodeUpgrade 让节点下载并替换新版本，返回后节点正在重启。失败时记下原因。
+// errUpgradeCanceled：升级被取消了（CancelNodeUpgrade 已经删掉记录）。
+var errUpgradeCanceled = errors.New("upgrade canceled")
+
+// runNodeUpgrade 让节点下载并替换新版本，返回后节点正在重启。失败时记下原因；被取消时返回 errUpgradeCanceled。
+// 返回错误时节点还是原来的版本。
 func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
+	installCtx, cancel := context.WithTimeout(ctx, updateInstallTimeout)
+	defer cancel()
+	// 记录换过（取消后又点了升级）时不动新的记录。
+	var mine *updateState
+	a.withUpdates(ctx, func(r *updateRecords) {
+		if mine = r.Nodes[id]; mine != nil {
+			a.updates.cancels[mine] = cancel
+		}
+	})
+	if mine == nil {
+		return errUpgradeCanceled
+	}
 	err := func() error {
 		if err := a.upgradableNode(id); err != nil {
 			return err
@@ -233,17 +256,20 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		if err != nil {
 			return err
 		}
-		installCtx, cancel := context.WithTimeout(ctx, updateInstallTimeout)
-		defer cancel()
 		_, err = conn.Agent.Upgrade(installCtx, &nagiv1.UpgradeRequest{Version: target})
-		if err != nil {
-			return fromGRPC(err)
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(installCtx.Err(), context.Canceled) || status.Code(err) == codes.Canceled:
+			return errUpgradeCanceled
+		case errors.Is(installCtx.Err(), context.DeadlineExceeded):
+			return i18n.New("10 分钟内没有完成下载和校验，已停止升级")
 		}
-		return nil
+		return fromGRPC(err)
 	}()
 	now := time.Now()
 	message := ""
-	if err != nil {
+	if err != nil && !errors.Is(err, errUpgradeCanceled) {
 		message = i18n.Localize(i18n.FromContext(ctx), err)
 		var ce *connect.Error
 		if errors.As(err, &ce) {
@@ -252,14 +278,17 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		a.recordOperation(ctx, nagiv1connect.NodeServiceUpgradeNodeProcedure, &nagiv1.UpgradeNodeRequest{NodeId: id}, message)
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
-		n := r.Nodes[id]
-		if n == nil {
+		delete(a.updates.cancels, mine)
+		if r.Nodes[id] != mine {
 			return
 		}
-		if err != nil {
-			n.fail(message, now)
-		} else {
-			n.Phase, n.Changed = updateRestarting, now.Unix()
+		switch {
+		case err == nil:
+			mine.Phase, mine.Changed = updateRestarting, now.Unix()
+		case errors.Is(err, errUpgradeCanceled):
+			delete(r.Nodes, id)
+		default:
+			mine.fail(message, now)
 		}
 	})
 	if err == nil {
@@ -305,7 +334,8 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 }
 
 // UpgradeAllNodes 把所有落后于面板的节点升级到面板的版本。一个一个来：同时重启可能让顶替的租约续不上，
-// 先升级热备和备份节点（见 docs/control-plane.md）。某个节点失败就停下，后面的不动。
+// 先升级热备和备份节点（见 docs/control-plane.md）。下载阶段失败（包括超时）时节点还是原来的版本，记下原因接着升下一个；
+// 替换后没有用新版本回来就停下，后面的不动：可能是新版本在这些机器上有问题。
 func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[nagiv1.UpgradeAllNodesRequest]) (*connect.Response[nagiv1.UpgradeAllNodesResponse], error) {
 	target := s.Panel.Version
 	if !release.IsVersion(target) {
@@ -349,20 +379,105 @@ func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[na
 
 func (a *API) runNodeUpgrades(ctx context.Context, ids []string, target string) {
 	for i, id := range ids {
+		queued := false
 		a.withUpdates(ctx, func(r *updateRecords) {
-			if n := r.Nodes[id]; n != nil {
-				n.Phase, n.Changed = updateInstalling, time.Now().Unix()
+			if n := r.Nodes[id]; n != nil && n.Phase == updateQueued {
+				n.Phase, n.Changed, queued = updateInstalling, time.Now().Unix(), true
 			}
 		})
-		if a.runNodeUpgrade(ctx, id, target) != nil || !a.waitNodeUpgrade(ctx, id) {
+		if !queued {
+			continue // 取消了
+		}
+		if a.runNodeUpgrade(ctx, id, target) != nil {
+			continue
+		}
+		if !a.waitNodeUpgrade(ctx, id) {
 			a.withUpdates(ctx, func(r *updateRecords) {
 				for _, rest := range ids[i+1:] {
-					delete(r.Nodes, rest)
+					if n := r.Nodes[rest]; n != nil && n.Phase == updateQueued {
+						delete(r.Nodes, rest)
+					}
 				}
 			})
 			return
 		}
 	}
+}
+
+// CancelNodeUpgrade 取消一个节点或者全部的升级：排队的删掉记录；下载中的让节点停止下载（CancelUpgrade），
+// 节点还是原来的版本。已经替换、正在重启的不能取消。v0.20.0 以前的节点不支持停止下载，只能等它完成或者超时。
+func (s *nodeService) CancelNodeUpgrade(ctx context.Context, req *connect.Request[nagiv1.CancelNodeUpgradeRequest]) (*connect.Response[nagiv1.CancelNodeUpgradeResponse], error) {
+	id := req.Msg.GetNodeId()
+	type install struct {
+		id  string
+		rec *updateState
+	}
+	var installing []install
+	var err error
+	canceled := 0
+	s.withUpdates(ctx, func(r *updateRecords) {
+		ids := []string{id}
+		if id == "" {
+			ids = slices.Collect(maps.Keys(r.Nodes))
+		}
+		for _, nid := range ids {
+			switch n := r.Nodes[nid]; {
+			case n != nil && n.Phase == updateQueued:
+				delete(r.Nodes, nid)
+				canceled++
+			case n != nil && n.Phase == updateInstalling:
+				installing = append(installing, install{nid, n})
+			case id == "":
+			case n != nil && n.Phase == updateRestarting:
+				err = i18n.New("节点已替换为新版本，正在重启，不能取消")
+			default:
+				err = i18n.New("节点没有在升级")
+			}
+		}
+	})
+	// 问节点的时候不拿着锁：节点可能要等一会儿才回答。
+	for _, in := range installing {
+		if e := s.cancelNodeInstall(ctx, in.id); e != nil {
+			err = e
+			continue
+		}
+		s.withUpdates(ctx, func(r *updateRecords) {
+			if r.Nodes[in.id] == in.rec {
+				if c := s.updates.cancels[in.rec]; c != nil {
+					c()
+				}
+				delete(r.Nodes, in.id)
+			}
+		})
+		canceled++
+	}
+	if err == nil && canceled == 0 {
+		err = i18n.New("没有可以取消的升级")
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	return connect.NewResponse(&nagiv1.CancelNodeUpgradeResponse{}), nil
+}
+
+// cancelNodeInstall 让节点停止正在下载、校验的升级。节点说没有在升级时也算成功：请求还没到，或者已经失败了。
+func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
+	conn, err := a.Nodes.Get(id)
+	if err != nil {
+		return i18n.Errorf("连不上节点 %s，无法取消", a.nodeName(ctx, id))
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	_, err = conn.Agent.CancelUpgrade(cctx, &nagiv1.CancelUpgradeRequest{})
+	switch status.Code(err) {
+	case codes.OK, codes.NotFound:
+		return nil
+	case codes.Unimplemented:
+		return i18n.Errorf("节点 %s 的版本不支持取消正在进行的下载，请等待完成或超时", a.nodeName(ctx, id))
+	case codes.FailedPrecondition:
+		return i18n.Errorf("节点 %s 已替换为新版本，正在重启，不能取消", a.nodeName(ctx, id))
+	}
+	return i18n.Errorf("连不上节点 %s，无法取消", a.nodeName(ctx, id))
 }
 
 func newUpdateState(target, from, phase string) *updateState {

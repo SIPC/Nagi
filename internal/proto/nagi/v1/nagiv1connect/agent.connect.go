@@ -190,6 +190,9 @@ const (
 	AgentServiceSetPanelDomainProcedure = "/nagi.v1.AgentService/SetPanelDomain"
 	// AgentServiceUpgradeProcedure is the fully-qualified name of the AgentService's Upgrade RPC.
 	AgentServiceUpgradeProcedure = "/nagi.v1.AgentService/Upgrade"
+	// AgentServiceCancelUpgradeProcedure is the fully-qualified name of the AgentService's
+	// CancelUpgrade RPC.
+	AgentServiceCancelUpgradeProcedure = "/nagi.v1.AgentService/CancelUpgrade"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -301,6 +304,9 @@ type AgentServiceClient interface {
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
+	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
+	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
+	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -662,6 +668,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("Upgrade")),
 			connect.WithClientOptions(opts...),
 		),
+		cancelUpgrade: connect.NewClient[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse](
+			httpClient,
+			baseURL+AgentServiceCancelUpgradeProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -725,6 +737,7 @@ type agentServiceClient struct {
 	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
 	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
 	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
+	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -1017,6 +1030,11 @@ func (c *agentServiceClient) Upgrade(ctx context.Context, req *connect.Request[v
 	return c.upgrade.CallUnary(ctx, req)
 }
 
+// CancelUpgrade calls nagi.v1.AgentService.CancelUpgrade.
+func (c *agentServiceClient) CancelUpgrade(ctx context.Context, req *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error) {
+	return c.cancelUpgrade.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	// ---- 容器 ----
@@ -1126,6 +1144,9 @@ type AgentServiceHandler interface {
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
+	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
+	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
+	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1483,6 +1504,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("Upgrade")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCancelUpgradeHandler := connect.NewUnaryHandler(
+		AgentServiceCancelUpgradeProcedure,
+		svc.CancelUpgrade,
+		connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServicePutContainerProcedure:
@@ -1601,6 +1628,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetPanelDomainHandler.ServeHTTP(w, r)
 		case AgentServiceUpgradeProcedure:
 			agentServiceUpgradeHandler.ServeHTTP(w, r)
+		case AgentServiceCancelUpgradeProcedure:
+			agentServiceCancelUpgradeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1840,4 +1869,8 @@ func (UnimplementedAgentServiceHandler) SetPanelDomain(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.Upgrade is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CancelUpgrade is not implemented"))
 }

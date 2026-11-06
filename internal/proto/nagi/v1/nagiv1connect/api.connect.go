@@ -124,6 +124,9 @@ const (
 	// NodeServiceUpgradeAllNodesProcedure is the fully-qualified name of the NodeService's
 	// UpgradeAllNodes RPC.
 	NodeServiceUpgradeAllNodesProcedure = "/nagi.v1.NodeService/UpgradeAllNodes"
+	// NodeServiceCancelNodeUpgradeProcedure is the fully-qualified name of the NodeService's
+	// CancelNodeUpgrade RPC.
+	NodeServiceCancelNodeUpgradeProcedure = "/nagi.v1.NodeService/CancelNodeUpgrade"
 	// NodeServiceGetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// GetNodeMirrors RPC.
 	NodeServiceGetNodeMirrorsProcedure = "/nagi.v1.NodeService/GetNodeMirrors"
@@ -827,8 +830,11 @@ type NodeServiceClient interface {
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
-	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	// 把所有落后于面板的节点逐个升级到面板的版本：下载阶段失败的记下原因接着升下一个，替换后没回来就停下。
+	// 在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
+	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
+	CancelNodeUpgrade(context.Context, *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -985,6 +991,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("UpgradeAllNodes")),
 			connect.WithClientOptions(opts...),
 		),
+		cancelNodeUpgrade: connect.NewClient[v1.CancelNodeUpgradeRequest, v1.CancelNodeUpgradeResponse](
+			httpClient,
+			baseURL+NodeServiceCancelNodeUpgradeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CancelNodeUpgrade")),
+			connect.WithClientOptions(opts...),
+		),
 		getNodeMirrors: connect.NewClient[v1.NodeRef, v1.Mirrors](
 			httpClient,
 			baseURL+NodeServiceGetNodeMirrorsProcedure,
@@ -1082,6 +1094,7 @@ type nodeServiceClient struct {
 	getPanelMesh          *connect.Client[v1.GetPanelMeshRequest, v1.MeshStatus]
 	upgradeNode           *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
 	upgradeAllNodes       *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
+	cancelNodeUpgrade     *connect.Client[v1.CancelNodeUpgradeRequest, v1.CancelNodeUpgradeResponse]
 	getNodeMirrors        *connect.Client[v1.NodeRef, v1.Mirrors]
 	setNodeMirrors        *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	reclaimNodeSnapshots  *connect.Client[v1.NodeRef, v1.DeployEvent]
@@ -1196,6 +1209,11 @@ func (c *nodeServiceClient) UpgradeAllNodes(ctx context.Context, req *connect.Re
 	return c.upgradeAllNodes.CallUnary(ctx, req)
 }
 
+// CancelNodeUpgrade calls nagi.v1.NodeService.CancelNodeUpgrade.
+func (c *nodeServiceClient) CancelNodeUpgrade(ctx context.Context, req *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error) {
+	return c.cancelNodeUpgrade.CallUnary(ctx, req)
+}
+
 // GetNodeMirrors calls nagi.v1.NodeService.GetNodeMirrors.
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error) {
 	return c.getNodeMirrors.CallUnary(ctx, req)
@@ -1289,8 +1307,11 @@ type NodeServiceHandler interface {
 	GetPanelMesh(context.Context, *connect.Request[v1.GetPanelMeshRequest]) (*connect.Response[v1.MeshStatus], error)
 	// 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeNode(context.Context, *connect.Request[v1.UpgradeNodeRequest]) (*connect.Response[v1.UpgradeResponse], error)
-	// 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+	// 把所有落后于面板的节点逐个升级到面板的版本：下载阶段失败的记下原因接着升下一个，替换后没回来就停下。
+	// 在后台进行，进度用 GetUpdateStatus 查。
 	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
+	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
+	CancelNodeUpgrade(context.Context, *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -1443,6 +1464,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("UpgradeAllNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceCancelNodeUpgradeHandler := connect.NewUnaryHandler(
+		NodeServiceCancelNodeUpgradeProcedure,
+		svc.CancelNodeUpgrade,
+		connect.WithSchema(nodeServiceMethods.ByName("CancelNodeUpgrade")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetNodeMirrorsHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeMirrorsProcedure,
 		svc.GetNodeMirrors,
@@ -1557,6 +1584,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceUpgradeNodeHandler.ServeHTTP(w, r)
 		case NodeServiceUpgradeAllNodesProcedure:
 			nodeServiceUpgradeAllNodesHandler.ServeHTTP(w, r)
+		case NodeServiceCancelNodeUpgradeProcedure:
+			nodeServiceCancelNodeUpgradeHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMirrorsProcedure:
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
@@ -1668,6 +1697,10 @@ func (UnimplementedNodeServiceHandler) UpgradeNode(context.Context, *connect.Req
 
 func (UnimplementedNodeServiceHandler) UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UpgradeAllNodes is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CancelNodeUpgrade(context.Context, *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CancelNodeUpgrade is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error) {

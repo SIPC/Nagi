@@ -248,6 +248,7 @@ type agent struct {
 	files    *nodefiles.Service
 	hostname string
 	info     *nagiv1.NodeInfo
+	upgrade  upgradeState
 
 	proxy     *proxy.Proxy
 	proxyKick chan struct{}

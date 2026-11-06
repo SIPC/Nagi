@@ -31,6 +31,8 @@ type panelUpdates struct {
 	state   updateRecords
 	loaded  bool
 	saved   string
+	// cancels：正在下载的节点升级的取消函数，按记录找。在 stateMu 里读写。
+	cancels map[*updateState]context.CancelFunc
 }
 
 // get 返回最新发布的版本号，force 时不用缓存。

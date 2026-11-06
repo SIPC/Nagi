@@ -180,8 +180,11 @@ service NodeService {
   rpc GetPanelMesh(GetPanelMeshRequest) returns (MeshStatus);
   // 把节点升级到面板提供的版本（面板自带的节点随面板升级，不能单独升级）。在后台进行，进度用 GetUpdateStatus 查。
   rpc UpgradeNode(UpgradeNodeRequest) returns (UpgradeResponse);
-  // 把所有落后于面板的节点逐个升级到面板的版本，某个失败就停下。在后台进行，进度用 GetUpdateStatus 查。
+  // 把所有落后于面板的节点逐个升级到面板的版本：下载阶段失败的记下原因接着升下一个，替换后没回来就停下。
+  // 在后台进行，进度用 GetUpdateStatus 查。
   rpc UpgradeAllNodes(UpgradeAllNodesRequest) returns (UpgradeAllNodesResponse);
+  // 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
+  rpc CancelNodeUpgrade(CancelNodeUpgradeRequest) returns (CancelNodeUpgradeResponse);
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
@@ -267,6 +270,13 @@ message UpgradeNodeRequest {
 }
 
 message UpgradeAllNodesRequest {}
+
+message CancelNodeUpgradeRequest {
+  // 为空时取消所有排队和下载中的升级。
+  string node_id = 1;
+}
+
+message CancelNodeUpgradeResponse {}
 
 message UpgradeAllNodesResponse {
   // 要升级的节点，按升级的顺序。

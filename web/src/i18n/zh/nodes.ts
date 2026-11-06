@@ -104,7 +104,11 @@ export default {
     all: "升级全部",
     allCount: (n: number) => `升级全部节点（${n}）`,
     allRunning: (n: number) => `正在升级，还剩 ${n} 个`,
-    allConfirm: (n: number, version: string) => `将 ${n} 个节点逐个升级到 ${version}？先升级只做热备和备份的节点，每个节点用新版本回来后才升级下一个；某个节点失败就停下，后面的不动。`,
+    allConfirm: (n: number, version: string) =>
+      `将 ${n} 个节点逐个升级到 ${version}？先升级只做热备和备份的节点，每个节点用新版本回来后才升级下一个。节点下载新版本失败时跳过；替换后没有恢复时停止，后面的节点不升级。`,
+    cancel: "取消升级",
+    canceling: "正在取消…",
+    noCancel: "该节点的版本不支持取消下载。",
   },
   add: {
     publicAddress: "面板对外地址",

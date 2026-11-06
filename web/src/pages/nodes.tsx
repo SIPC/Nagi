@@ -53,7 +53,7 @@ import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { confirmAction, notify } from "@/components/confirm";
-import { updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { toast } from "sonner";
@@ -243,7 +243,20 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
   const list = nodes.data?.nodes ?? [];
   const states = status.data?.nodes ?? {};
   const running = Object.values(states).filter(updateActive).length;
+  const canCancel = Object.entries(states).some(([id, s]) => cancelable(s, list.find((n) => n.id === id)));
+  const [canceling, setCanceling] = useState(false);
   const behind = list.filter((n) => upgradeTarget(n, panelVersion) && !updateActive(states[n.id])).length;
+  const cancelAll = async () => {
+    setCanceling(true);
+    try {
+      await nodeClient.cancelNodeUpgrade({});
+      await status.refetch();
+    } catch (err) {
+      await notify(errorMessage(err));
+    } finally {
+      setCanceling(false);
+    }
+  };
   const upgradeAll = async () => {
     if (!(await confirmAction(t.nodes.upgrade.allConfirm(behind, panelVersion), { action: t.nodes.upgrade.all }))) return;
     setStarting(true);
@@ -289,6 +302,11 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
               <Button variant="outline" onClick={upgradeAll} disabled={starting || running > 0}>
                 {(starting || running > 0) && <Spinner />}
                 {running > 0 ? t.nodes.upgrade.allRunning(running) : t.nodes.upgrade.allCount(behind)}
+              </Button>
+            )}
+            {isAdmin && canCancel && (
+              <Button variant="outline" onClick={cancelAll} disabled={canceling}>
+                {canceling ? t.nodes.upgrade.canceling : t.nodes.upgrade.cancel}
               </Button>
             )}
             <Button onClick={() => setDialog("add")}>
@@ -621,6 +639,18 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
       setBusy(false);
     }
   };
+  const cancel = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      await nodeClient.cancelNodeUpgrade({ nodeId: n.id });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
   if (state?.phase === "restarting") {
     return (
       <Notice tone="success" title={t.nodes.upgrade.restartingTitle(state.target)}>
@@ -631,9 +661,23 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
   if (state?.phase === "installing" || state?.phase === "queued") {
     const queued = state.phase === "queued";
     return (
-      <Notice tone={queued ? "neutral" : "info"} title={queued ? t.nodes.upgrade.queuedTitle(state.target) : t.nodes.upgrade.installingTitle(state.target)}>
-        {queued ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
-      </Notice>
+      <>
+        <Notice
+          tone={queued ? "neutral" : "info"}
+          title={queued ? t.nodes.upgrade.queuedTitle(state.target) : t.nodes.upgrade.installingTitle(state.target)}
+          actions={
+            cancelable(state, n) && (
+              <Button variant="outline" onClick={cancel} disabled={busy}>
+                {busy ? t.nodes.upgrade.canceling : t.nodes.upgrade.cancel}
+              </Button>
+            )
+          }
+        >
+          {queued ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
+          {!cancelable(state, n) && t.nodes.upgrade.noCancel}
+        </Notice>
+        {error && <Alert>{error}</Alert>}
+      </>
     );
   }
   const failed = state?.phase === "failed";
