@@ -40,17 +40,17 @@ export function PanelAccessCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const title = t.settings.tabs.access.label;
-  const heading = <span title={t.settings.tabs.access.description}>{title}</span>;
+  const heading = t.settings.tabs.access.label;
+  const help = t.settings.tabs.access.description;
   if (q.isPending)
     return (
-      <Section title={heading}>
+      <Section title={heading} help={help}>
         <RowsSkeleton />
       </Section>
     );
   if (!q.data)
     return (
-      <Section title={heading}>
+      <Section title={heading} help={help}>
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       </Section>
     );
@@ -121,27 +121,28 @@ export function PanelAccessCard() {
   );
 
   return (
-    <Section title={heading}>
+    <Section title={heading} help={help}>
       {/* 解除绑定不经过输入框，错误显示在上面；修改时显示在输入框下面。 */}
       {error && !editing && <Alert>{error}</Alert>}
       <SettingRows>
         <SettingRow
           label={t.access.address.label}
-          description={<span title={`${t.access.address.description} ${t.access.address.help}`}>{`${s.publicAddress || t.access.address.unset} · ${t.access.address.usage}`}</span>}
+          help={t.access.address.help}
+          description={`${s.publicAddress || t.access.address.unset} · ${t.access.address.usage}`}
         >
           {editing !== "address" && (
             <Button variant="outline" onClick={() => open("address")}>
-              {t.access.address.edit}
+              {t.common.actions.edit}
             </Button>
           )}
         </SettingRow>
         {editing === "address" && editRow("address")}
-        <SettingRow label={t.access.domain.label} description={<span title={t.access.domain.help}>{s.domain ? t.access.domain.bound(s.domain) : t.access.domain.unbound}</span>}>
+        <SettingRow label={t.access.domain.label} help={t.access.domain.help} description={s.domain ? t.access.domain.bound(s.domain) : t.access.domain.unbound}>
           {editing !== "domain" &&
             (s.domain ? (
               <span className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => open("domain")} disabled={busy}>
-                  {t.access.domain.edit}
+                  {t.common.actions.edit}
                 </Button>
                 <Button variant="outline" onClick={() => save("domain", "")} disabled={busy}>
                   {busy && <Spinner />}
@@ -155,7 +156,7 @@ export function PanelAccessCard() {
             ))}
         </SettingRow>
         {editing === "domain" && editRow("domain")}
-        <SettingRow label={t.access.fingerprint.label} description={<span className="break-all" title={t.access.fingerprint.description}>{s.fingerprint}</span>}>
+        <SettingRow label={t.access.fingerprint.label} help={t.access.fingerprint.help} description={<span className="break-all">{s.fingerprint}</span>}>
           <CopyTextButton text={s.fingerprint} label={t.common.actions.copy} />
         </SettingRow>
       </SettingRows>

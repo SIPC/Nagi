@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { formatDateTime, timeAgo } from "@/lib/utils";
+import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { CodeBox } from "@/pages/invite";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import { confirmAction, notify } from "@/components/confirm";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
@@ -21,8 +21,8 @@ export function PromoteButton({ size = "sm", variant = "outline" }: { size?: "sm
     if (!(await confirmAction(t.standby.promote.confirm, { action: t.standby.promote.button, danger: true }))) return;
     setBusy(true);
     try {
-      const res = await settingsClient.promoteStandby({});
-      await notify(t.standby.promote.done(res.term));
+      await settingsClient.promoteStandby({});
+      await notify(t.standby.promote.done);
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
       await notify(errorMessage(err));
@@ -63,13 +63,13 @@ export function StandbyCard() {
 
   if (d.isStandby) {
     return (
-      <Section title={<span title={t.standby.status.description}>{t.standby.status.title}</span>}>
+      <Section title={t.standby.status.title} help={t.standby.status.help}>
         {refetchError}
         <KeyValue
           items={[
             [t.standby.status.primary, <span className="wrap-anywhere">{d.primaryAddress}</span>],
             [t.standby.status.connection, d.connected ? <Status tone="success">{t.standby.connected}</Status> : <span className="text-warning-text"><Status tone="warning">{t.standby.disconnected}</Status></span>],
-            [t.standby.lastSync, <span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? timeAgo(toDate(d.lastSync)) : t.standby.status.neverSynced}</span>],
+            [t.standby.lastSync, <span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? capitalize(timeAgo(toDate(d.lastSync))) : t.standby.status.neverSynced}</span>],
           ]}
         />
         {d.lastError && (
@@ -97,7 +97,7 @@ export function StandbyCard() {
     }
   };
   const remove = async (id: string, name: string) => {
-    if (!(await confirmAction(t.standby.removeConfirm(name), { action: t.common.actions.remove, danger: true }))) return;
+    if (!(await confirmAction(t.standby.removeConfirm(name), { action: t.standby.remove, danger: true }))) return;
     setError("");
     setRemoving(id);
     try {
@@ -110,21 +110,18 @@ export function StandbyCard() {
     }
   };
 
+  const addButton = (
+    <Button variant="outline" onClick={create} disabled={busy}>
+      {busy ? <Spinner /> : <Plus />}
+      {t.standby.list.add}
+    </Button>
+  );
   return (
-    <Section
-      title={t.standby.list.title}
-      help={t.standby.list.help}
-      actions={
-        <Button variant="outline" onClick={create} disabled={busy}>
-          {busy ? <Spinner /> : <Plus />}
-          {t.standby.list.add}
-        </Button>
-      }
-    >
+    <Section title={t.standby.list.title} help={t.standby.list.help} actions={addButton}>
       {refetchError}
       {error && <Alert>{error}</Alert>}
       {d.standbys.length === 0 ? (
-        <EmptyRow>{t.standby.list.empty}</EmptyRow>
+        <EmptyRow action={addButton}>{t.standby.list.empty}</EmptyRow>
       ) : (
         <List>
           {d.standbys.map((s) => (
@@ -140,8 +137,11 @@ export function StandbyCard() {
                   content: s.connected ? (
                     <Status tone="success">{t.standby.connected}</Status>
                   ) : (
-                    <span className="text-warning-text" title={t.standby.disconnectedHint}>
-                      <Status tone="warning">{t.standby.disconnected}</Status>
+                    <span className="flex items-center gap-1">
+                      <span className="text-warning-text">
+                        <Status tone="warning">{t.standby.disconnected}</Status>
+                      </span>
+                      <HelpTip>{t.standby.disconnectedHint}</HelpTip>
                     </span>
                   ),
                 },
@@ -156,7 +156,7 @@ export function StandbyCard() {
           ))}
         </List>
       )}
-      <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} className="max-w-[520px]">
+      <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} description={t.standby.dialog.description} className="max-w-[520px]">
         {code && (
           <>
             <CodeBox text={`nagi server --standby ${code.code}`} />

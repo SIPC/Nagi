@@ -38,7 +38,7 @@
       copy: "Copy",
       copied: "Copied",
       open: "Open",
-      note: "Standby panels are read-only. If the primary panel can't be recovered, promote a standby panel to make changes. Sign in to each panel separately; if a security entry is enabled, add its path to the address.",
+      note: "Standby panels are read-only. If the primary panel can't be recovered, promote a standby panel to make changes. Sign in to each panel separately; if secure entry is enabled, add the entry path to the address.",
       retry: "Retry",
     },
   }[lang];

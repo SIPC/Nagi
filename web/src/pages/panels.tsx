@@ -28,6 +28,8 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<HandOverResult[]>([]);
+  // error：整个请求失败（例如接入码不对），可以改了再提交。
+  const [error, setError] = useState("");
   const [missing, setMissing] = useState<{ code?: boolean; nodes?: boolean }>({});
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
   const projectList = (projects.data?.projects ?? []).map((p) => p.project!).filter((p) => p && p.containers.length > 0);
@@ -44,15 +46,16 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
     if (lacks.code || lacks.nodes) return;
     if (!(await confirmAction(t.panels.handover.confirm(selected.length), { action: t.panels.handover.submit, danger: true }))) return;
     setBusy(true);
+    setError("");
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
     try {
       const res = await nodeClient.handoverNodes({ nodeIds: selected, invite: code });
       setResults(res.results.map((r) => ({ name: name(r.nodeId), ok: !r.error, error: r.error })));
+      setSelected([]);
     } catch (err) {
-      setResults([{ name: t.panels.handover.failedName, ok: false, error: errorMessage(err) }]);
+      setError(errorMessage(err));
     }
     setBusy(false);
-    setSelected([]);
     queryClient.invalidateQueries({ queryKey: ["nodes"] });
   };
 
@@ -88,6 +91,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
             ))}
           </div>
         </Field>
+        {error && <Alert>{error}</Alert>}
         {results.length > 0 && (
           <List>
             {results.map((r, i) => (
@@ -95,19 +99,28 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
                 key={i}
                 title={r.name}
                 sub={r.ok ? undefined : r.error}
-                cols={[{ content: <Status tone={r.ok ? "success" : "danger"}>{r.ok ? t.common.feedback.done : t.panels.handover.failed}</Status>, phone: true }]}
+                cols={[{ content: <Status tone={r.ok ? "success" : "danger"}>{r.ok ? t.panels.handover.handedOver : t.panels.handover.failed}</Status>, phone: true }]}
               />
             ))}
           </List>
         )}
+      {/* 出了结果就是结果页：只留「完成」，不能再提交一次。 */}
       <DialogActions>
-        <Button variant="outline" readOnlyOk onClick={onClose}>
-          {t.common.actions.cancel}
-        </Button>
-        <Button variant="destructive" disabled={busy} onClick={run}>
-          {busy && <Spinner />}
-          {busy ? t.panels.handover.processing : t.panels.handover.submit}
-        </Button>
+        {results.length > 0 ? (
+          <Button readOnlyOk onClick={onClose}>
+            {t.panels.handover.finish}
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" readOnlyOk onClick={onClose}>
+              {t.common.actions.cancel}
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={run}>
+              {busy && <Spinner />}
+              {busy ? t.panels.handover.processing : t.panels.handover.submit}
+            </Button>
+          </>
+        )}
       </DialogActions>
     </div>
   );
@@ -160,9 +173,12 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
                   <Button
                     size="row"
                     variant="ghost"
+                    // 不能通过面板移除最后一个面板（见 docs/control-plane.md）。
+                    disabled={q.data.panels.length === 1}
+                    title={q.data.panels.length === 1 ? t.panels.nodePanels.lastPanel : undefined}
                     onClick={async () => {
                       const msg = p.isSelf ? t.panels.nodePanels.removeSelfConfirm : t.panels.nodePanels.removeConfirm(p.address, key.slice(0, 12));
-                      if (!(await confirmAction(msg, { action: t.common.actions.remove, danger: true }))) return;
+                      if (!(await confirmAction(msg, { action: t.panels.nodePanels.remove, danger: true }))) return;
                       setError("");
                       try {
                         await nodeClient.removeNodePanel({ nodeId, fingerprint: p.fingerprint });

@@ -46,12 +46,22 @@ const menuGroups = [
   aboutGroup,
 ];
 
+// 不是管理员时只有自己的账号和关于。面板设置的接口也会拒绝。
+function groupsFor(isAdmin: boolean) {
+  return isAdmin ? menuGroups : [accountGroup, aboutGroup];
+}
+
+// settingsTabsFor：当前角色能看到的设置项，按菜单顺序。标签页标题、命令面板也用它。
+export function settingsTabsFor(isAdmin: boolean) {
+  const values = groupsFor(isAdmin).flatMap((g) => g.tabs);
+  return values.map((value) => settingsTabs.find((x) => x.value === value)!);
+}
+
 // 选中项直接读地址：没有 tab 参数时显示账号安全。
 export function SettingsPage(_props: { tab: SettingsTab }) {
   const tab = useSearch({ from: "/app/settings" }).tab ?? "security";
   const { isAdmin } = useRole();
-  // 不是管理员时只有自己的账号和关于。面板设置的接口也会拒绝。
-  const groups = isAdmin ? menuGroups : [accountGroup, aboutGroup];
+  const groups = groupsFor(isAdmin);
   const allowed = groups.flatMap((g) => g.tabs);
   const cur: SettingsTab = allowed.includes(tab) ? tab : "security";
   const label = (value: SettingsTab) => settingsTabs.find((x) => x.value === value)?.label;

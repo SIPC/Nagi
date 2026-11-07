@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
 import { Alert, Button, CopyButton, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
@@ -44,7 +45,7 @@ export function InviteCard() {
   };
 
   const revoke = async (id: string) => {
-    if (!(await confirmAction(t.invite.revokeConfirm(id), { action: t.invite.revoke, danger: true }))) return;
+    if (!(await confirmAction(t.invite.revokeConfirm(id), { action: t.invite.revokeAction, danger: true }))) return;
     setError("");
     setRevoking(id);
     try {
@@ -59,25 +60,36 @@ export function InviteCard() {
     }
   };
 
+  const generateButton = (
+    <Button variant="outline" onClick={create} disabled={creating}>
+      {creating && <Spinner />}
+      {t.invite.generate}
+    </Button>
+  );
   return (
     <Section
-      title={<span title={t.invite.description}>{t.settings.tabs.invite.label}</span>}
+      title={t.settings.tabs.invite.label}
       help={t.invite.help}
-      actions={
-        <Button variant="outline" onClick={create} disabled={creating}>
-          {creating && <Spinner />}
-          {t.invite.generate}
-        </Button>
-      }
+      description={t.invite.description(
+        <Link to="/nodes" className="text-foreground underline-offset-4 hover:underline">
+          {t.invite.addNode}
+        </Link>,
+      )}
+      actions={generateButton}
     >
       {error && <Alert>{error}</Alert>}
-      {code && <CodeBox text={code} title={t.invite.pasteHint(t.invite.command)} />}
+      {code && (
+        <div className="grid gap-2">
+          <CodeBox text={code} />
+          <p className="text-[13px] leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
+        </div>
+      )}
       {invites.isPending ? (
         <RowsSkeleton count={2} />
       ) : !invites.data ? (
         <QueryError error={errorMessage(invites.error)} onRetry={() => invites.refetch()} />
       ) : invites.data.invites.length === 0 ? (
-        <EmptyRow>{t.invite.empty}</EmptyRow>
+        <EmptyRow action={generateButton}>{t.invite.empty}</EmptyRow>
       ) : (
         <List>
           {invites.data.invites.map((i) => (

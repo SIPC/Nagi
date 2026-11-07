@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, Button, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, HelpTip, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
 import { confirmAction } from "@/components/confirm";
@@ -173,7 +173,7 @@ export function UpdateTips({ nodes, isStandby }: { nodes: Node[]; isStandby: boo
   } else if (panel) {
     panelTip = { key: `panel-${panel.phase}`, kind: "loading", title: panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target) };
   } else if (latest) {
-    panelTip = { key: `panel-new-${latest}`, kind: "info", title: t.update.tips.available(latest), description: t.update.tips.availableText, to: "update" };
+    panelTip = { key: `panel-new-${latest}`, kind: "info", title: t.update.tips.available(latest), to: "update" };
   }
   useTip("panel-update", panelTip);
 
@@ -220,7 +220,7 @@ export function UpdateCard() {
   };
 
   const update = async (version: string) => {
-    if (!(await confirmAction(t.update.confirm(version), { action: t.update.action }))) return;
+    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel }))) return;
     setStarting(true);
     setError("");
     try {
@@ -247,7 +247,11 @@ export function UpdateCard() {
     );
   const details = d?.available && (
     <>
-      {primaryHint && <span title={t.update.primaryHelp}>{`${primaryHint} `}</span>}
+      {primaryHint && (
+        <>
+          {primaryHint} <HelpTip>{t.update.primaryHelp}</HelpTip>{" "}
+        </>
+      )}
       <a className="text-foreground underline-offset-4 hover:underline" href={d.releaseUrl} target="_blank" rel="noreferrer">
         {t.update.notes}
       </a>
@@ -255,7 +259,7 @@ export function UpdateCard() {
   );
 
   return (
-    <Section title={<span title={t.settings.tabs.update.description}>{t.settings.tabs.update.label}</span>}>
+    <Section title={t.settings.tabs.update.label} help={t.update.help}>
       {error && <Alert>{error}</Alert>}
       {status.error && !status.data && <QueryError error={errorMessage(status.error)} onRetry={() => status.refetch()} />}
       {panel && failed && (
@@ -272,15 +276,17 @@ export function UpdateCard() {
             {t.update.restartingText}
           </Notice>
         ) : (
-          <Notice tone="info" title={<span title={t.update.installingText}>{t.update.installingTitle(panel.target)}</span>} />
+          <Notice tone="info" title={t.update.installingTitle(panel.target)}>
+            {t.update.installingText}
+          </Notice>
         ))}
       {d?.available && !active && !failed && (
         <Notice tone="info" title={t.update.availableTitle(d.latest)} actions={updateButton(t.update.action)}>
-          <span title={t.update.text}>{details}</span>
+          {details}
         </Notice>
       )}
       {checked && d && !d.available && <Notice title={t.update.upToDate} />}
-      {standbys?.isStandby && <Notice title={<span title={t.update.standbyHint}>{t.update.standbyTitle}</span>} />}
+      {standbys?.isStandby && <Notice title={t.update.standbyTitle}>{t.update.standbyHint}</Notice>}
       {q.isPending ? (
         <RowsSkeleton count={2} />
       ) : !d ? (

@@ -57,6 +57,8 @@ function ScopePick({
   all,
   ids,
   options,
+  error,
+  onRetry,
   empty,
   onChange,
 }: {
@@ -65,6 +67,9 @@ function ScopePick({
   all: boolean;
   ids: string[];
   options: { id: string; name: React.ReactNode }[] | undefined;
+  // error：选项加载失败。
+  error: unknown;
+  onRetry: () => void;
   empty: string;
   onChange: (all: boolean, ids: string[]) => void;
 }) {
@@ -86,7 +91,9 @@ function ScopePick({
         {/* 选「指定」时勾选列表展开，选「全部」时收起，下面的内容跟着平滑移动。 */}
         <Collapse open={!all}>
           <div className="pt-2">
-            {!options ? (
+            {!options && error ? (
+              <QueryError error={error} onRetry={onRetry} />
+            ) : !options ? (
               <RowsSkeleton count={1} />
             ) : options.length === 0 ? (
               <p className="text-muted-foreground">{empty}</p>
@@ -117,6 +124,8 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
         all={scope.allProjects}
         ids={scope.projectIds}
         empty={t.members.scope.noProjects}
+        error={projects.error}
+        onRetry={() => projects.refetch()}
         options={projects.data?.projects.map((p) => ({
           id: p.project!.id,
           name: (
@@ -134,6 +143,8 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
         all={scope.allNodes}
         ids={scope.nodeIds}
         empty={t.members.scope.noNodes}
+        error={nodes.error}
+        onRetry={() => nodes.refetch()}
         options={nodes.data?.nodes.filter((n) => !n.pending).map((n) => ({ id: n.id, name: n.name }))}
         onChange={(allNodes, nodeIds) => onChange({ ...scope, allNodes, nodeIds })}
       />
@@ -147,10 +158,7 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   const [scope, setScope] = useState(() => scopeOf(user));
   const save = useMutation({
     mutationFn: () => settingsClient.updateUser({ id: user.id, role: role === user.role ? "" : role, scope: role === "admin" ? undefined : scope }),
-    onSuccess: () => {
-      toast.success(t.common.feedback.saved);
-      onDone();
-    },
+    onSuccess: onDone,
   });
   return (
     <form
@@ -200,10 +208,10 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
         add.mutate();
       }}
     >
-      <Field label={t.members.username} htmlFor="member-name" required>
+      <Field label={t.members.username} htmlFor="member-name">
         <Input id="member-name" value={username} onChange={(e) => setUsername(e.target.value)} required maxLength={32} autoComplete="off" />
       </Field>
-      <Field label={t.members.password} htmlFor="member-password" required>
+      <Field label={t.members.password} htmlFor="member-password" hint={t.members.passwordHint}>
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
       <Field label={t.members.role} htmlFor="member-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
@@ -243,7 +251,7 @@ function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: ()
         reset.mutate();
       }}
     >
-      <Field label={t.members.newPassword} htmlFor="member-new-password" hint={t.members.passwordHint} required>
+      <Field label={t.members.newPassword} htmlFor="member-new-password" hint={t.members.passwordHint}>
         <Input id="member-new-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
       {reset.error && <Alert>{errorMessage(reset.error)}</Alert>}
@@ -269,34 +277,32 @@ export function MembersCard() {
   const [tokensOf, setTokensOf] = useState<PanelUser | null>(null);
   const [error, setError] = useState("");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
-  const call = async (fn: () => Promise<unknown>, done: string) => {
+  // 结果在列表上就能看到，不另外提示。
+  const call = async (fn: () => Promise<unknown>) => {
     setError("");
     try {
       await fn();
-      toast.success(done);
     } catch (err) {
       setError(errorMessage(err));
     }
     refresh();
   };
 
+  const addButton = (
+    <Button variant="outline" onClick={() => setAdding(true)}>
+      <Plus />
+      {t.members.add}
+    </Button>
+  );
   return (
-    <Section
-      title={<span title={t.members.help}>{t.members.title}</span>}
-      actions={
-        <Button variant="outline" onClick={() => setAdding(true)}>
-          <Plus />
-          {t.members.add}
-        </Button>
-      }
-    >
+    <Section title={t.members.title} help={t.members.help} actions={addButton}>
       {error && <Alert>{error}</Alert>}
       {users.isPending ? (
         <RowsSkeleton />
       ) : !users.data ? (
         <QueryError error={errorMessage(users.error)} onRetry={() => users.refetch()} />
       ) : users.data.users.length === 0 ? (
-        <EmptyRow>{t.members.empty}</EmptyRow>
+        <EmptyRow action={addButton}>{t.members.empty}</EmptyRow>
       ) : (
         <List>
           {users.data.users.map((u) => (
@@ -319,7 +325,7 @@ export function MembersCard() {
                   className="size-9 last:mr-0 [&_svg]:size-5"
                   items={[
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
-                    { label: t.tokens.title, onSelect: () => setTokensOf(u) },
+                    { label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true },
                     { label: t.members.resetPassword, onSelect: () => setResetting(u) },
                     ...(u.totpEnabled && !u.isSelf
                       ? [
@@ -327,7 +333,7 @@ export function MembersCard() {
                             label: t.members.clearTotp,
                             onSelect: async () => {
                               if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
-                                call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.common.feedback.done);
+                                call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }));
                             },
                           },
                         ]
@@ -335,11 +341,11 @@ export function MembersCard() {
                     ...(!u.isSelf
                       ? [
                           {
-                            label: t.common.actions.delete,
+                            label: t.members.deleteMember,
                             danger: true,
                             onSelect: async () => {
-                              if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.common.actions.delete, danger: true }))
-                                call(() => settingsClient.deleteUser({ id: u.id }), t.common.feedback.done);
+                              if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.members.deleteMember, danger: true }))
+                                call(() => settingsClient.deleteUser({ id: u.id }));
                             },
                           },
                         ]
@@ -422,7 +428,6 @@ export function SessionList() {
                     setRevoking(s.id);
                     try {
                       await settingsClient.revokeSession({ id: s.id });
-                      toast.success(t.common.feedback.done);
                       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
                     } catch (err) {
                       setError(errorMessage(err));

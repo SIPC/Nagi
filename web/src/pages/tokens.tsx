@@ -2,11 +2,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
-import { Alert, Button, Check, CodeBlock, CopyButton, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
+import { Alert, Button, Check, CodeBlock, CopyButton, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner } from "@/components/ui";
 import type { AccessToken, CreateAccessTokenResponse } from "@/gen/nagi/v1/api_pb";
 import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
@@ -37,18 +36,17 @@ function tokenSummary(tk: AccessToken) {
   return parts.join(" · ");
 }
 
-// AccessTokenList：令牌列表。userId 不为 0 时是管理员看别人的。
-export function AccessTokenList({ userId = 0n }: { userId?: bigint }) {
+// AccessTokenList：令牌列表。userId 不为 0 时是管理员看别人的。emptyAction：没有令牌时的下一步按钮。
+export function AccessTokenList({ userId = 0n, emptyAction }: { userId?: bigint; emptyAction?: React.ReactNode }) {
   const queryClient = useQueryClient();
   const key = ["access-tokens", String(userId)];
   const tokens = useQuery({ queryKey: key, queryFn: () => settingsClient.listAccessTokens({ userId }) });
   const [error, setError] = useState("");
   const revoke = async (tk: AccessToken) => {
-    if (!(await confirmAction(t.tokens.revokeConfirm(tk.name), { action: t.tokens.revoke, danger: true }))) return;
+    if (!(await confirmAction(t.tokens.revokeConfirm(tk.name), { action: t.tokens.revokeToken, danger: true }))) return;
     setError("");
     try {
       await settingsClient.revokeAccessToken({ id: tk.id });
-      toast.success(t.tokens.revoked);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -60,7 +58,7 @@ export function AccessTokenList({ userId = 0n }: { userId?: bigint }) {
     <>
       {error && <Alert>{error}</Alert>}
       {tokens.data.tokens.length === 0 ? (
-        <EmptyRow>{t.tokens.empty}</EmptyRow>
+        <EmptyRow action={emptyAction}>{t.tokens.empty}</EmptyRow>
       ) : (
         <List>
           {tokens.data.tokens.map((tk) => {
@@ -118,7 +116,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         create.mutate();
       }}
     >
-      <Field label={t.tokens.name} htmlFor="token-name" required>
+      <Field label={t.tokens.name} htmlFor="token-name">
         <Input id="token-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.tokens.namePlaceholder} required maxLength={64} autoComplete="off" />
       </Field>
       <Field label={t.tokens.expires} htmlFor="token-expires">
@@ -184,6 +182,7 @@ function CreatedToken({ secret, url, onDone }: { secret: string; url: string; on
           <span className="text-[13px] text-muted-foreground">{t.tokens.setupClaudeCode}</span>
           <CodeBlock copy>{`claude mcp add --transport http nagi ${url} --header "Authorization: Bearer ${secret}"`}</CodeBlock>
           <span className="text-[13px] text-muted-foreground">{t.tokens.setupOther}</span>
+          <CodeBlock copy>{url}</CodeBlock>
           <CodeBlock copy>{`Authorization: Bearer ${secret}`}</CodeBlock>
         </div>
       )}
@@ -212,14 +211,18 @@ export function AccessTokenSection() {
       }
     >
       <List>
-        <Row
-          center
-          title={t.tokens.mcpUrl}
-          sub={<span className="block truncate" title={mcp.url ? t.tokens.mcpUrlHint : undefined}>{mcp.hidden ? t.tokens.mcpUrlEntrance : mcp.url || "—"}</span>}
-          actions={mcp.url ? <CopyButton text={mcp.url} /> : null}
-        />
+        <SettingRow label={t.tokens.mcpUrl} help={mcp.url ? t.tokens.mcpUrlHint : undefined} description={<span className="block truncate">{mcp.hidden ? t.tokens.mcpUrlEntrance : mcp.url || "—"}</span>}>
+          {mcp.url ? <CopyButton text={mcp.url} /> : null}
+        </SettingRow>
       </List>
-      <AccessTokenList />
+      <AccessTokenList
+        emptyAction={
+          <Button variant="outline" onClick={() => setCreating(true)}>
+            <Plus />
+            {t.tokens.create}
+          </Button>
+        }
+      />
       <Dialog open={creating} onClose={() => setCreating(false)} title={t.tokens.create} description={t.tokens.help}>
         <CreateToken
           onCancel={() => setCreating(false)}
@@ -302,6 +305,7 @@ export function OAuthAuthorizePage() {
     return (
       <AuthShell title={k.invalid}>
         <Alert>{errorMessage(check.error)}</Alert>
+        <p className="text-muted-foreground">{k.invalidHint}</p>
       </AuthShell>
     );
   const c = check.data;

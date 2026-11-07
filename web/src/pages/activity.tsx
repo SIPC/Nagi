@@ -59,7 +59,7 @@ function ActivityList() {
   return (
     <>
     <PageHeader
-      title={t.app.nav.logs}
+      title={t.app.nav.activity}
       description={t.activity.description}
       actions={
         <Segmented
@@ -90,13 +90,14 @@ function ActivityList() {
                   const target = e.projectId ? `${projectName(e.projectId)}${e.target ? ` / ${e.target}` : ""}` : e.target;
                   const name = (e.kind === "alert" && e.detail) || actionLabel(e);
                   const time = timeAgo(toDate(e.time));
-                  // 告警第二行写类型和是否已恢复，操作写谁做的和失败原因。
-                  const parts = e.kind === "alert" ? [t.activity.firing, e.action === "resolved" && t.activity.resolved, time] : [e.actor, e.via && t.activity.via(e.via.replace(/^mcp:/, "")), e.detail, time];
+                  // 告警第二行写发出告警的节点（是否已恢复在右边的结果列），操作写谁做的和失败原因。
+                  const parts = e.kind === "alert" ? [e.actor, time] : [e.actor, e.via && t.activity.via(e.via.replace(/^mcp:/, "")), e.detail, time];
                   return (
                     <Row
                       key={String(e.id)}
                       title={
-                        <span className="min-w-0 truncate" title={e.kind === "alert" ? [e.detail, e.actor].filter(Boolean).join(" · ") : undefined}>
+                        // 放不下时截断，悬停看完整的一行。
+                        <span className="min-w-0 truncate" title={target ? `${name} ${target}` : name}>
                           {target ? `${name} ${target}` : name}
                         </span>
                       }

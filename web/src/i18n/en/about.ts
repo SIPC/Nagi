@@ -19,6 +19,6 @@ export default {
     kopia: "Snapshots and off-site copies",
     control: "Control-plane communication",
     shadcn: "UI components",
-    misans: "Interface font, by Xiaomi",
+    misans: "UI font, by Xiaomi",
   },
 } satisfies typeof zh;

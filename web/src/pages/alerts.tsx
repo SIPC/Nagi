@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { Plus } from "lucide-react";
@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { AlertChannelSchema, AlertConfigSchema, AlertRulesSchema, type AlertChannel, type AlertConfig, type AlertRules } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Dialog, DialogActions, Field, FormActions, FormBody, FormRow, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormActions, FormBody, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
+import { useUnsaved } from "@/components/unsaved";
 import { t } from "@/i18n";
 
 // ---- 告警设置：通知渠道和触发规则 ----
@@ -96,6 +97,7 @@ function ChannelDialog({ initial, adding, onClose, onSave }: { initial: AlertCha
 }
 
 // 查询成功才挂载，所以这里拿到的一定是面板上的配置，不会用空配置覆盖。
+// 面板上的规则变了（包括刚保存）时由上层换 key 重新挂载，正在填写的规则和「未保存」的起点一起更新。
 function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: boolean }) {
   const queryClient = useQueryClient();
   const channels = config?.channels ?? [];
@@ -107,12 +109,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   const [channelError, setChannelError] = useState("");
   const [rulesError, setRulesError] = useState("");
 
-  // 面板上的规则变了才同步。保存渠道不会改规则，所以不会冲掉正在填写的内容。
-  const rulesKey = JSON.stringify(savedRules);
-  useEffect(() => {
-    setRules(savedRules);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 内容由 rulesKey 决定。
-  }, [rulesKey]);
+  useUnsaved(rules);
 
   // 渠道和规则存在同一份配置里。各自保存时另一半用面板上已保存的值，不带上还没点保存的修改。
   const push = async (nextChannels: AlertChannel[], nextRules: AlertRules) => {
@@ -128,7 +125,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   };
 
   const removeChannel = async (i: number) => {
-    if (!(await confirmAction(t.alerts.deleteChannelConfirm(channelName(channels[i])), { action: t.common.actions.delete, danger: true }))) return;
+    if (!(await confirmAction(t.alerts.deleteChannelConfirm(channelName(channels[i])), { action: t.alerts.deleteChannel, danger: true }))) return;
     setChannelError("");
     try {
       await push(
@@ -165,8 +162,8 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
     }
   };
 
-  const ruleField = (label: string, key: keyof AlertRules, placeholder: number) => (
-    <Field label={label} htmlFor={`rule-${key}`}>
+  const ruleField = (label: string, key: keyof AlertRules, placeholder: number, help?: string) => (
+    <Field label={label} htmlFor={`rule-${key}`} help={help}>
       <Input
         id={`rule-${key}`}
         type="number"
@@ -184,25 +181,31 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
     </Field>
   );
 
+  const addButton = (
+    <Button variant="outline" onClick={() => setEditing({ index: null, channel: create(AlertChannelSchema, { type: "webhook" }) })}>
+      <Plus />
+      {t.alerts.addChannel}
+    </Button>
+  );
+  // 一组规则：小标题加字段。
+  const group = (title: string, children: React.ReactNode) => (
+    <fieldset className="grid gap-4">
+      <legend className="mb-4 font-medium">{title}</legend>
+      {children}
+    </fieldset>
+  );
+
   return (
     <>
-      <Section
-        title={<span title={t.settings.tabs.alerts.description}>{t.alerts.channels}</span>}
-        actions={
-          <Button variant="outline" onClick={() => setEditing({ index: null, channel: create(AlertChannelSchema, { type: "webhook" }) })}>
-            <Plus />
-            {t.alerts.addChannel}
-          </Button>
-        }
-      >
+      <Section title={t.alerts.channels} help={t.alerts.channelsHelp} actions={addButton}>
         {lost && (
           <Notice tone="warning" title={t.alerts.lostTitle}>
-            <span title={t.alerts.lostHelp}>{t.alerts.lostBody}</span>
+            {t.alerts.lostBody} <HelpTip>{t.alerts.lostHelp}</HelpTip>
           </Notice>
         )}
         {channelError && <Alert>{channelError}</Alert>}
         {channels.length === 0 ? (
-          <p className="text-muted-foreground">{t.alerts.noChannels}</p>
+          <EmptyRow action={addButton}>{t.alerts.noChannels}</EmptyRow>
         ) : (
           <List>
             {channels.map((c, i) => (
@@ -238,23 +241,34 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
             saveRules();
           }}
         >
-          <FormBody>
-            <FormRow>
-              {ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60)}
-              {ruleField(t.alerts.rule.memPercent, "memPercent", 90)}
-            </FormRow>
-            <FormRow>
-              {ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)}
-              {ruleField(t.alerts.rule.diskPercent, "diskPercent", 90)}
-            </FormRow>
-            <FormRow>
-              {ruleField(t.alerts.rule.restartCount, "restartCount", 3)}
-              {ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10)}
-            </FormRow>
-            <FormRow>
-              {ruleField(t.alerts.rule.errorPercent, "errorPercent", 5)}
-              {ruleField(t.alerts.rule.certDays, "certDays", 7)}
-            </FormRow>
+          <FormBody className="gap-6">
+            {group(
+              t.alerts.ruleGroups.resources,
+              <>
+                <FormRow>
+                  {ruleField(t.alerts.rule.memPercent, "memPercent", 90)}
+                  {ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)}
+                </FormRow>
+                <FormRow>{ruleField(t.alerts.rule.diskPercent, "diskPercent", 90)}</FormRow>
+              </>,
+            )}
+            {group(
+              t.alerts.ruleGroups.containers,
+              <>
+                <FormRow>
+                  {ruleField(t.alerts.rule.restartCount, "restartCount", 3)}
+                  {ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10)}
+                </FormRow>
+                <FormRow>{ruleField(t.alerts.rule.errorPercent, "errorPercent", 5, t.alerts.rule.errorPercentHelp)}</FormRow>
+              </>,
+            )}
+            {group(
+              t.alerts.ruleGroups.availability,
+              <FormRow>
+                {ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60)}
+                {ruleField(t.alerts.rule.certDays, "certDays", 7)}
+              </FormRow>,
+            )}
             {rulesError && <Alert>{rulesError}</Alert>}
             <FormActions>
               <Button type="submit" variant="outline" disabled={saving}>
@@ -289,5 +303,5 @@ export function AlertSettings() {
         <QueryError error={errorMessage(cfg.error)} onRetry={() => cfg.refetch()} />
       </Section>
     );
-  return <AlertForm config={cfg.data.config} lost={cfg.data.lost} />;
+  return <AlertForm key={JSON.stringify(cfg.data.config?.rules ?? {})} config={cfg.data.config} lost={cfg.data.lost} />;
 }

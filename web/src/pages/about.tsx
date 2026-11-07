@@ -53,8 +53,8 @@ export function AboutCard() {
       <Section className="border-t pt-6" title={a.links.title}>
         <List>
           <Row title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />
-          <Row title={<External href={`${repo}/releases`}>{a.links.changelog}</External>} cols={[{ phone: true, content: "Releases" }]} />
-          <Row title={<External href={`${repo}/issues`}>{a.links.issues}</External>} cols={[{ phone: true, content: "Issues" }]} />
+          <Row title={<External href={`${repo}/releases`}>{a.links.changelog}</External>} />
+          <Row title={<External href={`${repo}/issues`}>{a.links.issues}</External>} />
           <Row title={<External href={`${repo}/blob/main/LICENSE`}>{a.links.license}</External>} cols={[{ phone: true, content: "Apache-2.0" }]} />
         </List>
       </Section>

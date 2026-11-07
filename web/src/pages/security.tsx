@@ -36,8 +36,8 @@ function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
         <Field label={t.security.password.current} htmlFor="sec-cur">
           <Input id="sec-cur" type="password" autoComplete="current-password" autoFocus required value={cur} onChange={(e) => setCur(e.target.value)} />
         </Field>
-        <Field label={t.security.password.newPassword} htmlFor="sec-next">
-          <Input id="sec-next" type="password" placeholder={t.security.password.hint} autoComplete="new-password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} />
+        <Field label={t.security.password.newPassword} htmlFor="sec-next" hint={t.security.password.hint}>
+          <Input id="sec-next" type="password" autoComplete="new-password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} />
         </Field>
         {change.error && <Alert>{errorMessage(change.error)}</Alert>}
         <DialogActions>
@@ -86,7 +86,7 @@ function EnableTotpDialog({ setup, onClose, onDone }: { setup: { secret: string;
           </Button>
           <Button type="submit" disabled={enable.isPending}>
             {enable.isPending && <Spinner />}
-            {t.security.totp.confirmEnable}
+            {t.security.totp.enable}
           </Button>
         </DialogActions>
       </form>
@@ -100,7 +100,6 @@ function DisableTotpDialog({ onClose, onDone }: { onClose: () => void; onDone: (
     // 6 位数字按验证码，其余按登录密码。
     mutationFn: () => settingsClient.disableTOTP(/^\d{6}$/.test(code.trim()) ? { code: code.trim() } : { password: code }),
     onSuccess: () => {
-      toast.success(t.security.totp.disabledMsg);
       onDone();
       onClose();
     },
@@ -171,7 +170,7 @@ export function SecurityCard() {
         setSetup(await settingsClient.beginTOTP({}));
       } catch (err) {
         // 开启前要先再验证一次身份。
-        if (!isElevationRequired(err) || !(await requireElevation(t.security.totp.elevate))) throw err;
+        if (!isElevationRequired(err) || !(await requireElevation(t.security.totp.elevate, { suggestTotp: false }))) throw err;
         setSetup(await settingsClient.beginTOTP({}));
       }
     } catch (err) {
@@ -182,12 +181,11 @@ export function SecurityCard() {
   };
 
   const setEntrance = async (enabled: boolean) => {
-    if (!enabled && !(await confirmAction(t.security.entrance.disableConfirm, { action: t.security.entrance.actionOff, danger: true }))) return;
+    if (!enabled && !(await confirmAction(t.security.entrance.disableConfirm, { action: t.security.entrance.disable, danger: true }))) return;
     setBusy("entrance");
     setError("");
     try {
       await settingsClient.setEntrance({ enabled });
-      toast.success(enabled ? t.security.entrance.enabledMsg : t.security.entrance.disabledMsg);
       await sec.refetch();
     } catch (err) {
       setError(errorMessage(err));
@@ -201,7 +199,7 @@ export function SecurityCard() {
 
   return (
     <>
-      <Section title={<span title={t.settings.tabs.security.description}>{t.settings.tabs.security.label}</span>}>
+      <Section title={t.settings.tabs.security.label}>
         {error && <Alert>{error}</Alert>}
         {sec.isPending ? (
           <RowsSkeleton />
@@ -209,12 +207,12 @@ export function SecurityCard() {
           <QueryError error={errorMessage(sec.error)} onRetry={() => sec.refetch()} />
         ) : (
           <SettingRows>
-            <SettingRow label={t.security.password.label} description={<span title={t.security.password.help}>{t.security.password.description}</span>}>
+            <SettingRow label={t.security.password.label} help={t.security.password.help} description={t.security.password.description}>
               <Button variant="outline" onClick={() => setDialog("password")}>
                 {t.security.password.submit}
               </Button>
             </SettingRow>
-            <SettingRow label={t.security.totp.label} description={<span title={t.security.totp.help}>{s.totpEnabled ? t.security.totp.onStatus : t.security.totp.offStatus}</span>}>
+            <SettingRow label={t.security.totp.label} help={t.security.totp.help} description={s.totpEnabled ? t.security.totp.onStatus : t.security.totp.offStatus}>
               {s.totpEnabled ? (
                 <Button variant="outline" onClick={() => setDialog("disable-totp")}>
                   {t.security.totp.actionOff}
@@ -229,7 +227,8 @@ export function SecurityCard() {
             {isAdmin && masterKeyPath && (
               <SettingRow
                 label={t.security.masterKey.label}
-                description={<span className="break-all" title={`${t.security.masterKey.description} ${t.security.masterKey.help}`}>{`${masterKeyPath} · ${t.security.masterKey.backup}`}</span>}
+                help={t.security.masterKey.help}
+                description={<span className="break-all">{`${masterKeyPath} · ${t.security.masterKey.backup}`}</span>}
               >
                 <CopyTextButton text={masterKeyPath} label={t.security.masterKey.copyPath} />
               </SettingRow>
@@ -237,7 +236,8 @@ export function SecurityCard() {
             {isAdmin && (
               <SettingRow
                 label={t.security.entrance.label}
-                description={<span className="break-all" title={t.security.entrance.help}>{s.entrance ? `${entranceUrl} · ${t.security.entrance.onStatus}` : t.security.entrance.offStatus}</span>}
+                help={t.security.entrance.help}
+                description={<span className="break-all">{s.entrance ? `${entranceUrl} · ${t.security.entrance.onStatus}` : t.security.entrance.offStatus}</span>}
               >
                 <span className="flex items-center gap-2">
                   {s.entrance && <CopyButton text={entranceUrl} />}
@@ -251,7 +251,7 @@ export function SecurityCard() {
           </SettingRows>
         )}
       </Section>
-      <Section title={<span title={t.security.sessions.description}>{t.security.sessions.label}</span>}>
+      <Section title={t.security.sessions.label} help={t.security.sessions.help}>
         <SessionList />
       </Section>
       <AccessTokenSection />

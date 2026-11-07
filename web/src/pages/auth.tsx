@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
-import { Button, Field, Input, Notice, QueryError, Spinner, Waves } from "@/components/ui";
+import { Alert, Button, Field, Input, Notice, QueryError, Spinner, Waves } from "@/components/ui";
 import { LanguageButton } from "@/components/language";
 import { t } from "@/i18n";
 
@@ -74,7 +74,8 @@ export function SetupPage({ token }: { token: string }) {
       </AuthShell>
     );
 
-  const error = localError || (setup.error ? errorMessage(setup.error) : undefined);
+  // 两次密码不一致显示在「确认密码」下；面板返回的错误（用户名、密码不合要求等）显示在表单底部。
+  const serverError = setup.error ? errorMessage(setup.error) : undefined;
 
   return (
     <AuthShell title={t.auth.setup.title} description={t.auth.setup.description}>
@@ -93,12 +94,13 @@ export function SetupPage({ token }: { token: string }) {
         <Field label={t.auth.username} htmlFor="username">
           <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="admin" autoFocus required />
         </Field>
-        <Field label={t.auth.password} htmlFor="password">
-          <Input id="password" type="password" placeholder={t.auth.setup.passwordHint} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} />
+        <Field label={t.auth.password} htmlFor="password" hint={t.auth.setup.passwordHint}>
+          <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} />
         </Field>
-        <Field label={t.auth.setup.confirmPassword} htmlFor="confirm" error={error}>
+        <Field label={t.auth.setup.confirmPassword} htmlFor="confirm" error={localError || undefined}>
           <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
         </Field>
+        {serverError && <Alert keepFocus>{serverError}</Alert>}
         <Button type="submit" className="w-full" disabled={setup.isPending}>
           {setup.isPending && <Spinner />}
           {t.auth.setup.submit}

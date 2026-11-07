@@ -6,13 +6,13 @@ import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, ScrollText, Server, S
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
-import { ActiveBox, Button, ButtonLink, ReadOnlyContext, Slide, useActiveBox, useIsMobile, Waves } from "@/components/ui";
+import { ActiveBox, Button, ButtonLink, ReadOnlyContext, ReadOnlyReasonContext, Slide, useActiveBox, useIsMobile, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot, UpdateTips } from "@/pages/update";
 import { UserMenu, type ThemeMode } from "@/components/account";
 import { t } from "@/i18n";
 import { CommandPalette, SearchButton } from "@/components/command-palette";
-import { settingsTabs } from "@/pages/settings";
+import { settingsTabsFor } from "@/pages/settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { useRole } from "@/components/role";
 import { MobileProjectNav } from "@/pages/project";
@@ -67,7 +67,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   // bar：手机标题栏上的字。项目里是项目名（灰字），其他是当前页。
   let bar: string | undefined;
   if (parts[0] === "overview") title = t.app.nav.overview;
-  else if (parts[0] === "activity") title = t.app.nav.logs;
+  else if (parts[0] === "activity") title = t.app.nav.activity;
   else if (parts[0] === "projects" && parts[1] === "new") title = t.app.search.newProject;
   else if (projectId) {
     const name = project.data?.project?.name ?? t.app.nav.projects;
@@ -78,7 +78,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
-    const allowed = isAdmin ? settingsTabs : settingsTabs.filter((x) => x.value === "security" || x.value === "profile" || x.value === "about");
+    const allowed = settingsTabsFor(isAdmin);
     const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed.find((x) => x.value === "security") ?? allowed[0];
     title = `${tab.label} · ${t.app.nav.settings}`;
   }
@@ -156,8 +156,8 @@ const navItems = [
   { to: "/overview", label: t.app.nav.overview, icon: OverviewIcon },
   { to: "/projects", label: t.app.nav.projects, icon: Box },
   { to: "/nodes", label: t.app.nav.nodes, icon: Server },
-  // 日志只给管理员。
-  { to: "/activity", label: t.app.nav.logs, icon: ScrollText, adminOnly: true },
+  // 活动只给管理员。
+  { to: "/activity", label: t.app.nav.activity, icon: ScrollText, adminOnly: true },
   { to: "/settings", label: t.app.nav.settings, icon: SlidersHorizontal },
 ] as const;
 
@@ -229,7 +229,7 @@ export function AppLayout() {
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-1.5 focus:text-sm focus:shadow-lg">
         {t.app.skipToContent}
       </a>
-      <CommandPalette />
+      <CommandPalette canCreateProject={!(standby?.isStandby ?? false) && !isViewer} />
       {me.data?.role === "admin" && <UpdateTips nodes={nodes.data?.nodes ?? []} isStandby={standby?.isStandby ?? false} />}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-sidebar px-3 pt-4 pb-3 md:flex">
         {brand}
@@ -298,12 +298,14 @@ export function AppLayout() {
           )}
         >
           <ReadOnlyContext.Provider value={readOnly}>
-            <MobileBarSlot.Provider value={barSlot}>
-              {/* 项目页由 ProjectSplit 分栏，这一层不占位，内容的动画也由它管。 */}
-              <Slide id={split ? "split" : pathname} index={navItems.findIndex((it) => pathname.startsWith(it.to))} variant="page" className={split ? "contents" : undefined}>
-                <Outlet />
-              </Slide>
-            </MobileBarSlot.Provider>
+            <ReadOnlyReasonContext.Provider value={standby?.isStandby ? "standby" : "role"}>
+              <MobileBarSlot.Provider value={barSlot}>
+                {/* 项目页由 ProjectSplit 分栏，这一层不占位，内容的动画也由它管。 */}
+                <Slide id={split ? "split" : pathname} index={navItems.findIndex((it) => pathname.startsWith(it.to))} variant="page" className={split ? "contents" : undefined}>
+                  <Outlet />
+                </Slide>
+              </MobileBarSlot.Provider>
+            </ReadOnlyReasonContext.Provider>
           </ReadOnlyContext.Provider>
         </main>
       </div>

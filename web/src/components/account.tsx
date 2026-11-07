@@ -11,6 +11,7 @@ import { nextLocale, switchLanguage } from "@/components/language";
 import type { MeResponse } from "@/gen/nagi/v1/api_pb";
 import { t } from "@/i18n";
 import { authClient, errorMessage } from "@/lib/api";
+import { useUnsaved } from "@/components/unsaved";
 import { cn } from "@/lib/utils";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -61,17 +62,20 @@ export function UserAvatar({ username, src, className }: { username: string; src
 }
 
 // ProfileForm：个人资料表单。用户菜单的对话框和设置页的「个人资料」共用；传 onClose 就是对话框的样式。
-function ProfileForm({ me, onClose }: { me: MeResponse; onClose?: () => void }) {
+// 设置页里有未保存的修改时离开前确认；保存后由上层换 key 重新挂载，确认的起点跟着更新。
+function ProfileForm({ me, onClose, onSaved }: { me: MeResponse; onClose?: () => void; onSaved?: () => void }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState(me.displayName);
   const [avatar, setAvatar] = useState({ bytes: me.avatar, type: me.avatarType });
   const [error, setError] = useState("");
+  useUnsaved({ displayName, avatar: Array.from(avatar.bytes) }, !onClose);
   const save = useMutation({
     mutationFn: () => authClient.updateProfile({ displayName, avatar: avatar.bytes }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       toast.success(t.account.saved);
+      onSaved?.();
       onClose?.();
     },
     onError: (err) => setError(errorMessage(err)),
@@ -118,12 +122,13 @@ function ProfileForm({ me, onClose }: { me: MeResponse; onClose?: () => void }) 
             pick(file);
           }}
         />
-        <Button variant="outline" title={t.account.avatarHint} onClick={() => input.current?.click()}>
+        <Button variant="outline" onClick={() => input.current?.click()}>
           {t.account.upload}
         </Button>
         <Button variant="ghost" disabled={avatar.bytes.length === 0} onClick={() => setAvatar({ bytes: new Uint8Array(), type: "" })}>
           {t.account.remove}
         </Button>
+        <p className="w-full text-[13px] leading-5 text-muted-foreground">{t.account.avatarHint}</p>
       </div>
       <Field label={t.account.displayName} htmlFor="profile-name" help={t.account.displayNameHint(me.username)} className={onClose ? undefined : "sm:max-w-[328px]"}>
         <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} placeholder={me.username} autoComplete="off" />
@@ -154,9 +159,16 @@ function ProfileDialog({ me, onClose }: { me: MeResponse; onClose: () => void })
 // ProfileCard：设置页的「个人资料」，所有角色都有。
 export function ProfileCard() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
+  const [version, setVersion] = useState(0);
   return (
-    <Section title={<span title={t.settings.tabs.profile.description}>{t.settings.tabs.profile.label}</span>}>
-      {me.isPending ? <RowsSkeleton count={2} /> : !me.data ? <QueryError error={errorMessage(me.error)} onRetry={() => me.refetch()} /> : <ProfileForm me={me.data} />}
+    <Section title={t.settings.tabs.profile.label}>
+      {me.isPending ? (
+        <RowsSkeleton count={2} />
+      ) : !me.data ? (
+        <QueryError error={errorMessage(me.error)} onRetry={() => me.refetch()} />
+      ) : (
+        <ProfileForm key={version} me={me.data} onSaved={() => setVersion((v) => v + 1)} />
+      )}
     </Section>
   );
 }

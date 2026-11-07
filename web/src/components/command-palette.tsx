@@ -8,7 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui";
 import { nodeClient, projectClient } from "@/lib/api";
-import { settingsTabs } from "@/pages/settings";
+import { settingsTabsFor } from "@/pages/settings";
 import { useRole } from "@/components/role";
 import { t } from "@/i18n";
 
@@ -34,7 +34,8 @@ export function SearchButton({ compact }: { compact?: boolean }) {
   );
 }
 
-export function CommandPalette() {
+// canCreateProject：备用面板和只读角色不能新建项目，不显示这一项。
+export function CommandPalette({ canCreateProject }: { canCreateProject: boolean }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { isAdmin } = useRole();
@@ -76,10 +77,16 @@ export function CommandPalette() {
                   <Activity />
                   {t.app.nav.overview}
                 </CommandItem>
+                {canCreateProject && (
+                  <CommandItem value="new project" keywords={[t.app.search.newProject]} onSelect={() => go(() => navigate({ to: "/projects/new" }))}>
+                    <Plus />
+                    {t.app.search.newProject}
+                  </CommandItem>
+                )}
                 {isAdmin && (
-                  <CommandItem value="logs" keywords={[t.app.nav.logs]} onSelect={() => go(() => navigate({ to: "/activity" }))}>
+                  <CommandItem value="activity" keywords={[t.app.nav.activity]} onSelect={() => go(() => navigate({ to: "/activity" }))}>
                     <ScrollText />
-                    {t.app.nav.logs}
+                    {t.app.nav.activity}
                   </CommandItem>
                 )}
               </CommandGroup>
@@ -106,11 +113,11 @@ export function CommandPalette() {
                       <CommandItem
                         key={`${s.project!.id}/${c.name}`}
                         value={`container ${s.project!.id} ${c.name}`}
-                        keywords={[c.name, s.project!.name]}
+                        keywords={[c.displayName, c.name, s.project!.name].filter(Boolean)}
                         onSelect={() => go(() => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: s.project!.id, container: c.name } }))}
                       >
                         <Box />
-                        {c.name}
+                        {c.displayName || c.name}
                         <span className="ml-auto text-xs text-muted-foreground">{s.project!.name}</span>
                       </CommandItem>
                     )),
@@ -129,11 +136,7 @@ export function CommandPalette() {
                 </CommandGroup>
               )}
               <CommandGroup heading={t.app.nav.settings}>
-                <CommandItem value="new project" keywords={[t.app.search.newProject]} onSelect={() => go(() => navigate({ to: "/projects/new" }))}>
-                  <Plus />
-                  {t.app.search.newProject}
-                </CommandItem>
-                {settingsTabs.map((tab) => (
+                {settingsTabsFor(isAdmin).map((tab) => (
                   <CommandItem key={tab.value} value={`settings ${tab.value}`} keywords={[tab.label, t.app.nav.settings]} onSelect={() => go(() => navigate({ to: "/settings", search: { tab: tab.value } }))}>
                     <Settings />
                     {tab.label}
