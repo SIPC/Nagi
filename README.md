@@ -164,3 +164,12 @@ Nagi 构建在以下开源项目之上：
 ## 许可证
 
 [Apache-2.0](LICENSE)
+
+## Star 历史
+
+<a href="https://star-history.com/#SIPC/Nagi&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=SIPC/Nagi&type=Date&theme=dark">
+    <img src="https://api.star-history.com/svg?repos=SIPC/Nagi&type=Date" alt="Star 历史图表">
+  </picture>
+</a>
