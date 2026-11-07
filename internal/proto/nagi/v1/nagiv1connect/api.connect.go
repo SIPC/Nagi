@@ -205,6 +205,9 @@ const (
 	// SettingsServiceUpdatePanelProcedure is the fully-qualified name of the SettingsService's
 	// UpdatePanel RPC.
 	SettingsServiceUpdatePanelProcedure = "/nagi.v1.SettingsService/UpdatePanel"
+	// SettingsServiceGetPanelReleaseNotesProcedure is the fully-qualified name of the SettingsService's
+	// GetPanelReleaseNotes RPC.
+	SettingsServiceGetPanelReleaseNotesProcedure = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
 	// SettingsServiceGetUpdateStatusProcedure is the fully-qualified name of the SettingsService's
 	// GetUpdateStatus RPC.
 	SettingsServiceGetUpdateStatusProcedure = "/nagi.v1.SettingsService/GetUpdateStatus"
@@ -1777,6 +1780,8 @@ type SettingsServiceClient interface {
 	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
 	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
+	// 本面板到最新版本之间各版本的更新日志，按界面语言取（见 docs/panel.md#更新面板）。
+	GetPanelReleaseNotes(context.Context, *connect.Request[v1.GetPanelReleaseNotesRequest]) (*connect.Response[v1.GetPanelReleaseNotesResponse], error)
 	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
 	GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error)
 	// 账号安全：两步验证和安全入口。
@@ -1907,6 +1912,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
 			connect.WithClientOptions(opts...),
 		),
+		getPanelReleaseNotes: connect.NewClient[v1.GetPanelReleaseNotesRequest, v1.GetPanelReleaseNotesResponse](
+			httpClient,
+			baseURL+SettingsServiceGetPanelReleaseNotesProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetPanelReleaseNotes")),
+			connect.WithClientOptions(opts...),
+		),
 		getUpdateStatus: connect.NewClient[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse](
 			httpClient,
 			baseURL+SettingsServiceGetUpdateStatusProcedure,
@@ -2008,37 +2019,38 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // settingsServiceClient implements SettingsServiceClient.
 type settingsServiceClient struct {
-	getSettings       *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
-	updateSettings    *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
-	setPanelDomain    *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
-	getAlertConfig    *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
-	updateAlertConfig *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
-	testAlertChannel  *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
-	createInvite      *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
-	listInvites       *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
-	revokeInvite      *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
-	createStandbyCode *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
-	getStandbys       *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
-	removeStandby     *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
-	promoteStandby    *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
-	checkPanelUpdate  *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
-	updatePanel       *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
-	getUpdateStatus   *connect.Client[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse]
-	getSecurity       *connect.Client[v1.GetSecurityRequest, v1.Security]
-	beginTOTP         *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
-	enableTOTP        *connect.Client[v1.EnableTOTPRequest, v1.Security]
-	disableTOTP       *connect.Client[v1.DisableTOTPRequest, v1.Security]
-	setEntrance       *connect.Client[v1.SetEntranceRequest, v1.Security]
-	listActivity      *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
-	listUsers         *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
-	createUser        *connect.Client[v1.CreateUserRequest, v1.PanelUser]
-	updateUser        *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
-	deleteUser        *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
-	listSessions      *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
-	revokeSession     *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
-	listAccessTokens  *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
-	createAccessToken *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
-	revokeAccessToken *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
+	getSettings          *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
+	updateSettings       *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
+	setPanelDomain       *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
+	getAlertConfig       *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
+	updateAlertConfig    *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
+	testAlertChannel     *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
+	createInvite         *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
+	listInvites          *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
+	revokeInvite         *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
+	createStandbyCode    *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
+	getStandbys          *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
+	removeStandby        *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
+	promoteStandby       *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
+	checkPanelUpdate     *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
+	updatePanel          *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
+	getPanelReleaseNotes *connect.Client[v1.GetPanelReleaseNotesRequest, v1.GetPanelReleaseNotesResponse]
+	getUpdateStatus      *connect.Client[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse]
+	getSecurity          *connect.Client[v1.GetSecurityRequest, v1.Security]
+	beginTOTP            *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
+	enableTOTP           *connect.Client[v1.EnableTOTPRequest, v1.Security]
+	disableTOTP          *connect.Client[v1.DisableTOTPRequest, v1.Security]
+	setEntrance          *connect.Client[v1.SetEntranceRequest, v1.Security]
+	listActivity         *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
+	listUsers            *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
+	createUser           *connect.Client[v1.CreateUserRequest, v1.PanelUser]
+	updateUser           *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
+	deleteUser           *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
+	listSessions         *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
+	revokeSession        *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
+	listAccessTokens     *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
+	createAccessToken    *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
+	revokeAccessToken    *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2114,6 +2126,11 @@ func (c *settingsServiceClient) CheckPanelUpdate(ctx context.Context, req *conne
 // UpdatePanel calls nagi.v1.SettingsService.UpdatePanel.
 func (c *settingsServiceClient) UpdatePanel(ctx context.Context, req *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error) {
 	return c.updatePanel.CallUnary(ctx, req)
+}
+
+// GetPanelReleaseNotes calls nagi.v1.SettingsService.GetPanelReleaseNotes.
+func (c *settingsServiceClient) GetPanelReleaseNotes(ctx context.Context, req *connect.Request[v1.GetPanelReleaseNotesRequest]) (*connect.Response[v1.GetPanelReleaseNotesResponse], error) {
+	return c.getPanelReleaseNotes.CallUnary(ctx, req)
 }
 
 // GetUpdateStatus calls nagi.v1.SettingsService.GetUpdateStatus.
@@ -2222,6 +2239,8 @@ type SettingsServiceHandler interface {
 	CheckPanelUpdate(context.Context, *connect.Request[v1.CheckPanelUpdateRequest]) (*connect.Response[v1.CheckPanelUpdateResponse], error)
 	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error)
+	// 本面板到最新版本之间各版本的更新日志，按界面语言取（见 docs/panel.md#更新面板）。
+	GetPanelReleaseNotes(context.Context, *connect.Request[v1.GetPanelReleaseNotesRequest]) (*connect.Response[v1.GetPanelReleaseNotesResponse], error)
 	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
 	GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error)
 	// 账号安全：两步验证和安全入口。
@@ -2346,6 +2365,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		SettingsServiceUpdatePanelProcedure,
 		svc.UpdatePanel,
 		connect.WithSchema(settingsServiceMethods.ByName("UpdatePanel")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetPanelReleaseNotesHandler := connect.NewUnaryHandler(
+		SettingsServiceGetPanelReleaseNotesProcedure,
+		svc.GetPanelReleaseNotes,
+		connect.WithSchema(settingsServiceMethods.ByName("GetPanelReleaseNotes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	settingsServiceGetUpdateStatusHandler := connect.NewUnaryHandler(
@@ -2476,6 +2501,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceCheckPanelUpdateHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdatePanelProcedure:
 			settingsServiceUpdatePanelHandler.ServeHTTP(w, r)
+		case SettingsServiceGetPanelReleaseNotesProcedure:
+			settingsServiceGetPanelReleaseNotesHandler.ServeHTTP(w, r)
 		case SettingsServiceGetUpdateStatusProcedure:
 			settingsServiceGetUpdateStatusHandler.ServeHTTP(w, r)
 		case SettingsServiceGetSecurityProcedure:
@@ -2575,6 +2602,10 @@ func (UnimplementedSettingsServiceHandler) CheckPanelUpdate(context.Context, *co
 
 func (UnimplementedSettingsServiceHandler) UpdatePanel(context.Context, *connect.Request[v1.UpdatePanelRequest]) (*connect.Response[v1.UpdatePanelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdatePanel is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetPanelReleaseNotes(context.Context, *connect.Request[v1.GetPanelReleaseNotesRequest]) (*connect.Response[v1.GetPanelReleaseNotesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetPanelReleaseNotes is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetUpdateStatus(context.Context, *connect.Request[v1.GetUpdateStatusRequest]) (*connect.Response[v1.GetUpdateStatusResponse], error) {

@@ -107,12 +107,15 @@ jobs:
 
       - name: Checksums
         run: |
-          cp scripts/install.sh scripts/uninstall.sh dist/
+          cp scripts/install.sh scripts/uninstall.sh CHANGELOG.md CHANGELOG.en.md dist/
           cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh > SHA256SUMS
 
       # 正文取自 CHANGELOG.md 里这个版本的说明，没写的话发布失败（先补上更新日志再打标签）。
+      # 两份更新日志也作为发布文件上传，面板的更新弹窗按界面语言取，英文的也要写。
       - name: Release notes
-        run: sh scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+        run: |
+          sh scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          grep -qx "## $GITHUB_REF_NAME" CHANGELOG.en.md || { echo "CHANGELOG.en.md 中没有 $GITHUB_REF_NAME" >&2; exit 1; }
 
       - uses: softprops/action-gh-release@v2
         with:

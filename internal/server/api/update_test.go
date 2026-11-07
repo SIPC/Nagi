@@ -11,6 +11,7 @@ func TestStandbyCanUpdateItself(t *testing.T) {
 	for _, p := range []string{
 		nagiv1connect.SettingsServiceCheckPanelUpdateProcedure,
 		nagiv1connect.SettingsServiceUpdatePanelProcedure,
+		nagiv1connect.SettingsServiceGetPanelReleaseNotesProcedure,
 	} {
 		if !readOnlyProcedure(p) {
 			t.Errorf("%s 在备用面板上应该放行", p)

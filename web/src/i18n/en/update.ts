@@ -15,8 +15,10 @@ export default {
   standbyHelp: "If its database version differs from the primary's, syncing pauses until both are on the same version.",
   action: "Update",
   updatePanel: "Update panel",
-  confirm: (version: string) =>
-    `Update the panel to ${version}? The panel downloads and verifies the new version, then restarts in place. Operations in progress, such as deployments, are interrupted. You can't go back to an older version from the panel afterwards.`,
+  dialogTitle: (version: string) => `Update to ${version}`,
+  dialogDescription: "The panel downloads and verifies the new version, then restarts in place. Operations in progress, such as deployments, are interrupted. You can't go back to an older version from the panel afterwards.",
+  notesUnavailable: "Release notes are unavailable.",
+  notesOnGitHub: "View on GitHub",
   restartingTitle: (version: string) => `Replaced with ${version}. The panel is restarting`,
   restartingText: "The page refreshes automatically once the panel is back.",
   retry: "Retry",

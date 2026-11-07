@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, Button, HelpTip, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, HelpTip, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Skeleton, Spinner } from "@/components/ui";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
-import { confirmAction } from "@/components/confirm";
+import { cn } from "@/lib/utils";
 import type { Node, UpdateState } from "@/gen/nagi/v1/api_pb";
 
 // 「版本更新」区块和右下角的提示（见 docs/panel.md#更新面板）：检查有没有新版本，一键更新本面板。
@@ -195,6 +195,134 @@ export function UpdateTips({ nodes, isStandby }: { nodes: Node[]; isStandby: boo
   return null;
 }
 
+// 更新日志的一段行内文字：只认行内代码和链接，其余照原样显示。
+function inline(text: string) {
+  const out: React.ReactNode[] = [];
+  const re = /`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    out.push(text.slice(last, m.index));
+    if (m[1]) {
+      out.push(
+        <code key={m.index} className="font-mono text-[0.9em]">
+          {m[1]}
+        </code>,
+      );
+    } else {
+      out.push(
+        <a key={m.index} className="text-foreground underline underline-offset-4" href={m[3]} target="_blank" rel="noreferrer">
+          {m[2]}
+        </a>,
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  out.push(text.slice(last));
+  return out;
+}
+
+// NotesBody：一个版本的更新日志。只有「### 分组」和列表两种写法（见 docs/development.md#发布），其他行当作段落。
+function NotesBody({ body }: { body: string }) {
+  const blocks: React.ReactNode[] = [];
+  let items: string[] = [];
+  const flushList = () => {
+    if (items.length === 0) return;
+    blocks.push(
+      <ul key={blocks.length} className="grid list-disc gap-1 pl-5 marker:text-muted-foreground">
+        {items.map((it, i) => (
+          <li key={i}>{inline(it)}</li>
+        ))}
+      </ul>,
+    );
+    items = [];
+  };
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("- ")) {
+      items.push(line.slice(2));
+      continue;
+    }
+    flushList();
+    if (!line) continue;
+    if (line.startsWith("#")) {
+      blocks.push(
+        <h4 key={blocks.length} className="pt-1 text-xs leading-5 text-muted-foreground">
+          {line.replace(/^#+\s*/, "")}
+        </h4>,
+      );
+    } else blocks.push(<p key={blocks.length}>{inline(line)}</p>);
+  }
+  flushList();
+  return <div className="grid gap-2">{blocks}</div>;
+}
+
+// UpdateDialog：确认更新面板，列出本面板到新版本之间各版本的更新日志。
+function UpdateDialog({ open, version, releaseUrl, onClose, onConfirm }: { open: boolean; version: string; releaseUrl: string; onClose: () => void; onConfirm: () => void }) {
+  const notes = useQuery({
+    queryKey: ["panel-release-notes", version],
+    queryFn: () => settingsClient.getPanelReleaseNotes({}),
+    enabled: open && !!version,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const releases = notes.data?.releases ?? [];
+  // 日志框不显示滚动条；下面还有内容时底部渐隐，滚到底后去掉。
+  const box = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const measure = () => {
+    const el = box.current;
+    setMore(!!el && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  };
+  useLayoutEffect(measure, [notes.data, open]);
+  return (
+    <Dialog open={open} onClose={onClose} title={t.update.dialogTitle(version)} description={t.update.dialogDescription} className="max-w-[560px]">
+      <div className="overflow-hidden rounded-lg border">
+        <div
+          ref={box}
+          onScroll={measure}
+          className={cn(
+            "max-h-[min(50vh,26rem)] overflow-y-auto px-4 py-3 text-sm leading-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            more && "[mask-image:linear-gradient(to_bottom,#000_calc(100%-3rem),transparent)]",
+          )}
+        >
+          {notes.isPending ? (
+            <div role="status" aria-label={t.common.feedback.loading} className="grid gap-3 py-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-4/5" />
+            </div>
+          ) : releases.length === 0 ? (
+            <p className="text-muted-foreground">
+              {t.update.notesUnavailable}{" "}
+              <a className="text-foreground underline-offset-4 hover:underline" href={releaseUrl} target="_blank" rel="noreferrer">
+                {t.update.notesOnGitHub}
+              </a>
+            </p>
+          ) : (
+            <div className="grid gap-5">
+              {releases.map((r) => (
+                <section key={r.version} className="grid gap-1">
+                  {/* 版本号用等宽字体。 */}
+                  <h3 className="font-mono font-medium">{r.version}</h3>
+                  <NotesBody body={r.body} />
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <DialogActions>
+        <Button readOnlyOk size="sm" variant="outline" onClick={onClose}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button readOnlyOk size="sm" onClick={onConfirm}>
+          {t.update.updatePanel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export function UpdateCard() {
   const queryClient = useQueryClient();
   const q = usePanelUpdate();
@@ -204,6 +332,7 @@ export function UpdateCard() {
   const [checked, setChecked] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   const check = async () => {
     setChecking(true);
@@ -219,8 +348,8 @@ export function UpdateCard() {
     }
   };
 
-  const update = async (version: string) => {
-    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel }))) return;
+  const update = async () => {
+    setConfirming(false);
     setStarting(true);
     setError("");
     try {
@@ -245,7 +374,7 @@ export function UpdateCard() {
       : null;
   const updateButton = (label: string) =>
     d?.available && (
-      <Button readOnlyOk onClick={() => update(d.latest)} disabled={starting}>
+      <Button readOnlyOk onClick={() => setConfirming(true)} disabled={starting}>
         {starting && <Spinner />}
         {label}
       </Button>
@@ -311,6 +440,7 @@ export function UpdateCard() {
           )}
         </SettingRows>
       )}
+      {d?.available && <UpdateDialog open={confirming} version={d.latest} releaseUrl={d.releaseUrl} onClose={() => setConfirming(false)} onConfirm={update} />}
     </Section>
   );
 }

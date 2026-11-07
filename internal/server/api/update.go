@@ -33,6 +33,30 @@ type panelUpdates struct {
 	saved   string
 	// cancels：正在下载的节点升级的取消函数，按记录找。在 stateMu 里读写。
 	cancels map[*updateState]context.CancelFunc
+
+	// notes：各语言最新版本的更新日志，版本变了再下载。
+	notesMu sync.Mutex
+	notes   map[i18n.Lang]changelog
+}
+
+type changelog struct{ version, text string }
+
+// changelog 返回 version 的更新日志，同一版本只下载一次。
+func (u *panelUpdates) changelog(ctx context.Context, base, version string, lang i18n.Lang) (string, error) {
+	u.notesMu.Lock()
+	defer u.notesMu.Unlock()
+	if c, ok := u.notes[lang]; ok && c.version == version {
+		return c.text, nil
+	}
+	text, err := release.FetchChangelog(ctx, base, release.ChangelogName(lang))
+	if err != nil {
+		return "", err
+	}
+	if u.notes == nil {
+		u.notes = map[i18n.Lang]changelog{}
+	}
+	u.notes[lang] = changelog{version, text}
+	return text, nil
 }
 
 // get 返回最新发布的版本号，force 时不用缓存。
@@ -73,6 +97,29 @@ func (s *settingsService) CheckPanelUpdate(ctx context.Context, req *connect.Req
 	}
 	out.Latest, out.ReleaseUrl = latest, release.PageURL(latest)
 	out.Available = release.Older(s.Panel.Version, latest)
+	return connect.NewResponse(out), nil
+}
+
+func (s *settingsService) GetPanelReleaseNotes(ctx context.Context, _ *connect.Request[nagiv1.GetPanelReleaseNotesRequest]) (*connect.Response[nagiv1.GetPanelReleaseNotesResponse], error) {
+	if err := s.Panel.updateUnsupported(); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	latest, err := s.updates.get(ctx, false)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	out := &nagiv1.GetPanelReleaseNotesResponse{}
+	if !release.Older(s.Panel.Version, latest) {
+		return connect.NewResponse(out), nil
+	}
+	// 和更新时下载新版本走同一个地址：安装时指定了镜像就从镜像取。
+	md, err := s.updates.changelog(ctx, release.BaseFor(s.Panel.DataDir, latest), latest, i18n.FromContext(ctx))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	for _, sec := range release.Sections(md, s.Panel.Version, latest) {
+		out.Releases = append(out.Releases, &nagiv1.ReleaseNotes{Version: sec.Version, Body: sec.Body})
+	}
 	return connect.NewResponse(out), nil
 }
 

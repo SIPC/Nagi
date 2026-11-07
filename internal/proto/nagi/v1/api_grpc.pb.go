@@ -1953,37 +1953,38 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SettingsService_GetSettings_FullMethodName       = "/nagi.v1.SettingsService/GetSettings"
-	SettingsService_UpdateSettings_FullMethodName    = "/nagi.v1.SettingsService/UpdateSettings"
-	SettingsService_SetPanelDomain_FullMethodName    = "/nagi.v1.SettingsService/SetPanelDomain"
-	SettingsService_GetAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/GetAlertConfig"
-	SettingsService_UpdateAlertConfig_FullMethodName = "/nagi.v1.SettingsService/UpdateAlertConfig"
-	SettingsService_TestAlertChannel_FullMethodName  = "/nagi.v1.SettingsService/TestAlertChannel"
-	SettingsService_CreateInvite_FullMethodName      = "/nagi.v1.SettingsService/CreateInvite"
-	SettingsService_ListInvites_FullMethodName       = "/nagi.v1.SettingsService/ListInvites"
-	SettingsService_RevokeInvite_FullMethodName      = "/nagi.v1.SettingsService/RevokeInvite"
-	SettingsService_CreateStandbyCode_FullMethodName = "/nagi.v1.SettingsService/CreateStandbyCode"
-	SettingsService_GetStandbys_FullMethodName       = "/nagi.v1.SettingsService/GetStandbys"
-	SettingsService_RemoveStandby_FullMethodName     = "/nagi.v1.SettingsService/RemoveStandby"
-	SettingsService_PromoteStandby_FullMethodName    = "/nagi.v1.SettingsService/PromoteStandby"
-	SettingsService_CheckPanelUpdate_FullMethodName  = "/nagi.v1.SettingsService/CheckPanelUpdate"
-	SettingsService_UpdatePanel_FullMethodName       = "/nagi.v1.SettingsService/UpdatePanel"
-	SettingsService_GetUpdateStatus_FullMethodName   = "/nagi.v1.SettingsService/GetUpdateStatus"
-	SettingsService_GetSecurity_FullMethodName       = "/nagi.v1.SettingsService/GetSecurity"
-	SettingsService_BeginTOTP_FullMethodName         = "/nagi.v1.SettingsService/BeginTOTP"
-	SettingsService_EnableTOTP_FullMethodName        = "/nagi.v1.SettingsService/EnableTOTP"
-	SettingsService_DisableTOTP_FullMethodName       = "/nagi.v1.SettingsService/DisableTOTP"
-	SettingsService_SetEntrance_FullMethodName       = "/nagi.v1.SettingsService/SetEntrance"
-	SettingsService_ListActivity_FullMethodName      = "/nagi.v1.SettingsService/ListActivity"
-	SettingsService_ListUsers_FullMethodName         = "/nagi.v1.SettingsService/ListUsers"
-	SettingsService_CreateUser_FullMethodName        = "/nagi.v1.SettingsService/CreateUser"
-	SettingsService_UpdateUser_FullMethodName        = "/nagi.v1.SettingsService/UpdateUser"
-	SettingsService_DeleteUser_FullMethodName        = "/nagi.v1.SettingsService/DeleteUser"
-	SettingsService_ListSessions_FullMethodName      = "/nagi.v1.SettingsService/ListSessions"
-	SettingsService_RevokeSession_FullMethodName     = "/nagi.v1.SettingsService/RevokeSession"
-	SettingsService_ListAccessTokens_FullMethodName  = "/nagi.v1.SettingsService/ListAccessTokens"
-	SettingsService_CreateAccessToken_FullMethodName = "/nagi.v1.SettingsService/CreateAccessToken"
-	SettingsService_RevokeAccessToken_FullMethodName = "/nagi.v1.SettingsService/RevokeAccessToken"
+	SettingsService_GetSettings_FullMethodName          = "/nagi.v1.SettingsService/GetSettings"
+	SettingsService_UpdateSettings_FullMethodName       = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_SetPanelDomain_FullMethodName       = "/nagi.v1.SettingsService/SetPanelDomain"
+	SettingsService_GetAlertConfig_FullMethodName       = "/nagi.v1.SettingsService/GetAlertConfig"
+	SettingsService_UpdateAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/UpdateAlertConfig"
+	SettingsService_TestAlertChannel_FullMethodName     = "/nagi.v1.SettingsService/TestAlertChannel"
+	SettingsService_CreateInvite_FullMethodName         = "/nagi.v1.SettingsService/CreateInvite"
+	SettingsService_ListInvites_FullMethodName          = "/nagi.v1.SettingsService/ListInvites"
+	SettingsService_RevokeInvite_FullMethodName         = "/nagi.v1.SettingsService/RevokeInvite"
+	SettingsService_CreateStandbyCode_FullMethodName    = "/nagi.v1.SettingsService/CreateStandbyCode"
+	SettingsService_GetStandbys_FullMethodName          = "/nagi.v1.SettingsService/GetStandbys"
+	SettingsService_RemoveStandby_FullMethodName        = "/nagi.v1.SettingsService/RemoveStandby"
+	SettingsService_PromoteStandby_FullMethodName       = "/nagi.v1.SettingsService/PromoteStandby"
+	SettingsService_CheckPanelUpdate_FullMethodName     = "/nagi.v1.SettingsService/CheckPanelUpdate"
+	SettingsService_UpdatePanel_FullMethodName          = "/nagi.v1.SettingsService/UpdatePanel"
+	SettingsService_GetPanelReleaseNotes_FullMethodName = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
+	SettingsService_GetUpdateStatus_FullMethodName      = "/nagi.v1.SettingsService/GetUpdateStatus"
+	SettingsService_GetSecurity_FullMethodName          = "/nagi.v1.SettingsService/GetSecurity"
+	SettingsService_BeginTOTP_FullMethodName            = "/nagi.v1.SettingsService/BeginTOTP"
+	SettingsService_EnableTOTP_FullMethodName           = "/nagi.v1.SettingsService/EnableTOTP"
+	SettingsService_DisableTOTP_FullMethodName          = "/nagi.v1.SettingsService/DisableTOTP"
+	SettingsService_SetEntrance_FullMethodName          = "/nagi.v1.SettingsService/SetEntrance"
+	SettingsService_ListActivity_FullMethodName         = "/nagi.v1.SettingsService/ListActivity"
+	SettingsService_ListUsers_FullMethodName            = "/nagi.v1.SettingsService/ListUsers"
+	SettingsService_CreateUser_FullMethodName           = "/nagi.v1.SettingsService/CreateUser"
+	SettingsService_UpdateUser_FullMethodName           = "/nagi.v1.SettingsService/UpdateUser"
+	SettingsService_DeleteUser_FullMethodName           = "/nagi.v1.SettingsService/DeleteUser"
+	SettingsService_ListSessions_FullMethodName         = "/nagi.v1.SettingsService/ListSessions"
+	SettingsService_RevokeSession_FullMethodName        = "/nagi.v1.SettingsService/RevokeSession"
+	SettingsService_ListAccessTokens_FullMethodName     = "/nagi.v1.SettingsService/ListAccessTokens"
+	SettingsService_CreateAccessToken_FullMethodName    = "/nagi.v1.SettingsService/CreateAccessToken"
+	SettingsService_RevokeAccessToken_FullMethodName    = "/nagi.v1.SettingsService/RevokeAccessToken"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2014,6 +2015,8 @@ type SettingsServiceClient interface {
 	CheckPanelUpdate(ctx context.Context, in *CheckPanelUpdateRequest, opts ...grpc.CallOption) (*CheckPanelUpdateResponse, error)
 	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(ctx context.Context, in *UpdatePanelRequest, opts ...grpc.CallOption) (*UpdatePanelResponse, error)
+	// 本面板到最新版本之间各版本的更新日志，按界面语言取（见 docs/panel.md#更新面板）。
+	GetPanelReleaseNotes(ctx context.Context, in *GetPanelReleaseNotesRequest, opts ...grpc.CallOption) (*GetPanelReleaseNotesResponse, error)
 	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
 	GetUpdateStatus(ctx context.Context, in *GetUpdateStatusRequest, opts ...grpc.CallOption) (*GetUpdateStatusResponse, error)
 	// 账号安全：两步验证和安全入口。
@@ -2195,6 +2198,16 @@ func (c *settingsServiceClient) UpdatePanel(ctx context.Context, in *UpdatePanel
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdatePanelResponse)
 	err := c.cc.Invoke(ctx, SettingsService_UpdatePanel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetPanelReleaseNotes(ctx context.Context, in *GetPanelReleaseNotesRequest, opts ...grpc.CallOption) (*GetPanelReleaseNotesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPanelReleaseNotesResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetPanelReleaseNotes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2389,6 +2402,8 @@ type SettingsServiceServer interface {
 	CheckPanelUpdate(context.Context, *CheckPanelUpdateRequest) (*CheckPanelUpdateResponse, error)
 	// 把本面板更新到最新发布的版本：在后台下载并核对后替换可执行文件，然后原地重启。备用面板上也可以用。
 	UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error)
+	// 本面板到最新版本之间各版本的更新日志，按界面语言取（见 docs/panel.md#更新面板）。
+	GetPanelReleaseNotes(context.Context, *GetPanelReleaseNotesRequest) (*GetPanelReleaseNotesResponse, error)
 	// 面板和节点的更新进度。记在面板上，刷新页面和面板重启后都还在（见 docs/panel.md#更新状态）。
 	GetUpdateStatus(context.Context, *GetUpdateStatusRequest) (*GetUpdateStatusResponse, error)
 	// 账号安全：两步验证和安全入口。
@@ -2470,6 +2485,9 @@ func (UnimplementedSettingsServiceServer) CheckPanelUpdate(context.Context, *Che
 }
 func (UnimplementedSettingsServiceServer) UpdatePanel(context.Context, *UpdatePanelRequest) (*UpdatePanelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdatePanel not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetPanelReleaseNotes(context.Context, *GetPanelReleaseNotesRequest) (*GetPanelReleaseNotesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPanelReleaseNotes not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetUpdateStatus(context.Context, *GetUpdateStatusRequest) (*GetUpdateStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUpdateStatus not implemented")
@@ -2806,6 +2824,24 @@ func _SettingsService_UpdatePanel_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SettingsServiceServer).UpdatePanel(ctx, req.(*UpdatePanelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetPanelReleaseNotes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPanelReleaseNotesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetPanelReleaseNotes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetPanelReleaseNotes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetPanelReleaseNotes(ctx, req.(*GetPanelReleaseNotesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3164,6 +3200,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdatePanel",
 			Handler:    _SettingsService_UpdatePanel_Handler,
+		},
+		{
+			MethodName: "GetPanelReleaseNotes",
+			Handler:    _SettingsService_GetPanelReleaseNotes_Handler,
 		},
 		{
 			MethodName: "GetUpdateStatus",
