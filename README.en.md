@@ -111,64 +111,21 @@ Automatic scheduling, multiple replicas of one container, several panels managin
 
 ## Quick start
 
-### Install the panel
-
-Run as root on a Linux server:
+Run as root on a Linux server to install the panel (with an embedded node, so one server is enough):
 
 ```bash
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-The script downloads nagi, verifies its SHA-256 and runs the panel as a systemd service. The panel includes an embedded node, so a single server is enough to get started, and Docker is installed automatically if it is missing. When it finishes, it prints the panel address, the public key fingerprint and a setup link; open the link in a browser to create the admin account. The panel uses a self-signed certificate: when the browser warns about it, check the fingerprint and continue.
+When it finishes, open the setup link it prints in a browser to create the admin account.
 
-Common options (append to the command, for example `| sudo sh -s -- --port 28443`):
+See the [guides](docs/guide/README.en.md) for more:
 
-| Option | Description |
-| --- | --- |
-| `--port <port>` | Panel port; picked at random on first start by default |
-| `--no-agent` | Run only the panel without an embedded node, e.g. on a dedicated machine |
-| `--docker-mirror <name>` | Package mirror for installing Docker: `Aliyun` or `AzureChinaCloud`, for servers in mainland China |
-| `--download-url <url>` | Download nagi from a mirror or internal address when GitHub is unreachable; one-click panel updates then use it too |
-| `--version <version>` | Install a specific version; the latest by default |
-
-### Add a node
-
-Copy the install command from the **Nodes** page in the panel and run it as root on the new server. The script downloads the same nagi version as the panel from GitHub Releases, verifies its SHA-256 and installs Docker if needed. If GitHub is unreachable, append `--download-url <mirror>`; one-click upgrades from the panel will use the same address later.
-
-![Join a node with one command](docs/assets/join.en.png)
-
-### Add a standby panel
-
-Create a pairing code in **Settings → Standby panels** on the primary panel, then run on the new server:
-
-```bash
-curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh -s -- --standby <pairing-code>
-```
-
-If the primary panel fails, promote the standby panel to primary.
-
-### Upgrade
-
-Update the panel with one click under **Settings → Updates**, or run the install script again; its port, data directory and other settings stay the same. Nodes can be upgraded with one click on the **Nodes** page.
-
-### Uninstall
-
-The same script works for panels and nodes:
-
-```bash
-curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/uninstall.sh | sudo sh
-```
-
-By default only the program and services are removed; project containers and the Nagi data directory are kept. Add `-s -- --purge` to also remove the containers, networks and data directory managed by Nagi. Project files (container directories, under `/srv/nagi` by default) are never deleted; the script lists where they are. Docker itself is not uninstalled. Before removing a node, move or delete its containers in the panel.
-
-### Switch panels
-
-Create an invite code on the new panel and paste it into the old one to hand over nodes; the new panel rebuilds the projects from the nodes' cache (drafts and version history are not kept). If the old panel is already gone, run on each node:
-
-```bash
-nagi panel add <invite-code>
-nagi panel remove <old-panel-address>
-```
+- [Install the panel](docs/guide/install.en.md)
+- [Add a node](docs/guide/add-node.en.md)
+- [Add a standby panel](docs/guide/standby.en.md)
+- [Upgrade and uninstall](docs/guide/upgrade.en.md)
+- [Switch panels](docs/guide/migrate-panel.en.md)
 
 ## Requirements
 
@@ -184,22 +141,9 @@ nagi panel remove <old-panel-address>
 
 Ports you open for containers in the UI must also be allowed on the corresponding nodes.
 
-## Architecture
-
-There is a single binary, `nagi`: `nagi server` runs the panel and `nagi agent` runs a node.
-
-- **Control plane**: nodes connect out to the panel over mTLS, so they need no inbound ports. One connection is multiplexed with yamux, and the panel calls nodes over reverse gRPC. The panel has its own CA, and nodes verify it by public key fingerprint.
-- **Data plane**: nodes form a full mesh with userspace wireguard-go, with addresses derived from public keys. When a direct path is unavailable, traffic falls back to UDP relaying and then TLS relaying through the panel.
-- **Authorization**: being on the network grants nothing by itself; every call is authorized by the caller's public key.
-
-See the [design docs](docs/README.md) (in Chinese) for details on each module.
-
 ## Development
 
-- Backend: Go, gRPC, Connect-RPC, SQLite (modernc)
-- Frontend: Vite, React, TypeScript, TanStack Router / Query, shadcn/ui
-
-Building from source and local development are covered in the [development guide](docs/development.md#本地开发) (in Chinese).
+See the [design docs](docs/README.md) for each module and the [development guide](docs/development.md#本地开发) for building from source and local development (both in Chinese).
 
 ## Security
 
