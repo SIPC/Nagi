@@ -1182,7 +1182,8 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   // 现有目录（见 docs/agent.md#现有目录）：没有文件来源和保留路径，多一项快照包含的子目录。
   const projectDir = base?.projectDir ?? "";
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  // busy 记的是哪个操作在进行：转圈只出现在被点的按钮上。
+  const [busy, setBusy] = useState<"" | "save" | "deploy" | "discard">("");
   const formRef = useRef<HTMLFormElement>(null);
 
   const refresh = () => {
@@ -1190,8 +1191,8 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     queryClient.invalidateQueries({ queryKey: ["projects"] });
   };
 
-  const call = async (fn: () => Promise<unknown>, ok = "") => {
-    setBusy(true);
+  const call = async (kind: "save" | "deploy" | "discard", fn: () => Promise<unknown>, ok = "") => {
+    setBusy(kind);
     setError("");
     try {
       await fn();
@@ -1200,7 +1201,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     } catch (err) {
       setError(errorMessage(err));
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   };
 
@@ -1232,7 +1233,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const [envMode, setEnvMode] = useState<EnvMode>("rows");
 
   const save = () =>
-    call(async () => {
+    call("save", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? t.projectContainers.config.savedDraft : t.projectContainers.config.noChanges);
     });
@@ -1242,7 +1243,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     const form = formRef.current;
     if (form && !form.reportValidity()) return;
     if (container.deployedVersion > 0n && !(await confirmAction(t.projectContainers.detail.deployDraftConfirm(container.name), { action: t.projectContainers.config.saveAndDeploy }))) return;
-    await call(async () => {
+    await call("deploy", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
       const revision = res.containers.find((c) => c.name === container.name)?.revision;
       if (revision !== undefined) onDeploy(revision);
@@ -1252,7 +1253,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const discard = async () => {
     if (!(await confirmAction(t.projectContainers.config.discardConfirm(container.name), { action: t.projectContainers.config.discardDraft, danger: true }))) return;
     // 放弃后对比区消失，页面上能看到结果，不加提示。
-    call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }));
+    call("discard", () => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }));
   };
 
   const c = t.projectContainers.config;
@@ -1263,7 +1264,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         <section className="grid gap-4">
           <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h2 className="text-base font-semibold">{c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}</h2>
-            <Button variant="ghost" className="-mr-3" onClick={discard} disabled={busy}>
+            <Button variant="ghost" className="-mr-3" onClick={discard} disabled={!!busy}>
               {c.discardDraft}
             </Button>
           </header>
@@ -1384,11 +1385,12 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         <div className="sticky bottom-0 z-10 flex max-w-[720px] flex-wrap items-center justify-between gap-4 border-t bg-background py-3">
           <span className="text-muted-foreground">{dirty ? c.unsaved : c.notice}</span>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" variant="outline" disabled={busy || deploying}>
-              {busy && <Spinner />}
+            <Button type="submit" variant="outline" disabled={!!busy || deploying}>
+              {busy === "save" && <Spinner />}
               {c.saveDraft}
             </Button>
-            <Button disabled={busy || deploying} onClick={saveAndDeploy}>
+            <Button disabled={!!busy || deploying} onClick={saveAndDeploy}>
+              {(busy === "deploy" || deploying) && <Spinner />}
               {c.saveAndDeploy}
             </Button>
           </div>
