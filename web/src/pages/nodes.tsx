@@ -43,6 +43,7 @@ import {
   Section,
   Segmented,
   Slide,
+  SlideKeep,
   Skeleton,
   Spinner,
   Status,
@@ -577,11 +578,11 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <NodePanels nodeId={n.id} />
             )}
           </Slide>
-          {/* 终端不卸载：卸载就断开了。所以放在带 key 的那层外面。 */}
+          {/* 终端不卸载：卸载就断开了。所以放在带 key 的那层外面，进出时和其他标签一样横移。 */}
           {showAccess && n.online && !accessBlock && shellOpened && (
-            <div className={tab === "terminal" ? "animate-fade-in" : "hidden"}>
+            <SlideKeep active={tab === "terminal"} index={tabs.findIndex((x) => x.value === "terminal")} current={tabs.findIndex((x) => x.value === tab)}>
               <NodeTerminal node={n} cwd={path} />
-            </div>
+            </SlideKeep>
           )}
         </>
       )}

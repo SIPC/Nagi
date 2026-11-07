@@ -1067,6 +1067,36 @@ export function Slide({ id, index, variant = "tabs", className, inner, children 
   );
 }
 
+// SlideKeep：和 Slide 配合，切换时不能卸载的内容（例如终端，卸载就断开了），放在 Slide 外面。
+// active 时显示；进出的方向和 Slide 一致：index 是它自己的位置，current 是当前选中项的位置。
+export function SlideKeep({ active, index, current, className, children }: { active: boolean; index: number; current: number; className?: string; children: React.ReactNode }) {
+  const node = useRef<HTMLDivElement>(null);
+  const last = useRef({ active, current, dir: 1 });
+  const ghost = useRef<ReturnType<typeof captureGhost>>(null);
+  if (last.current.active !== active) {
+    const from = active ? last.current.current : index;
+    const to = active ? index : current;
+    if (!active) ghost.current = node.current && captureGhost(node.current);
+    last.current = { active, current, dir: to === from ? 1 : to > from ? 2 : 0 };
+  } else {
+    last.current.current = current;
+  }
+  const dir = last.current.dir;
+  useLayoutEffect(() => {
+    if (!ghost.current) return;
+    const stop = showGhost(ghost.current, cn(slideClasses.tabs.leave[dir], className));
+    ghost.current = null;
+    return stop;
+    // 只在显示和隐藏切换时运行。
+  }, [active]);
+  // 从隐藏变成显示时动画会重新播放，不需要 key（加 key 会重建里面的内容）。
+  return (
+    <div ref={node} className={cn(active ? slideClasses.tabs.enter[dir] : "hidden", className)}>
+      {children}
+    </div>
+  );
+}
+
 export function Tabs<T extends string>({
   value,
   onChange,
