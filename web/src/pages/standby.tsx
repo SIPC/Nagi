@@ -4,8 +4,7 @@ import { Plus } from "lucide-react";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { CodeBox } from "@/pages/invite";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status, CodeBlock } from "@/components/ui";
 import { confirmAction, notify } from "@/components/confirm";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
@@ -157,7 +156,7 @@ export function StandbyCard() {
       <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} description={t.standby.dialog.description} className="max-w-[520px]">
         {code && (
           <>
-            <CodeBox text={`nagi server --standby ${code.code}`} />
+            <CodeBlock copy nowrap>{`nagi server --standby ${code.code}`}</CodeBlock>
             <p className="text-[13px] leading-5 text-muted-foreground">{t.standby.dialog.notice}</p>
             <DialogActions>
               <Button readOnlyOk onClick={() => setCode(null)}>

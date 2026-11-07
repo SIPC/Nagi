@@ -693,7 +693,7 @@ export function Td({ className, ...props }: React.ComponentProps<"td">) {
 
 // ---- 状态与提示 ----
 
-const badgeVariants = cva("inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-xs leading-4 whitespace-nowrap", {
+export const badgeVariants = cva("inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-xs leading-4 whitespace-nowrap", {
   variants: {
     tone: {
       neutral: "border-border text-muted-foreground",
@@ -869,10 +869,20 @@ export function CopyButton({ text, className }: { text: string; className?: stri
 }
 
 // CodeBlock：一段等宽文字（命令、密钥、地址），右上角可复制。
-export function CodeBlock({ children, copy, className }: { children: string; copy?: boolean; className?: string }) {
+export function CodeBlock({ children, copy, nowrap, className }: { children: string; copy?: boolean; nowrap?: boolean; className?: string }) {
+  // nowrap：一行命令或接入码，放不下时截断，完整内容在悬停提示里，复制按钮在右边。默认按需折行。
+  if (nowrap)
+    return (
+      <div className={cn("flex min-h-10 min-w-0 items-center justify-between gap-2 rounded-lg bg-accent pr-1 pl-3", className)}>
+        <code className="min-w-0 truncate font-mono text-[13px] leading-5" title={children}>
+          {children}
+        </code>
+        {copy && <CopyButton text={children} className="shrink-0" />}
+      </div>
+    );
   return (
-    <div className={cn("relative rounded-md bg-accent", className)}>
-      <code className={cn("block px-3 py-2.5 font-mono text-xs leading-relaxed break-all", copy && "pr-10")}>{children}</code>
+    <div className={cn("relative rounded-lg bg-accent", className)}>
+      <code className={cn("block px-3 py-2.5 font-mono text-[13px] leading-relaxed break-all", copy && "pr-10")}>{children}</code>
       {copy && <CopyButton text={children} className="absolute top-1 right-1" />}
     </div>
   );

@@ -3,21 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, CopyButton, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 
-// CodeBox：一行命令或接入码加复制按钮，放不下时截断，完整内容在悬停提示里。
-export function CodeBox({ text, title }: { text: string; title?: string }) {
-  return (
-    <div className="flex min-h-10 min-w-0 items-center justify-between gap-2 rounded-md bg-accent pr-2 pl-3">
-      <span className="min-w-0 truncate font-mono text-[13px] leading-5" title={title ?? text}>
-        {text}
-      </span>
-      <CopyButton text={text} className="shrink-0" />
-    </div>
-  );
-}
 
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
 export function InviteCard() {
@@ -80,7 +69,7 @@ export function InviteCard() {
       {error && <Alert>{error}</Alert>}
       {code && (
         <div className="grid gap-2">
-          <CodeBox text={code} />
+          <CodeBlock copy nowrap>{code}</CodeBlock>
           <p className="text-[13px] leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
         </div>
       )}

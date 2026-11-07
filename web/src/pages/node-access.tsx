@@ -9,9 +9,8 @@ import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { fmtBytes } from "@/components/metrics";
 import { TerminalSession } from "@/components/terminal";
-import { Alert, Button, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea } from "@/components/ui";
+import { Alert, Button, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
-import { CodeBox } from "@/pages/invite";
 import { MobileBar, mobileBarText } from "@/pages/layout";
 import { Crumbs } from "@/pages/volume-files";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -31,7 +30,7 @@ export function nodeAccessBlock(n: Node) {
     return (
       <div className="grid gap-3">
         <Notice title={m.disabledTitle}>{m.disabledText}</Notice>
-        <CodeBox text="nagi node access enable" />
+        <CodeBlock copy nowrap>nagi node access enable</CodeBlock>
       </div>
     );
   }

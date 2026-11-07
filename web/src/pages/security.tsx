@@ -5,12 +5,11 @@ import { toast } from "sonner";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { Alert, Button, CopyButton, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, CopyButton, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
 import { CopyTextButton } from "@/pages/access";
-import { CodeBox } from "@/pages/invite";
 import { useRole } from "@/components/role";
 
 function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -75,7 +74,7 @@ function EnableTotpDialog({ setup, onClose, onDone }: { setup: { secret: string;
       >
         {/* 二维码固定黑底白字，深色模式下也能扫。 */}
         <div className="size-32 rounded-md bg-white p-2 [&_svg]:size-full" role="img" aria-label={t.security.totp.qrCode} dangerouslySetInnerHTML={{ __html: renderSVG(setup.uri, { border: 1 }) }} />
-        <CodeBox text={setup.secret} />
+        <CodeBlock copy nowrap>{setup.secret}</CodeBlock>
         <Field label={t.security.totp.code} htmlFor="totp-enable">
           <Input id="totp-enable" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
         </Field>

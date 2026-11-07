@@ -12,7 +12,6 @@ import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, n
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC } from "@/pages/mesh";
-import { CodeBox } from "@/pages/invite";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
   Alert,
@@ -48,6 +47,7 @@ import {
   Tabs,
   Textarea,
   ReadOnlyContext,
+  CodeBlock,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
@@ -790,7 +790,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
       </div>
       {command && (
         <>
-          <CodeBox text={command} />
+          <CodeBlock copy nowrap>{command}</CodeBlock>
           <p className="flex items-center gap-1 text-[13px] leading-5 text-muted-foreground">
             {t.nodes.add.commandHint}
             <HelpTip>{t.nodes.add.commandHelp}</HelpTip>
