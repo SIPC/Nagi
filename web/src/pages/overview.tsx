@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtCount, fmtCpu, metricRanges, RangePicker, type MetricRange } from "@/components/metrics";
+import { fmtBytes, fmtCount, fmtCpuShort, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status } from "@/components/ui";
@@ -23,34 +23,9 @@ const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds
 
 // ---- 格式 ----
 
-// 到 1000 就进位，不到 10 留一位小数：640 KB/s、1.2 MB/s。
-function scaled(v: number, units: string[]): [string, string] {
-  let i = 0;
-  while (v >= 1000 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return [v < 10 && i > 0 ? v.toFixed(1) : String(Math.round(v)), units[i]];
-}
-const rateParts = (v: number) => scaled(v, ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"]);
-const fmtRate = (v: number) => rateParts(v).join(" ");
-const fmtTotal = (v: number) => scaled(v, ["B", "KB", "MB", "GB", "TB"]).join(" ");
-
 // 已用 / 总量，两边都带单位：2.0 GB / 15.5 GB、86 GB / 1.0 TB。
-function fmtUsed(used: number, total: number) {
-  const part = (v: number): [string, string] => {
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let i = 0;
-    while (v >= 1000 && i < units.length - 1) {
-      v /= 1024;
-      i++;
-    }
-    return [v < 20 ? v.toFixed(1) : String(Math.round(v)), units[i]];
-  };
-  const [u, uUnit] = part(used);
-  const [a, aUnit] = part(total);
-  return `${u} ${uUnit} / ${a} ${aUnit}`;
-}
+const fmtUsed = (used: number, total: number) => `${fmtBytes(used)} / ${fmtBytes(total)}`;
+const fmtTotal = fmtBytes;
 
 // ---- 节点之间的流量 ----
 
@@ -909,9 +884,9 @@ export function OverviewPage() {
                           </span>
                         )}
                       </td>
-                      <td className={tdClass}><Roll value={u ? fmtCpu(u.cpu) : dash} /></td>
-                      <td className={tdClass}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpu(u.memory)) : dash} n={u?.memory} /></td>
-                      <td className={tdClass}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpu(u.disk)) : dash} n={u?.disk} /></td>
+                      <td className={tdClass}><Roll value={u ? fmtCpuShort(u.cpu) : dash} /></td>
+                      <td className={tdClass}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></td>
+                      <td className={tdClass}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></td>
                       <td className={tdClass}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></td>
                       <td className={tdClass}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></td>
                       <td className={tdClass}><Roll value={String(n.containers)} /></td>

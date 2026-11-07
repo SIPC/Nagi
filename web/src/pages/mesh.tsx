@@ -4,7 +4,7 @@ import { confirmAction } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
-import { fmtBytes } from "@/components/metrics";
+import { fmtBytes, fmtRate } from "@/components/metrics";
 import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowsSkeleton, Section, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
@@ -68,7 +68,6 @@ function speedTip(p: MeshPeerStatus, r: SpeedRun, port: number): { text: string;
   return undefined;
 }
 
-const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 
 // fmtLoss：丢包率（百万分之几）写成百分数，1% 以下保留两位小数。
 const fmtLoss = (ppm: number) => (ppm === 0 ? "0%" : `${(ppm / 10000).toFixed(ppm >= 10000 ? 1 : 2)}%`);

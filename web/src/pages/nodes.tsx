@@ -8,7 +8,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { RangePicker, UsageCell, fmtBytes, fmtBytesShort, fmtCpuShort, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
+import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC } from "@/pages/mesh";
@@ -83,7 +83,7 @@ function usePanelVersion() {
 }
 
 // 例如 8 GB、1.0 TB：数字和单位之间留空格。
-const sizeLabel = (v: number) => fmtBytesShort(v).replace(/([A-Z])/, " $1");
+const sizeLabel = fmtBytes;
 
 // 磁盘是所有盘加起来；旧版本的节点不报各盘，用数据目录所在的盘。
 const diskTotal = (info?: NodeInfo, usage?: NodeUsage) => usage?.disks.reduce((sum, d) => sum + Number(d.totalBytes), 0) || Number(info?.diskBytes ?? 0);
@@ -106,7 +106,7 @@ function nodeSpecTitle(info?: NodeInfo, usage?: NodeUsage) {
 const lastSeenText = (n: Node) => (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : t.nodes.neverSeen);
 
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
-const fmtPercent = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
+const fmtPercent = fmtCpuShort;
 
 // NodeResources：节点页的监控，每项一个数字加一张小图，三列；时间范围在区块标题右侧。内存和磁盘写成「已用 / 总量」。
 function NodeResources({ n }: { n: Node }) {
@@ -119,7 +119,7 @@ function NodeResources({ n }: { n: Node }) {
     placeholderData: (prev) => prev,
   });
   const ofTotal = (total: number) => (total ? (v: number) => `${sizeLabel((v / 100) * total)} / ${sizeLabel(total)}` : fmtPercent);
-  const rate = (v: number) => `${fmtBytes(v)}/s`;
+  const rate = fmtRate;
   const items = [
     { label: "CPU", name: "node:cpu", format: fmtPercent, minMax: 1 },
     { label: t.metrics.memory, name: "node:mem", format: ofTotal(Number(n.info?.memoryBytes ?? 0)) },

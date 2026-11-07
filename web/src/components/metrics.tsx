@@ -43,15 +43,20 @@ export function useRange(initial: MetricRange = "1h") {
 
 const toPoints = (s: MetricSeries | undefined): Pt[] => (s ? s.values.map((v, i) => [Number(s.times[i]), v]) : []);
 
-export function fmtBytes(v: number) {
-  const units = ["B", "KB", "MB", "GB", "TB"];
+// 字节数和速率全站用同一套写法（见 docs/ui.md）：到 1000 就进位（不出现 1010 MB 这样的 4 位数）。
+// 容量不到 100 保留一位小数（16.0 GB 和 15.6 GB 要分得出）：512 B、1.4 GB、15.6 GB、156 GB；
+// 速率变化快，不到 10 才保留一位小数：640 KB/s、89 KB/s、1.2 MB/s。
+export function sizeParts(v: number, units = ["B", "KB", "MB", "GB", "TB"], decimalsBelow = 100): [string, string] {
   let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
+  while (v >= 1000 && i < units.length - 1) {
     v /= 1024;
     i++;
   }
-  return `${v.toFixed(i === 0 ? 0 : 1).replace(/\.0$/, "")} ${units[i]}`;
+  return [v < decimalsBelow && i > 0 ? v.toFixed(1) : String(Math.round(v)), units[i]];
 }
+export const fmtBytes = (v: number) => sizeParts(v).join(" ");
+export const rateParts = (v: number) => sizeParts(v, ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"], 10);
+export const fmtRate = (v: number) => rateParts(v).join(" ");
 
 
 // CPU 图的纵轴至少到 1%，空闲容器的微小波动贴在底部，不被放大成尖峰。
@@ -118,7 +123,6 @@ function MetricsSkeleton() {
 
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 
-const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 // 上万的次数用紧凑写法（23.9万、239.3K），统计格放得下。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
@@ -284,16 +288,6 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   );
 }
 
-// fmtSize：节点的内存和磁盘容量，例如 1.4 GB、15.6 GB、512 MB：到 1000 就进位，不到 100 保留一位小数。
-export function fmtSize(v: number) {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (v >= 1000 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v < 100 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
-}
 
 // nodeUsage：节点列表一行里的 CPU、内存、磁盘。percent 是占整机的比例（定占用条和颜色），
 // value 和 limit 是显示的「已用 / 上限」：CPU 和容器一样按每核 100% 累加，写成「61% / 400%」；
@@ -309,8 +303,8 @@ export function nodeUsage(usage?: NodeUsage, info?: NodeInfo) {
   const sized = (label: string, percent: number | undefined, total: number, usedBytes?: number) => {
     if (percent === undefined) return { label, percent, value: "—", title: `${label} —` };
     if (!total) return { label, percent, value: fmtPct(percent), title: `${label} ${fmtPct(percent)}` };
-    const used = fmtSize(usedBytes ?? (percent / 100) * total);
-    const limit = fmtSize(total);
+    const used = fmtBytes(usedBytes ?? (percent / 100) * total);
+    const limit = fmtBytes(total);
     const [n, unit] = used.split(" ");
     return { label, percent, value: limit.endsWith(` ${unit}`) ? n : used, limit, title: `${label} ${used} / ${limit} (${fmtPct(percent)})` };
   };
