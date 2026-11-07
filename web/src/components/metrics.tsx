@@ -320,28 +320,16 @@ ${m.cpuCores(cpus)}` }
   ];
 }
 
-// UsageCell：列表里的一项占用。上面是已用（深色）和上限（灰色），下面一根高 3 的细条。
-// 平时灰色，75% 起琥珀，90% 起红，已用同步变色。
+// UsageCell：节点列表里的一项占用，写成「已用 / 上限」（已用深色，上限灰色）。75% 起已用变琥珀，90% 起变红。
 export function UsageCell({ percent, value, limit, title }: { percent?: number; value: string; limit?: string; title: string }) {
   if (percent === undefined) return <span className="text-muted-foreground">—</span>;
-  const ratio = Math.min(percent / 100, 1);
-  const level = ratio >= 0.9 ? "danger" : ratio >= 0.75 ? "warning" : "normal";
-  // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
-  const r = ratio > 0 ? Math.max(ratio, 0.03) : 0;
+  const level = percent >= 90 ? "text-destructive" : percent >= 75 ? "text-warning-text" : "text-foreground";
   return (
-    <span className="grid min-w-0 gap-1.5 tabular-nums" title={title}>
-      <span className="truncate leading-5">
-        <span className={cn(level === "danger" ? "text-destructive" : level === "warning" ? "text-warning-text" : "text-foreground")}>
-          <Roll value={value} n={percent} />
-        </span>
-        {limit && <span className="text-muted-foreground"> / {limit}</span>}
+    <span className="block truncate leading-5 tabular-nums" title={title}>
+      <span className={level}>
+        <Roll value={value} n={percent} />
       </span>
-      <span className="h-[3px] w-full overflow-hidden rounded-full bg-primary/10">
-        <span
-          className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", level === "danger" ? "bg-destructive" : level === "warning" ? "bg-warning" : "bg-muted-foreground/60")}
-          style={{ transform: `scaleX(${r})` }}
-        />
-      </span>
+      {limit && <span className="text-muted-foreground"> / {limit}</span>}
     </span>
   );
 }
