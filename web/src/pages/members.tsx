@@ -302,7 +302,7 @@ export function MembersCard() {
           {users.data.users.map((u) => (
             <Row
               key={String(u.id)}
-              icon={<UserAvatar name={u.displayName || u.username} src={avatarSrc(u.avatar, u.avatarType)} className="-mt-0.5 [&>span]:bg-foreground/10" />}
+              icon={<UserAvatar username={u.username} src={avatarSrc(u.avatar, u.avatarType)} className="-mt-0.5" />}
               center
               title={
                 <>

@@ -41,11 +41,21 @@ async function cropAvatar(file: File) {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), type: blob.type };
 }
 
-export function UserAvatar({ name, src, className }: { name: string; src?: string; className?: string }) {
+// avatarGradient：没上传头像时的渐变，按用户名算颜色，同一个用户名永远是同一组颜色，改显示名称不变。
+function avatarGradient(username: string) {
+  let h = 2166136261;
+  for (const c of username) h = Math.imul(h ^ c.codePointAt(0)!, 16777619);
+  h >>>= 0;
+  const from = h % 360;
+  const to = (from + 50 + ((h >>> 9) % 90)) % 360;
+  return `linear-gradient(135deg, oklch(0.84 0.12 ${from}), oklch(0.6 0.2 ${to}))`;
+}
+
+export function UserAvatar({ username, src, className }: { username: string; src?: string; className?: string }) {
   return (
     <Avatar className={className}>
       {src && <AvatarImage src={src} alt="" />}
-      <AvatarFallback>{Array.from(name)[0]?.toUpperCase()}</AvatarFallback>
+      <AvatarFallback style={{ backgroundImage: avatarGradient(username) }} />
     </Avatar>
   );
 }
@@ -95,7 +105,7 @@ function ProfileForm({ me, onClose }: { me: MeResponse; onClose?: () => void }) 
       }}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <UserAvatar name={displayName.trim() || me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="size-12 text-lg" />
+        <UserAvatar username={me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="size-12" />
         <input
           ref={input}
           type="file"
@@ -186,7 +196,7 @@ export function UserMenu({
               compact ? "p-1" : "h-10 w-full px-2 hover:bg-accent/50 data-[state=open]:bg-accent",
             )}
           >
-            <UserAvatar name={name} src={src} className={compact ? "size-7" : "size-6 text-xs"} />
+            <UserAvatar username={me.username} src={src} className={compact ? "size-7" : "size-6"} />
             {!compact && (
               <>
                 <span className="min-w-0 flex-1 truncate">{name}</span>
