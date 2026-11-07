@@ -315,7 +315,7 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
             </Button>
             {list.length > 0 && (
               <Button variant="outline" onClick={() => setDialog("handover")}>
-                {t.nodes.handover}
+                {t.nodes.handoverAction}
               </Button>
             )}
           </>

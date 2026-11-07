@@ -61,7 +61,7 @@ export default {
     descriptionNarrow: "Select a container to view details. Check several to deploy them together.",
     help: "Batch deployment deploys the selected containers in dependency order and creates a single deployment history entry.",
     addContainer: "Add container",
-    deployAll: "Deploy all containers",
+    deployAll: "Deploy all",
     changedTitle: (names) => `Containers with drafts, changed shared variables, or not yet deployed: ${names}`,
     deployChanged: (n) => `Deploy all changes (${n})`,
     deploySelected: (n) => `Deploy selected (${n})`,

@@ -59,6 +59,8 @@ export default {
   addNode: "添加节点",
   addNodeDescription: "生成安装命令，在新机器上执行后即接入本面板。",
   handover: "移交给其他面板",
+  // 页头按钮：英文用短的，和中文页头一样放得下。
+  handoverAction: "移交给其他面板",
   handoverDescription: "使用其他面板生成的接入码，将节点移交给该面板。",
   empty: "暂无节点",
   embedded: "面板内置",
