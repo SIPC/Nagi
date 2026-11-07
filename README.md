@@ -14,9 +14,7 @@
 
 <p align="center"><b>简体中文</b> · <a href="README.en.md">English</a></p>
 
-# Nagi（凪）
-
-> 风平浪静。
+# Nagi
 
 Nagi 是一个开源的自托管容器部署平台，可以在一个网页面板上管理分布在多台 Linux 服务器上的 Docker 容器。Nagi 基于 Docker 和 Docker Compose，支持多节点与高可用。
 

@@ -14,9 +14,7 @@
 
 <p align="center"><a href="README.md">简体中文</a> · <b>English</b></p>
 
-# Nagi (凪)
-
-> Calm waters.
+# Nagi
 
 Nagi is an open-source, self-hosted container deployment platform. You can manage Docker containers across many Linux servers from one web panel. Nagi is built on Docker and Docker Compose and supports multiple nodes and high availability.
 
