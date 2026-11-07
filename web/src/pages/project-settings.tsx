@@ -3,7 +3,7 @@ import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { formatDateTime, timeAgo } from "@/lib/utils";
+import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
@@ -49,8 +49,19 @@ function GeneralSettings({ project }: { project: Project }) {
   const [limit, setLimit] = useState(s?.snapshotLimit ? String(s.snapshotLimit) : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // 提交过一次以后才显示字段错误，免得刚开始输入就报错。
+  const [checked, setChecked] = useState(false);
+  // 留空用默认值，否则须为正整数。
+  const numberError = (v: string) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? m.positiveInteger : "");
+  const intervalError = checked ? numberError(interval) : "";
+  const limitError = checked ? numberError(limit) : "";
 
   const save = async () => {
+    setChecked(true);
+    if (numberError(interval) || numberError(limit)) return;
+    // 改网络名后，已连接项目里写的地址会失效，先确认。
+    const renamed = network.trim() !== "" && network.trim() !== project.networkName;
+    if (renamed && project.links.length > 0 && !(await confirmAction(m.renameConfirm(network.trim()), { action: m.rename }))) return;
     setBusy(true);
     setError("");
     try {
@@ -61,8 +72,8 @@ function GeneralSettings({ project }: { project: Project }) {
         networkName: network,
         settings: {
           internalPorts: s?.internalPorts,
-          snapshotIntervalMinutes: Number(interval) || 0,
-          snapshotLimit: Number(limit) || 0,
+          snapshotIntervalMinutes: Number(interval.trim() || 0),
+          snapshotLimit: Number(limit.trim() || 0),
         },
       });
       toast.success(t.common.feedback.saved);
@@ -91,10 +102,10 @@ function GeneralSettings({ project }: { project: Project }) {
             <Field label={m.networkName} htmlFor="p-network" help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />}>
               <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required />
             </Field>
-            <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint}>
+            <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint} error={intervalError}>
               <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotIntervalMinutes)} />
             </Field>
-            <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint}>
+            <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint} error={limitError}>
               <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotLimit)} />
             </Field>
           </FormRow>
@@ -142,6 +153,8 @@ function SharedEnv({ project }: { project: Project }) {
     call(async () => {
       const res = await projectClient.saveSharedEnv({ projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) });
       setAffected(Object.fromEntries(res.affected.map((c) => [c, true])));
+      // 再次保存时页面上没有变化，所以给提示。
+      toast.success(m.savedDraft);
     });
 
   const discard = async () => {
@@ -167,7 +180,7 @@ function SharedEnv({ project }: { project: Project }) {
     );
   };
 
-  const help = <HelpParts parts={[m.intro, m.description, m.help]} />;
+  const help = <HelpParts parts={[m.intro, m.help]} />;
   // 只读角色拿到的共享变量是空的（面板去掉了），不能显示成一个空编辑器。
   if (isViewer) {
     return (
@@ -190,8 +203,8 @@ function SharedEnv({ project }: { project: Project }) {
       <FormBody>
         <EnvEditor key={editorKey} id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
-          <Field label={m.scope}>
-            <div title={m.scopeHelp} className="flex flex-wrap gap-x-6 gap-y-2 [&_label]:leading-[14px] [&_label]:font-medium">
+          <Field label={m.scope} help={m.scopeHelp}>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 [&_label]:leading-[14px] [&_label]:font-medium">
               {project.containers.map((c) => (
                 <Check key={c.name} checked={!!affected[c.name]} onChange={(v) => setAffected({ ...affected, [c.name]: v })}>
                   {c.name}
@@ -244,7 +257,7 @@ function Deployments({ project }: { project: Project }) {
   });
 
   return (
-    <Section title={m.title}>
+    <Section title={m.title} help={<HelpParts parts={[m.description, m.numberHelp]} />}>
       {output}
       {list.isPending ? (
         <RowsSkeleton />
@@ -257,7 +270,7 @@ function Deployments({ project }: { project: Project }) {
           {list.data.deployments.map((d, i) => {
             const source = `${sourceLabel[d.source] ?? d.source}${d.restoreOf > 0n ? ` #${d.restoreOf}` : ""}`;
             // 第二行写这次动到的容器和它们的版本，所有容器的版本在悬停提示里。
-            const touched = m.containerList(d.containers.map((c) => (d.versions[c] !== undefined ? `${c} v${d.versions[c]}` : c)));
+            const touched = t.common.list(d.containers.map((c) => (d.versions[c] !== undefined ? `${c} v${d.versions[c]}` : c)));
             const all = Object.entries(d.versions)
               .map(([c, v]) => `${c} v${v}`)
               .join(" · ");
@@ -267,7 +280,7 @@ function Deployments({ project }: { project: Project }) {
                 key={String(d.id)}
                 title={
                   <>
-                    <span title={`${m.description} ${m.numberHelp}`}>{`#${d.id}`}</span>
+                    <span>{`#${d.id}`}</span>
                     {!d.success && (
                       <Status tone="danger">
                         <span className="text-destructive">{m.failed}</span>
@@ -276,7 +289,7 @@ function Deployments({ project }: { project: Project }) {
                   </>
                 }
                 sub={<span title={all}>{[source, touched, d.success ? "" : d.error].filter(Boolean).join(" · ")}</span>}
-                cols={[{ content: <span title={formatDateTime(time)}>{timeAgo(time)}</span> }]}
+                cols={[{ content: <span title={formatDateTime(time)}>{capitalize(timeAgo(time))}</span> }]}
                 actions={
                   i > 0 ? (
                     <Button
@@ -306,6 +319,7 @@ function DeleteProject({ project }: { project: Project }) {
   const queryClient = useQueryClient();
   const [deleteDir, setDeleteDir] = useState(false);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const remove = async () => {
     // 同时删除目录时数据无法恢复，确认框里要输入项目名称。
@@ -314,17 +328,19 @@ function DeleteProject({ project }: { project: Project }) {
       : await ask(m.confirm(project.name), { action: m.submit, danger: true });
     if (!answer) return;
     setError("");
+    setBusy(true);
     try {
       await projectClient.deleteProject({ projectId: project.id, baseRevision: project.revision, deleteDir, confirmName: deleteDir ? project.name : "" });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       navigate({ to: "/projects" });
     } catch (err) {
       setError(errorMessage(err));
+      setBusy(false);
     }
   };
 
   return (
-    <Section title={m.title}>
+    <Section title={m.title} tone="danger" help={m.help}>
       <p className="text-muted-foreground">{m.description}</p>
       <div className="grid justify-items-start gap-2">
         <Check checked={deleteDir} onChange={setDeleteDir}>
@@ -333,7 +349,8 @@ function DeleteProject({ project }: { project: Project }) {
       </div>
       {error && <Alert>{error}</Alert>}
       <div>
-        <Button variant="destructive-outline" title={m.help} onClick={remove}>
+        <Button variant="destructive-outline" disabled={busy} onClick={remove}>
+          {busy && <Spinner />}
           {m.submit}
         </Button>
       </div>

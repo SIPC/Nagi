@@ -14,7 +14,7 @@ import type { VolumeFileEntry } from "@/gen/nagi/v1/agent_pb";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { cn, formatDateTime, timeAgo } from "@/lib/utils";
+import { capitalize, cn, formatDateTime, timeAgo } from "@/lib/utils";
 
 // 目录一次显示的条数，内容多时点「显示更多」。
 const pageSize = 200;
@@ -159,14 +159,14 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const upload = async (list: File[]) => {
     const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
     if (tooLarge.length > 0) {
-      setError(m.tooLarge(tooLarge.join(", ")));
+      setError(m.tooLarge(t.common.list(tooLarge)));
       return;
     }
     const existing = new Set((files.data?.entries ?? []).map((e) => e.name));
     const clash = list.filter((f) => existing.has(f.name)).map((f) => f.name);
     let first = false;
     if (clash.length > 0) {
-      const answer = await ask(m.overwriteConfirm(clash.join(", ")), { action: m.overwrite, danger: true, check: m.snapshotFirst, checkDefault: true });
+      const answer = await ask(m.overwriteConfirm(t.common.list(clash)), { action: m.overwrite, danger: true, check: m.snapshotFirst, checkDefault: true });
       if (!answer) return;
       first = answer.checked;
     }
@@ -189,7 +189,6 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
         if (answer.checked) await snapshotFirst();
         await projectClient.deleteVolumeFile({ ...ref, snapshotId: "", path: join(e.name) });
       },
-      m.deleted,
     );
   };
 
@@ -324,7 +323,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
             e.preventDefault();
             const name = dirName.trim();
             if (!name) return;
-            run("mkdir", () => projectClient.createVolumeDir({ ...ref, snapshotId: "", path: join(name) }), m.created).then((ok) => {
+            run("mkdir", () => projectClient.createVolumeDir({ ...ref, snapshotId: "", path: join(name) })).then((ok) => {
               if (!ok) return;
               setDirName("");
               setCreating(false);
@@ -355,7 +354,17 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
       ) : files.error ? (
         <QueryError error={errorMessage(files.error)} onRetry={() => files.refetch()} />
       ) : entries.length === 0 ? (
-        <EmptyRow>{m.empty}</EmptyRow>
+        <EmptyRow
+          action={
+            snapshot ? undefined : (
+              <Button variant="outline" disabled={busy === "upload"} onClick={() => inputRef.current?.click()}>
+                {m.upload}
+              </Button>
+            )
+          }
+        >
+          {m.empty}
+        </EmptyRow>
       ) : (
         <List>
           {entries.slice(0, shown).map((e) => (
@@ -373,7 +382,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
                   </span>
                 )
               }
-              cols={[{ content: e.isDir || e.isSymlink ? "" : fmtBytes(Number(e.size)), num: true }, { content: <span title={formatDateTime(toDate(e.modified))}>{timeAgo(toDate(e.modified))}</span> }]}
+              cols={[{ content: e.isDir || e.isSymlink ? "" : fmtBytes(Number(e.size)), num: true }, { content: <span title={formatDateTime(toDate(e.modified))}>{capitalize(timeAgo(toDate(e.modified)))}</span> }]}
               actionsWidth="w-28"
               actions={
                 snapshot ? (

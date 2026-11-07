@@ -1,9 +1,9 @@
 // 导入现有目录（见 docs/agent.md#现有目录）：填节点上的目录、名称、节点，预览后接入为容器组，数据留在原处。
 // 只给管理员；读的是主机上的文件，要先确认身份。
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Alert, Button, ButtonLink, Field, FormActions, FormRow, Input, KeyValue, LogBox, Notice, Spinner } from "@/components/ui";
+import { Alert, Button, ButtonLink, Field, FormActions, FormRow, HelpTip, Input, KeyValue, LogBox, Notice, Spinner } from "@/components/ui";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { ComposeDirPreview } from "@/gen/nagi/v1/api_pb";
@@ -32,6 +32,8 @@ export function ImportDir({ project }: { project: Project }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"" | "read" | "deploy" | "add">("");
   const node = useNodeChoice({ projectId: project.id, projectName: project.networkName, container: name || "app", preferNodes: project.containers.map((m) => m.nodeId) });
+  // 预览读的是选中节点上的目录，换节点后作废，要重新读取。
+  useEffect(() => setPreview(undefined), [node.nodeId]);
 
   const read = async () => {
     setBusy("read");
@@ -106,8 +108,14 @@ export function ImportDir({ project }: { project: Project }) {
           <KeyValue
             items={[
               [k.composeFile, preview.composeFile],
-              [k.variables, preview.variables.length ? preview.variables.join("、") : k.none],
-              [k.replaces, preview.containers.length ? `${preview.project}：${preview.containers.join("、")}` : k.nothingRunning],
+              [
+                <span className="flex items-center gap-1">
+                  {k.variables}
+                  <HelpTip>{k.variablesHelp}</HelpTip>
+                </span>,
+                preview.variables.length ? t.common.list(preview.variables) : k.none,
+              ],
+              [k.replaces, preview.containers.length ? k.replacesValue(preview.project, t.common.list(preview.containers)) : k.nothingRunning],
             ]}
           />
           {preview.containers.length > 0 && <Notice tone="warning">{k.replaceNotice}</Notice>}

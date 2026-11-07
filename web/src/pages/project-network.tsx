@@ -8,7 +8,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
+import { Alert, Button, ButtonLink, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
@@ -141,7 +141,7 @@ function routeProblems(checks: DomainCheck[]) {
     c.entries.flatMap((e) => {
       const prefix = `${manyDomains ? `${c.domain} ` : ""}${manyEntries ? `${e.nodeName} ` : ""}`;
       const list: { text: string; danger?: boolean; cert?: boolean }[] = [];
-      if (e.dns === "mismatch") list.push({ text: m.dnsMismatch(c.addresses.join(", ")) });
+      if (e.dns === "mismatch") list.push({ text: m.dnsMismatch(t.common.list(c.addresses)) });
       if (e.dns === "unresolved") list.push({ text: m.dnsUnresolved, danger: true });
       if (e.dns === "unknown") list.push({ text: m.dnsUnknown });
       if (e.cert === "failed") list.push({ text: m.certFailed, danger: true, cert: true });
@@ -226,7 +226,7 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
   }
   const protocol = r.protocol.toUpperCase();
   const last = r.domains.length > 0 ? (r.httpOnly ? m.httpOnlyBadge : certSummary(checks)) : hasAddress ? protocol : `${protocol}/${r.published}`;
-  const entry = entries.length > 0 ? m.entryList([...entries].sort().join(", ")) : "";
+  const entry = entries.length > 0 ? m.entryList(t.common.list([...entries].sort())) : "";
   const parts = r.domains.length > 0 ? [entry, overview ? "" : last] : overview ? [last, entry] : hasAddress ? [last] : [entry, last];
   const line = [`${r.name} → ${target}`, ...parts].filter(Boolean);
   return (
@@ -283,11 +283,11 @@ function RoutesOverview({ project }: { project: Project }) {
   const { nodes, nodeName, entriesOf, addressesOf } = useRouteNodes(project);
   const domains = useDomainChecks(project.id, project.routes.filter((r) => r.domains.length > 0), 15_000);
   return (
-    <Section title={m.exposedTitle} help={m.overviewDescription}>
+    <Section title={m.title} help={m.overviewDescription}>
       {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
       {domains.error && <QueryError error={domains.error} onRetry={() => domains.refetch()} />}
       {project.routes.length === 0 ? (
-        <EmptyRow>{m.empty}</EmptyRow>
+        <EmptyRow>{m.emptyOverview}</EmptyRow>
       ) : nodes.isPending ? (
         <RowsSkeleton count={Math.min(project.routes.length, 6)} />
       ) : (
@@ -451,7 +451,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
 
   return (
     <Section
-      title={m.exposedTitle}
+      title={m.title}
       help={m.help}
       actions={
         routes.length > 0 && (
@@ -467,7 +467,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       {savedDomains.error && <QueryError error={savedDomains.error} onRetry={() => savedDomains.refetch()} />}
       {routes.length === 0 ? (
         <div className="grid justify-items-center gap-6 py-8 text-center">
-          <p className="text-muted-foreground">{m.emptyContainer}</p>
+          <p className="text-muted-foreground">{m.empty}</p>
           <Button onClick={openAdd}>
             <Plus />
             {m.add}
@@ -522,7 +522,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       )}
 
       {/* 重试成功后原因没了，对话框随之关闭。 */}
-      <Dialog open={shownReasons.length > 0} onClose={() => setReasonOf("")} title={m.check.certErrorDetail} className="max-w-[520px]">
+      <Dialog open={shownReasons.length > 0} onClose={() => setReasonOf("")} title={m.check.certErrorsTitle} className="max-w-[520px]">
         {shownReasons.map((c) => (
           <div key={`${c.domain}/${c.nodeId}`} className="grid gap-1">
             <div className="wrap-anywhere">
@@ -691,8 +691,10 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
         baseRevision: project.revision,
         name: project.name,
         networkName: project.networkName,
+        // 接口每次提交完整的设置：其余各项照原样带上，只换内部端口（共享变量由面板保留）。
         settings: {
           snapshotIntervalMinutes: project.settings?.snapshotIntervalMinutes ?? 0,
+          snapshotLimit: project.settings?.snapshotLimit ?? 0,
           internalPorts: [...[...known].flatMap((name) => splitPorts(valueOf(name)).map((p) => `${name}:${p}`)), ...splitPorts(others)],
         },
       });
@@ -714,7 +716,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
       help={<HelpParts parts={[m.description, m.help, m.portsRowHelp, m.internalPortsHelp]} />}
       actions={
         <>
-          <span>{`${t.projectNetwork.links.columns.networkName} ${project.networkName}`}</span>
+          <span>{`${t.projectNetwork.links.networkName} ${project.networkName}`}</span>
           {hasRows && (
             <Button variant="outline" onClick={save} disabled={busy}>
               {busy && <Spinner />}
@@ -727,7 +729,15 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
       {error && <Alert>{error}</Alert>}
       {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
       {!hasRows ? (
-        <EmptyRow>{m.empty}</EmptyRow>
+        <EmptyRow
+          action={
+            <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }} variant="outline">
+              {m.addContainer}
+            </ButtonLink>
+          }
+        >
+          {m.empty}
+        </EmptyRow>
       ) : (
         <List>
           {addresses.map((a, i) => (
@@ -834,7 +844,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
   return (
     <Section
       title={m.title}
-      help={<HelpParts parts={[m.intro(project.networkName), m.help, ...(addresses.length > 0 ? [`${m.addressesIntro} ${addresses.map((a) => `${a.name}.${project.networkName}`).join(", ")}`] : [])]} />}
+      help={<HelpParts parts={[m.intro(project.networkName), m.help, ...(addresses.length > 0 ? [`${m.addressesIntro} ${t.common.list(addresses.map((a) => `${a.name}.${project.networkName}`))}`] : [])]} />}
       actions={
         !open && (
           <Button variant="outline" onClick={() => setOpen(true)}>
@@ -892,7 +902,7 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
             <Row
               key={l.projectId}
               title={<span className={cn("min-w-0 wrap-anywhere", !l.name && "text-muted-foreground")}>{l.name || m.otherProject}</span>}
-              sub={`${l.networkName} · ${m.columns.example} ${exampleOf(l.projectId, l.networkName)}`}
+              sub={`${l.networkName} · ${m.exampleLabel} ${exampleOf(l.projectId, l.networkName)}`}
               actions={
                 l.name ? (
                   <Button size="row" variant="ghost" onClick={() => disconnect(l.projectId, l.name)}>
