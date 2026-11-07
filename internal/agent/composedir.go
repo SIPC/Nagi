@@ -38,7 +38,7 @@ func readLimited(path string) (string, error) {
 		return "", err
 	}
 	if len(b) > composeFileLimit {
-		return "", status.Errorf(codes.InvalidArgument, "%s 超过 1 MB", filepath.Base(path))
+		return "", status.Errorf(codes.InvalidArgument, "%s 超过 1 MB，无法读取", filepath.Base(path))
 	}
 	return string(b), nil
 }
@@ -63,7 +63,7 @@ func (s *agentService) InspectComposeDir(ctx context.Context, req *nagiv1.Inspec
 	}
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "读取目录 %s: %v", dir, err)
+		return nil, status.Errorf(codes.InvalidArgument, "无法读取目录 %s，请检查路径和权限", dir)
 	}
 	denied := []string{s.node.cfg.DataDir}
 	if s.node.cfg.Embedded {
@@ -71,12 +71,12 @@ func (s *agentService) InspectComposeDir(ctx context.Context, req *nagiv1.Inspec
 	}
 	for _, d := range denied {
 		if within(real, d) {
-			return nil, status.Error(codes.InvalidArgument, "这是 Nagi 自己的数据目录，不能导入")
+			return nil, status.Error(codes.InvalidArgument, "这是 Nagi 的数据目录，无法导入")
 		}
 	}
 	for _, d := range s.projects.Dirs(ctx) {
 		if within(real, d) || within(d, real) {
-			return nil, status.Errorf(codes.InvalidArgument, "%s 是 Nagi 管理的容器目录（或包含它），不能导入", d)
+			return nil, status.Errorf(codes.InvalidArgument, "%s 是（或包含）Nagi 管理的容器目录，无法导入", d)
 		}
 	}
 	out := &nagiv1.InspectComposeDirResponse{Path: dir, Volumes: map[string]string{}}
@@ -91,7 +91,7 @@ func (s *agentService) InspectComposeDir(ctx context.Context, req *nagiv1.Inspec
 		break
 	}
 	if out.ComposeFile == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "%s 里没有 compose 文件（compose.yaml、docker-compose.yml 等）", dir)
+		return nil, status.Errorf(codes.InvalidArgument, "%s 中没有 compose 文件（compose.yaml、docker-compose.yml 等）", dir)
 	}
 	for _, n := range overrideNames {
 		if _, err := os.Stat(filepath.Join(dir, n)); err == nil {
@@ -105,7 +105,7 @@ func (s *agentService) InspectComposeDir(ctx context.Context, req *nagiv1.Inspec
 	}
 	list, err := s.node.docker.ComposeContainersIn(ctx, dir)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "查找目录里的容器: %v", err)
+		return nil, status.Errorf(codes.Internal, "无法查找目录中的容器：%v", err)
 	}
 	for _, c := range list {
 		if strings.HasPrefix(c.Project, "nagi-") {

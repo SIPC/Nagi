@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
@@ -27,7 +28,7 @@ func (s *Service) stateful(ctx context.Context, cfg *nagiv1.ContainerConfig, c s
 // SaveRoute 新建或修改一条映射，立即生效。
 func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Exposure) (*nagiv1.Project, error) {
 	if in == nil {
-		return nil, invalid("缺少映射")
+		return nil, invalid("缺少端口映射")
 	}
 	r := spec.NormalizeRoute(in)
 	if err := spec.CheckRoute(r); err != nil {
@@ -58,7 +59,7 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 	if r.GetName() == "" {
 		r.Name = spec.NewRouteName(r, taken)
 	} else if old == nil {
-		return nil, invalid("映射 %s 不存在", r.GetName())
+		return nil, invalid("端口映射 %s 不存在", r.GetName())
 	}
 	if err := s.checkConflicts(ctx, c.NodeID, projectID, r.GetName(), r); err != nil {
 		return nil, err
@@ -131,7 +132,7 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 	}
 	for _, id := range failoverNodes(c) {
 		if conn, err := s.Nodes.Peek(id); err == nil && !conn.LastReport().GetNode().GetCrossNodeEntry() {
-			return invalid("节点 %s 的版本不支持跨节点入口，请先升级", s.NodeName(ctx, id))
+			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", s.NodeName(ctx, id))
 		}
 	}
 	for _, id := range r.GetEntryNodes() {
@@ -144,10 +145,10 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 		}
 		info := conn.LastReport().GetNode()
 		if !info.GetCrossNodeEntry() {
-			return invalid("节点 %s 的版本不支持跨节点入口，请先升级", n.Name)
+			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", n.Name)
 		}
 		if info.GetProxyDisabled() {
-			return invalid("节点 %s 没有启动 Caddy，不能作为入口节点", n.Name)
+			return invalid("节点 %s 没有启动 Caddy，无法作为入口节点", n.Name)
 		}
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		_, err = conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: []*nagiv1.Exposure{r}})
@@ -210,7 +211,7 @@ func (s *Service) DeleteRoute(ctx context.Context, projectID, name string) (*nag
 		s.refreshLinks()
 		return s.reload(ctx, projectID)
 	}
-	return nil, invalid("映射 %s 不存在", name)
+	return nil, invalid("端口映射 %s 不存在", name)
 }
 
 // checkService 检查服务在容器的 compose（最新版本或草稿）里，且不是 host 网络。
@@ -229,12 +230,12 @@ func (s *Service) checkService(ctx context.Context, c store.Container, service s
 		}
 		if svc, ok := cp.Services[service]; ok {
 			if svc.NetworkMode == "host" {
-				return invalid("容器 %s 使用 host 网络，端口直接对外，不能再经 Caddy 开放", service)
+				return invalid("容器 %s 使用 host 网络，端口已直接对外，无法再经 Caddy 开放", service)
 			}
 			return nil
 		}
 	}
-	return invalid("容器组 %s 里没有容器 %s", c.Name, service)
+	return invalid("容器组 %s 中没有容器 %s", c.Name, service)
 }
 
 // checkConflicts 检查一条映射和同一节点上所有映射的端口、整个面板上的域名是否冲突。
@@ -243,7 +244,7 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 	mine := spec.EntryNodesOf(r, nodeID)
 	for _, d := range r.GetDomains() {
 		if s.ReservedDomain != nil && s.ReservedDomain(d) {
-			return invalid("域名 %s 已经绑定给面板", d)
+			return invalid("域名 %s 已绑定给面板", d)
 		}
 	}
 	ports := map[spec.PortKey]bool{}
@@ -279,7 +280,7 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 		for _, d := range o.GetDomains() {
 			for _, mine := range r.GetDomains() {
 				if d == mine {
-					return invalid("域名 %s 已被项目 %s 的映射 %s 使用", d, name, other.Name)
+					return invalid("域名 %s 已被项目 %s 的端口映射 %s 使用", d, name, other.Name)
 				}
 			}
 		}
@@ -288,7 +289,7 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 		}
 		for _, k := range spec.UsedPorts(o) {
 			if ports[k] {
-				return invalid("%s 端口 %d 已被项目 %s 的映射 %s 使用（同一个节点）", k.Proto, k.Port, name, other.Name)
+				return invalid("%s 端口 %d 已被项目 %s 的端口映射 %s 使用（同一节点）", strings.ToUpper(k.Proto), k.Port, name, other.Name)
 			}
 		}
 	}
@@ -325,7 +326,7 @@ func (s *Service) importPorts(ctx context.Context, p store.Project, c store.Cont
 		}
 		r := port.Route
 		if err := s.checkConflicts(ctx, c.NodeID, p.ID, "", r); err != nil {
-			out(i18n.T(ctx, "compose 里 %s 的端口 %d 未开放：%v", r.GetService(), r.GetTarget(), err))
+			out(i18n.T(ctx, "compose 中 %s 的端口 %d 未开放：%v", r.GetService(), r.GetTarget(), err))
 			continue
 		}
 		r.Name = spec.NewRouteName(r, taken)
@@ -334,9 +335,9 @@ func (s *Service) importPorts(ctx context.Context, p store.Project, c store.Cont
 			return err
 		}
 		if port.Guessed {
-			out(i18n.T(ctx, "已按配置里的端口添加映射：%s（按端口猜测是网站，按 HTTP 开放；不是的话在端口映射里改成 TCP）", spec.RouteLabel(r)))
+			out(i18n.T(ctx, "已按配置中的端口添加端口映射：%s（按端口推测为网站，以 HTTP 开放；如果不是，请在端口映射中改为 TCP）", spec.RouteLabel(r)))
 		} else {
-			out(i18n.T(ctx, "已按配置里的端口添加映射：%s", spec.RouteLabel(r)))
+			out(i18n.T(ctx, "已按配置中的端口添加端口映射：%s", spec.RouteLabel(r)))
 		}
 	}
 	if !changed {

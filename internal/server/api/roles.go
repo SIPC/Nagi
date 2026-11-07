@@ -204,7 +204,7 @@ func (s *settingsService) CreateUser(ctx context.Context, req *connect.Request[n
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("用户名不能为空，且不超过 32 个字符"))
 	}
 	if !auth.ValidRole(m.GetRole()) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("不支持的角色"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("角色只能是管理员、操作员或只读"))
 	}
 	if err := checkNewPassword(m.GetPassword()); err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (s *settingsService) CreateUser(ctx context.Context, req *connect.Request[n
 		return nil, err
 	}
 	if _, err := s.Q.GetUserByUsername(ctx, username); err == nil {
-		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.New("用户名已存在"))
+		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.New("用户名已被使用"))
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	m := req.Msg
 	u, err := s.Q.GetUserByID(ctx, m.GetId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, i18n.New("用户不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("成员不存在"))
 	}
 	if sc := m.GetScope(); sc != nil {
 		if err := s.checkScope(ctx, sc); err != nil {
@@ -253,14 +253,14 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	}
 	if role := m.GetRole(); role != "" && role != u.Role {
 		if !auth.ValidRole(role) {
-			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("不支持的角色"))
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("角色只能是管理员、操作员或只读"))
 		}
 		last, err := s.lastAdmin(ctx, u)
 		if err != nil {
 			return nil, err
 		}
 		if last {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("至少要保留一个管理员"))
+			return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("至少保留一个管理员"))
 		}
 		if err := s.Q.SetUserRole(ctx, store.SetUserRoleParams{Role: role, ID: u.ID}); err != nil {
 			return nil, err
@@ -305,14 +305,14 @@ func (s *settingsService) DeleteUser(ctx context.Context, req *connect.Request[n
 	}
 	u, err := s.Q.GetUserByID(ctx, id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, i18n.New("用户不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("成员不存在"))
 	}
 	last, err := s.lastAdmin(ctx, u)
 	if err != nil {
 		return nil, err
 	}
 	if last {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("至少要保留一个管理员"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("至少保留一个管理员"))
 	}
 	if err := s.Q.DeleteUser(ctx, id); err != nil {
 		return nil, err
@@ -347,7 +347,7 @@ func (s *settingsService) RevokeSession(ctx context.Context, req *connect.Reques
 		return nil, err
 	}
 	if n == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, i18n.New("会话不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("登录设备不存在"))
 	}
 	return connect.NewResponse(&nagiv1.RevokeSessionResponse{}), nil
 }

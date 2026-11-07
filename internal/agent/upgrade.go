@@ -18,11 +18,11 @@ import (
 func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) (*nagiv1.UpgradeResponse, error) {
 	a := s.node
 	if a.cfg.Embedded {
-		return nil, status.Error(codes.FailedPrecondition, "面板自带的节点随面板一起升级，不能单独升级")
+		return nil, status.Error(codes.FailedPrecondition, "面板自带的节点随面板一起升级，无法单独升级")
 	}
 	want := req.GetVersion()
 	if !release.IsVersion(want) {
-		return nil, status.Errorf(codes.InvalidArgument, "版本号 %q 不对", want)
+		return nil, status.Errorf(codes.InvalidArgument, "版本号 %s 格式不正确", want)
 	}
 	u := &a.upgrade
 	ctx, cancel, err := u.begin(ctx)
@@ -84,7 +84,7 @@ func (u *upgradeState) begin(ctx context.Context) (context.Context, context.Canc
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if u.active {
-		return nil, nil, status.Error(codes.Aborted, "节点正在升级，请稍候")
+		return nil, nil, status.Error(codes.Aborted, "节点正在升级，请在完成后重试")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	u.active, u.canceled, u.replacing, u.cancel = true, false, false, cancel
@@ -116,7 +116,7 @@ func (u *upgradeState) abort() error {
 	case !u.active:
 		return status.Error(codes.NotFound, "节点没有在升级")
 	case u.replacing:
-		return status.Error(codes.FailedPrecondition, "节点已替换为新版本，正在重启，不能取消")
+		return status.Error(codes.FailedPrecondition, "节点已替换为新版本，正在重启，无法取消")
 	}
 	u.canceled = true
 	u.cancel()

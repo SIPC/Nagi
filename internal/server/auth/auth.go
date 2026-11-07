@@ -32,7 +32,7 @@ const CookieName = "nagi_session"
 const sessionTTL = 7 * 24 * time.Hour
 
 // ErrBadCredentials 表示用户名或密码错误。
-var ErrBadCredentials = i18n.New("用户名或密码错误")
+var ErrBadCredentials = i18n.New("用户名或密码不正确")
 
 // Service 管理用户和会话。
 type Service struct {
@@ -131,11 +131,13 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 	key := limitKey(ip)
 	done, wait := s.limiter.begin(key)
 	if done == nil && wait == 0 {
-		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录还在处理，请稍后再试"))
+		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录仍在处理，请稍后重试"))
 	}
 	if wait > 0 {
-		return nil, connect.NewError(connect.CodeResourceExhausted,
-			i18n.Errorf("登录失败次数过多，请 %d 秒后再试", int(wait.Seconds())+1))
+		if n := int(wait.Seconds()) + 1; n > 1 {
+			return nil, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("登录失败次数过多，请 %d 秒后重试", n))
+		}
+		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("登录失败次数过多，请 1 秒后重试"))
 	}
 	failed := true
 	defer func() { done(failed) }()
@@ -253,15 +255,15 @@ func (s *Service) SessionUser(ctx context.Context, token string) (User, error) {
 
 func (s *Service) session(ctx context.Context, token string) (User, error) {
 	if token == "" {
-		return User{}, i18n.New("未登录")
+		return User{}, i18n.New("请先登录")
 	}
 	row, err := s.q.GetSession(ctx, HashToken(token))
 	if err != nil {
-		return User{}, i18n.New("未登录")
+		return User{}, i18n.New("请先登录")
 	}
 	if row.ExpiresAt < time.Now().Unix() {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
-		return User{}, i18n.New("登录已过期")
+		return User{}, i18n.New("登录已过期，请重新登录")
 	}
 	return User{ID: row.UserID, Name: row.Username, Role: row.Role, ElevatedUntil: row.ElevatedUntil,
 		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0}, nil

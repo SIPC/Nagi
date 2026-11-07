@@ -48,7 +48,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, i18n.Sprintf(lang, "内部错误"), http.StatusInternalServerError)
+		http.Error(w, i18n.Sprintf(lang, "面板内部出错，请查看面板日志"), http.StatusInternalServerError)
 		return
 	}
 	hook := hookTarget{projectID, container}

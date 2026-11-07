@@ -44,7 +44,7 @@ func (u *panelUpdates) get(ctx context.Context, force bool) (string, error) {
 	}
 	v, err := release.Latest(ctx)
 	if err != nil {
-		return "", i18n.Errorf("检查更新失败：%w", err)
+		return "", err
 	}
 	u.latest, u.checked = v, time.Now()
 	return v, nil
@@ -53,10 +53,10 @@ func (u *panelUpdates) get(ctx context.Context, force bool) (string, error) {
 // updateUnsupported 返回本面板不能一键更新的原因，能更新时返回空。发布的文件只有 Linux 版，本地编译的版本没有对应的发布文件。
 func (p *PanelInfo) updateUnsupported() error {
 	if !release.IsVersion(p.Version) {
-		return i18n.New("这是本地编译的版本，不能一键更新")
+		return i18n.New("这是本地编译的版本，无法一键更新")
 	}
 	if runtime.GOOS != "linux" {
-		return i18n.New("只有 Linux 上的面板能一键更新")
+		return i18n.New("只有运行在 Linux 上的面板能一键更新")
 	}
 	return nil
 }
@@ -81,7 +81,7 @@ func (s *settingsService) UpdatePanel(ctx context.Context, _ *connect.Request[na
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 	if !s.updates.running.CompareAndSwap(false, true) {
-		return nil, connect.NewError(connect.CodeAborted, i18n.New("面板正在更新，请稍候"))
+		return nil, connect.NewError(connect.CodeAborted, i18n.New("面板正在更新，请在完成后重试"))
 	}
 	// 版本由面板自己决定，不听请求的：只升不降。
 	// 请求断开（例如刚点完就刷新页面）不影响更新。问 GitHub 要一两秒，先用缓存的版本号记下状态，免得界面这时还能再点一次。
@@ -102,7 +102,7 @@ func (s *settingsService) UpdatePanel(ctx context.Context, _ *connect.Request[na
 		return abort(connect.CodeUnavailable, err)
 	}
 	if !release.Older(s.Panel.Version, latest) {
-		return abort(connect.CodeFailedPrecondition, i18n.Errorf("面板已经是最新版本 %s", s.Panel.Version))
+		return abort(connect.CodeFailedPrecondition, i18n.Errorf("面板已是最新版本 %s", s.Panel.Version))
 	}
 	s.withUpdates(ctx, func(r *updateRecords) { r.Panel = newUpdateState(latest, s.Panel.Version, updateInstalling) })
 	go s.runPanelUpdate(ctx, latest)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -103,7 +104,7 @@ func (m *Manager) checkPorts(ctx context.Context, routes []*nagiv1.Exposure, por
 	for _, r := range routes {
 		for _, k := range ports(r) {
 			if !inUse[k] && !portFree(k) {
-				return invalid("%s 端口 %d 已被节点上的其他程序占用", k.Proto, k.Port)
+				return invalid("%s 端口 %d 已被节点上的其他程序占用，请更换端口", strings.ToUpper(k.Proto), k.Port)
 			}
 		}
 	}

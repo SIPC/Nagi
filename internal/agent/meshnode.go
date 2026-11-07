@@ -405,7 +405,7 @@ func (n *meshNode) relayLoop(ctx context.Context, panel nagiv1.PanelServiceClien
 func (s *agentService) GetMeshStatus(context.Context, *nagiv1.MeshStatusRequest) (*nagiv1.MeshStatus, error) {
 	n := s.node.mesh
 	if n == nil {
-		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
 	return mesh.StatusProto(n.m, n.name), nil
 }
@@ -413,7 +413,7 @@ func (s *agentService) GetMeshStatus(context.Context, *nagiv1.MeshStatusRequest)
 func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest) (*nagiv1.MeshPingResponse, error) {
 	n := s.node.mesh
 	if n == nil {
-		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
 	k, err := mesh.ParseKey(req.GetPublicKey())
 	if err != nil {
@@ -424,7 +424,7 @@ func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest
 	rtt, err := mesh.Ping(ctx, n.m, k)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, status.Error(codes.DeadlineExceeded, "经 mesh 连接超时")
+			return nil, status.Error(codes.DeadlineExceeded, "经节点网络连接超时")
 		}
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
@@ -434,7 +434,7 @@ func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest
 func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRequest) (*nagiv1.MeshSpeedResponse, error) {
 	n := s.node.mesh
 	if n == nil {
-		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
 	k, err := mesh.ParseKey(req.GetPublicKey())
 	if err != nil {
@@ -453,11 +453,11 @@ func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRe
 	}
 	switch {
 	case errors.Is(err, mesh.ErrSpeedBusy):
-		return nil, status.Error(codes.Unavailable, "对方正在测速，请稍后再试")
+		return nil, status.Error(codes.Unavailable, "对方正在测速，请稍后重试")
 	case errors.Is(err, mesh.ErrSpeedUnsupported):
-		return nil, status.Error(codes.FailedPrecondition, "对方版本较旧，不支持测速")
+		return nil, status.Error(codes.FailedPrecondition, "对方节点版本过低，升级后才能测速")
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return nil, status.Error(codes.DeadlineExceeded, "测速超时")
+		return nil, status.Error(codes.DeadlineExceeded, "测速超时，请稍后重试")
 	case err != nil:
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
@@ -474,7 +474,7 @@ const meshSpeedDuration = 5 * time.Second
 func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions) (*nagiv1.MeshOptions, error) {
 	n := s.node.mesh
 	if n == nil {
-		return nil, status.Error(codes.Unavailable, "mesh 没有启动")
+		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
 	file := meshQUICOffFile(s.node.cfg.DataDir)
 	var err error

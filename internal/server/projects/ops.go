@@ -54,7 +54,7 @@ func (s *Service) ListVolumes(ctx context.Context, projectID, name string) (*nag
 	}
 	out, err := agent.ListVolumes(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, i18n.New("节点版本过旧，升级节点后才能查看存储")
+		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能查看存储", s.NodeName(ctx, c.NodeID))
 	}
 	return out, err
 }
@@ -80,7 +80,7 @@ func (s *Service) CreateSnapshot(ctx context.Context, projectID, name string, ou
 			}
 		}
 		if len(targets) == 0 {
-			return invalid("项目还没有部署过的容器")
+			return invalid("项目中还没有部署过的容器")
 		}
 	}
 	var failed i18n.List
@@ -104,12 +104,12 @@ func (s *Service) CreateSnapshot(ctx context.Context, projectID, name string, ou
 			if len(targets) == 1 {
 				return err
 			}
-			out(i18n.T(ctx, "容器 %s 快照失败：%v", c.Name, err))
+			out(i18n.T(ctx, "容器 %s 未能创建快照：%v", c.Name, err))
 			failed = append(failed, c.Name)
 		}
 	}
 	if len(failed) > 0 {
-		return i18n.Errorf("这些容器快照失败：%s", failed)
+		return i18n.Errorf("以下容器未能创建快照：%s", failed)
 	}
 	return nil
 }
@@ -145,7 +145,7 @@ func (s *Service) DeleteSnapshot(ctx context.Context, projectID, name, snapshotI
 	}
 	_, err = agent.DeleteSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{ProjectId: projectID, Container: name, SnapshotId: snapshotID})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, i18n.New("节点版本过旧，升级节点后才能删除快照")
+		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能删除快照", s.NodeName(ctx, c.NodeID))
 	} else if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (s *Service) ControlContainer(ctx context.Context, projectID, name string, 
 		return err
 	}
 	if c.DeployedVersion == 0 {
-		return invalid("容器还没有部署")
+		return invalid("容器还没有部署，请先部署")
 	}
 	if action == nagiv1.ContainerAction_CONTAINER_ACTION_STOP && len(c.Failover) > 0 {
 		return invalid("容器已设置顶替，停止前须取消顶替")
@@ -179,7 +179,7 @@ func (s *Service) ControlContainer(ctx context.Context, projectID, name string, 
 	}
 	_, err = recvResult(stream.Recv, out)
 	if status.Code(err) == codes.Unimplemented {
-		return i18n.New("节点版本过旧，升级节点后才能启动、停止或重启容器")
+		return i18n.Errorf("节点 %s 版本过低，升级后才能启动、停止或重启容器", s.NodeName(ctx, c.NodeID))
 	}
 	return err
 }
@@ -319,7 +319,7 @@ func (s *Service) mergeDocker(p store.Project, add []byte, remove string) ([]byt
 	if len(add) > 0 {
 		var n dockerAuths
 		if err := json.Unmarshal(add, &n); err != nil || len(n.Auths) == 0 {
-			return nil, i18n.New("节点返回的登录信息无法识别")
+			return nil, i18n.New("节点返回的镜像仓库登录信息无法识别，请升级节点后重试")
 		}
 		for k, v := range n.Auths {
 			cur.Auths[k] = v

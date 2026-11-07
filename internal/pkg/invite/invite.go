@@ -30,11 +30,11 @@ func Decode(code string) (Invite, error) {
 	var i Invite
 	raw, ok := strings.CutPrefix(strings.TrimSpace(code), prefix)
 	if !ok {
-		return i, i18n.Errorf("接入码格式不对，应该以 %s 开头", prefix)
+		return i, i18n.Errorf("接入码应以 %s 开头，请完整复制", prefix)
 	}
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil || json.Unmarshal(data, &i) != nil || i.Address == "" || i.Fingerprint == "" || i.Token == "" {
-		return i, i18n.New("接入码无效，请重新复制")
+		return i, i18n.New("接入码不完整或已损坏，请重新复制")
 	}
 	return i, nil
 }

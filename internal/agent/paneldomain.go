@@ -83,7 +83,7 @@ func (a *agent) proxyHeaders() map[string]string {
 func (s *agentService) SetPanelDomain(_ context.Context, req *nagiv1.SetPanelDomainRequest) (*nagiv1.SetPanelDomainResponse, error) {
 	a := s.node
 	if !a.cfg.Embedded {
-		return nil, status.Error(codes.FailedPrecondition, "只有面板自带的节点反代面板")
+		return nil, status.Error(codes.FailedPrecondition, "只有面板自带的节点能反向代理面板")
 	}
 	d := strings.ToLower(strings.TrimSpace(req.GetDomain()))
 	var err error

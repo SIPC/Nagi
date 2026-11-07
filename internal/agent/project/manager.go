@@ -172,10 +172,10 @@ func checkFormat(p containerPaths) error {
 	}
 	v, err := strconv.Atoi(strings.TrimSpace(string(b)))
 	if err != nil {
-		return invalid("容器目录 %s 的格式版本号读不懂", p.root)
+		return invalid("容器目录 %s 的格式无法识别，请升级节点", p.root)
 	}
 	if v > formatVersion {
-		return invalid("容器目录的格式版本是 %d，本节点只支持到 %d，请先升级节点", v, formatVersion)
+		return invalid("容器目录的格式版本是 %d，此节点最高支持 %d，请先升级节点", v, formatVersion)
 	}
 	return nil
 }
@@ -307,7 +307,7 @@ func (m *Manager) ProjectName(ctx context.Context, projectID string) string {
 // checkSpec 检查面板下发的配置的基本字段。
 func checkSpec(s *nagiv1.ContainerSpec) error {
 	if len(s.GetProjectId()) != 16 {
-		return invalid("项目 ID 无效")
+		return invalid("项目 ID 格式不正确")
 	}
 	if err := spec.CheckContainerName(s.GetName()); err != nil {
 		return err
@@ -331,7 +331,7 @@ func (m *Manager) Put(ctx context.Context, s *nagiv1.ContainerSpec) error {
 	switch {
 	case err == nil:
 		if old.Spec.GetDir() != s.GetDir() {
-			return invalid("容器目录不能修改（%s）", old.Spec.GetDir())
+			return invalid("容器目录创建后不能更改（%s）", old.Spec.GetDir())
 		}
 	case errors.Is(err, ErrNotFound):
 		dir, err := m.CheckDir(ctx, s.GetDir())
@@ -369,18 +369,18 @@ func (m *Manager) prepareDir(p containerPaths) error {
 func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" || !filepath.IsAbs(dir) || !strings.HasPrefix(dir, "/") {
-		return "", invalid("容器目录必须是绝对路径")
+		return "", invalid("容器目录须为绝对路径")
 	}
 	dir = filepath.Clean(dir)
 	if dir == filepath.Dir(dir) {
 		return "", invalid("不能使用根目录作为容器目录")
 	}
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return "", invalid("目录 %s 已存在且不为空：换一个目录；如果是迁移、顶替或删除后留下的旧目录，确认没用以后在节点上删掉它", dir)
+		return "", invalid("目录 %s 已存在且不为空，请更换目录。如果是迁移、顶替或删除后留下的旧目录，确认不再需要后请在节点上删除", dir)
 	}
 	for _, c := range m.List(ctx) {
 		if within(dir, c.Spec.GetDir()) || within(c.Spec.GetDir(), dir) {
-			return "", invalid("目录和本节点上容器 %s 的目录 %s 重叠", c.Spec.GetName(), c.Spec.GetDir())
+			return "", invalid("目录与此节点上容器 %s 的目录 %s 重叠，请更换目录", c.Spec.GetName(), c.Spec.GetDir())
 		}
 	}
 	return dir, nil
@@ -595,7 +595,7 @@ func (m *Manager) Exec(ctx context.Context, projectID, container, service string
 			return m.docker.StartExec(ctx, c.ID, cmd, cols, rows)
 		}
 	}
-	return nil, invalid("容器 %s 没有在运行", service)
+	return nil, invalid("容器 %s 未运行", service)
 }
 
 // ---- 工具 ----

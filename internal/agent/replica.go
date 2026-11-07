@@ -49,7 +49,7 @@ type replicas struct {
 
 func replicaID(projectID, container string) (string, error) {
 	if !projectIDRe.MatchString(projectID) {
-		return "", status.Error(codes.InvalidArgument, "项目 ID 无效")
+		return "", status.Error(codes.InvalidArgument, "项目 ID 格式不正确")
 	}
 	if err := spec.CheckContainerName(container); err != nil {
 		return "", status.Error(codes.InvalidArgument, err.Error())
@@ -89,7 +89,7 @@ func (r *replicas) load(projectID, container string) (*replicaMeta, *nagiv1.Cont
 	}
 	b, err := os.ReadFile(filepath.Join(root, "meta.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil, root, status.Error(codes.NotFound, "本节点没有这个容器的副本")
+		return nil, nil, root, status.Error(codes.NotFound, "此节点上没有该容器的副本")
 	}
 	if err != nil {
 		return nil, nil, root, err
@@ -212,7 +212,7 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 		return "", err
 	}
 	if !slices.Equal(m.SourceKey, caller[:]) {
-		return "", status.Error(codes.PermissionDenied, "这个容器的副本不接受来自你的同步")
+		return "", status.Error(codes.PermissionDenied, "该容器的副本不接受来自此节点的同步")
 	}
 	return filepath.Join(root, "files"), nil
 }
@@ -405,7 +405,7 @@ func (a *agent) syncTo(ctx context.Context, projectID, container string, target 
 	// 同步期间仓库的文件不能被立即清理删掉，否则备份节点会收到不完整的一套文件。
 	defer a.projects.ReadRepo(projectID, container)()
 	if a.mesh == nil {
-		return 0, errors.New("mesh 没有启动")
+		return 0, errors.New("节点网络没有启动")
 	}
 	key, err := mesh.ParseKey(target.GetKey())
 	if err != nil {
@@ -492,7 +492,7 @@ func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.ContainerRef)
 		return nil, toStatus(err)
 	}
 	if c.Spec.GetBackup() == nil {
-		return nil, status.Error(codes.FailedPrecondition, "这个容器没有设置备份节点")
+		return nil, status.Error(codes.FailedPrecondition, "该容器没有设置备份节点")
 	}
 	err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer())
 	for errors.Is(err, errAlreadySyncing) {

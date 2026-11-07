@@ -25,7 +25,10 @@ func (s *Service) Elevate(ctx context.Context, ip, token, password, code string)
 		return time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.New("验证进行中，请稍后重试"))
 	}
 	if wait > 0 {
-		return time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("验证失败次数过多，请 %d 秒后重试", int(wait.Seconds())+1))
+		if n := int(wait.Seconds()) + 1; n > 1 {
+			return time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("验证失败次数过多，请 %d 秒后重试", n))
+		}
+		return time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.New("验证失败次数过多，请 1 秒后重试"))
 	}
 	failed := true
 	defer func() { done(failed) }()
@@ -54,7 +57,7 @@ func (s *Service) Elevate(ctx context.Context, ip, token, password, code string)
 			return time.Time{}, err
 		}
 		if !ok {
-			return time.Time{}, connect.NewError(connect.CodePermissionDenied, i18n.New("密码错误"))
+			return time.Time{}, connect.NewError(connect.CodePermissionDenied, i18n.New("密码不正确"))
 		}
 	}
 	failed = false

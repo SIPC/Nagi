@@ -28,11 +28,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ErrOffline 表示节点当前没有连上面板。
-var ErrOffline = i18n.New("节点不在线")
+// ErrOffline 表示节点当前没有连上面板。Get、Peek 返回的是带节点名称的 OfflineError，errors.Is 能识别为 ErrOffline。
+var ErrOffline = i18n.New("节点离线")
+
+// OfflineError 是某个节点离线：消息里说明是哪个节点。名称在用到消息时才查（Get 常被用来判断在不在线）。
+type OfflineError struct {
+	ID   string
+	name func() string
+}
+
+// NewOfflineError 返回节点 name 离线的错误。
+func NewOfflineError(name string) OfflineError {
+	return OfflineError{ID: name, name: func() string { return name }}
+}
+
+func (e OfflineError) Name() string {
+	if e.name != nil {
+		return e.name()
+	}
+	return e.ID
+}
+func (e OfflineError) Error() string        { return "节点 " + e.Name() + " 离线" }
+func (e OfflineError) Is(target error) bool { return target == ErrOffline }
+func (e OfflineError) Localize(l i18n.Lang) string {
+	return i18n.Sprintf(l, "节点 %s 离线", e.Name())
+}
 
 // ErrPending 表示节点是用接入码加入的，还没有批准。
-var ErrPending = i18n.New("节点是用接入码加入的，还没有批准。在节点页确认是自己的节点后批准，才能操作它")
+var ErrPending = i18n.New("节点通过接入码加入，尚未批准。请在节点页确认为自有机器后批准")
 
 // Registry 记录在线的节点。
 type Registry struct {
@@ -147,12 +170,24 @@ func (r *Registry) Get(nodeID string) (*Conn, error) {
 // Peek 返回节点的连接，不管是否已经批准。只用来显示节点的信息。
 func (r *Registry) Peek(nodeID string) (*Conn, error) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	c, ok := r.conns[nodeID]
+	r.mu.RUnlock()
 	if !ok {
-		return nil, ErrOffline
+		return nil, r.offline(nodeID)
 	}
 	return c, nil
+}
+
+// offline 返回带节点名称的离线错误。
+func (r *Registry) offline(nodeID string) error {
+	return OfflineError{ID: nodeID, name: func() string {
+		if r.q != nil {
+			if n, err := r.q.GetNode(context.Background(), nodeID); err == nil && n.Name != "" {
+				return n.Name
+			}
+		}
+		return nodeID
+	}}
 }
 
 // Approve 批准用接入码加入的节点：之后照常进 mesh、下发告警配置、可以操作。
@@ -162,7 +197,7 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 		return err
 	}
 	if n == 0 {
-		return i18n.New("没有这个节点")
+		return i18n.New("节点不存在")
 	}
 	if c, err := r.Peek(nodeID); err == nil {
 		c.mu.Lock()
@@ -191,7 +226,7 @@ func (r *Registry) Rename(ctx context.Context, nodeID, name string) error {
 		return err
 	}
 	if n == 0 {
-		return i18n.New("没有这个节点")
+		return i18n.New("节点不存在")
 	}
 	if c, err := r.Peek(nodeID); err == nil {
 		c.mu.Lock()
@@ -368,10 +403,10 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 func (p *panelService) RenewCertificate(ctx context.Context, req *nagiv1.RenewCertificateRequest) (*nagiv1.RenewCertificateResponse, error) {
 	csr, err := x509.ParseCertificateRequest(req.GetCsr())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "证书签名请求无效")
+		return nil, status.Error(codes.InvalidArgument, "节点的证书请求无法解析")
 	}
 	if NodeID(csr.RawSubjectPublicKeyInfo) != p.conn.NodeID {
-		return nil, status.Error(codes.PermissionDenied, "证书签名请求的公钥不属于这个节点")
+		return nil, status.Error(codes.PermissionDenied, "证书请求中的公钥不属于此节点")
 	}
 	cert, err := p.r.ca.SignCSR(req.GetCsr(), p.conn.NodeID, NodeCertValidity)
 	if err != nil {

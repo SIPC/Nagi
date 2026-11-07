@@ -80,13 +80,13 @@ func Prepare(ctx context.Context, base, want string) (*Prepared, error) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, unusable{i18n.Errorf("新版本在这台机器上运行不了：%w", err)}
+		return nil, unusable{i18n.Detail(i18n.New("新版本无法在此机器上运行"), err)}
 	}
 	version := strings.TrimSpace(string(out))
 	if version != want {
 		// 镜像地址不分版本，里面放的可能不是要求的版本。
 		p.Discard()
-		return nil, unusable{i18n.Errorf("下载到的是 %s，不是要求的 %s（检查镜像地址 %s）", version, want, base)}
+		return nil, unusable{i18n.Errorf("下载到的版本是 %s，不是 %s，请检查镜像地址 %s", version, want, base)}
 	}
 	return p, nil
 }
@@ -115,7 +115,7 @@ func Download(ctx context.Context, base, dst string) error {
 	}
 	want := Checksum(string(sums), name)
 	if want == "" {
-		return i18n.Errorf("SHA256SUMS 里没有 %s", name)
+		return i18n.Errorf("SHA256SUMS 中没有 %s，请检查镜像地址", name)
 	}
 
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
@@ -131,7 +131,7 @@ func Download(ctx context.Context, base, dst string) error {
 		return err
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
-		return i18n.Errorf("下载的文件校验不通过（%s，应为 %s）", got[:12], want[:min(12, len(want))])
+		return i18n.Errorf("下载的文件校验不一致（%s，应为 %s），请重试或检查镜像地址", got[:12], want[:min(12, len(want))])
 	}
 	return nil
 }
@@ -142,23 +142,30 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
+	name := path.Base(url)
+	unreachable := func(err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return i18n.Detail(i18n.Errorf("无法下载 %s，请检查网络或镜像地址", name), err)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, i18n.Errorf("下载 %s 失败：%w", url, err)
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, i18n.Errorf("下载 %s 失败：%s", url, resp.Status)
+		return nil, i18n.Errorf("无法下载 %s（HTTP %d），请检查镜像地址", name, resp.StatusCode)
 	}
 	if w != nil {
 		if _, err := io.Copy(w, resp.Body); err != nil {
-			return nil, i18n.Errorf("下载 %s 失败：%w", url, err)
+			return nil, unreachable(err)
 		}
 		return nil, nil
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
-		return nil, i18n.Errorf("下载 %s 失败：%w", url, err)
+		return nil, unreachable(err)
 	}
 	return b, nil
 }
@@ -179,12 +186,12 @@ func Latest(ctx context.Context) (string, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", i18n.Detail(i18n.New("无法连接 GitHub，请检查面板的网络后重试"), err)
 	}
 	defer resp.Body.Close()
 	v := path.Base(resp.Header.Get("Location"))
 	if resp.StatusCode/100 != 3 || !IsVersion(v) {
-		return "", i18n.Errorf("GitHub 没有返回最新版本（%s）", resp.Status)
+		return "", i18n.Errorf("GitHub 没有返回最新版本（HTTP %d），请稍后重试", resp.StatusCode)
 	}
 	return v, nil
 }

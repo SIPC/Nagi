@@ -56,7 +56,7 @@ func (r *Registry) AlertConfig(ctx context.Context) (*nagiv1.AlertConfig, error)
 	}
 	plain, err := r.sealer.Open(sealed, alertConfigContext)
 	if err != nil {
-		return nil, i18n.Errorf("解密告警配置: %w", err)
+		return nil, i18n.Detail(i18n.New("无法解密告警配置，面板主密钥可能已重新生成，请重新填写告警渠道"), err)
 	}
 	return cfg, proto.Unmarshal(plain, cfg)
 }
@@ -179,10 +179,10 @@ func allowWithin(seen map[string][]time.Time, nodeID string, limit int) bool {
 // ReportAlert 把节点发出的告警记入活动记录。限制频率和长度：节点不一定可信。
 func (p *panelService) ReportAlert(ctx context.Context, req *nagiv1.ReportAlertRequest) (*nagiv1.ReportAlertResponse, error) {
 	if p.conn.Pending() {
-		return nil, status.Error(codes.PermissionDenied, "节点还没有批准")
+		return nil, status.Error(codes.PermissionDenied, "节点尚未批准")
 	}
 	if !p.r.allowReport(p.conn.NodeID) {
-		return nil, status.Error(codes.ResourceExhausted, "上报的告警太多，稍后再试")
+		return nil, status.Error(codes.ResourceExhausted, "上报的告警过多，请稍后重试")
 	}
 	name := p.conn.NodeID
 	if node, err := p.r.q.GetNode(ctx, p.conn.NodeID); err == nil && node.Name != "" {
@@ -239,10 +239,10 @@ func (r *Registry) recordAlert(ctx context.Context, node, nodeID string, a *nagi
 
 func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertRequest) (*nagiv1.RelayAlertResponse, error) {
 	if p.conn.Pending() {
-		return nil, status.Error(codes.PermissionDenied, "节点还没有批准")
+		return nil, status.Error(codes.PermissionDenied, "节点尚未批准")
 	}
 	if !p.r.allowRelay(p.conn.NodeID) {
-		return nil, status.Error(codes.ResourceExhausted, "代发的告警太多，稍后再试")
+		return nil, status.Error(codes.ResourceExhausted, "代发的告警过多，请稍后重试")
 	}
 	a := req.GetAlert()
 	// 节点名由面板填（节点不能冒充别的节点）；节点给的文字限制长度、去掉控制字符，告警按纯文本发送。

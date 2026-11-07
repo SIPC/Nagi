@@ -58,7 +58,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	}
 	conn, err := a.Nodes.Get(nodeID)
 	if err != nil {
-		return fail(i18n.New("容器所在的节点不在线"))
+		return fail(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

@@ -81,11 +81,11 @@ func Validate(c *nagiv1.AlertChannel) error {
 	case "webhook":
 		u, err := url.Parse(c.GetUrl())
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return i18n.New("webhook 地址必须是 http 或 https 地址")
+			return i18n.New("webhook 地址须以 http:// 或 https:// 开头")
 		}
 	case "telegram":
 		if strings.TrimSpace(c.GetTelegramToken()) == "" || strings.TrimSpace(c.GetTelegramChatId()) == "" {
-			return i18n.New("Telegram 需要机器人令牌和聊天 ID")
+			return i18n.New("请填写 Telegram 机器人令牌和聊天 ID")
 		}
 	default:
 		return i18n.New("渠道类型只能是 webhook 或 telegram")
@@ -135,28 +135,35 @@ func Send(ctx context.Context, c *nagiv1.AlertChannel, a *nagiv1.Alert) error {
 			"time":    a.GetTime().AsTime().Format(time.RFC3339),
 			"text":    Text(a),
 		})
-		return post(ctx, c.GetUrl(), body)
+		host := c.GetUrl()
+		if u, err := url.Parse(c.GetUrl()); err == nil {
+			host = u.Host
+		}
+		return post(ctx, c.GetUrl(), body, i18n.Errorf("无法连接 webhook 地址 %s，请检查地址和面板的网络", host))
 	case "telegram":
 		body, _ := json.Marshal(map[string]any{"chat_id": c.GetTelegramChatId(), "text": Text(a)})
-		return post(ctx, "https://api.telegram.org/bot"+c.GetTelegramToken()+"/sendMessage", body)
+		return post(ctx, "https://api.telegram.org/bot"+c.GetTelegramToken()+"/sendMessage", body,
+			i18n.New("无法连接 Telegram，请检查面板能否访问 api.telegram.org"))
 	}
-	return i18n.Errorf("未知的渠道类型 %q", c.GetType())
+	return i18n.New("渠道类型只能是 webhook 或 telegram")
 }
 
-func post(ctx context.Context, url string, body []byte) error {
+// post 发送一条告警。连不上时返回 unreachable：Go 的错误里带着完整地址（Telegram 的地址里有机器人令牌），
+// 不能显示给浏览器，也不能写进日志和活动记录。
+func post(ctx context.Context, url string, body []byte, unreachable error) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return unreachable
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return unreachable
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
-		return i18n.Errorf("渠道返回 %d：%s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		return i18n.Errorf("渠道返回 HTTP %d：%s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return nil
 }

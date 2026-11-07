@@ -120,7 +120,7 @@ func (s *projectService) RetryDomainCert(ctx context.Context, req *connect.Reque
 	}
 	i := slices.IndexFunc(rows, func(r store.Route) bool { return r.Name == m.GetRoute() })
 	if i < 0 {
-		return nil, connect.NewError(connect.CodeNotFound, i18n.New("映射不存在"))
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("端口映射不存在"))
 	}
 	r := projects.RouteProto(rows[i])
 	c, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: m.GetProjectId(), Name: r.GetContainer()})
@@ -128,7 +128,7 @@ func (s *projectService) RetryDomainCert(ctx context.Context, req *connect.Reque
 		return nil, toConnect(err)
 	}
 	if !slices.Contains(r.GetDomains(), m.GetDomain()) || r.GetHttpOnly() || !slices.Contains(spec.EntryNodesOf(r, c.NodeID), m.GetNodeId()) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("这个节点上的这个域名不需要申请证书"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("该域名在此节点上无需申请证书"))
 	}
 	conn, err := s.Nodes.Get(m.GetNodeId())
 	if err != nil {

@@ -180,7 +180,7 @@ func noSymlinkBelow(base, path string) error {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return invalid("%s 是符号链接（可能是容器自己创建的），为了安全不挂载它。删掉这个链接后重新部署", cur)
+			return invalid("%s 是符号链接（可能由容器创建），为安全起见不挂载。请删除该链接后重新部署", cur)
 		}
 	}
 	return nil

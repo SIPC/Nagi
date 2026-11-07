@@ -39,15 +39,16 @@ type updateState struct {
 	Target  string `json:"target"`
 	From    string `json:"from"`
 	Phase   string `json:"phase"`
-	Error   string `json:"error,omitempty"`
+	Error   string `json:"error,omitempty"` // 中文；显示时按请求的语言翻译（见 updateStateProto）
 	Started int64  `json:"started"`
 	Changed int64  `json:"changed"`
 }
 
 func (s *updateState) active() bool { return s != nil && s.Phase != updateFailed }
 
-func (s *updateState) fail(message string, now time.Time) {
-	s.Phase, s.Error, s.Changed = updateFailed, message, now.Unix()
+// fail 记下失败的原因。存的是中文，读取时按请求的语言翻译：看的人不一定和触发的人用同一种语言。
+func (s *updateState) fail(err error, now time.Time) {
+	s.Phase, s.Error, s.Changed = updateFailed, errorText(i18n.Zh, err), now.Unix()
 }
 
 // updateRecords 是一个面板记下的更新状态，存在 settings 表，不同步给其他面板。更新成功的记录直接删掉。
@@ -57,16 +58,16 @@ type updateRecords struct {
 }
 
 // resume 在进程启动后第一次读取时调用：上一个进程的后台任务已经没了。
-func (r *updateRecords) resume(lang i18n.Lang, version string, now time.Time) {
+func (r *updateRecords) resume(version string, now time.Time) {
 	if p := r.Panel; p != nil {
 		switch {
 		case p.Phase == updateFailed:
 		case p.Target == version:
 			r.Panel = nil
 		case p.Phase == updateRestarting:
-			p.fail(i18n.Localize(lang, i18n.Errorf("面板重启后版本还是 %s，没有更新到 %s", version, p.Target)), now)
+			p.fail(i18n.Errorf("面板重启后版本仍是 %s，未能更新到 %s", version, p.Target), now)
 		default:
-			p.fail(i18n.Localize(lang, i18n.New("面板重启打断了更新，请重试")), now)
+			p.fail(i18n.New("面板重启中断了更新，请重试"), now)
 		}
 	}
 	for id, n := range r.Nodes {
@@ -74,19 +75,19 @@ func (r *updateRecords) resume(lang i18n.Lang, version string, now time.Time) {
 		case updateQueued:
 			delete(r.Nodes, id)
 		case updateInstalling:
-			n.fail(i18n.Localize(lang, i18n.New("面板重启打断了升级，请重试")), now)
+			n.fail(i18n.New("面板重启中断了升级，请重试"), now)
 		}
 	}
 }
 
 // reconcile 按现在的版本更新记录。nodeVersion 返回节点上报的版本，known 判断节点还在不在。
-func (r *updateRecords) reconcile(lang i18n.Lang, version string, nodeVersion func(string) string, known func(string) bool, now time.Time) {
+func (r *updateRecords) reconcile(version string, nodeVersion func(string) string, known func(string) bool, now time.Time) {
 	if p := r.Panel; p != nil {
 		switch {
 		case !release.Older(version, p.Target):
 			r.Panel = nil
 		case p.Phase == updateRestarting && now.Unix()-p.Changed > int64(updateRestartTimeout/time.Second):
-			p.fail(i18n.Localize(lang, i18n.Errorf("面板已替换为 %s，但 3 分钟内没有恢复", p.Target)), now)
+			p.fail(i18n.Errorf("面板已替换为 %s，但 3 分钟内没有恢复，请查看面板日志", p.Target), now)
 		}
 	}
 	for id, n := range r.Nodes {
@@ -96,7 +97,7 @@ func (r *updateRecords) reconcile(lang i18n.Lang, version string, nodeVersion fu
 		case nodeVersion(id) != "" && !release.Older(nodeVersion(id), n.Target):
 			delete(r.Nodes, id)
 		case n.Phase == updateRestarting && now.Unix()-n.Changed > int64(updateRestartTimeout/time.Second):
-			n.fail(i18n.Localize(lang, i18n.Errorf("节点已替换为 %s，但 3 分钟内没有恢复", n.Target)), now)
+			n.fail(i18n.Errorf("节点已替换为 %s，但 3 分钟内没有恢复，请在节点上查看日志", n.Target), now)
 		}
 	}
 }
@@ -115,7 +116,7 @@ func (a *API) withUpdates(ctx context.Context, fn func(*updateRecords)) {
 				a.Log.Warn("读取更新状态失败", "err", err)
 				u.state = updateRecords{}
 			}
-			u.state.resume(i18n.FromContext(ctx), a.Panel.Version, time.Now())
+			u.state.resume(a.Panel.Version, time.Now())
 		}
 	}
 	if u.state.Nodes == nil {
@@ -156,12 +157,12 @@ func (a *API) reconcileUpdates(ctx context.Context) {
 		known[row.ID] = true
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
-		r.reconcile(i18n.FromContext(ctx), a.Panel.Version, a.nodeVersion, func(id string) bool { return known[id] }, time.Now())
+		r.reconcile(a.Panel.Version, a.nodeVersion, func(id string) bool { return known[id] }, time.Now())
 	})
 }
 
-func updateStateProto(s *updateState) *nagiv1.UpdateState {
-	return &nagiv1.UpdateState{Target: s.Target, From: s.From, Phase: s.Phase, Error: s.Error, StartedAt: timestamppb.New(time.Unix(s.Started, 0))}
+func updateStateProto(lang i18n.Lang, s *updateState) *nagiv1.UpdateState {
+	return &nagiv1.UpdateState{Target: s.Target, From: s.From, Phase: s.Phase, Error: i18n.Text(lang, s.Error), StartedAt: timestamppb.New(time.Unix(s.Started, 0))}
 }
 
 func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Request[nagiv1.GetUpdateStatusRequest]) (*connect.Response[nagiv1.GetUpdateStatusResponse], error) {
@@ -169,10 +170,10 @@ func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Reques
 	out := &nagiv1.GetUpdateStatusResponse{Version: s.Panel.Version, Nodes: map[string]*nagiv1.UpdateState{}}
 	s.withUpdates(ctx, func(r *updateRecords) {
 		if r.Panel != nil {
-			out.Panel = updateStateProto(r.Panel)
+			out.Panel = updateStateProto(i18n.FromContext(ctx), r.Panel)
 		}
 		for id, n := range r.Nodes {
-			out.Nodes[id] = updateStateProto(n)
+			out.Nodes[id] = updateStateProto(i18n.FromContext(ctx), n)
 		}
 	})
 	return connect.NewResponse(out), nil
@@ -184,19 +185,21 @@ func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Reques
 func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 	fail := func(err error) {
 		a.updates.running.Store(false)
-		message := i18n.Localize(i18n.FromContext(ctx), err)
 		a.withUpdates(ctx, func(r *updateRecords) {
 			if r.Panel != nil {
-				r.Panel.fail(message, time.Now())
+				r.Panel.fail(err, time.Now())
 			}
 		})
-		a.recordOperation(ctx, nagiv1connect.SettingsServiceUpdatePanelProcedure, &nagiv1.UpdatePanelRequest{}, message)
+		a.recordOperation(ctx, nagiv1connect.SettingsServiceUpdatePanelProcedure, &nagiv1.UpdatePanelRequest{}, err.Error())
 	}
 	installCtx, cancel := context.WithTimeout(ctx, updateInstallTimeout)
 	defer cancel()
 	exe, err := release.Install(installCtx, release.BaseFor(a.Panel.DataDir, latest), latest)
+	if errors.Is(err, context.DeadlineExceeded) {
+		err = i18n.New("10 分钟内没有完成下载和校验，已停止更新")
+	}
 	if err != nil {
-		fail(i18n.Errorf("更新失败：%w", err))
+		fail(err)
 		return
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
@@ -208,7 +211,7 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 	time.Sleep(time.Second) // 让界面看到状态
 	if err := release.Reexec(exe); err != nil {
 		a.Log.Error("重启失败，请手动重启面板", "err", err)
-		fail(i18n.New("重启失败，请手动重启面板"))
+		fail(i18n.New("面板未能自动重启，请手动重启"))
 	}
 }
 
@@ -268,14 +271,8 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		return fromGRPC(err)
 	}()
 	now := time.Now()
-	message := ""
 	if err != nil && !errors.Is(err, errUpgradeCanceled) {
-		message = i18n.Localize(i18n.FromContext(ctx), err)
-		var ce *connect.Error
-		if errors.As(err, &ce) {
-			message = ce.Message() // 不要 unavailable: 这样的前缀。
-		}
-		a.recordOperation(ctx, nagiv1connect.NodeServiceUpgradeNodeProcedure, &nagiv1.UpgradeNodeRequest{NodeId: id}, message)
+		a.recordOperation(ctx, nagiv1connect.NodeServiceUpgradeNodeProcedure, &nagiv1.UpgradeNodeRequest{NodeId: id}, errorText(i18n.Zh, err))
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
 		delete(a.updates.cancels, mine)
@@ -288,7 +285,7 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		case errors.Is(err, errUpgradeCanceled):
 			delete(r.Nodes, id)
 		default:
-			mine.fail(message, now)
+			mine.fail(err, now)
 		}
 	})
 	if err == nil {
@@ -318,7 +315,7 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 	// 节点从 GitHub Release（或安装时指定的镜像）下载和面板同一个版本，面板不提供二进制。
 	target := s.Panel.Version
 	if !release.IsVersion(target) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，不能一键升级节点"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，无法一键升级节点"))
 	}
 	busy := false
 	s.withUpdates(ctx, func(r *updateRecords) {
@@ -327,7 +324,7 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 		}
 	})
 	if busy {
-		return nil, connect.NewError(connect.CodeAborted, i18n.New("节点正在升级，请稍候"))
+		return nil, connect.NewError(connect.CodeAborted, i18n.New("节点正在升级，请在完成后重试"))
 	}
 	go func() { _ = s.runNodeUpgrade(context.WithoutCancel(ctx), id, target) }()
 	return connect.NewResponse(&nagiv1.UpgradeResponse{Version: target}), nil
@@ -339,7 +336,7 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[nagiv1.UpgradeAllNodesRequest]) (*connect.Response[nagiv1.UpgradeAllNodesResponse], error) {
 	target := s.Panel.Version
 	if !release.IsVersion(target) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，不能一键升级节点"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，无法一键升级节点"))
 	}
 	rows, err := s.Q.ListNodes(ctx)
 	if err != nil {
@@ -352,7 +349,7 @@ func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[na
 		}
 	}
 	if len(ids) == 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("没有可以升级的节点"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("没有需要升级的节点"))
 	}
 	ids, err = s.Projects.UpgradeOrder(ctx, ids)
 	if err != nil {
@@ -371,7 +368,7 @@ func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[na
 		}
 	})
 	if busy {
-		return nil, connect.NewError(connect.CodeAborted, i18n.New("有节点正在升级，请稍候"))
+		return nil, connect.NewError(connect.CodeAborted, i18n.New("有节点正在升级，请在完成后重试"))
 	}
 	go s.runNodeUpgrades(context.WithoutCancel(ctx), ids, target)
 	return connect.NewResponse(&nagiv1.UpgradeAllNodesResponse{NodeIds: ids, Version: target}), nil
@@ -429,7 +426,7 @@ func (s *nodeService) CancelNodeUpgrade(ctx context.Context, req *connect.Reques
 				installing = append(installing, install{nid, n})
 			case id == "":
 			case n != nil && n.Phase == updateRestarting:
-				err = i18n.New("节点已替换为新版本，正在重启，不能取消")
+				err = i18n.New("节点已替换为新版本，正在重启，无法取消")
 			default:
 				err = i18n.New("节点没有在升级")
 			}
@@ -464,7 +461,7 @@ func (s *nodeService) CancelNodeUpgrade(ctx context.Context, req *connect.Reques
 func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
 	conn, err := a.Nodes.Get(id)
 	if err != nil {
-		return i18n.Errorf("连不上节点 %s，无法取消", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 离线，无法取消升级", a.nodeName(ctx, id))
 	}
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -473,11 +470,11 @@ func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
 	case codes.OK, codes.NotFound:
 		return nil
 	case codes.Unimplemented:
-		return i18n.Errorf("节点 %s 的版本不支持取消正在进行的下载，请等待完成或超时", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 版本过低，无法取消正在进行的下载，请等待完成或超时", a.nodeName(ctx, id))
 	case codes.FailedPrecondition:
-		return i18n.Errorf("节点 %s 已替换为新版本，正在重启，不能取消", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 已替换为新版本，正在重启，无法取消", a.nodeName(ctx, id))
 	}
-	return i18n.Errorf("连不上节点 %s，无法取消", a.nodeName(ctx, id))
+	return i18n.Detail(i18n.Errorf("无法连接节点 %s，未能取消升级，请稍后重试", a.nodeName(ctx, id)), err)
 }
 
 func newUpdateState(target, from, phase string) *updateState {

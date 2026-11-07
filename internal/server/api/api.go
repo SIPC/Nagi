@@ -114,19 +114,19 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 	if ok, err := s.Auth.HasUsers(ctx); err != nil {
 		return nil, err
 	} else if ok {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板已经初始化过了"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板已完成初始化"))
 	}
 	stored, err := s.Q.GetSetting(ctx, SettingSetupToken)
 	if err != nil {
-		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化令牌无效，请使用启动日志里的初始化链接"))
+		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化链接不正确，请使用面板启动日志里的初始化链接"))
 	}
 	want, expires, _ := strings.Cut(stored, ":")
 	if exp, _ := strconv.ParseInt(expires, 10, 64); time.Now().Unix() > exp {
-		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化链接已过期（24 小时内有效），重启面板获取新的链接"))
+		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化链接已过期（24 小时内有效），请重启面板获取新的链接"))
 	}
 	got := auth.HashToken(req.Msg.GetToken())
 	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
-		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化令牌无效，请使用启动日志里的初始化链接"))
+		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("初始化链接不正确，请使用面板启动日志里的初始化链接"))
 	}
 	username := strings.TrimSpace(req.Msg.GetUsername())
 	if username == "" || utf8.RuneCountInString(username) > 32 {
@@ -190,7 +190,7 @@ func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeReques
 func (s *authService) SetLanguage(ctx context.Context, req *connect.Request[nagiv1.SetLanguageRequest]) (*connect.Response[nagiv1.SetLanguageResponse], error) {
 	lang := req.Msg.GetLanguage()
 	if l, ok := i18n.Match(lang); lang != "" && (!ok || string(l) != lang) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("不支持的语言：%s", lang))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("语言只能是 zh-CN 或 en"))
 	}
 	if err := s.Q.SetUserLanguage(ctx, store.SetUserLanguageParams{Language: lang, ID: auth.CurrentUser(ctx).ID}); err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv
 	}
 	for _, row := range rows {
 		if row.ID != id && row.Name == name {
-			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已经有节点叫 %s 了", name))
+			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已有名为 %s 的节点", name))
 		}
 	}
 	if err := s.Nodes.Rename(ctx, id, name); err != nil {
@@ -329,7 +329,7 @@ func (s *nodeService) GetNodeStorage(ctx context.Context, req *connect.Request[n
 	}
 	resp, err := conn.Agent.GetStorage(ctx, &nagiv1.GetStorageRequest{})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点版本过旧，升级节点后才能查看磁盘明细"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能查看磁盘明细", s.nodeName(ctx, req.Msg.GetNodeId())))
 	} else if err != nil {
 		return nil, fromGRPC(err)
 	}
@@ -356,7 +356,10 @@ func (s *nodeService) RemoveNode(ctx context.Context, req *connect.Request[nagiv
 	if n, err := s.Q.CountNodeContainers(ctx, id); err != nil {
 		return nil, err
 	} else if n > 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点上还有 %d 个容器，请先把它们迁移到其他节点或者删除", n))
+		if n == 1 {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点上还有 1 个容器，请先迁移到其他节点或删除"))
+		}
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点上还有 %d 个容器，请先迁移到其他节点或删除", n))
 	}
 	if err := s.forgetNode(ctx, id); err != nil {
 		return nil, err
@@ -386,19 +389,19 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	// 先检查请求本身，全部合格再消耗令牌、改数据库：无效的请求不能用掉令牌，也不能借令牌恢复别的已移除节点。
 	meshKey := req.Msg.GetWireguardPublicKey()
 	if len(meshKey) != 32 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("WireGuard 公钥无效"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点的 WireGuard 公钥格式不正确，请在节点上重新执行加入命令"))
 	}
 	csr, err := x509.ParseCertificateRequest(req.Msg.GetCsr())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("证书签名请求无效: %w", err))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Detail(i18n.New("节点的证书请求无法解析，请在节点上重新执行加入命令"), err))
 	}
 	if err := csr.CheckSignature(); err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("证书签名请求的签名无效: %w", err))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Detail(i18n.New("节点的证书请求签名不正确，请在节点上重新执行加入命令"), err))
 	}
 	// 节点 ID 由节点的身份公钥算出：同一个节点加入不同的面板，ID 都一样。
 	nodeID := nodes.NodeID(csr.RawSubjectPublicKeyInfo)
 	if owner, err := s.Q.MeshKeyOwner(ctx, store.MeshKeyOwnerParams{MeshKey: meshKey, ID: nodeID}); err == nil {
-		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("这个 WireGuard 公钥已经属于节点 %s", owner))
+		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("该 WireGuard 公钥已属于节点 %s", owner))
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -410,7 +413,7 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		ExpiresAt: now,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("加入令牌无效、已使用或已过期"))
+		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("加入令牌已失效（已使用或已过期），请在面板上重新生成加入命令"))
 	} else if err != nil {
 		return nil, err
 	}
@@ -452,7 +455,7 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 // 操作可能没做完也可能已经做完，gRPC 的原始信息（"error reading from server: EOF"）用户看不懂，换成说明。
 func fromStream(err error) error {
 	if status.Code(err) == codes.Unavailable {
-		return connect.NewError(connect.CodeUnavailable, i18n.New("和节点的连接在操作过程中断开了，操作可能没做完，也可能已经做完。等节点重新连上后，看一下项目的状态和部署记录"))
+		return connect.NewError(connect.CodeUnavailable, i18n.New("与节点的连接在操作中断开，结果未知。节点重新连接后，请查看项目状态和部署记录"))
 	}
 	return fromGRPC(err)
 }

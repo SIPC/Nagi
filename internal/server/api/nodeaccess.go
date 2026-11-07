@@ -60,7 +60,7 @@ var elevationRequired = map[string]bool{
 }
 
 func elevationError() error {
-	err := connect.NewError(connect.CodePermissionDenied, i18n.New("需要身份验证"))
+	err := connect.NewError(connect.CodePermissionDenied, i18n.New("请先验证身份"))
 	err.Meta().Set(elevationHeader, "required")
 	return err
 }
@@ -182,7 +182,7 @@ func (s *nodeService) RestoreNodeFileBackup(ctx context.Context, req *connect.Re
 // nodeAccessError 转换节点返回的错误。旧版本的节点没有这些接口。
 func nodeAccessError(err error) error {
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
-		return connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点版本过低，请升级节点"))
+		return connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点版本过低，升级后才能使用此功能"))
 	}
 	return fromGRPC(err)
 }
@@ -226,7 +226,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		token := auth.SessionToken(r.Header)
 		u, err := a.Auth.SessionUser(r.Context(), token)
 		if err != nil {
-			http.Error(w, i18n.Sprintf(lang, "未登录"), http.StatusUnauthorized)
+			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
 		}
 		q := r.URL.Query()
@@ -240,9 +240,9 @@ func (a *API) NodeShellHandler() http.Handler {
 			return
 		}
 		if !u.Elevated() {
-			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "需要身份验证", true)
+			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "请先验证身份", true)
 			w.Header().Set(elevationHeader, "required")
-			http.Error(w, i18n.Sprintf(lang, "需要身份验证"), http.StatusForbidden)
+			http.Error(w, i18n.Sprintf(lang, "请先验证身份"), http.StatusForbidden)
 			return
 		}
 		cols, _ := strconv.Atoi(q.Get("cols"))
@@ -260,8 +260,8 @@ func (a *API) NodeShellHandler() http.Handler {
 
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
-			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "节点不在线", true)
-			fail(i18n.Sprintf(lang, "节点不在线"))
+			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, err.Error(), true)
+			fail(i18n.Localize(lang, err))
 			return
 		}
 		stream, err := conn.Agent.NodeShell(ctx)
@@ -272,7 +272,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		}
 		if err != nil {
 			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, activityFailure(err), true)
-			fail(i18n.Localize(lang, nodeAccessError(err)))
+			fail(terminalError(lang, err))
 			return
 		}
 
@@ -300,7 +300,7 @@ func (a *API) NodeShellHandler() http.Handler {
 				case ctx.Err() != nil:
 					return
 				case err != nil || cur.ID != u.ID:
-					msg = i18n.Sprintf(lang, "登录已失效，连接已断开")
+					msg = i18n.Sprintf(lang, "登录已过期，连接已断开")
 				case cur.Role != auth.RoleAdmin:
 					msg = i18n.Sprintf(lang, "权限已变更，连接已断开")
 				case time.Since(began) > nodeShellMaxAge:
@@ -338,7 +338,7 @@ func (a *API) alertNodeShell(ctx context.Context, nodeID, user, ip string) {
 		defer cancel()
 		a.Nodes.SendPanelAlert(ctx, &nagiv1.Alert{
 			Key: "node-shell:" + nodeID, Status: "firing", Title: "节点终端已打开",
-			Message: fmt.Sprintf("用户：%s；来源：%s；节点：%s", user, ip, name),
+			Message: fmt.Sprintf("成员：%s；来源：%s；节点：%s", user, ip, name),
 			Node:    name, Time: timestamppb.Now(),
 		})
 	}()
@@ -352,14 +352,13 @@ func (a *API) NodeFileHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		fail := func(code int, err error) {
-			msg := i18n.Localize(lang, err)
-			if st, ok := status.FromError(err); ok && err != nil {
-				msg = st.Message()
-				switch st.Code() {
+			msg := errorText(lang, err)
+			if isStatus(err) {
+				switch status.Code(err) {
 				case codes.Unavailable, codes.DeadlineExceeded:
-					msg = i18n.Localize(lang, i18n.New("无法连接节点"))
+					msg = i18n.Localize(lang, i18n.New("无法连接节点，请稍后重试"))
 				case codes.Unimplemented:
-					msg = i18n.Localize(lang, i18n.New("节点版本过低，请升级节点"))
+					msg = i18n.Localize(lang, i18n.New("节点版本过低，升级后才能使用此功能"))
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -368,7 +367,7 @@ func (a *API) NodeFileHandler() http.Handler {
 		}
 		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
 		if err != nil {
-			fail(http.StatusUnauthorized, i18n.New("未登录"))
+			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
 		q := r.URL.Query()
@@ -393,12 +392,12 @@ func (a *API) NodeFileHandler() http.Handler {
 		if !u.Elevated() {
 			record("需要身份验证")
 			w.Header().Set(elevationHeader, "required")
-			fail(http.StatusForbidden, i18n.New("需要身份验证"))
+			fail(http.StatusForbidden, i18n.New("请先验证身份"))
 			return
 		}
 		m := a.Nodes.Mesh()
 		if m == nil {
-			fail(http.StatusServiceUnavailable, i18n.New("面板的 mesh 没有启动，无法传输文件"))
+			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))
 			return
 		}
 		key, err := a.Nodes.NodeMeshKey(nodeID)

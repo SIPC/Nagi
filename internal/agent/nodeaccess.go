@@ -69,10 +69,10 @@ func inContainer() bool {
 // checkNodeAccess 是所有节点访问接口的第一步。
 func (a *agent) checkNodeAccess() error {
 	if !nodeAccessSupported() {
-		return status.Error(codes.Unimplemented, "系统不支持节点访问")
+		return status.Error(codes.Unimplemented, "此节点的系统不支持节点访问")
 	}
 	if NodeAccessDisabled(a.cfg.DataDir) {
-		return status.Error(codes.FailedPrecondition, "节点访问已关闭。在节点上执行 nagi node access enable 开启")
+		return status.Error(codes.FailedPrecondition, "节点访问已关闭。请在节点上执行 nagi node access enable 开启")
 	}
 	return nil
 }
@@ -119,7 +119,7 @@ func (s *agentService) NodeExec(req *nagiv1.NodeExecRequest, stream nagiv1.Agent
 	}
 	if activeNodeShells.Add(1) > maxNodeShells {
 		activeNodeShells.Add(-1)
-		return status.Errorf(codes.ResourceExhausted, "终端数量已达上限（%d 个）", maxNodeShells)
+		return status.Errorf(codes.ResourceExhausted, "终端数量已达上限（%d 个），请关闭不用的终端", maxNodeShells)
 	}
 	defer activeNodeShells.Add(-1)
 	timeout := min(time.Duration(req.GetTimeoutSeconds())*time.Second, nodeExecMax)
@@ -150,14 +150,14 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 	}
 	if activeNodeShells.Add(1) > maxNodeShells {
 		activeNodeShells.Add(-1)
-		return status.Errorf(codes.ResourceExhausted, "终端数量已达上限（%d 个）", maxNodeShells)
+		return status.Errorf(codes.ResourceExhausted, "终端数量已达上限（%d 个），请关闭不用的终端", maxNodeShells)
 	}
 	defer activeNodeShells.Add(-1)
 
 	size := start.GetSize()
 	sh, err := startShell(start.GetCwd(), uint16(size.GetCols()), uint16(size.GetRows()))
 	if err != nil {
-		return status.Errorf(codes.Internal, "启动终端失败：%v", err)
+		return status.Errorf(codes.Internal, "无法启动终端：%v", err)
 	}
 	// 面板的记录被篡改时还能在节点上查。用户名是面板说的，指纹是控制连接确认过的。
 	log := s.node.log.With("panel", s.panel, "user", start.GetActor())

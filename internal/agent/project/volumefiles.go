@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/snapshot"
@@ -41,7 +42,7 @@ func volumeDir(s *nagiv1.ContainerSpec, volume string) (string, error) {
 		return mp.dataDir(), nil
 	}
 	if volume == "" || volume == "." || volume == ".." || strings.ContainsAny(volume, `/\`) {
-		return "", invalid("卷名不对")
+		return "", invalid("卷名不能为空，也不能包含 / 或 \\")
 	}
 	return filepath.Join(mp.volumesDir(), volume), nil
 }
@@ -54,7 +55,7 @@ func cleanVolumePath(p string) (string, error) {
 	}
 	rel := filepath.FromSlash(p)
 	if !filepath.IsLocal(rel) {
-		return "", invalid("路径不对：%s", p)
+		return "", invalid("路径须在卷内：%s", p)
 	}
 	return filepath.Clean(rel), nil
 }
@@ -69,7 +70,7 @@ func openVolumeRoot(dir string) (*os.Root, error) {
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, invalid("卷不是目录")
+		return nil, invalid("卷不是目录，无法浏览")
 	}
 	return os.OpenRoot(dir)
 }
@@ -125,7 +126,7 @@ func (m *Manager) ListVolumeFiles(ctx context.Context, ref *nagiv1.VolumeFileRef
 		defer rep.Close(ctx)
 		list, err := rep.ListDir(ctx, ref.GetSnapshotId(), snapshotVolumePath(ref.GetVolume(), rel))
 		if err != nil {
-			return nil, invalid("读取快照：%v", err)
+			return nil, invalid("无法读取快照中的该路径，快照可能已被清理或路径不存在")
 		}
 		for _, f := range list {
 			out.Entries = append(out.Entries, &nagiv1.VolumeFileEntry{
@@ -182,15 +183,28 @@ func fileErr(err error) error {
 	case errors.Is(err, fs.ErrNotExist):
 		return invalid("文件不存在")
 	case errors.Is(err, fs.ErrPermission):
-		return invalid("没有权限访问这个文件")
+		return invalid("没有权限访问该文件")
 	case errors.Is(err, fs.ErrExist):
-		return invalid("已经有同名的文件或目录，或路径里有符号链接")
+		return invalid("已有同名的文件或目录，或路径中有符号链接")
 	case err != nil && strings.Contains(err.Error(), "path escapes"):
-		return invalid("这个路径经过了指向卷外面的符号链接，已拒绝")
+		return invalid("该路径经过指向卷外的符号链接，已拒绝访问")
 	}
 	var pe *fs.PathError
-	if errors.As(err, &pe) {
-		return invalid("文件操作失败：%v", pe.Err)
+	switch {
+	case errors.Is(err, syscall.ENOSPC):
+		return invalid("磁盘已满，请清理空间后重试")
+	case errors.Is(err, syscall.EROFS):
+		return invalid("文件系统只读，无法写入")
+	case errors.Is(err, syscall.ENOTEMPTY):
+		return invalid("目录不为空")
+	case errors.Is(err, syscall.EISDIR):
+		return invalid("该路径是目录，不是文件")
+	case errors.Is(err, syscall.ENOTDIR):
+		return invalid("路径中有一项不是目录")
+	case errors.Is(err, syscall.ENAMETOOLONG):
+		return invalid("文件名过长")
+	case errors.As(err, &pe):
+		return invalid("无法完成文件操作，请检查路径和权限后重试")
 	}
 	return err
 }
@@ -232,7 +246,7 @@ func (m *Manager) ReadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef,
 		}
 		return writeArchive(send, func(tw *tar.Writer) error { return tarRootDir(ctx, root, rel, tw) })
 	}
-	return invalid("这个文件是符号链接或特殊文件，不能下载")
+	return invalid("该文件是符号链接或特殊文件，无法下载")
 }
 
 func (m *Manager) readSnapshotFile(ctx context.Context, ref *nagiv1.VolumeFileRef, rel string, send func(*nagiv1.VolumeFileChunk) error) error {
@@ -253,11 +267,11 @@ func (m *Manager) readSnapshotFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	name := downloadName(ref, rel)
 	top, err := rep.Stat(ctx, ref.GetSnapshotId(), src)
 	if err != nil {
-		return invalid("读取快照：%v", err)
+		return invalid("无法读取快照中的该路径，快照可能已被清理或路径不存在")
 	}
 	if !top.IsDir {
 		if top.IsSymlink {
-			return invalid("这个文件是符号链接或特殊文件，不能下载")
+			return invalid("该文件是符号链接或特殊文件，无法下载")
 		}
 		if err := send(&nagiv1.VolumeFileChunk{Name: name, Size: top.Size}); err != nil {
 			return err
@@ -402,7 +416,7 @@ func tarRootDir(ctx context.Context, root *os.Root, rel string, tw *tar.Writer) 
 func (m *Manager) lockForWrite(projectID, container string) (func(), error) {
 	l := m.lock(projectID, container)
 	if !l.TryLock() {
-		return nil, invalid("容器正在进行其他操作，稍后再试")
+		return nil, invalid("容器正在进行其他操作，请稍后重试")
 	}
 	return l.Unlock, nil
 }
@@ -496,7 +510,7 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 		return 0, err
 	}
 	if rel == "." {
-		return 0, invalid("要写明文件名")
+		return 0, invalid("请填写文件名")
 	}
 	unlock, err := m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
 	if err != nil {
@@ -509,7 +523,7 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	}
 	defer root.Close()
 	if info, err := root.Lstat(rel); err == nil && info.IsDir() {
-		return 0, invalid("这里已经有一个同名目录")
+		return 0, invalid("此处已有同名目录")
 	}
 	staged, err := stageUpload(containerPaths{root: s.GetDir()}.stagingDir(), r)
 	if err != nil {
@@ -566,7 +580,7 @@ func (m *Manager) CreateVolumeDir(ctx context.Context, ref *nagiv1.VolumeFileRef
 		return err
 	}
 	if rel == "." {
-		return invalid("要写明目录名")
+		return invalid("请填写目录名")
 	}
 	unlock, err := m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
 	if err != nil {
@@ -596,7 +610,7 @@ func (m *Manager) RestoreVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileR
 		return err
 	}
 	if ref.GetSnapshotId() == "" {
-		return invalid("要指定快照")
+		return invalid("请指定快照")
 	}
 	unlock, err := m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
 	if err != nil {

@@ -61,11 +61,7 @@ func streamOp(ctx context.Context, out *connect.ServerStream[nagiv1.DeployEvent]
 	}
 	res := &nagiv1.DeployResult{Success: err == nil, Version: version}
 	if err != nil {
-		if isStatus(err) {
-			res.Error = status.Convert(err).Message()
-		} else {
-			res.Error = i18n.Localize(i18n.FromContext(ctx), err)
-		}
+		res.Error = errorText(i18n.FromContext(ctx), err)
 	}
 	return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: res}})
 }

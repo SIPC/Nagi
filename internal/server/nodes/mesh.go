@@ -123,7 +123,7 @@ func (r *Registry) NodeMeshKey(nodeID string) (mesh.Key, error) {
 	defer c.mu.RUnlock()
 	k, err := mesh.ParseKey(c.mesh.GetPublicKey())
 	if err != nil {
-		return mesh.Key{}, i18n.New("节点还没有加入 mesh")
+		return mesh.Key{}, i18n.Errorf("节点 %s 还没有加入节点网络", c.name)
 	}
 	return k, nil
 }
@@ -148,14 +148,14 @@ func (r *Registry) MeshPeerName(k mesh.Key) string {
 func (p *panelService) MeshRelay(stream nagiv1.PanelService_MeshRelayServer) error {
 	m := p.r.Mesh()
 	if m == nil {
-		return status.Error(codes.Unavailable, "面板的 mesh 没有启动")
+		return status.Error(codes.Unavailable, "面板的节点网络没有启动")
 	}
 	p.conn.mu.RLock()
 	info := p.conn.mesh
 	p.conn.mu.RUnlock()
 	k, err := mesh.ParseKey(info.GetPublicKey())
 	if err != nil {
-		return status.Error(codes.FailedPrecondition, "请先上报 mesh 信息")
+		return status.Error(codes.FailedPrecondition, "请先上报节点网络信息")
 	}
 	var mu sync.Mutex
 	detach := m.AttachLink(k, func(src, dst mesh.Key, payload []byte) error {

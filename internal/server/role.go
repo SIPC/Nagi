@@ -158,7 +158,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 // Promote 把备用面板提升为主面板：停止同步，任期加一（至少比节点上报里见过的大），然后按主面板重新启动。
 func (s *Server) Promote(ctx context.Context) (uint64, error) {
 	if s.standby == nil {
-		return 0, i18n.New("本面板已经是主面板")
+		return 0, i18n.New("本面板已是主面板")
 	}
 	// 和"改为跟随别的主面板"互斥：已经决定跟随别人（马上按备用面板重启）时不能再提升。
 	s.role.followMu.Lock()
@@ -167,7 +167,7 @@ func (s *Server) Promote(ctx context.Context) (uint64, error) {
 	s.role.mu.Unlock()
 	if changing {
 		s.role.followMu.Unlock()
-		return 0, i18n.New("面板正在切换角色，请稍后再试")
+		return 0, i18n.New("面板正在切换角色，请稍后重试")
 	}
 	s.role.promoting = true
 	s.role.followMu.Unlock()

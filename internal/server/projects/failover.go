@@ -42,7 +42,7 @@ func isParticipant(cfg *nagiv1.FailoverConfig, nodeID string) bool {
 
 func noFailover(c store.Container) error {
 	if len(c.Failover) > 0 {
-		return invalid("容器 %s 设置了顶替，请先取消顶替", c.Name)
+		return invalid("容器 %s 已设置顶替，请先取消顶替", c.Name)
 	}
 	return nil
 }
@@ -53,7 +53,7 @@ func (s *Service) participant(ctx context.Context, nodeID, dir string) (*nagiv1.
 		return nil, notFoundError{i18n.New("节点不存在")}
 	}
 	if len(n.MeshKey) != 32 {
-		return nil, invalid("节点 %s 还没有加入 mesh", n.Name)
+		return nil, invalid("节点 %s 还没有加入节点网络", n.Name)
 	}
 	return &nagiv1.FailoverParticipant{Key: n.MeshKey, NodeId: n.ID, Name: n.Name, Dir: dir}, nil
 }
@@ -63,7 +63,7 @@ func (s *Service) witnessFor(ctx context.Context, nodeID string) (*nagiv1.Failov
 	if nodeID == "" {
 		m := s.Nodes.Mesh()
 		if m == nil {
-			return nil, nil, invalid("面板的 mesh 没有启动，不能担任见证人")
+			return nil, nil, invalid("面板的节点网络没有启动，无法担任见证人")
 		}
 		k := m.PublicKey()
 		return &nagiv1.FailoverParticipant{Key: k[:], Name: "面板"}, nil, nil
@@ -102,20 +102,20 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 		return nil, err
 	}
 	if err := noFailover(c); err != nil {
-		return nil, invalid("容器 %s 已经设置了顶替，请先取消再重新设置", c.Name)
+		return nil, invalid("容器 %s 已设置顶替，请先取消再重新设置", c.Name)
 	}
 	if c.BackupNodeID != "" {
-		return nil, invalid("容器 %s 设置了备份节点，请先取消备份节点再设置顶替（顶替节点本身就有一份随时更新的副本）", c.Name)
+		return nil, invalid("容器 %s 已设置备份节点，请先取消备份节点再设置顶替（顶替节点本身保有实时更新的副本）", c.Name)
 	}
 	aID, bID, wID := c.NodeID, req.StandbyNodeID, req.WitnessNodeID
 	if bID == "" {
 		return nil, invalid("请选择顶替节点")
 	}
 	if bID == aID || wID == aID || (wID != "" && wID == bID) {
-		return nil, invalid("容器所在节点、顶替节点和见证人必须是三个不同的成员")
+		return nil, invalid("容器所在节点、顶替节点和见证人须是三个不同的节点（见证人也可以是面板）")
 	}
 	if req.LeaseSeconds != 0 && (req.LeaseSeconds < 9 || req.LeaseSeconds > 600) {
-		return nil, invalid("租约时长须在 9 到 600 秒之间")
+		return nil, invalid("租约时长须在 9–600 秒之间")
 	}
 	a, err := s.agent(ctx, aID)
 	if err != nil {
@@ -273,11 +273,11 @@ func (s *Service) ChangeWitness(ctx context.Context, projectID, name, witnessNod
 		return nil, invalid("见证人不能是容器所在的节点或顶替节点")
 	}
 	if witnessNodeID != "" && cfg.GetWitness().GetNodeId() == witnessNodeID {
-		return nil, invalid("这个节点已经是见证人")
+		return nil, invalid("该节点已是见证人")
 	}
 	if m := s.Nodes.Mesh(); witnessNodeID == "" && cfg.GetWitnessIsPanel() && m != nil {
 		if k := m.PublicKey(); string(cfg.GetWitness().GetKey()) == string(k[:]) {
-			return nil, invalid("本面板已经是见证人")
+			return nil, invalid("本面板已是见证人")
 		}
 	}
 	// 当前的持有者和轮次：A、B 上报的里轮次大的那个说了算。
@@ -289,7 +289,7 @@ func (s *Service) ChangeWitness(ctx context.Context, projectID, name, witnessNod
 		}
 	}
 	if holder == nil {
-		return nil, invalid("读不到当前的持有者，请稍后再试")
+		return nil, invalid("无法确认容器当前在哪个节点上运行，请稍后重试")
 	}
 	next := proto.Clone(cfg).(*nagiv1.FailoverConfig)
 	var w nagiv1.AgentServiceClient

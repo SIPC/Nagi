@@ -77,7 +77,7 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 	if n, err := s.Q.CountAccessTokens(ctx, u.ID); err != nil {
 		return nil, err
 	} else if n >= oauth.MaxTokens {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不用的", oauth.MaxTokens))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不再使用的令牌", oauth.MaxTokens))
 	}
 	viewer := u.Role == auth.RoleViewer
 	now := time.Now()
@@ -89,10 +89,10 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 	// 节点终端等于节点的 root：只有管理员能给令牌勾上（创建令牌本身已经要求确认过身份）。
 	if m.GetAllowNodeExec() {
 		if u.Role != auth.RoleAdmin {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可以在节点上执行命令的令牌"))
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可在节点上执行命令的令牌"))
 		}
 		if !t.AllowExec {
-			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点终端需要同时允许执行命令"))
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("允许节点终端时须同时允许执行命令"))
 		}
 		t.AllowNodeExec = true
 	}

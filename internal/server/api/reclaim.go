@@ -19,7 +19,7 @@ func (s *nodeService) ReclaimNodeSnapshots(ctx context.Context, req *connect.Req
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
 		conn, err := s.Nodes.Get(req.Msg.GetNodeId())
 		if err != nil {
-			return 0, i18n.New("节点不在线")
+			return 0, err
 		}
 		stream, err := conn.Agent.ReclaimSnapshots(context.WithoutCancel(ctx), &nagiv1.ReclaimSnapshotsRequest{})
 		for err == nil {
@@ -39,9 +39,9 @@ func (s *nodeService) ReclaimNodeSnapshots(ctx context.Context, req *connect.Req
 		}
 		switch {
 		case errors.Is(err, io.EOF):
-			return 0, i18n.New("节点没有返回结果")
+			return 0, i18n.New("节点没有返回结果，请升级节点后重试")
 		case status.Code(err) == codes.Unimplemented:
-			return 0, i18n.New("节点版本过旧，升级节点后才能清理快照仓库")
+			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能清理快照仓库", s.nodeName(ctx, req.Msg.GetNodeId()))
 		}
 		return 0, err
 	})

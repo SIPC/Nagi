@@ -40,7 +40,7 @@ func readOnlyProcedure(procedure string) bool {
 
 // standbyError 是备用面板拒绝修改时的说明。
 func (a *API) standbyError() error {
-	return i18n.Errorf("这是备用面板，只能查看；修改请到主面板 %s", a.Panel.Standby.PrimaryAddress())
+	return i18n.Errorf("这是备用面板，只能查看。请在主面板 %s 上编辑", a.Panel.Standby.PrimaryAddress())
 }
 
 // readOnly 拒绝备用面板上的修改。

@@ -13,7 +13,6 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -150,7 +149,7 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	if inv.Fingerprint == s.Panel.Fingerprint {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("这是本面板自己的接入码，请到新面板上生成"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("这是本面板的接入码，请在新面板上生成"))
 	}
 	ids := req.Msg.GetNodeIds()
 	if len(ids) == 0 {
@@ -158,7 +157,7 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 	}
 	for _, id := range ids {
 		if _, err := s.agent(id); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 不在线", s.Projects.NodeName(ctx, id)))
+			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 离线，无法移交", s.Projects.NodeName(ctx, id)))
 		}
 	}
 	// 移交按整个项目：项目相关的节点必须一起移交，免得项目被拆到两个面板上。
@@ -179,15 +178,11 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 		if err == nil {
 			s.Log.Info("节点已加入另一个面板", "node", id, "panel", inv.Address)
 			if _, rerr := agent.RemovePanel(ctx, &nagiv1.RemovePanelRequest{Fingerprint: s.Panel.Fingerprint}); rerr != nil {
-				err = i18n.Errorf("已加入新面板，但移除本面板失败：%w", rerr)
+				err = i18n.Errorf("已加入新面板，但未能从节点上移除本面板：%w", rerr)
 			}
 		}
 		if err != nil {
-			if isStatus(err) {
-				res.Error = status.Convert(err).Message()
-			} else {
-				res.Error = i18n.Localize(i18n.FromContext(ctx), err)
-			}
+			res.Error = errorText(i18n.FromContext(ctx), err)
 			failed++
 		}
 	}
@@ -213,7 +208,7 @@ func (s *nodeService) RemoveNodePanel(ctx context.Context, req *connect.Request[
 	nodeID := req.Msg.GetNodeId()
 	// 本面板的备用面板由主面板的成员列表管，从单个节点上移除它马上又会被加回来：要在设置的「备用面板」里移除。
 	if _, err := s.Q.GetStandbyPanelByServerFP(ctx, req.Msg.GetFingerprint()); err == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这是本面板的备用面板，请在设置的「备用面板」里移除，所有节点会一起移除它"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这是本面板的备用面板，请在设置的「备用面板」中移除，所有节点会同时移除它"))
 	}
 	agent, err := s.agent(nodeID)
 	if err != nil {
@@ -283,7 +278,7 @@ func (s *nodeService) SetNodeMeshOptions(ctx context.Context, req *connect.Reque
 func (s *nodeService) GetPanelMesh(context.Context, *connect.Request[nagiv1.GetPanelMeshRequest]) (*connect.Response[nagiv1.MeshStatus], error) {
 	m := s.Nodes.Mesh()
 	if m == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板的 mesh 没有启动"))
+		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板的节点网络没有启动"))
 	}
 	return connect.NewResponse(mesh.StatusProto(m, s.Nodes.MeshPeerName)), nil
 }
@@ -348,7 +343,7 @@ func (s *nodeService) ListNodeReplicas(ctx context.Context, req *connect.Request
 func (s *nodeService) DeleteNodeReplica(ctx context.Context, req *connect.Request[nagiv1.DeleteNodeReplicaRequest]) (*connect.Response[nagiv1.DeleteNodeReplicaResponse], error) {
 	m := req.Msg
 	if s.Projects.ReplicaInUse(ctx, m.GetNodeId(), m.GetProjectId(), m.GetContainer()) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("这个副本还在使用：先在容器上取消备份节点或顶替"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("该副本仍在使用，请先在容器上取消备份节点或顶替"))
 	}
 	agent, err := s.agent(m.GetNodeId())
 	if err != nil {

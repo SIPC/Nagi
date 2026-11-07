@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"google.golang.org/grpc/status"
 )
 
 // langInterceptor 按请求头 Accept-Language 确定语言：放进 ctx（i18n.T 用），返回的错误换成这个语言的文字。
@@ -39,6 +40,24 @@ func requestLang(r *http.Request) i18n.Lang {
 		return l
 	}
 	return i18n.Parse(r.Header.Get("Accept-Language"))
+}
+
+// errorText 返回给浏览器看的错误文字：节点返回的 gRPC 错误取其中的说明（节点的消息只有中文，按格式串翻译），
+// Connect 错误不带错误码前缀，其余按 i18n.Localize。
+func errorText(lang i18n.Lang, err error) string {
+	if err == nil {
+		return ""
+	}
+	if isStatus(err) {
+		return i18n.Text(lang, status.Convert(err).Message())
+	}
+	if ce, ok := err.(*connect.Error); ok {
+		if inner := ce.Unwrap(); inner != nil {
+			return i18n.Localize(lang, inner)
+		}
+		return i18n.Text(lang, ce.Message())
+	}
+	return i18n.Localize(lang, err)
 }
 
 // localizeError 把错误的文字换成 lang，错误码、details 和 metadata 不变。

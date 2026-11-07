@@ -151,14 +151,14 @@ func PinnedConfig(fingerprint string) *tls.Config {
 		InsecureSkipVerify: true, // 由下面的指纹校验代替
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
-				return i18n.New("对方没有提供证书")
+				return i18n.New("对方没有提供证书，不是预期的面板")
 			}
 			cert, err := x509.ParseCertificate(rawCerts[0])
 			if err != nil {
 				return err
 			}
 			if got := Fingerprint(cert); got != fingerprint {
-				return i18n.Errorf("面板公钥指纹不匹配：期望 %s，实际 %s", fingerprint, got)
+				return i18n.Errorf("对方不是预期的面板（公钥指纹应为 %s，实际为 %s）", fingerprint, got)
 			}
 			return nil
 		},

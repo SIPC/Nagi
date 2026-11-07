@@ -29,7 +29,7 @@ func (a *API) TerminalHandler() http.Handler {
 		lang := requestLang(r)
 		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
 		if err != nil {
-			http.Error(w, i18n.Sprintf(lang, "未登录"), http.StatusUnauthorized)
+			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
 		}
 		if !auth.CanOperate(u.Role) {
@@ -71,18 +71,16 @@ func (a *API) TerminalHandler() http.Handler {
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
 			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
-			fail(i18n.Sprintf(lang, "容器所在的节点不在线"))
-			return
-		}
-		stream, err := conn.Agent.Exec(ctx)
-		if err != nil {
-			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
 			fail(i18n.Localize(lang, err))
 			return
 		}
-		if err := stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: start}}); err != nil {
+		stream, err := conn.Agent.Exec(ctx)
+		if err == nil {
+			err = stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: start}})
+		}
+		if err != nil {
 			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
-			fail(err.Error())
+			fail(terminalError(lang, err))
 			return
 		}
 		a.recordOperation(ctx, "/OpenTerminal", start, "")
@@ -98,6 +96,21 @@ func (a *API) TerminalHandler() http.Handler {
 			recv:      stream.Recv,
 		})
 	})
+}
+
+// terminalError 返回终端出错时给浏览器看的说明：节点返回的说明按语言翻译，连接层面的错误（EOF、
+// "error reading from server" 这类 gRPC 的原始信息）换成「与节点的连接已断开」。
+func terminalError(lang i18n.Lang, err error) string {
+	if !isStatus(err) {
+		return i18n.Sprintf(lang, "与节点的连接已断开")
+	}
+	switch status.Code(err) {
+	case codes.Unimplemented:
+		return i18n.Sprintf(lang, "节点版本过低，升级后才能打开终端")
+	case codes.Unavailable, codes.Canceled, codes.Unknown, codes.DeadlineExceeded:
+		return i18n.Sprintf(lang, "与节点的连接已断开")
+	}
+	return errorText(lang, err)
 }
 
 // wsFail 返回发送错误并关闭 WebSocket 的函数。
@@ -168,17 +181,8 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 		if err != nil {
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {
 				ws.Close(websocket.StatusNormalClosure, "")
-			} else if s, ok := status.FromError(err); ok {
-				switch s.Code() {
-				case codes.Unimplemented:
-					fail(i18n.Sprintf(lang, "节点版本过低，请升级节点"))
-				case codes.Unavailable, codes.Canceled:
-					fail(i18n.Sprintf(lang, "与节点的连接已断开"))
-				default:
-					fail(s.Message())
-				}
 			} else {
-				fail(err.Error())
+				fail(terminalError(lang, err))
 			}
 			return
 		}

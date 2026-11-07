@@ -36,7 +36,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	}
 	conn, err := a.Nodes.Get(nodeID)
 	if err != nil {
-		return fail(i18n.New("节点不在线"))
+		return fail(err)
 	}
 	// 节点那边按同一个超时结束命令；这里多等一会儿，好收到它的退出码。
 	ctx2, cancel := context.WithTimeout(ctx, timeout+10*time.Second)
@@ -90,7 +90,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 // nodeExecError 翻译节点返回的错误：旧版本节点没有这个接口。
 func nodeExecError(err error) error {
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
-		return i18n.New("节点版本过旧，升级节点后才能执行节点命令")
+		return i18n.New("节点版本过低，升级后才能执行节点命令")
 	}
 	return fromGRPC(err)
 }

@@ -94,7 +94,7 @@ func (s *agentService) SetMirrors(ctx context.Context, req *nagiv1.Mirrors) (*na
 		}
 		u, err := url.Parse(m)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "加速地址必须是 http(s):// 开头的完整地址：%s", m)
+			return nil, status.Errorf(codes.InvalidArgument, "加速地址须为以 http:// 或 https:// 开头的完整地址：%s", m)
 		}
 		list = append(list, m)
 	}

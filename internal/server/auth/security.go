@@ -32,14 +32,14 @@ func (s *Service) secret(user store.User) (string, error) {
 func (s *Service) useTOTP(ctx context.Context, user store.User, code string) error {
 	secret, err := s.secret(user)
 	if err != nil {
-		return i18n.New("两步验证数据损坏，请在面板机器上执行 nagi reset 2fa")
+		return i18n.New("两步验证数据已损坏，请在面板所在机器上执行 nagi reset 2fa")
 	}
 	step, ok := checkTOTP(secret, code, time.Now())
 	if !ok {
-		return i18n.New("验证码错误")
+		return i18n.New("验证码不正确")
 	}
 	if n, err := s.q.UseTOTPStep(ctx, store.UseTOTPStepParams{TotpLastStep: step, ID: user.ID, TotpLastStep_2: step}); err != nil || n == 0 {
-		return i18n.New("这个验证码已经用过了，请等下一个")
+		return i18n.New("该验证码已使用，请等待下一个验证码")
 	}
 	return nil
 }
@@ -57,7 +57,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, token, curre
 		return err
 	}
 	if !VerifyPassword(current, u.PasswordHash) {
-		return connect.NewError(connect.CodePermissionDenied, i18n.New("当前密码不对"))
+		return connect.NewError(connect.CodePermissionDenied, i18n.New("当前密码不正确"))
 	}
 	if len([]rune(next)) < 8 {
 		return connect.NewError(connect.CodeInvalidArgument, i18n.New("新密码至少 8 个字符"))
@@ -95,7 +95,7 @@ func (s *Service) EnableTOTP(ctx context.Context, userID int64, token, code stri
 	}
 	step, ok := checkTOTP(p.secret, code, time.Now())
 	if !ok {
-		return connect.NewError(connect.CodeInvalidArgument, i18n.New("验证码错误，请检查手机时间是否准确"))
+		return connect.NewError(connect.CodeInvalidArgument, i18n.New("验证码不正确，请检查手机时间是否准确"))
 	}
 	sealed, err := s.sealer.Seal([]byte(p.secret), totpContext(userID))
 	if err != nil {
@@ -126,7 +126,7 @@ func (s *Service) DisableTOTP(ctx context.Context, userID int64, code, password 
 		ok = s.useTOTP(ctx, u, code) == nil
 	}
 	if !ok {
-		return connect.NewError(connect.CodePermissionDenied, i18n.New("验证码或密码不对"))
+		return connect.NewError(connect.CodePermissionDenied, i18n.New("验证码或密码不正确"))
 	}
 	return s.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: "", ID: userID})
 }

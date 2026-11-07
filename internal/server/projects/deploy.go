@@ -170,7 +170,7 @@ func (s *Service) runJobs(ctx context.Context, p store.Project, jobs []job, sour
 					rest = append(rest, r.c.Name)
 				}
 				if len(rest) > 0 {
-					out(i18n.T(ctx, "已停止，没有部署：%s", rest))
+					out(i18n.T(ctx, "已停止，以下容器未部署：%s", rest))
 				}
 			}
 			break
@@ -197,7 +197,7 @@ func orderJobs(jobs []job) ([]job, error) {
 	visit = func(j job) error {
 		switch state[j.c.Name] {
 		case 1:
-			return invalid("容器之间的依赖有循环（%s）", j.c.Name)
+			return invalid("容器之间存在循环依赖（%s），请调整依赖关系", j.c.Name)
 		case 2:
 			return nil
 		}
@@ -331,11 +331,11 @@ func recvResult(recv func() (*nagiv1.DeployEvent, error), out Output) (*nagiv1.D
 	for {
 		ev, err := recv()
 		if errors.Is(err, io.EOF) {
-			return nil, i18n.New("节点没有返回结果")
+			return nil, i18n.New("节点没有返回结果，请升级节点后重试")
 		}
 		if err != nil {
 			if status.Code(err) == codes.Unavailable {
-				return nil, i18n.New("和节点的连接在操作过程中断开了，操作可能没做完，也可能已经做完。等节点重新连上后，看一下容器的状态和部署记录")
+				return nil, i18n.New("与节点的连接在操作中断开，结果未知。节点重新连接后，请查看容器状态和部署记录")
 			}
 			return nil, err
 		}
@@ -405,10 +405,10 @@ func (s *Service) rollbackJob(ctx context.Context, c store.Container, target int
 		return job{}, err
 	}
 	if !v.DeployedAt.Valid {
-		return job{}, invalid("容器 %s 的版本 %d 没有部署成功过，不能回滚到它", c.Name, target)
+		return job{}, invalid("容器 %s 的版本 %d 从未部署成功，无法回滚到该版本", c.Name, target)
 	}
 	if v.HasFiles == 0 {
-		return job{}, invalid("容器 %s 的版本 %d 的文件已经不在了（可能已被清理，或者容器换过节点），不能回滚到这个版本", c.Name, target)
+		return job{}, invalid("容器 %s 版本 %d 的文件已不存在（可能已被清理，或容器已更换节点），无法回滚到该版本", c.Name, target)
 	}
 	cfg, shared, err := s.versionData(v)
 	if err != nil {
@@ -442,7 +442,7 @@ func (s *Service) Rollback(ctx context.Context, projectID, name string, target i
 		return 0, err
 	}
 	j.restoreData = restoreData
-	out(i18n.T(ctx, "把容器 %s 回滚到版本 %d", name, target))
+	out(i18n.T(ctx, "将容器 %s 回滚到版本 %d", name, target))
 	return s.runJobs(ctx, p, []job{j}, "rollback", 0, out)
 }
 
@@ -473,7 +473,7 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 	for _, c := range rows {
 		target, ok := versions[c.Name]
 		if !ok {
-			out(i18n.T(ctx, "容器 %s 是之后才加的（或那时还没部署过），不动", c.Name))
+			out(i18n.T(ctx, "容器 %s 在该次部署之后才添加（或当时未部署），保持不变", c.Name))
 			continue
 		}
 		if c.DeployedVersion == target {
@@ -487,7 +487,7 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 		jobs = append(jobs, j)
 	}
 	if len(jobs) == 0 {
-		return 0, invalid("所有容器的版本已经和这次部署时一样")
+		return 0, invalid("所有容器的版本已与该次部署时相同")
 	}
 	return s.runJobs(ctx, p, jobs, "restore", deploymentID, out)
 }

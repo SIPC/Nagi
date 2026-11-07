@@ -94,15 +94,25 @@ func fsErr(err error) error {
 	case errors.Is(err, fs.ErrPermission):
 		return invalid("没有访问权限")
 	case errors.Is(err, syscall.ENOSPC):
-		return invalid("磁盘已满")
+		return invalid("磁盘已满，请清理空间后重试")
 	case errors.Is(err, syscall.EROFS):
-		return invalid("只读文件系统")
+		return invalid("文件系统只读，无法写入")
 	case errors.Is(err, syscall.ENOTEMPTY):
-		return invalid("目录非空")
-	case errors.As(err, &pe):
-		return invalid("文件操作失败：" + pe.Err.Error())
-	case errors.As(err, &le):
-		return invalid("文件操作失败：" + le.Err.Error())
+		return invalid("目录不为空")
+	case errors.Is(err, syscall.EISDIR):
+		return invalid("该路径是目录，不是文件")
+	case errors.Is(err, syscall.ENOTDIR):
+		return invalid("路径中有一项不是目录")
+	case errors.Is(err, syscall.ENAMETOOLONG):
+		return invalid("文件名过长")
+	case errors.Is(err, syscall.EBUSY):
+		return invalid("文件正在被使用，请稍后重试")
+	case errors.Is(err, syscall.ELOOP):
+		return invalid("路径中的符号链接层级过多")
+	case errors.Is(err, syscall.EXDEV):
+		return invalid("不能跨文件系统移动")
+	case errors.As(err, &pe), errors.As(err, &le):
+		return invalid("无法完成文件操作，请检查路径和权限后重试")
 	}
 	if _, ok := status.FromError(err); ok {
 		return err
@@ -171,7 +181,7 @@ func (s *Service) Access(real string) string {
 // cleanPath 检查并整理请求里的路径：只接受绝对路径。
 func cleanPath(p string) (string, error) {
 	if !strings.HasPrefix(p, "/") || strings.ContainsRune(p, 0) {
-		return "", invalid("路径必须为绝对路径")
+		return "", invalid("路径须为绝对路径")
 	}
 	return path.Clean(p), nil
 }
@@ -204,16 +214,16 @@ func (s *Service) readable(p string) (string, string, error) {
 	}
 	a := s.Access(real)
 	if a == AccessDenied {
-		return "", "", denied("禁止访问：" + deniedReason(real))
+		return "", "", denied(deniedReason(real))
 	}
 	return real, a, nil
 }
 
 func deniedReason(real string) string {
 	if slices.ContainsFunc(systemDenied, func(d string) bool { return under(real, d) }) {
-		return "系统虚拟文件系统"
+		return "禁止访问系统虚拟文件系统"
 	}
-	return "Nagi 数据目录"
+	return "禁止访问 Nagi 数据目录"
 }
 
 // writable 解析路径，确认可以写。
@@ -289,7 +299,7 @@ func (s *Service) List(p string) (*nagiv1.ListNodeDirResponse, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		var pe *fs.PathError
 		if errors.As(err, &pe) && errors.Is(pe.Err, syscall.ENOTDIR) {
-			return nil, invalid("不是目录")
+			return nil, invalid("该路径不是目录")
 		}
 		return nil, fsErr(err)
 	}
@@ -340,7 +350,7 @@ func openRegular(real string) (*os.File, fs.FileInfo, error) {
 		return nil, nil, fsErr(err)
 	}
 	if !info.Mode().IsRegular() {
-		return nil, nil, invalid("不是普通文件")
+		return nil, nil, invalid("该路径不是普通文件")
 	}
 	f, err := os.OpenFile(real, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -348,7 +358,7 @@ func openRegular(real string) (*os.File, fs.FileInfo, error) {
 	}
 	if info, err = f.Stat(); err != nil || !info.Mode().IsRegular() {
 		f.Close()
-		return nil, nil, invalid("不是普通文件")
+		return nil, nil, invalid("该路径不是普通文件")
 	}
 	return f, info, nil
 }
@@ -365,14 +375,14 @@ func (s *Service) Read(p string) (*nagiv1.ReadNodeFileResponse, error) {
 	}
 	defer f.Close()
 	if info.Size() > MaxEdit {
-		return nil, invalid("文件超过 1 MB，不支持在线编辑")
+		return nil, invalid("文件超过 1 MB，无法在线编辑")
 	}
 	b, err := io.ReadAll(io.LimitReader(f, MaxEdit+1))
 	if err != nil {
 		return nil, fsErr(err)
 	}
 	if len(b) > MaxEdit {
-		return nil, invalid("文件超过 1 MB，不支持在线编辑")
+		return nil, invalid("文件超过 1 MB，无法在线编辑")
 	}
 	out := &nagiv1.ReadNodeFileResponse{
 		Path: real, Sha256: hashOf(b), Modified: timestamppb.New(info.ModTime()), Mode: info.Mode().Perm().String(),
@@ -705,18 +715,18 @@ func (s *Service) Delete(req *nagiv1.DeleteNodeFileRequest) error {
 	}
 	a := s.Access(real)
 	if a == AccessDenied {
-		return denied("禁止访问：" + deniedReason(real))
+		return denied(deniedReason(real))
 	}
 	if a == AccessReadonly {
 		return checkWrite(a, false)
 	}
 	if (info.IsDir() || a == AccessConfirm) && req.GetConfirmName() != path.Base(real) {
-		return status.Error(codes.FailedPrecondition, "需输入名称确认")
+		return status.Error(codes.FailedPrecondition, "请输入名称确认")
 	}
 	if info.IsDir() {
 		for _, d := range s.deniedDirs() {
 			if under(d, real) {
-				return denied("目录包含 Nagi 数据目录")
+				return denied("目录包含 Nagi 数据目录，无法删除")
 			}
 		}
 		for _, d := range s.managedDirs() {
@@ -801,7 +811,7 @@ func (s *Service) Download(ctx context.Context, p string, send func(*nagiv1.Volu
 		}
 		return gz.Close()
 	}
-	return invalid("不是普通文件")
+	return invalid("该路径不是普通文件")
 }
 
 func sendChunks(r io.Reader, send func(*nagiv1.VolumeFileChunk) error) error {

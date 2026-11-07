@@ -3,8 +3,6 @@ package api
 import (
 	"testing"
 	"time"
-
-	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
 func TestUpdateRecordsResume(t *testing.T) {
@@ -19,7 +17,7 @@ func TestUpdateRecordsResume(t *testing.T) {
 		},
 	}
 	// 重启后版本对上了：更新成功，记录删掉。
-	r.resume(i18n.Lang("zh-CN"), "v0.9.0", now)
+	r.resume("v0.9.0", now)
 	if r.Panel != nil {
 		t.Errorf("版本对上了应该删掉：%+v", r.Panel)
 	}
@@ -39,7 +37,7 @@ func TestUpdateRecordsResume(t *testing.T) {
 	// 重启后版本没变。
 	for phase, want := range map[string]string{updateRestarting: updateFailed, updateInstalling: updateFailed} {
 		r := updateRecords{Panel: &updateState{Target: "v0.9.0", Phase: phase}}
-		r.resume(i18n.Lang("zh-CN"), "v0.8.0", now)
+		r.resume("v0.8.0", now)
 		if r.Panel == nil || r.Panel.Phase != want || r.Panel.Error == "" {
 			t.Errorf("%s：应该算失败：%+v", phase, r.Panel)
 		}
@@ -62,7 +60,7 @@ func TestUpdateRecordsReconcile(t *testing.T) {
 		},
 	}
 	versions := map[string]string{"back": "v0.9.0", "late": "v0.9.0", "queued": "v0.8.0"}
-	r.reconcile(i18n.Lang("zh-CN"), "v0.8.0", func(id string) string { return versions[id] }, func(id string) bool { return id != "removed" }, now)
+	r.reconcile("v0.8.0", func(id string) string { return versions[id] }, func(id string) bool { return id != "removed" }, now)
 	if r.Panel == nil || r.Panel.Phase != updateFailed {
 		t.Errorf("面板超时没恢复应该算失败：%+v", r.Panel)
 	}
@@ -83,7 +81,7 @@ func TestUpdateRecordsReconcile(t *testing.T) {
 
 	// 面板用新版本回来了。
 	r = updateRecords{Panel: &updateState{Target: "v0.9.0", Phase: updateInstalling}, Nodes: map[string]*updateState{}}
-	r.reconcile(i18n.Lang("zh-CN"), "v0.9.0", func(string) string { return "" }, func(string) bool { return true }, now)
+	r.reconcile("v0.9.0", func(string) string { return "" }, func(string) bool { return true }, now)
 	if r.Panel != nil {
 		t.Errorf("面板已经是目标版本，记录应该删掉：%+v", r.Panel)
 	}

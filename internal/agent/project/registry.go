@@ -21,7 +21,7 @@ func NormalizeRegistry(registry string) string {
 func (m *Manager) Login(ctx context.Context, registry, username, password string) ([]byte, error) {
 	registry = NormalizeRegistry(registry)
 	if registry == "" || strings.ContainsAny(registry, " /") || strings.HasPrefix(registry, "-") {
-		return nil, invalid("请填写仓库地址，例如 ghcr.io、registry.example.com:5000（Docker Hub 填 docker.io）")
+		return nil, invalid("请填写仓库地址，如 ghcr.io、registry.example.com:5000（Docker Hub 填 docker.io）")
 	}
 	if strings.TrimSpace(username) == "" || password == "" {
 		return nil, invalid("请填写用户名和密码（或访问令牌）")

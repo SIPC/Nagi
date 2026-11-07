@@ -120,7 +120,7 @@ func (a *agent) checkControl(projectID, container string, action nagiv1.Containe
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !bytes.Equal(st.holder, a.selfKey()) || st.fenced || st.restoring || st.failingBack {
-		return spec.Invalid("节点现在没有持有容器的顶替租约，不能启动或重启")
+		return spec.Invalid("容器当前由另一节点运行，此节点无法启动或重启它")
 	}
 	return nil
 }
@@ -128,7 +128,7 @@ func (a *agent) checkControl(projectID, container string, action nagiv1.Containe
 // checkFileWrite 判断现在能不能改容器的文件：有顶替的容器只有持有租约的节点能写，否则改动会被下一次同步盖掉。
 func (a *agent) checkFileWrite(projectID, container string) error {
 	if err := a.checkControl(projectID, container, nagiv1.ContainerAction_CONTAINER_ACTION_RESTART); err != nil {
-		return spec.Invalid("节点现在没有持有容器的顶替租约，不能修改文件")
+		return spec.Invalid("容器当前由另一节点运行，无法在此节点上编辑文件")
 	}
 	return nil
 }
@@ -949,13 +949,13 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 		return nil, status.Error(codes.InvalidArgument, "顶替设置不完整")
 	}
 	if a.mesh == nil {
-		return nil, status.Error(codes.FailedPrecondition, "mesh 没有启动")
+		return nil, status.Error(codes.FailedPrecondition, "节点网络没有启动")
 	}
 	pid, name := cfg.GetProjectId(), cfg.GetContainer()
 	me, _ := a.selfParticipant(cfg)
 	// 新设置时 A 上必须有容器；已有设置（例如顶替之后更换见证人）时 A 可能已经退位成了热备。
 	if me != nil && bytes.Equal(me.GetKey(), cfg.GetA().GetKey()) && f.get(id) == nil && !a.projects.Has(ctx, pid, name) {
-		return nil, status.Error(codes.FailedPrecondition, "A 节点上没有这个容器")
+		return nil, status.Error(codes.FailedPrecondition, "容器所在节点上没有该容器")
 	}
 	// 初始租约归 A，第 1 轮；更换见证人时新见证人从当前的持有者和轮次开始。
 	// 已经有设置时（修改参数、更换见证人）保留当前的持有者和轮次。
@@ -984,7 +984,7 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 	if me != nil && !bytes.Equal(me.GetKey(), holder) {
 		m, sp, _, err := a.replicas.load(pid, name)
 		if err != nil {
-			return nil, status.Error(codes.FailedPrecondition, "热备上还没有登记这个容器的副本")
+			return nil, status.Error(codes.FailedPrecondition, "顶替节点上还没有登记该容器的副本")
 		}
 		m.SourceKey, m.SourceName = holder, participantName(cfg, holder)
 		if err := a.replicas.save(m, sp); err != nil {
@@ -1063,12 +1063,12 @@ func (s *agentService) ConfirmTakeover(ctx context.Context, req *nagiv1.Containe
 	f := s.node.failovers
 	st := f.get(id)
 	if st == nil {
-		return nil, status.Error(codes.NotFound, "本节点没有这个容器的顶替设置")
+		return nil, status.Error(codes.NotFound, "此节点上没有该容器的顶替设置")
 	}
 	f.mu.Lock()
 	if !st.pending {
 		f.mu.Unlock()
-		return nil, status.Error(codes.FailedPrecondition, "现在不需要确认顶替")
+		return nil, status.Error(codes.FailedPrecondition, "当前无需确认顶替")
 	}
 	st.confirmed = true
 	f.mu.Unlock()

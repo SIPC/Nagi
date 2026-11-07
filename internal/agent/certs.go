@@ -68,10 +68,13 @@ func (f *certFailures) get(domain string) string {
 
 func (s *agentService) RetryCerts(_ context.Context, req *nagiv1.RetryCertsRequest) (*nagiv1.RetryCertsResponse, error) {
 	if s.node.proxy == nil {
-		return nil, status.Error(codes.FailedPrecondition, "节点没有启动 Caddy")
+		return nil, status.Error(codes.FailedPrecondition, "节点没有启动 Caddy，无法申请证书")
 	}
 	if wait := s.node.certFails.beginRetry(req.GetDomains(), time.Now()); wait > 0 {
-		return nil, status.Errorf(codes.ResourceExhausted, "刚重试过，请 %d 秒后再试", int(wait.Seconds())+1)
+		if n := int(wait.Seconds()) + 1; n > 1 {
+			return nil, status.Errorf(codes.ResourceExhausted, "刚重试过，请 %d 秒后重试", n)
+		}
+		return nil, status.Error(codes.ResourceExhausted, "刚重试过，请 1 秒后重试")
 	}
 	if err := s.node.proxy.Reload(); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())

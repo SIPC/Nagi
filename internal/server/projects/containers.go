@@ -52,7 +52,7 @@ func (s *Service) addContainer(ctx context.Context, req AddRequest) error {
 		return err
 	}
 	if _, err := s.container(ctx, p.ID, req.Name); err == nil {
-		return invalid("项目里已经有容器 %s", req.Name)
+		return invalid("项目中已有容器 %s", req.Name)
 	}
 	conn, err := s.Nodes.Get(req.NodeID)
 	if err != nil {
@@ -63,11 +63,11 @@ func (s *Service) addContainer(ctx context.Context, req AddRequest) error {
 		dir = s.defaultDir(ctx, conn, req.NodeID, p.ID, p.Name, req.Name)
 	}
 	if !strings.HasPrefix(dir, "/") {
-		return invalid("容器目录必须是绝对路径")
+		return invalid("容器目录须为绝对路径")
 	}
 	dir = path.Clean(dir)
 	if owner, ok := s.dirOwner(ctx, req.NodeID, dir, p.ID, req.Name); ok {
-		return invalid("这个节点上的容器 %s 已经在用目录 %s（或顶替时要用）", owner, dir)
+		return invalid("此节点上的容器 %s 已在使用目录 %s（或顶替时使用），请更换目录", owner, dir)
 	}
 	settings, err := s.settings(p)
 	if err != nil {
@@ -162,12 +162,12 @@ func (s *Service) checkNames(ctx context.Context, projectID, container string, c
 					continue
 				}
 				if _, ok := cp.Services[container]; ok {
-					return invalid("容器名 %s 和容器组 %s 里的一个容器同名：%s 内部查 %s 时可能查到这个容器，请换个名字", container, r.Name, r.Name, container)
+					return invalid("容器名称 %s 与容器组 %s 内的容器重名，在项目内网中会解析冲突，请更换名称", container, r.Name)
 				}
 			case !spec.IsSingle(cfg) && spec.IsSingle(other):
 				for _, svc := range services {
 					if svc == r.Name {
-						return invalid("这份 compose 里的 %s 和单个容器 %s 同名：compose 内部查 %s 时可能查到那个容器，请改 compose 里的服务名", svc, r.Name, svc)
+						return invalid("compose 中的服务 %s 与容器 %s 重名，在项目内网中会解析冲突，请更改 compose 中的服务名", svc, r.Name)
 					}
 				}
 			}

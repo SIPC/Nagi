@@ -61,7 +61,7 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 	switch {
 	case err == nil:
 		if cached.Spec.GetDir() != s.GetDir() {
-			return res, invalid("容器目录不能修改（%s）", cached.Spec.GetDir())
+			return res, invalid("容器目录创建后不能更改（%s）", cached.Spec.GetDir())
 		}
 		filesRoot = cached.FilesRoot
 	case errors.Is(err, ErrNotFound):
@@ -314,7 +314,7 @@ func (m *Manager) Control(ctx context.Context, projectID, container string, acti
 		return err
 	}
 	if c.Spec.GetVersion() == 0 {
-		return invalid("容器还没有部署")
+		return invalid("容器还没有部署，请先部署")
 	}
 	files := composeFiles(c.Spec)
 	switch action {
@@ -333,7 +333,7 @@ func (m *Manager) Control(ctx context.Context, projectID, container string, acti
 	case nagiv1.ContainerAction_CONTAINER_ACTION_RESTART:
 		err = compose.Restart(ctx, files, onLine)
 	default:
-		return invalid("不支持的操作")
+		return invalid("操作只能是启动、停止或重启")
 	}
 	if err != nil {
 		return err
@@ -352,7 +352,7 @@ func findVersionFiles(ctx context.Context, rep *snapshot.Repo, version int64) (s
 			return s.ID, nil
 		}
 	}
-	return "", invalid("版本 %d 的文件已经不在这个节点上（可能已被清理，或者容器换过节点），不能回滚到这个版本", version)
+	return "", invalid("版本 %d 的文件已不在此节点上（可能已被清理，或容器已更换节点），无法回滚到该版本", version)
 }
 
 // findPreDeploy 找到某个版本被替换前保存的运行数据（部署前快照）。

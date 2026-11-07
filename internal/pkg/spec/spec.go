@@ -49,7 +49,7 @@ var (
 // CheckContainerName 检查容器名（容器组的名字也一样）。
 func CheckContainerName(name string) error {
 	if !NameRe.MatchString(name) {
-		return Invalid("容器名只能用小写字母、数字和 -，不以 - 开头或结尾，不超过 32 个字符")
+		return Invalid("容器名称只能用小写字母、数字和 -，不以 - 开头或结尾，不超过 32 个字符")
 	}
 	return nil
 }
@@ -113,14 +113,14 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	var ports []string
 	for _, p := range f.GetPorts() {
 		if p.GetPublished() == 0 || p.GetTarget() == 0 || p.GetPublished() > 65535 || p.GetTarget() > 65535 {
-			return "", Invalid("端口必须在 1 到 65535 之间")
+			return "", Invalid("端口须在 1–65535 之间")
 		}
 		proto := strings.ToLower(p.GetProtocol())
 		if proto == "" {
 			proto = "tcp"
 		}
 		if proto != "tcp" && proto != "udp" {
-			return "", Invalid("端口协议只能是 tcp 或 udp")
+			return "", Invalid("端口协议只能是 TCP 或 UDP")
 		}
 		ports = append(ports, fmt.Sprintf("%d:%d/%s", p.GetPublished(), p.GetTarget(), proto))
 	}
@@ -134,7 +134,7 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	for _, target := range f.GetVolumes() {
 		target = strings.TrimSpace(target)
 		if !strings.HasPrefix(target, "/") {
-			return "", Invalid("持久化目录必须是容器内的绝对路径：%s", target)
+			return "", Invalid("卷须为容器内的绝对路径：%s", target)
 		}
 		name := volumeName(target, used)
 		volumes[name] = map[string]any{}
@@ -142,7 +142,7 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 	}
 	if wd := strings.TrimSpace(f.GetWorkdir()); wd != "" {
 		if !strings.HasPrefix(wd, "/") {
-			return "", Invalid("工作目录必须是容器内的绝对路径")
+			return "", Invalid("工作目录须为容器内的绝对路径")
 		}
 		// compose 的相对路径以容器的 data/ 为准，所以 "./" 就是 data/。
 		mounts = append(mounts, "./:"+wd)
@@ -155,7 +155,7 @@ func formCompose(f *nagiv1.ImageForm, service string) (string, error) {
 		svc["mem_limit"] = fmt.Sprintf("%dm", mb)
 	}
 	if c := f.GetCpus(); c < 0 || c > 1024 {
-		return "", Invalid("CPU 上限不对")
+		return "", Invalid("CPU 上限须在 0–1024 之间，0 表示不限制")
 	} else if c > 0 {
 		svc["cpus"] = c
 	}
@@ -232,7 +232,7 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 			return nil, err
 		}
 		if cfg.GetForm() != nil || cfg.GetSource().GetGitUrl() != "" {
-			return nil, Invalid("现有目录只用于容器组，也不能再设置文件来源")
+			return nil, Invalid("现有目录只用于容器组，且不能设置文件来源")
 		}
 		cfg.ProjectDir, dataDir = clean, clean
 	}
@@ -255,7 +255,7 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 	}
 	for name := range ServiceEnv(cfg, container) {
 		if _, ok := proj.Services[name]; !ok {
-			return nil, Invalid("环境变量里的容器 %q 不在这个容器组的 compose 中", name)
+			return nil, Invalid("环境变量中的容器 %s 不在该容器组的 compose 中", name)
 		}
 	}
 	if url := strings.TrimSpace(cfg.GetSource().GetGitUrl()); url != "" {
@@ -275,8 +275,11 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 		if d == "" || seen[d] {
 			continue
 		}
-		if d == container || !NameRe.MatchString(d) {
-			return nil, Invalid("依赖的容器 %q 不对", d)
+		if d == container {
+			return nil, Invalid("容器不能依赖自身")
+		}
+		if !NameRe.MatchString(d) {
+			return nil, Invalid("依赖的容器名称 %s 只能用小写字母、数字和 -", d)
 		}
 		seen[d] = true
 		deps = append(deps, d)
@@ -343,7 +346,7 @@ func CheckEnv(vars []*nagiv1.EnvVar) error {
 	seen := map[string]bool{}
 	for _, v := range vars {
 		if !envKeyRe.MatchString(v.GetKey()) {
-			return Invalid("变量名 %q 不合法：只能包含字母、数字和下划线，且不能以数字开头", v.GetKey())
+			return Invalid("变量名 %s 只能包含字母、数字和下划线，且不能以数字开头", v.GetKey())
 		}
 		if seen[v.GetKey()] {
 			return Invalid("变量 %s 重复", v.GetKey())
@@ -380,7 +383,7 @@ func CleanBackupPaths(list []string) ([]string, error) {
 			continue
 		}
 		if strings.ContainsAny(p, `/\$~`) || p == "." || p == ".." {
-			return nil, Invalid("快照包含的子目录要写现有目录下的一级目录名，例如 postgres，不能是 %q", p)
+			return nil, Invalid("快照包含的子目录须为现有目录下的一级目录名（如 postgres），不能是 %s", p)
 		}
 		if !slices.Contains(out, p) {
 			out = append(out, p)
@@ -394,7 +397,7 @@ func CleanBackupPaths(list []string) ([]string, error) {
 func CleanProjectDir(dir string) (string, error) {
 	d := strings.TrimSpace(dir)
 	if !path.IsAbs(d) || strings.ContainsAny(d, `\$~`) {
-		return "", Invalid("现有目录要写节点上的绝对路径，例如 /opt/immich")
+		return "", Invalid("现有目录须为节点上的绝对路径，如 /opt/immich")
 	}
 	d = path.Clean(d)
 	if d == "/" {
@@ -531,10 +534,10 @@ func CleanInternalPorts(in []string) ([]string, error) {
 		}
 		m := internalPortRe.FindStringSubmatch(s)
 		if m == nil {
-			return nil, Invalid("内部端口 %q 的格式不对，应该是\"容器:端口\"或\"服务.容器组:端口\"，UDP 在后面加 /udp", s)
+			return nil, Invalid("内部端口 %s 的格式应为 容器:端口 或 服务.容器组:端口，UDP 在末尾加 /udp", s)
 		}
 		if p, _ := strconv.Atoi(m[3]); p < 1 || p > 65535 {
-			return nil, Invalid("内部端口 %q 的端口号不对", s)
+			return nil, Invalid("内部端口 %s 的端口号须在 1–65535 之间", s)
 		}
 		s = strings.TrimSuffix(s, "/tcp")
 		if !contains(out, s) {

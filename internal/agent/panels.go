@@ -37,13 +37,13 @@ func (s *agentService) ListPanels(context.Context, *nagiv1.ListPanelsRequest) (*
 func (s *agentService) AddPanel(ctx context.Context, req *nagiv1.AddPanelRequest) (*nagiv1.AddPanelResponse, error) {
 	a := s.node
 	if req.GetAddress() == "" || req.GetFingerprint() == "" {
-		return nil, status.Error(codes.InvalidArgument, "需要面板地址和公钥指纹")
+		return nil, status.Error(codes.InvalidArgument, "请提供面板地址和公钥指纹")
 	}
 	if p, ok := a.id.panel(req.GetFingerprint()); ok {
 		// 已经信任这个面板，只更新地址，不消耗令牌。只能改自己的地址：
 		// 否则一个面板可以把另一个面板的地址改成连不上的，悄悄把它锁在外面。
 		if p.Address != req.GetAddress() && req.GetFingerprint() != s.panel {
-			return nil, status.Error(codes.PermissionDenied, "已经信任这个面板了，地址不一样；面板的地址只能由它自己修改")
+			return nil, status.Error(codes.PermissionDenied, "已信任该面板，但地址不同。面板地址只能由该面板自己修改")
 		}
 		if p.Address != req.GetAddress() {
 			p.Address = req.GetAddress()
@@ -55,7 +55,7 @@ func (s *agentService) AddPanel(ctx context.Context, req *nagiv1.AddPanelRequest
 		return &nagiv1.AddPanelResponse{}, nil
 	}
 	if req.GetToken() == "" {
-		return nil, status.Error(codes.InvalidArgument, "加入新的面板需要令牌")
+		return nil, status.Error(codes.InvalidArgument, "加入新面板需要令牌")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

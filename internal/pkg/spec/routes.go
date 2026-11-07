@@ -89,25 +89,25 @@ func EntryNodesOf(r *nagiv1.Exposure, containerNode string) []string {
 // CheckRoute 校验一条映射本身的格式。
 func CheckRoute(r *nagiv1.Exposure) error {
 	if r.GetName() != "" && !routeNameRe.MatchString(r.GetName()) {
-		return Invalid("映射名只能包含小写字母、数字、- 和 _")
+		return Invalid("端口映射名称只能用小写字母、数字、- 和 _，以字母或数字开头，不超过 63 个字符")
 	}
 	if r.GetNoLocalEntry() && len(r.GetEntryNodes()) == 0 {
-		return Invalid("至少要留一个入口节点")
+		return Invalid("至少保留一个入口节点")
 	}
 	if strings.TrimSpace(r.GetContainer()) == "" {
-		return Invalid("需要选择容器")
+		return Invalid("请选择容器")
 	}
 	if strings.TrimSpace(r.GetService()) == "" {
-		return Invalid("需要选择容器组里的容器")
+		return Invalid("请选择容器组中的容器")
 	}
 	if r.GetTarget() == 0 || r.GetTarget() > 65535 {
-		return Invalid("容器 %s 的端口无效", r.GetService())
+		return Invalid("容器 %s 的端口须在 1–65535 之间", r.GetService())
 	}
 	switch r.GetProtocol() {
 	case ProtoHTTP:
 		for _, d := range r.GetDomains() {
 			if !domainRe.MatchString(d) {
-				return Invalid("域名 %q 无效（只能用小写字母、数字和连字符）", d)
+				return Invalid("域名 %s 须为完整域名（如 app.example.com），只能用小写字母、数字、- 和点", d)
 			}
 		}
 		if len(r.GetDomains()) == 0 {
@@ -115,11 +115,11 @@ func CheckRoute(r *nagiv1.Exposure) error {
 		}
 	case ProtoTCP, ProtoUDP:
 		if len(r.GetDomains()) > 0 {
-			return Invalid("只有 http 才能绑定域名")
+			return Invalid("只有 HTTP 端口映射能绑定域名")
 		}
 		return checkPublished(r)
 	default:
-		return Invalid("开放方式只能是 http、tcp 或 udp")
+		return Invalid("开放方式只能是 HTTP、TCP 或 UDP")
 	}
 	return nil
 }
@@ -127,10 +127,10 @@ func CheckRoute(r *nagiv1.Exposure) error {
 func checkPublished(r *nagiv1.Exposure) error {
 	p := r.GetPublished()
 	if p == 0 || p > 65535 {
-		return Invalid("容器 %s 需要填写节点上对外的端口", r.GetService())
+		return Invalid("请填写容器 %s 在节点上对外的端口", r.GetService())
 	}
 	if p == 80 || p == 443 {
-		return Invalid("端口 80 和 443 留给域名访问，请换一个端口，或者绑定域名")
+		return Invalid("端口 80 和 443 用于域名访问，请更换端口或绑定域名")
 	}
 	return nil
 }
@@ -216,7 +216,7 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 			cp := ComposePort{Key: fmt.Sprintf("%s/%d/%s", name, port.Target, proto)}
 			published, _ := strconv.Atoi(strings.Split(port.Published, "-")[0])
 			if published == 0 {
-				cp.Skip = i18n.Errorf("compose 里 %s 的端口 %d 没有指定对外端口，未开放，可以手动添加映射", name, port.Target)
+				cp.Skip = i18n.Errorf("compose 中 %s 的端口 %d 没有指定对外端口，未开放，可手动添加端口映射", name, port.Target)
 				out = append(out, cp)
 				continue
 			}
@@ -225,7 +225,7 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 				r.Protocol, cp.Guessed = ProtoHTTP, port.AppProtocol == ""
 			}
 			if err := CheckRoute(r); err != nil {
-				cp.Skip = i18n.Errorf("compose 里 %s 的端口 %d 未开放：%v", name, port.Target, err)
+				cp.Skip = i18n.Errorf("compose 中 %s 的端口 %d 未开放：%v", name, port.Target, err)
 			}
 			cp.Route = r
 			out = append(out, cp)

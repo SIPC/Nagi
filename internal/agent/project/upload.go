@@ -68,7 +68,7 @@ func (m *Manager) ReceiveUpload(ctx context.Context, projectID, container string
 		return res, fmt.Errorf("接收压缩包: %w", err)
 	}
 	if res.Bytes > maxUploadSize {
-		return res, invalid("压缩包超过 %d GiB", maxUploadSize>>30)
+		return res, invalid("压缩包超过 %d GiB，无法上传", maxUploadSize>>30)
 	}
 	out := filepath.Join(tmp, "files")
 	if res.Files, err = extract(archive, out); err != nil {

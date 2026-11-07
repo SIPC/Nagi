@@ -32,7 +32,7 @@ func (n *meshNode) isPanel(k mesh.Key) bool {
 func (s *meshService) VolumeDownload(req *nagiv1.VolumeFileRef, stream nagiv1.MeshService_VolumeDownloadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
 	if !ok || !s.a.mesh.isPanel(caller) {
-		return status.Error(codes.PermissionDenied, "只接受信任的面板下载文件")
+		return status.Error(codes.PermissionDenied, "只接受受信任的面板下载文件")
 	}
 	return toStatus(s.a.projects.ReadVolumeFile(stream.Context(), req, stream.Send))
 }
@@ -41,7 +41,7 @@ func (s *meshService) VolumeDownload(req *nagiv1.VolumeFileRef, stream nagiv1.Me
 func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
 	if !ok || !s.a.mesh.isPanel(caller) {
-		return status.Error(codes.PermissionDenied, "只接受信任的面板上传文件")
+		return status.Error(codes.PermissionDenied, "只接受受信任的面板上传文件")
 	}
 	first, err := stream.Recv()
 	if err != nil {
@@ -79,7 +79,7 @@ func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer)
 func (s *meshService) Upload(stream nagiv1.MeshService_UploadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
 	if !ok || !s.a.mesh.isPanel(caller) {
-		return status.Error(codes.PermissionDenied, "只接受信任的面板上传文件")
+		return status.Error(codes.PermissionDenied, "只接受受信任的面板上传文件")
 	}
 	first, err := stream.Recv()
 	if err != nil {

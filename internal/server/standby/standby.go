@@ -292,7 +292,7 @@ func readFrame(r io.Reader) ([]byte, error) {
 	}
 	n := binary.BigEndian.Uint64(hdr[:])
 	if n > maxFrame {
-		return nil, i18n.New("快照太大")
+		return nil, i18n.New("主面板的数据超过同步的大小上限")
 	}
 	b := make([]byte, n)
 	_, err := io.ReadFull(r, b)
@@ -575,7 +575,7 @@ func (c *Client) syncOnce(ctx context.Context) error {
 		}
 		if err := c.apply(ctx, frame); err != nil {
 			c.mu.Lock()
-			c.lastError = i18n.Errorf("应用主面板的数据失败：%w", err)
+			c.lastError = i18n.Errorf("未能应用主面板的数据：%w", err)
 			c.mu.Unlock()
 			c.Log.Error("应用主面板的数据失败", "err", err)
 			continue
@@ -614,7 +614,7 @@ func (c *Client) apply(ctx context.Context, snap []byte) error {
 		return err
 	}
 	if theirs != ours {
-		return i18n.Errorf("主面板的数据库版本（%d）和本面板（%d）不同，请把两个面板升级到同一个版本", theirs, ours)
+		return i18n.Errorf("主面板的数据库版本（%d）与本面板（%d）不同，请将两个面板升级到同一版本", theirs, ours)
 	}
 	// 表名取本面板自己的数据库里有的（两边版本相同，表一样）：不拿快照里的名字拼 SQL。
 	rows, err := conn.QueryContext(ctx, "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "+

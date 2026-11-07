@@ -143,7 +143,7 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 			continue
 		}
 		if key == "." || key == ".." {
-			return nil, invalid("volume 名不能是 %q", key)
+			return nil, invalid("卷名不能是 %s", key)
 		}
 		dir := filepath.Join(in.mp.volumesDir(), key)
 		if err := noSymlinkBelow(in.mp.root, dir); err != nil {

@@ -21,7 +21,26 @@ func operatorLimited(ctx context.Context) bool {
 }
 
 func adminOnlyConfig(reasons []string) error {
-	return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("以下配置仅管理员可保存：%s", strings.Join(reasons, ", ")))
+	return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("以下配置仅管理员可保存：%s", privilegeReasons(reasons)))
+}
+
+// privilegeReasons 是 spec.PrivilegeReasons 的结果，显示时把面板自己的字段换成界面上的名称（compose 的写法照原样）。
+type privilegeReasons []string
+
+func (r privilegeReasons) String() string { return r.Localize(i18n.Zh) }
+
+func (r privilegeReasons) Localize(l i18n.Lang) string {
+	out := make(i18n.List, len(r))
+	for i, s := range r {
+		switch {
+		case s == "project_dir":
+			s = i18n.Sprintf(l, "现有目录")
+		case strings.HasPrefix(s, "backup_paths: "):
+			s = i18n.Sprintf(l, "快照包含的子目录：%s", strings.TrimPrefix(s, "backup_paths: "))
+		}
+		out[i] = s
+	}
+	return out.Localize(l)
 }
 
 // checkOperatorConfig 检查配置里有没有只有管理员能保存的内容。管理员保存过的配置可以留着，

@@ -106,7 +106,7 @@ func (s *Service) seal(m proto.Message, context string) ([]byte, error) {
 func (s *Service) open(data []byte, context string, m proto.Message) error {
 	b, err := s.Sealer.Open(data, []byte(context))
 	if err != nil {
-		return i18n.Errorf("解密 %s: %w", context, err)
+		return i18n.Detail(i18n.New("无法解密项目数据，面板主密钥可能已重新生成，请恢复原来的主密钥文件"), fmt.Errorf("解密 %s: %w", context, err))
 	}
 	return proto.Unmarshal(b, m)
 }
@@ -131,7 +131,7 @@ func (s *Service) secrets(c store.Container) (secrets, error) {
 	var out secrets
 	b, err := s.Sealer.Open(c.Secrets, []byte(secretsCtx(c.ProjectID, c.Name)))
 	if err != nil {
-		return out, i18n.Errorf("解密容器 %s 的密钥: %w", c.Name, err)
+		return out, i18n.Detail(i18n.Errorf("无法解密容器 %s 的密钥，面板主密钥可能已重新生成，请恢复原来的主密钥文件", c.Name), err)
 	}
 	return out, json.Unmarshal(b, &out)
 }
@@ -303,7 +303,9 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 		return nil, err
 	}
 	for _, r := range routes {
-		proj.Routes = append(proj.Routes, RouteProto(r))
+		pr := RouteProto(r)
+		pr.Error = i18n.Text(i18n.FromContext(ctx), pr.Error)
+		proj.Routes = append(proj.Routes, pr)
 	}
 	if proj.Links, err = s.linkedProjects(ctx, p.ID); err != nil {
 		return nil, err
@@ -402,7 +404,7 @@ func DefaultNetworkName(name string) string { return spec.Slug(name) }
 func checkProjectName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 64 {
-		return "", invalid("项目名不能为空，且不超过 64 个字符")
+		return "", invalid("项目名称不能为空，且不超过 64 个字符")
 	}
 	return name, nil
 }
@@ -413,7 +415,7 @@ func (s *Service) checkNetworkName(ctx context.Context, name, except string) err
 		return err
 	}
 	if id, err := s.Q.ProjectByNetworkName(ctx, name); err == nil && id != except {
-		return invalid("网络名 %s 已经被其他项目使用", name)
+		return invalid("网络名 %s 已被其他项目使用", name)
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
@@ -437,7 +439,7 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 		return nil, invalid("定时快照间隔不能超过 7 天")
 	}
 	if n := out.SnapshotLimit; n != 0 && (n < minSnapshotLimit || n > maxSnapshotLimit) {
-		return nil, invalid("快照份数上限须在 %d 到 %d 之间", minSnapshotLimit, maxSnapshotLimit)
+		return nil, invalid("快照份数上限须在 %d–%d 之间", minSnapshotLimit, maxSnapshotLimit)
 	}
 	return out, nil
 }
@@ -459,7 +461,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*nagiv1.Projec
 	network := strings.TrimSpace(req.NetworkName)
 	if network == "" {
 		if network = DefaultNetworkName(name); network == "" {
-			return nil, invalid("项目名里没有英文字母或数字，请填写网络名（小写字母、数字和 -）")
+			return nil, invalid("项目名称中没有英文字母或数字，请填写网络名（小写字母、数字和 -）")
 		}
 	}
 	if err := s.checkNetworkName(ctx, network, ""); err != nil {
@@ -649,7 +651,7 @@ func (s *Service) Delete(ctx context.Context, id string, base int64, deleteDir b
 		return err
 	}
 	if deleteDir && confirmName != p.Name {
-		return invalid("要同时删除容器目录，请输入项目名 %s 确认", p.Name)
+		return invalid("要同时删除容器目录，请输入项目名称 %s 确认", p.Name)
 	}
 	rows, err := s.Q.ListContainers(ctx, id)
 	if err != nil {

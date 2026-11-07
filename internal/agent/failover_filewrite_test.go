@@ -32,8 +32,8 @@ func TestCheckFileWrite(t *testing.T) {
 			if c.allow && err != nil {
 				t.Fatalf("应该能写：%v", err)
 			}
-			if !c.allow && (err == nil || !strings.Contains(err.Error(), "不能修改文件")) {
-				t.Fatalf("应该拒绝并说明不能修改文件，实际：%v", err)
+			if !c.allow && (err == nil || !strings.Contains(err.Error(), "无法在此节点上编辑文件")) {
+				t.Fatalf("应该拒绝并说明无法编辑文件，实际：%v", err)
 			}
 		})
 	}

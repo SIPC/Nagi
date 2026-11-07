@@ -120,3 +120,57 @@ func TestLocalize(t *testing.T) {
 		t.Error("nil 应返回空")
 	}
 }
+
+// 节点返回的消息只有文字：按格式串反推参数再翻译，参数本身也翻译。
+func TestText(t *testing.T) {
+	withCatalog(t, map[string]string{
+		"节点 %s 不在线":       "Node %s is offline",
+		"%[1]s 有 %[2]d 个": "%[2]d in %[1]s",
+		"容器 %s 未能部署：%v":   "Container %s couldn't deploy: %v",
+		"磁盘已满":            "The disk is full",
+		"进度 100%% 完成：%s":  "100%% done: %s",
+		"版本 %d 不存在":       "Version %d not found",
+	})
+	cases := map[string]string{
+		"节点 n1 不在线":        "Node n1 is offline",
+		"web 有 3 个":        "3 in web",
+		"容器 web 未能部署：磁盘已满": "Container web couldn't deploy: The disk is full",
+		"容器 web 未能部署：底层错误": "Container web couldn't deploy: 底层错误",
+		"进度 100% 完成：好了":    "100% done: 好了",
+		"版本 abc 不存在":       "版本 abc 不存在", // %d 只对上数字
+		"外层：节点 n1 不在线":     "外层：节点 n1 不在线",
+		"没有译文":             "没有译文",
+	}
+	for in, want := range cases {
+		if got := Text(En, in); got != want {
+			t.Errorf("Text(%q) = %q, want %q", in, got, want)
+		}
+		if got := Text(Zh, in); got != in {
+			t.Errorf("Text(Zh, %q) = %q", in, got)
+		}
+	}
+	if got := Localize(En, errors.New("节点 n2 不在线")); got != "Node n2 is offline" {
+		t.Errorf("普通错误按格式串翻译 = %q", got)
+	}
+}
+
+func TestDetail(t *testing.T) {
+	withCatalog(t, map[string]string{"无法连接 GitHub": "Can't reach GitHub"})
+	cause := errors.New("dial tcp: i/o timeout")
+	err := Detail(New("无法连接 GitHub"), cause)
+	if got := Localize(En, err); got != "Can't reach GitHub" {
+		t.Errorf("Localize(En) = %q", got)
+	}
+	if got := Localize(Zh, err); got != "无法连接 GitHub" {
+		t.Errorf("Localize(Zh) = %q", got)
+	}
+	if got := err.Error(); got != "无法连接 GitHub（dial tcp: i/o timeout）" {
+		t.Errorf("Error() = %q", got)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("errors.Is 应该能找到底层原因")
+	}
+	if Detail(New("x"), nil).Error() != "x" {
+		t.Error("没有原因时就是原来的错误")
+	}
+}

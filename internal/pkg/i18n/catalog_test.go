@@ -62,18 +62,22 @@ func TestCatalogArgs(t *testing.T) {
 	}
 }
 
-// scanned 是要求文案都有译文的目录（相对仓库根目录）。
-var scanned = []string{"internal/server", "internal/pkg"}
+// scanned 是要求文案都有译文的目录（相对仓库根目录）。节点（internal/agent）返回的消息只有中文，
+// 面板按整句或格式串找译文（见 Text），所以也要登记。
+var scanned = []string{"internal/server", "internal/pkg", "internal/agent"}
 
 // textArg 是会显示给用户的函数及其文案参数的位置。
 var textArg = map[string]int{
-	"i18n.Errorf":  0,
-	"i18n.New":     0,
-	"i18n.T":       1,
-	"i18n.Sprintf": 1,
-	"spec.Invalid": 0,
-	"Invalid":      0, // spec 包里
-	"invalid":      0, // projects 包里，等同 spec.Invalid
+	"i18n.Errorf":   0,
+	"i18n.New":      0,
+	"i18n.T":        1,
+	"i18n.Sprintf":  1,
+	"spec.Invalid":  0,
+	"Invalid":       0, // spec 包里
+	"invalid":       0, // projects、agent/project 包里等同 spec.Invalid；agent/nodefiles 里是参数错误的 gRPC 状态
+	"denied":        0, // agent/nodefiles 里，权限错误的 gRPC 状态
+	"status.Error":  1, // 节点返回给面板的错误，面板会显示给浏览器
+	"status.Errorf": 1,
 }
 
 var han = regexp.MustCompile(`\p{Han}`)

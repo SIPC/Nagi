@@ -32,7 +32,7 @@ type agentService struct {
 
 func (s *agentService) SetAlertConfig(_ context.Context, req *nagiv1.SetAlertConfigRequest) (*nagiv1.SetAlertConfigResponse, error) {
 	if err := s.alerts.SetConfig(s.panel, req.GetConfig()); err != nil {
-		return nil, status.Errorf(codes.Internal, "保存告警配置: %v", err)
+		return nil, status.Errorf(codes.Internal, "无法保存告警配置：%v", err)
 	}
 	return &nagiv1.SetAlertConfigResponse{}, nil
 }
@@ -67,7 +67,7 @@ func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetric
 func (s *agentService) SetProjectsRoot(_ context.Context, req *nagiv1.SetProjectsRootRequest) (*nagiv1.SetProjectsRootResponse, error) {
 	if err := s.node.setProjectsRoot(req.GetRoot()); err != nil {
 		if errors.Is(err, project.ErrInvalidArgument) {
-			return nil, status.Error(codes.InvalidArgument, "项目根目录必须是绝对路径，且不能是 /")
+			return nil, status.Error(codes.InvalidArgument, "项目根目录须为绝对路径，且不能是 /")
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}

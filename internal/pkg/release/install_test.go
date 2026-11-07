@@ -43,8 +43,8 @@ func TestDownload(t *testing.T) {
 	}{
 		{"校验通过", sum(bin) + "  " + name + "\n", ""},
 		{"二进制模式的条目", sum(bin) + " *" + name + "\n", ""},
-		{"内容被改过", sum("other") + "  " + name + "\n", "校验不通过"},
-		{"SHA256SUMS 里没有这个架构", sum(bin) + "  nagi-linux-riscv64\n", "SHA256SUMS 里没有"},
+		{"内容被改过", sum("other") + "  " + name + "\n", "校验不一致"},
+		{"SHA256SUMS 里没有这个架构", sum(bin) + "  nagi-linux-riscv64\n", "SHA256SUMS 中没有"},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {

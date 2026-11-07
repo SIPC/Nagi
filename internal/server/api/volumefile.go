@@ -26,14 +26,13 @@ func (a *API) VolumeFileHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		fail := func(code int, err error) {
-			msg := i18n.Localize(lang, err)
-			if st, ok := status.FromError(err); ok && err != nil {
-				msg = st.Message()
-				switch st.Code() {
+			msg := errorText(lang, err)
+			if isStatus(err) {
+				switch status.Code(err) {
 				case codes.Unavailable, codes.DeadlineExceeded:
-					msg = i18n.Localize(lang, i18n.New("连不上容器所在的节点，稍后再试"))
+					msg = i18n.Localize(lang, i18n.New("无法连接容器所在的节点，请稍后重试"))
 				case codes.Unimplemented:
-					msg = i18n.Localize(lang, i18n.New("节点版本过旧，升级节点后才能管理文件"))
+					msg = i18n.Localize(lang, i18n.New("节点版本过低，升级后才能管理文件"))
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -42,7 +41,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 		}
 		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
 		if err != nil {
-			fail(http.StatusUnauthorized, i18n.New("未登录"))
+			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
 		if !auth.CanOperate(u.Role) {
@@ -60,7 +59,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 		ctx := auth.WithUser(r.Context(), u)
 		m := a.Nodes.Mesh()
 		if m == nil {
-			fail(http.StatusServiceUnavailable, i18n.New("面板的 mesh 没有启动，无法传输文件"))
+			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))
 			return
 		}
 		nodeID, err := a.Projects.Locate(ctx, ref.GetProjectId(), ref.GetContainer())

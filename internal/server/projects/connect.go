@@ -48,7 +48,7 @@ func (s *Service) groupNames(ctx context.Context, projectID string) ([]string, e
 func (s *Service) checkLinkNames(ctx context.Context, projectID string, groups []string, networks map[string]string) error {
 	for name, network := range networks {
 		if slices.Contains(groups, network) {
-			return invalid("容器组 %s 和已连接项目 %s 的网络名相同：项目内网里"+`"容器.%s"`+"会撞名，请换个名字或者先断开连接", network, name, network)
+			return invalid("容器组 %s 与已连接项目 %s 的网络名相同，在项目内网中会重名，请更换名称或先断开项目连接", network, name)
 		}
 	}
 	return nil
@@ -91,7 +91,7 @@ func (s *Service) checkRenameNetwork(ctx context.Context, projectID, network str
 		}
 		if slices.Contains(groups, network) {
 			p, _ := s.Q.GetProject(ctx, id)
-			return invalid("已连接的项目 %s 里有容器组 %s，和新网络名相同，会在它的项目内网里撞名，请换个网络名", p.Name, network)
+			return invalid("已连接项目 %s 中有容器组 %s 与新网络名相同，在项目内网中会重名，请更换网络名", p.Name, network)
 		}
 	}
 	return nil
@@ -115,7 +115,7 @@ func (s *Service) linkedProjects(ctx context.Context, projectID string) ([]*nagi
 // Connect 连接两个项目。
 func (s *Service) Connect(ctx context.Context, id, otherID string) (*nagiv1.Project, error) {
 	if id == otherID {
-		return nil, invalid("不能连接项目自己")
+		return nil, invalid("项目不能连接自身")
 	}
 	a, b := linkPair(id, otherID)
 	la, lb := s.lock(a), s.lock(b)
@@ -136,7 +136,7 @@ func (s *Service) Connect(ctx context.Context, id, otherID string) (*nagiv1.Proj
 		return nil, err
 	}
 	if slices.Contains(linked[id], otherID) {
-		return nil, invalid("已经连接了项目 %s", other.Name)
+		return nil, invalid("已连接项目 %s", other.Name)
 	}
 	for _, side := range []struct{ self, peer string }{{id, otherID}, {otherID, id}} {
 		groups, err := s.groupNames(ctx, side.self)
@@ -166,7 +166,7 @@ func (s *Service) Disconnect(ctx context.Context, id, otherID string) (*nagiv1.P
 		return nil, err
 	}
 	if n == 0 {
-		return nil, notFoundError{i18n.New("没有连接这个项目")}
+		return nil, notFoundError{i18n.New("未连接该项目")}
 	}
 	s.refreshLinks()
 	return s.reload(ctx, id)

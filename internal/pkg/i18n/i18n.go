@@ -9,9 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Lang 是界面语言，取值和前端一致。
@@ -149,6 +152,21 @@ func (e *Error) Unwrap() []error {
 	return nil
 }
 
+// Detail 返回给人看的错误 err，底层原因 cause 只留给日志：Error() 在后面附上 cause 的原始文字，
+// 按语言显示时只有 err。errors.Is / errors.As 两个都能找到。
+func Detail(err, cause error) error {
+	if cause == nil {
+		return err
+	}
+	return detailed{err, cause}
+}
+
+type detailed struct{ err, cause error }
+
+func (d detailed) Error() string          { return d.err.Error() + "（" + d.cause.Error() + "）" }
+func (d detailed) Localize(l Lang) string { return Localize(l, d.err) }
+func (d detailed) Unwrap() []error        { return []error{d.err, d.cause} }
+
 // Localize 按语言拼出错误的文字。
 func (e *Error) Localize(l Lang) string {
 	if e.literal {
@@ -177,8 +195,121 @@ func Localize(l Lang, err error) string {
 		}
 		e = next
 	}
-	if s, ok := catalogs[l][err.Error()]; ok {
-		return s
+	return Text(l, err.Error())
+}
+
+// Text 按语言翻译一段已经拼好的文字，用于节点返回的消息这类只有文字、没有格式串的场合：
+// 整条文字有译文时用译文；否则按格式串反推参数（例如「节点 n2 离线」对上「节点 %s 离线」），
+// 参数本身也再翻译一次；都对不上时原样返回。
+func Text(l Lang, s string) string {
+	if out, ok := text(l, s, 0); ok {
+		return out
 	}
-	return err.Error()
+	return s
+}
+
+func text(l Lang, s string, depth int) (string, bool) {
+	cat := catalogs[l]
+	if cat == nil {
+		return s, false
+	}
+	if tr, ok := cat[s]; ok {
+		return tr, true
+	}
+	if depth > 1 || s == "" {
+		return s, false
+	}
+	for _, p := range patternsFor(l, cat) {
+		m := p.re.FindStringSubmatch(s)
+		if m == nil {
+			continue
+		}
+		args := make([]any, len(m)-1)
+		for i, a := range m[1:] {
+			if out, ok := text(l, a, depth+1); ok {
+				a = out
+			}
+			args[i] = a
+		}
+		return fmt.Sprintf(p.tr, args...), true
+	}
+	return s, false
+}
+
+// pattern 是由格式串生成的正则：参数位置换成捕获组，译文里的动词都换成 %s（参数是捕获到的文字）。
+type pattern struct {
+	re      *regexp.Regexp
+	tr      string
+	literal int    // 格式串里固定文字的长度，越长越具体，先试
+	key     string // 格式串本身，长度相同时按它排序，结果不随 map 的顺序变
+}
+
+var (
+	verbRe    = regexp.MustCompile(`%(\[\d+\])?[-+# 0]*\d*(\.\d+)?[a-zA-Z]`)
+	patternMu sync.Mutex
+	patternOf = map[Lang]struct {
+		cat  map[string]string
+		list []pattern
+	}{}
+)
+
+func patternsFor(l Lang, cat map[string]string) []pattern {
+	patternMu.Lock()
+	defer patternMu.Unlock()
+	if c, ok := patternOf[l]; ok && reflect.ValueOf(c.cat).Pointer() == reflect.ValueOf(cat).Pointer() && len(c.cat) == len(cat) {
+		return c.list
+	}
+	var list []pattern
+	for zh, tr := range cat {
+		f := strings.ReplaceAll(zh, "%%", "\x00") // %% 是百分号本身，不是动词
+		locs := verbRe.FindAllStringIndex(f, -1)
+		if len(locs) == 0 {
+			continue
+		}
+		var b strings.Builder
+		b.WriteString("(?s)^")
+		literal, last := 0, 0
+		addLiteral := func(s string) {
+			s = strings.ReplaceAll(s, "\x00", "%")
+			b.WriteString(regexp.QuoteMeta(s))
+			literal += len(s)
+		}
+		for _, loc := range locs {
+			addLiteral(f[last:loc[0]])
+			if strings.HasSuffix(f[loc[0]:loc[1]], "d") {
+				b.WriteString(`(-?\d+)`)
+			} else {
+				b.WriteString(`(.+?)`)
+			}
+			last = loc[1]
+		}
+		addLiteral(f[last:])
+		b.WriteString("$")
+		if literal < 4 {
+			continue // 只有参数和标点的格式串什么都能对上
+		}
+		re, err := regexp.Compile(b.String())
+		if err != nil {
+			continue
+		}
+		tr = verbRe.ReplaceAllStringFunc(strings.ReplaceAll(tr, "%%", "\x00"), func(v string) string {
+			if m := verbRe.FindStringSubmatch(v); m[1] != "" {
+				return "%" + m[1] + "s"
+			}
+			return "%s"
+		})
+		tr = strings.ReplaceAll(tr, "\x00", "%%")
+		list = append(list, pattern{re: re, tr: tr, literal: literal, key: zh})
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].literal != list[j].literal {
+			return list[i].literal > list[j].literal
+		}
+		return list[i].key < list[j].key
+	})
+	patternOf[l] = struct {
+		cat  map[string]string
+		list []pattern
+	}{cat, list}
+	return list
 }

@@ -88,7 +88,7 @@ func (s *settingsService) GetSettings(ctx context.Context, _ *connect.Request[na
 func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateSettingsRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
 	addr := strings.TrimSpace(req.Msg.GetPublicAddress())
 	if net.ParseIP(addr) == nil && !hostnameRe.MatchString(addr) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("对外地址必须是 IP 或域名，不含端口"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("对外地址须为 IP 地址或域名，不含端口"))
 	}
 	old := s.Panel.PublicAddress(ctx)
 	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPublicAddress, Value: addr}); err != nil {
@@ -160,7 +160,7 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		ch.TelegramToken = strings.TrimSpace(ch.GetTelegramToken())
 		ch.TelegramChatId = strings.TrimSpace(ch.GetTelegramChatId())
 		if err := alert.Validate(ch); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("渠道 %q：%w", ch.GetName(), err))
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("渠道 %s：%w", ch.GetName(), err))
 		}
 		if ch.GetName() == "" {
 			ch.Name = ch.GetType()
@@ -171,7 +171,7 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		ids[ch.GetId()] = true
 	}
 	if r := cfg.GetRules(); r != nil && (r.GetDiskPercent() > 100 || r.GetMemPercent() > 100) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("百分比不能超过 100"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("百分比须在 0–100 之间"))
 	}
 	if err := s.Nodes.SetAlertConfig(ctx, cfg); err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func (s *settingsService) GetStandbys(ctx context.Context, _ *connect.Request[na
 
 func (s *settingsService) PromoteStandby(ctx context.Context, _ *connect.Request[nagiv1.PromoteStandbyRequest]) (*connect.Response[nagiv1.PromoteStandbyResponse], error) {
 	if s.Panel.Standby == nil || s.Panel.Promote == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("本面板已经是主面板"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("本面板已是主面板"))
 	}
 	term, err := s.Panel.Promote(ctx)
 	if err != nil {

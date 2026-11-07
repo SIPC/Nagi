@@ -52,11 +52,11 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 	}
 	conn, err := a.Nodes.Get(nodeID)
 	if err != nil {
-		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点不在线"))
+		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 	res, err := conn.Agent.InspectComposeDir(ctx, &nagiv1.InspectComposeDirRequest{Path: dir})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("节点版本过旧，升级节点后才能导入现有目录"))
+		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能导入现有目录", a.nodeName(ctx, nodeID)))
 	} else if err != nil {
 		return nil, nil, fromGRPC(err)
 	}
@@ -65,7 +65,7 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 		preview.Containers = append(preview.Containers, c.GetName()+" "+c.GetState())
 	}
 	for _, f := range res.GetIgnoredFiles() {
-		preview.Notes = append(preview.Notes, i18n.T(ctx, "%s 不会带上：compose 会自动叠加它，导入后需要把其中的内容合并进 compose", f))
+		preview.Notes = append(preview.Notes, i18n.T(ctx, "%s 不会导入：compose 会自动叠加它，导入后请把其中的内容合并进 compose", f))
 	}
 	vars, err := dotenv.ParseWithLookup(strings.NewReader(res.GetEnv()), func(string) (string, bool) { return "", false })
 	if err != nil {
@@ -104,7 +104,7 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 	}
 	for _, svc := range proj.Services {
 		if svc.Build != nil {
-			return nil, nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("服务 %s 用了 build：节点上不构建镜像，先构建好镜像并推送到镜像仓库，再把 build 换成 image", svc.Name))
+			return nil, nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("服务 %s 使用了 build：节点不构建镜像，请先构建镜像并推送到镜像仓库，再把 build 换成 image", svc.Name))
 		}
 		// 推荐纳入快照的子目录：直接挂载到数据库数据目录的一级子目录。照片库这类大目录不推荐。
 		for _, v := range svc.Volumes {
@@ -157,7 +157,7 @@ func externalVolumes(ctx context.Context, text string, volumes map[string]string
 		}
 		full, ok := volumes[key]
 		if !ok {
-			notes = append(notes, i18n.T(ctx, "命名卷 %s 没有找到原来的卷，会新建一个空卷（在面板的容器目录里）", key))
+			notes = append(notes, i18n.T(ctx, "没有找到命名卷 %s 原来的卷，将在容器目录里新建一个空卷", key))
 			continue
 		}
 		vols.Content[i+1] = &yaml.Node{Kind: yaml.MappingNode, Content: []*yaml.Node{

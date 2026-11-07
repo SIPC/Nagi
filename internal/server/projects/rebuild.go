@@ -278,7 +278,7 @@ func containsString(list []string, x string) bool {
 
 func checkSpecIDs(sp *nagiv1.ContainerSpec) error {
 	if len(sp.GetProjectId()) != 16 || spec.CheckContainerName(sp.GetName()) != nil || sp.GetConfig() == nil {
-		return i18n.New("缓存的配置不完整")
+		return i18n.New("节点上的容器配置不完整，无法导入")
 	}
 	return nil
 }
@@ -524,7 +524,7 @@ func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name st
 		return err
 	}
 	if _, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: projectID, Name: name}); err == nil {
-		return invalid("项目里已经有容器 %s", name)
+		return invalid("项目中已有容器 %s", name)
 	}
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {
@@ -543,7 +543,7 @@ func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name st
 		}
 	}
 	if sp == nil {
-		return invalid("节点上已经没有这个容器了")
+		return invalid("节点上已没有该容器")
 	}
 	var fo *nagiv1.FailoverStatus
 	for _, st := range cache.GetFailovers() {

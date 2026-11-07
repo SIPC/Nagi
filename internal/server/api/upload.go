@@ -9,7 +9,6 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"google.golang.org/grpc/status"
 )
 
 // UploadHandler 接收浏览器上传的容器文件压缩包，经 mesh 转给容器所在的节点：POST /api/upload?project=&container=，
@@ -24,15 +23,12 @@ func (a *API) UploadHandler() http.Handler {
 		}
 		lang := requestLang(r)
 		fail := func(code int, err error) {
-			msg := i18n.Localize(lang, err)
-			if isStatus(err) {
-				msg = status.Convert(err).Message()
-			}
+			msg := errorText(lang, err)
 			reply(code, map[string]string{"message": msg})
 		}
 		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
 		if err != nil {
-			fail(http.StatusUnauthorized, i18n.New("未登录"))
+			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
 		if !auth.CanOperate(u.Role) {
@@ -50,7 +46,7 @@ func (a *API) UploadHandler() http.Handler {
 		q := r.URL.Query()
 		m := a.Nodes.Mesh()
 		if m == nil {
-			fail(http.StatusServiceUnavailable, i18n.New("面板的 mesh 没有启动，无法上传"))
+			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法上传"))
 			return
 		}
 		nodeID, err := a.Projects.Locate(r.Context(), q.Get("project"), q.Get("container"))

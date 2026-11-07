@@ -331,7 +331,7 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, projectID, container, sid
 	defer rep.Close(ctx)
 	tags, err := rep.Tags(ctx, sid)
 	if err != nil {
-		return invalid("快照不存在：%v", err)
+		return invalid("快照不存在或已被清理")
 	}
 	if k := snapshot.Kind(tags["kind"]); k != snapshot.Scheduled && k != snapshot.Manual {
 		return invalid("只能从定时快照或手动快照恢复")
@@ -373,11 +373,11 @@ func (m *Manager) DeleteSnapshot(ctx context.Context, projectID, container, sid 
 	}
 	defer rep.Close(ctx)
 	if _, err := rep.Tags(ctx, sid); err != nil {
-		return invalid("快照不存在：%v", err)
+		return invalid("快照不存在或已被清理")
 	}
 	err = rep.Delete(ctx, sid)
 	if errors.Is(err, snapshot.ErrNotDeletable) {
-		return invalid("版本文件不能删除，回滚要用")
+		return invalid("版本快照用于回滚，不能删除")
 	}
 	return err
 }

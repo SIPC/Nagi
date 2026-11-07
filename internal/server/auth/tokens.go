@@ -26,7 +26,7 @@ const (
 )
 
 // ErrInvalidToken 表示令牌不存在、已吊销或已过期。
-var ErrInvalidToken = i18n.New("访问令牌无效或已过期")
+var ErrInvalidToken = i18n.New("访问令牌不正确或已过期，请重新创建令牌")
 
 // NewSecret 生成一个新的令牌（或刷新令牌、授权码）：前缀加 32 字节随机数。
 func NewSecret() string {

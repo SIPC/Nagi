@@ -37,7 +37,7 @@ func (a *API) checkAgentFiles(ctx context.Context, projectID string, write bool)
 func (a *API) meshFiles(ctx context.Context, ref *nagiv1.VolumeFileRef) (nagiv1.MeshServiceClient, *grpc.ClientConn, error) {
 	m := a.Nodes.Mesh()
 	if m == nil {
-		return nil, nil, i18n.New("面板的 mesh 没有启动，无法传输文件")
+		return nil, nil, i18n.New("面板的节点网络没有启动，无法传输文件")
 	}
 	nodeID, err := a.Projects.Locate(ctx, ref.GetProjectId(), ref.GetContainer())
 	if err != nil {

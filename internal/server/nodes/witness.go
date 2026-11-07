@@ -68,7 +68,7 @@ func (r *Registry) SetWitnessFrom(cfg *nagiv1.FailoverConfig, holder []byte, epo
 	w := r.witness
 	id := witnessID(cfg.GetProjectId(), cfg.GetContainer())
 	if w == nil || !witnessIDRe.MatchString(id) {
-		return status.Error(codes.InvalidArgument, "顶替设置无效")
+		return status.Error(codes.InvalidArgument, "顶替设置不完整")
 	}
 	b, err := protojson.Marshal(cfg)
 	if err != nil {

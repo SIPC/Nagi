@@ -261,7 +261,7 @@ func (a *agent) checkPrimary(fp, method string) error {
 	}
 	p, ok := a.id.panel(fp)
 	if !ok {
-		return status.Error(codes.PermissionDenied, "不在信任列表里的面板")
+		return status.Error(codes.PermissionDenied, "该面板不在节点的信任列表中")
 	}
 	st := a.id.cluster(p.clusterID())
 	if st.Primary == "" || st.Primary == fp {
@@ -271,7 +271,7 @@ func (a *agent) checkPrimary(fp, method string) error {
 	if pp, ok := a.id.panel(st.Primary); ok {
 		where = pp.Address
 	}
-	return status.Errorf(codes.FailedPrecondition, "这是备用面板，只能查询；修改请到主面板 %s", where)
+	return status.Errorf(codes.FailedPrecondition, "这是备用面板，只能查询。请在主面板 %s 上编辑", where)
 }
 
 // primaryGuard 返回只放行主面板修改的拦截器（每条面板连接一个）。
@@ -309,7 +309,7 @@ func (a *agent) setConnectError(fingerprint string, err error) {
 	}
 	msg := err.Error()
 	switch {
-	case strings.Contains(msg, "指纹不匹配"):
+	case strings.Contains(msg, "指纹不匹配"), strings.Contains(msg, "公钥指纹应为"): // 后者是新版本的说法（见 tlsutil）
 		msg = "这个地址上的面板公钥变了（面板可能重装过）。确认不再使用后可以移除"
 	case strings.Contains(msg, "connection refused"):
 		msg = "连接被拒绝：面板没有运行，或者地址、端口不对"

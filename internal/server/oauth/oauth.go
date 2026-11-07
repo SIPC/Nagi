@@ -185,13 +185,13 @@ func (s *Server) Check(ctx context.Context, req *nagiv1.OAuthRequest) (Client, e
 		return c, err
 	}
 	if !matchRedirect(c.RedirectURIs, req.GetRedirectUri()) {
-		return c, i18n.New("回调地址和客户端注册的不一致")
+		return c, i18n.New("回调地址与客户端注册的不一致")
 	}
 	if req.GetResponseType() != "code" {
 		return c, i18n.New("只支持授权码方式")
 	}
 	if req.GetCodeChallenge() == "" || req.GetCodeChallengeMethod() != "S256" {
-		return c, i18n.New("客户端必须使用 PKCE（S256）")
+		return c, i18n.New("客户端须使用 PKCE（S256）")
 	}
 	return c, nil
 }
@@ -226,17 +226,17 @@ func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequ
 	if n, err := s.Q.CountAccessTokens(ctx, u.ID); err != nil {
 		return "", err
 	} else if n >= MaxTokens {
-		return "", i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不用的", MaxTokens)
+		return "", i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不再使用的令牌", MaxTokens)
 	}
 	if u.Role == auth.RoleViewer {
 		write, exec = false, false
 	}
 	// 节点终端等于节点的 root：只有管理员能授权，而且要同时允许执行命令（和个人访问令牌一样）。
 	if node && u.Role != auth.RoleAdmin {
-		return "", i18n.New("只有管理员能创建可以在节点上执行命令的令牌")
+		return "", i18n.New("只有管理员能创建可在节点上执行命令的令牌")
 	}
 	if node && !exec {
-		return "", i18n.New("节点终端需要同时允许执行命令")
+		return "", i18n.New("允许节点终端时须同时允许执行命令")
 	}
 	code := randomHex(32)
 	s.mu.Lock()
@@ -615,7 +615,7 @@ func (s *Server) metadataClient(ctx context.Context, id string) (Client, error) 
 func (s *Server) fetchMetadata(ctx context.Context, id string) (Client, error) {
 	u, err := url.Parse(id)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.Path == "" || u.Path == "/" {
-		return Client{}, i18n.New("客户端标识不是有效的网址")
+		return Client{}, i18n.New("客户端标识须为网址")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -626,11 +626,11 @@ func (s *Server) fetchMetadata(ctx context.Context, id string) (Client, error) {
 	req.Header.Set("Accept", "application/json")
 	res, err := s.fetch.Do(req)
 	if err != nil {
-		return Client{}, i18n.Errorf("取不到客户端的元数据：%v", err)
+		return Client{}, i18n.Detail(i18n.New("无法获取客户端元数据，请检查客户端标识的网址"), err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return Client{}, i18n.Errorf("取不到客户端的元数据：%s", res.Status)
+		return Client{}, i18n.Errorf("无法获取客户端元数据（%s）", res.Status)
 	}
 	var doc struct {
 		ClientID     string   `json:"client_id"`
@@ -638,14 +638,14 @@ func (s *Server) fetchMetadata(ctx context.Context, id string) (Client, error) {
 		RedirectURIs []string `json:"redirect_uris"`
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(&doc); err != nil {
-		return Client{}, i18n.New("客户端的元数据不是有效的 JSON")
+		return Client{}, i18n.New("客户端元数据须为 JSON")
 	}
 	if doc.ClientID != id {
-		return Client{}, i18n.New("客户端元数据里的 client_id 和网址不一致")
+		return Client{}, i18n.New("客户端元数据中的 client_id 与网址不一致")
 	}
 	for _, r := range doc.RedirectURIs {
 		if !validRedirect(r) {
-			return Client{}, i18n.New("客户端元数据里有不能用的回调地址")
+			return Client{}, i18n.New("客户端元数据中有不可用的回调地址")
 		}
 	}
 	name := clip(strings.TrimSpace(doc.ClientName), 64)

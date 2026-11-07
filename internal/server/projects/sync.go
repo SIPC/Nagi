@@ -25,18 +25,10 @@ func HashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// offlineError 是节点不在线：errors.Is 能识别为 nodes.ErrOffline，消息里说明是哪个节点。
-type offlineError struct{ name string }
-
-func (e offlineError) Error() string        { return "节点 " + e.name + " 不在线" }
-func (e offlineError) Is(target error) bool { return target == nodes.ErrOffline }
-func (e offlineError) Localize(l i18n.Lang) string {
-	return i18n.Sprintf(l, "节点 %s 不在线", e.name)
-}
-
+// nodeErr 把节点离线的错误换成带节点名称的（errors.Is 照样能识别为 nodes.ErrOffline）。
 func (s *Service) nodeErr(ctx context.Context, nodeID string, err error) error {
 	if errors.Is(err, nodes.ErrOffline) {
-		return offlineError{s.NodeName(ctx, nodeID)}
+		return nodes.NewOfflineError(s.NodeName(ctx, nodeID))
 	}
 	return err
 }
@@ -268,6 +260,9 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 
 // ---- 转换 ----
 
+// errNoEntry 是入口节点都被移除了的端口映射的说明。返回给浏览器时按语言翻译（见 Get）。
+var errNoEntry = i18n.New("没有入口节点，请编辑端口映射重新选择")
+
 // RouteProto 把数据库里的映射转成 proto。
 func RouteProto(r store.Route) *nagiv1.Exposure {
 	e := &nagiv1.Exposure{
@@ -278,7 +273,7 @@ func RouteProto(r store.Route) *nagiv1.Exposure {
 	_ = json.Unmarshal([]byte(r.EntryNodes), &e.EntryNodes)
 	// 入口节点都被移除了：映射留着让用户重新选，但不生效。
 	if e.NoLocalEntry && len(e.EntryNodes) == 0 {
-		e.Error = "没有入口节点，请编辑映射重新选择"
+		e.Error = errNoEntry.Error()
 	}
 	return e
 }

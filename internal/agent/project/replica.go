@@ -92,7 +92,7 @@ func (m *Manager) CheckPlacement(ctx context.Context, s *nagiv1.ContainerSpec) e
 		return err
 	}
 	if _, err := m.Get(ctx, s.GetProjectId(), s.GetName()); err == nil {
-		return invalid("目标节点上已经有容器 %s", s.GetName())
+		return invalid("目标节点上已有容器 %s", s.GetName())
 	}
 	if _, err := m.CheckDir(ctx, s.GetDir()); err != nil {
 		return err
@@ -111,7 +111,7 @@ func (m *Manager) RestoreReplica(ctx context.Context, s *nagiv1.ContainerSpec, r
 	l.Lock()
 	defer l.Unlock()
 	if _, err := m.Get(ctx, s.GetProjectId(), s.GetName()); err == nil {
-		return invalid("本节点上已经有容器 %s", s.GetName())
+		return invalid("此节点上已有容器 %s", s.GetName())
 	}
 	dir, err := m.CheckDir(ctx, s.GetDir())
 	if err != nil {
@@ -169,7 +169,7 @@ func restoreData(ctx context.Context, rep *snapshot.Repo, s *nagiv1.ContainerSpe
 			onLine(fmt.Sprintf("使用最新的快照（%s）", list[0].Time.Local().Format("2006-01-02 15:04:05")))
 		}
 	} else if tags, err := rep.Tags(ctx, sid); err != nil {
-		return invalid("快照不存在：%v", err)
+		return invalid("快照不存在或已被清理")
 	} else if k := snapshot.Kind(tags["kind"]); k != snapshot.Scheduled && k != snapshot.Manual {
 		return invalid("只能从定时快照或手动快照恢复")
 	}

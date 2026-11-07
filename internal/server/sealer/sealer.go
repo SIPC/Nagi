@@ -67,7 +67,7 @@ func (s *Sealer) Seal(plaintext, additional []byte) ([]byte, error) {
 func (s *Sealer) Open(ciphertext, additional []byte) ([]byte, error) {
 	n := s.aead.NonceSize()
 	if len(ciphertext) < 1+n || ciphertext[0] != version {
-		return nil, i18n.New("密文格式无效")
+		return nil, i18n.New("加密数据的格式无法识别")
 	}
 	return s.aead.Open(nil, ciphertext[1:1+n], ciphertext[1+n:], additional)
 }
