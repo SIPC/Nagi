@@ -118,7 +118,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
       <div role="status" className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span>
           <span className="mr-2 mb-0.5 inline-block size-1.5 rounded-full bg-warning align-middle" />
-          <span className="font-medium text-warning-text">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
+          <span className="font-medium">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
         </span>
         <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? m.collapse : m.view}

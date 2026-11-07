@@ -5,9 +5,9 @@ import { Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { HelpTip, QueryError, RowsSkeleton, Section, Segmented, Status, Waves } from "@/components/ui";
+import { HelpTip, QueryError, RowsSkeleton, Section, Status, Waves } from "@/components/ui";
 import { Legend as ChartLegend, TimeChart, type Pt as ChartPt } from "@/components/chart";
-import { metricRanges, type MetricRange } from "@/components/metrics";
+import { RangePicker, metricRanges, type MetricRange } from "@/components/metrics";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -182,8 +182,10 @@ function NodeGlyph({
 }) {
   const live = n.online && !n.pending;
   const u = live ? n.usage : undefined;
-  const ratio = u ? Math.min(Math.max(u.cpu, u.memory, u.disk) / 100, 1) : 0;
-  const ring = ratio >= 0.9 ? "stroke-destructive" : ratio >= 0.75 ? "stroke-warning" : "stroke-info";
+  // CPU 按每核 100% 累加，换成占整机的比例再和内存、磁盘比。
+  const cpu = u ? (n.info?.cpus ? u.cpu / n.info.cpus : u.cpu) : 0;
+  const ratio = u ? Math.min(Math.max(cpu, u.memory, u.disk) / 100, 1) : 0;
+  const ring = ratio >= 0.9 ? "stroke-destructive" : ratio >= 0.75 ? "stroke-warning" : "stroke-primary";
   const status = nodeStatus(n);
   // 文字放在圆的外侧，连线都朝内，压不到字：两侧的节点写在旁边，其余写在上方或下方。
   const side = Math.abs(at.x) > 0.7 * Math.hypot(at.x, at.y);
@@ -586,15 +588,16 @@ function LatencyHistory({ a, b, statuses }: { a: Node; b: Node; statuses: Map<st
     placeholderData: (prev) => prev,
   });
   const series = [
-    { label: k.direction(a.name, b.name), points: q.data?.[0] ?? [], className: "text-muted-foreground" },
-    { label: k.direction(b.name, a.name), points: q.data?.[1] ?? [], className: "text-wave" },
+    // 正常数据用灰，两个方向用深浅区分。
+    { label: k.direction(a.name, b.name), points: q.data?.[0] ?? [], className: "text-foreground" },
+    { label: k.direction(b.name, a.name), points: q.data?.[1] ?? [], className: "text-muted-foreground" },
   ];
   const now = Date.now() / 1000;
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <ChartLegend series={series} />
-        <Segmented value={range} onChange={setRange} label={t.metrics.rangeLabel} items={metricRanges.map((x) => ({ value: x.value, label: t.metrics.rangesShort[x.value] }))} />
+        <RangePicker value={range} onChange={setRange} />
       </div>
       {q.error ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />

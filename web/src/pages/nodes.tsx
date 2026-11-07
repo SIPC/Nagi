@@ -8,7 +8,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { UsageCell, fmtBytes, fmtBytesShort, fmtCpuShort, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
+import { RangePicker, UsageCell, fmtBytes, fmtBytesShort, fmtCpuShort, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC } from "@/pages/mesh";
@@ -129,7 +129,7 @@ function NodeResources({ n }: { n: Node }) {
   ];
   const now = Date.now() / 1000;
   return (
-    <Section title={t.metrics.resourceUsage} actions={<Segmented value={range} onChange={setRange} items={metricRanges.map((x) => ({ value: x.value, label: t.metrics.rangesShort[x.value] }))} />}>
+    <Section title={t.metrics.resourceUsage} actions={<RangePicker value={range} onChange={setRange} />}>
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
@@ -147,7 +147,7 @@ function NodeResources({ n }: { n: Node }) {
                 </div>
                 <TimeChart
                   className="mt-2"
-                  series={[{ label: it.label, points, className: "text-info" }]}
+                  series={[{ label: it.label, points, className: "text-muted-foreground" }]}
                   from={now - r.seconds}
                   to={now}
                   step={r.step}
@@ -207,11 +207,7 @@ function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean })
             cols={[
               { content: container.deployedVersion > 0n ? `v${container.deployedVersion}` : "—", num: true },
               {
-                content: (
-                  <span className={cn(st.tone === "danger" && "text-destructive", st.tone === "warning" && "text-warning-text")}>
-                    <Status tone={st.tone}>{st.label}</Status>
-                  </span>
-                ),
+                content: <Status tone={st.tone}>{st.label}</Status>,
                 phone: true,
               },
             ]}

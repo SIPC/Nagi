@@ -17,22 +17,11 @@ export function actionLabel(e: ActivityEntry) {
   return (t.activity.actions as Record<string, string>)[e.action] ?? e.action;
 }
 
+// 结果写成灰字，只有圆点带颜色；成功和已恢复是常态，圆点也是灰色，颜色只给失败和未恢复的告警。
 function result(e: ActivityEntry) {
-  if (e.kind === "alert")
-    return e.action === "resolved" ? (
-      <Status tone="success">{actionLabel(e)}</Status>
-    ) : (
-      <span className="text-warning-text">
-        <Status tone="warning">{actionLabel(e)}</Status>
-      </span>
-    );
-  if (e.failed)
-    return (
-      <span className="text-destructive">
-        <Status tone="danger">{t.activity.failed}</Status>
-      </span>
-    );
-  return <Status tone="success">{t.activity.succeeded}</Status>;
+  if (e.kind === "alert") return <Status tone={e.action === "resolved" ? "neutral" : "warning"}>{actionLabel(e)}</Status>;
+  if (e.failed) return <Status tone="danger">{t.activity.failed}</Status>;
+  return <Status tone="neutral">{t.activity.succeeded}</Status>;
 }
 
 export function ActivityPage() {

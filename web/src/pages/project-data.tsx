@@ -745,7 +745,7 @@ function RestoreNotice({ project, container, nodes, run }: { project: Project; c
       <Notice
         tone="warning"
         className={noticeRow}
-        title={<span className="text-warning-text">{t.projectData.placement.offline(nodes.name(container.nodeId))}</span>}
+        title={t.projectData.placement.offline(nodes.name(container.nodeId))}
         actions={
           <Button disabled={run.busy} onClick={() => setOpen(true)}>
             {t.projectData.restore.latest}
@@ -1100,7 +1100,7 @@ function TakeoverNotice({ project, container, nodes }: { project: Project; conta
       <Notice
         tone="warning"
         className={noticeRow}
-        title={<span className="text-warning-text">{f.pendingTitle}</span>}
+        title={f.pendingTitle}
         actions={
           <Button
             disabled={busy}

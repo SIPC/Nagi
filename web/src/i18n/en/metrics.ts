@@ -8,13 +8,6 @@ export default {
     "7d": "Last 7 days",
     "30d": "Last 30 days",
   },
-  rangesShort: {
-    "1h": "1h",
-    "6h": "6h",
-    "24h": "24h",
-    "7d": "7d",
-    "30d": "30d",
-  },
   rangeLabel: "Time range",
   resourceUsage: "Resource usage",
   memory: "Memory",

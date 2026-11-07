@@ -517,7 +517,8 @@ function TrendChart({ title, help, series, from, to, step }: { title: string; he
   );
 }
 
-const pairColors = ["text-foreground", "text-muted-foreground", "text-wave", "text-info"];
+// 节点之间的流量是正常数据，用几档灰区分；品牌色只给对外流量（见 docs/ui.md）。
+const pairColors = ["text-foreground", "text-foreground/60", "text-muted-foreground", "text-muted-foreground/50"];
 
 // ---- 页面 ----
 

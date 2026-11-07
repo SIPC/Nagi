@@ -247,7 +247,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
             m.hasDraft && pc.badges.draft,
             m.sharedEnvOutdated && pc.badges.sharedEnvPending,
             m.stateful && pc.badges.stateful,
-            m.hostNetworkServices.length > 0 && <span className="text-destructive">{pc.badges.hostNetwork}</span>,
+            m.hostNetworkServices.length > 0 && <span className="text-warning-text">{pc.badges.hostNetwork}</span>,
             m.unmanagedVolumes.length > 0 && pc.badges.volumeUnmanaged,
           ].filter(Boolean);
           return (
@@ -1006,7 +1006,8 @@ function ContainerEvents({ project, container }: { project: Project; container: 
           <table className="w-full border-separate border-spacing-0">
             <tbody>
               {list.map(({ entry: e, count }) => {
-                const tone = e.kind === "alert" ? (e.action === "resolved" ? "success" : "warning") : e.failed ? "danger" : "success";
+                // 常态的操作圆点是灰色，颜色只给失败和未恢复的告警。
+                const tone = e.kind === "alert" ? (e.action === "resolved" ? "neutral" : "warning") : e.failed ? "danger" : "neutral";
                 const td = "h-9 px-2 py-1 align-middle transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
                 return (
                   <tr key={String(e.id)} className="group">

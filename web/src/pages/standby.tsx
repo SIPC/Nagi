@@ -68,7 +68,7 @@ export function StandbyCard() {
         <KeyValue
           items={[
             [t.standby.status.primary, <span className="wrap-anywhere">{d.primaryAddress}</span>],
-            [t.standby.status.connection, d.connected ? <Status tone="success">{t.standby.connected}</Status> : <span className="text-warning-text"><Status tone="warning">{t.standby.disconnected}</Status></span>],
+            [t.standby.status.connection, d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>],
             [t.standby.lastSync, <span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? capitalize(timeAgo(toDate(d.lastSync))) : t.standby.status.neverSynced}</span>],
           ]}
         />
@@ -138,9 +138,7 @@ export function StandbyCard() {
                     <Status tone="success">{t.standby.connected}</Status>
                   ) : (
                     <span className="flex items-center gap-1">
-                      <span className="text-warning-text">
-                        <Status tone="warning">{t.standby.disconnected}</Status>
-                      </span>
+                      <Status tone="warning">{t.standby.disconnected}</Status>
                       <HelpTip>{t.standby.disconnectedHint}</HelpTip>
                     </span>
                   ),

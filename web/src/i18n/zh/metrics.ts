@@ -7,13 +7,6 @@ export default {
     "7d": "最近 7 天",
     "30d": "最近 30 天",
   },
-  rangesShort: {
-    "1h": "1 小时",
-    "6h": "6 小时",
-    "24h": "24 小时",
-    "7d": "7 天",
-    "30d": "30 天",
-  },
   rangeLabel: "时间范围",
   resourceUsage: "资源占用",
   memory: "内存",
