@@ -389,7 +389,7 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
   );
 }
 
-// 节点列表的列：名称和地址，CPU、内存、磁盘各一列（已用 / 上限），容器数靠右，各列上下居中。窄于 lg 时（平板上五列放不下）只留名称这一列，用量并进第三行。
+// 节点列表的列：名称和地址，CPU、内存、磁盘各一列（已用 / 上限加占用条），容器数靠右，各列上下居中。窄于 lg 时（平板上五列放不下）只留名称这一列，用量并进第三行。
 const nodeCols = "grid grid-cols-[minmax(0,1fr)] items-center gap-x-6 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem_3rem]";
 
 // NodeList：节点页的列表。字段多、要横向比较，所以有表头；表头线不超出内容区，行左右外扩 8 只为悬停底色。
