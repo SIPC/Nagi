@@ -2,6 +2,8 @@ package mesh
 
 import (
 	"encoding/binary"
+	"math/rand/v2"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +19,10 @@ import (
 //	校验包：0x11 组号(4) 序号(1，从组大小开始) 实际的组大小(1) 校验包个数(1) 校验分片
 //
 // 校验分片按"长度(2) 包 补零"对齐到组里最长的包。第一个字节和 WireGuard（1～4）、控制包（'N'）都不重。
+//
+// 组号从随机值开始：对方重启后，新组号和接收方记着的旧组号几乎不会挨着。收到的组号和最新的差 fecResync 以上时，
+// 接收方当作对方重启过（或者断了很久），清空记着的组从头开始；否则新组和旧组同号时新包被当成重复的丢掉，
+// 比旧组号小得多时新组一建好就当过期的删掉，校验包也就算不回丢的包。
 //
 // 有校验包的组按顺序交给 WireGuard：前面缺了包时，后面的包先扣下，等校验包把缺的算回来再一起交，
 // 最多等 fecHold。否则后面的包先到，TCP 看到乱序就当成丢包、立刻降速，算回来也晚了。
@@ -39,6 +45,8 @@ const (
 	// fecLossSamples：攒够这么多个包才报一次丢包率（约 2.5 MB）。0.2% 的丢包在几百个包里经常一个都碰不上。
 	fecLossSamples = 2000
 	fecBurst       = 3
+	// fecResync：组号和最新的组差这么多，就不是迟到的包（最多差 fecKeep 组），而是对方重启过或者断了很久。
+	fecResync = 1 << 10
 )
 
 // parityFor 由丢包率（百万分之几）决定每组加几个校验包。
@@ -85,6 +93,11 @@ func shard(pkt []byte, size int) []byte {
 // ---- 发送 ----
 
 // fecEncoder 是发往一个对端的 FEC 状态。
+// newFECEncoder 返回新的编码器，组号从随机值开始（见上文）。
+func newFECEncoder(parity int) *fecEncoder {
+	return &fecEncoder{parity: parity, gid: rand.Uint32()}
+}
+
 type fecEncoder struct {
 	mu      sync.Mutex
 	parity  int // 每组的校验包个数，由对方报告的丢包率决定，一开始是 1
@@ -288,6 +301,11 @@ func (d *fecDecoder) push(pkt []byte, now time.Time) (out [][]byte, waiting bool
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.overhead += int64(len(pkt))
+	if len(pkt) >= 5 && d.seen {
+		if diff := int32(binary.BigEndian.Uint32(pkt[1:]) - d.newest); diff >= fecResync || diff <= -fecResync {
+			out = d.resync(out)
+		}
+	}
 	switch pkt[0] {
 	case fecData:
 		s, payload, protected := d.data(pkt)
@@ -399,6 +417,30 @@ func (d *fecDecoder) advance() {
 	if d.next.idx >= size {
 		d.next = seq{d.next.gid + 1, 0}
 	}
+}
+
+// resync 清空记着的组，从下一个包重新开始（见上文）。扣着的包按顺序交出去：断了很久时它们是真的包；
+// 对方重启时它们属于旧的 WireGuard 会话，WireGuard 自己会丢掉。调用时持有 d.mu。
+func (d *fecDecoder) resync(out [][]byte) [][]byte {
+	held := make([]seq, 0, len(d.held))
+	for s := range d.held {
+		held = append(held, s)
+	}
+	slices.SortFunc(held, func(a, b seq) int {
+		if a.before(b) {
+			return -1
+		}
+		if b.before(a) {
+			return 1
+		}
+		return 0
+	})
+	for _, s := range held {
+		out = append(out, d.held[s])
+	}
+	d.groups, d.held = map[uint32]*fecGroupState{}, map[seq][]byte{}
+	d.heldAt, d.seen, d.ordered = time.Time{}, false, false
+	return out
 }
 
 func (d *fecDecoder) group(gid uint32, k int) *fecGroupState {

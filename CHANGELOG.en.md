@@ -8,6 +8,16 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.23.1
+
+### Fixes
+
+- Fixes an issue where, after a node restarted, other nodes could drop some of its packets and could no longer recover lost ones, so connections took several seconds to recover.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.23.1.
+
 ## v0.23.0
 
 ### New features

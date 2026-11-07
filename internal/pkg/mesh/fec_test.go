@@ -56,6 +56,38 @@ func TestFECRecover(t *testing.T) {
 	}
 }
 
+// TestFECPeerRestart：对方重启后编码器换了一个组号接着发（离原来的很远），接收方要从新的组号重新开始：
+// 新组照常按顺序交、丢的包照常算回来，不会因为组号比记着的旧，建好就当过期的删掉。
+func TestFECPeerRestart(t *testing.T) {
+	dec := newFECDecoder()
+	send := func(enc *fecEncoder, groups int) {
+		t.Helper()
+		for g := 0; g < groups; g++ {
+			pkts, frames := group(enc, fecGroup)
+			var got [][]byte
+			for i, f := range frames {
+				if i == 4 { // 每组丢一个数据包
+					continue
+				}
+				out, _ := dec.push(f, time.Now())
+				got = append(got, out...)
+			}
+			if len(got) != fecGroup {
+				t.Fatalf("组号 %d 起的第 %d 组：应该交出 %d 个包，实际 %d 个", enc.gid, g, fecGroup, len(got))
+			}
+			for i := range pkts {
+				if !bytes.Equal(got[i], pkts[i]) {
+					t.Fatalf("组号 %d 起的第 %d 组：第 %d 个包不对（顺序或内容）", enc.gid, g, i)
+				}
+			}
+		}
+	}
+	send(&fecEncoder{parity: 1, gid: 100000}, 5)
+	// 重启：组号比记着的小得多（以前从 0 开始）、或者大得多（现在从随机值开始）。
+	send(&fecEncoder{parity: 1, gid: 7}, 5)
+	send(&fecEncoder{parity: 1, gid: 1 << 30}, 5)
+}
+
 // TestFECOverhead：两端记下的 FEC 多出的字节数加上交给 WireGuard 的字节数，等于线上实际收发的字节数。
 func TestFECOverhead(t *testing.T) {
 	enc := &fecEncoder{parity: 2}

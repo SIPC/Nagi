@@ -8,6 +8,16 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.23.1
+
+### 修复
+
+- 修复了节点重启后，其他节点可能丢弃它发来的部分包、也无法再恢复丢失的包，连接要等几秒才恢复的问题。
+
+### 升级说明
+
+- 需将节点升级到 v0.23.1。
+
 ## v0.23.0
 
 ### 新功能

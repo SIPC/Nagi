@@ -630,7 +630,7 @@ func (b *Bind) setPeers(peers []Peer) {
 				learned: map[netip.AddrPort]time.Time{}, lastPing: map[netip.AddrPort]time.Time{},
 				pings: map[[txidLen]byte]pingInfo{},
 				// 一开始就加 1 个校验包，对方报告丢包很少时再关：等测出丢包再开，TCP 早就降速了。
-				enc: &fecEncoder{parity: 1}, dec: newFECDecoder(),
+				enc: newFECEncoder(1), dec: newFECDecoder(),
 			}
 			b.peers[pe.Key] = p
 		}
