@@ -24,7 +24,7 @@
 | [guide](guide/README.md) | 使用教程：安装、添加节点、备用面板、升级与卸载、更换面板。中英各一份，英文为 `<名字>.en.md` |
 | [assets/screenshots](assets/screenshots) | README 里的界面截图，在真实运行的面板上截取，数据是演示环境的。每张图有四个版本：`<名字>.png`（中文浅色）、`.dark.png`（深色）、`.en.png`、`.en.dark.png`，README 用 `<picture>` 按读者的主题切换 |
 | [assets/guide](assets/guide) | 使用教程里的界面截图，版本命名同上。对话框单独截出，背景透明，不做颜色量化，避免阴影出现色带 |
-| [assets/src](assets/src) | README 配图的源文件。英文配图（`<名字>.en.html`）由 `translate.mjs` 从中文版生成，译文写在该脚本里，不要直接修改。修改后依次执行 `node docs/assets/src/translate.mjs` 和 `node docs/assets/src/render.mjs` 重新生成（需本机安装 Edge 或 Chrome）；改了中文文字而没同步译文时，`translate.mjs` 会报错 |
+| [assets/src](assets/src) | README 配图的源文件。英文配图（`<名字>.en.html`）由 `translate.mjs` 从中文版生成，译文写在该脚本里，不要直接修改。修改后依次执行 `node docs/assets/src/translate.mjs` 和 `node docs/assets/src/render.mjs` 重新生成（需本机安装 Edge 或 Chrome）；改了中文文字而没同步译文时，`translate.mjs` 会报错。首图没有文字，中英文共用，浅色和深色两版（`hero.html`、`hero.dark.html`）共用 `hero.js` |
 
 ## 设计原则
 

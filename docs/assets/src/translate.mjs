@@ -8,11 +8,6 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 const t = {
-  // 中文标语的字间距按汉字设，英文用小一些的。
-  hero: [
-    ["风平浪静", "Calm waters"],
-    ["letter-spacing: 0.4em;", "letter-spacing: 0.08em;"],
-  ],
   architecture: [
     ["一个面板，管理多个节点", "One panel, many nodes"],
     ["每个节点主动连接面板，无需开放端口；节点之间通过 WireGuard 直接通信。", "Nodes connect out to the panel, so no inbound ports are needed; nodes talk to each other directly over WireGuard."],
