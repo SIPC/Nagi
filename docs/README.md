@@ -18,6 +18,7 @@
 | [failover.md](failover.md) | 高可用：面板故障、重新部署到其他节点、顶替节点、手动迁移 |
 | [monitoring.md](monitoring.md) | 监控与告警、全局概览的数据来源 |
 | [ui.md](ui.md) | 界面规范：间距、圆角、字号、组件、页面布局、文案 |
+| [writing.md](writing.md) | 文档写法：语气、教程结构、格式、英文 |
 | [decisions.md](decisions.md) | 技术决策汇总、待定问题 |
 | [development.md](development.md) | 开发规划：仓库结构、依赖库、各步完成标准 |
 | [guide](guide/README.md) | 使用教程：安装、添加节点、备用面板、升级与卸载、更换面板。中英各一份，英文为 `<名字>.en.md` |
