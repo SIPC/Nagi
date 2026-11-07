@@ -360,11 +360,13 @@ export function OAuthAuthorizePage() {
         )}
         {approve.error && <Alert>{errorMessage(approve.error)}</Alert>}
         <div className="grid grid-cols-2 gap-2">
+          {/* 转圈跟着被点的按钮：approve.variables 是这次提交的是允许还是拒绝。 */}
           <Button variant="outline" disabled={approve.isPending || leaving} onClick={() => approve.mutate(false)}>
+            {(approve.isPending || leaving) && approve.variables === false && <Spinner />}
             {k.deny}
           </Button>
           <Button type="submit" disabled={approve.isPending || leaving}>
-            {(approve.isPending || leaving) && <Spinner />}
+            {(approve.isPending || leaving) && approve.variables !== false && <Spinner />}
             {k.allow}
           </Button>
         </div>

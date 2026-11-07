@@ -12,6 +12,7 @@ import { Alert, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, 
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction } from "@/components/confirm";
 import { EnvEditor } from "@/components/env-editor";
+import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
@@ -55,6 +56,13 @@ function GeneralSettings({ project }: { project: Project }) {
   const numberError = (v: string) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? m.positiveInteger : "");
   const intervalError = checked ? numberError(interval) : "";
   const limitError = checked ? numberError(limit) : "";
+  // 和已保存的设置比较（不是和第一次渲染比）：保存后项目重新加载，就不再算未保存。
+  useUnsaved(
+    name !== project.name ||
+      network !== project.networkName ||
+      interval !== (s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "") ||
+      limit !== (s?.snapshotLimit ? String(s.snapshotLimit) : ""),
+  );
 
   const save = async () => {
     setChecked(true);
@@ -135,6 +143,8 @@ function SharedEnv({ project }: { project: Project }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { run, busy: running, output } = useRun(project.id);
+  // 和已保存的变量（有草稿时是草稿）比较，按变量比，不管空行和顺序以外的写法差异。
+  useUnsaved(envToText(textToEnv(sharedEnv)) !== envToText(project.hasSharedEnvDraft ? project.sharedEnvDraft : project.settings?.sharedEnv), !isViewer);
 
   const call = async (fn: () => Promise<unknown>) => {
     setBusy(true);

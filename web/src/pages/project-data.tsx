@@ -77,12 +77,13 @@ function useNodes() {
 type Nodes = ReturnType<typeof useNodes>;
 
 // useCall：表单和按钮共用的提交：转圈、错误、成功后刷新项目。返回是否成功。
+// useCall：区块里的操作。pending 记的是哪个操作在进行（call 的第二个参数），转圈只出现在被点的按钮上；busy 是有操作在进行。
 function useCall(projectId: string) {
   const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState("");
   const [error, setError] = useState("");
-  const call = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
+  const call = async (fn: () => Promise<unknown>, key = "call") => {
+    setPending(key);
     setError("");
     try {
       await fn();
@@ -92,10 +93,10 @@ function useCall(projectId: string) {
       setError(errorMessage(err));
       return false;
     } finally {
-      setBusy(false);
+      setPending("");
     }
   };
-  return { busy, error, call };
+  return { busy: pending !== "", pending, error, call };
 }
 
 // ContainerStorage：容器页的「存储」标签：卷和快照；地址带 volume 时就地换成这个卷的文件管理。
@@ -664,7 +665,7 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
 // BackupDetail：已设置备份节点：标签值列表，同步和取消在标题栏。
 function BackupDetail({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const b = t.projectData.backup;
-  const { busy, error, call } = useCall(project.id);
+  const { busy, pending, error, call } = useCall(project.id);
   const backup = container.backup;
   const sourceOnline = nodes.online(container.nodeId);
 
@@ -689,9 +690,9 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
             variant="outline"
             disabled={busy || !sourceOnline || backup?.syncing}
             title={sourceOnline ? undefined : b.sourceOffline(nodes.name(container.nodeId))}
-            onClick={() => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name }))}
+            onClick={() => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name }), "sync")}
           >
-            {busy && <Spinner />}
+            {pending === "sync" && <Spinner />}
             {b.syncNow}
           </Button>
           <Button
@@ -699,9 +700,10 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
             disabled={busy}
             onClick={async () =>
               (await confirmAction(b.removeConfirm(container.name), { action: b.remove, danger: true })) &&
-              call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: "", deleteReplica: true }))
+              call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: "", deleteReplica: true }), "remove")
             }
           >
+            {pending === "remove" && <Spinner />}
             {b.remove}
           </Button>
         </>

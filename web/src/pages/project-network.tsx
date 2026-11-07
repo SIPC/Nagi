@@ -13,6 +13,7 @@ import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
 import { toast } from "sonner";
+import { useUnsaved } from "@/components/unsaved";
 
 // 「网络」标签页：对外访问（端口映射与域名）、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
@@ -681,6 +682,9 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
   const valueOf = (name: string) => edits[name] ?? (saved[name] ?? []).join(" ");
   const others = othersEdit ?? savedOthers.join(" ");
   const showOthers = savedOthers.length > 0 || others !== "" || addresses.some((a) => a.placeholder);
+  // 改过的行和已保存的不同才算未保存；保存后 edits 清空。
+  const dirty = Object.keys(edits).some((name) => edits[name].trim() !== (saved[name] ?? []).join(" ")) || (othersEdit !== undefined && othersEdit.trim() !== savedOthers.join(" "));
+  useUnsaved(dirty, !readOnly);
 
   const save = async () => {
     setBusy(true);
@@ -746,7 +750,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
               className="min-h-14 py-2"
               title={<span className="min-w-0 wrap-anywhere">{a.name}</span>}
               sub={i === 0 && !a.placeholder ? m.portsRowSub(a.name) : undefined}
-              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}><Status>{nodeName(a.node)}</Status></span>, width: "w-32", phone: true }]}
+              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}>{nodeName(a.node)}</span>, width: "w-32", phone: true }]}
               actions={
                 a.placeholder ? null : (
                   <Input
