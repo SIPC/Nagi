@@ -7,7 +7,7 @@ export default {
   moreInfo: "More info…",
   lessInfo: "Show less",
   upToDate: "Up to date",
-  availableTitle: (version: string) => `${version} available`,
+  available: "Update available",
   primaryHint: "Standby panels are updated separately.",
   primaryHelp: "If their database version differs from this panel's, they pause syncing until both are on the same version.",
   standbyHint: "Only this standby panel is updated.",

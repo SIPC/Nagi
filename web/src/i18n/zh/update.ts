@@ -6,7 +6,7 @@ export default {
   moreInfo: "更多信息…",
   lessInfo: "收起",
   upToDate: "已是最新版本",
-  availableTitle: (version: string) => `可更新到 ${version}`,
+  available: "有可用更新",
   primaryHint: "备用面板需单独更新。",
   primaryHelp: "两边的数据库版本不同时，备用面板会暂停同步，直到更新到同一版本。",
   standbyHint: "仅更新本备用面板。",

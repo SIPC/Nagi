@@ -367,14 +367,14 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
   } else if (panel && failed) {
     [tone, state] = ["danger", t.update.tips.panelFailed(panel.target)];
   } else if (d?.available) {
-    [tone, state] = ["info", t.update.availableTitle(d.latest)];
+    [tone, state] = ["info", t.update.available];
   } else if (d && !d.unsupported) {
     [tone, state] = ["success", t.update.upToDate];
   }
   const checkedAt = d?.checkedAt && timestampDate(d.checkedAt);
   const showChecked = !!checkedAt && !!d && !d.available && !d.unsupported && !active && !failed;
 
-  // 右边的按钮：可更新时是更新（失败后是重试），其余是检查更新。更新进行中、不能一键更新时没有按钮。
+  // 按钮：可更新时是更新（失败后是重试），其余是检查更新。更新进行中、不能一键更新时没有按钮。
   let action: React.ReactNode = null;
   if (canUpdate) {
     action = (
@@ -392,16 +392,17 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
     );
   }
 
-  // 版本信息下面：进行中的进度、失败原因、可更新时的更新说明，和名称左对齐。
+  // 版本下面：进行中的进度、失败原因。
   let below: React.ReactNode = null;
   if (panel && active) {
     below = <p className="text-pretty text-muted-foreground">{panel.phase === "restarting" ? t.update.restartingText : t.update.installingText}</p>;
   } else if (panel && failed && panel.error) {
     below = <p className="text-pretty text-muted-foreground">{panel.error}</p>;
   }
-  // 收起时是最新版本的前三条；展开是本面板到最新版本之间的全部，按版本分段，新的在前。高度过渡，下面的内容跟着移动。
-  const notesBlock = canUpdate && latest && preview && preview.items.length > 0 && (
-    <div ref={notesRef} className="grid scroll-mt-20 gap-2 text-muted-foreground">
+  // 更新说明：收起时是最新版本的前三条；展开是本面板到最新版本之间的全部，按版本分段，新的在前。高度过渡，下面的按钮跟着移动。
+  const hasNotes = canUpdate && !!latest && !!preview && preview.items.length > 0;
+  const notesBlock = hasNotes && (
+    <div ref={notesRef} className="scroll-mt-20 text-muted-foreground">
       <AutoHeight>
         {expanded ? (
           <div className="grid gap-5">
@@ -423,51 +424,55 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
       </AutoHeight>
-      <button type="button" aria-expanded={expanded} className="justify-self-start rounded-sm text-foreground outline-none hover:underline focus-ring" onClick={toggleNotes}>
-        {expanded ? t.update.lessInfo : t.update.moreInfo}
-      </button>
     </div>
   );
 
-  // 间距按 HIG 的 8 点网格：logo 到名称 12，名称到介绍 4，介绍到版本 12，版本到下面的说明 16。
+  // 间距按 HIG 的 8 点网格：logo 到名称 12，名称、介绍、版本之间 4，版本到下面的内容、内容到按钮都是 16。
+  // 按钮放在最下面（参考 iOS 的软件更新：看完说明再操作），靠左，「更多信息」跟在它右边。
   return (
     <div className="grid">
       <Waves className="h-5 w-9 text-wave" />
       {/* 品牌是第一个区块：标题和区块标题同级（16 / 600），不和页面标题抢层级。 */}
       <h2 className="mt-3 text-base font-semibold">Nagi</h2>
       <p className="mt-1 text-pretty text-muted-foreground">{t.about.tagline}</p>
-      {/* 按钮和版本同一行，上下居中；按钮（32）上下各收进 6，不撑高这一行（20），文字间距才是 12 和 16。 */}
-      <div className="mt-3 flex min-h-5 items-center gap-4">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-          {q.isPending ? (
-            <Skeleton className="h-3 w-40" />
-          ) : (
-            <>
-              {/* 状态点放在版本号前面，进行中换成转圈；版本号用等宽字体。 */}
-              <span className="inline-flex items-center gap-2">
-                {panel && active ? <Spinner /> : tone && <span className={cn("size-1.5 rounded-full", dotColor[tone])} />}
-                <span className="font-mono text-foreground">{d?.current || status.data?.version || "—"}</span>
+      <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+        {q.isPending ? (
+          <Skeleton className="h-3 w-40" />
+        ) : (
+          <>
+            {/* 状态点放在版本号前面，进行中换成转圈；版本号用等宽字体。 */}
+            <span className="inline-flex items-center gap-2">
+              {panel && active ? <Spinner /> : tone && <span className={cn("size-1.5 rounded-full", dotColor[tone])} />}
+              <span className="font-mono text-foreground">{d?.current || status.data?.version || "—"}</span>
+            </span>
+            {d?.unsupported && <span>{d.unsupported}</span>}
+            {!d && q.error && <span>{errorMessage(q.error)}</span>}
+            {state && <span>{state}</span>}
+            {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
+            {canUpdate && scopeHint && (
+              <span className="inline-flex items-center gap-1">
+                {scopeHint.text}
+                <HelpTip>{scopeHint.help}</HelpTip>
               </span>
-              {d?.unsupported && <span>{d.unsupported}</span>}
-              {!d && q.error && <span>{errorMessage(q.error)}</span>}
-              {state && <span>{state}</span>}
-              {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
-              {canUpdate && scopeHint && (
-                <span className="inline-flex items-center gap-1">
-                  {scopeHint.text}
-                  <HelpTip>{scopeHint.help}</HelpTip>
-                </span>
-              )}
-            </>
-          )}
-        </div>
-        {action && <div className="-my-1.5 shrink-0">{action}</div>}
+            )}
+          </>
+        )}
       </div>
       {(error || below || notesBlock) && (
         <div className="mt-4 grid gap-3">
           {error && <Alert>{error}</Alert>}
           {below}
           {notesBlock}
+        </div>
+      )}
+      {action && (
+        <div className="mt-4 flex items-center gap-4">
+          {action}
+          {hasNotes && (
+            <button type="button" aria-expanded={expanded} className="rounded-sm text-foreground outline-none hover:underline focus-ring" onClick={toggleNotes}>
+              {expanded ? t.update.lessInfo : t.update.moreInfo}
+            </button>
+          )}
         </div>
       )}
     </div>
