@@ -22,3 +22,5 @@ Thumbs.db
 
 # Local tooling
 /.claude/
+/.agents/
+/skills-lock.json
