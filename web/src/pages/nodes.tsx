@@ -551,39 +551,42 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       {!n.pending && (
         <>
           <Tabs value={tab} onChange={onTab} items={tabs} className={cn("mb-6", browsing && "max-md:hidden")} />
-          {/* 这一层不能省：区块靠 first: 去掉第一个的分隔线。 */}
-          <Slide id={tab} index={tabs.findIndex((x) => x.value === tab)}>
-            {tab === "containers" ? (
-              <NodeContainers nodeId={n.id} online={n.online} />
-            ) : (tab === "terminal" || tab === "files") && !showAccess ? (
-              <Notice title={t.nodeAccess.gate.adminOnly} />
-            ) : !n.online ? (
-              <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
-            ) : tab === "terminal" || tab === "files" ? (
-              accessBlock ?? (tab === "files" ? <NodeFiles node={n} path={path || "/"} onPath={onFilePath} onTerminal={onOpenTerminal} onExit={() => onTab("metrics")} /> : null)
-            ) : tab === "metrics" ? (
-              <NodeResources n={n} />
-            ) : tab === "mesh" ? (
-              <NodeMesh nodeId={n.id} />
-            ) : tab === "replicas" ? (
-              <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
-            ) : tab === "settings" ? (
-              <>
-                <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
-                <NodeMirrors nodeId={n.id} />
-                <NodeQUIC nodeId={n.id} online={n.online} />
-                <NodeReclaim nodeId={n.id} online={n.online} />
-              </>
-            ) : (
-              <NodePanels nodeId={n.id} />
+          {/* 终端和标签内容叠在同一格：切到终端时标签内容的高度从旧值过渡到 0，终端放在下面会被它从下往上推。 */}
+          <div className="grid grid-cols-[minmax(0,1fr)] *:col-start-1 *:row-start-1">
+            {/* 这一层不能省：区块靠 first: 去掉第一个的分隔线。 */}
+            <Slide id={tab} index={tabs.findIndex((x) => x.value === tab)}>
+              {tab === "containers" ? (
+                <NodeContainers nodeId={n.id} online={n.online} />
+              ) : (tab === "terminal" || tab === "files") && !showAccess ? (
+                <Notice title={t.nodeAccess.gate.adminOnly} />
+              ) : !n.online ? (
+                <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
+              ) : tab === "terminal" || tab === "files" ? (
+                accessBlock ?? (tab === "files" ? <NodeFiles node={n} path={path || "/"} onPath={onFilePath} onTerminal={onOpenTerminal} onExit={() => onTab("metrics")} /> : null)
+              ) : tab === "metrics" ? (
+                <NodeResources n={n} />
+              ) : tab === "mesh" ? (
+                <NodeMesh nodeId={n.id} />
+              ) : tab === "replicas" ? (
+                <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
+              ) : tab === "settings" ? (
+                <>
+                  <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
+                  <NodeMirrors nodeId={n.id} />
+                  <NodeQUIC nodeId={n.id} online={n.online} />
+                  <NodeReclaim nodeId={n.id} online={n.online} />
+                </>
+              ) : (
+                <NodePanels nodeId={n.id} />
+              )}
+            </Slide>
+            {/* 终端不卸载：卸载就断开了。所以放在带 key 的那层外面，进出时和其他标签一样横移。 */}
+            {showAccess && n.online && !accessBlock && shellOpened && (
+              <SlideKeep active={tab === "terminal"} index={tabs.findIndex((x) => x.value === "terminal")} current={tabs.findIndex((x) => x.value === tab)}>
+                <NodeTerminal node={n} cwd={path} />
+              </SlideKeep>
             )}
-          </Slide>
-          {/* 终端不卸载：卸载就断开了。所以放在带 key 的那层外面，进出时和其他标签一样横移。 */}
-          {showAccess && n.online && !accessBlock && shellOpened && (
-            <SlideKeep active={tab === "terminal"} index={tabs.findIndex((x) => x.value === "terminal")} current={tabs.findIndex((x) => x.value === tab)}>
-              <NodeTerminal node={n} cwd={path} />
-            </SlideKeep>
-          )}
+          </div>
         </>
       )}
     </>
