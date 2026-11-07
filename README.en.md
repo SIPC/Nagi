@@ -15,6 +15,11 @@
 
 Nagi is an open-source, self-hosted container deployment platform: one web panel to manage Docker containers across many Linux servers. It is built on Docker and Docker Compose, supports multiple nodes and high availability, and aims to be simple, good-looking and easy to deploy. It is ready for production out of the box.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.en.dark.png">
+  <img src="docs/assets/screenshots/overview.en.png" alt="Overview: node status and live traffic">
+</picture>
+
 The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
 
 ## How it works
@@ -33,6 +38,29 @@ The panel UI is available in English and Chinese. The [design docs](docs/README.
 | Node | A Linux server running the Nagi node program. Containers run on nodes |
 | Project | A group of containers that work together, such as a frontend, a backend and a database. Projects live on the panel, and their containers can be spread across nodes. Projects are isolated from each other by default |
 | Container | The unit deployed on its own within a project: a single container, or a container group defined by one compose file. Each is deployed, rolled back, snapshotted and migrated on its own |
+
+## Interface
+
+**Projects**: a group of containers that work together, spread across nodes, deployed and monitored in one place.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/project.en.dark.png">
+  <img src="docs/assets/screenshots/project.en.png" alt="Project page: containers and monitoring">
+</picture>
+
+**Containers**: every container has its own page with its status, resource usage, versions and recent events.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/container.en.dark.png">
+  <img src="docs/assets/screenshots/container.en.png" alt="Container page: image, node, version and resource usage">
+</picture>
+
+**Nodes**: CPU, memory and disk usage of every server.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/nodes.en.dark.png">
+  <img src="docs/assets/screenshots/nodes.en.png" alt="Nodes page: resource usage of each node">
+</picture>
 
 ## Features
 

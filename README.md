@@ -15,6 +15,11 @@
 
 Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，管理分布在多台 Linux 服务器上的 Docker 容器。它基于 Docker 和 Docker Compose，支持多节点与高可用，追求简单、美观、易于部署，可直接用于生产环境。
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.dark.png">
+  <img src="docs/assets/screenshots/overview.png" alt="概览：节点状态和实时流量">
+</picture>
+
 ## 工作方式
 
 - **基于 Docker Compose**：每个应用都是一份标准的 compose 文件，加上环境变量和密钥；用镜像表单创建的单个容器也会自动生成 compose。部署、版本、回滚都以 compose 为单位，Nagi 不改写你的 compose 文件。
@@ -31,6 +36,29 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
 | 节点 | 一台运行 Nagi 节点程序的 Linux 服务器，容器运行在节点上 |
 | 项目 | 一组一起工作的容器，例如前端、后端和数据库。项目存在面板上，里面的容器可以分布在不同节点上；项目之间默认隔离 |
 | 容器 | 项目里独立部署的单位：单个容器，或一份 compose 定义的容器组。各自部署、回滚、快照和迁移 |
+
+## 界面
+
+**项目**：一组一起工作的容器，可以分布在不同节点上，统一部署和监控。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/project.dark.png">
+  <img src="docs/assets/screenshots/project.png" alt="项目页：容器列表和监控">
+</picture>
+
+**容器**：每个容器单独一页，查看状态、资源用量、版本和最近事件。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/container.dark.png">
+  <img src="docs/assets/screenshots/container.png" alt="容器页：镜像、节点、版本和资源用量">
+</picture>
+
+**节点**：每台服务器的 CPU、内存和磁盘用量。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/nodes.dark.png">
+  <img src="docs/assets/screenshots/nodes.png" alt="节点页：各节点的资源用量">
+</picture>
 
 ## 特性
 
