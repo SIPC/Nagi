@@ -227,7 +227,7 @@ export function TerminalView({ projectId, container, services }: { projectId: st
   const [service, setService] = useState("");
   const selected = service || services[0] || "";
   const picker = services.length > 1 && (
-    <Select value={selected} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={t.projectContainers.logs.allContainers}>
+    <Select value={selected} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={t.projectContainers.logs.service}>
       {services.map((s) => (
         <option key={s} value={s}>
           {s}

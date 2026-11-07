@@ -5,14 +5,8 @@ export default {
     network: "网络",
     settings: "设置",
   },
-  tabs: {
-    containers: "容器",
-    network: "网络",
-    settings: "设置",
-  },
   breadcrumb: "项目",
   back: "返回项目",
-  stateful: "有状态",
   nodes: (names: string[]) => `节点 ${names.join("、")}`,
   noContainers: "暂无容器",
   rebuiltHint: "面板丢失或更换后根据节点缓存重建的项目，原创建时间、历史版本和部署记录已丢失。",
@@ -26,8 +20,8 @@ export default {
     allProjects: "全部项目",
     project: "项目",
     containers: "容器",
-    nodeOffline: "节点离线",
     draft: "草稿",
-    stateOnNode: (state: string) => `${state}，节点`,
+    // 读屏软件在容器名后面读出的状态和节点。
+    stateOnNode: (state: string, node: string) => `（${state}，节点 ${node}）`,
   },
 };

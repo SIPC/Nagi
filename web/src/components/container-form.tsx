@@ -41,7 +41,8 @@ function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: {
 // prefix 加在输入框的 id 前面：同一个页面上可能同时有"添加容器"和"修改容器"两个表单。
 // top：镜像下面的一行（名称和节点）；moreTop：更多设置开头的字段（容器目录、依赖）。常用的字段直接显示，其余收进更多设置。
 // parts：配置页把字段分进几个区块，单独取用；添加容器用排好的 fields。
-export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, moreTop?: ReactNode) {
+// hasDeps：更多设置里有没有「依赖」（项目里第一个容器没有），折叠时的标签按它列出字段。
+export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, moreTop?: ReactNode, hasDeps = false) {
   const editing = !!initial;
   const [image, setImage] = useState(initial?.image ?? "");
   const [command, setCommand] = useState(initial?.command ?? "");
@@ -65,7 +66,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
   );
   const commandField = (
     <Field label={t.containerForm.command} htmlFor={prefix + "command"}>
-      <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={editing ? t.containerForm.commandHintEdit : t.containerForm.commandHint} className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
+      <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t.containerForm.commandHint} className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const workdirField = (
@@ -110,7 +111,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
       {top}
       <FormRow className="gap-y-6 max-md:gap-y-4">
         {!editing && (
-          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} help={`${t.containerForm.portsHint}${t.common.sentenceEnd}${t.containerForm.portsHelp}`}>
+          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} hint={t.containerForm.portsHint} help={t.containerForm.portsHelp}>
             <Input
               id={prefix + "ports"}
               value={ports}
@@ -130,7 +131,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
       <Field label={t.containerForm.env} htmlFor={prefix + "env"} error={checkEnv(env)}>
         <EnvEditor id={prefix + "env"} value={env} onChange={setEnv} />
       </Field>
-      <MoreSettings label={t.containerForm.moreImage} labelOpen={t.containerForm.more} labelPhone={t.containerForm.more} defaultOpen={hasMore}>
+      <MoreSettings label={t.containerForm.moreImage(hasDeps)} labelOpen={t.containerForm.more} labelPhone={t.containerForm.more} defaultOpen={hasMore}>
         <FormRow className="gap-y-6 max-md:gap-y-4">
           {commandField}
           {workdirField}
@@ -186,6 +187,7 @@ export function useContainerForm(
       {moreTop}
       {deps}
     </>,
+    !first,
   );
 
   const build = (): ContainerConfigInit => {
@@ -212,10 +214,10 @@ export function useContainerForm(
       {mode === "compose" ? (
         <>
           {top?.("compose")}
-          <Field label="compose" htmlFor="compose" help={t.containerForm.composeHelp}>
+          <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp}>
             <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} required />
           </Field>
-          <MoreSettings label={t.containerForm.moreCompose} labelOpen={t.containerForm.more}>
+          <MoreSettings label={t.containerForm.moreCompose(!first)} labelOpen={t.containerForm.more}>
             <FormRow className="gap-y-6 max-md:gap-y-4">
               {moreTop}
               {deps}

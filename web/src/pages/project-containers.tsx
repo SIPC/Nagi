@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowUpCircle, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
-import { cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
+import { capitalize, cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
@@ -72,13 +72,12 @@ export function useProjectActions(project: Project, imageUpdates: ImageUpdate[])
   const { isViewer } = useRole();
   const { run, busy, output, hasOutput } = useRun(project.id);
   const pc = t.projectContainers;
-  const sep = pc.listSeparator;
   const updateNames = [...new Set(imageUpdates.map((u) => u.container))];
   const changed = project.containers.filter((m) => m.hasDraft || m.sharedEnvOutdated || m.deployedVersion === 0n);
 
   const updateImages = async () => {
     const label = pc.imageUpdates.action(updateNames.length);
-    if (!(await confirmAction(pc.imageUpdates.confirm(updateNames.join(sep)), { action: label }))) return;
+    if (!(await confirmAction(pc.imageUpdates.confirm(t.common.list(updateNames)), { action: label }))) return;
     run(() =>
       projectClient.deploy({
         projectId: project.id,
@@ -89,7 +88,7 @@ export function useProjectActions(project: Project, imageUpdates: ImageUpdate[])
   };
   const deploy = async (containers: Container[]) => {
     const running = containers.filter((m) => m.deployedVersion > 0n).map((m) => m.name);
-    if (running.length > 0 && !(await confirmAction(pc.table.deployConfirm(running.join(sep)), { action: pc.detail.deploy }))) return;
+    if (running.length > 0 && !(await confirmAction(pc.table.deployConfirm(containers.length, t.common.list(running)), { action: pc.detail.deploy }))) return;
     run(() =>
       projectClient.deploy({
         projectId: project.id,
@@ -102,14 +101,14 @@ export function useProjectActions(project: Project, imageUpdates: ImageUpdate[])
     project.containers.length === 0 ? undefined : (
       <>
         {updateNames.length > 0 && !isViewer && (
-          <Button variant="outline" disabled={busy} onClick={updateImages} title={pc.imageUpdates.hover([...new Set(imageUpdates.map((u) => u.image))].join(sep))}>
+          <Button variant="outline" disabled={busy} onClick={updateImages} title={pc.imageUpdates.hover(t.common.list([...new Set(imageUpdates.map((u) => u.image))]))}>
             {busy ? <Spinner /> : <ArrowUpCircle className="size-3.5! text-info" />}
             {pc.imageUpdates.action(updateNames.length)}
           </Button>
         )}
         {/* 有变更时主按钮只部署有变更的容器，部署全部收进 ⋯。 */}
         {changed.length > 0 ? (
-          <Button disabled={busy} onClick={() => deploy(changed)} title={pc.table.changedTitle(changed.map((m) => m.name).join(sep))}>
+          <Button disabled={busy} onClick={() => deploy(changed)} title={pc.table.changedTitle(t.common.list(changed.map((m) => m.name)))}>
             {busy && <Spinner />}
             {pc.table.deployChanged(changed.length)}
           </Button>
@@ -241,7 +240,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
           const address = m.kind !== "group" ? m.name : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ");
           const notes: React.ReactNode[] = [
             !offline && (node?.name ?? m.nodeId),
-            offline ? <span className="text-warning-text">{pc.nodeOffline}</span> : stateOf(svc, m.deployedVersion > 0n).label,
+            offline ? <span className="text-warning-text">{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
             offline && t.common.status.unknown,
             !offline && version,
             m.kind === "group" && pc.kind.group,
@@ -255,10 +254,13 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
             <Row
               key={m.name}
               className="relative"
+              // 只有一个容器时没有批量部署，不显示勾选框。
               icon={
-                <span className="relative z-10 flex">
-                  <Checkbox aria-label={pc.table.select(m.name)} checked={!!checked[m.name]} onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })} />
-                </span>
+                project.containers.length > 1 && (
+                  <span className="relative z-10 flex">
+                    <Checkbox aria-label={pc.table.select(m.name)} checked={!!checked[m.name]} onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })} />
+                  </span>
+                )
               }
               title={
                 // 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；after 让整行可点。
@@ -316,7 +318,16 @@ export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAut
     return (
       <>
         <Breadcrumb items={crumbs} className="max-md:hidden xl:hidden" />
-        <Alert>{t.projectContainers.page.notFound(name)}</Alert>
+        <Notice
+          tone="warning"
+          actions={
+            <ButtonLink to="/projects/$projectId" params={{ projectId: p.id }} variant="outline" readOnlyOk>
+              {t.projectContainers.page.backToProject}
+            </ButtonLink>
+          }
+        >
+          {t.projectContainers.page.notFound(name)}
+        </Notice>
       </>
     );
   }
@@ -350,24 +361,33 @@ function ContainerSkeleton() {
 // imageTipKey：关掉提示后按「容器 + 镜像」记在浏览器里，同一版本不再自动弹。
 const imageTipKey = (project: string, container: string, images: string) => `nagi:image-tip:${project}/${container}:${images}`;
 
-// ImageTip：进入可更新的容器时右下角的提示。不自动消失，不抢焦点（规则见 docs/ui.md「镜像更新提示」）。
-function ImageTip({ storageKey, images, disabled, onUpdate }: { storageKey: string; images: string; disabled: boolean; onUpdate: () => void }) {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(storageKey) === "1";
-    } catch {
-      return false;
-    }
-  });
-  if (hidden) return null;
+function tipClosed(key: string) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+// useImageTip：提示是否显示。关掉后记在浏览器里；点标题旁的「可更新」重新打开。
+function useImageTip(key: string) {
+  const [state, setState] = useState<Record<string, boolean>>({});
+  const open = state[key] ?? !tipClosed(key);
   const close = () => {
-    setHidden(true);
+    setState((s) => ({ ...s, [key]: false }));
     try {
-      localStorage.setItem(storageKey, "1");
+      localStorage.setItem(key, "1");
     } catch {
       // 浏览器不让存时，这次关掉就行。
     }
   };
+  return { open, close, reopen: () => setState((s) => ({ ...s, [key]: true })) };
+}
+
+// ImageTip：进入可更新的容器时右下角的提示。不自动消失，不抢焦点（规则见 docs/ui.md「镜像更新提示」）。
+// 点「更新容器」后先确认，确认了才关掉；取消时提示保留。
+function ImageTip({ images, disabled, onClose, onUpdate }: { images: string; disabled: boolean; onClose: () => void; onUpdate: () => void }) {
+  const close = onClose;
   const tip = t.projectContainers.imageTip;
   return (
     <aside role="status" aria-label={tip.label} className="fixed right-6 bottom-6 z-20 grid w-[340px] max-w-[calc(100vw-32px)] gap-3 rounded-lg bg-popover p-4 shadow-popover max-md:right-4 max-md:bottom-4 max-md:left-4 max-md:w-auto">
@@ -384,13 +404,7 @@ function ImageTip({ storageKey, images, disabled, onUpdate }: { storageKey: stri
         <Button variant="ghost" onClick={close}>
           {tip.later}
         </Button>
-        <Button
-          disabled={disabled}
-          onClick={() => {
-            close();
-            onUpdate();
-          }}
-        >
+        <Button disabled={disabled} onClick={onUpdate}>
           {tip.update}
         </Button>
       </div>
@@ -422,7 +436,10 @@ function ContainerDetail({
   const { isViewer } = useRole();
   const readOnly = useContext(ReadOnlyContext);
   const hasImageUpdate = imageUpdates.length > 0;
-  const updateImages = [...new Set(imageUpdates.map((u) => shortImage(u.image)))].join(t.projectContainers.listSeparator);
+  const updateImages = t.common.list([...new Set(imageUpdates.map((u) => shortImage(u.image)))]);
+  const tip = useImageTip(imageTipKey(project.id, container.name, updateImages));
+  // 正在做的事：部署类（部署、上传、拉取、更新镜像）、回滚，或启停重启。按钮上的文字和转圈按它显示。
+  const [doing, setDoing] = useState<"deploy" | "rollback" | "control">("deploy");
   // 只读角色没有配置和终端，直接打开这些地址时显示概览。
   const view = isViewer && (viewProp === "config" || viewProp === "terminal") ? "overview" : viewProp;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -443,13 +460,15 @@ function ContainerDetail({
   };
   const deploy = (opts: { pull?: boolean; useUpload?: boolean; pullImages?: boolean }, keep = false) => {
     showOutput();
+    setDoing("deploy");
     return run(() => projectClient.deploy({ projectId: project.id, targets: target, ...opts }), keep);
   };
 
-  // 已部署的容器重新部署会重建容器、中断服务并生成新版本，先确认。
+  // 已部署的容器重新部署会重建容器、中断服务并生成新版本，先确认。返回是否开始了。
   const confirmDeploy = async (message: string, action: string, opts: { pull?: boolean; pullImages?: boolean }) => {
-    if (container.deployedVersion > 0n && !(await confirmAction(message, { action }))) return;
+    if (container.deployedVersion > 0n && !(await confirmAction(message, { action }))) return false;
     deploy(opts);
+    return true;
   };
   // 添加容器时选了「添加并部署」：进入容器页后开始部署，输出显示在概览里。
   useEffect(() => {
@@ -467,6 +486,7 @@ function ContainerDetail({
   const deployed = container.deployedVersion > 0n;
   const control = (action: ContainerAction) => {
     showOutput();
+    setDoing("control");
     return run(() => projectClient.controlContainer({ projectId: project.id, container: container.name, action }));
   };
 
@@ -475,10 +495,19 @@ function ContainerDetail({
     onView("overview");
     setLines([t.projectContainers.detail.uploading(file.name, (file.size / 1048576).toFixed(1))]);
     const q = new URLSearchParams({ project: project.id, container: container.name });
-    const res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: file });
-    const body = await res.json();
+    const fail = (msg: string) => setLines((l) => [...l, t.projectContainers.detail.uploadFailed(msg)]);
+    let res: Response;
+    try {
+      res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: file });
+    } catch {
+      fail(t.common.errors.unreachable);
+      return;
+    }
+    // 反向代理拒绝时（例如文件太大返回 413）不是 JSON。
+    const httpError = t.common.errors.http(String(res.status));
+    const body: { message?: string; files: number; stripped: string } = await res.json().catch(() => ({ message: httpError, files: 0, stripped: "" }));
     if (!res.ok) {
-      setLines((l) => [...l, t.projectContainers.detail.uploadFailed(body.message)]);
+      fail(body.message || httpError);
       return;
     }
     setLines((l) => [...l, t.projectContainers.detail.uploaded(body.files, body.stripped)]);
@@ -498,7 +527,8 @@ function ContainerDetail({
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       return true;
     } catch (err) {
-      setLines([t.projectContainers.detail.deleteFailed(errorMessage(err))]);
+      // 删除在页头菜单里，任何标签都能点；存储和高可用标签不显示输出，错误用 Toast 显示。
+      toast.error(errorMessage(err));
       return false;
     }
   };
@@ -514,12 +544,16 @@ function ContainerDetail({
   // 现有目录的容器文件在节点上的那个目录里，不经面板上传。
   const uploadDeployable = !cfg?.projectDir && (!cfg?.form || !!cfg.form.workdir);
   const pullDeploy = () => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true });
+  const updateFromTip = async () => {
+    if (await updateImage()) tip.close();
+  };
+  const deployBusy = busy && doing !== "control";
 
   return (
     <>
-      {hasImageUpdate && !isViewer && !readOnly && (
+      {hasImageUpdate && !isViewer && !readOnly && tip.open && (
         <div className={cn(browsing && "max-md:hidden")}>
-          <ImageTip key={updateImages} storageKey={imageTipKey(project.id, container.name, updateImages)} images={updateImages} disabled={busy || !nodeOnline} onUpdate={updateImage} />
+          <ImageTip images={updateImages} disabled={busy || !nodeOnline} onClose={tip.close} onUpdate={updateFromTip} />
         </div>
       )}
       <PageHeader
@@ -530,14 +564,15 @@ function ContainerDetail({
             {containerLabel(container)}
             {container.displayName && <span className="font-mono text-sm font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
-            {offlineNodeNames([container], knownNodes(nodes.data)).length > 0 ? <Status tone="warning">{t.common.status.unknown}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
+            {node && !nodeOnline ? <Status tone="warning">{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {hasImageUpdate &&
               (isViewer || readOnly ? (
                 <Badge tone="info">{d.updatable}</Badge>
               ) : (
-                <button type="button" disabled={busy || !nodeOnline} onClick={updateImage} className="inline-flex shrink-0 cursor-pointer items-center rounded-[999px] border border-transparent bg-[color-mix(in_srgb,var(--info)_10%,transparent)] px-2 py-px text-xs leading-4 font-normal tracking-normal whitespace-nowrap text-info outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50">
+                // 弹窗关掉以后，点这里重新打开。
+                <button type="button" onClick={tip.reopen} className="inline-flex shrink-0 cursor-pointer items-center rounded-[999px] border border-transparent bg-[color-mix(in_srgb,var(--info)_10%,transparent)] px-2 py-px text-xs leading-4 font-normal tracking-normal whitespace-nowrap text-info outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50">
                   {d.updatable}
                 </button>
               ))}
@@ -558,12 +593,12 @@ function ContainerDetail({
             />
             {/* 手机上这一行只放重启、重新部署和更多，其余进更多。 */}
             {!mobile && uploadDeployable && (
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy || !nodeOnline}>
                 {t.projectContainers.detail.uploadDeploy}
               </Button>
             )}
             {!mobile && cfg?.source?.gitUrl && (
-              <Button variant="outline" size="sm" onClick={pullDeploy} disabled={busy}>
+              <Button variant="outline" size="sm" onClick={pullDeploy} disabled={busy || !nodeOnline}>
                 {t.projectContainers.detail.pullDeploy}
               </Button>
             )}
@@ -574,17 +609,19 @@ function ContainerDetail({
                 disabled={busy || !nodeOnline}
                 onClick={async () => (await confirmAction(d.restartConfirm(isGroup, container.name), { action: d.restart })) && control(ContainerAction.RESTART)}
               >
+                {busy && doing === "control" && <Spinner />}
                 {d.restart}
               </Button>
             ) : (
               <Button variant="outline" size="sm" disabled={busy || !nodeOnline} onClick={() => control(ContainerAction.START)}>
+                {busy && doing === "control" && <Spinner />}
                 {d.start}
               </Button>
             ))}
             <Button
               size="sm"
               // 只有要部署新内容（草稿、第一次部署）或正在部署时是主按钮。
-              variant={container.hasDraft || !deployed || busy ? "default" : "outline"}
+              variant={container.hasDraft || !deployed || deployBusy ? "default" : "outline"}
               onClick={() =>
                 container.hasDraft
                   ? confirmDeploy(d.deployDraftConfirm(container.name), d.deployDraft, {})
@@ -592,9 +629,11 @@ function ContainerDetail({
               }
               disabled={busy || !nodeOnline}
             >
-              {busy && <Spinner />}
-              {busy
-                ? t.projectContainers.detail.deploying
+              {deployBusy && <Spinner />}
+              {deployBusy
+                ? doing === "rollback"
+                  ? d.rollingBack
+                  : d.deploying
                 : container.hasDraft
                   ? t.projectContainers.detail.deployDraft
                   : container.deployedVersion > 0n
@@ -604,8 +643,8 @@ function ContainerDetail({
             <Menu
               title={container.name}
               items={[
-                ...(mobile && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy }] : []),
-                ...(mobile && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy }] : []),
+                ...(mobile && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy || !nodeOnline }] : []),
+                ...(mobile && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy || !nodeOnline }] : []),
                 { label: t.projectContainers.rename.action, onSelect: () => setRenaming(true) },
                 { label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline },
                 // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
@@ -635,7 +674,7 @@ function ContainerDetail({
           </>
         }
       />
-      <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.projectContainers.rename.title} description={t.projectContainers.rename.description}>
+      <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.projectContainers.rename.title(isGroup)} description={t.projectContainers.rename.description}>
         <RenameContainer project={project} container={container} onDone={() => setRenaming(false)} />
       </Dialog>
       <Tabs
@@ -662,9 +701,22 @@ function ContainerDetail({
             container={container}
             services={serviceNames}
             deploying={busy}
-            onDeploy={(baseRevision) => run(() => projectClient.deploy({ projectId: project.id, targets: [{ container: container.name, baseRevision }] }))}
+            onDeploy={(baseRevision) => {
+              setDoing("deploy");
+              run(() => projectClient.deploy({ projectId: project.id, targets: [{ container: container.name, baseRevision }] }));
+            }}
           />}
-        {view === "versions" && <Versions project={project} container={container} onRun={() => !busy && setLines([])} />}
+        {view === "versions" && (
+          <Versions
+            container={container}
+            projectId={project.id}
+            busy={busy}
+            onRollback={(version, restoreData) => {
+              setDoing("rollback");
+              run(() => projectClient.rollback({ projectId: project.id, container: container.name, version, restoreData }));
+            }}
+          />
+        )}
         {view === "logs" && (
           <Logs
             projectId={project.id}
@@ -741,7 +793,8 @@ function uptime(services: ServiceStatus[]) {
   if (/^about a minute/i.test(text)) return up.minute(1);
   if (/^less than a second/i.test(text)) return up.second(1);
   const n = /^(\d+)\s+(second|minute|hour|day|week|month|year)s?/i.exec(text);
-  if (!n) return text;
+  // 认不出的格式不直接显示 Docker 的英文原文。
+  if (!n) return "—";
   return up[n[2].toLowerCase() as keyof typeof up](Number(n[1]));
 }
 
@@ -775,7 +828,7 @@ function Overview({ project, container, services }: { project: Project; containe
   const offline = !!node && !node.online;
   const isGroup = container.kind === "group";
   const images = [...new Set(services.map((s) => shortImage(s.image)).filter(Boolean))];
-  const image = container.config?.form?.image || cfg?.form?.image || images.join(pc.listSeparator) || "—";
+  const image = container.config?.form?.image || cfg?.form?.image || t.common.list(images) || "—";
   // 容器组每个服务一行：服务名和它正在用的镜像，按服务名排序。
   const serviceImages = [...new Map(services.filter((s) => s.image).map((s) => [s.name, s.image] as const)).entries()].sort(([a], [b]) => a.localeCompare(b));
   const version =
@@ -789,18 +842,18 @@ function Overview({ project, container, services }: { project: Project; containe
       {hasNotes && (
         <div className="mb-6 grid gap-2">
           {offline && (
-            <Notice tone="warning" title={pc.nodeOffline}>
-              {o.nodeOfflineBody(node.name)}
+            <Notice tone="warning" title={t.common.status.nodesOffline([node.name])}>
+              {o.nodeOfflineBody}
             </Notice>
           )}
           {container.hostNetworkServices.length > 0 && (
             <Notice tone="warning" title={o.hostNetworkTitle}>
-              {o.hostNetworkBody(container.hostNetworkServices.join(pc.listSeparator))}
+              {o.hostNetworkBody(t.common.list(container.hostNetworkServices))}
             </Notice>
           )}
           {container.unmanagedVolumes.length > 0 && (
             <Notice tone="warning" title={pc.badges.volumeUnmanaged}>
-              {o.volumeBody(container.unmanagedVolumes.join(pc.listSeparator))}
+              {o.volumeBody(t.common.list(container.unmanagedVolumes))}
             </Notice>
           )}
           {container.sharedEnvOutdated && <Notice tone="warning" title={pc.badges.sharedEnvPending}>{pc.detail.sharedEnvOutdated}</Notice>}
@@ -844,7 +897,7 @@ function Overview({ project, container, services }: { project: Project; containe
       {showServices && (
         <Section title={o.servicesTitle}>
           {services.length === 0 ? (
-            <p className="text-muted-foreground">{o.notDeployed}</p>
+            <p className="text-muted-foreground">{t.common.status.notDeployed}</p>
           ) : (
             <List>
               {services.map((s) => (
@@ -871,13 +924,13 @@ function Overview({ project, container, services }: { project: Project; containe
             <GitRow k={o.gitCommit}>
               <span className={mono}>{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>
             </GitRow>
-            <GitRow k="deploy key" help={o.deployKeyHint}>
+            <GitRow k={o.deployKey} help={o.deployKeyHint}>
               <span className={cn(mono, "line-clamp-1")} title={container.deployKey}>
                 {container.deployKey}
               </span>
               <CopyLink text={container.deployKey} />
             </GitRow>
-            <GitRow k="webhook" help={o.webhookHint}>
+            <GitRow k={o.webhook} help={o.webhookHint}>
               <span className={mono}>{`${location.origin}/hooks/${container.webhookToken}`}</span>
               <CopyLink text={`${location.origin}/hooks/${container.webhookToken}`} />
             </GitRow>
@@ -958,7 +1011,7 @@ function ContainerEvents({ project, container }: { project: Project; container: 
                 return (
                   <tr key={String(e.id)} className="group">
                     <td className={cn(td, "w-28 whitespace-nowrap text-muted-foreground")} title={formatDateTime(toDate(e.time))}>
-                      {timeAgo(toDate(e.time))}
+                      {capitalize(timeAgo(toDate(e.time)))}
                     </td>
                     <td className={cn(td, "whitespace-nowrap")}>
                       <Status tone={tone}>{actionLabel(e)}</Status>
@@ -1059,7 +1112,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
             ]}
           />
           {services.length > 1 && (
-            <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={l_.allContainers}>
+            <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={l_.service}>
               <option value="">{l_.allContainers}</option>
               {services.map((s) => (
                 <option key={s} value={s}>
@@ -1198,7 +1251,8 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
 
   const discard = async () => {
     if (!(await confirmAction(t.projectContainers.config.discardConfirm(container.name), { action: t.projectContainers.config.discardDraft, danger: true }))) return;
-    call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }), t.projectContainers.config.discarded);
+    // 放弃后对比区消失，页面上能看到结果，不加提示。
+    call(() => projectClient.discardDraft({ projectId: project.id, container: container.name, baseRevision: container.revision }));
   };
 
   const c = t.projectContainers.config;
@@ -1240,7 +1294,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
           {/* 容器创建后不能在单个容器和容器组之间切换：单个容器的 Compose 是表单生成的只读预览。 */}
           <Slide id={showCompose ? "compose" : "form"} index={showCompose ? 1 : 0} inner="grid gap-4">
           {isForm && showCompose && (
-            <Field label="compose" help={c.composePreviewHelp}>
+            <Field label={t.containerForm.compose} help={c.composePreviewHelp}>
               <pre className="m-0 overflow-auto rounded-md bg-muted p-3 font-mono text-[13px] leading-5">{formToCompose(container.name, imageForm.build())}</pre>
             </Field>
           )}
@@ -1251,7 +1305,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
             </>
           )}
           {!isForm && (
-            <Field label="compose" htmlFor="edit-compose" help={c.composeHelp}>
+            <Field label={t.containerForm.compose} htmlFor="edit-compose" help={c.composeHelp}>
               <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
             </Field>
           )}
@@ -1262,7 +1316,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
           help={isForm ? undefined : c.groupEnvHelp}
           action={
             <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
-              {envMode === "rows" ? c.envToText : t.containerForm.envRows}
+              {envMode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
             </Button>
           }
         >
@@ -1309,7 +1363,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
             <Field label={c.git} htmlFor="edit-git" help={c.gitHelp}>
               <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
-            <Field label={c.ref} htmlFor="edit-ref" help={c.refHint}>
+            <Field label={c.ref} htmlFor="edit-ref" hint={c.refHint}>
               <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} className={textField} autoComplete="off" spellCheck={false} />
             </Field>
             <Field label={c.preserve} htmlFor="edit-preserve" help={`${c.preserveHint}${t.common.sentenceEnd}${c.preserveHelp}`}>
@@ -1372,13 +1426,11 @@ function imageDigest(images: Record<string, string>) {
     .join(", ");
 }
 
-// onRun：开始回滚时调用（上面那次部署的输出就过时了）。
-function Versions({ project, container, onRun }: { project: Project; container: Container; onRun: () => void }) {
-  const { run, busy, output, hasOutput } = useRun(project.id);
-  const ref = { projectId: project.id, container: container.name };
+// onRollback：回滚交给容器页执行，和部署共用输出和按钮状态，切换标签也不丢输出。
+function Versions({ projectId, container, busy, onRollback }: { projectId: string; container: Container; busy: boolean; onRollback: (version: bigint, restoreData: boolean) => void }) {
   const versions = useQuery({
-    queryKey: ["versions", project.id, container.name, String(container.revision)],
-    queryFn: () => projectClient.listVersions(ref),
+    queryKey: ["versions", projectId, container.name, String(container.revision)],
+    queryFn: () => projectClient.listVersions({ projectId, container: container.name }),
   });
   const v_ = t.projectContainers.versions;
   const list = versions.data?.versions ?? [];
@@ -1392,7 +1444,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
     </span>
   );
   const rollback = async (x: (typeof list)[number]) => {
-    const answer = await ask(v_.rollbackTitle(container.name), {
+    const answer = await ask(v_.rollbackConfirm(container.name, String(x.version)), {
       action: v_.rollback,
       check: v_.restoreDataCheck,
       checkHelp: v_.restoreDataHelp,
@@ -1403,13 +1455,11 @@ function Versions({ project, container, onRun }: { project: Project; container: 
       ],
     });
     if (!answer) return;
-    onRun();
-    run(() => projectClient.rollback({ ...ref, version: x.version, restoreData: answer.checked }));
+    onRollback(x.version, answer.checked);
   };
 
   return (
     <Section className="max-md:[&>header]:hidden" title={t.projectContainers.tabs.versions} help={v_.intro}>
-      {hasOutput && output}
       {versions.isPending ? (
         <RowsSkeleton />
       ) : versions.error ? (
@@ -1421,7 +1471,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
           {list.map((x) => {
             const notes = [
               x.version === container.deployedVersion ? v_.current : "",
-              x.rollbackOf > 0n ? v_.rollbackOf(String(x.rollbackOf)).replace(/^\s*·\s*/, "") : "",
+              x.rollbackOf > 0n ? v_.rollbackOf(String(x.rollbackOf)) : "",
               x.commit ? x.commit.slice(0, 8) : "",
             ].filter(Boolean);
             return (
@@ -1436,7 +1486,7 @@ function Versions({ project, container, onRun }: { project: Project; container: 
                 }
                 cols={[
                   { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={Object.values(x.images).join(", ")}>{imageDigest(x.images)}</span> },
-                  { content: x.deployedAt ? timeAgo(toDate(x.deployedAt)) : "" },
+                  { content: x.deployedAt ? capitalize(timeAgo(toDate(x.deployedAt))) : "" },
                 ]}
                 actions={
                   x.version !== container.deployedVersion && x.deployedAt ? (
@@ -1496,7 +1546,7 @@ function AddContainer({ project }: { project: Project }) {
       <Field
         label={mode === "compose" ? t.projects.create.groupName : t.projectContainers.columns.name}
         htmlFor="new-container"
-        help={mode === "compose" ? t.containerForm.groupNameHelp : `${t.containerForm.nameHelpImage}${t.projectContainers.add.nameHelp}`}
+        help={mode === "compose" ? t.containerForm.groupNameHelp : `${t.containerForm.nameHelpImage}${t.common.sentenceEnd}${t.projectContainers.add.nameHelp}`}
         error={checkName(name)}
       >
         <Input

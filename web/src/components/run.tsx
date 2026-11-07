@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "@/lib/api";
 import { Alert, LogBox, Notice } from "@/components/ui";
@@ -15,12 +15,15 @@ export function useRun(projectId: string) {
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState<RunResult>();
   const [busy, setBusy] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
   const run = async (start: () => AsyncIterable<StreamEvent>, keep = false) => {
     setBusy(true);
     setResult(undefined);
     if (!keep) setLines([]);
+    // 结果显示在输出区；输出区不在视野里时（例如在配置页底部点了部署）才另外弹 Toast。
     const finish = (r: RunResult) => {
       setResult(r);
+      if (inView(boxRef.current)) return;
       if (r.success) toast.success(t.common.feedback.done);
       else toast.error(r.error || t.common.feedback.failed);
     };
@@ -42,7 +45,7 @@ export function useRun(projectId: string) {
       setTimeout(refresh, 2000);
     }
   };
-  const output = <RunOutput lines={lines} result={result} />;
+  const output = <RunOutput boxRef={boxRef} lines={lines} result={result} />;
   // hasOutput：有没有要显示的输出，调用方据此决定要不要给输出留位置。
   const hasOutput = lines.length > 0 || result !== undefined;
   return { run, busy, output, hasOutput, setLines };
@@ -74,14 +77,20 @@ function appendLine(lines: string[], text: string): string[] {
 const noteLine = /未开放|已按配置里的端口添加映射|匿名卷|not exposed|Added a port mapping from the config|anonymous volume/i; // i18n-ignore
 const warnLine = /未开放|匿名卷|not exposed|anonymous volume/i; // i18n-ignore
 
-function RunOutput({ lines, result }: { lines: string[]; result?: RunResult }) {
+function inView(el: HTMLElement | null) {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+}
+
+function RunOutput({ boxRef, lines, result }: { boxRef: RefObject<HTMLDivElement | null>; lines: string[]; result?: RunResult }) {
   const outRef = useRef<HTMLPreElement>(null);
   useEffect(() => {
     outRef.current?.scrollTo({ top: outRef.current.scrollHeight });
   }, [lines.length]);
   if (lines.length === 0 && !result) return null;
   return (
-    <div className="grid gap-2">
+    <div ref={boxRef} className="grid gap-2">
       {result && (result.success ? <Notice tone="success">{t.common.feedback.done}</Notice> : <Alert>{result.error || t.common.feedback.failed}</Alert>)}
       {lines
         .filter((l) => noteLine.test(l))

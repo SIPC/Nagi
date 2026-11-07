@@ -95,9 +95,9 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
         value={tab}
         onChange={onTab}
         items={[
-          { value: "containers", label: t.project.tabs.containers, count: p.containers.length },
-          { value: "network", label: t.project.tabs.network, count: p.routes.length },
-          { value: "settings", label: t.project.tabs.settings },
+          { value: "containers", label: t.project.sections.overview },
+          { value: "network", label: t.project.sections.network, count: p.routes.length },
+          { value: "settings", label: t.project.sections.settings },
         ]}
       />
       {tab === "containers" && <ContainersTab project={p} services={services} deploy={deploy} busy={busy} output={output} hasOutput={hasOutput} />}
@@ -143,7 +143,7 @@ export function ProjectSplit({
 
 // navState：项目导航里容器的状态点。节点离线时容器的状态是未知。
 function navState(m: Container, node: Node | undefined, services: NonNullable<ProjectData["status"]>["services"]) {
-  if (node?.online === false) return { tone: "warning" as const, label: t.project.column.nodeOffline };
+  if (node?.online === false) return { tone: "warning" as const, label: t.common.status.nodesOffline([node.name]) };
   return stateOf(
     services.filter((s) => s.container === m.name),
     m.deployedVersion > 0n,
@@ -185,10 +185,10 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
         return (
           <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: search.view }} className={item(m.name === container)} title={st.label}>
             <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
-            <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
+            <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-            <span className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+            <span aria-hidden className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
           </Link>
         );
       })}
@@ -272,15 +272,15 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
             >
               <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
-                <span className="sr-only">{t.project.column.stateOnNode(st.label)}</span>
                 <span className={cn("truncate", active && "font-medium")}>{containerLabel(m)}</span>
+                <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
                 {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-                {imageUpdates.some((x) => x.container === m.name) && <ArrowUpCircle aria-label={t.projectContainers.imageUpdates.title} className="size-3.5 shrink-0 text-info" />}
-                <span className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
+                {imageUpdates.some((x) => x.container === m.name) && <ArrowUpCircle aria-label={t.projects.card.imageUpdate} className="size-3.5 shrink-0 text-info" />}
+                <span aria-hidden className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
               </span>
               {node?.online === false ? (
-                <span className="pl-3.5 text-xs text-warning-text">{t.project.column.nodeOffline}</span>
+                <span className="pl-3.5 text-xs text-warning-text">{t.common.status.nodesOffline([node.name])}</span>
               ) : (
                 <UsageRings usage={u} memFallback={memFallback} className="pl-3.5" />
               )}

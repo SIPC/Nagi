@@ -144,7 +144,7 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
               setModeState(mode === "rows" ? "text" : "rows");
             }}
           >
-            {mode === "rows" ? t.containerForm.envBulk : t.containerForm.envRows}
+            {mode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
           </Button>
         </div>
       )}

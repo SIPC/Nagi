@@ -66,7 +66,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
   if (offlineNodes.length > 0) {
     items.push({
       key: "nodes",
-      short: t.common.status.nodesOffline(offlineNodes),
+      short: m.nodes(offlineNodes),
       title: t.common.status.nodesOffline(offlineNodes),
       text: t.projects.offline.body,
       action: (
@@ -80,7 +80,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
     items.push({
       key: "standby",
       short: m.standby,
-      title: t.projects.standbyOffline.title(offlineStandbys.join(", ")),
+      title: t.projects.standbyOffline.title(t.common.list(offlineStandbys)),
       text: t.projects.standbyOffline.body,
       action: (
         <ButtonLink to="/settings" search={{ tab: "standby" }} variant="ghost" className={edge} readOnlyOk>
@@ -118,7 +118,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
       <div role="status" className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span>
           <span className="mr-2 mb-0.5 inline-block size-1.5 rounded-full bg-warning align-middle" />
-          <span className="font-medium text-warning-text">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{items.map((it) => it.short).join(m.separator)}</span>
+          <span className="font-medium text-warning-text">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
         </span>
         <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? m.collapse : m.view}
@@ -178,7 +178,7 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
         ) : (
           shown.map((c) => {
             const st = offline(c.nodeId)
-              ? { tone: "warning" as const, label: t.projects.card.nodeOffline }
+              ? { tone: "warning" as const, label: t.common.status.nodesOffline([nodeName(c.nodeId)]) }
               : stateOf(
                   services.filter((x) => x.container === c.name),
                   c.deployedVersion > 0n,
@@ -349,7 +349,21 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
   const selected = nodeId || preferred || onlineNodes[0]?.id || "";
   const defaultDir = useDefaultDir(selected, args.projectId ?? "", args.projectName, args.container);
   const nodeField = (
-      <Field label={t.projects.nodeChoice.node} htmlFor="container-node" help={t.projects.nodeChoice.nodeHelp}>
+      <Field
+        label={t.projects.nodeChoice.node}
+        htmlFor="container-node"
+        help={t.projects.nodeChoice.nodeHelp}
+        hint={
+          nodes.data && onlineNodes.length === 0 && (
+            <>
+              {t.projects.nodeChoice.noOnlineNodesHint}{" "}
+              <Link to="/nodes" className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
+                {t.projects.nodeChoice.viewNodes}
+              </Link>
+            </>
+          )
+        }
+      >
         <Select id="container-node" value={selected} onChange={(e) => setNodeId(e.target.value)} required>
           {onlineNodes.length === 0 && <option value="">{t.projects.nodeChoice.noOnlineNodes}</option>}
           {onlineNodes.map((n) => (
@@ -400,7 +414,7 @@ function NewProjectDialog() {
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} required maxLength={64} autoFocus />
         </Field>
         {editNetwork ? (
-          <Field label={t.projects.create.networkName} htmlFor="network" help={`${t.projects.create.slugHint}${t.common.sentenceEnd}${t.projects.create.networkHelp}`} error={checkName(network)}>
+          <Field label={t.projects.create.networkName} htmlFor="network" hint={t.projects.create.slugHint} help={t.projects.create.networkHelp} error={checkName(network)}>
             <Input
               id="network"
               value={network}
@@ -415,7 +429,7 @@ function NewProjectDialog() {
           <div className="-mt-2 flex items-center gap-2 text-[13px] leading-5">
             <span className="text-muted-foreground">{t.projects.create.networkName}</span>
             <span className="min-w-0 truncate">{generated || "—"}</span>
-            <HelpTip className="-ml-1">{`${t.projects.create.networkHelp}${t.projects.create.slugHint}${t.common.sentenceEnd}`}</HelpTip>
+            <HelpTip className="-ml-1">{`${t.projects.create.slugHint}${t.common.sentenceEnd}${t.projects.create.networkHelp}`}</HelpTip>
             <button type="button" className="cursor-pointer underline underline-offset-4 decoration-border hover:decoration-foreground" onClick={() => setEditNetwork(true)}>
               {t.projects.create.editNetwork}
             </button>

@@ -6,14 +6,8 @@ export default {
     network: "Network",
     settings: "Settings",
   },
-  tabs: {
-    containers: "Containers",
-    network: "Network",
-    settings: "Settings",
-  },
   breadcrumb: "Projects",
   back: "Back to projects",
-  stateful: "Stateful",
   nodes: (names) => (names.length === 1 ? `Node ${names[0]}` : `Nodes ${names.join(", ")}`),
   noContainers: "No containers",
   rebuiltHint:
@@ -28,8 +22,7 @@ export default {
     allProjects: "All projects",
     project: "Project",
     containers: "Containers",
-    nodeOffline: "Node offline",
     draft: "Draft",
-    stateOnNode: (state) => `${state}, node`,
+    stateOnNode: (state, node) => ` (${state}, node ${node})`,
   },
 } satisfies typeof zh;

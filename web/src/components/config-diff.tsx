@@ -30,6 +30,8 @@ function configLines(c: ContainerConfig | undefined): string[] {
   add("ref", c.source?.gitRef);
   for (const p of c.preserve) add("preserve", p);
   add("depends-on", c.dependsOn.join(", "));
+  add("backup-paths", c.backupPaths.join(", "));
+  add("stateful", c.stateful ? "true" : "");
   return out;
 }
 
