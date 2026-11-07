@@ -133,7 +133,9 @@ function fit(text: string, px: number, size: number) {
 }
 
 // mergeSmall：节点太多时，流量小的节点合并成「其他」。
-function mergeSmall(rows: { id: string; name: string }[], flows: Flow[]) {
+type SankeyRow = { id: string; name: string; offline?: boolean };
+
+function mergeSmall(rows: SankeyRow[], flows: Flow[]) {
   const nodes = rows.filter((r) => r.id !== external);
   if (nodes.length <= sankeyMaxNodes) return { rows, flows };
   const total = new Map<string, number>();
@@ -230,7 +232,8 @@ function useHeldFlows(flows: Flow[]) {
 // Sankey：左边发出，右边接收，每个节点和外部网络单独一行，两边顺序、高度相同。按实际宽度算布局，不整体缩放。
 // 切换视图时图不重建：不属于这个视图的路径和行淡出，其余的平滑换位。所以 flows 传全部路径，这里再按视图筛选；
 // 断流保留也在筛选之前算，否则切走的路径会被当成断流留下来。
-function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; name: string }[]; flows: Flow[]; view: FlowView }) {
+// 离线节点（offline）照常占一行，名称变灰，没有路径。
+function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; flows: Flow[]; view: FlowView }) {
   const { ref, width } = useWidth();
   const held = useHeldFlows(allFlows);
   const merged = mergeSmall(allRows, held.filter((f) => view === "all" || f.kind === view));
@@ -238,6 +241,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
   const flows = merged.flows;
   const order = new Map(rows.map((r, i) => [r.id, i]));
   const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
+  const isOffline = (id: string) => rows.some((r) => r.id === id && r.offline);
   const top = [...flows].sort((a, b) => b.rate - a.rate)[0];
 
   const label = Math.min(128, Math.round(width * 0.24));
@@ -286,7 +290,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
   // 路径增减时其他线会换位置：位置、线宽都过渡（高度由外层的区块过渡），新路径淡入，消失的路径留到淡出结束。
   const leaving = useRef(new Map<string, { flow: Flow; y1: number; y2: number }>());
   const shown = useRef(new Map<string, { flow: Flow; y1: number; y2: number }>());
-  type DrawnRow = { id: string; name: string; center: number; send: number; receive: number };
+  type DrawnRow = { id: string; name: string; offline: boolean; center: number; send: number; receive: number };
   const leavingRows = useRef(new Map<string, DrawnRow>());
   const shownRows = useRef(new Map<string, DrawnRow>());
   const lastNow = useRef<Record<string, number>>({});
@@ -298,7 +302,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
   const nextRows = new Map(
     groups.map((g) => [
       g.id,
-      { id: g.id, name: nameOf(g.id), center: g.center, send: sum(g.out), receive: sum(g.into) },
+      { id: g.id, name: nameOf(g.id), offline: isOffline(g.id), center: g.center, send: sum(g.out), receive: sum(g.into) },
     ]),
   );
   for (const [k, v] of shownRows.current) if (!nextRows.has(k)) leavingRows.current.set(k, v);
@@ -361,10 +365,10 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
             return (
               <g key={n.id} opacity={now[`row:${n.id}:op`] ?? 0}>
                 <title>{n.name}</title>
-                <text x={0} y={center - 9} className="fill-foreground text-sm">
+                <text x={0} y={center - 9} className={cn("text-sm", n.offline ? "fill-muted-foreground" : "fill-foreground")}>
                   {fit(n.name, nameMax, 14)}
                 </text>
-                <text x={width} y={center - 9} textAnchor="end" className="fill-foreground text-sm">
+                <text x={width} y={center - 9} textAnchor="end" className={cn("text-sm", n.offline ? "fill-muted-foreground" : "fill-foreground")}>
                   {fit(n.name, nameMax, 14)}
                 </text>
               </g>
@@ -392,10 +396,10 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: { id: string; 
             return (
               <Fragment key={n.id}>
                 <div className={cell} style={{ left: 0, top, opacity }}>
-                  <Roll value={n.send > 0 ? fmtRate(n.send) : o.flow.noSend} n={n.send} />
+                  <Roll value={n.offline ? t.common.status.offline : n.send > 0 ? fmtRate(n.send) : o.flow.noSend} n={n.send} />
                 </div>
                 <div className={cell} style={{ right: 0, top, opacity }}>
-                  <Roll value={n.receive > 0 ? fmtRate(n.receive) : o.flow.noReceive} n={n.receive} />
+                  <Roll value={n.offline ? t.common.status.offline : n.receive > 0 ? fmtRate(n.receive) : o.flow.noReceive} n={n.receive} />
                 </div>
               </Fragment>
             );
@@ -646,6 +650,7 @@ export function OverviewPage() {
   const abnormal = containers.filter((c) => c?.tone === "danger").length;
   const offlineNames = all.filter((n) => !n.online).map((n) => n.name);
   const allOffline = all.length > 0 && online.length === 0;
+  // 实时流量里离线节点照常列出（变灰），只有端口映射需要说明。
   const offlineNotice = offlineNames.length > 0 && !allOffline && <Notice tone="warning">{o.offlineExcluded(t.common.list(offlineNames))}</Notice>;
 
   const sample = liveRates(online.map((n) => n.id), liveMesh.data, keys);
@@ -671,9 +676,9 @@ export function OverviewPage() {
     }
   }
   const panelAlone = keys?.panel !== undefined && keys.peers.get(keys.panel) === panelRow;
-  const sankeyRows = [
+  const sankeyRows: SankeyRow[] = [
     ...(view === "mesh" ? [] : [{ id: external, name: o.flow.external }]),
-    ...online.map((n) => ({ id: n.id, name: n.name })),
+    ...all.map((n) => ({ id: n.id, name: n.name, offline: !n.online })),
     ...(panelAlone ? [{ id: panelRow, name: o.flow.panel }] : []),
   ];
 
@@ -827,7 +832,6 @@ export function OverviewPage() {
                 {o.flow.outdated(t.common.list(outdated))}
               </Notice>
             )}
-            {offlineNotice}
             {nodes.isPending ? (
               <RowsSkeleton />
             ) : allOffline ? (

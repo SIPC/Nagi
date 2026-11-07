@@ -506,7 +506,9 @@ const trafficSeries = [
 // RouteMetrics：一条端口映射的请求情况。上面是时间范围内的汇总，下面是三张图：按状态码堆叠的请求数、耗时分位数、流量。
 // 节点存的是每秒速率，乘以步长就是该时段内的次数或字节数。旧版本的节点只报 req、5xx、lat，只显示有数据的部分。
 // divided：和上面的分组之间一条细线。empty：没有数据，数字都写「—」。quiet：图里也不写「暂无数据」（还没有容器时的占位）。
-function RouteMetrics({ name, data, range, divided, empty, quiet }: { name?: string; data: Map<string, Pt[]>; range: MetricRange; divided?: boolean; empty?: boolean; quiet?: boolean }) {
+function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { name?: string; data: Map<string, Pt[]>; range: MetricRange; divided?: boolean; empty?: boolean; quiet?: boolean }) {
+  // 节点只在有请求的时段报耗时。报了状态码分类的是新版本的节点，没有耗时也照常显示耗时图和 P95。
+  const data = reported.has("2xx") ? new Map([...noRouteData(), ...reported]) : reported;
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   const get = (m: string) => data.get(m) ?? [];
