@@ -261,7 +261,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
   };
 
   const sub = (v: VolumeInfo) => {
-    const mounts = v.mounts.map((x) => (container.kind === "group" ? `${x.service}: ${x.target}` : x.target)).join(", ");
+    const mounts = t.common.list(v.mounts.map((x) => (container.kind === "group" ? `${x.service}: ${x.target}` : x.target)));
     const files = m.files(Number(v.files));
     const removing = form && v.kind === "managed" && v.mounts.length > 0 && !removableMount(v);
     const titled = volumeLabel(v, container.kind) !== v.name;

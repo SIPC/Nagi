@@ -517,7 +517,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
                 {n.info.version && <span>{`Nagi ${n.info.version}`}</span>}
               </>
             )}
-            <button type="button" className="cursor-pointer underline-offset-4 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
+            <button type="button" className="cursor-pointer rounded-sm underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => onTab("containers")}>
               <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
             {!n.online && !n.pending && <Roll value={lastSeenText(n)} />}
@@ -954,7 +954,7 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
     <>
       {pending && (
         <Notice tone="warning" title={t.nodes.mirrors.pendingTitle}>
-          <span className="break-all">{t.nodes.mirrors.pendingText(mirrors.active.join(", ") || t.nodes.mirrors.none)}</span>
+          <span className="break-all">{t.nodes.mirrors.pendingText(t.common.list(mirrors.active) || t.nodes.mirrors.none)}</span>
         </Notice>
       )}
       <form

@@ -42,6 +42,17 @@ export function formatTime(date: Date | undefined): string | undefined {
   return date?.toLocaleTimeString(locale);
 }
 
+// formatClock：只有时和分，24 小时制，例如 08:12。用在今天、近期这类短时间里。
+export function formatClock(date: Date): string {
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// formatMonthDay：月和日，不是今年时带上年份，例如 10/28、2025/10/28。
+export function formatMonthDay(date: Date): string {
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(locale, sameYear ? { month: "2-digit", day: "2-digit" } : { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
 // slugName 由名字生成小写字母、数字和 - 组成的标识（不超过 32 个字符）；
 // 名字里没有能用的字符（例如全是中文）时用 fallback（通常是 ID 的前几位）。
 // slugName 把名称转成小写字母、数字和 - 组成的短名（不超过 32 个字符），汉字转成不带声调的拼音

@@ -6,7 +6,7 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Button, ButtonLink, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
@@ -163,8 +163,7 @@ function certSummary(checks: DomainCheck[]) {
   const dates = entries.flatMap((e) => (e.certNotAfter ? [timestampDate(e.certNotAfter)] : []));
   if (dates.length === 0) return m.check.certObtained();
   const earliest = new Date(Math.min(...dates.map((d) => d.getTime())));
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return m.certExpires(`${earliest.getFullYear()}-${pad(earliest.getMonth() + 1)}-${pad(earliest.getDate())}`);
+  return m.certExpires(formatDate(earliest) ?? "");
 }
 
 function useRouteNodes(project: Project) {
@@ -630,7 +629,7 @@ function DraftDns({ checks, error }: { checks: DomainCheck[]; error: unknown }) 
       {checks.flatMap((c) =>
         c.entries.map((e) => (
           <span key={`${c.domain}/${e.nodeId}`} className={cn("block text-sm", e.dns === "mismatch" && "text-warning-text", e.dns === "unresolved" && "text-destructive")}>
-            {`${multiple ? `${c.domain} ` : ""}${e.nodeName}: ${e.dns === "mismatch" ? m.dnsMismatch(c.addresses.join(", ")) : e.dns === "ok" ? m.dnsOk : e.dns === "unresolved" ? m.dnsUnresolved : m.dnsUnknown}`}
+            {`${multiple ? `${c.domain} ` : ""}${e.nodeName}: ${e.dns === "mismatch" ? m.dnsMismatch(t.common.list(c.addresses)) : e.dns === "ok" ? m.dnsOk : e.dns === "unresolved" ? m.dnsUnresolved : m.dnsUnknown}`}
           </span>
         )),
       )}

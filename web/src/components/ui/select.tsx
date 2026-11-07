@@ -43,7 +43,7 @@ export function SelectItem({ className, children, ...props }: React.ComponentPro
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex cursor-pointer items-center rounded-sm py-1.5 pr-8 pl-2 text-[13px] outline-none max-md:py-2.5 max-md:text-base select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent",
+        "relative flex cursor-pointer items-center rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none max-md:py-2.5 max-md:text-base select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent",
         className,
       )}
       {...props}

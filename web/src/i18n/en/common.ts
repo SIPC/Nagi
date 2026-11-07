@@ -3,6 +3,8 @@ import type zh from "../zh/common";
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
 export default {
+  // 字段和标题旁问号按钮的读屏名称。
+  help: "More info",
   status: {
     running: "Running",
     stopped: "Stopped",

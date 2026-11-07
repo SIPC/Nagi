@@ -4,12 +4,12 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtCpu, metricRanges, RangePicker, type MetricRange } from "@/components/metrics";
+import { fmtCount, fmtCpu, metricRanges, RangePicker, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { locale, t } from "@/i18n";
+import { t } from "@/i18n";
 import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
 
 const o = t.overview;
@@ -943,7 +943,7 @@ export function OverviewPage() {
                       </Link>
                     </td>
                     <td className={tdClass}>{x.route.container}</td>
-                    <td className={tdClass}><Roll value={t.metrics.count(Math.round(x.req).toLocaleString(locale))} n={x.req} /></td>
+                    <td className={tdClass}><Roll value={fmtCount(x.req)} n={x.req} /></td>
                     <td className={tdClass}><Roll value={x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash} /></td>
                     <td className={tdClass}><Roll value={fmtTotal(x.in)} n={x.in} /></td>
                     <td className={tdClass}><Roll value={fmtTotal(x.out)} n={x.out} /></td>

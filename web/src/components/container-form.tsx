@@ -26,7 +26,7 @@ function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
         <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform", open && "rotate-90")} />
         {open ? labelOpen : <span className={cn(labelPhone && "max-md:hidden")}>{label}</span>}
         {!open && labelPhone && <span className="md:hidden">{labelPhone}</span>}

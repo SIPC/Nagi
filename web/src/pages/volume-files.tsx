@@ -14,7 +14,7 @@ import type { VolumeFileEntry } from "@/gen/nagi/v1/agent_pb";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { capitalize, cn, formatDateTime, timeAgo } from "@/lib/utils";
+import { capitalize, cn, formatClock, formatDateTime, formatMonthDay, timeAgo } from "@/lib/utils";
 
 // 目录一次显示的条数，内容多时点「显示更多」。
 const pageSize = 200;
@@ -25,11 +25,9 @@ const maxUploadBytes = 8 * 1024 ** 3;
 // snapshotTime：快照的绝对时间，短到能放进一行：今天 10:08、11/02 10:08，不是今年的带年份。
 export function snapshotTime(date: Date | undefined): string {
   if (!date) return "";
-  const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return t.projectData.snapshots.today(time);
-  const day = date.toLocaleDateString(locale, date.getFullYear() === now.getFullYear() ? { month: "2-digit", day: "2-digit" } : { year: "numeric", month: "2-digit", day: "2-digit" });
-  return `${day} ${time}`;
+  const time = formatClock(date);
+  if (date.toDateString() === new Date().toDateString()) return t.projectData.snapshots.today(time);
+  return `${formatMonthDay(date)} ${time}`;
 }
 
 type Crumb = { label: string; onClick: () => void };

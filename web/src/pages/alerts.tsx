@@ -56,15 +56,15 @@ function ChannelDialog({ initial, adding, onClose, onSave }: { initial: AlertCha
         {c.type === "telegram" ? (
           <FormRow>
             <Field label={t.alerts.botToken} htmlFor="channel-token">
-              <Input id="channel-token" className="font-mono" autoComplete="off" value={c.telegramToken} onChange={(e) => patch({ telegramToken: e.target.value })} />
+              <Input id="channel-token" className="font-mono [&:not(:focus)]:[-webkit-text-security:disc]" autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" value={c.telegramToken} onChange={(e) => patch({ telegramToken: e.target.value })} />
             </Field>
             <Field label={t.alerts.chatId} htmlFor="channel-chat">
-              <Input id="channel-chat" className="font-mono" autoComplete="off" value={c.telegramChatId} onChange={(e) => patch({ telegramChatId: e.target.value })} />
+              <Input id="channel-chat" className="font-mono" autoComplete="off" spellCheck={false} value={c.telegramChatId} onChange={(e) => patch({ telegramChatId: e.target.value })} />
             </Field>
           </FormRow>
         ) : (
           <Field label={t.alerts.webhookUrl} htmlFor="channel-url">
-            <Input id="channel-url" placeholder="https://" autoComplete="off" value={c.url} onChange={(e) => patch({ url: e.target.value })} />
+            <Input id="channel-url" type="url" placeholder="https://" autoComplete="off" spellCheck={false} value={c.url} onChange={(e) => patch({ url: e.target.value })} />
           </Field>
         )}
         {error && <Alert>{error}</Alert>}
@@ -167,6 +167,8 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
       <Input
         id={`rule-${key}`}
         type="number"
+        min={0}
+        inputMode="numeric"
         placeholder={t.alerts.defaultValue(placeholder)}
         value={(rules[key] as number) || ""}
         onChange={(e) =>

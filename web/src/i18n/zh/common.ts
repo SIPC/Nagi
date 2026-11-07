@@ -1,5 +1,7 @@
 // 通用的词：状态、按钮、时间。状态用固定的词（docs/ui.md）。
 export default {
+  // 字段和标题旁问号按钮的读屏名称。
+  help: "说明",
   status: {
     running: "运行中",
     stopped: "已停止",

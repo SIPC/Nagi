@@ -37,7 +37,7 @@ function pathClass(path: string) {
 
 // meshSummary：本端在 mesh 中的地址、端口和直连地址，写在区块标题右边。标题旁只写第一个直连地址（面板不写），全部在悬停提示里。
 function meshSummary(status: MeshStatus, endpoints: string[]) {
-  return [status.address, `UDP ${status.port}`, endpoints.length > 0 && `${t.mesh.endpoints} ${endpoints.join(", ")}`].filter(Boolean).join(" · ");
+  return [status.address, `UDP ${status.port}`, endpoints.length > 0 && `${t.mesh.endpoints} ${t.common.list(endpoints)}`].filter(Boolean).join(" · ");
 }
 
 type Ping = { text: string; failed?: boolean; detail?: string };

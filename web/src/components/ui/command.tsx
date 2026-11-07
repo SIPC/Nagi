@@ -12,7 +12,7 @@ export function CommandInput({ className, ...props }: React.ComponentProps<typeo
   return (
     <div className="flex items-center gap-2 border-b px-3.5">
       <Search className="size-4 shrink-0 text-muted-foreground" />
-      <CommandPrimitive.Input className={cn("h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/70", className)} {...props} />
+      <CommandPrimitive.Input className={cn("h-11 w-full bg-transparent text-sm outline-none max-md:text-base placeholder:text-muted-foreground/70", className)} {...props} />
     </div>
   );
 }
@@ -38,7 +38,7 @@ export function CommandItem({ className, ...props }: React.ComponentProps<typeof
   return (
     <CommandPrimitive.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] outline-none select-none data-[selected=true]:bg-accent [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
+        "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[selected=true]:bg-accent [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
         className,
       )}
       {...props}

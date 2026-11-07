@@ -252,7 +252,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
             {t.project.column.containers}
             <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
           </span>
-          <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="xs" className="-mr-1 size-6 p-0 text-foreground" aria-label={t.projectContainers.table.addContainer}>
+          <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="icon" className="-my-2 -mr-2 text-foreground" aria-label={t.projectContainers.table.addContainer}>
             <Plus />
           </ButtonLink>
         </div>

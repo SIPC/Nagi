@@ -94,12 +94,14 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
                 <div className="relative min-w-0 flex-1">
                   <Input
                     value={r.value}
-                    type={masked ? "password" : "text"}
+                    // 遮住密钥用 CSS，不用 type="password"：浏览器会把 password 框当成登录表单，提示保存密码或自动填入账号。
                     autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
                     aria-label={t.containerForm.envValue}
                     placeholder={t.containerForm.envValue}
                     spellCheck={false}
-                    className={cn("min-w-0", mono, secret && "pr-8")}
+                    className={cn("min-w-0", mono, secret && "pr-8", masked && "[-webkit-text-security:disc]")}
                     onChange={(e) => update(rows.map((x) => (x.id === r.id ? { ...x, value: e.target.value } : x)))}
                   />
                   {secret && (

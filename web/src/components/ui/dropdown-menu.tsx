@@ -31,7 +31,7 @@ export function DropdownMenuItem({ className, variant, ...props }: React.Compone
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        "cursor-pointer rounded-sm px-2 py-1.5 text-[13px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-60 data-[highlighted]:bg-accent",
+        "cursor-pointer rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-60 data-[highlighted]:bg-accent",
         variant === "destructive" && "text-destructive",
         className,
       )}

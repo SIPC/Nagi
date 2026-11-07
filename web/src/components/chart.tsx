@@ -179,7 +179,7 @@ export function TimeChart({
         {hover !== null && (
           <div
             className={cn(
-              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-1.5 rounded-lg bg-popover shadow-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap shadow-xl",
+              "pointer-events-none absolute top-0 z-10 grid w-max min-w-28 gap-1.5 rounded-lg bg-popover shadow-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap",
               tipLeft ? "-translate-x-full" : "",
             )}
             style={{ left: x(hover) + (tipLeft ? -8 : 8) }}
@@ -191,7 +191,7 @@ export function TimeChart({
                 <div key={i} className="flex items-center gap-2">
                   <i className={cn("size-2.5 shrink-0 rounded-[2px] bg-current", s.className)} />
                   <span className="text-muted-foreground">{s.label}</span>
-                  <b className="ml-auto pl-3 font-mono font-medium">{v === undefined ? "—" : format(v)}</b>
+                  <b className="ml-auto pl-3 font-medium tabular-nums">{v === undefined ? "—" : format(v)}</b>
                 </div>
               );
             })}
@@ -212,7 +212,7 @@ export function TimeChart({
 // Legend：图例，10px 的方块加名称。
 export function Legend({ series, className }: { series: { label: string; className: string }[]; className?: string }) {
   return (
-    <span className={cn("flex flex-wrap gap-4 text-[13px] leading-4 text-muted-foreground", className)}>
+    <span className={cn("flex flex-wrap gap-4 text-xs leading-4 text-muted-foreground", className)}>
       {series.map((s) => (
         <span key={s.label} className="inline-flex shrink-0 items-center gap-1">
           <i className={cn("size-2.5 rounded-[2px] bg-current", s.className)} />

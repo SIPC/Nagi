@@ -92,7 +92,7 @@ export function SetupPage({ token }: { token: string }) {
         }}
       >
         <Field label={t.auth.username} htmlFor="username">
-          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="admin" autoFocus required />
+          <Input id="username" name="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="admin" autoFocus required />
         </Field>
         <Field label={t.auth.password} htmlFor="password" hint={t.auth.setup.passwordHint}>
           <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} />
@@ -209,7 +209,7 @@ export function LoginPage() {
     <AuthShell title={t.auth.login.title}>
       <form className="grid gap-4" onSubmit={submit}>
         <Field label={t.auth.username} htmlFor="username">
-          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
+          <Input id="username" name="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required />
         </Field>
         <Field label={t.auth.password} htmlFor="password" error={error}>
           <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />

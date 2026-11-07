@@ -393,7 +393,7 @@ function ImageTip({ images, disabled, onClose, onUpdate }: { images: string; dis
     <aside role="status" aria-label={tip.label} className="fixed right-6 bottom-6 z-20 grid w-[340px] max-w-[calc(100vw-32px)] gap-3 rounded-lg bg-popover p-4 shadow-popover max-md:right-4 max-md:bottom-4 max-md:left-4 max-md:w-auto">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{tip.title}</span>
-        <Button variant="ghost" size="icon" className="-my-1 -mr-1 size-6! text-muted-foreground" aria-label={t.common.actions.close} onClick={close}>
+        <Button variant="ghost" size="icon" className="-my-2 -mr-2 text-muted-foreground" aria-label={t.common.actions.close} onClick={close}>
           <X />
         </Button>
       </div>

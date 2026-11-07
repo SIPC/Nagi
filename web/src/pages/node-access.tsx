@@ -209,14 +209,14 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const upload = async (list: File[]) => {
     const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
     if (tooLarge.length > 0) {
-      setError(m.tooLarge(tooLarge.join(", ")));
+      setError(m.tooLarge(t.common.list(tooLarge)));
       return;
     }
     const existing = new Map((q.data?.entries ?? []).map((e) => [e.name, e]));
     const clash = list.filter((f) => existing.has(f.name));
     const sensitive = q.data?.access === "confirm" || clash.some((f) => existing.get(f.name)?.access === "confirm");
     if (clash.length > 0 || sensitive) {
-      const names = (clash.length ? clash : list).map((f) => f.name).join(", ");
+      const names = t.common.list((clash.length ? clash : list).map((f) => f.name));
       const large = clash.some((f) => Number(existing.get(f.name)?.size ?? 0) > maxEditBytes);
       if (!(await confirmAction(m.overwriteConfirm(names, large), { action: m.overwrite, danger: true }))) return;
     }

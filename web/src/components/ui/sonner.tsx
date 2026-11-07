@@ -14,6 +14,8 @@ export function Toaster() {
       theme={dark ? "dark" : "light"}
       position="top-center"
       duration={3000}
+      // sonner 自带的样式写死了系统字体和一层很淡的阴影，换成界面字体和浮层统一的阴影（深色下也看得出边缘）。
+      toastOptions={{ style: { fontFamily: "var(--font-sans)", boxShadow: "var(--shadow-popover)" } }}
       style={
         {
           "--normal-bg": "var(--popover)",

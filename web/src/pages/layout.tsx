@@ -162,7 +162,7 @@ const navItems = [
 ] as const;
 
 const navLink =
-  "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors not-data-active:hover:bg-accent/50 [&_svg]:size-4";
+  "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors outline-none not-data-active:hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset [&_svg]:size-4";
 const mobileNavLink = cn(navLink.replace("h-8", "h-11"), "data-[status=active]:bg-accent");
 
 export function AppLayout() {

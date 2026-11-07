@@ -123,7 +123,7 @@ const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 // 上万的次数用紧凑写法（23.9万、239.3K），统计格放得下。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
-const fmtCount = (v: number) => m.count(v >= 10_000 ? compactCount.format(v) : Math.round(v).toLocaleString(locale));
+export const fmtCount = (v: number) => m.count(v >= 10_000 ? compactCount.format(v) : Math.round(v).toLocaleString(locale));
 
 const containerMetricFormat: Record<string, [string, (v: number) => string]> = {
   cpu: ["CPU", (v) => fmtCpu(v)],

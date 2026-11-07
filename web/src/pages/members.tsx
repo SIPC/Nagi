@@ -9,8 +9,8 @@ import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field,
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { AccessTokenList } from "@/pages/tokens";
-import { formatDate, formatDateTime } from "@/lib/utils";
-import { locale, t } from "@/i18n";
+import { formatClock, formatDateTime, formatMonthDay } from "@/lib/utils";
+import { t } from "@/i18n";
 
 const roles = ["admin", "operator", "viewer"] as const;
 
@@ -19,10 +19,9 @@ function shortDate(d: Date | undefined) {
   if (!d) return "—";
   const now = new Date();
   const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
-  if (days === 0) return `${t.members.today} ${d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  if (days === 0) return `${t.members.today} ${formatClock(d)}`;
   if (days === 1) return t.members.yesterday;
-  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(locale, { month: "2-digit", day: "2-digit" });
-  return formatDate(d) ?? "—";
+  return formatMonthDay(d);
 }
 
 const roleOptions = roles.map((r) => (
@@ -209,7 +208,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       }}
     >
       <Field label={t.members.username} htmlFor="member-name">
-        <Input id="member-name" value={username} onChange={(e) => setUsername(e.target.value)} required maxLength={32} autoComplete="off" />
+        <Input id="member-name" value={username} onChange={(e) => setUsername(e.target.value)} required maxLength={32} autoComplete="off" autoCapitalize="none" spellCheck={false} />
       </Field>
       <Field label={t.members.password} htmlFor="member-password" hint={t.members.passwordHint}>
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />

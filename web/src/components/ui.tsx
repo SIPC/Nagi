@@ -187,6 +187,7 @@ export function HelpTip({ children, className }: { children: React.ReactNode; cl
       <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger
           type="button"
+          aria-label={t.common.help}
           className={cn("inline-flex cursor-help rounded-full align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40", className)}
           onClick={(e) => {
             e.preventDefault();
