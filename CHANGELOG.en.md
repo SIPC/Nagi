@@ -8,6 +8,22 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.23.0
+
+### New features
+
+- Shows release notes in "Settings → About" when a new version is available. Click "More info…" to see the notes for every version between the current and the latest.
+- Shows release notes in English when the interface is in English.
+
+### Improvements
+
+- Shows when updates were last checked in "About".
+- Centers each column vertically in the node list.
+
+### Behavior changes
+
+- Merges "Updates" into "About". Check for and install panel updates in "About".
+
 ## v0.22.2
 
 ### Improvements
