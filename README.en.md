@@ -13,7 +13,7 @@
 
 > Calm waters.
 
-Nagi is an open-source, self-hosted container deployment platform: one web panel to manage Docker containers across many Linux servers. It is built on Docker and Docker Compose, supports multiple nodes and high availability, and aims to be simple, good-looking and easy to deploy. It is ready for production out of the box.
+Nagi is an open-source, self-hosted container deployment platform: one web panel to manage Docker containers across many Linux servers. It is built on Docker and Docker Compose, supports multiple nodes and high availability, and aims to be simple, good-looking and easy to deploy.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.en.dark.png">
@@ -211,6 +211,7 @@ Nagi is built on these open-source projects:
 
 - [Caddy](https://github.com/caddyserver/caddy) and [caddy-l4](https://github.com/mholt/caddy-l4): external access, automatic HTTPS and TCP / UDP forwarding
 - [wireguard-go](https://git.zx2c4.com/wireguard-go): the encrypted network between nodes
+- [Hysteria](https://github.com/apernet/hysteria) and [quic-go](https://github.com/quic-go/quic-go): the QUIC fast path and BBR congestion control
 - [kopia](https://github.com/kopia/kopia): snapshots and off-site replicas
 - [yamux](https://github.com/hashicorp/yamux) and [Connect](https://connectrpc.com): control-plane communication
 - [shadcn/ui](https://ui.shadcn.com): UI components

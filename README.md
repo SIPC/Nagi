@@ -13,7 +13,7 @@
 
 > 风平浪静。
 
-Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，管理分布在多台 Linux 服务器上的 Docker 容器。它基于 Docker 和 Docker Compose，支持多节点与高可用，追求简单、美观、易于部署，可直接用于生产环境。
+Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，管理分布在多台 Linux 服务器上的 Docker 容器。它基于 Docker 和 Docker Compose，支持多节点与高可用，追求简单、美观、易于部署。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.dark.png">
@@ -209,6 +209,7 @@ Nagi 构建在以下开源项目之上：
 
 - [Caddy](https://github.com/caddyserver/caddy) 与 [caddy-l4](https://github.com/mholt/caddy-l4)：对外访问、自动 HTTPS 与 TCP / UDP 转发
 - [wireguard-go](https://git.zx2c4.com/wireguard-go)：节点之间的加密网络
+- [Hysteria](https://github.com/apernet/hysteria) 与 [quic-go](https://github.com/quic-go/quic-go)：QUIC 快速通道与 BBR 拥塞控制
 - [kopia](https://github.com/kopia/kopia)：快照与异地副本
 - [yamux](https://github.com/hashicorp/yamux)、[Connect](https://connectrpc.com)：控制面通信
 - [shadcn/ui](https://ui.shadcn.com)：界面组件

@@ -12,6 +12,8 @@ const repo = "https://github.com/SIPC/Nagi";
 const credits = [
   { name: "Caddy", href: "https://github.com/caddyserver/caddy", use: a.credits.caddy },
   { name: "wireguard-go", href: "https://git.zx2c4.com/wireguard-go", use: a.credits.wireguard },
+  { name: "Hysteria", href: "https://github.com/apernet/hysteria", use: a.credits.quic },
+  { name: "quic-go", href: "https://github.com/quic-go/quic-go", use: a.credits.quic },
   { name: "kopia", href: "https://github.com/kopia/kopia", use: a.credits.kopia },
   { name: "yamux", href: "https://github.com/hashicorp/yamux", use: a.credits.control },
   { name: "Connect", href: "https://connectrpc.com", use: a.credits.control },
