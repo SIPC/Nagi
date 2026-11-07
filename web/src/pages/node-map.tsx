@@ -5,7 +5,7 @@ import { Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { HelpTip, QueryError, Section, Segmented, Status, Waves } from "@/components/ui";
+import { HelpTip, QueryError, RowsSkeleton, Section, Segmented, Status, Waves } from "@/components/ui";
 import { Legend as ChartLegend, TimeChart, type Pt as ChartPt } from "@/components/chart";
 import { metricRanges, type MetricRange } from "@/components/metrics";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -157,7 +157,7 @@ const nodeStatus = (n: Node) => (n.pending ? t.common.status.pendingApproval : n
 
 // statusLine：离线、待批准的节点在名字下面写状态，在线时返回空，由图层自己写。
 const statusLine = (n: Node) =>
-  n.pending ? t.common.status.pendingApproval : !n.online ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : "";
+  n.pending ? t.common.status.pendingApproval : !n.online ? (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : t.nodes.neverSeen) : "";
 
 const pct = (v: number) => `${Math.round(v)}%`;
 
@@ -510,7 +510,7 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
           type="button"
           onClick={() => setPick(on ? null : [from.id, to.id])}
           aria-pressed={on}
-          aria-label={`${k.direction(from.name, to.name)}：${text}`}
+          aria-label={k.cell(k.direction(from.name, to.name), text)}
           className={cn(
             "h-9 w-full cursor-pointer rounded-md px-2 text-[13px] tabular-nums outline-none transition-shadow duration-150 focus-visible:ring-2 focus-visible:ring-ring/40",
             c && c.rtt > 0 ? heat(c.rtt) : "bg-muted/40",
@@ -761,6 +761,8 @@ function HaMap({ nodes }: { nodes: Node[] }) {
       <div className="mx-auto w-full max-w-xl">
         {projects.error && !projects.data ? (
           <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />
+        ) : projects.isPending ? (
+          <RowsSkeleton count={2} />
         ) : failedNode ? (
           <FailureReport node={failedNode} nodes={nodes} items={items} />
         ) : (

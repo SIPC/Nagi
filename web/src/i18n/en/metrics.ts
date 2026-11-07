@@ -19,8 +19,8 @@ export default {
   resourceUsage: "Resource usage",
   memory: "Memory",
   disk: "Disk",
-  netRx: "Down",
-  netTx: "Up",
+  netRx: "In",
+  netTx: "Out",
   restarts: "Restarts",
   count: (n) => n,
   memTitle: (usage) => `Memory ${usage}`,
@@ -43,5 +43,4 @@ export default {
   requestCount: "Requests",
   latency: "Latency",
   traffic: "Traffic",
-  seriesSeparator: ", ",
 } satisfies typeof zh;

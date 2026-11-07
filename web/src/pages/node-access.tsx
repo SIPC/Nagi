@@ -193,7 +193,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       onExpired();
       return new Error(t.nodeAccess.elevate.expired);
     }
-    return new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+    return new Error((await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status)));
   };
   const download = (p: string) =>
     run(`download:${p}`, async () => {
@@ -234,7 +234,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
 
   const remove = async (e: NodeFileEntry) => {
     const typed = (e.isDir && !e.isSymlink) || e.access === "confirm";
-    const answer = await ask(m.deleteConfirm(e.name, e.isDir), {
+    const answer = await ask(m.deleteConfirm(e.name, e.isDir && !e.isSymlink), {
       action: t.common.actions.delete,
       danger: true,
       ...(typed ? { checkDefault: true, typeToConfirm: { label: m.deleteType(e.name), value: e.name } } : {}),
@@ -543,9 +543,14 @@ function EditNodeFile({ node, file, initial, onClose, onPath, onExpired, onSaved
             tone="warning"
             title={m.conflictTitle}
             actions={
-              <Button variant="outline" readOnlyOk onClick={reload}>
-                {m.conflictReload}
-              </Button>
+              <>
+                <Button variant="outline" readOnlyOk onClick={reload}>
+                  {m.conflictReload}
+                </Button>
+                <Button variant="outline" disabled={busy} onClick={() => save("")}>
+                  {m.overwrite}
+                </Button>
+              </>
             }
           >
             {m.conflictText}

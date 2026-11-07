@@ -18,6 +18,7 @@ import {
   Alert,
   Badge,
   Button,
+  ButtonLink,
   cardClass,
   CardGrid,
   Dialog,
@@ -52,7 +53,7 @@ import {
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
 import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
-import { confirmAction, notify } from "@/components/confirm";
+import { ask, confirmAction, notify } from "@/components/confirm";
 import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
@@ -102,6 +103,9 @@ function nodeSpecTitle(info?: NodeInfo, usage?: NodeUsage) {
   return disk ? `${t.nodes.disk} ${sizeLabel(disk)}` : undefined;
 }
 
+// lastSeenText：离线节点最后在线的时间，从未连上过时写「从未在线」。
+const lastSeenText = (n: Node) => (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : t.nodes.neverSeen);
+
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 const fmtPercent = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
 
@@ -130,7 +134,7 @@ function NodeResources({ n }: { n: Node }) {
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
-        <Alert>{errorMessage(q.error)}</Alert>
+        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
         <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           {items.map((it) => {
@@ -233,12 +237,15 @@ async function approve(n: Node) {
 
 export type NodesView = "cards" | MapLayer;
 
-export function NodesPage({ view, onView }: { view: NodesView; onView: (v: NodesView) => void }) {
+export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesView; onView: (v: NodesView) => void; openAdd?: boolean; onAddOpened?: () => void }) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
   const { isAdmin } = useRole();
   const status = useUpdateStatus(isAdmin);
-  const [dialog, setDialog] = useState<"add" | "handover" | null>(null);
+  const [dialog, setDialog] = useState<"add" | "handover" | null>(openAdd && isAdmin ? "add" : null);
+  useEffect(() => {
+    if (openAdd) onAddOpened?.();
+  }, [openAdd, onAddOpened]);
   const [starting, setStarting] = useState(false);
   const list = nodes.data?.nodes ?? [];
   const states = status.data?.nodes ?? {};
@@ -313,11 +320,7 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
               <Plus />
               {t.nodes.addNode}
             </Button>
-            {list.length > 0 && (
-              <Button variant="outline" onClick={() => setDialog("handover")}>
-                {t.nodes.handoverAction}
-              </Button>
-            )}
+            {list.length > 0 && <Menu items={[{ label: t.nodes.handover, onSelect: () => setDialog("handover") }]} />}
           </>
         }
       />
@@ -356,7 +359,7 @@ export function NodesPage({ view, onView }: { view: NodesView; onView: (v: Nodes
       <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} className="max-w-[520px]">
         <AddNode onClose={() => setDialog(null)} />
       </Dialog>
-      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} className="max-w-[520px]">
+      <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} description={t.nodes.handoverDescription} className="max-w-[520px]">
         <HandOver nodes={list} onClose={() => setDialog(null)} />
       </Dialog>
     </>
@@ -417,12 +420,12 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
         <NodeUsageBars usage={u} info={n.info} />
       ) : (
         <p className="text-[13px] leading-5 text-muted-foreground">
-          <Roll value={t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))} />
+          <Roll value={lastSeenText(n)} />
         </p>
       )}
       <div className="mt-auto flex items-center justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
         <Roll value={t.nodes.containers(n.containers)} n={n.containers} className="shrink-0" />
-        <span className="truncate">{n.info ? `Docker ${n.info.dockerVersion || "?"}` : "—"}</span>
+        <span className="truncate">{n.info?.dockerVersion ? `Docker ${n.info.dockerVersion}` : "—"}</span>
       </div>
     </Link>
   );
@@ -449,7 +452,15 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
     return (
       <>
         <Breadcrumb className="md:hidden" items={[{ label: t.nodes.title, to: "/nodes" }]} />
-        <Notice tone="danger" title={t.nodes.notFound} />
+        <Notice
+          tone="danger"
+          title={t.nodes.notFound}
+          actions={
+            <ButtonLink to="/nodes" variant="outline" readOnlyOk>
+              {t.nodes.viewAll}
+            </ButtonLink>
+          }
+        />
       </>
     );
   }
@@ -462,7 +473,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   const target = upgradeTarget(n, panelVersion);
   const upgradeState = status.data?.nodes[n.id];
   const remove = async () => {
-    if (!(await confirmAction(t.nodes.removeConfirm(n.name), { action: t.common.actions.remove, danger: true }))) return;
+    if (!(await confirmAction(t.nodes.removeConfirm(n.name), { action: t.nodes.removeNode, danger: true }))) return;
     try {
       await nodeClient.removeNode({ nodeId: n.id });
       navigate({ to: "/nodes" });
@@ -489,14 +500,14 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <>
                 <span>{`${n.info.os}/${n.info.arch}`}</span>
                 {nodeSpec(n.info) && <span title={nodeSpecTitle(n.info, n.usage)}>{nodeSpec(n.info)}</span>}
-                <span title={`Compose ${n.info.composeVersion || "?"}`}>{`Docker ${n.info.dockerVersion || "?"}`}</span>
-                <span>{`Nagi ${n.info.version || "?"}`}</span>
+                {n.info.dockerVersion && <span title={n.info.composeVersion ? `Compose ${n.info.composeVersion}` : undefined}>{`Docker ${n.info.dockerVersion}`}</span>}
+                {n.info.version && <span>{`Nagi ${n.info.version}`}</span>}
               </>
             )}
             <button type="button" className="cursor-pointer underline-offset-4 hover:text-foreground hover:underline" onClick={() => onTab("containers")}>
               <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
-            {!n.online && <Roll value={t.nodes.lastSeen(timeAgo(toDate(n.lastSeen)))} />}
+            {!n.online && !n.pending && <Roll value={lastSeenText(n)} />}
           </>
         }
         actions={
@@ -715,26 +726,36 @@ function AddNode({ onClose }: { onClose: () => void }) {
   });
   const [address, setAddress] = useState<string | null>(null);
   const [command, setCommand] = useState("");
+  const [addressError, setAddressError] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
+  // saveAddress 保存修改过的对外地址。安装命令用的是已保存的地址，所以生成前先保存。
   const saveAddress = async () => {
-    setError("");
+    if (address === null) return true;
+    setAddressError("");
     try {
-      await settingsClient.updateSettings({ publicAddress: address ?? "" });
+      await settingsClient.updateSettings({ publicAddress: address });
       setAddress(null);
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      return true;
     } catch (err) {
-      setError(errorMessage(err));
+      setAddressError(errorMessage(err));
+      return false;
     }
   };
 
   const create = async () => {
     setError("");
+    setBusy(true);
     try {
+      if (!(await saveAddress())) return;
       const res = await nodeClient.createEnrollCommand({});
       setCommand(res.command);
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -743,17 +764,9 @@ function AddNode({ onClose }: { onClose: () => void }) {
   if (settings.error) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      {error && <Alert>{error}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address">
-          <div className="flex items-center gap-2">
-            <Input id="public-address" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
-            {address !== null && (
-              <Button variant="outline" onClick={saveAddress}>
-                {t.common.actions.save}
-              </Button>
-            )}
-          </div>
+        <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address" error={addressError}>
+          <Input id="public-address" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
         </Field>
         <Field label={t.nodes.add.port} htmlFor="public-port">
           <Input id="public-port" value={s?.port ?? ""} readOnly />
@@ -768,10 +781,12 @@ function AddNode({ onClose }: { onClose: () => void }) {
           </p>
         </>
       )}
+      {error && <Alert>{error}</Alert>}
       <DialogActions>
         {command ? (
           <>
-            <Button variant="outline" onClick={create}>
+            <Button variant="outline" onClick={create} disabled={busy}>
+              {busy && <Spinner />}
               {t.nodes.add.regenerate}
             </Button>
             <Button readOnlyOk onClick={onClose}>
@@ -783,7 +798,10 @@ function AddNode({ onClose }: { onClose: () => void }) {
             <Button variant="outline" readOnlyOk onClick={onClose}>
               {t.common.actions.cancel}
             </Button>
-            <Button onClick={create}>{t.nodes.add.generate}</Button>
+            <Button onClick={create} disabled={busy}>
+              {busy && <Spinner />}
+              {t.nodes.add.generate}
+            </Button>
           </>
         )}
       </DialogActions>
@@ -843,7 +861,7 @@ function NodeMirrors({ nodeId }: { nodeId: string }) {
   const q = useQuery({ queryKey: ["node-mirrors", nodeId], queryFn: () => nodeClient.getNodeMirrors({ nodeId }), enabled: isAdmin });
   const denied = !isAdmin || (q.error instanceof ConnectError && q.error.code === Code.PermissionDenied);
   return (
-    <Section title={t.nodes.mirrors.title}>
+    <Section title={t.nodes.mirrors.title} description={t.nodes.mirrors.description}>
       {denied ? (
         <Notice title={t.nodes.mirrors.adminOnly} />
       ) : q.isPending ? (
@@ -933,13 +951,8 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
           <Field
             label={t.nodes.mirrors.label}
             htmlFor={`mirrors-${nodeId}`}
-            help={
-              <span className="grid gap-1">
-                <span>{t.nodes.mirrors.description}</span>
-                <span>{t.nodes.mirrors.hint}</span>
-                <span>{t.nodes.mirrors.help}</span>
-              </span>
-            }
+            hint={t.nodes.mirrors.hint}
+            help={t.nodes.mirrors.help}
           >
             <Textarea id={`mirrors-${nodeId}`} rows={3} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" spellCheck={false} className="py-2" />
           </Field>
@@ -961,8 +974,10 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ["node-replicas", nodeId], queryFn: () => nodeClient.listNodeReplicas({ nodeId }) });
   const [error, setError] = useState("");
-  const remove = async (projectId: string, container: string) => {
-    if (!(await confirmAction(t.nodes.replicas.deleteConfirm(container), { action: t.common.actions.delete, danger: true }))) return;
+  const remove = async (projectId: string, container: string, label: string) => {
+    const m = t.nodes.replicas;
+    const answer = await ask(m.deleteConfirm(label), { action: m.deleteAction, danger: true, checkDefault: true, typeToConfirm: { label: m.deleteType(container), value: container } });
+    if (!answer) return;
     setError("");
     try {
       await nodeClient.deleteNodeReplica({ nodeId, projectId, container });
@@ -994,7 +1009,7 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
                 cols={[{ content: <Roll value={fmtBytes(Number(r?.bytes ?? 0))} n={Number(r?.bytes ?? 0)} />, num: true }]}
                 actions={
                   inUse ? null : (
-                    <Button size="row" variant="ghost" onClick={() => remove(r!.projectId, r!.container)}>
+                    <Button size="row" variant="ghost" onClick={() => remove(r!.projectId, r!.container, label)}>
                       {t.common.actions.delete}
                     </Button>
                   )

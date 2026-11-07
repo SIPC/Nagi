@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes } from "@/components/metrics";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowsSkeleton, Section, Spinner, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowsSkeleton, Section, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
@@ -59,12 +58,13 @@ type SpeedRun = { steps: SpeedStep[]; quicOffHere?: boolean; quicOffPeer?: boole
 const speedRunning = (r?: SpeedRun) => !!r && r.steps.some((s) => s.state === "run" || s.state === "wait");
 
 // speedTip：有更快的走法时提示怎么改：经面板中转、有一端关了 QUIC、WireGuard 隧道比 QUIC 快 20% 以上。
-function speedTip(p: MeshPeerStatus, r: SpeedRun) {
-  if (p.path === "udp-relay" || p.path === "tls-relay") return t.mesh.tipRelay;
-  if (r.quicOffHere) return t.mesh.tipQuicOffHere;
-  if (r.quicOffPeer) return t.mesh.tipQuicOffPeer;
+// settings：要改的是本节点的 QUIC 设置，提示旁给出到节点设置的链接。
+function speedTip(p: MeshPeerStatus, r: SpeedRun, port: number): { text: string; settings?: boolean } | undefined {
+  if (p.path === "udp-relay" || p.path === "tls-relay") return { text: t.mesh.tipRelay(port) };
+  if (r.quicOffHere) return { text: t.mesh.tipQuicOffHere, settings: true };
+  if (r.quicOffPeer) return { text: t.mesh.tipQuicOffPeer };
   const [a, b] = r.steps;
-  if (a?.quic && a.state === "done" && b?.state === "done" && b.up! + b.down! > 1.2 * (a.up! + a.down!)) return t.mesh.tipWireGuard;
+  if (a?.quic && a.state === "done" && b?.state === "done" && b.up! + b.down! > 1.2 * (a.up! + a.down!)) return { text: t.mesh.tipWireGuard, settings: true };
   return undefined;
 }
 
@@ -211,7 +211,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
                         }
                       }}
                     >
-                      Ping
+                      {t.mesh.ping}
                     </Button>
                   </div>
                 ) : undefined
@@ -220,8 +220,8 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
           );
         })}
       </List>
-      {openPeer && speed[openPeer.address] && (
-        <SpeedDialog peer={openPeer} run={speed[openPeer.address]} onRetry={() => runSpeed(openPeer.address, openPeer)} onClose={() => setOpen(null)} />
+      {openPeer && speed[openPeer.address] && nodeId && (
+        <SpeedDialog nodeId={nodeId} port={status.port} peer={openPeer} run={speed[openPeer.address]} onRetry={() => runSpeed(openPeer.address, openPeer)} onClose={() => setOpen(null)} />
       )}
     </>
   );
@@ -257,10 +257,10 @@ function useSeconds(active: boolean) {
 }
 
 // SpeedDialog：测速的进度和结果。一行一种走法，测完一步就显示；下面是这条连接的路径、延迟、丢包和建议。
-function SpeedDialog({ peer: p, run, onRetry, onClose }: { peer: MeshPeerStatus; run: SpeedRun; onRetry: () => void; onClose: () => void }) {
+function SpeedDialog({ nodeId, port, peer: p, run, onRetry, onClose }: { nodeId: string; port: number; peer: MeshPeerStatus; run: SpeedRun; onRetry: () => void; onClose: () => void }) {
   const busy = speedRunning(run);
   useSeconds(busy);
-  const tip = busy ? undefined : speedTip(p, run);
+  const tip = busy ? undefined : speedTip(p, run, port);
   const facts = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, lossText(p)].filter(Boolean).join(" · ");
   const label = (s: SpeedStep) => (s.via === "wireguard" ? t.mesh.viaWireGuardCompare : `${s.quic ? t.mesh.viaQuic : t.mesh.viaWireGuardShort}${t.mesh.speedCurrent}`);
   const status = (s: SpeedStep) => {
@@ -311,7 +311,19 @@ function SpeedDialog({ peer: p, run, onRetry, onClose }: { peer: MeshPeerStatus;
       {errors.map((s) => (
         <Alert key={s.via}>{s.error}</Alert>
       ))}
-      {tip && <Notice tone="warning" title={tip} />}
+      {tip && (
+        <Notice
+          tone="warning"
+          title={tip.text}
+          actions={
+            tip.settings && (
+              <ButtonLink to="/nodes/$nodeId" params={{ nodeId }} search={{ tab: "settings" }} variant="outline" readOnlyOk>
+                {t.mesh.openSettings}
+              </ButtonLink>
+            )
+          }
+        />
+      )}
       <DialogActions>
         <Button variant="outline" onClick={onClose} readOnlyOk>
           {t.common.actions.close}
@@ -349,18 +361,20 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
   const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const q = useQuery({ queryKey: ["node-mesh", nodeId], queryFn: () => nodeClient.getNodeMesh({ nodeId }), enabled: online });
   const off = q.data?.quicOff;
+  // 结果直接显示在开关旁，不另外提示「已保存」。
   const toggle = async () => {
     if (!off && !(await confirmAction(t.mesh.quicConfirm, { action: t.mesh.quicDisable }))) return;
     setBusy(true);
+    setError("");
     try {
       const r = await nodeClient.setNodeMeshOptions({ nodeId, options: { quicOff: !off } });
       queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", nodeId] });
-      toast.success(t.common.feedback.saved);
     } catch (err) {
-      toast.error(errorMessage(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -369,6 +383,7 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
     <Section
       title={t.mesh.quicTitle}
       description={t.mesh.quicDescription}
+      help={t.mesh.quicHelp}
       actions={
         q.data && (
           <div className="flex items-center gap-3">
@@ -382,7 +397,9 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
           </div>
         )
       }
-    />
+    >
+      {q.error && !q.data ? <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} /> : error ? <Alert>{error}</Alert> : null}
+    </Section>
   );
 }
 

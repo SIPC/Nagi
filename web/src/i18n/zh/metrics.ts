@@ -18,8 +18,8 @@ export default {
   resourceUsage: "资源占用",
   memory: "内存",
   disk: "磁盘",
-  netRx: "下行",
-  netTx: "上行",
+  netRx: "入站",
+  netTx: "出站",
   restarts: "重启次数",
   count: (n: string) => `${n} 次`,
   memTitle: (usage: string) => `内存 ${usage}`,
@@ -42,5 +42,4 @@ export default {
   requestCount: "请求数",
   latency: "耗时",
   traffic: "流量",
-  seriesSeparator: "、",
 };

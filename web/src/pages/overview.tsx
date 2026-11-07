@@ -637,10 +637,16 @@ export function OverviewPage() {
 
   // ---- 汇总 ----
 
-  const containers = projectList.flatMap((s) => (s.project?.containers ?? []).map((c) => stateOf((s.status?.services ?? []).filter((v) => v.container === c.name), c.deployedVersion > 0n)));
-  const running = containers.filter((c) => c.tone === "success").length;
-  const abnormal = containers.filter((c) => c.tone === "danger").length;
+  // 离线节点上的容器状态未知（docs/ui.md），不算运行中，也不算异常。
+  const offlineIds = new Set(all.filter((n) => !n.online).map((n) => n.id));
+  const containers = projectList.flatMap((s) =>
+    (s.project?.containers ?? []).map((c) => (offlineIds.has(c.nodeId) ? undefined : stateOf((s.status?.services ?? []).filter((v) => v.container === c.name), c.deployedVersion > 0n))),
+  );
+  const running = containers.filter((c) => c?.tone === "success").length;
+  const abnormal = containers.filter((c) => c?.tone === "danger").length;
   const offlineNames = all.filter((n) => !n.online).map((n) => n.name);
+  const allOffline = all.length > 0 && online.length === 0;
+  const offlineNotice = offlineNames.length > 0 && !allOffline && <Notice tone="warning">{o.offlineExcluded(t.common.list(offlineNames))}</Notice>;
 
   const sample = liveRates(online.map((n) => n.id), liveMesh.data, keys);
   const ready = !!sample && !!live.data;
@@ -770,6 +776,7 @@ export function OverviewPage() {
         }
       />
       {nodes.error && <QueryError className="mb-6" error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />}
+      {projects.error && !projects.data && <QueryError className="mb-6" error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4 md:flex md:flex-wrap md:gap-x-12">
         <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
@@ -784,9 +791,7 @@ export function OverviewPage() {
           <Empty
             title={o.noNodes.title}
             action={
-              <ButtonLink to="/nodes" variant="outline" readOnlyOk>
-                {o.noNodes.action}
-              </ButtonLink>
+              <ButtonLink to="/nodes" search={{ add: true }}>{o.noNodes.action}</ButtonLink>
             }
           >
             {o.noNodes.text}
@@ -810,9 +815,23 @@ export function OverviewPage() {
               />
             }
           >
-            {outdated.length > 0 && <Notice tone="warning">{o.flow.outdated(outdated.join(o.flow.separator))}</Notice>}
+            {outdated.length > 0 && (
+              <Notice
+                tone="warning"
+                actions={
+                  <ButtonLink to="/nodes" variant="outline" readOnlyOk>
+                    {o.viewNodes}
+                  </ButtonLink>
+                }
+              >
+                {o.flow.outdated(t.common.list(outdated))}
+              </Notice>
+            )}
+            {offlineNotice}
             {nodes.isPending ? (
               <RowsSkeleton />
+            ) : allOffline ? (
+              <EmptyRow>{o.allOffline}</EmptyRow>
             ) : online.length === 0 ? (
               <EmptyRow>{o.flow.empty}</EmptyRow>
             ) : !ready ? (
@@ -872,7 +891,19 @@ export function OverviewPage() {
                           {n.name}
                         </Link>
                       </td>
-                      <td className={tdClass}>{n.pending ? <Status>{o.nodes.pending}</Status> : n.online ? <Status tone="success">{o.nodes.online}</Status> : <Status tone="warning">{o.nodes.offline}</Status>}</td>
+                      <td className={tdClass}>
+                        {n.pending ? (
+                          <span className="text-warning-text">
+                            <Status tone="warning">{t.common.status.pendingApproval}</Status>
+                          </span>
+                        ) : n.online ? (
+                          <Status tone="success">{t.common.status.online}</Status>
+                        ) : (
+                          <span className="text-destructive">
+                            <Status tone="danger">{t.common.status.offline}</Status>
+                          </span>
+                        )}
+                      </td>
                       <td className={tdClass}><Roll value={u ? fmtCpu(u.cpu) : dash} /></td>
                       <td className={tdClass}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpu(u.memory)) : dash} n={u?.memory} /></td>
                       <td className={tdClass}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpu(u.disk)) : dash} n={u?.disk} /></td>
@@ -887,8 +918,11 @@ export function OverviewPage() {
           </Section>
 
           <Section title={o.routes.title} help={o.routes.help}>
+            {offlineNotice}
             {routeRows.length === 0 ? (
-              online.length > 0 && routeSeries.isPending ? (
+              allOffline ? (
+                <EmptyRow>{o.allOffline}</EmptyRow>
+              ) : online.length > 0 && routeSeries.isPending ? (
                 <RowsSkeleton count={1} />
               ) : (
                 <EmptyRow>{o.routes.empty}</EmptyRow>

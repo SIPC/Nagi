@@ -4,7 +4,7 @@ import { Cpu, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
-import { EmptyRow, Notice, QueryError, Roll, Section, Segmented, Select, Skeleton } from "@/components/ui";
+import { EmptyRow, Notice, QueryError, Roll, Select, Skeleton } from "@/components/ui";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
@@ -118,41 +118,6 @@ function MetricsSkeleton() {
 }
 
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
-
-// NodeMetrics：节点页的监控，时间范围在区块标题右侧。
-export function NodeMetrics({ nodeId }: { nodeId: string }) {
-  const [range, setRange] = useState<MetricRange>("1h");
-  return (
-    <Section title={m.resourceUsage} actions={<Segmented value={range} onChange={setRange} items={metricRanges.map((r) => ({ value: r.value, label: m.rangesShort[r.value] }))} />}>
-      <NodeMetricCards nodeId={nodeId} range={range} />
-    </Section>
-  );
-}
-
-function NodeMetricCards({ nodeId, range }: { nodeId: string; range: MetricRange }) {
-  const r = rangeOf(range);
-  const q = useQuery({
-    queryKey: ["node-metrics", nodeId, range],
-    queryFn: () => nodeClient.queryNodeMetrics({ nodeId, prefix: "node:", from: ago(r.seconds), step: BigInt(r.step) }),
-    refetchInterval: 10_000,
-    placeholderData: (prev) => prev,
-  });
-  if (q.isPending) return <MetricsSkeleton />;
-  if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
-  const series = new Map(q.data.series.map((s) => [s.name, s]));
-  const metric = (label: string, name: string, format: (v: number) => string, minMax?: number) => (
-    <Metric key={name} label={label} points={toPoints(series.get(name))} format={format} range={range} minMax={minMax} />
-  );
-  return (
-    <div className="grid grid-cols-1 gap-8 max-md:gap-4 md:grid-cols-3">
-      {metric("CPU", "node:cpu", fmtCpu, cpuMinMax)}
-      {metric(m.memory, "node:mem", fmtCpu)}
-      {metric(m.disk, "node:disk", fmtCpu)}
-      {metric(m.netRx, "node:net_rx", fmtRate)}
-      {metric(m.netTx, "node:net_tx", fmtRate)}
-    </div>
-  );
-}
 
 const fmtRate = (v: number) => `${fmtBytes(v)}/s`;
 const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
@@ -487,7 +452,7 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRo
   if (total.size === 0 && routes.size === 0 && idle.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
     <>
-      {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(offline.join(m.seriesSeparator))}</Notice>}
+      {offline.length > 0 && <Notice tone="warning">{m.offlineExcluded(t.common.list(offline))}</Notice>}
       {total.size > 0 && (
         <>
           <div className="font-medium">{m.allContainersTotal}</div>

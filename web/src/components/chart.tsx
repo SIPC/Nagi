@@ -167,7 +167,7 @@ export function TimeChart({
         onPointerLeave={() => setHover(null)}
       >
         {width > 0 && (
-          <svg width={width} height={height} className="absolute inset-0 block overflow-visible" role="img" aria-label={series.map((s) => s.label).join(t.metrics.seriesSeparator)}>
+          <svg width={width} height={height} className="absolute inset-0 block overflow-visible" role="img" aria-label={t.common.list(series.map((s) => s.label))}>
             {stacked ? bars() : series.map(lines)}
             {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={height} className="stroke-muted-foreground" strokeDasharray="3 3" />}
           </svg>
