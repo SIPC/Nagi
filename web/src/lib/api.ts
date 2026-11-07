@@ -39,7 +39,8 @@ export function errorMessage(err: unknown): string {
     const m = err.rawMessage;
     const http = /^HTTP (\d+)$/.exec(m);
     if (http) return t.common.errors.http(http[1]);
-    if (err.code === Code.Unavailable || /failed to fetch|networkerror|load failed/i.test(m)) return t.common.errors.unreachable;
+    // 只有请求没到面板（网络错误、没有说明）时才换成通用文字；面板自己返回的 Unavailable（例如「节点 n2 离线」）照原文显示。
+    if (m === "" || /failed to fetch|networkerror|load failed/i.test(m)) return t.common.errors.unreachable;
     return m;
   }
   if (err instanceof Error) return err.message;

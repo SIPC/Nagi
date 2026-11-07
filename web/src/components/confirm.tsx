@@ -115,7 +115,7 @@ export function ConfirmHost() {
           {req?.notice ? (
             <AlertDialogAction asChild>
               <Button ref={safeButton} readOnlyOk size="sm" onClick={() => finish({ checked: false })}>
-                {t.common.actions.confirm}
+                {t.common.actions.ok}
               </Button>
             </AlertDialogAction>
           ) : (

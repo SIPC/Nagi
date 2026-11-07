@@ -4,7 +4,7 @@ export default {
     overview: "概览",
     projects: "项目",
     nodes: "节点",
-    logs: "日志",
+    activity: "活动",
     settings: "设置",
     open: "打开导航",
     close: "关闭导航",
@@ -16,7 +16,7 @@ export default {
   },
   names: {
     invalid: "只能用小写字母、数字和 -，不以 - 开头或结尾，不超过 32 个字符",
-    invalidEnv: (key: string) => `变量名「${key}」不合法：只能包含字母、数字和下划线，且不能以数字开头`,
+    invalidEnv: (key: string) => `变量名「${key}」只能包含字母、数字和下划线，且不能以数字开头`,
   },
   nodesOffline: (n: number) => `${n} 个节点离线`,
   skipToContent: "跳到主要内容",
@@ -53,8 +53,8 @@ export default {
     reconnect: "重新连接",
   },
   ports: {
-    badFormat: (p: string) => `「${p}」格式不对，应为 节点端口:容器端口，例如 8080:80 或 53:53/udp`,
-    outOfRange: (p: string) => `「${p}」端口应在 1～65535 之间`,
+    badFormat: (p: string) => `「${p}」须为 节点端口:容器端口，例如 8080:80 或 53:53/udp`,
+    outOfRange: (p: string) => `「${p}」的端口须在 1–65535 之间`,
     reserved: (published: number, target: number) =>
       `节点端口 ${published} 留给域名访问。网站请换一个端口（如 8080:${target}），或部署后在「网络」里绑定域名`,
   },

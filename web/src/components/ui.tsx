@@ -61,8 +61,14 @@ export const buttonVariants = cva(
   },
 );
 
-// ReadOnlyContext：备用面板上为 true，按钮默认置灰（只读的按钮加 readOnlyOk）。见 docs/standby.md。
+// ReadOnlyContext：备用面板上或角色只能查看时为 true，按钮默认置灰（只读的按钮加 readOnlyOk）。见 docs/standby.md。
 export const ReadOnlyContext = createContext(false);
+// ReadOnlyReasonContext：只读的原因，决定置灰按钮的提示。
+export const ReadOnlyReasonContext = createContext<"standby" | "role">("role");
+
+function useReadOnlyHint() {
+  return useContext(ReadOnlyReasonContext) === "standby" ? t.common.readOnly.standby : t.common.readOnly.role;
+}
 
 export function Button({
   className,
@@ -75,12 +81,13 @@ export function Button({
   ...props
 }: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { readOnlyOk?: boolean }) {
   const readOnly = useContext(ReadOnlyContext) && !readOnlyOk;
+  const hint = useReadOnlyHint();
   return (
     <button
       type={type}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || readOnly}
-      title={readOnly ? t.common.readOnlyHint : title}
+      title={readOnly ? hint : title}
       {...props}
     />
   );
@@ -211,18 +218,13 @@ export function Field({
   className?: string;
   // error：填写有误时的说明，显示在格式说明的位置。
   error?: string;
-  // required：必填，标签后面显示星号。
-  required?: boolean;
   children: React.ReactNode;
 }) {
   const errorId = error && htmlFor ? `${htmlFor}-error` : undefined;
   return (
     <div className={cn("grid min-w-0 content-start gap-2", className)}>
       <div className="flex items-center gap-1">
-        <Label htmlFor={htmlFor}>
-          {label}
-          
-        </Label>
+        <Label htmlFor={htmlFor}>{label}</Label>
         {help && <HelpTip>{help}</HelpTip>}
       </div>
       {error && isValidElement<{ "aria-invalid"?: boolean; "aria-describedby"?: string }>(children)
@@ -846,9 +848,15 @@ export function Empty({ title, children, action, icon }: { title: string; childr
   );
 }
 
-// EmptyRow：区块里没有内容时的一行说明。
-export function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="py-4 text-center text-muted-foreground">{children}</p>;
+// EmptyRow：区块里没有内容时的一行说明。action：下一步的按钮，例如「暂无访问令牌」下的「生成令牌」。
+export function EmptyRow({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  if (!action) return <p className="py-4 text-center text-muted-foreground">{children}</p>;
+  return (
+    <div className="flex flex-col items-center gap-3 py-4 text-center">
+      <p className="text-muted-foreground">{children}</p>
+      {action}
+    </div>
+  );
 }
 
 // ---- 文本 ----
@@ -1189,7 +1197,8 @@ export function Dialog({
   );
 }
 
-type MenuItem = { label: React.ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean; hint?: string };
+// readOnlyOk：只读时仍可用的项（例如查看）。只读时其余项置灰，有一项可用菜单就能打开。
+type MenuItem = { label: React.ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean; hint?: string; readOnlyOk?: boolean };
 
 // ActionSheet：手机的底部操作面板：灰字标题、一列项高 44 的操作、取消。
 function ActionSheet({ open, onClose, items, label, title }: { open: boolean; onClose: () => void; items: MenuItem[]; label: string; title?: React.ReactNode }) {
@@ -1235,11 +1244,13 @@ function ActionSheet({ open, onClose, items, label, title }: { open: boolean; on
 
 // Menu：「更多」按钮和下拉菜单（shadcn）。不用模态模式：选中后常常接着打开确认框，模态菜单会和它争焦点。
 // 手机上是底部操作面板。title：面板的标题（灰字），例如文件名。ghost：无框按钮（手机标题栏的 ⋯）。className：按钮的样式。
-export function Menu({ items, label = t.common.actions.more, rowStyle, ghost, title, className }: { items: MenuItem[]; label?: string; rowStyle?: boolean; ghost?: boolean; title?: React.ReactNode; className?: string }) {
+export function Menu({ items: all, label = t.common.actions.more, rowStyle, ghost, title, className }: { items: MenuItem[]; label?: string; rowStyle?: boolean; ghost?: boolean; title?: React.ReactNode; className?: string }) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const readOnly = useContext(ReadOnlyContext);
+  const items = readOnly ? all.map((it) => (it.readOnlyOk ? it : { ...it, disabled: true })) : all;
   const trigger = (
-    <Button variant={rowStyle || ghost ? "ghost" : "outline"} size={rowStyle ? "rowIcon" : "icon"} className={className} aria-label={label} onClick={mobile ? () => setOpen(true) : undefined}>
+    <Button variant={rowStyle || ghost ? "ghost" : "outline"} size={rowStyle ? "rowIcon" : "icon"} className={className} aria-label={label} readOnlyOk={all.some((it) => it.readOnlyOk)} onClick={mobile ? () => setOpen(true) : undefined}>
       <Ellipsis />
     </Button>
   );

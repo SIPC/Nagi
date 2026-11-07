@@ -190,13 +190,22 @@ const addContainerRoute = createRoute({
 const nodesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes",
-  validateSearch: (search: Record<string, unknown>): { view?: NodesView } => ({
+  // add：打开添加节点的对话框（概览空状态的「添加节点」）。
+  validateSearch: (search: Record<string, unknown>): { view?: NodesView; add?: boolean } => ({
     view: search.view === "network" || search.view === "ha" ? search.view : undefined,
+    add: search.add === true || search.add === "true" ? true : undefined,
   }),
   component: function Nodes() {
-    const { view } = nodesRoute.useSearch();
+    const { view, add } = nodesRoute.useSearch();
     const navigate = nodesRoute.useNavigate();
-    return <NodesPage view={view ?? "cards"} onView={(v) => navigate({ search: { view: v === "cards" ? undefined : v }, replace: true })} />;
+    return (
+      <NodesPage
+        view={view ?? "cards"}
+        onView={(v) => navigate({ search: { view: v === "cards" ? undefined : v }, replace: true })}
+        openAdd={add}
+        onAddOpened={() => navigate({ search: (s) => ({ ...s, add: undefined }), replace: true })}
+      />
+    );
   },
 });
 

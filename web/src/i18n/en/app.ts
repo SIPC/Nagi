@@ -5,7 +5,7 @@ export default {
     overview: "Overview",
     projects: "Projects",
     nodes: "Nodes",
-    logs: "Logs",
+    activity: "Activity",
     settings: "Settings",
     open: "Open navigation",
     close: "Close navigation",
@@ -16,8 +16,8 @@ export default {
     back: "Back to projects",
   },
   names: {
-    invalid: "Use lowercase letters, digits and -. It cannot start or end with - and must be at most 32 characters",
-    invalidEnv: (key) => `Invalid variable name "${key}": use letters, digits and underscores, and do not start with a digit`,
+    invalid: "Use lowercase letters, digits and -. It can't start or end with - and must be at most 32 characters",
+    invalidEnv: (key) => `Variable name "${key}" can only contain letters, digits and underscores, and can't start with a digit`,
   },
   nodesOffline: (n) => (n === 1 ? "1 node offline" : `${n} nodes offline`),
   skipToContent: "Skip to main content",
@@ -54,9 +54,9 @@ export default {
     reconnect: "Reconnect",
   },
   ports: {
-    badFormat: (p) => `"${p}" is invalid. Use node port:container port, e.g. 8080:80 or 53:53/udp`,
-    outOfRange: (p) => `"${p}": ports must be between 1 and 65535`,
+    badFormat: (p) => `"${p}" must be node port:container port, for example 8080:80 or 53:53/udp`,
+    outOfRange: (p) => `Ports in "${p}" must be between 1 and 65535`,
     reserved: (published, target) =>
-      `Node port ${published} is reserved for domain access. Use another port for websites (e.g. 8080:${target}), or bind a domain under Network after deploying`,
+      `Node port ${published} is reserved for domain access. Use another port for websites (for example 8080:${target}), or bind a domain on the Network tab after deploying`,
   },
 } satisfies typeof zh;
