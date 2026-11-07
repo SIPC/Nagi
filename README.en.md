@@ -1,4 +1,7 @@
-<p align="center"><img src="docs/assets/hero.en.png" alt="Nagi · calm waters" width="860"></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.en.dark.png">
+  <img src="docs/assets/screenshots/overview.en.png" alt="Overview: node status and live traffic">
+</picture>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
@@ -14,11 +17,6 @@
 > Calm waters.
 
 Nagi is an open-source, self-hosted container deployment platform. You can manage Docker containers across many Linux servers from one web panel. Nagi is built on Docker and Docker Compose and supports multiple nodes and high availability.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.en.dark.png">
-  <img src="docs/assets/screenshots/overview.en.png" alt="Overview: node status and live traffic">
-</picture>
 
 The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
 

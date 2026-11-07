@@ -1,4 +1,7 @@
-<p align="center"><img src="docs/assets/hero.png" alt="Nagi · 风平浪静" width="860"></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.dark.png">
+  <img src="docs/assets/screenshots/overview.png" alt="概览：节点状态和实时流量">
+</picture>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
@@ -14,11 +17,6 @@
 > 风平浪静。
 
 Nagi 是一个开源的自托管容器部署平台，可以在一个网页面板上管理分布在多台 Linux 服务器上的 Docker 容器。Nagi 基于 Docker 和 Docker Compose，支持多节点与高可用。
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.dark.png">
-  <img src="docs/assets/screenshots/overview.png" alt="概览：节点状态和实时流量">
-</picture>
 
 ## 工作方式
 
