@@ -8,7 +8,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { NodeUsageBars, fmtBytes, fmtBytesShort, metricRanges, type MetricRange } from "@/components/metrics";
+import { UsageCell, fmtBytes, fmtBytesShort, fmtCpuShort, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC } from "@/pages/mesh";
@@ -19,8 +19,7 @@ import {
   Badge,
   Button,
   ButtonLink,
-  cardClass,
-  CardGrid,
+  dotColor,
   Dialog,
   DialogActions,
   Empty,
@@ -44,7 +43,6 @@ import {
   Segmented,
   Slide,
   SlideKeep,
-  Skeleton,
   Spinner,
   Status,
   Tabs,
@@ -278,11 +276,11 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
     }
   };
   const cards = (
-    <CardGrid>
+    <NodeList>
       {list.map((n) => (
-        <NodeCard key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
+        <NodeRow key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
       ))}
-    </CardGrid>
+    </NodeList>
   );
 
   return (
@@ -327,7 +325,7 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
       />
       <AutoHeight>
       {nodes.isPending ? (
-        <CardsSkeleton />
+        <RowsSkeleton count={3} />
       ) : nodes.error ? (
         <QueryError error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />
       ) : list.length === 0 ? (
@@ -367,48 +365,59 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
   );
 }
 
-// CardsSkeleton：节点卡片加载中。
-function CardsSkeleton() {
+// 节点列表的列：名称和地址，CPU、内存、磁盘各一列（百分比加细条），容器数靠右。窄于 lg 时（平板上五列放不下）只留名称这一列，用量并进第三行。
+const nodeCols = "grid grid-cols-[minmax(0,1fr)] items-start gap-x-6 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem_3rem]";
+
+// NodeList：节点页的列表。字段多、要横向比较，所以有表头；表头线不超出内容区，行左右外扩 8 只为悬停底色。
+function NodeList({ children }: { children: React.ReactNode }) {
   return (
-    <div role="status" aria-label={t.common.feedback.loading}>
-      <CardGrid>
-        {[0, 1].map((i) => (
-          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-background p-4">
-            <Skeleton className="my-1 h-3 w-3/5" />
-            <Skeleton className="my-1 h-3 w-4/5" />
-          </div>
-        ))}
-      </CardGrid>
+    <div className="-mx-2 grid grid-cols-[minmax(0,1fr)] animate-fade-in">
+      <div className={cn(nodeCols, "mx-2 h-9 content-center border-b text-[13px] text-muted-foreground max-lg:hidden")}>
+        <span>{t.nodes.columns.node}</span>
+        <span>CPU</span>
+        <span>{t.metrics.memory}</span>
+        <span>{t.metrics.disk}</span>
+        <span className="text-right">{t.nodes.columns.containers}</span>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)] pt-1">{children}</div>
     </div>
   );
 }
 
-function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
-  const u = n.online && !n.pending ? n.usage : undefined;
-  // 整张卡片可点：链接铺满卡片，「批准」按钮叠在链接上面，不放进链接里（链接里不能嵌按钮）。
+// NodeRow：一个节点一行，整行可点。链接铺满整行，「批准」按钮叠在链接上面，不放进链接里（链接里不能嵌按钮）。
+// 状态只用名称前的圆点，在线时不写字；离线和待批准时在名称后面写灰字。
+function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
+  const usage = n.online && !n.pending ? nodeUsage(n.usage, n.info) : undefined;
+  const tone = n.pending ? "warning" : n.online ? "success" : "neutral";
   return (
-    <div className={cn(cardClass, "relative min-w-0 gap-3 p-4 has-[>a:focus-visible]:border-ring has-[>a:focus-visible]:ring-3 has-[>a:focus-visible]:ring-ring/15")}>
-      <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} aria-label={n.name} className="absolute inset-0 rounded-lg outline-none" />
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium">{n.name}</span>
+    <div className={cn(nodeCols, "relative min-h-13 rounded-md px-2 py-1.5 transition-colors hover:bg-accent has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/40")}>
+      <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} aria-label={n.name} className="absolute inset-0 rounded-md outline-none" />
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2 leading-5">
+          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", dotColor[tone])} />
+          <span className="truncate">{n.name}</span>
           {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
-        </span>
-        <NodeStatus n={n} />
-      </div>
-      <div className="-mt-2 flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate font-mono text-xs leading-5 text-muted-foreground">{n.address || n.id}</span>
-        {upgrade ? (
-          <Badge tone={upgrade.phase === "failed" ? "warning" : "neutral"} title={upgrade.error || undefined}>
-            {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
-          </Badge>
-        ) : (
-          canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>
-        )}
+          {upgrade ? (
+            <Badge tone={upgrade.phase === "failed" ? "warning" : "neutral"} title={upgrade.error || undefined}>
+              {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
+            </Badge>
+          ) : (
+            canUpgrade && <Badge tone="info">{t.nodes.upgrade.badge}</Badge>
+          )}
+          {(n.pending || !n.online) && (
+            <span className="shrink-0 text-[13px] text-muted-foreground">
+              {n.pending ? t.common.status.pendingApproval : <Roll value={`${t.common.status.offline} · ${lastSeenText(n)}`} />}
+            </span>
+          )}
+        </div>
+        <div className="truncate font-mono text-[13px] leading-5 text-muted-foreground">{n.address || n.id}</div>
+        <div className="text-[13px] leading-5 text-muted-foreground tabular-nums lg:hidden">
+          {/* 和 Row 在手机上合并灰色信息的写法相同，用 · 隔开。 */}
+          {[...(usage ?? []).map((u) => `${u.label} ${u.label === "CPU" ? u.value : u.percent === undefined ? "—" : fmtCpuShort(u.percent)}`), t.nodes.containers(n.containers)].join(" · ")}
+        </div>
       </div>
       {n.pending ? (
-        <>
-          <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.pendingHint}</p>
+        <div className="lg:col-span-3 max-lg:mt-2">
           <Button
             variant="outline"
             className="relative"
@@ -418,18 +427,23 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
           >
             {t.nodes.approve}
           </Button>
-        </>
-      ) : n.online ? (
-        <NodeUsageBars usage={u} info={n.info} />
+        </div>
+      ) : usage ? (
+        usage.map((u) => (
+          <span key={u.label} className="max-lg:hidden">
+            <UsageCell {...u} />
+          </span>
+        ))
       ) : (
-        <p className="text-[13px] leading-5 text-muted-foreground">
-          <Roll value={lastSeenText(n)} />
-        </p>
+        [0, 1, 2].map((i) => (
+          <span key={i} className="text-muted-foreground max-lg:hidden">
+            —
+          </span>
+        ))
       )}
-      <div className="mt-auto flex items-center justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
-        <Roll value={t.nodes.containers(n.containers)} n={n.containers} className="shrink-0" />
-        <span className="truncate">{n.info?.dockerVersion ? `Docker ${n.info.dockerVersion}` : "—"}</span>
-      </div>
+      <span className="text-right text-muted-foreground tabular-nums max-lg:hidden">
+        <Roll value={String(n.containers)} n={n.containers} />
+      </span>
     </div>
   );
 }

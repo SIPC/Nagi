@@ -13,8 +13,9 @@ export default {
   },
   approveConfirm: (name, address) => `Approve node ${name} (${address})? It'll join the node network and be managed by this panel. Make sure it's your machine.`,
   title: "Nodes",
+  columns: { node: "Node", containers: "Containers" },
   views: {
-    cards: "Cards",
+    cards: "List",
     network: "Network",
     ha: "High availability",
   },

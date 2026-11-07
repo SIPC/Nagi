@@ -313,71 +313,71 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   );
 }
 
-// NodeUsageBars：节点的 CPU、内存、磁盘占用，上下三项：文字加通栏的占用条。
-// 显示「已用 / 总量」（旧版本的节点不报总量，退回百分比）。
-export function NodeUsageBars({ usage, info, className }: { usage?: NodeUsage; info?: NodeInfo; className?: string }) {
-  // 例如 1.4 GB、15.6 GB、512 MB：到 1000 就进位，不到 100 保留一位小数。
-  const size = (v: number) => {
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let i = 0;
-    while (v >= 1000 && i < units.length - 1) {
-      v /= 1024;
-      i++;
-    }
-    return `${v < 100 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
-  };
+// fmtSize：节点的内存和磁盘容量，例如 1.4 GB、15.6 GB、512 MB：到 1000 就进位，不到 100 保留一位小数。
+export function fmtSize(v: number) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v < 100 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
 
-  // 每项两层：上面是名称和靠右的「已用 / 总量」，下面是占满整行的占用条。超过阈值时已用和条一起变色。
-  const row = (label: string, percent: number | undefined, total: number | undefined, fmt: (v: number) => string, fmtTotal = fmt, detail?: string) => {
-    const ratio = percent === undefined ? 0 : percent / 100;
-    const used = percent !== undefined && total ? ratio * total : undefined;
-    const summary =
-      percent === undefined ? `${label} —` : used !== undefined ? `${label} ${fmt(used)} / ${fmtTotal(total!)} (${fmtPct(percent)})` : `${label} ${fmtPct(percent)}`;
-    const title = detail ? `${summary}
-${detail}` : summary;
-    // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
-    const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
-    return (
-      <span className="grid min-w-0 gap-1.5" title={title}>
-        <span className="flex min-w-0 items-baseline justify-between gap-2 text-[13px] leading-5">
-          <span className="shrink-0 text-muted-foreground">{label}</span>
-          <span className="truncate">
-            <span className={cn("font-medium", ratio >= 0.9 ? "text-destructive" : ratio >= 0.75 ? "text-warning-text" : "text-foreground")}><Roll value={percent === undefined ? "—" : used !== undefined ? fmt(used) : fmtCpuShort(percent)} n={percent} /></span>
-            {used !== undefined && (
-              <span className="text-muted-foreground">
-                {" / "}
-                <Roll value={fmtTotal(total!)} />
-              </span>
-            )}
-          </span>
-        </span>
-        <span className="h-1 overflow-hidden rounded-full bg-primary/12">
-          <span
-            className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", ratio >= 0.9 ? "bg-destructive" : ratio >= 0.75 ? "bg-warning" : "bg-primary")}
-            style={{ transform: `scaleX(${r})` }}
-          />
-        </span>
-      </span>
-    );
-  };
-  // 节点卡片的 CPU 和容器一样按每核 100% 算：16 核的机器总量是 1600%。悬停提示里同时有占整机的比例和核数。
-  const cpuTotal = info?.cpus ? info.cpus * 100 : undefined;
-  const cpuDetail = info?.cpus ? m.cpuCores(info.cpus) : undefined;
-  // 磁盘是所有盘加起来，每块盘的用量在悬停提示里。旧版本的节点不报各盘，退回数据目录所在的盘。
+// nodeUsage：节点列表一行里的 CPU、内存、磁盘。percent 是占整机的比例（定占用条和颜色），
+// value 和 limit 是显示的「已用 / 上限」：CPU 和容器一样按每核 100% 累加，写成「61% / 400%」；
+// 内存和磁盘写成「3.8 / 8.0 GB」（单位相同时只在上限后面写一次）。
+// 旧版本的节点不报总量，只显示已用。
+export function nodeUsage(usage?: NodeUsage, info?: NodeInfo) {
   const disks = usage?.disks ?? [];
-  const diskTotal = disks.reduce((sum, d) => sum + Number(d.totalBytes), 0);
+  const diskSum = disks.reduce((sum, d) => sum + Number(d.totalBytes), 0);
   const diskUsed = disks.reduce((sum, d) => sum + Number(d.usedBytes), 0);
-  const diskDetail = disks.length > 1 ? disks.map((d) => `${d.mount}  ${size(Number(d.usedBytes))} / ${size(Number(d.totalBytes))}`).join("\n") : undefined;
+  const memTotal = info?.memoryBytes ? Number(info.memoryBytes) : 0;
+  const diskTotal = diskSum || (info?.diskBytes ? Number(info.diskBytes) : 0);
+  const cpus = info?.cpus ?? 0;
+  const sized = (label: string, percent: number | undefined, total: number, usedBytes?: number) => {
+    if (percent === undefined) return { label, percent, value: "—", title: `${label} —` };
+    if (!total) return { label, percent, value: fmtPct(percent), title: `${label} ${fmtPct(percent)}` };
+    const used = fmtSize(usedBytes ?? (percent / 100) * total);
+    const limit = fmtSize(total);
+    const [n, unit] = used.split(" ");
+    return { label, percent, value: limit.endsWith(` ${unit}`) ? n : used, limit, title: `${label} ${used} / ${limit} (${fmtPct(percent)})` };
+  };
+  const cpu = !usage
+    ? { label: "CPU", percent: undefined, value: "—", title: "CPU —" }
+    : cpus
+      ? { label: "CPU", percent: usage.cpu / cpus, value: fmtCpuShort(usage.cpu), limit: fmtPct(cpus * 100), title: `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpus * 100)}
+${m.cpuCores(cpus)}` }
+      : { label: "CPU", percent: usage.cpu, value: fmtCpuShort(usage.cpu), title: `CPU ${fmtPct(usage.cpu)}` };
+  return [
+    cpu as { label: string; percent?: number; value: string; limit?: string; title: string },
+    sized(m.memory, usage?.memory, memTotal),
+    sized(m.disk, !usage ? undefined : diskSum > 0 ? (100 * diskUsed) / diskSum : usage.disk, diskTotal, diskSum > 0 ? diskUsed : undefined),
+  ];
+}
+
+// UsageCell：列表里的一项占用。上面是已用（深色）和上限（灰色），下面一根高 3 的细条。
+// 平时灰色，75% 起琥珀，90% 起红，已用同步变色。
+export function UsageCell({ percent, value, limit, title }: { percent?: number; value: string; limit?: string; title: string }) {
+  if (percent === undefined) return <span className="text-muted-foreground">—</span>;
+  const ratio = Math.min(percent / 100, 1);
+  const level = ratio >= 0.9 ? "danger" : ratio >= 0.75 ? "warning" : "normal";
+  // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
+  const r = ratio > 0 ? Math.max(ratio, 0.03) : 0;
   return (
-    <span
-      className={cn(
-        "grid gap-3 tabular-nums",
-        className,
-      )}
-    >
-      {row("CPU", usage?.cpu, cpuTotal, fmtCpuShort, fmtCpuShort, cpuDetail)}
-      {row(m.memory, usage?.memory, info?.memoryBytes ? Number(info.memoryBytes) : undefined, size)}
-      {diskTotal > 0 ? row(m.disk, (100 * diskUsed) / diskTotal, diskTotal, size, size, diskDetail) : row(m.disk, usage?.disk, info?.diskBytes ? Number(info.diskBytes) : undefined, size)}
+    <span className="grid min-w-0 gap-1.5 tabular-nums" title={title}>
+      <span className="truncate leading-5">
+        <span className={cn(level === "danger" ? "text-destructive" : level === "warning" ? "text-warning-text" : "text-foreground")}>
+          <Roll value={value} n={percent} />
+        </span>
+        {limit && <span className="text-muted-foreground"> / {limit}</span>}
+      </span>
+      <span className="h-[3px] w-full overflow-hidden rounded-full bg-primary/10">
+        <span
+          className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", level === "danger" ? "bg-destructive" : level === "warning" ? "bg-warning" : "bg-muted-foreground/60")}
+          style={{ transform: `scaleX(${r})` }}
+        />
+      </span>
     </span>
   );
 }

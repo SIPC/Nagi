@@ -36,7 +36,7 @@ const rateParts = (v: number) => scaled(v, ["B/s", "KB/s", "MB/s", "GB/s", "TB/s
 const fmtRate = (v: number) => rateParts(v).join(" ");
 const fmtTotal = (v: number) => scaled(v, ["B", "KB", "MB", "GB", "TB"]).join(" ");
 
-// 已用 / 总量，两边都带单位，和节点卡片一样：2.0 GB / 15.5 GB、86 GB / 1.0 TB。
+// 已用 / 总量，两边都带单位：2.0 GB / 15.5 GB、86 GB / 1.0 TB。
 function fmtUsed(used: number, total: number) {
   const part = (v: number): [string, string] => {
     const units = ["B", "KB", "MB", "GB", "TB"];

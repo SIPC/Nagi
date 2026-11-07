@@ -12,8 +12,9 @@ export default {
   },
   approveConfirm: (name: string, address: string) => `批准节点 ${name}（${address}）？节点将加入节点网络并接受面板管理，请确认是自有机器。`,
   title: "节点",
+  columns: { node: "节点", containers: "容器" },
   views: {
-    cards: "卡片",
+    cards: "列表",
     network: "网络",
     ha: "高可用",
   },
