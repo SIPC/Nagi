@@ -23,7 +23,10 @@ import { ContainerNetwork } from "@/pages/project-network";
 import {
   Alert,
   Badge,
+  badgeVariants,
   Button,
+  Check,
+  CopyButton,
   Dialog,
   DialogActions,
   ButtonLink,
@@ -33,8 +36,9 @@ import {
   FormRow,
   HelpTip,
   Input,
+  KeyValue,
   List,
-    Menu,
+  Menu,
   Notice,
   QueryError,
   ReadOnlyContext,
@@ -44,7 +48,6 @@ import {
   Roll,
   Segmented,
   Slide,
-  useIsMobile,
   Select,
   Skeleton,
   Spinner,
@@ -194,6 +197,39 @@ function displayImage(image: string) {
   return s;
 }
 
+// ContainerNotes：容器概览上方的提示。一条时直接显示；多条时合并成一条，标题写条数和各条的标题，点「查看」再逐条列出。
+function ContainerNotes({ notes }: { notes: { key: string; title: string; body: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const f = t.common.feedback;
+  if (notes.length === 1)
+    return (
+      <Notice tone="warning" title={notes[0].title} className="mb-6">
+        {notes[0].body}
+      </Notice>
+    );
+  return (
+    <div className="mb-6 grid gap-2">
+      <Notice
+        tone="warning"
+        title={f.notes(notes.length)}
+        actions={
+          <Button variant="outline" readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? f.hideNotes : f.showNotes}
+          </Button>
+        }
+      >
+        {t.common.list(notes.map((n) => n.title))}
+      </Notice>
+      {open &&
+        notes.map((n) => (
+          <Notice key={n.key} tone="warning" title={n.title} className="pl-4">
+            {n.body}
+          </Notice>
+        ))}
+    </div>
+  );
+}
+
 // containerKind 返回"容器"（单个容器，镜像表单）或"容器组"（一份 compose，里面有几个容器）。
 // containerLabel：界面上显示的名称。设了显示名称时用它，否则用容器名（容器名创建后不能改）。
 export function containerLabel(m: Container) {
@@ -264,7 +300,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
               }
               title={
                 // 真正的链接：键盘能进入，也能 Ctrl+点击在新标签打开；after 让整行可点。
-                <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: m.name }} className="rounded-sm outline-none after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring/40">
+                <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: m.name }} className="rounded-sm outline-none after:absolute after:inset-0 focus-ring">
                   {containerLabel(m)}
                 </Link>
               }
@@ -537,7 +573,6 @@ function ContainerDetail({
   const node = knownNodes(nodes.data).find((n) => n.id === container.nodeId);
   const nodeOnline = node?.online !== false;
   const navigate = useNavigate();
-  const mobile = useIsMobile();
   // 手机上打开卷的文件页时，标题栏换成卷名，不再显示容器标题和标签。
   const { volume } = useSearch({ strict: false }) as { volume?: string };
   const browsing = view === "storage" && !!volume && !isViewer;
@@ -572,7 +607,7 @@ function ContainerDetail({
                 <Badge tone="info">{d.updatable}</Badge>
               ) : (
                 // 弹窗关掉以后，点这里重新打开。
-                <button type="button" onClick={tip.reopen} className="inline-flex shrink-0 cursor-pointer items-center rounded-[999px] border border-transparent bg-[color-mix(in_srgb,var(--info)_10%,transparent)] px-2 py-px text-xs leading-4 font-normal tracking-normal whitespace-nowrap text-info outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={tip.reopen} className={cn(badgeVariants({ tone: "info" }), "cursor-pointer font-normal tracking-normal outline-none focus-ring")}>
                   {d.updatable}
                 </button>
               ))}
@@ -591,17 +626,7 @@ function ContainerDetail({
                 if (f) upload(f);
               }}
             />
-            {/* 手机上这一行只放重启、重新部署和更多，其余进更多。 */}
-            {!mobile && uploadDeployable && (
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={busy || !nodeOnline}>
-                {t.projectContainers.detail.uploadDeploy}
-              </Button>
-            )}
-            {!mobile && cfg?.source?.gitUrl && (
-              <Button variant="outline" size="sm" onClick={pullDeploy} disabled={busy || !nodeOnline}>
-                {t.projectContainers.detail.pullDeploy}
-              </Button>
-            )}
+            {/* 页头只放重启（或启动）、重新部署和更多；上传、拉取并部署在更多里。 */}
             {deployed && (running || !nodeOnline ? (
               <Button
                 variant="outline"
@@ -643,8 +668,8 @@ function ContainerDetail({
             <Menu
               title={container.name}
               items={[
-                ...(mobile && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy || !nodeOnline }] : []),
-                ...(mobile && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy || !nodeOnline }] : []),
+                ...(uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy || !nodeOnline }] : []),
+                ...(cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy || !nodeOnline }] : []),
                 { label: t.projectContainers.rename.action, onSelect: () => setRenaming(true) },
                 { label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline },
                 // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
@@ -711,6 +736,8 @@ function ContainerDetail({
             container={container}
             projectId={project.id}
             busy={busy}
+            deployDisabled={busy || !nodeOnline}
+            onDeploy={() => confirmDeploy(d.redeployConfirm(container.name), d.deploy, {})}
             onRollback={(version, restoreData) => {
               setDoing("rollback");
               run(() => projectClient.rollback({ projectId: project.id, container: container.name, version, restoreData }));
@@ -798,26 +825,6 @@ function uptime(services: ServiceStatus[]) {
   return up[n[2].toLowerCase() as keyof typeof up](Number(n[1]));
 }
 
-// CopyLink：行内的「复制」文字按钮。
-function CopyLink({ text }: { text: string }) {
-  return (
-    <button
-      type="button"
-      className="ml-2 cursor-pointer whitespace-nowrap underline decoration-border underline-offset-4 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          toast.success(t.common.feedback.copied);
-        } catch {
-          toast.error(t.common.feedback.copyFailed);
-        }
-      }}
-    >
-      {t.common.actions.copy}
-    </button>
-  );
-}
-
 function Overview({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
   const cfg = container.draft ?? container.config;
   const pc = t.projectContainers;
@@ -835,30 +842,19 @@ function Overview({ project, container, services }: { project: Project; containe
     container.deployedVersion > 0n ? `v${container.deployedVersion}${container.latestVersion !== container.deployedVersion ? pc.table.latest(String(container.latestVersion)) : ""}` : "—";
   // 单个健康的容器，页头的状态已经说明了一切；多个服务或有问题时才列出每个服务。
   const showServices = services.length !== 1 || services[0].state !== "running" || services[0].health === "unhealthy" || services[0].health === "starting" || offline;
-  const hasNotes = offline || container.hostNetworkServices.length > 0 || container.unmanagedVolumes.length > 0 || container.sharedEnvOutdated;
+  // 页面上方需要注意的事。同一处只放一条：多条时合并成「需要注意 N 项」，点开再逐条列出。
+  const notes = [
+    offline && { key: "offline", title: t.common.status.nodesOffline([node.name]), body: o.nodeOfflineBody },
+    container.hostNetworkServices.length > 0 && { key: "host", title: o.hostNetworkTitle, body: o.hostNetworkBody(t.common.list(container.hostNetworkServices)) },
+    container.unmanagedVolumes.length > 0 && { key: "volumes", title: pc.badges.volumeUnmanaged, body: o.volumeBody(t.common.list(container.unmanagedVolumes)) },
+    container.sharedEnvOutdated && { key: "env", title: pc.badges.sharedEnvPending, body: pc.detail.sharedEnvOutdated },
+  ].filter((x): x is { key: string; title: string; body: string } => !!x);
+  const hasNotes = notes.length > 0;
   const mono = "font-mono text-[13px] wrap-anywhere";
+  const webhookUrl = `${location.origin}/hooks/${container.webhookToken}`;
   return (
     <div>
-      {hasNotes && (
-        <div className="mb-6 grid gap-2">
-          {offline && (
-            <Notice tone="warning" title={t.common.status.nodesOffline([node.name])}>
-              {o.nodeOfflineBody}
-            </Notice>
-          )}
-          {container.hostNetworkServices.length > 0 && (
-            <Notice tone="warning" title={o.hostNetworkTitle}>
-              {o.hostNetworkBody(t.common.list(container.hostNetworkServices))}
-            </Notice>
-          )}
-          {container.unmanagedVolumes.length > 0 && (
-            <Notice tone="warning" title={pc.badges.volumeUnmanaged}>
-              {o.volumeBody(t.common.list(container.unmanagedVolumes))}
-            </Notice>
-          )}
-          {container.sharedEnvOutdated && <Notice tone="warning" title={pc.badges.sharedEnvPending}>{pc.detail.sharedEnvOutdated}</Notice>}
-        </div>
-      )}
+      {hasNotes && <ContainerNotes notes={notes} />}
       <Section>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
           {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
@@ -897,7 +893,7 @@ function Overview({ project, container, services }: { project: Project; containe
       {showServices && (
         <Section title={o.servicesTitle}>
           {services.length === 0 ? (
-            <p className="text-muted-foreground">{t.common.status.notDeployed}</p>
+            <EmptyRow>{t.common.status.notDeployed}</EmptyRow>
           ) : (
             <List>
               {services.map((s) => (
@@ -914,27 +910,34 @@ function Overview({ project, container, services }: { project: Project; containe
       )}
       {cfg?.source?.gitUrl && (
         <Section title={o.gitTitle}>
-          <dl className="m-0 grid">
-            <GitRow k={o.gitRepo}>
-              <span className={mono}>
-                {cfg.source.gitUrl}
-                {cfg.source.gitRef && ` @ ${cfg.source.gitRef}`}
-              </span>
-            </GitRow>
-            <GitRow k={o.gitCommit}>
-              <span className={mono}>{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>
-            </GitRow>
-            <GitRow k={o.deployKey} help={o.deployKeyHint}>
-              <span className={cn(mono, "line-clamp-1")} title={container.deployKey}>
-                {container.deployKey}
-              </span>
-              <CopyLink text={container.deployKey} />
-            </GitRow>
-            <GitRow k={o.webhook} help={o.webhookHint}>
-              <span className={mono}>{`${location.origin}/hooks/${container.webhookToken}`}</span>
-              <CopyLink text={`${location.origin}/hooks/${container.webhookToken}`} />
-            </GitRow>
-          </dl>
+          <KeyValue
+            items={[
+              [
+                o.gitRepo,
+                <span className={mono}>
+                  {cfg.source.gitUrl}
+                  {cfg.source.gitRef && ` @ ${cfg.source.gitRef}`}
+                </span>,
+              ],
+              [o.gitCommit, <span className={mono}>{container.lastCommit ? container.lastCommit.slice(0, 12) : "—"}</span>],
+              [
+                <KeyHelp k={o.deployKey} help={o.deployKeyHint} />,
+                <>
+                  <span className="min-w-0 truncate font-mono text-[13px]" title={container.deployKey}>
+                    {container.deployKey}
+                  </span>
+                  <CopyButton text={container.deployKey} />
+                </>,
+              ],
+              [
+                <KeyHelp k={o.webhook} help={o.webhookHint} />,
+                <>
+                  <span className={cn(mono, "min-w-0")}>{webhookUrl}</span>
+                  <CopyButton text={webhookUrl} />
+                </>,
+              ],
+            ]}
+          />
         </Section>
       )}
     </div>
@@ -950,15 +953,13 @@ function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactN
   );
 }
 
-function GitRow({ k, help, children }: { k: string; help?: string; children: React.ReactNode }) {
+// KeyHelp：属性名加问号。
+function KeyHelp({ k, help }: { k: string; help: string }) {
   return (
-    <div className="flex min-h-8 items-center gap-4">
-      <dt className="flex w-24 flex-none items-center gap-1 text-muted-foreground">
-        {k}
-        {help && <HelpTip>{help}</HelpTip>}
-      </dt>
-      <dd className="m-0 flex min-w-0 items-center">{children}</dd>
-    </div>
+    <span className="flex items-center gap-1">
+      {k}
+      <HelpTip>{help}</HelpTip>
+    </span>
   );
 }
 
@@ -973,7 +974,7 @@ function mergeEvents<E extends { kind: string; action: string; actor: string; fa
   return out;
 }
 
-// ContainerEvents：这个容器最近的操作和告警，一行一条：时间、状态、详情、操作者。
+// ContainerEvents：这个容器最近的操作和告警，一行一条：状态、详情、操作者、时间。
 function ContainerEvents({ project, container }: { project: Project; container: Container }) {
   const ev = t.projectContainers.events;
   // 日志页只给管理员。
@@ -1002,29 +1003,28 @@ function ContainerEvents({ project, container }: { project: Project; container: 
       ) : list.length === 0 ? (
         <EmptyRow>{ev.empty}</EmptyRow>
       ) : (
-        <div className="-mx-2 overflow-x-auto">
-          <table className="w-full border-separate border-spacing-0">
-            <tbody>
-              {list.map(({ entry: e, count }) => {
-                // 常态的操作圆点是灰色，颜色只给失败和未恢复的告警。
-                const tone = e.kind === "alert" ? (e.action === "resolved" ? "neutral" : "warning") : e.failed ? "danger" : "neutral";
-                const td = "h-9 px-2 py-1 align-middle transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
-                return (
-                  <tr key={String(e.id)} className="group">
-                    <td className={cn(td, "w-28 whitespace-nowrap text-muted-foreground")} title={formatDateTime(toDate(e.time))}>
-                      {capitalize(timeAgo(toDate(e.time)))}
-                    </td>
-                    <td className={cn(td, "whitespace-nowrap")}>
-                      <Status tone={tone}>{actionLabel(e)}</Status>
-                    </td>
-                    <td className={cn(td, "text-muted-foreground")}>{count === 1 ? e.detail : e.action.endsWith("VolumeFile") ? ev.files(count) : ev.times(count)}</td>
-                    <td className={cn(td, "text-right whitespace-nowrap text-muted-foreground")}>{e.actor}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <List>
+          {list.map(({ entry: e, count }) => {
+            // 常态的操作圆点是灰色，颜色只给失败和未恢复的告警。
+            const tone = e.kind === "alert" ? (e.action === "resolved" ? "neutral" : "warning") : e.failed ? "danger" : "neutral";
+            const detail = count === 1 ? e.detail : e.action.endsWith("VolumeFile") ? ev.files(count) : ev.times(count);
+            return (
+              <Row
+                key={String(e.id)}
+                title={
+                  <>
+                    <Status tone={tone}>{actionLabel(e)}</Status>
+                    {detail && <span className="truncate text-muted-foreground">{detail}</span>}
+                  </>
+                }
+                cols={[
+                  { width: "w-24", content: e.actor },
+                  { content: <span title={formatDateTime(toDate(e.time))}>{capitalize(timeAgo(toDate(e.time)))}</span> },
+                ]}
+              />
+            );
+          })}
+        </List>
       )}
     </Section>
   );
@@ -1124,9 +1124,10 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" readOnlyOk aria-pressed={showTime} onClick={() => setShowTime(!showTime)}>
+          {/* 复选框，开关状态一眼看得出。 */}
+          <Check checked={showTime} onChange={setShowTime} className="mr-2">
             {l_.showTime}
-          </Button>
+          </Check>
           <Button variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
             {frozen ? l_.resume : l_.pause}
           </Button>
@@ -1142,16 +1143,19 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         }}
-        className="h-[560px] overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-xs leading-5 text-log-foreground max-md:h-[calc(100dvh-20rem)]"
+        // 日志框在浅色主题下也是深色底。底色取页面主题的 --log，和其他日志框一致；
+        // 里面的每一行加 dark，灰字、红字、蓝字取深色主题的值，才对得上深底。
+        className="h-[560px] overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground max-md:h-[calc(100dvh-20rem)]"
       >
         {visible.length === 0 ? (
           <span className="opacity-50">{lines.length > 0 ? l_.noMatch : connecting && !error ? t.app.terminal.connecting : l_.empty}</span>
         ) : (
           visible.map((l) => (
-            <div key={l.key} className="break-all whitespace-pre-wrap">
-              {showTime && l.time && <span className="mr-2 text-neutral-400">{formatTime(l.time)}</span>}
+            // 最多 2000 行：看不见的行跳过排版和绘制（content-visibility），滚动和追加不卡。
+            <div key={l.key} className="dark break-all whitespace-pre-wrap [contain-intrinsic-size:auto_20px] [content-visibility:auto]">
+              {showTime && l.time && <span className="mr-2 text-muted-foreground">{formatTime(l.time)}</span>}
               {!service && services.length > 1 && <span className="mr-2 text-info">{l.service}</span>}
-              <span className={cn(l.stream === "stderr" && "text-[#ff6467]")}>{l.text}</span>
+              <span className={cn(l.stream === "stderr" && "text-destructive")}>{l.text}</span>
             </div>
           ))
         )}
@@ -1259,99 +1263,102 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
 
   const c = t.projectContainers.config;
   const textField = "font-mono text-[13px] max-md:text-base";
+  const portsLink = (
+    <p className="text-muted-foreground">
+      <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
+        {c.portsLink}
+      </Link>
+    </p>
+  );
+  // 和其他表单一样：区块用 Section（之间一条细线），最宽 672，保存栏的按钮靠左。
   return (
-    <div className="grid gap-8">
+    <form
+      ref={formRef}
+      className="max-w-[672px]"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
       {container.hasDraft && (
-        <section className="grid gap-4">
-          <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <h2 className="text-base font-semibold">{c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}</h2>
+        <Section
+          title={c.diffTitle(container.deployedVersion > 0n ? String(container.deployedVersion) : "")}
+          actions={
             <Button variant="ghost" className="-mr-3" onClick={discard} disabled={!!busy}>
               {c.discardDraft}
             </Button>
-          </header>
+          }
+        >
           <ConfigDiff deployed={container.config} draft={container.draft} />
-        </section>
+        </Section>
       )}
-      <form
-        ref={formRef}
-        className="grid gap-8"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <ConfigGroup
-          title={c.groupImage}
-          action={
+      <Section
+        title={c.groupImage}
+        actions={
+          // 容器创建后不能在单个容器和容器组之间切换：容器组只有 Compose，不显示切换。
+          isForm && (
             <Segmented
               value={showCompose ? "compose" : "form"}
-              onChange={(v) => isForm && setPreview(v === "compose")}
+              onChange={(v) => setPreview(v === "compose")}
               items={[
-                { value: "form", label: isForm ? c.modeForm : <span title={c.modeFormDisabled} className="opacity-50">{c.modeForm}</span> },
+                { value: "form", label: c.modeForm },
                 { value: "compose", label: c.modeCompose },
               ]}
             />
-          }
-        >
-          {/* 容器创建后不能在单个容器和容器组之间切换：单个容器的 Compose 是表单生成的只读预览。 */}
+          )
+        }
+      >
+        {isForm ? (
+          // 单个容器的 Compose 是表单生成的只读预览。
           <Slide id={showCompose ? "compose" : "form"} index={showCompose ? 1 : 0} inner="grid gap-4">
-          {isForm && showCompose && (
-            <Field label={t.containerForm.compose} help={c.composePreviewHelp}>
-              <pre className="m-0 overflow-auto rounded-md bg-muted p-3 font-mono text-[13px] leading-5">{formToCompose(container.name, imageForm.build())}</pre>
-            </Field>
-          )}
-          {isForm && !showCompose && (
-            <>
-              {imageForm.parts.image}
-              {imageForm.parts.command}
-            </>
-          )}
-          {!isForm && (
+            {showCompose ? (
+              <Field label={t.containerForm.compose} help={c.composePreviewHelp}>
+                <pre className="m-0 overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5">{formToCompose(container.name, imageForm.build())}</pre>
+              </Field>
+            ) : (
+              <>
+                {imageForm.parts.image}
+                {imageForm.parts.command}
+              </>
+            )}
+          </Slide>
+        ) : (
+          <>
             <Field label={t.containerForm.compose} htmlFor="edit-compose" help={c.composeHelp}>
               <Textarea id="edit-compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
             </Field>
-          )}
-          </Slide>
-        </ConfigGroup>
-        <ConfigGroup
-          title={isForm ? t.containerForm.env : c.groupEnv}
-          help={isForm ? undefined : c.groupEnvHelp}
-          action={
-            <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
-              {envMode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
-            </Button>
-          }
-        >
-          {isForm ? <EnvEditor id="edit-env" mode={envMode} value={imageForm.env} onChange={imageForm.setEnv} /> : <EnvEditor id="edit-env" mode={envMode} value={env} onChange={setEnv} />}
-        </ConfigGroup>
-        {!isForm &&
-          services.map((s) => (
-            <ConfigGroup key={s} title={c.serviceEnv(s)} help={c.serviceEnvHelp}>
-              <EnvEditor id={`edit-env-${s}`} value={serviceEnv[s] ?? ""} onChange={(v) => setServiceEnv((prev) => ({ ...prev, [s]: v }))} />
-            </ConfigGroup>
-          ))}
-        {isForm && (
-          <ConfigGroup title={c.groupStorage}>
-            <FormRow>
-              {imageForm.parts.volumes}
-              {imageForm.parts.workdir}
-            </FormRow>
-            <p className="text-muted-foreground">
-              <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
-                {c.portsLink}
-              </Link>
-            </p>
-          </ConfigGroup>
+            {portsLink}
+          </>
         )}
-        {!isForm && (
-          <p className="max-w-[720px] text-muted-foreground">
-            <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
-              {c.portsLink}
-            </Link>
-          </p>
-        )}
-        <ConfigGroup title={c.groupSource}>
-          {projectDir ? (
+      </Section>
+      <Section
+        title={isForm ? t.containerForm.env : c.groupEnv}
+        help={isForm ? undefined : c.groupEnvHelp}
+        actions={
+          <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
+            {envMode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
+          </Button>
+        }
+      >
+        {isForm ? <EnvEditor id="edit-env" mode={envMode} value={imageForm.env} onChange={imageForm.setEnv} /> : <EnvEditor id="edit-env" mode={envMode} value={env} onChange={setEnv} />}
+      </Section>
+      {!isForm &&
+        services.map((s) => (
+          <Section key={s} title={c.serviceEnv(s)} help={c.serviceEnvHelp}>
+            <EnvEditor id={`edit-env-${s}`} value={serviceEnv[s] ?? ""} onChange={(v) => setServiceEnv((prev) => ({ ...prev, [s]: v }))} />
+          </Section>
+        ))}
+      {isForm && (
+        <Section title={c.groupStorage}>
+          <FormRow>
+            {imageForm.parts.volumes}
+            {imageForm.parts.workdir}
+          </FormRow>
+          {portsLink}
+        </Section>
+      )}
+      <Section title={c.groupSource}>
+        {projectDir ? (
           <FormRow>
             <Field label={c.backupPaths} htmlFor="edit-backup-paths" help={c.backupPathsHelp(projectDir)}>
               <Input id="edit-backup-paths" value={backupPaths} onChange={(e) => setBackupPaths(e.target.value)} placeholder="postgres" className={textField} autoComplete="off" spellCheck={false} />
@@ -1360,13 +1367,13 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
           </FormRow>
-          ) : (
+        ) : (
           <FormRow>
             <Field label={c.git} htmlFor="edit-git" help={c.gitHelp}>
               <Input id="edit-git" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="git@github.com:org/app.git" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
-            <Field label={c.ref} htmlFor="edit-ref" hint={c.refHint}>
-              <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} className={textField} autoComplete="off" spellCheck={false} />
+            <Field label={c.ref} htmlFor="edit-ref" help={c.refHelp}>
+              <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
             <Field label={c.preserve} htmlFor="edit-preserve" help={`${c.preserveHint}${t.common.sentenceEnd}${c.preserveHelp}`}>
               <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, "min-h-8 resize-none py-[5px] max-md:py-[9px]")} />
@@ -1375,45 +1382,28 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
           </FormRow>
-          )}
-        </ConfigGroup>
-        {isForm && (
-          <ConfigGroup title={c.groupLimits}>
-            <FormRow>{imageForm.parts.limits}</FormRow>
-          </ConfigGroup>
         )}
-        {error && <Alert className="max-w-[720px]">{error}</Alert>}
-        <div className="sticky bottom-0 z-10 flex max-w-[720px] flex-wrap items-center justify-between gap-4 border-t bg-background py-3">
-          <span className="text-muted-foreground">{dirty ? c.unsaved : c.notice}</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" variant="outline" disabled={!!busy || deploying}>
-              {busy === "save" && <Spinner />}
-              {c.saveDraft}
-            </Button>
-            <Button disabled={!!busy || deploying} onClick={saveAndDeploy}>
-              {(busy === "deploy" || deploying) && <Spinner />}
-              {c.saveAndDeploy}
-            </Button>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// ConfigGroup：配置页的一组字段，最宽 720，标题右边可以有切换。
-function ConfigGroup({ title, help, action, children }: { title: React.ReactNode; help?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="grid max-w-[720px] gap-4">
-      <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h2 className="flex items-center gap-1 text-base font-semibold">
-          {title}
-          {help && <HelpTip>{help}</HelpTip>}
-        </h2>
-        {action}
-      </header>
-      {children}
-    </section>
+      </Section>
+      {isForm && (
+        <Section title={c.groupLimits}>
+          <FormRow>{imageForm.parts.limits}</FormRow>
+        </Section>
+      )}
+      {error && <Alert className="mt-6 max-md:mt-4">{error}</Alert>}
+      <div className="sticky bottom-0 z-10 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t bg-background py-3 max-md:mt-4">
+        <FormActions>
+          <Button disabled={!!busy || deploying} onClick={saveAndDeploy}>
+            {(busy === "deploy" || deploying) && <Spinner />}
+            {c.saveAndDeploy}
+          </Button>
+          <Button type="submit" variant="outline" disabled={!!busy || deploying}>
+            {busy === "save" && <Spinner />}
+            {c.saveDraft}
+          </Button>
+        </FormActions>
+        <span className="text-muted-foreground">{dirty ? c.unsaved : c.notice}</span>
+      </div>
+    </form>
   );
 }
 
@@ -1421,16 +1411,31 @@ function ConfigGroup({ title, help, action, children }: { title: React.ReactNode
 
 // imageDigest：镜像摘要的前 8 位；没有摘要时是镜像名。
 function imageDigest(images: Record<string, string>) {
-  return Object.values(images)
-    .map((image) => {
+  return t.common.list(
+    Object.values(images).map((image) => {
       const i = image.indexOf("sha256:");
       return i < 0 ? image : image.slice(i + 7, i + 15);
-    })
-    .join(", ");
+    }),
+  );
 }
 
 // onRollback：回滚交给容器页执行，和部署共用输出和按钮状态，切换标签也不丢输出。
-function Versions({ projectId, container, busy, onRollback }: { projectId: string; container: Container; busy: boolean; onRollback: (version: bigint, restoreData: boolean) => void }) {
+// onDeploy：还没有版本时，空状态下的「部署」。
+function Versions({
+  projectId,
+  container,
+  busy,
+  deployDisabled,
+  onDeploy,
+  onRollback,
+}: {
+  projectId: string;
+  container: Container;
+  busy: boolean;
+  deployDisabled: boolean;
+  onDeploy: () => void;
+  onRollback: (version: bigint, restoreData: boolean) => void;
+}) {
   const versions = useQuery({
     queryKey: ["versions", projectId, container.name, String(container.revision)],
     queryFn: () => projectClient.listVersions({ projectId, container: container.name }),
@@ -1468,7 +1473,15 @@ function Versions({ projectId, container, busy, onRollback }: { projectId: strin
       ) : versions.error ? (
         <QueryError error={errorMessage(versions.error)} onRetry={() => versions.refetch()} />
       ) : list.length === 0 ? (
-        <EmptyRow>{v_.empty}</EmptyRow>
+        <EmptyRow
+          action={
+            <Button variant="outline" disabled={deployDisabled} onClick={onDeploy}>
+              {t.projectContainers.detail.deploy}
+            </Button>
+          }
+        >
+          {v_.empty}
+        </EmptyRow>
       ) : (
         <List>
           {list.map((x) => {
@@ -1488,7 +1501,7 @@ function Versions({ projectId, container, busy, onRollback }: { projectId: strin
                   </>
                 }
                 cols={[
-                  { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={Object.values(x.images).join(", ")}>{imageDigest(x.images)}</span> },
+                  { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={t.common.list(Object.values(x.images))}>{imageDigest(x.images)}</span> },
                   { content: x.deployedAt ? capitalize(timeAgo(toDate(x.deployedAt))) : "" },
                 ]}
                 actions={
@@ -1592,36 +1605,39 @@ function AddContainer({ project }: { project: Project }) {
     }
   };
 
-  if (form.mode === "dir")
-    return (
-      <div className="grid max-w-[672px] gap-6 max-md:gap-4">
-        {form.fields}
-        <ImportDir project={project} />
-      </div>
-    );
+  // 类型切换在外面，下面三种内容（镜像表单、compose、现有目录）放进同一个 Slide，切换时横移。
   return (
-    <form
-      className="grid max-w-[672px] gap-6 max-md:gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        add();
-      }}
-    >
-      {form.fields}
-      {error && <Alert>{error}</Alert>}
-      <FormActions className="mt-2 max-md:grid max-md:[&>*]:w-full">
-        <Button type="submit" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = true)}>
-          {busy && deployAfter.current && <Spinner />}
-          {t.projectContainers.add.addAndDeploy}
-        </Button>
-        <Button type="submit" variant="outline" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = false)}>
-          {busy && !deployAfter.current && <Spinner />}
-          {t.projectContainers.add.addOnly}
-        </Button>
-        <ButtonLink to="/projects/$projectId" params={{ projectId: project.id }} variant="ghost" readOnlyOk>
-          {t.common.actions.cancel}
-        </ButtonLink>
-      </FormActions>
-    </form>
+    <div className="grid max-w-[672px] gap-4">
+      {form.switcher}
+      <Slide id={form.mode} index={["image", "compose", "dir"].indexOf(form.mode)} inner="grid gap-4">
+        {form.mode === "dir" ? (
+          <ImportDir project={project} />
+        ) : (
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add();
+            }}
+          >
+            {form.body}
+            {error && <Alert>{error}</Alert>}
+            <FormActions className="mt-2 max-md:grid max-md:[&>*]:w-full">
+              <Button type="submit" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = true)}>
+                {busy && deployAfter.current && <Spinner />}
+                {t.projectContainers.add.addAndDeploy}
+              </Button>
+              <Button type="submit" variant="outline" disabled={busy || !node.nodeId} onClick={() => (deployAfter.current = false)}>
+                {busy && !deployAfter.current && <Spinner />}
+                {t.projectContainers.add.addOnly}
+              </Button>
+              <ButtonLink to="/projects/$projectId" params={{ projectId: project.id }} variant="ghost" readOnlyOk>
+                {t.common.actions.cancel}
+              </ButtonLink>
+            </FormActions>
+          </form>
+        )}
+      </Slide>
+    </div>
   );
 }

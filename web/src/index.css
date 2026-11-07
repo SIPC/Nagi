@@ -25,6 +25,7 @@
   --accent-foreground: #0a0a0a;
   --ring: #a1a1a1;
   --destructive: #e7000b;
+  --destructive-solid: #e7000b;
   --success: #16a34a;
   --warning: #f59e0b;
   --warning-text: #b45309;
@@ -55,6 +56,8 @@
   --accent-foreground: #ededed;
   --ring: #737373;
   --destructive: #ff6467;
+  /* 深色下 destructive 是给文字用的浅红，白字放在上面对比度不够，危险按钮和徽标的底色换深一档。 */
+  --destructive-solid: #dc2626;
   --success: #4ade80;
   --warning: #fbbf24;
   --warning-text: #fbbf24;
@@ -84,6 +87,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-warning-text: var(--warning-text);
@@ -249,6 +253,13 @@
   @media (prefers-reduced-transparency: reduce) {
     background-color: var(--material-base, var(--card));
     backdrop-filter: none;
+  }
+}
+
+/* 焦点样式（docs/ui.md）：边框变 ring 色，外加 3px ring/50。按钮、输入框、下拉、复选框、菜单触发器共用这一种。 */
+@utility focus-ring {
+  &:focus-visible {
+    @apply border-ring ring-3 ring-ring/50;
   }
 }
 

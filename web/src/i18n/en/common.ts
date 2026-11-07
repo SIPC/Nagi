@@ -51,6 +51,10 @@ export default {
     copyFailed: "Couldn't copy. Select the text and copy it manually",
     done: "Done",
     failed: "The panel returned no reason. Check Activity for details",
+    viewActivity: "View activity",
+    notes: (n) => `${n} items need attention`,
+    showNotes: "Show",
+    hideNotes: "Hide",
   },
   errors: {
     http: (status) => `The panel returned HTTP ${status}. It may be restarting, or this page is out of date. Reload the page and try again`,

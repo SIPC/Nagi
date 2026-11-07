@@ -34,7 +34,7 @@ export default {
     other: "其他",
     noSend: "无发出",
     noReceive: "无接收",
-    outdated: (names: string) => `${names} 需升级后才能统计节点之间的流量，在此之前其对外流量包含节点之间的流量。`,
+    outdated: (names: string) => `${names} 需升级后才能统计节点之间的流量，在此之前其对外流量包含节点之间的流量`,
     empty: "暂无流量",
     aria: (from: string, to: string, rate: string) => `流量桑基图：左边是发出方，右边是接收方。最大的是 ${from} 发往 ${to} ${rate}。`,
     caption: "当前各路径的流量",
@@ -51,6 +51,7 @@ export default {
     inbound: "入站",
     outbound: "出站",
     other: "其他",
+    more: (n: number) => `另外 ${n} 项`,
   },
   nodes: {
     title: "节点",

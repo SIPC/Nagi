@@ -5,12 +5,11 @@ export default {
   masterKey: {
     label: "Panel master key",
     backup: "Back it up separately",
-    copyPath: "Copy path",
     help: "Encrypts config backup keys, 2FA secrets and alert tokens. If the master key is lost, these secrets can't be decrypted, even if the panel database is restored on another machine.",
   },
   password: {
     label: "Sign-in password",
-    description: "Changing it signs out all other devices.",
+    description: "Changing it signs out all other devices",
     help: "If you forget the password, run nagi reset password on the panel machine.",
     current: "Current password",
     newPassword: "New password",
@@ -20,8 +19,8 @@ export default {
   },
   totp: {
     label: "Two-factor authentication",
-    onStatus: "On.",
-    offStatus: "Off. Requires a 6-digit code from an authenticator app when signing in.",
+    onStatus: "On",
+    offStatus: "Off. Requires a 6-digit code from an authenticator app when signing in",
     actionOn: "Enable",
     actionOff: "Disable",
     help: "If you lose your authenticator, run nagi reset 2fa on the panel machine.",
@@ -40,7 +39,7 @@ export default {
   entrance: {
     label: "Secure entry",
     onStatus: "On. Note down the entry URL",
-    offStatus: "Off. When enabled, only the entry URL opens the sign-in page.",
+    offStatus: "Off. When turned on, only the entry URL opens the sign-in page",
     actionOn: "Enable",
     actionOff: "Disable",
     disableConfirm: "Disable secure entry? Anyone will be able to open the sign-in page.",

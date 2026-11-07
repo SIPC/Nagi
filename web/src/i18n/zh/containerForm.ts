@@ -1,4 +1,4 @@
-// 容器表单：镜像表单（单个容器）和容器组（compose）。
+// 容器表单：镜像表单（单个容器）和容器组（Compose）。
 export default {
   envKey: "变量名",
   envValue: "值",
@@ -36,9 +36,9 @@ export default {
   healthInterval: "检查间隔（秒）",
   healthIntervalHint: "30",
   typeImage: "容器",
-  typeCompose: "容器组（compose）",
+  typeCompose: "容器组（Compose）",
   typeDir: "现有目录",
-  composeHelp: "compose 文件整体作为一个容器组，适用于自带数据库等依赖的应用。组内容器通过 compose 中的服务名互相访问。",
+  composeHelp: "Compose 文件整体作为一个容器组，适用于自带数据库等依赖的应用。组内容器通过 Compose 中的服务名互相访问。",
   dependsOn: "依赖",
   dependsOnHint: "容器名，逗号分隔",
   dependsOnHelp: "批量部署时，优先部署此处列出的容器，例如后端依赖的数据库。",

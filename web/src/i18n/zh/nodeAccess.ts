@@ -68,7 +68,7 @@ export default {
     restoreConfirm: (time: string) => `恢复到 ${time} 的版本？当前内容将保存为历史版本。`,
     restored: "已恢复",
     conflictTitle: "文件已在节点上被修改",
-    conflictText: "红色为节点上的内容，绿色为编辑中的内容。",
+    conflictText: "红色为节点上的内容，绿色为编辑中的内容。保存将覆盖节点上的内容。",
     conflictSame: "内容相同",
     conflictReload: "使用节点内容",
     overwriteNode: "覆盖节点上的内容？节点上的当前内容将保存为历史版本。",

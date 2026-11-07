@@ -7,7 +7,7 @@ import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { containerUsage, projectMetricNodes, UsageRings, useProjectMetrics } from "@/components/metrics";
-import { ActiveBox, Badge, ButtonLink, dotColor, Loading, QueryError, Roll, Slide, Tabs, useActiveBox } from "@/components/ui";
+import { ActiveBox, Badge, ButtonLink, dotColor, HelpTip, Loading, QueryError, Roll, Slide, Tabs, useActiveBox } from "@/components/ui";
 import { containerKind, containerLabel, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
 import { NetworkTab } from "@/pages/project-network";
 import { SettingsTab } from "@/pages/project-settings";
@@ -33,14 +33,12 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
   });
 
   if (project.isPending) return <Loading />;
+  // 加载失败：一行错误加重试，回项目列表用上面的上级链接。
   if (project.error) {
     return (
       <>
         <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: projectId }]} />
         <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />
-        <ButtonLink to="/projects" variant="outline" readOnlyOk className="mt-4">
-          {t.project.back}
-        </ButtonLink>
       </>
     );
   }
@@ -58,13 +56,14 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
   return (
     <>
       <Breadcrumb items={[{ label: t.project.breadcrumb, to: "/projects" }, { label: p.name }]} className="max-md:hidden xl:hidden" />
-      {/* 宽屏和手机上项目名已在项目栏、标题栏里：概览仍显示项目标题和元信息，网络、设置只显示这一块的标题。 */}
+      {/* 宽屏和手机上项目名已在项目栏、标题栏里：概览仍显示项目标题和元信息，网络、设置只显示这一块的标题。
+          PageHeader 把标题里的 span 设成 400，这两个 span 是标题本身，改回 600，和网络、设置页一致。 */}
       <div className={cn(tab !== "containers" && "max-md:hidden xl:hidden")}>
         <PageHeader
           title={
             <>
-              <span className="hidden font-medium! tracking-tight! max-md:inline xl:inline">{t.project.sections.overview}</span>
-              <span className="max-md:hidden xl:hidden">{p.name}</span>
+              <span className="hidden font-semibold! tracking-tight! max-md:inline xl:inline">{t.project.sections.overview}</span>
+              <span className="font-semibold! tracking-tight! max-md:hidden xl:hidden">{p.name}</span>
               <span className="flex items-center gap-3 max-md:hidden xl:hidden">
                 <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
               </span>
@@ -74,10 +73,13 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
           meta={
             <>
               <span className="max-md:hidden xl:hidden">{p.networkName}</span>
-              {nodeIds.length > 0 && <span>{t.project.nodes(nodeIds.map(nodeName))}</span>}
+              {nodeIds.length > 0 && <span>{t.project.nodes(nodeIds.length, t.common.list(nodeIds.map(nodeName)))}</span>}
               <span>{countContainers(p.containers)}</span>
               {p.rebuiltAt ? (
-                <span title={t.project.rebuiltHint}>{t.project.rebuiltAt(timeAgo(toDate(p.rebuiltAt)))}</span>
+                <span className="inline-flex items-center gap-1">
+                  {t.project.rebuiltAt(timeAgo(toDate(p.rebuiltAt)))}
+                  <HelpTip>{t.project.rebuiltHint}</HelpTip>
+                </span>
               ) : (
                 <span>{t.project.createdAt(timeAgo(toDate(p.createdAt)))}</span>
               )}
@@ -165,7 +167,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
   const onSection = parts.length === 2;
   const tab = search.tab ?? "containers";
   const item = (active: boolean) => cn("flex min-h-11 items-center gap-2 rounded-md px-2 text-sm transition-colors", active ? "bg-accent" : "hover:bg-accent/50");
-  const label = "mt-1 flex h-6 items-center px-2 text-xs font-medium text-muted-foreground";
+  const label = "mt-1 flex h-6 items-center px-2 text-[13px] text-muted-foreground";
   return (
     <nav className="grid gap-1" aria-label={p.name}>
       <Link to="/projects" className={item(false)}>
@@ -239,7 +241,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
           <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
           </span>
-          <span className="font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</span>
+          <span className="font-mono text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
         </div>
       </div>
       <nav ref={ref} className="relative grid gap-1" aria-label={p.name}>
@@ -247,7 +249,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
         <Link to="/projects/$projectId" params={{ projectId: p.id }} data-active={section("containers") || undefined} className={cn(item, !section("containers") && idle)}>
           {t.project.sections.overview}
         </Link>
-        <div className="relative mt-2 flex h-6 items-center justify-between px-2 text-xs font-medium text-muted-foreground">
+        <div className="relative mt-2 flex h-6 items-center justify-between px-2 text-[13px] text-muted-foreground">
           <span>
             {t.project.column.containers}
             <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
@@ -276,7 +278,11 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
                 <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
                 {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-                {imageUpdates.some((x) => x.container === m.name) && <ArrowUpCircle aria-label={t.projects.card.imageUpdate} className="size-3.5 shrink-0 text-info" />}
+                {imageUpdates.some((x) => x.container === m.name) && (
+                  <span title={t.projects.card.imageUpdate} className="inline-flex shrink-0">
+                    <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
+                  </span>
+                )}
                 <span aria-hidden className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
               </span>
               {node?.online === false ? (
@@ -300,11 +306,11 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
   );
 }
 
-// countContainers 按种类数，例如"2 个容器，1 个容器组，1 个有状态"。
+// countContainers 按种类数，例如"2 个容器、1 个容器组、1 个有状态"。
 function countContainers(cs: Container[]) {
   if (cs.length === 0) return t.project.noContainers;
   const groups = cs.filter((c) => c.kind === "group").length;
   const singles = cs.length - groups;
   const stateful = cs.filter((c) => c.stateful).length;
-  return [singles > 0 && t.project.containerCount(singles), groups > 0 && t.project.groupCount(groups), stateful > 0 && t.project.statefulCount(stateful)].filter(Boolean).join(t.project.countSeparator);
+  return t.common.list([singles > 0 && t.project.containerCount(singles), groups > 0 && t.project.groupCount(groups), stateful > 0 && t.project.statefulCount(stateful)].filter((s): s is string => !!s));
 }

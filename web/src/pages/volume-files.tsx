@@ -38,7 +38,7 @@ export function Crumbs({ parts, current }: { parts: Crumb[]; current: string }) 
     <nav aria-label={t.projectData.files.pathLabel} className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2 wrap-anywhere">
       {parts.map((p, i) => (
         <Fragment key={i}>
-          <button type="button" className="cursor-pointer rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40" onClick={p.onClick}>
+          <button type="button" className="cursor-pointer rounded-sm text-muted-foreground outline-none hover:text-foreground focus-ring" onClick={p.onClick}>
             {p.label}
           </button>
           <span className="text-muted-foreground" aria-hidden>
@@ -71,6 +71,9 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const [snapshot, setSnapshot] = useState("");
   const [creating, setCreating] = useState(false);
   const [dirName, setDirName] = useState("");
+  // 点过「创建」以后才提示目录名为空。
+  const [dirChecked, setDirChecked] = useState(false);
+  const dirError = dirChecked && !dirName.trim() ? m.dirNameRequired : "";
   const [editing, setEditing] = useState<{ path: string; text: string } | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -191,8 +194,16 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   };
 
   const restore = async (name: string) => {
-    if (!(await confirmAction(m.restoreConfirm(name), { action: m.restore, danger: true }))) return;
-    await run(`restore:${name}`, () => projectClient.restoreVolumeFile({ ...ref, path: join(name) }), m.restored);
+    const answer = await ask(m.restoreConfirm(name), { action: m.restore, danger: true, check: m.snapshotFirst, checkDefault: true });
+    if (!answer) return;
+    await run(
+      `restore:${name}`,
+      async () => {
+        if (answer.checked) await snapshotFirst();
+        await projectClient.restoreVolumeFile({ ...ref, path: join(name) });
+      },
+      m.restored,
+    );
   };
 
   const edit = async (e: VolumeFileEntry) => {
@@ -241,6 +252,13 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const entries = files.data?.entries ?? [];
   const crumbs = trail();
   const current = crumbs.pop();
+  // 说明放进问号；手机上面包屑换成了标题栏，问号放到右边的工具栏里。
+  const help = <HelpTip>{snapshot ? m.snapshotMode : `${m.description} ${m.symlinkHint}`}</HelpTip>;
+  const closeCreate = () => {
+    setDirName("");
+    setDirChecked(false);
+    setCreating(false);
+  };
   const moreItems = [
     { label: m.newDir, onSelect: () => setCreating(true) },
     { label: m.downloadDir, onSelect: () => download(path) },
@@ -257,11 +275,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-center gap-2 max-md:hidden">
           <Crumbs parts={crumbs} current={current?.label ?? label} />
-          {!snapshot && (
-            <HelpTip>
-              {m.description} {m.symlinkHint}
-            </HelpTip>
-          )}
+          {help}
         </div>
         <div className="flex flex-wrap items-center gap-3 max-md:w-full max-md:flex-nowrap max-md:gap-2">
           <Select
@@ -271,7 +285,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
             onChange={(e) => {
               setSnapshot(e.target.value === "live" ? "" : e.target.value);
               setPath("");
-              setCreating(false);
+              closeCreate();
             }}
           >
             <option value="live">{m.live}</option>
@@ -308,40 +322,53 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
               </div>
             </>
           )}
+          <span className="flex md:hidden">{help}</span>
         </div>
       </header>
 
-      {snapshot && <p className="text-muted-foreground">{m.snapshotMode}</p>}
       {snapshots.error && <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />}
 
       {creating && !snapshot && (
         <form
-          className="flex items-center gap-2"
+          className="grid gap-2"
           onSubmit={(e) => {
             e.preventDefault();
+            setDirChecked(true);
             const name = dirName.trim();
             if (!name) return;
             run("mkdir", () => projectClient.createVolumeDir({ ...ref, snapshotId: "", path: join(name) })).then((ok) => {
-              if (!ok) return;
-              setDirName("");
-              setCreating(false);
+              if (ok) closeCreate();
             });
           }}
         >
-          <Input ref={dirRef} aria-label={m.dirName} placeholder={m.dirName} value={dirName} onChange={(e) => setDirName(e.target.value)} className="min-w-0 flex-1" />
-          <Button type="submit" disabled={busy === "mkdir"}>
-            {busy === "mkdir" && <Spinner />}
-            {t.common.actions.create}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setDirName("");
-              setCreating(false);
-            }}
-          >
-            {t.common.actions.cancel}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              ref={dirRef}
+              aria-label={m.dirName}
+              aria-invalid={!!dirError}
+              aria-describedby={dirError ? "new-dir-error" : undefined}
+              // 占位符写示例，字段名留给读屏（和节点文件一致）。
+              placeholder="data"
+              value={dirName}
+              onChange={(e) => setDirName(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="min-w-0 flex-1"
+            />
+            <Button type="submit" disabled={busy === "mkdir"}>
+              {busy === "mkdir" && <Spinner />}
+              {t.common.actions.create}
+            </Button>
+            <Button variant="ghost" onClick={closeCreate}>
+              {t.common.actions.cancel}
+            </Button>
+          </div>
+          {dirError && (
+            <p id="new-dir-error" role="alert" className="leading-5 text-destructive">
+              {dirError}
+            </p>
+          )}
         </form>
       )}
 
@@ -371,7 +398,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
               icon={e.isDir ? <Folder className="-mr-1" strokeWidth={2.25} /> : e.isSymlink ? <LinkIcon className="-mr-1" strokeWidth={2.25} /> : <File className="-mr-1" strokeWidth={2.25} />}
               title={
                 e.isDir ? (
-                  <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => setPath(join(e.name))}>
+                  <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-ring" onClick={() => setPath(join(e.name))}>
                     {e.name}
                   </button>
                 ) : (

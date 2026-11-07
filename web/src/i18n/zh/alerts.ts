@@ -2,8 +2,7 @@
 export default {
   savedAndPushed: "已保存并下发至在线节点",
   testSent: (name: string) => `已发送测试消息至 ${name}`,
-  channels: "通知渠道",
-  channelsHelp: "节点和容器异常时，告警发送到这些渠道。",
+  channelsHelp: "节点和容器异常时，告警发送到以下通知渠道。",
   lostTitle: "告警配置无法解密",
   lostBody: "面板主密钥已重新生成，原告警配置无法解密，重新填写并保存。",
   lostHelp: "保存前各节点继续按原配置发送告警，但面板自身的节点离线告警无法发送。",

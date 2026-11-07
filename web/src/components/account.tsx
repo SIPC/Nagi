@@ -2,11 +2,11 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, Languages, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { Languages, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, Button, Dialog, DialogActions, Field, FormActions, Input, QueryError, RowsSkeleton, Section, Spinner } from "@/components/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { nextLocale, switchLanguage } from "@/components/language";
 import type { MeResponse } from "@/gen/nagi/v1/api_pb";
 import { t } from "@/i18n";
@@ -108,8 +108,8 @@ function ProfileForm({ me, onClose, onSaved }: { me: MeResponse; onClose?: () =>
         save.mutate();
       }}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <UserAvatar username={me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="size-12" />
+      <div className="flex flex-wrap items-center gap-2">
+        <UserAvatar username={me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="mr-2 size-12" />
         <input
           ref={input}
           type="file"
@@ -128,7 +128,7 @@ function ProfileForm({ me, onClose, onSaved }: { me: MeResponse; onClose?: () =>
         <Button variant="ghost" disabled={avatar.bytes.length === 0} onClick={() => setAvatar({ bytes: new Uint8Array(), type: "" })}>
           {t.account.remove}
         </Button>
-        <p className="w-full text-[13px] leading-5 text-muted-foreground">{t.account.avatarHint}</p>
+        <p className="w-full leading-5 text-muted-foreground">{t.account.avatarHint}</p>
       </div>
       <Field label={t.account.displayName} htmlFor="profile-name" help={t.account.displayNameHint(me.username)} className={onClose ? undefined : "sm:max-w-[328px]"}>
         <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} placeholder={me.username} autoComplete="off" />
@@ -201,10 +201,11 @@ export function UserMenu({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={t.account.menu}
+            // 宽屏上按钮里有可见的名称，读屏直接念它；窄屏只有头像，才补上名称。
+            aria-label={compact ? name : undefined}
             title={compact ? name : undefined}
             className={cn(
-              "flex items-center gap-2 rounded-md text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+              "flex items-center gap-2 rounded-md text-left text-sm outline-none transition-colors focus-ring",
               compact ? "p-1" : "h-10 w-full px-2 hover:bg-accent/50 data-[state=open]:bg-accent",
             )}
           >
@@ -229,16 +230,17 @@ export function UserMenu({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>{t.app.theme.label}</DropdownMenuLabel>
-          {(["light", "dark", "system"] as const).map((mode) => {
-            const Icon = themeIcons[mode];
-            return (
-              <DropdownMenuItem key={mode} className={item} onSelect={() => onTheme(mode)}>
-                <Icon />
-                {t.app.theme[mode]}
-                {theme === mode && <Check className="ml-auto" />}
-              </DropdownMenuItem>
-            );
-          })}
+          <DropdownMenuRadioGroup value={theme} onValueChange={(v) => onTheme(v as ThemeMode)}>
+            {(["light", "dark", "system"] as const).map((mode) => {
+              const Icon = themeIcons[mode];
+              return (
+                <DropdownMenuRadioItem key={mode} value={mode} className={item}>
+                  <Icon />
+                  {t.app.theme[mode]}
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem className={item} onSelect={() => switchLanguage(true)}>
             <Languages />

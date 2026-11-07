@@ -35,15 +35,15 @@ export function useIsMobile() {
 // ---- 按钮与输入 ----
 
 export const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md border border-transparent text-sm whitespace-nowrap transition-colors outline-none not-disabled:active:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md border border-transparent text-sm whitespace-nowrap transition-colors outline-none not-disabled:active:opacity-80 focus-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "bg-primary font-medium text-primary-foreground not-disabled:hover:bg-primary/88",
         outline: "border-input bg-transparent not-disabled:hover:bg-accent",
         ghost: "not-disabled:hover:bg-accent",
-        // 深色下 destructive 是给文字用的浅红，白字放在上面对比度不够，按钮底色换深一档。
-        destructive: "bg-destructive text-white not-disabled:hover:bg-destructive/90 dark:bg-red-600 dark:not-disabled:hover:bg-red-600/90",
+        // 底色用 destructive-solid：深色下 destructive 是给文字用的浅红，白字放在上面对比度不够。
+        destructive: "bg-destructive-solid text-white not-disabled:hover:bg-destructive-solid/90",
         "destructive-outline": "border-input bg-transparent text-destructive not-disabled:hover:bg-accent",
       },
       size: {
@@ -118,7 +118,7 @@ export const ButtonLink = createLink(function ButtonLink({
 });
 
 const control =
-  "w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground aria-[invalid=true]:border-destructive focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60 max-md:text-base";
+  "w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-ring aria-[invalid=true]:border-destructive disabled:cursor-not-allowed disabled:opacity-60 max-md:text-base";
 
 export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return <input className={cn(control, "h-8 max-md:h-10", className)} {...props} />;
@@ -150,9 +150,14 @@ export function Select({
   className,
   children,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedby,
 }: {
   id?: string;
   "aria-label"?: string;
+  // Field 出错时给子元素加这两项，传到触发器上，才有红框和读屏说明。
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
   value: string;
   onChange?: (e: { target: { value: string } }) => void;
   required?: boolean;
@@ -165,7 +170,7 @@ export function Select({
   const unset = required && value === "";
   return (
     <SelectRoot value={unset ? "" : value === "" ? emptyValue : value} onValueChange={(v) => v && onChange?.({ target: { value: v === emptyValue ? "" : v } })} required={required} disabled={disabled}>
-      <SelectTrigger id={id} className={className} aria-label={ariaLabel}>
+      <SelectTrigger id={id} className={className} aria-label={ariaLabel} aria-invalid={ariaInvalid} aria-describedby={ariaDescribedby}>
         <SelectValue placeholder={unset ? options.find((o) => o.value === "")?.label : undefined} />
       </SelectTrigger>
       <SelectContent>
@@ -188,7 +193,7 @@ export function HelpTip({ children, className }: { children: React.ReactNode; cl
         <TooltipTrigger
           type="button"
           aria-label={t.common.help}
-          className={cn("inline-flex cursor-help rounded-full align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40", className)}
+          className={cn("inline-flex cursor-help rounded-full align-middle text-muted-foreground/70 outline-none hover:text-foreground focus-visible:text-foreground focus-ring", className)}
           onClick={(e) => {
             e.preventDefault();
             setOpen(true);
@@ -515,7 +520,7 @@ export function Section({
             {description && <p className="mt-1 text-pretty text-muted-foreground">{description}</p>}
           </div>
           {/* 手机上灰字说明换到标题下面一行，按钮留在标题右边。 */}
-          {actions && <div className="flex flex-wrap items-center gap-3 max-md:contents [&>span]:text-[13px] [&>span]:text-muted-foreground max-md:[&>span]:order-1 max-md:[&>span]:w-full max-md:[&>span]:leading-5">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center gap-2 max-md:contents [&>span]:text-[13px] [&>span]:text-muted-foreground max-md:[&>span]:order-1 max-md:[&>span]:w-full max-md:[&>span]:leading-5">{actions}</div>}
         </header>
       )}
       {children != null && children !== false && <AutoHeight className="grid gap-4 max-md:gap-2">{children}</AutoHeight>}
@@ -660,7 +665,7 @@ export function SettingRows({ children }: { children: React.ReactNode }) {
 
 // cardClass：项目页网格里的卡片，整张是链接。其他地方不用卡片（见 docs/ui.md）。
 export const cardClass =
-  "group flex flex-col rounded-lg border bg-background outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
+  "group flex flex-col rounded-lg border bg-background outline-none transition-colors hover:border-ring focus-ring";
 
 // CardGrid：卡片的网格，每张至少 240px，卡片之间 16px。
 export function CardGrid({ className, ...props }: React.ComponentProps<"div">) {
@@ -670,25 +675,35 @@ export function CardGrid({ className, ...props }: React.ComponentProps<"div">) {
 
 // ---- 表格 ----
 
-// 表格：表头 36、13 号灰字，表头下一条线；行高 40，行之间没有线。只给字段多、需要横向比较的内容用，细分页优先 List。
+// 表格：表头 36、13 号灰字，表头下一条线；行高 36，行之间没有线，悬停整行浅底、首尾圆角 6。
+// 左右各外扩 8 只是为了悬停底色，文字和区块标题对齐；表头线不超出内容区。只给字段多、需要横向比较的内容用，细分页优先 List。
 const TableDensity = createContext(false);
 
 export function Table({ className, compact = false, ...props }: React.ComponentProps<"table"> & { compact?: boolean }) {
   return (
-    <div data-slot="table" className="overflow-x-auto">
+    <div data-slot="table" className="-mx-2 overflow-x-auto">
       <TableDensity.Provider value={compact}>
-        <table className={cn("w-full text-sm", className)} {...props} />
+        <table
+          className={cn(
+            "w-full text-sm [&_tbody_tr:hover>td]:bg-accent [&_tbody_tr>td:first-child]:rounded-l-md [&_tbody_tr>td:last-child]:rounded-r-md",
+            className,
+          )}
+          {...props}
+        />
       </TableDensity.Provider>
     </div>
   );
 }
 
+// 表头线画在背景上：首尾两格各让出外扩的 8，线和内容区一样宽。
+const headLine = "bg-[linear-gradient(var(--border),var(--border))] bg-bottom bg-no-repeat bg-size-[100%_1px] first:bg-size-[calc(100%-8px)_1px] first:bg-right-bottom last:bg-size-[calc(100%-8px)_1px] last:bg-left-bottom";
+
 export function Th({ className, ...props }: React.ComponentProps<"th">) {
-  return <th className={cn("h-9 border-b px-2 text-left text-[13px] font-normal whitespace-nowrap text-muted-foreground first:pl-0 last:pr-0", className)} {...props} />;
+  return <th className={cn("h-9 px-2 text-left text-[13px] font-normal whitespace-nowrap text-muted-foreground", headLine, className)} {...props} />;
 }
 
 export function Td({ className, ...props }: React.ComponentProps<"td">) {
-  return <td className={cn("h-9 px-2 py-1 align-middle first:pl-0 last:pr-0", className)} {...props} />;
+  return <td className={cn("h-9 px-2 py-1 align-middle transition-colors", className)} {...props} />;
 }
 
 // ---- 状态与提示 ----
@@ -699,8 +714,8 @@ export const badgeVariants = cva("inline-flex shrink-0 items-center gap-1 rounde
       neutral: "border-border text-muted-foreground",
       success: "border-border text-success",
       warning: "border-border text-warning-text",
-      danger: "border-transparent bg-destructive text-white",
-      info: "border-transparent bg-info/10 text-info",
+      danger: "border-transparent bg-destructive-solid text-white",
+      info: "border-border text-info",
     },
   },
   defaultVariants: { tone: "neutral" },
@@ -764,14 +779,15 @@ export function Notice({
   actions?: React.ReactNode;
 }) {
   return (
-    <div role={tone === "danger" ? "alert" : "status"} className={cn("flex min-h-8 animate-fade-in items-start gap-2 leading-5 max-md:flex-wrap", className)}>
+    // 带按钮时一行高 32：文字上下留 6，按钮用负外边距抵掉，文字和按钮上下居中。
+    <div role={tone === "danger" ? "alert" : "status"} className={cn("flex min-h-8 animate-fade-in items-start gap-2 leading-5 max-md:flex-wrap", actions && "md:py-1.5", className)}>
       <span className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", noticeDot[tone])} />
       <div className="min-w-0 flex-1 text-pretty">
         {title && <span className={cn("font-medium", tone === "danger" && "text-destructive")}>{title}</span>}
         {title && children && " "}
         {children && <span className={cn(tone === "danger" && !title ? "font-medium text-destructive" : "text-muted-foreground")}>{children}</span>}
       </div>
-      {actions && <div className="-mt-1.5 flex shrink-0 items-center gap-2 max-md:mt-0 max-md:w-full max-md:[&>*]:flex-1">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-2 max-md:w-full md:-my-1.5 max-md:[&>*]:flex-1">{actions}</div>}
     </div>
   );
 }
@@ -805,7 +821,7 @@ export function Loading() {
 // Empty：空状态。
 export function Empty({ title, children, action, icon }: { title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+    <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
       {icon && <div className="mb-1 text-muted-foreground [&_svg]:size-5">{icon}</div>}
       <p className="text-base font-semibold">{title}</p>
       {children && <div className="max-w-md text-muted-foreground">{children}</div>}
@@ -890,7 +906,7 @@ export function CodeBlock({ children, copy, nowrap, className }: { children: str
 
 // LogBox：日志和命令输出的深色区域。
 export function LogBox({ className, ...props }: React.ComponentProps<"pre">) {
-  return <pre className={cn("overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-xs leading-5 text-log-foreground", className)} {...props} />;
+  return <pre className={cn("overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground", className)} {...props} />;
 }
 
 // ---- 标签页 ----
@@ -1107,7 +1123,7 @@ export function Tabs<T extends string>({
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="-mb-px inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 border-b-2 border-transparent text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset data-[state=active]:text-foreground"
+            className="-mb-px inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 border-b-2 border-transparent text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset data-[state=active]:text-foreground"
           >
             {it.label}
             {it.count !== undefined && it.count > 0 && <Roll value={String(it.count)} className="text-xs text-muted-foreground" />}
@@ -1131,7 +1147,7 @@ export function Segmented<T extends string>({ value, onChange, items, label }: {
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=active]:text-foreground"
+            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-ring data-[state=active]:text-foreground"
           >
             {it.label}
           </TabsTrigger>
@@ -1231,7 +1247,7 @@ function ActionSheet({ open, onClose, items, label, title }: { open: boolean; on
               key={i}
               type="button"
               disabled={it.disabled}
-              className={cn("grid min-h-11 cursor-pointer content-center justify-items-center rounded-md px-2 text-base leading-6 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50", it.danger && "text-destructive")}
+              className={cn("grid min-h-11 cursor-pointer content-center justify-items-center rounded-md px-2 text-base leading-6 outline-none transition-colors hover:bg-accent focus-ring disabled:cursor-not-allowed disabled:opacity-50", it.danger && "text-destructive")}
               onClick={() => {
                 onClose();
                 // 等面板关掉再执行：选中后常常接着打开确认框。

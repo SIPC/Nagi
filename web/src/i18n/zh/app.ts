@@ -12,13 +12,15 @@ export default {
   notFound: {
     title: "页面不存在",
     body: "地址可能有误，或页面已被移除。",
-    back: "返回项目",
+    back: "返回概览",
   },
   names: {
     invalid: "只能用小写字母、数字和 -，不以 - 开头或结尾，不超过 32 个字符",
     invalidEnv: (key: string) => `变量名「${key}」只能包含字母、数字和下划线，且不能以数字开头`,
   },
   nodesOffline: (n: number) => `${n} 个节点离线`,
+  // 面包屑的读屏名称。
+  breadcrumb: "页面路径",
   skipToContent: "跳到主要内容",
   search: {
     button: "搜索",

@@ -237,7 +237,12 @@ export function UpdateCard() {
   const panel = status.data?.panel;
   const active = updateActive(panel);
   const failed = panel?.phase === "failed";
-  const primaryHint = !standbys?.isStandby && standbys?.standbys.length ? t.update.primaryHint : "";
+  // 主面板有备用面板时提醒它们要单独更新；备用面板上提醒只更新自己。
+  const scopeHint = standbys?.isStandby
+    ? { text: t.update.standbyHint, help: t.update.standbyHelp }
+    : standbys?.standbys.length
+      ? { text: t.update.primaryHint, help: t.update.primaryHelp }
+      : null;
   const updateButton = (label: string) =>
     d?.available && (
       <Button readOnlyOk onClick={() => update(d.latest)} disabled={starting}>
@@ -247,9 +252,9 @@ export function UpdateCard() {
     );
   const details = d?.available && (
     <>
-      {primaryHint && (
+      {scopeHint && (
         <>
-          {primaryHint} <HelpTip>{t.update.primaryHelp}</HelpTip>{" "}
+          {scopeHint.text} <HelpTip>{scopeHint.help}</HelpTip>{" "}
         </>
       )}
       <a className="text-foreground underline-offset-4 hover:underline" href={d.releaseUrl} target="_blank" rel="noreferrer">
@@ -262,46 +267,42 @@ export function UpdateCard() {
     <Section title={t.settings.tabs.update.label} help={t.update.help}>
       {error && <Alert>{error}</Alert>}
       {status.error && !status.data && <QueryError error={errorMessage(status.error)} onRetry={() => status.refetch()} />}
-      {panel && failed && (
+      {/* 同一处只放一条提示，按失败、进行中、可更新、已是最新的顺序取第一条。 */}
+      {panel && failed ? (
         <Notice tone="danger" title={t.update.tips.panelFailed(panel.target)} actions={updateButton(t.update.retry)}>
           {panel.error}
           {panel.error && details && " "}
           {details}
         </Notice>
-      )}
-      {panel &&
-        active &&
-        (panel.phase === "restarting" ? (
-          <Notice tone="success" title={t.update.restartingTitle(panel.target)}>
-            {t.update.restartingText}
-          </Notice>
-        ) : (
-          <Notice tone="info" title={t.update.installingTitle(panel.target)}>
-            {t.update.installingText}
-          </Notice>
-        ))}
-      {d?.available && !active && !failed && (
+      ) : panel && active ? (
+        <Notice tone="info" title={panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target)}>
+          {panel.phase === "restarting" ? t.update.restartingText : t.update.installingText}
+        </Notice>
+      ) : d?.available ? (
         <Notice tone="info" title={t.update.availableTitle(d.latest)} actions={updateButton(t.update.action)}>
           {details}
         </Notice>
+      ) : (
+        checked && d && <Notice title={t.update.upToDate} />
       )}
-      {checked && d && !d.available && <Notice title={t.update.upToDate} />}
-      {standbys?.isStandby && <Notice title={t.update.standbyTitle}>{t.update.standbyHint}</Notice>}
       {q.isPending ? (
         <RowsSkeleton count={2} />
       ) : !d ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
         <SettingRows>
+          {/* 版本号用等宽字体。 */}
           <SettingRow
             label={t.update.current}
-            description={`${d.current || "—"}${d.unsupported ? ` · ${d.unsupported}` : ""}`}
+            description={
+              <>
+                <span className="font-mono">{d.current || "—"}</span>
+                {d.unsupported && ` · ${d.unsupported}`}
+              </>
+            }
           />
           {!d.unsupported && (
-            <SettingRow
-              label={t.update.latest}
-              description={d.latest || "—"}
-            >
+            <SettingRow label={t.update.latest} description={<span className="font-mono">{d.latest || "—"}</span>}>
               <Button readOnlyOk variant="outline" onClick={check} disabled={checking || starting || active}>
                 {checking && <Spinner />}
                 {t.update.check}

@@ -14,7 +14,6 @@ export default {
   disconnected: "Not connected",
   lastSync: "Last synced",
   status: {
-    title: "Sync status",
     help: "This is a standby panel that syncs data from the primary panel in real time.",
     primary: "Primary panel",
     connection: "Connection",
@@ -22,7 +21,6 @@ export default {
     syncFailed: "Sync failed",
   },
   list: {
-    title: "Paired standby panels",
     help: "Standby panels connect to this panel through the panel port and share its CA and master key. Standby panels are read-only; all changes are made on the primary panel.",
     add: "Add standby panel",
     empty: "No standby panels",
@@ -42,7 +40,8 @@ export default {
     withStandby: "The panel's machine may be offline. You can continue on a standby panel.",
     noStandby: "The panel's machine may be offline. This notice disappears when it comes back.",
     open: "Open",
-    note: "Standby panels are read-only. If the primary panel can't be recovered, promote a standby panel to make changes. Sign in to each panel separately; if secure entry is enabled, add the entry path to the address.",
+    note: "Standby panels are read-only until you promote one to primary.",
+    noteHelp: "Sign in to each panel separately. If secure entry is turned on, add the entry path to the address.",
     retry: "Retry",
   },
 } satisfies typeof zh;

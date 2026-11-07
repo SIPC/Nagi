@@ -109,13 +109,13 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   const [channelError, setChannelError] = useState("");
   const [rulesError, setRulesError] = useState("");
 
-  useUnsaved(rules);
+  const dirty = useUnsaved(rules);
 
   // 渠道和规则存在同一份配置里。各自保存时另一半用面板上已保存的值，不带上还没点保存的修改。
+  // 渠道的增删改在列表上就看得到，不另外提示；规则保存后页面没有变化，才提示已下发。
   const push = async (nextChannels: AlertChannel[], nextRules: AlertRules) => {
     await settingsClient.updateAlertConfig({ config: create(AlertConfigSchema, { channels: nextChannels, rules: nextRules }) });
     await queryClient.invalidateQueries({ queryKey: ["alert-config"] });
-    toast.success(t.alerts.savedAndPushed);
   };
 
   const saveChannel = async (c: AlertChannel) => {
@@ -155,6 +155,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
     setRulesError("");
     try {
       await push(channels, rules);
+      toast.success(t.alerts.savedAndPushed);
     } catch (err) {
       setRulesError(errorMessage(err));
     } finally {
@@ -199,7 +200,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
 
   return (
     <>
-      <Section title={t.alerts.channels} help={t.alerts.channelsHelp} actions={addButton}>
+      <Section title={t.settings.tabs.alerts.label} help={t.alerts.channelsHelp} actions={addButton}>
         {lost && (
           <Notice tone="warning" title={t.alerts.lostTitle}>
             {t.alerts.lostBody} <HelpTip>{t.alerts.lostHelp}</HelpTip>
@@ -272,8 +273,9 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
               </FormRow>,
             )}
             {rulesError && <Alert>{rulesError}</Alert>}
+            {/* 和面板访问的保存一样用主按钮；没有改动时没有可保存的，置灰。 */}
             <FormActions>
-              <Button type="submit" variant="outline" disabled={saving}>
+              <Button type="submit" disabled={saving || !dirty}>
                 {saving && <Spinner />}
                 {t.common.actions.save}
               </Button>
@@ -294,14 +296,14 @@ export function AlertSettings() {
   });
   if (cfg.isPending)
     return (
-      <Section title={t.alerts.channels}>
+      <Section title={t.settings.tabs.alerts.label}>
         <RowsSkeleton />
       </Section>
     );
   // 查询失败时不显示表单：空配置一保存就把面板上的配置覆盖了。
   if (!cfg.data)
     return (
-      <Section title={t.alerts.channels}>
+      <Section title={t.settings.tabs.alerts.label}>
         <QueryError error={errorMessage(cfg.error)} onRetry={() => cfg.refetch()} />
       </Section>
     );

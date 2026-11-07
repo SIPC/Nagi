@@ -1,6 +1,5 @@
 // 导航底部的用户卡片和个人资料。
 export default {
-  menu: "账号菜单",
   signedInAs: (name: string) => `登录账号：${name}`,
   profile: "个人资料",
   security: "账号安全",

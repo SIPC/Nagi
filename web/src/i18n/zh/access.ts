@@ -8,8 +8,8 @@ export default {
   },
   domain: {
     label: "绑定域名",
-    bound: (domain: string) => `通过 https://${domain} 访问面板。`,
-    unbound: "未绑定，通过 https://<对外地址>:<端口> 访问。",
+    bound: (domain: string) => `通过 https://${domain} 访问面板`,
+    unbound: "未绑定，通过 https://<对外地址>:<端口> 访问",
     help: "域名须预先解析到本机。绑定后由本机 Caddy 经 80/443 端口反向代理面板并自动申请证书；节点仍通过对外地址和面板端口连接。",
     bind: "绑定",
     unbind: "解除绑定",

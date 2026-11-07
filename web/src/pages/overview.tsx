@@ -8,6 +8,7 @@ import { fmtBytes, fmtCount, fmtCpuShort, fmtRate, metricRanges, RangePicker, ra
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status } from "@/components/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import type { MetricSeries } from "@/gen/nagi/v1/common_pb";
@@ -407,10 +408,11 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
 
 // ---- 表格和数字 ----
 
+// Stat：一个关键数字。能点的（节点、容器、项目）悬停时名称变成主文字色并加下划线，看得出是链接。
 function Stat({ label, value, n, unit, to, title }: { label: string; value: string | number; n?: number; unit?: string; to?: "/nodes" | "/projects"; title?: string }) {
   const inner = (
     <>
-      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("text-muted-foreground", to && "underline-offset-4 transition-colors group-hover:text-foreground group-hover:underline")}>{label}</span>
       <span className="text-2xl leading-8 font-medium tracking-tight whitespace-nowrap">
         <Roll value={String(value)} n={n} />
         {unit && (
@@ -426,7 +428,7 @@ function Stat({ label, value, n, unit, to, title }: { label: string; value: stri
   );
   const box = "grid min-w-0 gap-1";
   return to ? (
-    <Link to={to} className={cn(box, "rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40")} title={title}>
+    <Link to={to} className={cn(box, "group rounded-sm outline-none focus-ring")} title={title}>
       {inner}
     </Link>
   ) : (
@@ -440,21 +442,19 @@ const thClass =
   "h-9 bg-[linear-gradient(var(--border),var(--border))] [background-position:bottom] [background-size:100%_1px] bg-no-repeat px-2 text-left text-[13px] font-normal whitespace-nowrap text-muted-foreground first:[background-position:right_bottom] first:[background-size:calc(100%-8px)_1px] last:[background-position:left_bottom] last:[background-size:calc(100%-8px)_1px]";
 const tdClass = "h-9 truncate px-2 py-1 align-middle whitespace-nowrap text-muted-foreground transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
 
-// 列宽跟内容走（cols 是除最后一列外的宽度），靠左排，多出来的宽度都留给最后一列。
-function OverviewTable({ head, cols, children }: { head: string[]; cols: number[]; children: ReactNode }) {
+// 列宽跟内容走（width 是除最后一列外的宽度，写在表头上），靠左排，多出来的宽度都留给最后一列。
+// 窄屏收起次要列（hide 是对应的类名，表头和单元格一起用），不横向滚动整页；第一列和最后一列一直显示。
+type Col = { label: string; width?: number; hide?: string };
+
+function OverviewTable({ cols, children }: { cols: Col[]; children: ReactNode }) {
   return (
     <div className="-mx-2 overflow-x-auto">
       <table className="w-full border-separate border-spacing-0 md:table-fixed">
-        <colgroup>
-          {head.map((h, i) => (
-            <col key={h} style={{ width: cols[i] }} />
-          ))}
-        </colgroup>
         <thead>
           <tr>
-            {head.map((h) => (
-              <th key={h} className={thClass}>
-                {h}
+            {cols.map((c) => (
+              <th key={c.label} className={cn(thClass, c.hide)} style={{ width: c.width }}>
+                {c.label}
               </th>
             ))}
           </tr>
@@ -465,11 +465,41 @@ function OverviewTable({ head, cols, children }: { head: string[]; cols: number[
   );
 }
 
+// 节点表：CPU 到 md、内存和磁盘到 lg、流量到 xl 才显示。
+const hideCpu = "max-md:hidden";
+const hideUsage = "max-lg:hidden";
+const hideNet = "max-xl:hidden";
+const nodeCols: Col[] = [
+  { label: o.nodes.name, width: 176 },
+  { label: o.nodes.status, width: 80 },
+  { label: o.nodes.cpu, width: 72, hide: hideCpu },
+  { label: o.nodes.memory, width: 136, hide: hideUsage },
+  { label: o.nodes.disk, width: 136, hide: hideUsage },
+  { label: o.nodes.inbound, width: 104, hide: hideNet },
+  { label: o.nodes.outbound, width: 104, hide: hideNet },
+  { label: o.nodes.containers },
+];
+
+// 端口映射表：请求到 md、错误率和入站到 lg、容器到 xl 才显示。
+const hideReq = "max-md:hidden";
+const hideRate = "max-lg:hidden";
+const hideContainer = "max-xl:hidden";
+const routeCols: Col[] = [
+  { label: o.routes.mapping, width: 176 },
+  { label: o.routes.project, width: 160 },
+  { label: o.routes.container, width: 136, hide: hideContainer },
+  { label: o.routes.requests, width: 104, hide: hideReq },
+  { label: o.routes.errorRate, width: 72, hide: hideRate },
+  { label: o.routes.inbound, width: 104, hide: hideRate },
+  { label: o.routes.outbound },
+];
+
 // 图表：标题、图例，下面是图形和 5 个时间。节点之间的线多时只画最大的几条。图例折行时两张图的图形仍然对齐（subgrid）。
 // 图例只占一行，左右两张图才对得齐：只列前两项，其余收成 +N，完整的在悬停提示里。
 const trendLegendMax = 2;
 
-function TrendChart({ title, help, series, from, to, step }: { title: string; help: string; series: ChartSeries[]; from: number; to: number; step: number }) {
+// loading：数据还没到，图里先不写「暂无数据」。
+function TrendChart({ title, help, series, from, to, step, loading }: { title: string; help: string; series: ChartSeries[]; from: number; to: number; step: number; loading?: boolean }) {
   const rest = series.slice(trendLegendMax);
   return (
     <div className="row-span-2 grid min-w-0 grid-rows-subgrid gap-y-3">
@@ -480,15 +510,36 @@ function TrendChart({ title, help, series, from, to, step }: { title: string; he
         </span>
         <span className="flex min-w-0 items-center gap-4 text-[13px] leading-4 whitespace-nowrap text-muted-foreground">
           <Legend series={series.slice(0, trendLegendMax)} className="min-w-0 flex-nowrap overflow-hidden" />
-          {rest.length > 0 && (
-            <span className="shrink-0" title={rest.map((s) => s.label).join("\n")}>
-              +{rest.length}
-            </span>
-          )}
+          {rest.length > 0 && <LegendMore series={rest} />}
         </span>
       </div>
-      <TimeChart series={series} from={from} to={to} step={step} format={fmtRate} />
+      <TimeChart series={series} from={from} to={to} step={step} format={fmtRate} quiet={loading} />
     </div>
+  );
+}
+
+// LegendMore：图例放不下的几项收成「+N」，悬停或聚焦时列出来（和 HelpTip 同一种提示，触屏上点一下显示）。
+function LegendMore({ series }: { series: ChartSeries[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger
+          type="button"
+          aria-label={o.trend.more(series.length)}
+          className="shrink-0 cursor-help rounded-sm outline-none hover:text-foreground focus-visible:text-foreground focus-ring"
+          onClick={(e) => {
+            e.preventDefault();
+            setOpen(true);
+          }}
+        >
+          +{series.length}
+        </TooltipTrigger>
+        <TooltipContent>
+          <Legend series={series} className="flex-col gap-1.5" />
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -744,6 +795,11 @@ export function OverviewPage() {
   const [outValue, outUnit] = rateParts(extOut);
   const [meshValue, meshUnit] = rateParts(meshTotal);
   const noNodes = nodes.isSuccess && nodes.data.nodes.length === 0;
+  // 节点查询失败（没有旧数据）时，下面的区块都依赖节点，只显示上面的错误，不写「暂无流量」和空表头。
+  const nodesFailed = !!nodes.error && !nodes.data;
+  // 趋势图的数据还没到：节点列表、网卡历史、节点之间的历史和公钥对应都要有。
+  const extLoading = nodes.isPending || history.isLoading || meshHistory.isLoading || meshKeys.isLoading;
+  const meshLoading = nodes.isPending || meshHistory.isLoading || meshKeys.isLoading;
 
   return (
     <>
@@ -756,9 +812,9 @@ export function OverviewPage() {
           </span>
         }
       />
-      {nodes.error && <QueryError className="mb-6" error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />}
+      {nodesFailed && <QueryError className="mb-6" error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />}
       {projects.error && !projects.data && <QueryError className="mb-6" error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4 md:flex md:flex-wrap md:gap-x-12">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4 md:flex md:flex-wrap md:gap-x-8">
         <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
         <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
@@ -778,7 +834,7 @@ export function OverviewPage() {
             {o.noNodes.text}
           </Empty>
         </div>
-      ) : (
+      ) : nodesFailed ? null : (
         <>
           <Section
             title={o.flow.title}
@@ -840,8 +896,9 @@ export function OverviewPage() {
                   { label: o.trend.inbound, className: "text-muted-foreground", points: extSeries("node:net_rx", "rx") },
                   { label: o.trend.outbound, className: "text-wave", points: extSeries("node:net_tx", "tx") },
                 ]}
+                loading={extLoading}
               />
-              <TrendChart title={o.trend.mesh} help={o.trend.meshHelp} from={now - r.seconds} to={now} step={r.step} series={pairSeries} />
+              <TrendChart title={o.trend.mesh} help={o.trend.meshHelp} from={now - r.seconds} to={now} step={r.step} series={pairSeries} loading={meshLoading} />
             </div>
           </Section>
 
@@ -856,7 +913,7 @@ export function OverviewPage() {
             {nodes.isPending ? (
               <RowsSkeleton />
             ) : (
-              <OverviewTable cols={[176, 80, 72, 136, 136, 104, 104]} head={[o.nodes.name, o.nodes.status, o.nodes.cpu, o.nodes.memory, o.nodes.disk, o.nodes.inbound, o.nodes.outbound, o.nodes.containers]}>
+              <OverviewTable cols={nodeCols}>
                 {(nodes.data?.nodes ?? []).map((n) => {
                   const u = n.online ? n.usage : undefined;
                   const memTotal = Number(n.info?.memoryBytes ?? 0n);
@@ -884,11 +941,11 @@ export function OverviewPage() {
                           </span>
                         )}
                       </td>
-                      <td className={tdClass}><Roll value={u ? fmtCpuShort(u.cpu) : dash} /></td>
-                      <td className={tdClass}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></td>
-                      <td className={tdClass}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></td>
-                      <td className={tdClass}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></td>
-                      <td className={tdClass}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></td>
+                      <td className={cn(tdClass, hideCpu)}><Roll value={u ? fmtCpuShort(u.cpu) : dash} /></td>
+                      <td className={cn(tdClass, hideUsage)}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></td>
+                      <td className={cn(tdClass, hideUsage)}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></td>
+                      <td className={cn(tdClass, hideNet)}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></td>
+                      <td className={cn(tdClass, hideNet)}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></td>
                       <td className={tdClass}><Roll value={String(n.containers)} /></td>
                     </tr>
                   );
@@ -897,36 +954,37 @@ export function OverviewPage() {
             )}
           </Section>
 
-          <Section title={o.routes.title} help={o.routes.help}>
-            {offlineNotice}
-            {routeRows.length === 0 ? (
-              allOffline ? (
-                <EmptyRow>{o.allOffline}</EmptyRow>
-              ) : online.length > 0 && routeSeries.isPending ? (
-                <RowsSkeleton count={1} />
+          {/* 节点全部离线时，「节点均离线」已经写在实时流量里，端口映射没有数据来源，整个区块不显示。 */}
+          {!allOffline && (
+            <Section title={o.routes.title} help={o.routes.help}>
+              {offlineNotice}
+              {routeRows.length === 0 ? (
+                online.length > 0 && routeSeries.isPending ? (
+                  <RowsSkeleton count={1} />
+                ) : (
+                  <EmptyRow>{o.routes.empty}</EmptyRow>
+                )
               ) : (
-                <EmptyRow>{o.routes.empty}</EmptyRow>
-              )
-            ) : (
-              <OverviewTable cols={[176, 160, 136, 104, 72, 104]} head={[o.routes.mapping, o.routes.project, o.routes.container, o.routes.requests, o.routes.errorRate, o.routes.inbound, o.routes.outbound]}>
-                {routeRows.map((x) => (
-                  <tr key={`${x.project.id}/${x.route.name}`} className="group">
-                    <td className={cn(tdClass, "font-mono text-[13px] text-foreground")}>{x.route.name}</td>
-                    <td className={cn(tdClass, "text-foreground")}>
-                      <Link to="/projects/$projectId" params={{ projectId: x.project.id }}>
-                        {x.project.name}
-                      </Link>
-                    </td>
-                    <td className={tdClass}>{x.route.container}</td>
-                    <td className={tdClass}><Roll value={fmtCount(x.req)} n={x.req} /></td>
-                    <td className={tdClass}><Roll value={x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash} /></td>
-                    <td className={tdClass}><Roll value={fmtTotal(x.in)} n={x.in} /></td>
-                    <td className={tdClass}><Roll value={fmtTotal(x.out)} n={x.out} /></td>
-                  </tr>
-                ))}
-              </OverviewTable>
-            )}
-          </Section>
+                <OverviewTable cols={routeCols}>
+                  {routeRows.map((x) => (
+                    <tr key={`${x.project.id}/${x.route.name}`} className="group">
+                      <td className={cn(tdClass, "font-mono text-[13px] text-foreground")}>{x.route.name}</td>
+                      <td className={cn(tdClass, "text-foreground")}>
+                        <Link to="/projects/$projectId" params={{ projectId: x.project.id }}>
+                          {x.project.name}
+                        </Link>
+                      </td>
+                      <td className={cn(tdClass, hideContainer)}>{x.route.container}</td>
+                      <td className={cn(tdClass, hideReq)}><Roll value={fmtCount(x.req)} n={x.req} /></td>
+                      <td className={cn(tdClass, hideRate)}><Roll value={x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash} /></td>
+                      <td className={cn(tdClass, hideRate)}><Roll value={fmtTotal(x.in)} n={x.in} /></td>
+                      <td className={tdClass}><Roll value={fmtTotal(x.out)} n={x.out} /></td>
+                    </tr>
+                  ))}
+                </OverviewTable>
+              )}
+            </Section>
+          )}
         </>
       )}
     </>

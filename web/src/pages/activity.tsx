@@ -52,6 +52,7 @@ function ActivityList() {
       description={t.activity.description}
       actions={
         <Segmented
+          label={t.activity.filter}
           value={kind}
           onChange={setKind}
           items={[

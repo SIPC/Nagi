@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Server } from "lucide-react";
@@ -30,16 +30,24 @@ const PANEL = "panel";
 type Pt = { x: number; y: number };
 
 // layout：面板和节点在圆上的位置。面板不在圆心，节点之间的线不用绕开它，都是直线。
-function layout(nodes: Node[]) {
+// 按可用宽度 avail 算布局，不整体缩放（缩放会让文字小于 12）：放不下时先收窄两侧留给文字的宽度，再缩小圆，
+// 圆最小到相邻节点不相碰；还是放不下时横向滚动。avail 为 0（还没量到宽度）时按默认大小。
+function layout(nodes: Node[], avail = 0) {
   const count = nodes.length;
-  const r = count <= 3 ? 180 : Math.min(260, 130 + count * 14);
+  let r = count <= 3 ? 180 : Math.min(260, 130 + count * 14);
+  let padX = 170; // 两侧节点的名字和说明写在外侧，留出文字的宽度
+  if (avail > 0 && 2 * (r + padX) > avail) {
+    padX = Math.max(110, avail / 2 - r);
+    // 相邻节点的圆心至少隔 72（圆直径 50，外加状态点和间隙）。
+    const minR = Math.max(120, 36 / Math.sin(Math.PI / (count + 1)));
+    r = Math.max(minR, Math.min(r, avail / 2 - padX));
+  }
   const angle = (i: number) => -Math.PI / 2 + (2 * Math.PI * (i + 1)) / (count + 1);
   const pos = new Map<string, Pt>([[PANEL, { x: 0, y: -r }]]);
   nodes.forEach((n, i) => {
     pos.set(n.id, { x: r * Math.cos(angle(i)), y: r * Math.sin(angle(i)) });
   });
   const ys = [...pos.values()].map((p) => p.y);
-  const padX = 170; // 两侧节点的名字和说明写在外侧，留出文字的宽度
   // 上方还要容得下向外弯的线和它的标签（见 bend）：按每对节点之间可能的线算。
   let top = Math.min(...ys) - 64;
   const pts = nodes.map((n) => pos.get(n.id)!);
@@ -50,7 +58,58 @@ function layout(nodes: Node[]) {
     }
   }
   const bottom = Math.max(...ys) + 64;
-  return { pos, box: { x: -r - padX, y: top, w: 2 * (r + padX), h: bottom - top } };
+  // spacing：相邻两个节点圆心的距离，上下方的文字最宽不超过它。
+  const spacing = 2 * r * Math.sin(Math.PI / (count + 1));
+  return { pos, spacing, box: { x: -r - padX, y: top, w: 2 * (r + padX), h: bottom - top } };
+}
+
+type Box = ReturnType<typeof layout>["box"];
+
+// labelSide：文字放在圆的外侧，连线都朝内，压不到字：两侧的节点写在旁边，其余写在上方或下方。
+const labelSide = (at: Pt) => Math.abs(at.x) > 0.7 * Math.hypot(at.x, at.y);
+
+// labelWidth：节点名字和说明最宽多少。两侧的写到画布边缘为止；上下方的居中，不超过相邻节点的间距。
+function labelWidth(at: Pt, box: Box, spacing: number) {
+  const half = box.w / 2;
+  if (labelSide(at)) return Math.max(48, half - Math.abs(at.x) - 34 - 4);
+  return Math.max(48, Math.min(spacing - 12, 2 * (half - Math.abs(at.x)) - 8));
+}
+
+// textWidth：文字的实际宽度，用页面的字体在 canvas 上量；量不了时按汉字 1em、其余 0.58em 估算。
+let measure: CanvasRenderingContext2D | null | undefined;
+function textWidth(text: string, size: number, weight: number) {
+  if (measure === undefined) measure = document.createElement("canvas").getContext("2d");
+  if (!measure) return [...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 1 : 0.58) * size, 0);
+  measure.font = `${weight} ${size}px ${getComputedStyle(document.body).fontFamily}`;
+  return measure.measureText(text).width;
+}
+
+// clip：放不下时截短，末尾加省略号；完整的文字放在 <title> 里。
+function clip(text: string, size: number, max: number, weight = 400) {
+  if (textWidth(text, size, weight) <= max) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (textWidth(text.slice(0, mid) + "…", size, weight) <= max) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, Math.max(lo, 1)) + "…";
+}
+
+// useWidth：容器的可用宽度，布局按它算。
+function useWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, width };
 }
 
 // curve：从 A 经控制点 P 到 B 的二次曲线；at(s) 是曲线上的点（s 从 0 到 1）。
@@ -121,18 +180,22 @@ const halo = { stroke: "var(--background)", strokeWidth: 4, strokeLinejoin: "rou
 
 // ---- 共用的图形 ----
 
-function MapSvg({ box, label, onBackground, children }: { box: { x: number; y: number; w: number; h: number }; label: string; onBackground?: () => void; children: React.ReactNode }) {
+// MapSvg：按布局的实际大小画，不缩放；比容器宽时（节点很多、窗口很窄）横向滚动。
+function MapSvg({ box, avail, label, onBackground, children }: { box: Box; avail: number; label: string; onBackground?: () => void; children: React.ReactNode }) {
   return (
-    <svg
-      viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
-      width={box.w}
-      className="mx-auto h-auto max-w-full overflow-visible select-none"
-      role="group"
-      aria-label={label}
-      onClick={(e) => e.target === e.currentTarget && onBackground?.()}
-    >
-      {children}
-    </svg>
+    <div className={cn(avail > 0 && box.w > avail && "overflow-x-auto")}>
+      <svg
+        viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
+        width={box.w}
+        height={box.h}
+        className="mx-auto block overflow-visible select-none"
+        role="group"
+        aria-label={label}
+        onClick={(e) => e.target === e.currentTarget && onBackground?.()}
+      >
+        {children}
+      </svg>
+    </div>
   );
 }
 
@@ -168,6 +231,8 @@ function NodeGlyph({
   at,
   dim,
   sub,
+  warn,
+  maxWidth,
   failed,
   onActive,
   onSelect,
@@ -175,7 +240,10 @@ function NodeGlyph({
   n: Node;
   at: Pt;
   dim: boolean;
-  sub: React.ReactNode;
+  // sub：名字下面的说明；warn：接在说明后面、用警告色写的一段（无副本的容器数）。
+  sub: string;
+  warn?: string;
+  maxWidth: number;
   failed?: boolean;
   onActive: (on: boolean) => void;
   onSelect?: () => void;
@@ -187,8 +255,7 @@ function NodeGlyph({
   const ratio = u ? Math.min(Math.max(cpu, u.memory, u.disk) / 100, 1) : 0;
   const ring = ratio >= 0.9 ? "stroke-destructive" : ratio >= 0.75 ? "stroke-warning" : "stroke-primary";
   const status = nodeStatus(n);
-  // 文字放在圆的外侧，连线都朝内，压不到字：两侧的节点写在旁边，其余写在上方或下方。
-  const side = Math.abs(at.x) > 0.7 * Math.hypot(at.x, at.y);
+  const side = labelSide(at);
   const above = at.y < 0;
   const textX = side ? Math.sign(at.x) * 34 : 0;
   const anchor = !side ? "middle" : at.x > 0 ? "start" : "end";
@@ -197,6 +264,12 @@ function NodeGlyph({
   const detail = [n.name, status, u && `CPU ${pct(u.cpu)} · ${t.nodes.memory} ${pct(u.memory)} · ${t.nodes.disk} ${pct(u.disk)}`, t.nodes.containers(n.containers)]
     .filter(Boolean)
     .join("\n");
+  // 放不下时截短：名字和说明各自截，警告的那段跟在说明后面一起算宽度。
+  const name = clip(n.name, 13, maxWidth, 500);
+  const fullSub = warn ? `${sub} · ${warn}` : sub;
+  const shownSub = clip(fullSub, 12, maxWidth);
+  const subHead = shownSub.slice(0, sub.length);
+  const subTail = shownSub.slice(sub.length);
 
   const inner = (
     <>
@@ -237,11 +310,14 @@ function NodeGlyph({
           )}
         />
         <text x={textX} y={nameY} textAnchor={anchor} fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
-          {n.name}
+          {name !== n.name && <title>{n.name}</title>}
+          {name}
         </text>
         {sub && (
           <text x={textX} y={subY} textAnchor={anchor} fontSize={12} {...halo} className="fill-muted-foreground tabular-nums">
-            {sub}
+            {shownSub !== fullSub && <title>{fullSub}</title>}
+            {subHead}
+            {subTail && <tspan className="fill-warning-text">{subTail}</tspan>}
           </text>
         )}
       </g>
@@ -373,7 +449,8 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
   const statuses = new Map<string, MeshStatus>();
   live.forEach((n, i) => meshes[i]?.data && statuses.set(n.id, meshes[i].data));
   const edges = buildMeshEdges(nodes, statuses, panelMesh.data, new Set([PANEL, ...live.map((n) => n.id)]));
-  const { pos, box } = layout(nodes);
+  const { ref, width } = useWidth();
+  const { pos, box, spacing } = layout(nodes, width);
   const nameOf = (id: string) => (id === PANEL ? t.nodes.map.panel : (nodes.find((n) => n.id === id)?.name ?? id));
 
   // 悬停或聚焦某个节点时，突出它的连接，其他的淡下去。
@@ -384,8 +461,8 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
   const geometry = (e: MeshEdge) => meshGeometry(pos.get(e.a)!, pos.get(e.b)!, pos.get(PANEL)!, e.a === PANEL || e.b === PANEL, e.kind);
 
   return (
-    <div className="grid gap-4">
-      <MapSvg box={box} label={t.nodes.views.network}>
+    <div ref={ref} className="grid gap-4">
+      <MapSvg box={box} avail={width} label={t.nodes.views.network}>
         <g fill="none" strokeWidth={1.5} strokeLinecap="round">
           {edges.map((e) => {
             const on = touches(e);
@@ -396,7 +473,8 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
                 strokeDasharray={e.kind === "relay" ? "6 5" : e.kind === "none" ? "2 5" : undefined}
                 className={cn(
                   "transition-opacity duration-150 ease-out",
-                  e.kind === "relay" ? "stroke-warning" : e.kind === "none" ? "stroke-destructive" : on ? "stroke-foreground/60" : "stroke-muted-foreground/35",
+                  // 直连的灰线和图例同一个透明度；突出时加深。
+                  e.kind === "relay" ? "stroke-warning" : e.kind === "none" ? "stroke-destructive" : on ? "stroke-foreground/70" : "stroke-muted-foreground/60",
                   active !== null && !on && "opacity-15",
                 )}
               />
@@ -421,6 +499,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
             at={pos.get(n.id)!}
             dim={dim(n.id)}
             sub={statusLine(n) || (n.usage ? `CPU ${pct(n.usage.cpu)} · ${t.nodes.memory} ${pct(n.usage.memory)}` : "")}
+            maxWidth={labelWidth(pos.get(n.id)!, box, spacing)}
             onActive={(on) => setActive(on ? n.id : null)}
           />
         ))}
@@ -437,35 +516,42 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
         <HelpTip>{t.nodes.map.help}</HelpTip>
       </Legend>
 
-      {failedMesh.length > 0 && <QueryError className="mx-auto" error={errorMessage(failedMesh[0].error)} onRetry={() => failedMesh.forEach((q) => q.refetch())} />}
+      {/* 图下的内容和下面的区块一样靠左。 */}
+      {failedMesh.length > 0 && <QueryError error={errorMessage(failedMesh[0].error)} onRetry={() => failedMesh.forEach((q) => q.refetch())} />}
 
       {issues.length > 0 && (
-        <div className="mx-auto grid gap-2">
-          <div className="text-sm font-medium">{t.nodes.map.issues}</div>
-          <ul className="grid gap-2">
+        <Section title={t.nodes.map.issues} className={belowMap}>
+          {/* 悬停或聚焦一行时在图上突出这条连接，键盘也能用。 */}
+          <ul className="grid">
             {issues.map((e) => (
               <li
                 key={e.a + "|" + e.b}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]"
+                tabIndex={0}
+                className="-mx-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 outline-none transition-colors hover:bg-accent focus-ring"
                 onMouseEnter={() => setActive(e.a === PANEL ? e.b : e.a)}
                 onMouseLeave={() => setActive(null)}
+                onFocus={() => setActive(e.a === PANEL ? e.b : e.a)}
+                onBlur={() => setActive(null)}
               >
-                <span className="font-medium">
+                <span>
                   {nameOf(e.a)} ↔ {nameOf(e.b)}
                 </span>
-                <span className={e.kind === "none" ? "text-destructive" : "text-warning-text"}>
+                <span className={cn("text-[13px]", e.kind === "none" ? "text-destructive" : "text-warning-text")}>
                   <Status tone={e.kind === "none" ? "danger" : "warning"}>{pathLabel[e.path] ?? e.path}</Status>
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </Section>
       )}
 
       <LatencyMatrix nodes={live} statuses={statuses} />
     </div>
   );
 }
+
+// belowMap：图下的区块。外层网格已经隔了 16，上面再补 8，分隔线上下各 24（手机上各 16）。
+const belowMap = "mt-2 max-md:mt-0";
 
 // ---- 延迟矩阵 ----
 
@@ -514,7 +600,7 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
           aria-pressed={on}
           aria-label={k.cell(k.direction(from.name, to.name), text)}
           className={cn(
-            "h-9 w-full cursor-pointer rounded-md px-2 text-[13px] tabular-nums outline-none transition-shadow duration-150 focus-visible:ring-2 focus-visible:ring-ring/40",
+            "h-9 w-full cursor-pointer rounded-md px-2 text-[13px] tabular-nums outline-none transition-shadow duration-150 focus-ring",
             c && c.rtt > 0 ? heat(c.rtt) : "bg-muted/40",
             c?.path === "none" ? "text-destructive" : relay ? "text-warning-text" : c && c.rtt > 0 ? "text-foreground" : "text-muted-foreground",
             on && "shadow-[0_0_0_1.5px_var(--foreground)]",
@@ -527,7 +613,7 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
   };
 
   return (
-    <Section title={k.title} help={k.help} className="mt-2 border-t pt-6 max-md:pt-4">
+    <Section title={k.title} help={k.help} className={belowMap}>
       <div className="-mx-1 overflow-x-auto">
         <table className="w-full table-fixed border-separate border-spacing-1 text-left" style={{ minWidth: 112 + nodes.length * 84 }}>
           <colgroup>
@@ -602,7 +688,8 @@ function LatencyHistory({ a, b, statuses }: { a: Node; b: Node; statuses: Map<st
       {q.error ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
-        <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={fmtMs} minMax={5} />
+        // 加载中不写「暂无数据」，图框留着，数据到了直接画上。
+        <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={fmtMs} minMax={5} quiet={q.isLoading} />
       )}
     </div>
   );
@@ -669,7 +756,8 @@ function HaMap({ nodes }: { nodes: Node[] }) {
     if (unprotected(c)) risky.set(c.nodeId, (risky.get(c.nodeId) ?? 0) + 1);
   }
   const edges = [...edgeMap.values()].filter((e) => nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to));
-  const { pos: layoutPos, box } = layout(nodes);
+  const { ref, width } = useWidth();
+  const { pos: layoutPos, box, spacing } = layout(nodes, width);
   // 箭头都朝外弯。两个节点互相指向时，ID 大的一方发出的弯得更多，两条一里一外；
   // 同一方向既有顶替又有备份时，备份弯得多一些。
   const directed = new Set(edges.map((e) => e.from + "|" + e.to));
@@ -688,8 +776,8 @@ function HaMap({ nodes }: { nodes: Node[] }) {
   const failedNode = nodes.find((n) => n.id === focus);
 
   return (
-    <div className="grid gap-4" onKeyDown={(e) => e.key === "Escape" && setSelected(null)}>
-      <MapSvg box={box} label={t.nodes.views.ha} onBackground={() => setSelected(null)}>
+    <div ref={ref} className="grid gap-4" onKeyDown={(e) => e.key === "Escape" && setSelected(null)}>
+      <MapSvg box={box} avail={width} label={t.nodes.views.ha} onBackground={() => setSelected(null)}>
         {edges.map((e) => {
           const g = geometry(e);
           const out = focus !== null && e.from === focus;
@@ -704,9 +792,9 @@ function HaMap({ nodes }: { nodes: Node[] }) {
                 strokeWidth={1.5}
                 strokeLinecap="round"
                 strokeDasharray={e.type === "backup" ? "6 5" : undefined}
-                className={out ? "stroke-foreground/80" : "stroke-muted-foreground/50"}
+                className={out ? "stroke-foreground/80" : "stroke-muted-foreground/60"}
               />
-              <path d={g.head} className={out ? "fill-foreground/80" : "fill-muted-foreground/50"} />
+              <path d={g.head} className={out ? "fill-foreground/80" : "fill-muted-foreground/60"} />
             </g>
           );
         })}
@@ -736,14 +824,9 @@ function HaMap({ nodes }: { nodes: Node[] }) {
               at={layoutPos.get(n.id)!}
               dim={dim(n.id)}
               failed={focus === n.id}
-              sub={
-                statusLine(n) || (
-                  <>
-                    {t.nodes.containers(n.containers)}
-                    {k > 0 && <tspan className="fill-warning-text"> · {t.nodes.ha.unprotected(k)}</tspan>}
-                  </>
-                )
-              }
+              sub={statusLine(n) || t.nodes.containers(n.containers)}
+              warn={!statusLine(n) && k > 0 ? t.nodes.ha.unprotected(k) : undefined}
+              maxWidth={labelWidth(layoutPos.get(n.id)!, box, spacing)}
               onActive={(on) => setHover(on ? n.id : null)}
               onSelect={() => setSelected((s) => (s === n.id ? null : n.id))}
             />
@@ -796,7 +879,8 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
   return (
     <div className="grid gap-3 border-t pt-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium">{t.nodes.ha.title(node.name)}</h3>
+        {/* 页面标题之下的第一级，用 h2；字号是分组标题的 14 / 500。 */}
+        <h2 className="text-sm font-medium">{t.nodes.ha.title(node.name)}</h2>
         <Link to="/nodes/$nodeId" params={{ nodeId: node.id }} className="text-[13px] text-muted-foreground hover:text-foreground">
           {t.nodes.ha.open} →
         </Link>

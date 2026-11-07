@@ -12,9 +12,6 @@ export default {
     view: "查看",
     collapse: "收起",
   },
-  loadFailed: {
-    title: "无法加载项目",
-  },
   reminders: {
     totpTitle: "未开启两步验证",
     totpText: (link: ReactNode) => <>可在{link}中开启。</>,
@@ -29,7 +26,7 @@ export default {
   newProject: "新建项目",
   empty: {
     title: "暂无项目",
-    text: "新建项目后，可添加容器或容器组（一份 compose），并为每个容器选择运行的节点。",
+    text: "新建项目后，可添加容器或容器组（一份 Compose），并为每个容器选择运行的节点。",
   },
   filter: {
     placeholder: "筛选项目或容器…",
@@ -72,7 +69,7 @@ export default {
   },
   create: {
     editNetwork: "编辑",
-    name: "名称",
+    name: "项目名称",
     namePlaceholder: "我的应用",
     networkName: "网络名",
     slugHint: "小写字母、数字和 -",

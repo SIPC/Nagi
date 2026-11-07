@@ -7,7 +7,6 @@ import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 
-
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
 export function InviteCard() {
   const invites = useQuery({
@@ -86,7 +85,8 @@ export function InviteCard() {
               key={i.id}
               title={<span className="truncate">{i.id}</span>}
               sub={t.invite.usedCount(i.uses)}
-              cols={[{ content: <span title={formatDateTime(toDate(i.expiresAt))}>{t.invite.expiresIn(timeAgo(toDate(i.expiresAt)))}</span>, num: true }]}
+              // 时间靠左（见 docs/ui.md「列表行」），英文「Expires in 59 minutes」放不进默认的列宽。
+              cols={[{ content: <span title={formatDateTime(toDate(i.expiresAt))}>{t.invite.expiresIn(timeAgo(toDate(i.expiresAt)))}</span>, width: "w-40" }]}
               actions={
                 <Button size="row" variant="ghost" disabled={revoking !== ""} onClick={() => revoke(i.id)}>
                   {revoking === i.id && <Spinner />}

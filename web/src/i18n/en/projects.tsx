@@ -11,9 +11,6 @@ export default {
     view: "View",
     collapse: "Collapse",
   },
-  loadFailed: {
-    title: "Can't load projects",
-  },
   reminders: {
     totpTitle: "Two-factor authentication is off",
     // 链接自带左右外边距（mx-1），当作空格；句末不加句号，免得句号前空一格。
@@ -31,7 +28,7 @@ export default {
   newProject: "New project",
   empty: {
     title: "No projects",
-    text: "Create a project, then add containers or container groups (a compose file) and choose a node for each container.",
+    text: "Create a project, then add containers or container groups (a Compose file) and choose a node for each container.",
   },
   filter: {
     placeholder: "Filter projects or containers…",
@@ -74,7 +71,7 @@ export default {
   },
   create: {
     editNetwork: "Edit",
-    name: "Name",
+    name: "Project name",
     namePlaceholder: "My app",
     networkName: "Network name",
     slugHint: "Lowercase letters, digits and -",

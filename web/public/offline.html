@@ -47,11 +47,13 @@
         width: 100%;
         max-width: 480px;
       }
+      /* 和面板里的 PanelDown 一致：标题 24/600，列表行之间不加线，悬停整行变底色。 */
       h1 {
         margin: 16px 0 4px;
-        font-size: 20px;
-        line-height: 28px;
+        font-size: 24px;
+        line-height: 32px;
         font-weight: 600;
+        letter-spacing: -0.025em;
       }
       p {
         margin: 0;
@@ -59,16 +61,19 @@
       }
       ul {
         list-style: none;
-        margin: 20px 0 0;
+        margin: 24px -8px 0;
         padding: 0;
-        border-top: 1px solid var(--border);
       }
       li {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border);
+        min-height: 52px;
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      li:hover {
+        background: var(--accent);
       }
       .who {
         min-width: 0;
@@ -114,10 +119,9 @@
       }
       .note {
         margin-top: 16px;
-        font-size: 13px;
       }
       .actions {
-        margin-top: 20px;
+        margin-top: 24px;
         display: flex;
         gap: 8px;
       }

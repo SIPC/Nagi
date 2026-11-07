@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Alert, Button, ButtonLink, Field, FormActions, FormRow, HelpTip, Input, KeyValue, LogBox, Notice, Spinner } from "@/components/ui";
+import { Alert, Button, ButtonLink, Field, FormActions, FormRow, HelpTip, Input, KeyValue, Notice, Spinner } from "@/components/ui";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { ComposeDirPreview } from "@/gen/nagi/v1/api_pb";
@@ -19,6 +19,14 @@ async function elevated<T>(call: () => Promise<T>): Promise<T> {
     if (!isElevationRequired(err) || !(await requireElevation(t.importDir.elevate))) throw err;
     return call();
   }
+}
+
+// previewNotice：预览下面的提示连成一段。面板返回的说明句末没有标点，统一去掉再按界面语言的句号连起来。
+function previewNotice(preview: ComposeDirPreview, withBackup: boolean) {
+  const k = t.importDir;
+  const parts = [...(preview.containers.length > 0 ? [k.replaceNotice] : []), ...preview.notes, withBackup ? k.limitsWithBackup : k.limits];
+  const end = t.common.sentenceEnd.trim();
+  return parts.map((s) => (s.endsWith(end) ? s.slice(0, -end.length) : s)).join(t.common.sentenceEnd) + end;
 }
 
 export function ImportDir({ project }: { project: Project }) {
@@ -118,12 +126,10 @@ export function ImportDir({ project }: { project: Project }) {
               [k.replaces, preview.containers.length ? k.replacesValue(preview.project, t.common.list(preview.containers)) : k.nothingRunning],
             ]}
           />
-          {preview.containers.length > 0 && <Notice tone="warning">{k.replaceNotice}</Notice>}
-          {preview.notes.map((n) => (
-            <Notice key={n}>{n}</Notice>
-          ))}
-          <Notice>{backupPaths.trim() ? k.limitsWithBackup : k.limits}</Notice>
-          <LogBox className="max-h-72">{preview.compose}</LogBox>
+          {/* 同一处只放一条提示：替换、面板返回的说明和限制连成一段。 */}
+          <Notice tone={preview.containers.length > 0 ? "warning" : "neutral"}>{previewNotice(preview, backupPaths.trim() !== "")}</Notice>
+          {/* 和配置页的 Compose 预览同一种写法。 */}
+          <pre className="m-0 max-h-72 overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5">{preview.compose}</pre>
         </div>
       )}
       {error && <Alert>{error}</Alert>}
@@ -136,7 +142,7 @@ export function ImportDir({ project }: { project: Project }) {
             </Button>
             <Button variant="outline" disabled={!!busy} onClick={() => add(false)}>
               {busy === "add" && <Spinner />}
-              {t.projectContainers.add.addOnly}
+              {k.importOnly}
             </Button>
           </>
         ) : (

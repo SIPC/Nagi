@@ -7,9 +7,11 @@ export default {
   empty: "暂无记录",
   succeeded: "成功",
   failed: "失败",
-  firing: "告警",
+  firing: "告警中",
   resolved: "已恢复",
   more: "加载更多",
+  // 「全部 / 操作 / 告警」分段控件的读屏名称。
+  filter: "筛选",
   via: (token: string) => `通过 MCP（${token}）`,
   actions: {
     OpenTerminal: "打开容器终端",

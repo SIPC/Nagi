@@ -7,8 +7,7 @@ export default {
     settings: "Settings",
   },
   breadcrumb: "Projects",
-  back: "Back to projects",
-  nodes: (names) => (names.length === 1 ? `Node ${names[0]}` : `Nodes ${names.join(", ")}`),
+  nodes: (n, names) => (n === 1 ? `Node ${names}` : `Nodes ${names}`),
   noContainers: "No containers",
   rebuiltHint:
     "This project was rebuilt from node caches after the panel was lost or replaced. The original creation time, version history and deployment history are lost.",
@@ -17,7 +16,6 @@ export default {
   containerCount: (n) => (n === 1 ? "1 container" : `${n} containers`),
   groupCount: (n) => (n === 1 ? "1 container group" : `${n} container groups`),
   statefulCount: (n) => `${n} stateful`,
-  countSeparator: ", ",
   column: {
     allProjects: "All projects",
     project: "Project",

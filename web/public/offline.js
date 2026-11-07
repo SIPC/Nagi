@@ -28,7 +28,7 @@
       copy: "复制",
       copied: "已复制",
       open: "打开",
-      note: "备用面板只能查看，主面板无法恢复时，在备用面板上提升为主面板后才能修改。两个面板需分别登录；开启了安全入口时，需在地址后加上入口路径。",
+      note: "备用面板只能查看，提升为主面板后才能修改。两个面板需分别登录。开启了安全入口时，地址需加上入口路径。",
       retry: "重试",
     },
     en: {
@@ -38,7 +38,7 @@
       copy: "Copy",
       copied: "Copied",
       open: "Open",
-      note: "Standby panels are read-only. If the primary panel can't be recovered, promote a standby panel to make changes. Sign in to each panel separately; if secure entry is enabled, add the entry path to the address.",
+      note: "Standby panels are read-only until you promote one to primary. Sign in to each panel separately. If secure entry is turned on, add the entry path to the address.",
       retry: "Retry",
     },
   }[lang];
@@ -51,7 +51,7 @@
 
   if (standbys.length > 0) {
     const list = $("list");
-    for (const s of standbys) {
+    for (const [i, s] of standbys.entries()) {
       const url = "https://" + s.address;
       const li = document.createElement("li");
       const who = document.createElement("div");
@@ -74,7 +74,8 @@
         } catch {}
       });
       const open = document.createElement("a");
-      open.className = "button primary";
+      // 只有第一个备用面板的「打开」是主按钮，和面板里的 PanelDown 一致。
+      open.className = i === 0 ? "button primary" : "button";
       open.href = url;
       open.target = "_blank";
       open.rel = "noopener noreferrer";

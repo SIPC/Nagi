@@ -6,7 +6,7 @@ import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, ScrollText, Server, S
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
-import { ActiveBox, Button, ButtonLink, ReadOnlyContext, ReadOnlyReasonContext, Slide, useActiveBox, useIsMobile, Waves } from "@/components/ui";
+import { ActiveBox, Alert, Button, ButtonLink, ReadOnlyContext, ReadOnlyReasonContext, Slide, useActiveBox, useIsMobile, Waves } from "@/components/ui";
 import { PromoteButton, useStandbys } from "@/pages/standby";
 import { UpdateDot, UpdateTips } from "@/pages/update";
 import { UserMenu, type ThemeMode } from "@/components/account";
@@ -36,7 +36,7 @@ function useTheme() {
     const apply = () => {
       const dark = mode === "dark" || (mode === "system" && media.matches);
       document.documentElement.classList.toggle("dark", dark);
-      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b0c0d" : "#ffffff");
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0a0a0a" : "#ffffff");
     };
     apply();
     if (mode !== "system") return;
@@ -79,7 +79,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
     const allowed = settingsTabsFor(isAdmin);
-    const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed.find((x) => x.value === "security") ?? allowed[0];
+    const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed[0];
     title = `${tab.label} · ${t.app.nav.settings}`;
   }
   useEffect(() => {
@@ -162,7 +162,7 @@ const navItems = [
 ] as const;
 
 const navLink =
-  "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors outline-none not-data-active:hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset [&_svg]:size-4";
+  "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors outline-none not-data-active:hover:bg-accent/50 focus-ring focus-visible:ring-inset [&_svg]:size-4";
 const mobileNavLink = cn(navLink.replace("h-8", "h-11"), "data-[status=active]:bg-accent");
 
 export function AppLayout() {
@@ -181,6 +181,7 @@ export function AppLayout() {
   const mobile = useIsMobile();
   const [navOpen, setNavOpen] = useState(false);
   const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
+  const [promoteError, setPromoteError] = useState("");
   // 换了页面（例如用户菜单里的「安全」）就收起导航。
   useEffect(() => setNavOpen(false), [href]);
   // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
@@ -214,8 +215,10 @@ export function AppLayout() {
       {it.label}
       {it.to === "/settings" && <UpdateDot />}
       {it.to === "/nodes" && offlineCount > 0 && (
+        // 红色数字只给看得见的人，读屏念「N 个节点离线」。
         <span className="ml-auto text-xs text-destructive" title={t.app.nodesOffline(offlineCount)}>
-          {offlineCount}
+          <span aria-hidden>{offlineCount}</span>
+          <span className="sr-only">{t.app.nodesOffline(offlineCount)}</span>
         </span>
       )}
     </Link>
@@ -267,7 +270,8 @@ export function AppLayout() {
         )}
         {standby?.isStandby && (
           <div className="border-b">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-[13px] md:px-8">
+            {/* 和下面的内容区同宽居中，文字和页面内容左右对齐。 */}
+            <div className="mx-auto flex max-w-[1184px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-[13px] md:px-8">
               <span className="font-medium">{t.app.standby.title}</span>
               <span className="text-muted-foreground">
                 {t.app.standby.readOnly}{" "}
@@ -284,7 +288,8 @@ export function AppLayout() {
                   </span>
                 )}
               </span>
-              <PromoteButton size="xs" />
+              <PromoteButton onError={setPromoteError} />
+              {promoteError && <Alert className="w-full">{promoteError}</Alert>}
             </div>
           </div>
         )}
@@ -320,13 +325,10 @@ export function NotFound() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <main className="w-full max-w-[360px]">
         <div className="grid justify-items-center gap-2 text-center">
-          <svg viewBox="4 9 24 14" fill="none" aria-hidden className="h-6 w-[42px]">
-            <path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="var(--wave)" strokeWidth="2.4" strokeLinecap="round" />
-            <path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--muted-foreground)" strokeWidth="2.4" strokeLinecap="round" />
-          </svg>
+          <Waves className="h-6 w-[42px] text-wave" />
           <h1 className="mt-2 text-2xl leading-8 font-semibold">{t.app.notFound.title}</h1>
           <p className="text-muted-foreground">{t.app.notFound.body}</p>
-          <ButtonLink to="/projects" className="mt-4" readOnlyOk>
+          <ButtonLink to="/overview" className="mt-4" readOnlyOk>
             {t.app.notFound.back}
           </ButtonLink>
         </div>
@@ -335,19 +337,21 @@ export function NotFound() {
   );
 }
 
-// Breadcrumb：页面顶部的上级链接。
+// Breadcrumb：页面顶部的上级链接。最后一项是当前页，不是链接。
 export function Breadcrumb({ items, className }: { items: { label: React.ReactNode; to?: string }[]; className?: string }) {
   return (
-    <nav className={cn("mb-2 flex items-center gap-1 text-[13px] leading-5 text-muted-foreground", className)}>
+    <nav aria-label={t.app.breadcrumb} className={cn("mb-2 flex items-center gap-1 text-[13px] leading-5 text-muted-foreground", className)}>
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1">
-          {i > 0 && <ChevronRight className="size-3.5 opacity-60" />}
+          {i > 0 && <ChevronRight aria-hidden className="size-3.5 opacity-60" />}
           {it.to ? (
             <Link to={it.to} className="hover:text-foreground">
               {it.label}
             </Link>
           ) : (
-            <span className="text-foreground">{it.label}</span>
+            <span aria-current={i === items.length - 1 ? "page" : undefined} className="text-foreground">
+              {it.label}
+            </span>
           )}
         </span>
       ))}
@@ -374,7 +378,7 @@ export function PageHeader({
     <div className={cn("mb-6 flex flex-wrap items-start justify-between gap-4", className)}>
       <div className="min-w-0">
         <h1 className="flex flex-wrap items-center gap-3 text-2xl leading-8 font-semibold tracking-tight [&>span]:font-normal [&>span]:tracking-normal">{title}</h1>
-        {description && <p className="text-pretty text-muted-foreground">{description}</p>}
+        {description && <p className="mt-1 text-pretty text-muted-foreground">{description}</p>}
         {meta && <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">{meta}</div>}
       </div>
       {actions && <div className={cn("flex flex-wrap items-center gap-2", actionsClassName)}>{actions}</div>}

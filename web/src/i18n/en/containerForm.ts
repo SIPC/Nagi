@@ -38,10 +38,10 @@ export default {
   healthInterval: "Check interval (seconds)",
   healthIntervalHint: "30",
   typeImage: "Container",
-  typeCompose: "Container group (compose)",
+  typeCompose: "Container group (Compose)",
   typeDir: "Existing directory",
   composeHelp:
-    "The whole compose file becomes one container group, suited to apps that bundle dependencies such as a database. Containers in the group reach each other by compose service name.",
+    "The whole Compose file becomes one container group, suited to apps that bundle dependencies such as a database. Containers in the group reach each other by Compose service name.",
   dependsOn: "Dependencies",
   dependsOnHint: "Container names, comma-separated",
   dependsOnHelp: "In batch deployments, the containers listed here are deployed first, such as the database a backend depends on.",

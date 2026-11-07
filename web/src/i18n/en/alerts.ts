@@ -3,8 +3,7 @@ import type zh from "../zh/alerts";
 export default {
   savedAndPushed: "Saved and pushed to online nodes",
   testSent: (name) => `Test message sent to ${name}`,
-  channels: "Notification channels",
-  channelsHelp: "Alerts for node and container issues are sent to these channels.",
+  channelsHelp: "Alerts for node and container issues are sent to the notification channels below.",
   lostTitle: "Alert configuration can't be decrypted",
   lostBody: "The panel master key was regenerated, so the previous alert settings can't be decrypted. Fill them in again and save.",
   lostHelp: "Until you save, nodes keep alerting with the old settings, but the panel can't send its own node-offline alerts.",

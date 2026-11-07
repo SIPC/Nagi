@@ -4,10 +4,12 @@ export default {
   general: {
     title: "General",
     name: "Project name",
+    nameRequired: "Enter a project name",
     networkName: "Network name",
-    networkNameHint: "Unique on the panel. Linked projects reach this project's containers at \"container.network-name\".",
-    networkNameHelp:
-      "Use lowercase letters, digits and -. After changing it, update the addresses those projects use. Existing container directories don't change.",
+    networkNameRequired: "Enter a network name",
+    networkNameFormat: "Lowercase letters, digits and -",
+    networkNameHint: "Unique on the panel. Linked projects reach this project's containers at “container.network-name”.",
+    networkNameHelp: "After changing it, update the addresses those projects use. Existing container directories don't change.",
     renameConfirm: (name) => `Change the network name to ${name}? Addresses in linked projects must be updated.`,
     rename: "Change network name",
     snapshotInterval: "Snapshot interval (minutes)",
@@ -36,6 +38,7 @@ export default {
     title: "Deployment history",
     description: "Each deployment records every container's version. Restore the project to any past deployment.",
     empty: "No deployments yet",
+    showAll: (n) => `Show all ${n} deployments`,
     sources: {
       manual: "Manual deploy",
       git: "Git pull",
@@ -51,9 +54,8 @@ export default {
   delete: {
     title: "Delete project",
     description: "All containers and container groups in the project will be deleted. Container directories are kept by default.",
-    help: "Container directories, including data and snapshots, are kept on their nodes by default. The containers' nodes must be online.",
-    confirm: (name) => `Delete project ${name}? All containers and container groups in the project will be deleted. Container directories are kept.`,
-    confirmDir: (name) => `Delete project ${name}? All containers, container groups and their directories will be deleted. Data and snapshots can't be recovered.`,
+    help: "Container directories include data and snapshots and stay on their nodes. The containers' nodes must be online.",
+    confirm: (name) => `Delete project ${name}? All containers and container groups in the project will be deleted. Container directories are kept by default.`,
     deleteDir: "Also delete container directories (data and snapshots can't be recovered)",
     confirmName: (name) => `Type ${name} to confirm`,
     submit: "Delete project",

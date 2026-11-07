@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { authClient, errorMessage, settingsClient } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { Alert, Button, CopyButton, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
@@ -112,11 +112,14 @@ function DisableTotpDialog({ onClose, onDone }: { onClose: () => void; onDone: (
           disable.mutate();
         }}
       >
+        {/* 可能是登录密码，始终按密码显示：按内容切换明文时，以数字开头的密码前几位会露出来。 */}
         <Field label={t.security.totp.disableLabel} htmlFor="totp-disable" help={t.security.totp.disableHelp}>
           <Input
             id="totp-disable"
-            type={/^\d{0,6}$/.test(code) ? "text" : "password"}
+            type="password"
             autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             autoFocus
             placeholder={t.security.totp.disablePlaceholder}
             value={code}
@@ -229,7 +232,7 @@ export function SecurityCard() {
                 help={t.security.masterKey.help}
                 description={<span className="break-all">{`${masterKeyPath} · ${t.security.masterKey.backup}`}</span>}
               >
-                <CopyTextButton text={masterKeyPath} label={t.security.masterKey.copyPath} />
+                <CopyTextButton text={masterKeyPath} />
               </SettingRow>
             )}
             {isAdmin && (
@@ -239,7 +242,7 @@ export function SecurityCard() {
                 description={<span className="break-all">{s.entrance ? `${entranceUrl} · ${t.security.entrance.onStatus}` : t.security.entrance.offStatus}</span>}
               >
                 <span className="flex items-center gap-2">
-                  {s.entrance && <CopyButton text={entranceUrl} />}
+                  {s.entrance && <CopyTextButton text={entranceUrl} />}
                   <Button variant="outline" onClick={() => setEntrance(!s.entrance)} disabled={busy !== null}>
                     {busy === "entrance" && <Spinner />}
                     {s.entrance ? t.security.entrance.actionOff : t.security.entrance.actionOn}

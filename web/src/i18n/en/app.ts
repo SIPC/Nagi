@@ -13,13 +13,14 @@ export default {
   notFound: {
     title: "Page not found",
     body: "The address may be wrong, or the page has been removed.",
-    back: "Back to projects",
+    back: "Back to overview",
   },
   names: {
     invalid: "Use lowercase letters, digits and -. It can't start or end with - and must be at most 32 characters",
     invalidEnv: (key) => `Variable name "${key}" can only contain letters, digits and underscores, and can't start with a digit`,
   },
   nodesOffline: (n) => (n === 1 ? "1 node offline" : `${n} nodes offline`),
+  breadcrumb: "Breadcrumb",
   skipToContent: "Skip to main content",
   search: {
     button: "Search",

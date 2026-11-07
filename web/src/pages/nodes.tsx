@@ -11,7 +11,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
-import { NodeMesh, NodeQUIC } from "@/pages/mesh";
+import { NodeMesh, NodeQUIC, ratePair } from "@/pages/mesh";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
   Alert,
@@ -24,13 +24,9 @@ import {
   Empty,
   EmptyRow,
   Field,
-  FormActions,
-  FormBody,
-  FormRow,
   HelpTip,
   Input,
   List,
-  Loading,
   Menu,
   Notice,
   QueryError,
@@ -40,6 +36,9 @@ import {
   Roll,
   Section,
   Segmented,
+  SettingRow,
+  SettingRows,
+  Skeleton,
   Slide,
   SlideKeep,
   Spinner,
@@ -56,7 +55,6 @@ import { ask, confirmAction, notify } from "@/components/confirm";
 import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
-import { toast } from "sonner";
 import { stateOf } from "@/components/status";
 import { NodeFiles, NodeTerminal, nodeAccessBlock } from "@/pages/node-access";
 
@@ -67,10 +65,10 @@ export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "containers", label: t.nodes.tabs.containers },
   { value: "terminal", label: t.nodes.tabs.terminal },
   { value: "files", label: t.nodes.tabs.files },
-  { value: "settings", label: t.nodes.tabs.settings },
   { value: "replicas", label: t.nodes.tabs.replicas },
   { value: "panels", label: t.nodes.tabs.panels },
   { value: "mesh", label: t.nodes.tabs.mesh },
+  { value: "settings", label: t.nodes.tabs.settings },
 ];
 
 function useNodeList() {
@@ -108,7 +106,8 @@ const lastSeenText = (n: Node) => (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 const fmtPercent = fmtCpuShort;
 
-// NodeResources：节点页的监控，每项一个数字加一张小图，三列；时间范围在区块标题右侧。内存和磁盘写成「已用 / 总量」。
+// NodeResources：节点页的监控，4 个数值块：CPU、内存、磁盘、流量，每块一个数字加一条小折线；时间范围在区块标题右侧。
+// 内存和磁盘写成「已用 / 总量」；流量是入站、出站两条线，数字写成「↑ 出站 ↓ 入站」，和节点网络的测速一致。
 function NodeResources({ n }: { n: Node }) {
   const [range, setRange] = useState<MetricRange>("1h");
   const r = metricRanges.find((x) => x.value === range)!;
@@ -119,49 +118,78 @@ function NodeResources({ n }: { n: Node }) {
     placeholderData: (prev) => prev,
   });
   const ofTotal = (total: number) => (total ? (v: number) => `${sizeLabel((v / 100) * total)} / ${sizeLabel(total)}` : fmtPercent);
-  const rate = fmtRate;
-  const items = [
-    { label: "CPU", name: "node:cpu", format: fmtPercent, minMax: 1 },
-    { label: t.metrics.memory, name: "node:mem", format: ofTotal(Number(n.info?.memoryBytes ?? 0)) },
-    { label: t.metrics.disk, name: "node:disk", format: ofTotal(diskTotal(n.info, n.usage)) },
-    { label: t.metrics.netRx, name: "node:net_rx", format: rate },
-    { label: t.metrics.netTx, name: "node:net_tx", format: rate },
+  const pointsOf = (name: string) => {
+    const s = q.data?.series.find((x) => x.name === name);
+    return (s?.values ?? []).map((v, i): [number, number] => [Number(s!.times[i]), v]);
+  };
+  const last = (points: [number, number][]) => (points.length ? points[points.length - 1][1] : undefined);
+  const one = (label: string, name: string, format: (v: number) => string, minMax?: number) => {
+    const points = pointsOf(name);
+    const v = last(points);
+    return { label, series: [{ label, points, className: "text-muted-foreground" }], format, minMax, value: v === undefined ? "—" : format(v), n: v, title: undefined as string | undefined };
+  };
+  const rx = pointsOf("node:net_rx");
+  const tx = pointsOf("node:net_tx");
+  const lastRx = last(rx);
+  const lastTx = last(tx);
+  const net = lastRx !== undefined && lastTx !== undefined ? { rx: lastRx, tx: lastTx } : undefined;
+  const tiles = [
+    one("CPU", "node:cpu", fmtPercent, 1),
+    one(t.metrics.memory, "node:mem", ofTotal(Number(n.info?.memoryBytes ?? 0))),
+    one(t.metrics.disk, "node:disk", ofTotal(diskTotal(n.info, n.usage))),
+    {
+      label: t.metrics.traffic,
+      // 两条线用深浅两档灰区分，都是正常数据。
+      series: [
+        { label: t.metrics.netRx, points: rx, className: "text-muted-foreground" },
+        { label: t.metrics.netTx, points: tx, className: "text-foreground/60" },
+      ],
+      format: fmtRate,
+      minMax: undefined,
+      value: net ? ratePair(net.tx, net.rx) : "—",
+      n: net ? net.rx + net.tx : undefined,
+      title: net ? `${t.metrics.netTx} ${fmtRate(net.tx)} · ${t.metrics.netRx} ${fmtRate(net.rx)}` : undefined,
+    },
   ];
   const now = Date.now() / 1000;
   return (
     <Section title={t.metrics.resourceUsage} actions={<RangePicker value={range} onChange={setRange} />}>
       {q.isPending ? (
-        <Loading />
+        <TilesSkeleton />
       ) : q.error ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          {items.map((it) => {
-            const s = q.data.series.find((x) => x.name === it.name);
-            const points = (s?.values ?? []).map((v, i): [number, number] => [Number(s!.times[i]), v]);
-            return (
-              <div key={it.name} className="grid min-w-0 gap-3">
-                <div className="text-muted-foreground">{it.label}</div>
-                <div className="text-[20px] leading-7 font-medium tracking-tight">
-                  <Roll value={points.length ? it.format(points[points.length - 1][1]) : "—"} n={points.length ? points[points.length - 1][1] : undefined} />
-                </div>
-                <TimeChart
-                  className="mt-2"
-                  series={[{ label: it.label, points, className: "text-muted-foreground" }]}
-                  from={now - r.seconds}
-                  to={now}
-                  step={r.step}
-                  format={it.format}
-                  height={80}
-                  axis={false}
-                  minMax={it.minMax}
-                />
+        <div className={tileGrid}>
+          {tiles.map((it) => (
+            <div key={it.label} className="grid min-w-0 content-start gap-1">
+              <div className="text-muted-foreground">{it.label}</div>
+              <div className="truncate text-xl leading-7 font-medium tracking-tight" title={it.title}>
+                <Roll value={it.value} n={it.n} />
               </div>
-            );
-          })}
+              <TimeChart className="mt-2" series={it.series} from={now - r.seconds} to={now} step={r.step} format={it.format} height={40} axis={false} minMax={it.minMax} />
+            </div>
+          ))}
         </div>
       )}
     </Section>
+  );
+}
+
+// 数值块 4 列，手机 2 列，和容器的监控同一种排法（docs/ui.md「对齐」）。
+const tileGrid = "grid grid-cols-2 gap-8 max-md:gap-4 md:grid-cols-4";
+
+// TilesSkeleton：监控加载中，和数值块一样的版面，内容出来时不跳。
+function TilesSkeleton() {
+  return (
+    <div role="status" aria-label={t.common.feedback.loading} className={tileGrid}>
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="grid gap-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="mt-2 h-10 w-full" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -498,7 +526,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
     <>
       <Breadcrumb className={cn("md:hidden", browsing && "max-md:hidden")} items={[{ label: t.nodes.title, to: "/nodes" }, { label: n.name }]} />
       <PageHeader
-        className={cn("mb-4", browsing && "max-md:hidden")}
+        className={cn(browsing && "max-md:hidden")}
         title={
           <>
             {n.name}
@@ -517,7 +545,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
                 {n.info.version && <span>{`Nagi ${n.info.version}`}</span>}
               </>
             )}
-            <button type="button" className="cursor-pointer rounded-sm underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => onTab("containers")}>
+            <button type="button" className="cursor-pointer rounded-sm underline-offset-4 outline-none hover:text-foreground hover:underline focus-ring" onClick={() => onTab("containers")}>
               <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
             {!n.online && !n.pending && <Roll value={lastSeenText(n)} />}
@@ -536,7 +564,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
         <RenameNode n={n} onDone={() => setRenaming(false)} />
       </Dialog>
       {(target || upgradeState || n.unknownContainers.length > 0 || n.pending) && (
-        <div className="mb-4 grid gap-2">
+        <div className="mb-6 grid gap-2">
           {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
           {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
           {n.pending && (
@@ -580,12 +608,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               ) : tab === "replicas" ? (
                 <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
               ) : tab === "settings" ? (
-                <>
-                  <NodeSettings nodeId={n.id} root={n.info?.projectsRoot || "/srv/nagi"} />
-                  <NodeMirrors nodeId={n.id} />
-                  <NodeQUIC nodeId={n.id} online={n.online} />
-                  <NodeReclaim nodeId={n.id} online={n.online} />
-                </>
+                <NodeSettings n={n} />
               ) : (
                 <NodePanels nodeId={n.id} />
               )}
@@ -725,7 +748,7 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
           state.error
         ) : (
           <>
-            {t.nodes.upgrade.text(n.info?.version || "?")} <HelpTip>{t.nodes.upgrade.help}</HelpTip>
+            {t.nodes.upgrade.text(n.info?.version || "—")} <HelpTip>{t.nodes.upgrade.help}</HelpTip>
           </>
         )}
       </Notice>
@@ -779,15 +802,18 @@ function AddNode({ onClose }: { onClose: () => void }) {
   if (settings.isPending) return <RowsSkeleton count={1} />;
   if (settings.error) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address" error={addressError}>
-          <Input id="public-address" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} />
-        </Field>
-        <Field label={t.nodes.add.port} htmlFor="public-port">
-          <Input id="public-port" value={s?.port ?? ""} readOnly />
-        </Field>
-      </div>
+    // 在地址框里按 Enter：还没生成或改了地址时生成，否则等于「完成」。
+    <form
+      className="grid grid-cols-[minmax(0,1fr)] gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (command && address === null) onClose();
+        else create();
+      }}
+    >
+      <Field label={t.nodes.add.publicAddress} help={t.nodes.add.publicAddressHelp} htmlFor="public-address" hint={s?.port ? t.nodes.add.portHint(String(s.port)) : undefined} error={addressError}>
+        <Input id="public-address" value={address ?? s?.publicAddress ?? ""} onChange={(e) => setAddress(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
+      </Field>
       {command && (
         <>
           <CodeBlock copy nowrap>{command}</CodeBlock>
@@ -805,7 +831,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
               {busy && <Spinner />}
               {t.nodes.add.regenerate}
             </Button>
-            <Button readOnlyOk onClick={onClose}>
+            <Button type="submit" readOnlyOk>
               {t.nodes.add.finish}
             </Button>
           </>
@@ -814,30 +840,98 @@ function AddNode({ onClose }: { onClose: () => void }) {
             <Button variant="outline" readOnlyOk onClick={onClose}>
               {t.common.actions.cancel}
             </Button>
-            <Button onClick={create} disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {busy && <Spinner />}
               {t.nodes.add.generate}
             </Button>
           </>
         )}
       </DialogActions>
-    </div>
+    </form>
   );
 }
 
-// NodeSettings 是节点自己的设置：项目根目录（新放到这个节点的容器，目录默认是 <项目根目录>/<网络名>/<容器名>）。
-function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
+// NodeSettings：节点「设置」标签。和设置页一样用设置行：一行状态加一个按钮，表单放进对话框（docs/ui.md「节点详情」）。
+function NodeSettings({ n }: { n: Node }) {
+  const { isAdmin } = useRole();
+  const reclaim = useRun("");
+  const [editing, setEditing] = useState<"root" | "mirrors" | null>(null);
+  const root = n.info?.projectsRoot || "/srv/nagi";
+  const mirrors = useQuery({ queryKey: ["node-mirrors", n.id], queryFn: () => nodeClient.getNodeMirrors({ nodeId: n.id }), enabled: isAdmin });
+  const denied = !isAdmin || (mirrors.error instanceof ConnectError && mirrors.error.code === Code.PermissionDenied);
+  const m = t.nodes.reclaim;
+  const startReclaim = async () => {
+    if (!(await confirmAction(m.confirm, { action: m.action }))) return;
+    await reclaim.run(() => nodeClient.reclaimNodeSnapshots({ nodeId: n.id }));
+  };
+  return (
+    <>
+      <SettingRows>
+        <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
+          <Button variant="outline" onClick={() => setEditing("root")}>
+            {t.common.actions.edit}
+          </Button>
+        </SettingRow>
+        <SettingRow
+          label={t.nodes.mirrors.title}
+          help={t.nodes.mirrors.description}
+          description={denied ? t.nodes.mirrors.adminOnly : mirrors.isPending ? <LineSkeleton /> : mirrors.error ? <span className="text-destructive">{errorMessage(mirrors.error)}</span> : <MirrorsSummary mirrors={mirrors.data} />}
+        >
+          {denied || mirrors.isPending ? null : mirrors.error ? (
+            <Button variant="outline" readOnlyOk onClick={() => mirrors.refetch()}>
+              {t.common.actions.retry}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setEditing("mirrors")}>
+              {t.common.actions.edit}
+            </Button>
+          )}
+        </SettingRow>
+        <NodeQUIC nodeId={n.id} online={n.online} />
+        <SettingRow label={m.title} help={m.description} description={!isAdmin ? m.adminOnly : undefined}>
+          {isAdmin && (
+            <Button variant="outline" disabled={reclaim.busy || !n.online} onClick={startReclaim}>
+              {reclaim.busy && <Spinner />}
+              {m.action}
+            </Button>
+          )}
+        </SettingRow>
+      </SettingRows>
+      {/* 清理快照仓库的输出接在设置行下面。 */}
+      {reclaim.hasOutput && <div className="mt-4">{reclaim.output}</div>}
+      <Dialog open={editing === "root"} onClose={() => setEditing(null)} title={t.nodes.settings.root}>
+        <RootForm nodeId={n.id} root={root} onDone={() => setEditing(null)} />
+      </Dialog>
+      <Dialog open={editing === "mirrors" && !!mirrors.data} onClose={() => setEditing(null)} title={t.nodes.mirrors.title} description={t.nodes.mirrors.description} className="max-w-[520px]">
+        {mirrors.data && <MirrorsForm nodeId={n.id} mirrors={mirrors.data} onDone={() => setEditing(null)} />}
+      </Dialog>
+    </>
+  );
+}
+
+// LineSkeleton：设置行第二行的占位，和文字一样高。
+function LineSkeleton() {
+  return (
+    <span className="flex h-5 items-center">
+      <Skeleton className="h-3 w-24" />
+    </span>
+  );
+}
+
+// RootForm：编辑项目根目录（新放到这个节点的容器，目录默认是 <项目根目录>/<网络名>/<容器名>）。
+function RootForm({ nodeId, root, onDone }: { nodeId: string; root: string; onDone: () => void }) {
   const queryClient = useQueryClient();
   const [value, setValue] = useState(root);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const save = async () => {
+    if (value === root) return onDone();
     setBusy(true);
     setError("");
     try {
       await nodeClient.setNodeProjectsRoot({ nodeId, root: value });
-      toast.success(t.common.feedback.saved);
-      queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      onDone();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -845,76 +939,27 @@ function NodeSettings({ nodeId, root }: { nodeId: string; root: string }) {
     }
   };
   return (
-    <Section title={t.nodes.settings.rootTitle}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <FormBody>
-          <FormRow>
-            <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} help={t.nodes.settings.rootHelp}>
-              <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder={t.nodes.settings.rootHint} required pattern=".*\S.*" />
-            </Field>
-          </FormRow>
-          {error && <Alert>{error}</Alert>}
-          <FormActions>
-            <Button type="submit" variant="outline" disabled={busy}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        </FormBody>
-      </form>
-    </Section>
-  );
-}
-
-// NodeMirrors：节点的 Docker 镜像加速地址（见 docs/agent.md#镜像）。
-function NodeMirrors({ nodeId }: { nodeId: string }) {
-  const { isAdmin } = useRole();
-  const q = useQuery({ queryKey: ["node-mirrors", nodeId], queryFn: () => nodeClient.getNodeMirrors({ nodeId }), enabled: isAdmin });
-  const denied = !isAdmin || (q.error instanceof ConnectError && q.error.code === Code.PermissionDenied);
-  return (
-    <Section title={t.nodes.mirrors.title} description={t.nodes.mirrors.description}>
-      {denied ? (
-        <Notice title={t.nodes.mirrors.adminOnly} />
-      ) : q.isPending ? (
-        <RowsSkeleton count={1} />
-      ) : q.error ? (
-        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
-      ) : (
-        <MirrorsForm nodeId={nodeId} mirrors={q.data} />
-      )}
-    </Section>
-  );
-}
-
-// NodeReclaim：立即清理节点上的快照仓库（见 docs/snapshot.md#立即清理），逐个容器输出结果。
-function NodeReclaim({ nodeId, online }: { nodeId: string; online: boolean }) {
-  const { isAdmin } = useRole();
-  const { run, busy, output } = useRun("");
-  const m = t.nodes.reclaim;
-  const start = async () => {
-    if (!(await confirmAction(m.confirm, { action: m.action }))) return;
-    await run(() => nodeClient.reclaimNodeSnapshots({ nodeId }));
-  };
-  return (
-    <Section
-      title={m.title}
-      description={m.description}
-      actions={
-        isAdmin && (
-          <Button variant="outline" disabled={busy || !online} onClick={start}>
-            {busy && <Spinner />}
-            {m.action}
-          </Button>
-        )
-      }
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
     >
-      {!isAdmin ? <Notice title={m.adminOnly} /> : output}
-    </Section>
+      <Field label={t.nodes.settings.root} htmlFor={`root-${nodeId}`} help={t.nodes.settings.rootHelp}>
+        <Input id={`root-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder={t.nodes.settings.rootHint} className="font-mono" autoFocus autoComplete="off" autoCapitalize="none" spellCheck={false} required pattern=".*\S.*" />
+      </Field>
+      {error && <Alert keepFocus>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
   );
 }
 
@@ -925,7 +970,30 @@ function sameMirrors(a: string[], b: string[]) {
   return a.length === b.length && a.every((m, i) => trimSlash(m) === trimSlash(b[i]));
 }
 
-function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) {
+// MirrorsSummary：镜像加速那一行的状态：当前的加速地址；daemon.json 里的和 Docker 正在用的不一样时（还没有重启 Docker），后面写「重启 Docker 后生效」。
+function MirrorsSummary({ mirrors }: { mirrors: Mirrors }) {
+  const pending = !sameMirrors(mirrors.mirrors, mirrors.active);
+  const list = t.common.list(mirrors.mirrors) || t.nodes.mirrors.empty;
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="truncate" title={list}>
+        {list}
+      </span>
+      {pending && (
+        <>
+          <span className="shrink-0">·</span>
+          <span className="shrink-0 text-warning-text">{t.nodes.mirrors.pendingTitle}</span>
+          <HelpTip>
+            <span className="break-all">{t.nodes.mirrors.pendingText(t.common.list(mirrors.active) || t.nodes.mirrors.none)}</span>
+          </HelpTip>
+        </>
+      )}
+    </span>
+  );
+}
+
+// MirrorsForm：编辑节点的 Docker 镜像加速地址（见 docs/agent.md#镜像），放在对话框里。
+function MirrorsForm({ nodeId, mirrors, onDone }: { nodeId: string; mirrors: Mirrors; onDone: () => void }) {
   const queryClient = useQueryClient();
   const [value, setValue] = useState(mirrors.mirrors.join("\n"));
   const [error, setError] = useState("");
@@ -940,48 +1008,35 @@ function MirrorsForm({ nodeId, mirrors }: { nodeId: string; mirrors: Mirrors }) 
         .filter(Boolean);
       const res = await nodeClient.setNodeMirrors({ nodeId, mirrors: list });
       queryClient.setQueryData(["node-mirrors", nodeId], res);
-      setValue(res.mirrors.join("\n"));
-      toast.success(t.common.feedback.saved);
+      onDone();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
-  // daemon.json 里的和 Docker 正在用的不一样：还没有重启 Docker。
-  const pending = !sameMirrors(mirrors.mirrors, mirrors.active);
   return (
-    <>
-      {pending && (
-        <Notice tone="warning" title={t.nodes.mirrors.pendingTitle}>
-          <span className="break-all">{t.nodes.mirrors.pendingText(t.common.list(mirrors.active) || t.nodes.mirrors.none)}</span>
-        </Notice>
-      )}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <FormBody>
-          <Field
-            label={t.nodes.mirrors.label}
-            htmlFor={`mirrors-${nodeId}`}
-            hint={t.nodes.mirrors.hint}
-            help={t.nodes.mirrors.help}
-          >
-            <Textarea id={`mirrors-${nodeId}`} rows={3} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" spellCheck={false} className="py-2" />
-          </Field>
-          {error && <Alert>{error}</Alert>}
-          <FormActions>
-            <Button type="submit" variant="outline" disabled={busy}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        </FormBody>
-      </form>
-    </>
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field label={t.nodes.mirrors.label} htmlFor={`mirrors-${nodeId}`} hint={t.nodes.mirrors.hint} help={t.nodes.mirrors.help}>
+        <Textarea id={`mirrors-${nodeId}`} rows={4} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" autoFocus spellCheck={false} className="py-2" />
+      </Field>
+      {error && <Alert keepFocus>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
   );
 }
 

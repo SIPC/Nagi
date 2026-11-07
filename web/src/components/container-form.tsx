@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { ChevronRight } from "lucide-react";
-import { Field, FormRow, Input, Segmented, Slide, Textarea } from "@/components/ui";
+import { Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
@@ -26,12 +26,12 @@ function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring">
         <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform", open && "rotate-90")} />
         {open ? labelOpen : <span className={cn(labelPhone && "max-md:hidden")}>{label}</span>}
         {!open && labelPhone && <span className="md:hidden">{labelPhone}</span>}
       </button>
-      {open && <div className="grid animate-slide-from-above gap-6 max-md:gap-4">{children}</div>}
+      {open && <div className="grid animate-slide-from-above gap-4">{children}</div>}
     </>
   );
 }
@@ -56,22 +56,22 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
   const [healthInterval, setHealthInterval] = useState(initial?.healthIntervalSeconds ? String(initial.healthIntervalSeconds) : "");
   const volumesField = (
     <Field label={t.containerForm.volumes} htmlFor={prefix + "volumes"} help={`${t.containerForm.volumesHint}${t.common.sentenceEnd}${t.containerForm.volumesHelp}`}>
-      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn("min-h-8 resize-none py-[5px] max-md:py-[9px]", editing && monoInput)} placeholder="/data" spellCheck={false} />
+      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn("min-h-8 resize-none py-[5px] max-md:py-[9px]", monoInput)} placeholder="/data" spellCheck={false} />
     </Field>
   );
   const imageField = (
     <Field label={t.containerForm.image} htmlFor={prefix + "image"}>
-      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required placeholder={t.containerForm.imagePlaceholder} className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
+      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required placeholder={t.containerForm.imagePlaceholder} className={monoInput} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const commandField = (
     <Field label={t.containerForm.command} htmlFor={prefix + "command"}>
-      <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t.containerForm.commandHint} className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
+      <Input id={prefix + "command"} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t.containerForm.commandHint} className={monoInput} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const workdirField = (
     <Field label={t.containerForm.workdir} htmlFor={prefix + "workdir"} help={t.containerForm.workdirHelp}>
-      <Input id={prefix + "workdir"} value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
+      <Input id={prefix + "workdir"} value={workdir} onChange={(e) => setWorkdir(e.target.value)} placeholder="/app" className={monoInput} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const limits = (
@@ -83,7 +83,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
         <Input id={prefix + "cpus"} value={cpus} onChange={(e) => setCpus(e.target.value)} inputMode="decimal" placeholder={t.containerForm.cpusHint} autoComplete="off" />
       </Field>
       <Field label={t.containerForm.health} htmlFor={prefix + "health"} help={t.containerForm.healthHelp}>
-        <Input id={prefix + "health"} value={health} onChange={(e) => setHealth(e.target.value)} placeholder="wget -qO- http://localhost/ || exit 1" className={cn(editing && monoInput)} autoComplete="off" spellCheck={false} />
+        <Input id={prefix + "health"} value={health} onChange={(e) => setHealth(e.target.value)} placeholder="wget -qO- http://localhost/ || exit 1" className={monoInput} autoComplete="off" spellCheck={false} />
       </Field>
       <Field label={t.containerForm.healthInterval} htmlFor={prefix + "health-interval"}>
         <Input id={prefix + "health-interval"} value={healthInterval} onChange={(e) => setHealthInterval(e.target.value)} inputMode="numeric" placeholder={t.containerForm.healthIntervalHint} autoComplete="off" />
@@ -146,7 +146,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
 }
 
 // composeInputClass：compose 编辑框的样式（添加容器组和配置页共用）。
-export const composeInputClass = "h-80 resize-y border-0 bg-muted p-3 font-mono text-[13px] leading-5 max-md:h-70 max-md:text-base max-md:leading-6";
+export const composeInputClass = "h-80 resize-y border-transparent bg-muted p-3 font-mono text-[13px] leading-5 max-md:h-70 max-md:text-base max-md:leading-6";
 
 // formToCompose：把镜像表单写成 compose 的样子，只用来预览（真正的转换在节点上，见 internal/pkg/spec）。环境变量不写进 compose。
 export function formToCompose(service: string, f: ImageFormInit) {
@@ -164,13 +164,14 @@ export function formToCompose(service: string, f: ImageFormInit) {
 // 添加容器的表单：一个容器（镜像表单）或一个容器组（一份 compose）。
 // first 表示项目里的第一个容器（没有别的容器可依赖，不显示"依赖"）。
 // top 和 moreTop 由调用方给：名称和节点、容器目录。
-// dir 时多一个类型「现有目录」（只给管理员）：选中时这里只显示类型切换，表单由调用方画。
+// dir 时多一个类型「现有目录」（只给管理员），那时 body 为空，内容由调用方画。
+// switcher 是类型切换，body 是镜像表单或 compose 的字段；调用方把三种内容放进同一个 Slide，切换时才有横移。
 export function useContainerForm(
   first = false,
   top?: (mode: "compose" | "image") => ReactNode,
   moreTop?: ReactNode,
   dir = false,
-): { fields: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" | "dir"; image: () => string } {
+): { switcher: ReactNode; body: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" | "dir"; image: () => string } {
   const [mode, setMode] = useState<"compose" | "image" | "dir">("image");
   const [compose, setCompose] = useState(exampleCompose);
   const [dependsOn, setDependsOn] = useState("");
@@ -196,40 +197,35 @@ export function useContainerForm(
     return { dependsOn: list, form: imageForm.build() };
   };
 
-  const fields = (
-    <>
-      <div className="max-md:[&>*]:w-full">
-        <Segmented
-          value={mode}
-          onChange={setMode}
-          items={[
-            { value: "image", label: t.containerForm.typeImage },
-            { value: "compose", label: t.containerForm.typeCompose },
-            ...(dir ? [{ value: "dir" as const, label: t.containerForm.typeDir }] : []),
-          ]}
-        />
-      </div>
-      {mode !== "dir" && (
-      <Slide id={mode} index={mode === "compose" ? 1 : 0} inner="grid gap-6 max-md:gap-4">
-      {mode === "compose" ? (
-        <>
-          {top?.("compose")}
-          <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp}>
-            <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} required />
-          </Field>
-          <MoreSettings label={t.containerForm.moreCompose(!first)} labelOpen={t.containerForm.more}>
-            <FormRow className="gap-y-6 max-md:gap-y-4">
-              {moreTop}
-              {deps}
-            </FormRow>
-          </MoreSettings>
-        </>
-      ) : (
-        imageForm.fields
-      )}
-      </Slide>
-      )}
-    </>
+  const switcher = (
+    <div className="max-md:[&>*]:w-full">
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        items={[
+          { value: "image", label: t.containerForm.typeImage },
+          { value: "compose", label: t.containerForm.typeCompose },
+          ...(dir ? [{ value: "dir" as const, label: t.containerForm.typeDir }] : []),
+        ]}
+      />
+    </div>
   );
-  return { fields, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
+  const body =
+    mode === "dir" ? null : mode === "compose" ? (
+      <>
+        {top?.("compose")}
+        <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp}>
+          <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} required />
+        </Field>
+        <MoreSettings label={t.containerForm.moreCompose(!first)} labelOpen={t.containerForm.more}>
+          <FormRow>
+            {moreTop}
+            {deps}
+          </FormRow>
+        </MoreSettings>
+      </>
+    ) : (
+      imageForm.fields
+    );
+  return { switcher, body, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
 }

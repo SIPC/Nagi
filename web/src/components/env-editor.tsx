@@ -75,6 +75,18 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
           const masked = secret && !shown[r.id];
           const keyError = r.key.trim() ? checkEnv(`${r.key.trim()}=`) : "";
           const mono = controlled && "font-mono text-[13px]";
+          const remove = (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 text-muted-foreground max-md:size-10"
+              aria-label={t.common.actions.delete}
+              title={t.common.actions.delete}
+              onClick={() => update(rows.filter((x) => x.id !== r.id))}
+            >
+              <X />
+            </Button>
+          );
           return (
             <div key={r.id} className={cn("grid min-w-0 items-center max-md:gap-2", controlled ? "grid-cols-[minmax(0,1fr)_minmax(0,2fr)_2rem] gap-2 max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem]" : "grid-cols-2 gap-4")}>
               <Input
@@ -90,8 +102,9 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
                   update(rows.map((x) => (x.id === r.id ? { ...x, key: e.target.value } : x)));
                 }}
               />
-              <div className={cn("relative flex min-w-0 items-center", controlled && "contents")}>
-                <div className="relative min-w-0 flex-1">
+              {/* 默认样式里删除按钮也放进值的输入框，输入框右边缘和上面的端口映射、持久化目录对齐；紧凑样式里删除按钮单独一列。 */}
+              <div className={cn("relative min-w-0", controlled && "contents")}>
+                <div className="relative min-w-0">
                   <Input
                     value={r.value}
                     // 遮住密钥用 CSS，不用 type="password"：浏览器会把 password 框当成登录表单，提示保存密码或自动填入账号。
@@ -101,32 +114,31 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
                     aria-label={t.containerForm.envValue}
                     placeholder={t.containerForm.envValue}
                     spellCheck={false}
-                    className={cn("min-w-0", mono, secret && "pr-8", masked && "[-webkit-text-security:disc]")}
+                    className={cn(
+                      "min-w-0",
+                      mono,
+                      controlled ? secret && "pr-8 max-md:pr-10" : secret ? "pr-16 max-md:pr-20" : "pr-8 max-md:pr-10",
+                      masked && "[-webkit-text-security:disc]",
+                    )}
                     onChange={(e) => update(rows.map((x) => (x.id === r.id ? { ...x, value: e.target.value } : x)))}
                   />
-                  {secret && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="absolute top-0 right-0 size-8 text-muted-foreground max-md:size-10"
-                      aria-label={masked ? t.containerForm.envShow : t.containerForm.envHide}
-                      title={masked ? t.containerForm.envShow : t.containerForm.envHide}
-                      onClick={() => setShown({ ...shown, [r.id]: masked })}
-                    >
-                      {masked ? <Eye /> : <EyeOff />}
-                    </Button>
-                  )}
+                  <div className="absolute inset-y-0 right-0 flex">
+                    {secret && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 text-muted-foreground max-md:size-10"
+                        aria-label={masked ? t.containerForm.envShow : t.containerForm.envHide}
+                        title={masked ? t.containerForm.envShow : t.containerForm.envHide}
+                        onClick={() => setShown({ ...shown, [r.id]: masked })}
+                      >
+                        {masked ? <Eye /> : <EyeOff />}
+                      </Button>
+                    )}
+                    {!controlled && remove}
+                  </div>
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className={cn("size-8 text-muted-foreground max-md:size-10", !controlled && "-mr-2 max-md:-mr-3")}
-                  aria-label={t.common.actions.delete}
-                  title={t.common.actions.delete}
-                  onClick={() => update(rows.filter((x) => x.id !== r.id))}
-                >
-                  <X />
-                </Button>
+                {controlled && remove}
               </div>
             </div>
           );

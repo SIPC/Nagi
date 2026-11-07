@@ -21,9 +21,10 @@ const credits = [
   { name: "MiSans", href: "https://hyperos.mi.com/font", use: a.credits.misans },
 ];
 
+// External：列表行里的外部链接。after 撑满整行（行加 relative），悬停底色的范围都能点。
 function External({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40">
+    <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-sm outline-none after:absolute after:inset-0 after:rounded-md hover:underline focus-ring">
       {children}
       <ArrowUpRight className="size-3.5 text-muted-foreground" />
     </a>
@@ -39,10 +40,11 @@ export function AboutCard() {
 
   return (
     <div>
-      <div className="grid justify-items-start gap-4 pb-8">
+      {/* 品牌是第一个区块：标题和区块标题同级（16 / 600），不和页面标题抢层级；下面的区块自带分隔线和上下 24。 */}
+      <div className="grid justify-items-start gap-4">
         <Waves className="h-8 w-14 text-wave" />
         <div className="grid gap-1">
-          <h2 className="text-2xl leading-8 font-semibold tracking-tight">Nagi</h2>
+          <h2 className="text-base font-semibold">Nagi</h2>
           <p className="text-pretty text-muted-foreground">{a.tagline}</p>
         </div>
         <div className="flex min-h-5 flex-wrap items-center gap-x-4 gap-y-1">
@@ -50,18 +52,18 @@ export function AboutCard() {
           {state && (isAdmin ? <Link to="/settings" search={{ tab: "update" }}>{state}</Link> : state)}
         </div>
       </div>
-      <Section className="border-t pt-6" title={a.links.title}>
+      <Section title={a.links.title}>
         <List>
-          <Row title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />
-          <Row title={<External href={`${repo}/releases`}>{a.links.changelog}</External>} />
-          <Row title={<External href={`${repo}/issues`}>{a.links.issues}</External>} />
-          <Row title={<External href={`${repo}/blob/main/LICENSE`}>{a.links.license}</External>} cols={[{ phone: true, content: "Apache-2.0" }]} />
+          <Row className="relative" title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />
+          <Row className="relative" title={<External href={`${repo}/releases`}>{a.links.changelog}</External>} />
+          <Row className="relative" title={<External href={`${repo}/issues`}>{a.links.issues}</External>} />
+          <Row className="relative" title={<External href={`${repo}/blob/main/LICENSE`}>{a.links.license}</External>} cols={[{ phone: true, content: "Apache-2.0" }]} />
         </List>
       </Section>
       <Section title={a.credits.title}>
         <List>
           {credits.map((c) => (
-            <Row key={c.name} title={<External href={c.href}>{c.name}</External>} sub={c.use} />
+            <Row key={c.name} className="relative" title={<External href={c.href}>{c.name}</External>} sub={c.use} />
           ))}
         </List>
       </Section>

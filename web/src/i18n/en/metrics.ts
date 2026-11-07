@@ -18,7 +18,7 @@ export default {
   count: (n) => n,
   memTitle: (usage) => `Memory ${usage}`,
   noData: "No data",
-  allContainersTotal: "All containers",
+  allContainersTotal: "Total for all containers",
   cpuCores: (n) => (n === 1 ? "1 core" : `${n} cores`),
   offlineExcluded: (nodes) => `Totals exclude containers on offline nodes: ${nodes}`,
   average: "Avg",

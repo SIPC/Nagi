@@ -67,7 +67,8 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
         {projects.error && !projects.data && <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
         {projectList.length > 0 && (
           <Field label={t.panels.handover.byProject} help={t.panels.handover.byProjectHelp}>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {/* 字段名是一组复选框的名称，没有对应的单个输入框，所以用 group 关联。 */}
+            <div role="group" aria-label={t.panels.handover.byProject} className="flex flex-wrap gap-x-4 gap-y-2">
               {projectList.map((p) => (
                 <Check key={p.id} checked={projectSelected(p)} onChange={(v) => toggleProject(p, v)}>
                   {p.name}
@@ -77,7 +78,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
           </Field>
         )}
         <Field label={t.panels.handover.nodes} error={missing.nodes && selected.length === 0 ? t.panels.handover.nodesRequired : undefined}>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <div role="group" aria-label={t.panels.handover.nodes} className="flex flex-wrap gap-x-4 gap-y-2">
             {nodes.map((n) => (
               <Check
                 key={n.id}
@@ -168,7 +169,8 @@ export function NodePanels({ nodeId }: { nodeId: string }) {
                     )}
                   </>
                 }
-                cols={[{ content: p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>, phone: true }]}
+                // 英文「Not connected」放不进默认的列宽。
+                cols={[{ content: p.connected ? <Status tone="success">{t.panels.nodePanels.connected}</Status> : <Status>{t.panels.nodePanels.disconnected}</Status>, phone: true, width: "w-32" }]}
                 actions={
                   <Button
                     size="row"

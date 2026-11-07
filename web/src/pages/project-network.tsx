@@ -1,5 +1,4 @@
 import { Fragment, useContext, useEffect, useState } from "react";
-import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Plus } from "lucide-react";
@@ -14,6 +13,7 @@ import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from
 import { confirmAction } from "@/components/confirm";
 import { toast } from "sonner";
 import { useUnsaved } from "@/components/unsaved";
+import { HelpParts } from "@/components/help-parts";
 
 // 「网络」标签页：对外访问（端口映射与域名）、项目内网、项目连接（见 docs/agent.md#项目连接）。
 
@@ -37,23 +37,13 @@ export function ContainerNetwork({ project, container, services }: { project: Pr
   );
 }
 
-// HelpParts：问号里的几段说明，一段一行。
-function HelpParts({ parts }: { parts: React.ReactNode[] }) {
-  return (
-    <span className="grid gap-1">
-      {parts.map((p, i) => (
-        <span key={i}>{p}</span>
-      ))}
-    </span>
-  );
-}
-
 // InternalAccess：项目内的容器访问这个容器用的地址，连接的项目再加上网络名。
+// 容器组还没运行时不知道里面的容器，占位的名字不是地址，不列出。
 function InternalAccess({ project, container, services }: { project: Project; container: Container; services: ServiceStatus[] }) {
   const m = t.projectNetwork.access;
   const own = services.filter((s) => s.container === container.name);
   const names = intranetAddresses(project, services)
-    .filter((a) => (container.kind === "group" ? a.name.endsWith(`.${container.name}`) : a.name === container.name))
+    .filter((a) => !a.placeholder && (container.kind === "group" ? a.name.endsWith(`.${container.name}`) : a.name === container.name))
     .map((a) => a.name);
   const ports = (name: string) => {
     const service = container.kind === "group" ? name.slice(0, name.lastIndexOf(".")) : name;
@@ -69,7 +59,7 @@ function InternalAccess({ project, container, services }: { project: Project; co
   return (
     <Section title={m.title} help={m.help(project.networkName)}>
       {addresses.length === 0 ? (
-        <EmptyRow>{t.projectNetwork.intranet.empty}</EmptyRow>
+        <EmptyRow>{m.empty}</EmptyRow>
       ) : (
         <List>
           {addresses.map((a) => (
@@ -241,7 +231,7 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
               {part.cert && onReason && (
                 <>
                   {" · "}
-                  <button type="button" className="cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/40" onClick={onReason}>
+                  <button type="button" className="cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none focus-ring" onClick={onReason}>
                     {m.check.certErrorDetail}
                   </button>
                 </>
@@ -256,7 +246,7 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
 
 function RouteLink({ url, className }: { url: string; className?: string }) {
   return (
-    <a href={url} target="_blank" rel="noreferrer" className={cn("inline-flex min-w-0 items-center gap-1 rounded-sm wrap-anywhere outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40", className)}>
+    <a href={url} target="_blank" rel="noreferrer" className={cn("inline-flex min-w-0 items-center gap-1 rounded-sm wrap-anywhere outline-none hover:underline focus-ring", className)}>
       {url.replace(/^https?:\/\//, "")}
       <ArrowUpRight strokeWidth={2.25} className="size-3 shrink-0 text-muted-foreground" />
     </a>
@@ -277,7 +267,7 @@ function useDomainChecks(projectId: string, routes: Exposure[] | MessageInitShap
   return { checks: on ? (q.data?.domains ?? []) : [], pending: on && q.isPending, error: on ? q.error : null, refetch: q.refetch };
 }
 
-// RoutesOverview：项目页上全部端口映射的总览。修改在容器页，整行链过去。
+// RoutesOverview：项目页上全部端口映射的总览。编辑在容器页，整行链过去。
 function RoutesOverview({ project }: { project: Project }) {
   const m = t.projectNetwork.routes;
   const { nodes, nodeName, entriesOf, addressesOf } = useRouteNodes(project);
@@ -287,7 +277,19 @@ function RoutesOverview({ project }: { project: Project }) {
       {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
       {domains.error && <QueryError error={domains.error} onRetry={() => domains.refetch()} />}
       {project.routes.length === 0 ? (
-        <EmptyRow>{m.emptyOverview}</EmptyRow>
+        // 添加在容器的「网络」标签，链到第一个容器，在那里可以换到别的容器。
+        <EmptyRow
+          action={
+            project.containers.length > 0 && (
+              <ButtonLink to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: project.containers[0].name }} search={{ view: "network" }} variant="outline">
+                <Plus />
+                {m.add}
+              </ButtonLink>
+            )
+          }
+        >
+          {m.empty}
+        </EmptyRow>
       ) : nodes.isPending ? (
         <RowsSkeleton count={Math.min(project.routes.length, 6)} />
       ) : (
@@ -303,7 +305,7 @@ function RoutesOverview({ project }: { project: Project }) {
                   params={{ projectId: project.id, container: r.container }}
                   search={{ view: "network" }}
                   aria-label={r.name}
-                  className="absolute inset-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="absolute inset-0 rounded-md outline-none focus-ring"
                 />
                 <Row
                   className="group-hover/route:bg-accent"
@@ -341,6 +343,8 @@ function RoutesSection({ project, services, container }: { project: Project; ser
   const [form, setForm] = useState(empty);
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState("");
+  // 提交过一次以后才显示必填的提示，免得刚打开就报错。
+  const [checked, setChecked] = useState(false);
   const [listError, setListError] = useState("");
   const [busy, setBusy] = useState(false);
   const [retrying, setRetrying] = useState("");
@@ -357,6 +361,8 @@ function RoutesSection({ project, services, container }: { project: Project; ser
   const domainList = isHTTP ? form.domains.split(/[\s,]+/).filter(Boolean) : [];
   const hasDomains = domainList.length > 0;
   const multipleEntries = (form.localEntry ? 1 : 0) + form.entryNodes.length > 1;
+  const targetError = checked && !form.target.trim() ? m.containerPortRequired : "";
+  const publishedError = checked && !hasDomains && !form.published.trim() ? m.nodePortRequired : "";
   const draftRoute = {
     name: form.name,
     container,
@@ -382,6 +388,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
   const openAdd = () => {
     setForm(empty);
     setFormError("");
+    setChecked(false);
     setOpen(true);
   };
 
@@ -398,10 +405,13 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       entryNodes: r.entryNodes,
     });
     setFormError("");
+    setChecked(false);
     setOpen(true);
   };
 
   const save = async () => {
+    setChecked(true);
+    if (!form.target.trim() || (!hasDomains && !form.published.trim())) return;
     setFormError("");
     setBusy(true);
     try {
@@ -466,13 +476,16 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
       {savedDomains.error && <QueryError error={savedDomains.error} onRetry={() => savedDomains.refetch()} />}
       {routes.length === 0 ? (
-        <div className="grid justify-items-center gap-6 py-8 text-center">
-          <p className="text-muted-foreground">{m.empty}</p>
-          <Button onClick={openAdd}>
-            <Plus />
-            {m.add}
-          </Button>
-        </div>
+        <EmptyRow
+          action={
+            <Button variant="outline" onClick={openAdd}>
+              <Plus />
+              {m.add}
+            </Button>
+          }
+        >
+          {m.empty}
+        </EmptyRow>
       ) : nodes.isPending ? (
         <RowsSkeleton count={Math.min(routes.length, 6)} />
       ) : (
@@ -503,6 +516,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
                       </Button>
                     ) : failed ? (
                       <Button variant="ghost" size="row" disabled={retrying === r.name} onClick={() => retry(r.name, checks)}>
+                        {retrying === r.name && <Spinner />}
                         {retrying === r.name ? m.check.certRetrying : t.common.actions.retry}
                       </Button>
                     ) : null}
@@ -551,8 +565,8 @@ function RoutesSection({ project, services, container }: { project: Project; ser
             </Field>
           )}
           <FormRow className="max-md:grid-cols-2">
-            <Field label={m.containerPort} htmlFor="route-target">
-              <Input id="route-target" required inputMode="numeric" placeholder="80" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} />
+            <Field label={m.containerPort} htmlFor="route-target" error={targetError}>
+              <Input id="route-target" inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="80" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} />
             </Field>
             <Field label={m.protocol} htmlFor="route-protocol">
               <Select id="route-protocol" value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value })}>
@@ -569,19 +583,19 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               help={m.domainsHelp}
               hint={hasDomains ? <DraftDns checks={draftDomains.checks} error={draftDomains.error} /> : undefined}
             >
-              <Input id="route-domains" placeholder="app.example.com" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
+              <Input id="route-domains" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="app.example.com" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
             </Field>
           )}
           {!hasDomains && (
-            <Field label={m.nodePort} htmlFor="route-published" help={m.nodePortHelp}>
-              <Input id="route-published" required inputMode="numeric" placeholder="8080" value={form.published} onChange={(e) => setForm({ ...form, published: e.target.value })} />
+            <Field label={m.nodePort} htmlFor="route-published" help={m.nodePortHelp} error={publishedError}>
+              <Input id="route-published" inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="8080" value={form.published} onChange={(e) => setForm({ ...form, published: e.target.value })} />
             </Field>
           )}
           <Field label={m.entryNodes} help={m.entryNodesHelp}>
             {nodes.isPending ? (
               <Skeleton className="h-5 w-64 max-w-full" />
             ) : (
-              <div className="flex flex-wrap gap-x-6 gap-y-2 [&_label]:leading-[14px] [&_label]:font-medium">
+              <div role="group" aria-label={m.entryNodes} className="flex flex-wrap gap-x-6 gap-y-2">
                 <Check checked={form.localEntry} onChange={(v) => setForm({ ...form, localEntry: v })}>
                   {m.localEntry(nodeName(containerNode))}
                 </Check>
@@ -596,7 +610,6 @@ function RoutesSection({ project, services, container }: { project: Project; ser
             )}
             {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
             {hasDomains && multipleEntries && !form.httpOnly && <p className="leading-5 text-warning-text">{m.entryDomainWarningShort}</p>}
-            {!hasDomains && form.entryNodes.length > 0 && <p className="leading-5 text-muted-foreground">{m.entryCrossHint}</p>}
           </Field>
           {hasDomains && (
             <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
@@ -746,7 +759,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
           {addresses.map((a, i) => (
             <Row
               key={a.name}
-              className="min-h-14 py-2"
+              center
               title={<span className="min-w-0 wrap-anywhere">{a.name}</span>}
               sub={i === 0 && !a.placeholder ? m.portsRowSub(a.name) : undefined}
               cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}>{nodeName(a.node)}</span>, width: "w-32", phone: true }]}
@@ -755,6 +768,8 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
                   <Input
                     aria-label={`${m.internalPorts} ${a.name}`}
                     className="w-[120px] shrink-0"
+                    autoComplete="off"
+                    spellCheck={false}
                     placeholder="80 9100"
                     disabled={readOnly}
                     value={valueOf(a.name)}
@@ -770,7 +785,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
               actionsWidth="w-64"
               title={<span className="flex items-center gap-1">{m.others}</span>}
               sub={m.othersHint}
-              actions={<Input aria-label={m.others} className="w-64 max-md:w-40" placeholder="pg.web:5432" disabled={readOnly} value={others} onChange={(e) => setOthersEdit(e.target.value)} />}
+              actions={<Input aria-label={m.others} className="w-64 max-md:w-40" autoComplete="off" spellCheck={false} placeholder="pg.web:5432" disabled={readOnly} value={others} onChange={(e) => setOthersEdit(e.target.value)} />}
             />
           )}
         </List>

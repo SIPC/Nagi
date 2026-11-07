@@ -356,7 +356,8 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
             });
           }}
         >
-          <Input ref={nameRef} aria-label={creating === "dir" ? m.dirName : m.fileName} placeholder={creating === "dir" ? m.dirName : m.fileName} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
+          {/* 字段名给读屏，占位符写示例。 */}
+          <Input ref={nameRef} aria-label={creating === "dir" ? m.dirName : m.fileName} placeholder={creating === "dir" ? "data" : "config.yml"} autoComplete="off" autoCapitalize="none" spellCheck={false} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
           <Button type="submit" disabled={busy === "create"}>
             {busy === "create" && <Spinner />}
             {t.common.actions.create}
@@ -393,7 +394,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
                 title={
                   <>
                     {e.isDir && !blocked ? (
-                      <button type="button" title={[e.owner, e.mode].filter(Boolean).join(" · ")} className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => onPath(join(real, e.name))}>
+                      <button type="button" title={[e.owner, e.mode].filter(Boolean).join(" · ")} className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-ring" onClick={() => onPath(join(real, e.name))}>
                         {e.name}
                       </button>
                     ) : (
@@ -541,15 +542,11 @@ function EditNodeFile({ node, file, initial, onClose, onPath, onExpired, onSaved
           <Notice
             tone="warning"
             title={m.conflictTitle}
+            // 右边只放「使用节点内容」；要覆盖时点保存，保存前确认（docs/ui.md「节点 · 终端、文件」）。
             actions={
-              <>
-                <Button variant="outline" readOnlyOk onClick={reload}>
-                  {m.conflictReload}
-                </Button>
-                <Button variant="outline" disabled={busy} onClick={() => save("")}>
-                  {m.overwrite}
-                </Button>
-              </>
+              <Button variant="outline" readOnlyOk onClick={reload}>
+                {m.conflictReload}
+              </Button>
             }
           >
             {m.conflictText}

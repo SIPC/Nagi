@@ -23,6 +23,7 @@ import {
   HelpTip,
   Input,
   Notice,
+  QueryError,
   Roll,
   Select,
   Skeleton,
@@ -261,26 +262,17 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
         {projects.isPending ? (
           <CardsSkeleton />
         ) : projects.error ? (
-          <Notice
-            tone="danger"
-            title={t.projects.loadFailed.title}
-            actions={
-              <Button variant="outline" readOnlyOk onClick={() => projects.refetch()}>
-                {t.common.actions.retry}
-              </Button>
-            }
-          >
-            {errorMessage(projects.error)}
-          </Notice>
+          <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />
         ) : projects.data.projects.length === 0 ? (
           <Empty title={t.projects.empty.title} action={newButton}>
             {t.projects.empty.text}
           </Empty>
         ) : (
           <div className="grid gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.label} autoComplete="off" className="max-w-[280px] max-md:max-w-none" />
-              <Select value={sort} onChange={(e) => navigateList({ to: "/projects", search: (s) => ({ ...s, sort: e.target.value === "name" ? "name" : undefined }), replace: true })} aria-label={t.projects.filter.sort} className="w-auto max-md:hidden">
+            {/* 手机上筛选框和排序同一行，筛选框占剩下的宽度。 */}
+            <div className="flex items-center justify-between gap-2">
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.label} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
+              <Select value={sort} onChange={(e) => navigateList({ to: "/projects", search: (s) => ({ ...s, sort: e.target.value === "name" ? "name" : undefined }), replace: true })} aria-label={t.projects.filter.sort} className="w-auto shrink-0">
                 <option value="created">{t.projects.filter.byCreated}</option>
                 <option value="name">{t.projects.filter.byName}</option>
               </Select>
@@ -367,7 +359,7 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
   );
   const dirField = (
     <Field label={t.projects.nodeChoice.dir} htmlFor="container-dir" help={t.projects.nodeChoice.dirHelp}>
-      <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} />
+      <Input id="container-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={defaultDir} autoComplete="off" spellCheck={false} />
     </Field>
   );
   // dirFor：容器名称可能到提交时才定下来（留空时取镜像名），目录按最终的名称算。
@@ -414,6 +406,8 @@ function NewProjectDialog() {
                 e.target.setCustomValidity(checkName(e.target.value));
               }}
               placeholder={slugName(name, "shop")}
+              autoComplete="off"
+              spellCheck={false}
             />
           </Field>
         ) : (

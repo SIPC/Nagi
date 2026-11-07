@@ -1,11 +1,11 @@
-// 添加容器里的「现有目录」：把节点上已有的 compose 目录接入面板。
+// 添加容器里的「现有目录」：把节点上已有的 Compose 目录接入面板。
 export default {
-  description: "接入节点上已有的 compose 目录，数据留在原处，部署时由面板接管原来的容器。",
+  description: "接入节点上已有的 Compose 目录，数据留在原处，部署时由面板接管原来的容器。",
   dir: "目录",
-  dirHelp: "节点上 compose 文件所在目录的绝对路径。",
-  read: "读取",
+  dirHelp: "节点上 Compose 文件所在目录的绝对路径。",
+  read: "读取目录",
   elevate: "读取节点上的目录需验证身份，验证后 15 分钟内有效。",
-  composeFile: "compose 文件",
+  composeFile: "Compose 文件",
   variables: "接入的变量",
   variablesHelp: "目录里的 .env 复制为容器组变量。",
   none: "无",
@@ -16,4 +16,5 @@ export default {
   limits: "数据不在容器目录中：快照不包含这些数据，也不能迁移、顶替或设置备份节点。",
   limitsWithBackup: "数据不在容器目录中：快照只包含上面填写的子目录，其他数据需自行备份；不能迁移、顶替或设置备份节点。",
   importAndDeploy: "接入并部署",
+  importOnly: "仅接入",
 };

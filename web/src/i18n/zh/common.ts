@@ -50,6 +50,11 @@ export default {
     done: "已完成",
     // 接口没有返回原因时的兜底。
     failed: "面板未返回原因，可在「活动」中查看",
+    viewActivity: "查看活动",
+    // 操作输出里需要注意的几行合并成一条提示。
+    notes: (n: number) => `需要注意 ${n} 项`,
+    showNotes: "查看",
+    hideNotes: "收起",
   },
   errors: {
     http: (status: string) => `面板返回 HTTP ${status}。面板可能正在重启，或页面版本过旧，可刷新页面后重试`,

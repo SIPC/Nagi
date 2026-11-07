@@ -1,10 +1,12 @@
 // shadcn/ui DropdownMenu。
+import { Check } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export function DropdownMenuContent({ className, sideOffset = 4, align = "end", ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
@@ -37,5 +39,23 @@ export function DropdownMenuItem({ className, variant, ...props }: React.Compone
       )}
       {...props}
     />
+  );
+}
+
+// DropdownMenuRadioItem：一组里只能选一项（例如主题）。选中项右边一个对勾，读屏念出「已选中」。
+export function DropdownMenuRadioItem({ className, children, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+  return (
+    <DropdownMenuPrimitive.RadioItem
+      className={cn(
+        "relative cursor-pointer rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-60 data-[highlighted]:bg-accent",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <DropdownMenuPrimitive.ItemIndicator className="absolute right-2 flex items-center">
+        <Check className="size-3.5" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </DropdownMenuPrimitive.RadioItem>
   );
 }

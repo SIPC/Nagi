@@ -97,7 +97,8 @@ function ScopePick({
             ) : options.length === 0 ? (
               <p className="text-muted-foreground">{empty}</p>
             ) : (
-              <div className="grid max-h-44 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
+              // 字段名没有对应的单个输入框：分段控件自带名称，勾选列表用 group 关联。
+              <div role="group" aria-label={label} className="grid max-h-44 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
                 {options.map((o) => (
                   <Check key={o.id} checked={picked.has(o.id)} onChange={(v) => onChange(false, v ? [...ids, o.id] : ids.filter((x) => x !== o.id))}>
                     {o.name}

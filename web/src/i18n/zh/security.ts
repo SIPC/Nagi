@@ -4,12 +4,11 @@ export default {
   masterKey: {
     label: "面板主密钥",
     backup: "须单独备份",
-    copyPath: "复制路径",
     help: "用于加密配置备份密钥、两步验证密钥和告警令牌。主密钥丢失后，即使在其他机器上恢复面板数据库，这些密钥也无法解密。",
   },
   password: {
     label: "登录密码",
-    description: "修改后其他设备将退出登录。",
+    description: "修改后其他设备将退出登录",
     help: "忘记密码时，在面板所在机器上执行 nagi reset password。",
     current: "当前密码",
     newPassword: "新密码",
@@ -19,8 +18,8 @@ export default {
   },
   totp: {
     label: "两步验证",
-    onStatus: "已开启。",
-    offStatus: "未开启。登录时额外校验验证器应用生成的 6 位验证码。",
+    onStatus: "已开启",
+    offStatus: "未开启。登录时额外校验验证器应用生成的 6 位验证码",
     actionOn: "开启",
     actionOff: "关闭",
     help: "丢失验证器时，在面板所在机器上执行 nagi reset 2fa。",
@@ -38,7 +37,7 @@ export default {
   entrance: {
     label: "安全入口",
     onStatus: "已开启，须记录入口地址",
-    offStatus: "未开启。开启后只有带入口路径的地址能打开登录页。",
+    offStatus: "未开启。开启后只有带入口路径的地址能打开登录页",
     actionOn: "开启",
     actionOff: "关闭",
     disableConfirm: "关闭安全入口？任何人都能打开登录页。",

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Collapsible } from "radix-ui";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
@@ -248,9 +247,12 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
   const m = t.projectData.volumes;
   const online = nodes.online(container.nodeId);
   const deployed = container.deployedVersion > 0n;
-  const { volumes, form, targets, saveTargets, remove, removableMount, busy, error } = useVolumes(project, container, nodes);
+  const { volumes, form, targets, saveTargets, removableMount, busy, error } = useVolumes(project, container, nodes);
   const [adding, setAdding] = useState(false);
   const [path, setPath] = useState("");
+  // 提交过一次以后才显示路径格式的提示。
+  const [checked, setChecked] = useState(false);
+  const pathError = checked && !path.trim().startsWith("/") ? m.addInvalid : "";
 
   const deployedTargets = new Set((volumes.data?.volumes ?? []).flatMap((v) => v.mounts.map((x) => x.target)));
   const pendingAdd = targets.filter((x) => !deployedTargets.has(x));
@@ -258,6 +260,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
   const closeAdd = () => {
     setAdding(false);
     setPath("");
+    setChecked(false);
   };
 
   const sub = (v: VolumeInfo) => {
@@ -278,20 +281,13 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
     return parts.filter(Boolean).join(" · ");
   };
 
-  // volumeActions：浏览；还在配置里的挂载另有「取消挂载」。
-  const volumeActions = (v: VolumeInfo) => {
-    const mount = removableMount(v);
-    return (
-      <>
-        {v.kind !== "unmanaged" && (
-          <Button variant="ghost" size="row" onClick={() => onBrowse(v.name)}>
-            {m.browse}
-          </Button>
-        )}
-        {mount && <RowMenu title={volumeLabel(v, container.kind)} items={[{ label: m.remove, danger: true, disabled: busy, onSelect: () => remove(mount.target) }]} />}
-      </>
+  // volumeActions：浏览。取消挂载在卷的文件页右上角的更多里。
+  const volumeActions = (v: VolumeInfo) =>
+    v.kind !== "unmanaged" && (
+      <Button variant="ghost" size="row" onClick={() => onBrowse(v.name)}>
+        {m.browse}
+      </Button>
     );
-  };
 
   return (
     <Section
@@ -322,11 +318,25 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
           className="grid gap-2"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (path.trim() && (await saveTargets([...targets, path.trim()]))) closeAdd();
+            setChecked(true);
+            if (!path.trim().startsWith("/")) return;
+            if (await saveTargets([...targets, path.trim()])) closeAdd();
           }}
         >
           <div className="flex items-center gap-2">
-            <Input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder={m.addPlaceholder} aria-label={m.addLabel} required pattern="/.*" title={m.addHint} className="min-w-0 flex-1" />
+            <Input
+              autoFocus
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder={m.addPlaceholder}
+              aria-label={m.addLabel}
+              aria-invalid={!!pathError}
+              aria-describedby="add-dir-hint"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="min-w-0 flex-1"
+            />
             <Button type="submit" disabled={busy}>
               {busy && <Spinner />}
               {t.common.actions.add}
@@ -335,7 +345,15 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
               {t.common.actions.cancel}
             </Button>
           </div>
-          <p className="text-[13px] leading-5 text-muted-foreground">{m.addHint}</p>
+          {pathError ? (
+            <p id="add-dir-hint" role="alert" className="leading-5 text-destructive">
+              {pathError}
+            </p>
+          ) : (
+            <p id="add-dir-hint" className="text-[13px] leading-5 text-muted-foreground">
+              {m.addHint}
+            </p>
+          )}
         </form>
       )}
       {error && <Alert>{error}</Alert>}
@@ -346,7 +364,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
       ) : nodes.loadError ? (
         <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />
       ) : !online ? (
-        <p className="text-muted-foreground">{m.nodeOffline(nodes.name(container.nodeId))}</p>
+        <Notice tone="warning">{m.nodeOffline(nodes.name(container.nodeId))}</Notice>
       ) : volumes.isPending ? (
         <RowsSkeleton />
       ) : volumes.error ? (
@@ -469,7 +487,7 @@ function Snapshots({
       ) : nodes.loadError ? (
         <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />
       ) : !online ? (
-        <p className="text-muted-foreground">{s.nodeOffline(nodes.name(container.nodeId))}</p>
+        <Notice tone="warning">{s.nodeOffline(nodes.name(container.nodeId))}</Notice>
       ) : (
         <SnapshotList project={project} container={container} busy={run.busy} run={run.run} />
       )}
@@ -477,7 +495,8 @@ function Snapshots({
   );
 }
 
-// SnapshotRows：一行是绝对时间加相对时间、类型、大小、版本和操作。卷和快照共用一套列位。
+// SnapshotRows：一行是绝对时间加相对时间、类型、大小、版本和操作。卷和快照共用一套列位：
+// 大小都在倒数第二列，操作列同宽（w-28），大小才对得齐。
 // action 返回 null 的行（不能在这里操作的快照）显示「随版本回滚」；返回空字符串时不显示操作。
 function SnapshotRows({
   snapshots,
@@ -516,6 +535,7 @@ function SnapshotRows({
               { content: fmtBytes(Number(sn.size)), num: true },
               { content: sn.version > 0n ? `v${sn.version}` : "" },
             ]}
+            actionsWidth="w-28"
             actions={
               action(sn.id, sn.kind) ?? (
                 <span className="text-muted-foreground" title={s.viaVersionHint}>
@@ -733,8 +753,6 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
   );
 }
 
-// noticeRow：页面最上面带主按钮的提示：一行高 32，文字和按钮上下居中。
-const noticeRow = "md:py-1.5 md:[&>div:last-child]:-my-1.5";
 
 // RestoreNotice：所在节点离线、有备份节点时最上面的提示。
 function RestoreNotice({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
@@ -744,7 +762,6 @@ function RestoreNotice({ project, container, nodes, run }: { project: Project; c
     <>
       <Notice
         tone="warning"
-        className={noticeRow}
         title={t.projectData.placement.offline(nodes.name(container.nodeId))}
         actions={
           <Button disabled={run.busy} onClick={() => setOpen(true)}>
@@ -830,7 +847,7 @@ function RestoreDialog({ project, container, nodes, run, snapshotId, onClose }: 
           }}
         >
           <Field label={r.dir} htmlFor="restore-dir" help={t.projectData.dirHelp}>
-            <Input id="restore-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} />
+            <Input id="restore-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} autoComplete="off" spellCheck={false} />
           </Field>
           <DialogActions>
             <AlertDialogCancel asChild>
@@ -930,7 +947,7 @@ function PlacementDialog({ project, container, nodes, run, online, onClose }: { 
             </Select>
           </Field>
           <Field label={p.dir} htmlFor="move-dir" help={t.projectData.dirHelp}>
-            <Input id="move-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} />
+            <Input id="move-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} autoComplete="off" spellCheck={false} />
           </Field>
         </FormRow>
         <DialogActions>
@@ -1059,22 +1076,29 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
             </Check>
           )}
         </div>
-        <Collapsible.Root open={advanced} onOpenChange={setAdvanced} className="grid gap-4">
-          <Collapsible.Trigger className="inline-flex cursor-pointer items-center gap-1 justify-self-start text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
-            <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90 transition-transform" : "size-4 transition-transform"} />
-            {advanced ? f.advanced : f.advancedHint}
-          </Collapsible.Trigger>
-          <Collapsible.Content>
+        {/* 高级设置：和添加容器的「更多设置」一样，展开时内容从上方滑入，箭头旋转。 */}
+        <button
+          type="button"
+          aria-expanded={advanced}
+          aria-controls="fo-advanced"
+          onClick={() => setAdvanced(!advanced)}
+          className="inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring"
+        >
+          <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90 transition-transform" : "size-4 transition-transform"} />
+          {advanced ? f.advanced : f.advancedHint}
+        </button>
+        {advanced && (
+          <div id="fo-advanced" className="animate-slide-from-above">
             <FormRow>
               <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
-                <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} />
+                <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} autoComplete="off" spellCheck={false} />
               </Field>
               <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp} error={leaseError}>
                 <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
               </Field>
             </FormRow>
-          </Collapsible.Content>
-        </Collapsible.Root>
+          </div>
+        )}
         {error && <Alert>{error}</Alert>}
         <DialogActions>
           <Button variant="outline" readOnlyOk onClick={onClose}>
@@ -1099,7 +1123,6 @@ function TakeoverNotice({ project, container, nodes }: { project: Project; conta
     <div className="grid gap-2">
       <Notice
         tone="warning"
-        className={noticeRow}
         title={f.pendingTitle}
         actions={
           <Button
@@ -1197,13 +1220,7 @@ function FailoverDetail({ project, container, nodes }: { project: Project; conta
                   {f.oldPanel}
                 </span>
               )}
-              {" "}
-              <Button
-                variant="ghost"
-                disabled={busy}
-                className="ml-2 h-auto rounded-none border-0 p-0 align-baseline underline decoration-border underline-offset-4 not-disabled:hover:bg-transparent max-md:h-auto max-md:text-sm"
-                onClick={() => setChangingWitness(true)}
-              >
+              <Button variant="ghost" size="row" disabled={busy} className="ml-1" onClick={() => setChangingWitness(true)}>
                 {f.change}
               </Button>
             </span>,
@@ -1233,24 +1250,26 @@ function FailoverDetail({ project, container, nodes }: { project: Project; conta
 function WitnessDialog({ project, container, nodes, onClose }: { project: Project; container: Container; nodes: Nodes; onClose: () => void }) {
   const f = t.projectData.failover;
   const { busy, error, call } = useCall(project.id);
-  const [witness, setWitness] = useState("-");
+  const [witness, setWitness] = useState<string>();
   const cfg = container.failover!;
   const options = nodes.usable.filter((n) => n.id !== cfg.a?.nodeId && n.id !== cfg.b?.nodeId && (cfg.witnessIsPanel || n.id !== cfg.witness?.nodeId));
+  // 本面板已是见证人时不再列出它。默认选第一项，不让「请选择」挡住提交；一项都没有时确实换不了。
+  const panelOption = !(cfg.witnessIsPanel && container.failoverWitnessSelf);
+  const choices = [...(panelOption ? [""] : []), ...options.map((n) => n.id)];
+  const choice = witness ?? choices[0];
   return (
     <Dialog open onClose={onClose} title={f.changeWitness}>
       <form
         className="grid gap-4"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (await call(() => projectClient.changeWitness({ projectId: project.id, container: container.name, witnessNodeId: witness }))) onClose();
+          if (choice === undefined) return;
+          if (await call(() => projectClient.changeWitness({ projectId: project.id, container: container.name, witnessNodeId: choice }))) onClose();
         }}
       >
-        <Field label={f.witness} htmlFor="fo-change-witness" help={f.witnessHelp}>
-          <Select id="fo-change-witness" value={witness} onChange={(e) => setWitness(e.target.value)}>
-            <option value="-" disabled>
-              {f.select}
-            </option>
-            {!(cfg.witnessIsPanel && container.failoverWitnessSelf) && <option value="">{t.projectData.thisPanel}</option>}
+        <Field label={f.witness} htmlFor="fo-change-witness" help={f.witnessHelp} hint={choice === undefined ? f.noWitnessCandidates : undefined}>
+          <Select id="fo-change-witness" value={choice ?? ""} disabled={choice === undefined} onChange={(e) => setWitness(e.target.value)}>
+            {panelOption && <option value="">{t.projectData.thisPanel}</option>}
             {options.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
@@ -1263,7 +1282,7 @@ function WitnessDialog({ project, container, nodes, onClose }: { project: Projec
           <Button variant="outline" readOnlyOk onClick={onClose}>
             {t.common.actions.cancel}
           </Button>
-          <Button type="submit" disabled={busy || witness === "-"}>
+          <Button type="submit" disabled={busy || choice === undefined}>
             {busy && <Spinner />}
             {f.change}
           </Button>

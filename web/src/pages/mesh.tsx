@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { confirmAction } from "@/components/confirm";
+import { confirmAction, notify } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import { fmtBytes, fmtRate } from "@/components/metrics";
-import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowsSkeleton, Section, Spinner, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
@@ -179,40 +179,40 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
                 ...(nodeId && pinged ? [{ content: result && <span className={cn(result.failed && "text-destructive")}>{result.text}</span>, num: true, phone: true }] : []),
                 ...(canSpeed && tested ? [{ content: speed[key] && <SpeedSummary run={speed[key]} />, num: true, phone: true, width: "w-40" }] : []),
               ]}
-              actionsWidth={canSpeed ? "w-36" : undefined}
+              // 测速和 Ping 收进行末的更多菜单，一行只留一个操作位。
+              actionsWidth="w-8"
               actions={
                 nodeId ? (
-                  <div className="flex justify-end gap-1">
-                    {canSpeed && (
-                      <Button
-                        size="row"
-                        variant="ghost"
-                        disabled={testing && !speedRunning(speed[key])}
-                        onClick={() => {
-                          setOpen(key);
-                          if (!speedRunning(speed[key])) void runSpeed(key, p);
-                        }}
-                      >
-                        {t.mesh.speedTest}
-                      </Button>
-                    )}
-                    <Button
-                      readOnlyOk
-                      size="row"
-                      variant="ghost"
-                      onClick={async () => {
-                        setPing((x) => ({ ...x, [key]: { text: "…" } }));
-                        try {
-                          const r = await nodeClient.pingNodeMesh({ nodeId, publicKey: p.publicKey });
-                          setPing((x) => ({ ...x, [key]: { text: `${r.rttMs.toFixed(1)} ms` } }));
-                        } catch (err) {
-                          setPing((x) => ({ ...x, [key]: pingFailure(err) }));
-                        }
-                      }}
-                    >
-                      {t.mesh.ping}
-                    </Button>
-                  </div>
+                  <RowMenu
+                    title={p.name}
+                    items={[
+                      ...(canSpeed
+                        ? [
+                            {
+                              label: t.mesh.speedTest,
+                              disabled: testing && !speedRunning(speed[key]),
+                              onSelect: () => {
+                                setOpen(key);
+                                if (!speedRunning(speed[key])) void runSpeed(key, p);
+                              },
+                            },
+                          ]
+                        : []),
+                      {
+                        label: t.mesh.ping,
+                        readOnlyOk: true,
+                        onSelect: async () => {
+                          setPing((x) => ({ ...x, [key]: { text: "…" } }));
+                          try {
+                            const r = await nodeClient.pingNodeMesh({ nodeId, publicKey: p.publicKey });
+                            setPing((x) => ({ ...x, [key]: { text: `${r.rttMs.toFixed(1)} ms` } }));
+                          } catch (err) {
+                            setPing((x) => ({ ...x, [key]: pingFailure(err) }));
+                          }
+                        },
+                      },
+                    ]}
+                  />
                 ) : undefined
               }
             />
@@ -239,7 +239,7 @@ function SpeedSummary({ run }: { run: SpeedRun }) {
 }
 
 // ratePair：↑ 31.9 ↓ 31.5 MB/s，单位一样时只写一次。
-function ratePair(up: number, down: number) {
+export function ratePair(up: number, down: number) {
   const [u, uu] = fmtRate(up).split(" ");
   const [d, du] = fmtRate(down).split(" ");
   return uu === du ? `↑ ${u} ↓ ${d} ${du}` : `↑ ${u} ${uu} ↓ ${d} ${du}`;
@@ -355,50 +355,59 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
   return <MeshSection q={q} nodeId={nodeId} title={t.mesh.title} />;
 }
 
-// NodeQUIC：节点设置里的 QUIC 快速通道开关（见 docs/mesh.md#quic-快速通道），保存在节点上。
+// NodeQUIC：节点设置里的 QUIC 快速通道（见 docs/mesh.md#quic-快速通道），保存在节点上。一行设置：状态加一个按钮。
 export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }) {
   const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const q = useQuery({ queryKey: ["node-mesh", nodeId], queryFn: () => nodeClient.getNodeMesh({ nodeId }), enabled: online });
   const off = q.data?.quicOff;
-  // 结果直接显示在开关旁，不另外提示「已保存」。
+  // 结果直接显示在这一行，不另外提示「已保存」。
   const toggle = async () => {
     if (!off && !(await confirmAction(t.mesh.quicConfirm, { action: t.mesh.quicDisable }))) return;
     setBusy(true);
-    setError("");
     try {
       const r = await nodeClient.setNodeMeshOptions({ nodeId, options: { quicOff: !off } });
       queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", nodeId] });
     } catch (err) {
-      setError(errorMessage(err));
+      await notify(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+  const failed = q.error && !q.data;
   return (
-    <Section
-      title={t.mesh.quicTitle}
-      description={t.mesh.quicDescription}
+    <SettingRow
+      label={t.mesh.quicTitle}
       help={t.mesh.quicHelp}
-      actions={
-        q.data && (
-          <div className="flex items-center gap-3">
-            <span className="text-muted-foreground">{off ? t.mesh.quicOff : t.mesh.quicOn}</span>
-            {isAdmin && (
-              <Button variant="outline" disabled={busy || !online} onClick={toggle}>
-                {busy && <Spinner />}
-                {off ? t.mesh.quicEnable : t.mesh.quicDisable}
-              </Button>
-            )}
-          </div>
+      description={
+        failed ? (
+          <span className="text-destructive">{errorMessage(q.error)}</span>
+        ) : q.data ? (
+          off ? t.mesh.quicOff : t.mesh.quicOn
+        ) : (
+          // 加载中：占位条，和状态文字一样高。
+          <span className="flex h-5 items-center">
+            <Skeleton className="h-3 w-16" />
+          </span>
         )
       }
     >
-      {q.error && !q.data ? <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} /> : error ? <Alert>{error}</Alert> : null}
-    </Section>
+      {failed ? (
+        <Button variant="outline" readOnlyOk onClick={() => q.refetch()}>
+          {t.common.actions.retry}
+        </Button>
+      ) : (
+        isAdmin &&
+        q.data && (
+          <Button variant="outline" disabled={busy || !online} onClick={toggle}>
+            {busy && <Spinner />}
+            {off ? t.mesh.quicEnable : t.mesh.quicDisable}
+          </Button>
+        )
+      )}
+    </SettingRow>
   );
 }
 

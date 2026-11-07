@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
@@ -8,7 +7,8 @@ import { t } from "@/i18n";
 import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
 import { useRole } from "@/components/role";
-import { Alert, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { HelpParts } from "@/components/help-parts";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction } from "@/components/confirm";
 import { EnvEditor } from "@/components/env-editor";
@@ -28,17 +28,6 @@ export function SettingsTab({ project }: { project: Project }) {
   );
 }
 
-// HelpParts：问号里的几段说明，一段一行。
-function HelpParts({ parts }: { parts: React.ReactNode[] }) {
-  return (
-    <span className="grid gap-1">
-      {parts.map((p, i) => (
-        <span key={i}>{p}</span>
-      ))}
-    </span>
-  );
-}
-
 // GeneralSettings 修改名称、网络名、快照间隔和份数上限；内部端口照原样提交（接口每次提交完整的设置）。
 function GeneralSettings({ project }: { project: Project }) {
   const m = t.projectSettings.general;
@@ -54,6 +43,8 @@ function GeneralSettings({ project }: { project: Project }) {
   const [checked, setChecked] = useState(false);
   // 留空用默认值，否则须为正整数。
   const numberError = (v: string) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? m.positiveInteger : "");
+  const nameError = checked && !name.trim() ? m.nameRequired : "";
+  const networkError = checked && !network.trim() ? m.networkNameRequired : "";
   const intervalError = checked ? numberError(interval) : "";
   const limitError = checked ? numberError(limit) : "";
   // 和已保存的设置比较（不是和第一次渲染比）：保存后项目重新加载，就不再算未保存。
@@ -66,9 +57,9 @@ function GeneralSettings({ project }: { project: Project }) {
 
   const save = async () => {
     setChecked(true);
-    if (numberError(interval) || numberError(limit)) return;
+    if (!name.trim() || !network.trim() || numberError(interval) || numberError(limit)) return;
     // 改网络名后，已连接项目里写的地址会失效，先确认。
-    const renamed = network.trim() !== "" && network.trim() !== project.networkName;
+    const renamed = network.trim() !== project.networkName;
     if (renamed && project.links.length > 0 && !(await confirmAction(m.renameConfirm(network.trim()), { action: m.rename }))) return;
     setBusy(true);
     setError("");
@@ -104,11 +95,11 @@ function GeneralSettings({ project }: { project: Project }) {
       >
         <FormBody>
           <FormRow>
-            <Field label={m.name} htmlFor="p-name">
-              <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <Field label={m.name} htmlFor="p-name" error={nameError}>
+              <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label={m.networkName} htmlFor="p-network" help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />}>
-              <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} required />
+            <Field label={m.networkName} htmlFor="p-network" hint={m.networkNameFormat} help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />} error={networkError}>
+              <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
             </Field>
             <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint} error={intervalError}>
               <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotIntervalMinutes)} />
@@ -205,7 +196,11 @@ function SharedEnv({ project }: { project: Project }) {
       title={
         <>
           {m.title}
-          {project.hasSharedEnvDraft && <span className="text-[13px] leading-5 text-muted-foreground">{m.draft}</span>}
+          {project.hasSharedEnvDraft && (
+            <Badge tone="warning" className="ml-1 font-normal">
+              {m.draft}
+            </Badge>
+          )}
         </>
       }
       help={help}
@@ -214,7 +209,7 @@ function SharedEnv({ project }: { project: Project }) {
         <EnvEditor key={editorKey} id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
           <Field label={m.scope} help={m.scopeHelp}>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 [&_label]:leading-[14px] [&_label]:font-medium">
+            <div role="group" aria-label={m.scope} className="flex flex-wrap gap-x-6 gap-y-2">
               {project.containers.map((c) => (
                 <Check key={c.name} checked={!!affected[c.name]} onChange={(v) => setAffected({ ...affected, [c.name]: v })}>
                   {c.name}
@@ -261,6 +256,8 @@ const sourceLabel: Record<string, string> = {
 function Deployments({ project }: { project: Project }) {
   const m = t.projectSettings.deployments;
   const { run, busy, output } = useRun(project.id);
+  // 默认只列最近几次，其余收起。
+  const [expanded, setExpanded] = useState(false);
   const list = useQuery({
     queryKey: ["deployments", project.id],
     queryFn: () => projectClient.listDeployments({ projectId: project.id }),
@@ -276,46 +273,55 @@ function Deployments({ project }: { project: Project }) {
       ) : list.data.deployments.length === 0 ? (
         <EmptyRow>{m.empty}</EmptyRow>
       ) : (
-        <List>
-          {list.data.deployments.map((d, i) => {
-            const source = `${sourceLabel[d.source] ?? d.source}${d.restoreOf > 0n ? ` #${d.restoreOf}` : ""}`;
-            // 第二行写这次动到的容器和它们的版本，所有容器的版本在悬停提示里。
-            const touched = t.common.list(d.containers.map((c) => (d.versions[c] !== undefined ? `${c} v${d.versions[c]}` : c)));
-            const all = Object.entries(d.versions)
-              .map(([c, v]) => `${c} v${v}`)
-              .join(" · ");
-            const time = toDate(d.time);
-            return (
-              <Row
-                key={String(d.id)}
-                title={
-                  <>
-                    <span>{`#${d.id}`}</span>
-                    {!d.success && (
-                      <Status tone="danger">
-                        <span className="text-destructive">{m.failed}</span>
-                      </Status>
-                    )}
-                  </>
-                }
-                sub={<span title={all}>{[source, touched, d.success ? "" : d.error].filter(Boolean).join(" · ")}</span>}
-                cols={[{ content: <span title={formatDateTime(time)}>{capitalize(timeAgo(time))}</span> }]}
-                actions={
-                  i > 0 ? (
-                    <Button
-                      size="row"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={async () => (await confirmAction(m.restoreConfirm(d.id), { action: m.restore })) && run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))}
-                    >
-                      {m.restore}
-                    </Button>
-                  ) : null
-                }
-              />
-            );
-          })}
-        </List>
+        <>
+          <List>
+            {(expanded ? list.data.deployments : list.data.deployments.slice(0, 6)).map((d, i) => {
+              const source = `${sourceLabel[d.source] ?? d.source}${d.restoreOf > 0n ? ` #${d.restoreOf}` : ""}`;
+              // 第二行写这次动到的容器和它们的版本，所有容器的版本在悬停提示里。
+              const touched = t.common.list(d.containers.map((c) => (d.versions[c] !== undefined ? `${c} v${d.versions[c]}` : c)));
+              const all = Object.entries(d.versions)
+                .map(([c, v]) => `${c} v${v}`)
+                .join(" · ");
+              const time = toDate(d.time);
+              return (
+                <Row
+                  key={String(d.id)}
+                  title={
+                    <>
+                      <span>{`#${d.id}`}</span>
+                      {!d.success && (
+                        <Status tone="danger">
+                          <span className="text-destructive">{m.failed}</span>
+                        </Status>
+                      )}
+                    </>
+                  }
+                  sub={<span title={all}>{[source, touched, d.success ? "" : d.error].filter(Boolean).join(" · ")}</span>}
+                  cols={[{ content: <span title={formatDateTime(time)}>{capitalize(timeAgo(time))}</span> }]}
+                  actions={
+                    i > 0 ? (
+                      <Button
+                        size="row"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={async () => (await confirmAction(m.restoreConfirm(d.id), { action: m.restore })) && run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))}
+                      >
+                        {m.restore}
+                      </Button>
+                    ) : null
+                  }
+                />
+              );
+            })}
+          </List>
+          {!expanded && list.data.deployments.length > 6 && (
+            <div>
+              <Button readOnlyOk variant="ghost" className="-ml-3" onClick={() => setExpanded(true)}>
+                {m.showAll(list.data.deployments.length)}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </Section>
   );
@@ -327,16 +333,14 @@ function DeleteProject({ project }: { project: Project }) {
   const m = t.projectSettings.delete;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [deleteDir, setDeleteDir] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const remove = async () => {
-    // 同时删除目录时数据无法恢复，确认框里要输入项目名称。
-    const answer = deleteDir
-      ? await ask(m.confirmDir(project.name), { action: m.submit, danger: true, checkDefault: true, typeToConfirm: { label: m.confirmName(project.name), value: project.name } })
-      : await ask(m.confirm(project.name), { action: m.submit, danger: true });
+    // 「同时删除容器目录」在确认框里；勾选后数据无法恢复，要输入项目名称。
+    const answer = await ask(m.confirm(project.name), { action: m.submit, danger: true, check: m.deleteDir, typeToConfirm: { label: m.confirmName(project.name), value: project.name } });
     if (!answer) return;
+    const deleteDir = answer.checked;
     setError("");
     setBusy(true);
     try {
@@ -352,11 +356,6 @@ function DeleteProject({ project }: { project: Project }) {
   return (
     <Section title={m.title} tone="danger" help={m.help}>
       <p className="text-muted-foreground">{m.description}</p>
-      <div className="grid justify-items-start gap-2">
-        <Check checked={deleteDir} onChange={setDeleteDir}>
-          {m.deleteDir}
-        </Check>
-      </div>
       {error && <Alert>{error}</Alert>}
       <div>
         <Button variant="destructive-outline" disabled={busy} onClick={remove}>

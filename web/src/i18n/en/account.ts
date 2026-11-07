@@ -1,7 +1,6 @@
 import type zh from "../zh/account";
 
 export default {
-  menu: "Account menu",
   signedInAs: (name) => `Signed in as ${name}`,
   profile: "Profile",
   security: "Account security",

@@ -5,12 +5,13 @@ import { Plus } from "lucide-react";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
-import { Alert, Button, Check, CodeBlock, CopyButton, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner } from "@/components/ui";
+import { Alert, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner } from "@/components/ui";
 import type { AccessToken, CreateAccessTokenResponse } from "@/gen/nagi/v1/api_pb";
 import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { AuthShell, returnToKey } from "@/pages/auth";
+import { CopyTextButton } from "@/pages/access";
 
 const expiryDays = [30, 90, 365, 0];
 
@@ -211,8 +212,17 @@ export function AccessTokenSection() {
       }
     >
       <List>
-        <SettingRow label={t.tokens.mcpUrl} help={mcp.url ? t.tokens.mcpUrlHint : undefined} description={<span className="block truncate">{mcp.hidden ? t.tokens.mcpUrlEntrance : mcp.url || "—"}</span>}>
-          {mcp.url ? <CopyButton text={mcp.url} /> : null}
+        <SettingRow
+          label={t.tokens.mcpUrl}
+          help={mcp.url ? t.tokens.mcpUrlHint : undefined}
+          // 放不下时截断，悬停看完整的内容。
+          description={
+            <span className="block truncate" title={mcp.hidden ? t.tokens.mcpUrlEntrance : mcp.url || undefined}>
+              {mcp.hidden ? t.tokens.mcpUrlEntrance : mcp.url || "—"}
+            </span>
+          }
+        >
+          {mcp.url ? <CopyTextButton text={mcp.url} /> : null}
         </SettingRow>
       </List>
       <AccessTokenList

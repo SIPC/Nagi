@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "@/lib/api";
-import { Alert, LogBox, Notice } from "@/components/ui";
+import { useRole } from "@/components/role";
+import { Alert, Button, LogBox, Notice } from "@/components/ui";
 import { t } from "@/i18n";
 import { toast } from "sonner";
 
@@ -12,6 +14,8 @@ type StreamEvent = { event: { case: string | undefined; value?: unknown } };
 
 export function useRun(projectId: string) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState<RunResult>();
   const [busy, setBusy] = useState(false);
@@ -25,7 +29,8 @@ export function useRun(projectId: string) {
       setResult(r);
       if (inView(boxRef.current)) return;
       if (r.success) toast.success(t.common.feedback.done);
-      else toast.error(r.error || t.common.feedback.failed);
+      // 失败的详情记在活动里（只有管理员能看）。
+      else toast.error(r.error || t.common.feedback.failed, isAdmin ? { action: { label: t.common.feedback.viewActivity, onClick: () => navigate({ to: "/activity" }) } } : undefined);
     };
     try {
       for await (const ev of start()) {
@@ -85,20 +90,44 @@ function inView(el: HTMLElement | null) {
 
 function RunOutput({ boxRef, lines, result }: { boxRef: RefObject<HTMLDivElement | null>; lines: string[]; result?: RunResult }) {
   const outRef = useRef<HTMLPreElement>(null);
+  const [showNotes, setShowNotes] = useState(false);
   useEffect(() => {
     outRef.current?.scrollTo({ top: outRef.current.scrollHeight });
   }, [lines.length]);
   if (lines.length === 0 && !result) return null;
+  const f = t.common.feedback;
+  const notes = lines.filter((l) => noteLine.test(l));
+  const warn = notes.some((l) => warnLine.test(l));
+  // 同一处只放一条提示：失败时只写原因（需要注意的几行在下面的输出里）；
+  // 否则结果作标题、需要注意的行作说明，多于一行时合并成「需要注意 N 项」，点开看。
   return (
     <div ref={boxRef} className="grid gap-2">
-      {result && (result.success ? <Notice tone="success">{t.common.feedback.done}</Notice> : <Alert>{result.error || t.common.feedback.failed}</Alert>)}
-      {lines
-        .filter((l) => noteLine.test(l))
-        .map((l, i) => (
-          <Notice key={i} tone={warnLine.test(l) ? "warning" : undefined}>
-            {l}
+      {result && !result.success ? (
+        <Alert>{result.error || f.failed}</Alert>
+      ) : (
+        (result || notes.length > 0) && (
+          <Notice
+            tone={warn ? "warning" : result ? "success" : "neutral"}
+            title={result && notes.length > 0 ? f.done : undefined}
+            actions={
+              notes.length > 1 && (
+                <Button variant="outline" readOnlyOk aria-expanded={showNotes} onClick={() => setShowNotes(!showNotes)}>
+                  {showNotes ? f.hideNotes : f.showNotes}
+                </Button>
+              )
+            }
+          >
+            {notes.length === 0 ? f.done : notes.length === 1 ? notes[0] : f.notes(notes.length)}
           </Notice>
-        ))}
+        )
+      )}
+      {showNotes && notes.length > 1 && (
+        <ul className="grid gap-1 pl-3.5 text-muted-foreground">
+          {notes.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      )}
       {lines.length > 0 && (
         <LogBox ref={outRef} className="max-h-72">
           {lines.join("\n")}

@@ -254,10 +254,8 @@ const settingsRoute = createRoute({
   beforeLoad: ({ search }) => {
     if (search.activity !== undefined) throw redirect({ to: "/activity", search: { kind: search.activity || undefined }, replace: true });
   },
-  component: function Settings() {
-    const { tab } = settingsRoute.useSearch();
-    return <SettingsPage tab={tab ?? "access"} />;
-  },
+  // 当前子页由 SettingsPage 自己从地址读。
+  component: SettingsPage,
 });
 
 const activityRoute = createRoute({

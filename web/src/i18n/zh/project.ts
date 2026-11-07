@@ -6,8 +6,8 @@ export default {
     settings: "设置",
   },
   breadcrumb: "项目",
-  back: "返回项目",
-  nodes: (names: string[]) => `节点 ${names.join("、")}`,
+  // n：节点数，英文按单复数用。
+  nodes: (_n: number, names: string) => `节点 ${names}`,
   noContainers: "暂无容器",
   rebuiltHint: "面板丢失或更换后根据节点缓存重建的项目，原创建时间、历史版本和部署记录已丢失。",
   rebuiltAt: (ago: string) => `从节点缓存重建于 ${ago}`,
@@ -15,7 +15,6 @@ export default {
   containerCount: (n: number) => `${n} 个容器`,
   groupCount: (n: number) => `${n} 个容器组`,
   statefulCount: (n: number) => `${n} 个有状态`,
-  countSeparator: "，",
   column: {
     allProjects: "全部项目",
     project: "项目",

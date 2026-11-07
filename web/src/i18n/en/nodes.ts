@@ -25,7 +25,7 @@ export default {
     relay: "Relayed via panel",
     none: "Unreachable",
     help: "Lines are node network (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed via panel and the line passes through it. The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
-    issues: "Connections that aren't direct",
+    issues: "Indirect connections",
   },
   latency: {
     title: "Latency between nodes",
@@ -55,7 +55,7 @@ export default {
     backupOffline: (target) => `Backup node ${target} is offline too`,
     lost: "No replica: unavailable until the node recovers",
     redeploy: "Stateless: can be redeployed to another node",
-    collateral: "Lose failover or backup node (still running)",
+    collateral: "Keeps running, but loses its failover or backup node",
   },
   description: "Machines that run containers. Containers keep running if the panel is down.",
   addNode: "Add node",
@@ -106,7 +106,7 @@ export default {
     phases: { queued: "Queued", installing: "Upgrading", restarting: "Restarting", failed: "Upgrade failed" },
     all: "Upgrade all",
     allCount: (n) => `Upgrade all nodes (${n})`,
-    allRunning: (n) => `Upgrading, ${n} left`,
+    allRunning: (n) => `Upgrading (${n} left)`,
     allConfirm: (n, version) => `Upgrade ${n} ${n === 1 ? "node" : "nodes"} to ${version} one at a time? Nodes that only hold replicas go first; if a node doesn't come back, the rest are skipped.`,
     cancel: "Cancel upgrade",
     canceling: "Canceling",
@@ -115,7 +115,7 @@ export default {
   add: {
     publicAddress: "Panel public address",
     publicAddressHelp: "Nodes connect to the panel at this address. It must be reachable from the node. It's saved when the install command is generated.",
-    port: "Port",
+    portHint: (port) => `Port: ${port}`,
     command: "Install command",
     commandHint: "Run as root on the new machine",
     commandHelp: "The token is single-use: one command per machine, valid for 1 hour.",
@@ -124,7 +124,6 @@ export default {
     finish: "Done",
   },
   settings: {
-    rootTitle: "Project directories",
     root: "Projects root",
     rootHint: "Absolute path",
     rootHelp: "New containers on this node default to <projects root>/<network name>/<container name>. Existing container directories don't change.",
@@ -145,6 +144,7 @@ export default {
     pendingTitle: "Takes effect after Docker restarts",
     pendingText: (active) => `Written to daemon.json. Run systemctl restart docker on the node to apply. Docker currently uses: ${active}`,
     none: "none",
+    empty: "Not set",
     adminOnly: "Only administrators can view registry mirrors",
   },
   replicas: {

@@ -26,7 +26,15 @@ export function ServiceState({ service }: { service: ServiceStatus }) {
         : service.state === "dead"
           ? "danger"
           : "neutral";
-  return <Status tone={tone}>{stateLabels[service.state] ?? service.state}</Status>;
+  const label = stateLabels[service.state];
+  // 不认识的 Docker 状态不直接显示英文原文，写「状态未知」，原文放在悬停提示里。
+  if (!label)
+    return (
+      <span title={service.state}>
+        <Status>{s.unknown}</Status>
+      </span>
+    );
+  return <Status tone={tone}>{label}</Status>;
 }
 
 // offlineNodeNames 列出部署过容器的离线节点。这些节点上的容器状态未知（节点离线不等于容器停止）。

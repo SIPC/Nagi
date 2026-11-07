@@ -69,7 +69,7 @@ export default {
     restoreConfirm: (time) => `Restore the version from ${time}? The current content is saved to history.`,
     restored: "Restored",
     conflictTitle: "File changed on the node",
-    conflictText: "Red is the content on the node. Green is the edited content.",
+    conflictText: "Red is the content on the node. Green is the edited content. Saving overwrites the content on the node.",
     conflictSame: "No differences",
     conflictReload: "Use node content",
     overwriteNode: "Overwrite the content on the node? Its current content is saved to history.",

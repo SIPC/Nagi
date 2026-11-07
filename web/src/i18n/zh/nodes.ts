@@ -55,7 +55,7 @@ export default {
     backupOffline: (target: string) => `备份节点 ${target} 也离线`,
     lost: "无副本，节点恢复前无法运行",
     redeploy: "无状态，可重新部署到其他节点",
-    collateral: "失去顶替节点或备份节点（容器照常运行）",
+    collateral: "照常运行，但失去顶替节点或备份节点",
   },
   description: "运行容器的机器，面板不可用时容器照常运行。",
   addNode: "添加节点",
@@ -106,7 +106,7 @@ export default {
     phases: { queued: "排队中", installing: "升级中", restarting: "重启中", failed: "升级失败" },
     all: "升级全部",
     allCount: (n: number) => `升级全部节点（${n}）`,
-    allRunning: (n: number) => `正在升级，还剩 ${n} 个`,
+    allRunning: (n: number) => `升级中（剩余 ${n} 个）`,
     allConfirm: (n: number, version: string) => `将 ${n} 个节点逐个升级到 ${version}？先升级只保存副本的节点；某个节点升级后未恢复时停止，后面的节点不升级。`,
     cancel: "取消升级",
     canceling: "正在取消",
@@ -115,7 +115,7 @@ export default {
   add: {
     publicAddress: "面板对外地址",
     publicAddressHelp: "节点通过该地址连接面板，须可从节点访问。生成安装命令时自动保存。",
-    port: "端口",
+    portHint: (port: string) => `端口：${port}`,
     command: "安装命令",
     commandHint: "以 root 身份在新机器上执行",
     commandHelp: "令牌仅可使用一次：每台机器一条命令，有效期 1 小时。",
@@ -124,7 +124,6 @@ export default {
     finish: "完成",
   },
   settings: {
-    rootTitle: "项目目录",
     root: "项目根目录",
     rootHint: "绝对路径",
     rootHelp: "新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。",
@@ -145,6 +144,7 @@ export default {
     pendingTitle: "重启 Docker 后生效",
     pendingText: (active: string) => `已写入 daemon.json，在节点上执行 systemctl restart docker 后生效。Docker 当前使用：${active}`,
     none: "无",
+    empty: "未设置",
     adminOnly: "仅管理员可查看镜像加速",
   },
   replicas: {

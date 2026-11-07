@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Section, Spinner, Status, CodeBlock } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, List, Notice, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, Status, CodeBlock } from "@/components/ui";
 import { confirmAction, notify } from "@/components/confirm";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
@@ -14,22 +14,24 @@ export function useStandbys() {
 }
 
 // PromoteButton：把本面板（备用面板）提升为主面板。提升后面板按主面板重新启动，页面几秒后刷新。
-export function PromoteButton({ size = "sm", variant = "outline" }: { size?: "sm" | "xs"; variant?: "outline" | "destructive-outline" }) {
+// onError：提升失败的原因，由放按钮的地方就地显示（传空串表示清掉上一次的错误）。
+export function PromoteButton({ variant = "outline", onError }: { variant?: "outline" | "destructive-outline"; onError: (message: string) => void }) {
   const [busy, setBusy] = useState(false);
   const promote = async () => {
     if (!(await confirmAction(t.standby.promote.confirm, { action: t.standby.promote.button, danger: true }))) return;
     setBusy(true);
+    onError("");
     try {
       await settingsClient.promoteStandby({});
       await notify(t.standby.promote.done);
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
-      await notify(errorMessage(err));
+      onError(errorMessage(err));
       setBusy(false);
     }
   };
   return (
-    <Button readOnlyOk size={size} variant={variant} onClick={promote} disabled={busy}>
+    <Button readOnlyOk variant={variant} onClick={promote} disabled={busy}>
       {busy && <Spinner />}
       {t.standby.promote.button}
     </Button>
@@ -60,25 +62,30 @@ export function StandbyCard() {
   // 每 5 秒刷新一次：刷新失败时列表留着，上面提示数据不是最新的。
   const refetchError = q.error && <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
 
+  // 备用面板上：同步状态写成设置行，提升为主面板放在主面板那一行。
   if (d.isStandby) {
     return (
-      <Section title={t.standby.status.title} help={t.standby.status.help}>
+      <Section title={t.settings.tabs.standby.label} help={t.standby.status.help}>
         {refetchError}
-        <KeyValue
-          items={[
-            [t.standby.status.primary, <span className="wrap-anywhere">{d.primaryAddress}</span>],
-            [t.standby.status.connection, d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>],
-            [t.standby.lastSync, <span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? capitalize(timeAgo(toDate(d.lastSync))) : t.standby.status.neverSynced}</span>],
-          ]}
-        />
+        {error && <Alert>{error}</Alert>}
         {d.lastError && (
           <Notice tone="danger" title={t.standby.status.syncFailed}>
             {d.lastError}
           </Notice>
         )}
-        <div>
-          <PromoteButton variant="destructive-outline" />
-        </div>
+        <SettingRows>
+          <SettingRow label={t.standby.status.primary} description={<span className="wrap-anywhere">{d.primaryAddress}</span>}>
+            <PromoteButton variant="destructive-outline" onError={setError} />
+          </SettingRow>
+          <SettingRow
+            label={t.standby.status.connection}
+            description={d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>}
+          />
+          <SettingRow
+            label={t.standby.lastSync}
+            description={<span title={formatDateTime(toDate(d.lastSync))}>{d.lastSync ? capitalize(timeAgo(toDate(d.lastSync))) : t.standby.status.neverSynced}</span>}
+          />
+        </SettingRows>
       </Section>
     );
   }
@@ -116,7 +123,7 @@ export function StandbyCard() {
     </Button>
   );
   return (
-    <Section title={t.standby.list.title} help={t.standby.list.help} actions={addButton}>
+    <Section title={t.settings.tabs.standby.label} help={t.standby.list.help} actions={addButton}>
       {refetchError}
       {error && <Alert>{error}</Alert>}
       {d.standbys.length === 0 ? (
@@ -133,6 +140,8 @@ export function StandbyCard() {
               cols={[
                 {
                   phone: true,
+                  // 英文「Not connected」加问号放不进默认的列宽。
+                  width: "w-36",
                   content: s.connected ? (
                     <Status tone="success">{t.standby.connected}</Status>
                   ) : (

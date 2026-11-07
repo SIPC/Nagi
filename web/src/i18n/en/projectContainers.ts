@@ -1,7 +1,7 @@
 import type zh from "../zh/projectContainers";
 
 export default {
-  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View all events", empty: "No events" },
+  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View activity", empty: "No events" },
   terminal: { connected: "Connected" },
   imageTip: {
     label: "Image update available",
@@ -13,7 +13,7 @@ export default {
   kind: {
     container: "Container",
     group: "Container group",
-    groupCompose: "Container group (compose)",
+    groupCompose: "Container group (Compose)",
   },
   tabs: {
     overview: "Overview",
@@ -26,7 +26,7 @@ export default {
     ha: "High availability",
   },
   columns: {
-    name: "Name",
+    name: "Container name",
     kind: "Type",
     node: "Node",
     image: "Image",
@@ -35,7 +35,7 @@ export default {
     draft: "Draft",
     sharedEnvPending: "Shared variables pending",
     stateful: "Stateful",
-    hostNetwork: "host network",
+    hostNetwork: "Host network",
     volumeUnmanaged: "Volume not in snapshots",
   },
   monitoring: "Monitoring",
@@ -158,17 +158,17 @@ export default {
     git: "Git repository",
     gitHelp: "SSH URLs are pulled with the deploy key; HTTPS supports public repositories only. Leave empty to provide the data/ directory by upload.",
     ref: "Branch or tag",
-    refHint: "Leave empty for the default branch",
+    refHelp: "Leave empty to use the default branch.",
     preserve: "Preserved paths",
     preserveHint: "Relative to data/, one per line",
     preserveHelp: "Kept when files are updated (upload or Git pull), such as user-uploaded files.",
     backupPaths: "Subdirectories in snapshots",
-    backupPathsHelp: (dir: string) => `Top-level directories under ${dir}, comma separated, such as the database directory postgres. Scheduled snapshots include them and pause the containers; leave out large ones like a photo library.`,
+    backupPathsHelp: (dir: string) => `Top-level directories under ${dir}, comma-separated, such as the database directory postgres. Scheduled snapshots include them and pause the containers; leave out large ones like a photo library.`,
     dependsOn: "Dependencies",
     dependsOnHint: "Container names, comma-separated",
     dependsOnHelp: "Listed containers are deployed first in batch deployments.",
     groupEnv: "Container group variables",
-    groupEnvHelp: "Replaces ${VAR} in compose. Takes precedence over project shared variables with the same name.",
+    groupEnvHelp: "Replaces ${VAR} in Compose. Takes precedence over project shared variables with the same name.",
     serviceEnv: (service) => `Environment variables: ${service}`,
     serviceEnvHelp: "Injected into this container only.",
     savedDraft: "Saved as draft",
@@ -178,7 +178,6 @@ export default {
     groupImage: "Image and startup",
     modeForm: "Form",
     modeCompose: "Compose",
-    modeFormDisabled: "A container group can't be switched to a form after creation",
     composePreviewHelp: "Generated from the form, read only. A container can't switch between single and group after creation.",
     groupStorage: "Directories and ports",
     groupSource: "File source and dependencies",

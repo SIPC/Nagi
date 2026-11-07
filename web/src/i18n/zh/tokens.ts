@@ -6,7 +6,7 @@ export default {
   create: "生成令牌",
   mcpUrl: "MCP 地址",
   mcpUrlHint: "仅支持 OAuth 的客户端只需填写此地址，连接时打开授权页。",
-  mcpUrlEntrance: "面板开启了安全入口，MCP 地址须带入口路径，请向管理员获取。",
+  mcpUrlEntrance: "面板开启了安全入口，MCP 地址须带入口路径，请向管理员获取",
   name: "名称",
   namePlaceholder: "Claude Code · 笔记本",
   expires: "有效期",

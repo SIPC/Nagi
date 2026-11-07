@@ -17,7 +17,7 @@ import { ProfileCard } from "@/components/account";
 import { useRole } from "@/components/role";
 
 // 设置页：左边二级菜单，右边只显示选中的一项。选中的一项记在地址的 tab 参数里。
-// 没有 tab 参数时显示账号安全，所有角色都有。
+// 没有 tab 参数时显示菜单第一项个人资料，所有角色都有。
 
 export const settingsTabs = [
   { value: "security", label: t.settings.tabs.security.label },
@@ -57,13 +57,13 @@ export function settingsTabsFor(isAdmin: boolean) {
   return values.map((value) => settingsTabs.find((x) => x.value === value)!);
 }
 
-// 选中项直接读地址：没有 tab 参数时显示账号安全。
-export function SettingsPage(_props: { tab: SettingsTab }) {
-  const tab = useSearch({ from: "/app/settings" }).tab ?? "security";
+// 选中项直接读地址：没有 tab 参数（或没有权限看）时显示菜单第一项。
+export function SettingsPage() {
   const { isAdmin } = useRole();
   const groups = groupsFor(isAdmin);
   const allowed = groups.flatMap((g) => g.tabs);
-  const cur: SettingsTab = allowed.includes(tab) ? tab : "security";
+  const tab = useSearch({ from: "/app/settings" }).tab ?? allowed[0];
+  const cur: SettingsTab = allowed.includes(tab) ? tab : allowed[0];
   const label = (value: SettingsTab) => settingsTabs.find((x) => x.value === value)?.label;
   // 窄屏是横向滑动的一行：选中项滚到可见。
   const { ref: navRef, box } = useActiveBox();
@@ -82,18 +82,19 @@ export function SettingsPage(_props: { tab: SettingsTab }) {
           <ActiveBox box={box} className="max-md:hidden" />
           {groups.map((g) => (
             <Fragment key={g.tabs[0]}>
-              {g.label ? <div className="relative mt-2 hidden h-6 items-center px-2 text-xs leading-5 font-medium text-muted-foreground first:mt-0 md:flex">{g.label}</div> : <div className="hidden h-2 md:block" />}
+              {/* 分组标题和项目栏顶部的「项目」一样，13 号次文字。 */}
+              {g.label ? <div className="relative mt-2 hidden h-6 items-center px-2 text-[13px] leading-5 text-muted-foreground first:mt-0 md:flex">{g.label}</div> : <div className="hidden h-2 md:block" />}
               {g.tabs.map((value) => (
                 <Link
                   key={value}
                   to="/settings"
-                  search={{ tab: value === "security" ? undefined : value }}
-                  replace
+                  // 切换子页是一次导航，后退回到上一个子页，不直接离开设置页。
+                  search={{ tab: value === allowed[0] ? undefined : value }}
                   activeOptions={{ explicitUndefined: true }}
                   aria-current={value === cur ? "page" : undefined}
                   data-active={value === cur || undefined}
                   className={cn(
-                    "relative flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors not-data-active:hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset max-md:h-10",
+                    "relative flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors not-data-active:hover:bg-accent/50 focus-ring focus-visible:ring-inset max-md:h-10",
                     value === cur && "max-md:bg-accent",
                   )}
                 >

@@ -70,7 +70,7 @@ export function LineDiff({ before, after, none }: { before: string; after: strin
   const ops = diffLines(a, b).filter((o) => o.kind !== "same");
   if (ops.length === 0) return <p className="text-muted-foreground">{none}</p>;
   return (
-    <div className="max-h-64 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre">
+    <div className="max-h-64 overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5 whitespace-pre">
       {ops.map((o, i) => (
         <div key={i} className={o.kind === "add" ? "text-success" : "text-destructive"}>
           {`${o.kind === "add" ? "+" : "-"} ${o.text}`}
@@ -85,7 +85,7 @@ export function ConfigDiff({ deployed, draft }: { deployed: ContainerConfig | un
   const ops = diffLines(configLines(deployed), configLines(draft)).filter((o) => o.kind !== "same");
   if (ops.length === 0) return <p className="text-muted-foreground">{t.projectContainers.config.diffNone}</p>;
   return (
-    <div className="overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre">
+    <div className="overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5 whitespace-pre">
       {ops.map((o, i) => (
         <div key={i} className={o.kind === "add" ? "text-success" : "text-destructive"}>
           {`${o.kind === "add" ? "+" : "-"} ${maskLine(o.text)}`}

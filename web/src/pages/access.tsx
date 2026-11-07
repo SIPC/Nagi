@@ -6,8 +6,8 @@ import { confirmAction } from "@/components/confirm";
 import { Alert, Button, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 
-// 带文字的复制按钮。复制不改东西，备用面板上也能用。
-export function CopyTextButton({ text, label }: { text: string; label: string }) {
+// 设置行里的复制按钮：有框，写「复制」，各设置页统一用它。复制不改东西，备用面板上也能用。
+export function CopyTextButton({ text }: { text: string }) {
   return (
     <Button
       readOnlyOk
@@ -21,7 +21,7 @@ export function CopyTextButton({ text, label }: { text: string; label: string })
         }
       }}
     >
-      {label}
+      {t.common.actions.copy}
     </Button>
   );
 }
@@ -157,7 +157,7 @@ export function PanelAccessCard() {
         </SettingRow>
         {editing === "domain" && editRow("domain")}
         <SettingRow label={t.access.fingerprint.label} help={t.access.fingerprint.help} description={<span className="break-all">{s.fingerprint}</span>}>
-          <CopyTextButton text={s.fingerprint} label={t.common.actions.copy} />
+          <CopyTextButton text={s.fingerprint} />
         </SettingRow>
       </SettingRows>
     </Section>

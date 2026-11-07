@@ -291,7 +291,7 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
 
 // nodeUsage：节点列表一行里的 CPU、内存、磁盘。percent 是占整机的比例（定占用条和颜色），
 // value 和 limit 是显示的「已用 / 上限」：CPU 和容器一样按每核 100% 累加，写成「61% / 400%」；
-// 内存和磁盘写成「3.8 / 8.0 GB」（单位相同时只在上限后面写一次）。
+// 内存和磁盘两边都带单位，写成「3.8 GB / 8.0 GB」「786 MB / 1.9 GB」。
 // 旧版本的节点不报总量，只显示已用。
 export function nodeUsage(usage?: NodeUsage, info?: NodeInfo) {
   const disks = usage?.disks ?? [];
@@ -305,8 +305,7 @@ export function nodeUsage(usage?: NodeUsage, info?: NodeInfo) {
     if (!total) return { label, percent, value: fmtPct(percent), title: `${label} ${fmtPct(percent)}` };
     const used = fmtBytes(usedBytes ?? (percent / 100) * total);
     const limit = fmtBytes(total);
-    const [n, unit] = used.split(" ");
-    return { label, percent, value: limit.endsWith(` ${unit}`) ? n : used, limit, title: `${label} ${used} / ${limit} (${fmtPct(percent)})` };
+    return { label, percent, value: used, limit, title: `${label} ${used} / ${limit} (${fmtPct(percent)})` };
   };
   const cpu = !usage
     ? { label: "CPU", percent: undefined, value: "—", title: "CPU —" }
@@ -506,7 +505,8 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
 
   return (
     <>
-      <div className={cn("font-medium", divided && "mt-4 border-t pt-6")}>
+      {/* 分隔线上下各 24（加上外层的间距 16），手机上和区块一样各 16。 */}
+      <div className={cn("font-medium", divided && "mt-2 border-t pt-6 max-md:pt-4")}>
         {m.portMapping}
         {name && " "}
         {name && <span className="ml-1 font-mono text-[13px] font-normal text-muted-foreground">{name}</span>}
