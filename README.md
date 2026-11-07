@@ -13,7 +13,7 @@
 
 > 风平浪静。
 
-Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，管理分布在多台 Linux 服务器上的 Docker 容器。它基于 Docker 和 Docker Compose，支持多节点与高可用，追求简单、美观、易于部署。
+Nagi 是一个开源的自托管容器部署平台，可以在一个网页面板上管理分布在多台 Linux 服务器上的 Docker 容器。Nagi 基于 Docker 和 Docker Compose，支持多节点与高可用。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.dark.png">
@@ -22,12 +22,12 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
 
 ## 工作方式
 
-- **基于 Docker Compose**：每个应用都是一份标准的 compose 文件，加上环境变量和密钥；用镜像表单创建的单个容器也会自动生成 compose。部署、版本、回滚都以 compose 为单位，Nagi 不改写你的 compose 文件。
-- **一个面板，多个节点**：面板是网页控制台，保存项目的配置；节点是运行容器的服务器，主动连接面板，无需开放入站端口。面板默认内嵌一个节点，一台服务器即可使用。
-- **节点之间自动组网**：节点之间通过 WireGuard 加密互联，同一项目的容器不论在哪台服务器上，都能按名字互相访问。
-- **对外访问**：内置 Caddy，绑定域名后自动申请 HTTPS 证书，也可以直接开放 TCP / UDP 端口。
-- **数据保护**：基于 kopia 按容器定时快照，可同步到另一个节点作为异地副本；节点故障时，可由事先指定的节点自动接替。
-- **单个程序**：用 Go 编写，面板和节点是同一个程序，数据存在内置的 SQLite 中，除 Docker 外不依赖其他服务。
+- **基于 Docker Compose**：每个应用都是一份标准的 compose 文件，加上环境变量和密钥；用镜像表单创建的单个容器也自动生成 compose 文件。部署、版本和回滚都以 compose 文件为单位，Nagi 不改写已有的 compose 文件。
+- **一个面板，多个节点**：面板是网页控制台，保存项目的配置；节点是运行容器的服务器，主动连接面板，不需要开放入站端口。面板默认内嵌一个节点，一台服务器即可开始使用。
+- **节点网络**：节点之间通过 WireGuard 加密连接。同一项目的容器无论在哪台服务器上，都可以按名称互相访问。
+- **对外访问**：内置 Caddy，绑定域名后自动申请 HTTPS 证书，也可以直接开放 TCP 和 UDP 端口。
+- **数据保护**：基于 kopia 按容器定时快照，可以同步到另一个节点作为异地副本。节点故障时，容器自动顶替到事先指定的顶替节点。
+- **单个程序**：面板和节点是同一个用 Go 编写的程序，数据保存在内置的 SQLite 中，除 Docker 外不依赖其他服务。
 
 ### 核心概念
 
@@ -46,21 +46,21 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
   <img src="docs/assets/screenshots/project.png" alt="项目页：容器列表和监控">
 </picture>
 
-**容器**：每个容器单独一页，查看状态、资源用量、版本和最近事件。
+**容器**：每个容器有单独的页面，显示状态、资源用量、版本和最近事件。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/container.dark.png">
   <img src="docs/assets/screenshots/container.png" alt="容器页：镜像、节点、版本和资源用量">
 </picture>
 
-**节点**：每台服务器的 CPU、内存和磁盘用量。
+**节点**：显示每台服务器的 CPU、内存和磁盘用量。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/nodes.dark.png">
   <img src="docs/assets/screenshots/nodes.png" alt="节点页：各节点的资源用量">
 </picture>
 
-**节点网络**：节点之间的连接方式和延迟，直连还是经面板中转一目了然。
+**节点网络**：显示节点之间的连接方式和延迟，包括直连和经面板中转的连接。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/network.dark.png">
@@ -83,9 +83,9 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
 
 此外还支持：
 
-- 快照：按容器定时备份与恢复，可指定备份节点作为异地副本；容器可在节点间迁移，数据不丢失；节点彻底损坏时，可将容器重新部署到其他节点
+- 快照：按容器定时备份与恢复，可以指定备份节点作为异地副本；容器可以在节点之间迁移，数据随容器迁移；节点无法恢复时，可以将容器重新部署到其他节点
 - 主备面板，以及在面板之间移交节点
-- 节点终端与文件：无需 SSH，仅管理员可用，操作前验证身份，全程记录；可在节点上关闭
+- 节点终端与文件：不需要 SSH，仅管理员可用，操作前验证身份并记录在活动中；可以在节点上关闭
 
 ### 基础功能
 
@@ -100,8 +100,8 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
 - 日志、终端、监控与告警（webhook、Telegram），面板离线时告警照常发送
 - 环境变量（项目、容器组、容器三层）与密钥、私有镜像仓库认证、健康检查、资源限制
 - 镜像更新提醒、国内节点镜像加速
-- 项目之间默认隔离，可按需连接两个项目
-- 面板安全：可选两步验证、登录限速与安全入口；可在面板上一键更新面板和升级节点
+- 项目之间默认隔离，需要时可以连接两个项目
+- 面板安全：两步验证、登录限速与安全入口；在面板上一键更新面板和升级节点
 
 ### 暂不支持
 
@@ -109,15 +109,15 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
 
 ## 快速开始
 
-在 Linux 服务器上以 root 执行，安装面板（内嵌一个节点，单机即可使用）：
+在 Linux 服务器上以 root 身份执行以下命令，安装面板。面板内嵌一个节点，一台服务器即可开始使用。
 
 ```bash
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-完成后在浏览器中打开终端输出的初始化链接，设置管理员账号。
+安装完成后，在浏览器中打开终端输出的初始化链接，设置管理员账号。
 
-更多操作见 [使用教程](docs/guide/README.md)：
+详细步骤见 [使用教程](docs/guide/README.md)：
 
 - [安装面板](docs/guide/install.md)
 - [添加节点](docs/guide/add-node.md)
@@ -128,16 +128,16 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ## 系统要求
 
 - Linux（amd64 / arm64），建议使用 systemd
-- Docker 与 compose 插件 2.24 及以上版本（安装脚本会自动安装）
-- 需要放行的端口：
+- Docker 与 compose 插件 2.24 或更高版本（安装脚本自动安装）
+- 以下端口需要放行：
 
 | 端口 | 协议 | 用途 |
 | --- | --- | --- |
-| 面板端口 | TCP、UDP | 网页控制台与节点连接，需能被浏览器和所有节点访问；UDP 用于 WireGuard 中转 |
+| 面板端口 | TCP、UDP | 网页控制台与节点连接，须能被浏览器和所有节点访问；UDP 用于 WireGuard 中转 |
 | 80、443 | TCP | 项目域名访问与证书申请，仅在通过域名对外提供服务的节点上需要 |
 | 节点的 WireGuard 端口 | UDP | 节点之间直连，首次启动时随机选择；未放行时自动经面板中转 |
 
-此外，在界面上为容器开放的 TCP / UDP 端口也需要在对应节点上放行。
+在面板上为容器开放的 TCP 和 UDP 端口，也需要在对应节点上放行。
 
 ## 参与开发
 
@@ -145,7 +145,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ## 安全
 
-请勿通过公开的 issue 报告安全问题，报告方式见 [SECURITY.md](SECURITY.md)。
+不要通过公开的 issue 报告安全问题。报告方式见 [SECURITY.md](SECURITY.md)。
 
 ## 致谢
 
