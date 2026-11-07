@@ -60,6 +60,13 @@ Nagi 是一个开源的自托管容器部署平台：在一个网页面板上，
   <img src="docs/assets/screenshots/nodes.png" alt="节点页：各节点的资源用量">
 </picture>
 
+**节点网络**：节点之间的连接方式和延迟，直连还是经面板中转一目了然。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/network.dark.png">
+  <img src="docs/assets/screenshots/network.png" alt="节点网络：节点之间的连接和延迟">
+</picture>
+
 ## 特性
 
 ### 多节点与高可用

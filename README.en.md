@@ -62,6 +62,13 @@ The panel UI is available in English and Chinese. The [design docs](docs/README.
   <img src="docs/assets/screenshots/nodes.en.png" alt="Nodes page: resource usage of each node">
 </picture>
 
+**Node network**: how nodes connect to each other and the latency between them, direct or relayed through the panel.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/network.en.dark.png">
+  <img src="docs/assets/screenshots/network.en.png" alt="Node network: connections and latency between nodes">
+</picture>
+
 ## Features
 
 ### Multi-node and high availability
