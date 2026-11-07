@@ -927,6 +927,8 @@ message CheckPanelUpdateResponse {
   string release_url = 4;
   // 本面板不能一键更新的原因（例如本地编译的版本），能更新时为空。
   string unsupported = 5;
+  // 上次向 GitHub 查询最新版本的时间（结果缓存 1 小时）。
+  google.protobuf.Timestamp checked_at = 6;
 }
 
 message GetPanelReleaseNotesRequest {}

@@ -2,8 +2,6 @@ import type zh from "../zh/about";
 
 export default {
   tagline: "A self-hosted panel for deploying and managing containers across nodes.",
-  upToDate: "Up to date",
-  available: (version: string) => `${version} available`,
   links: {
     title: "Project",
     source: "Source code",

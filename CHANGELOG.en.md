@@ -1,8 +1,8 @@
 # Changelog
 
-Each version's notes are also shown in the panel's update dialog. For version numbering rules, see the [development guide](docs/development.md#发布) (in Chinese).
+Each version's notes are also shown on the panel's "About" page. For version numbering rules, see the [development guide](docs/development.md#发布) (in Chinese).
 
-To upgrade: from v0.6.0, update the panel with one click in "Settings → Updates"; for earlier versions, run the install script again on the panel server. Then upgrade each node with one click on the "Nodes" page.
+To upgrade: from v0.6.0, update the panel with one click in its settings; for earlier versions, run the install script again on the panel server. Then upgrade each node with one click on the "Nodes" page.
 
 ```bash
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh

@@ -1,8 +1,8 @@
 # 更新日志
 
-每个版本的说明同时作为 GitHub Release 的正文（见 `scripts/release-notes.sh`），也显示在面板的更新弹窗中。版本号规则见 [开发规划](docs/development.md#发布)。
+每个版本的说明同时作为 GitHub Release 的正文（见 `scripts/release-notes.sh`），也显示在面板的「关于」中。版本号规则见 [开发规划](docs/development.md#发布)。
 
-升级方式：v0.6.0 起在面板的「设置 → 版本更新」一键更新面板，更早的版本在面板服务器上重新执行安装脚本；然后在面板的「节点」页一键升级各节点。
+升级方式：v0.6.0 起在面板的设置中一键更新面板，更早的版本在面板服务器上重新执行安装脚本；然后在面板的「节点」页一键升级各节点。
 
 ```bash
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh

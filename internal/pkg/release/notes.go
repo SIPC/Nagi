@@ -8,7 +8,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
-// 更新日志（CHANGELOG.md、CHANGELOG.en.md）随发布文件一起上传，面板的更新弹窗从这里取（见 docs/panel.md#更新面板）。
+// 更新日志（CHANGELOG.md、CHANGELOG.en.md）随发布文件一起上传，面板的「关于」从这里取（见 docs/panel.md#更新面板）。
 
 // ChangelogName 返回界面语言对应的更新日志文件名。
 func ChangelogName(lang i18n.Lang) string {

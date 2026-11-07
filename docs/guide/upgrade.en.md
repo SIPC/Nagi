@@ -4,13 +4,13 @@ You can update the panel and upgrade nodes with one click in the panel, or run t
 
 ## Update the panel
 
-1. In the panel, click **Settings → Updates**.
+1. In the panel, click **Settings → About**.
 
 2. If a new version is available, click **Update**, then click **Update panel** in the confirmation.
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="../assets/guide/update.en.dark.png">
-     <img src="../assets/guide/update.en.png" alt="The Updates page showing an available version">
+     <img src="../assets/guide/update.en.png" alt="The About page showing an available version">
    </picture>
 
 The panel downloads and verifies the new version, then restarts in place. The page is interrupted for a few seconds and reloads automatically. Project containers keep running.

@@ -6,7 +6,7 @@ import { PanelMeshCard } from "@/pages/mesh";
 import { InviteCard } from "@/pages/invite";
 import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
-import { UpdateCard, UpdateDot } from "@/pages/update";
+import { UpdateDot } from "@/pages/update";
 import { AboutCard } from "@/pages/about";
 import { Link, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,6 @@ export const settingsTabs = [
   { value: "access", label: t.settings.tabs.access.label },
   { value: "profile", label: t.settings.tabs.profile.label },
   { value: "members", label: t.settings.tabs.members.label },
-  { value: "update", label: t.settings.tabs.update.label },
   { value: "standby", label: t.settings.tabs.standby.label },
   { value: "invite", label: t.settings.tabs.invite.label },
   { value: "mesh", label: t.settings.tabs.mesh.label },
@@ -41,7 +40,7 @@ const aboutGroup = { label: "", tabs: ["about"] as SettingsTab[] };
 
 const menuGroups = [
   accountGroup,
-  { label: t.settings.groups.panel, tabs: ["access", "members", "alerts", "update", "standby"] as SettingsTab[] },
+  { label: t.settings.groups.panel, tabs: ["access", "members", "alerts", "standby"] as SettingsTab[] },
   { label: t.settings.groups.nodes, tabs: ["invite", "mesh"] as SettingsTab[] },
   aboutGroup,
 ];
@@ -99,7 +98,7 @@ export function SettingsPage() {
                   )}
                 >
                   {label(value)}
-                  {value === "update" && <UpdateDot />}
+                  {value === "about" && <UpdateDot />}
                 </Link>
               ))}
             </Fragment>
@@ -114,7 +113,6 @@ export function SettingsPage() {
           {cur === "standby" && <StandbyCard />}
           {cur === "invite" && <InviteCard />}
           {cur === "mesh" && <PanelMeshCard />}
-          {cur === "update" && <UpdateCard />}
           {cur === "about" && <AboutCard />}
         </Slide>
       </div>

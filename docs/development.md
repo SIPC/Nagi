@@ -114,7 +114,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 面板和节点可能暂时不是同一版本（面板先升级，节点随后在界面上升级），proto 只新增字段，不删除、不改编号。
 - 节点上缓存的配置、状态文件要能被新版本读取。
 
-发版前先在 `CHANGELOG.md` 和 `CHANGELOG.en.md` 顶部写好这个版本的说明（`## v<版本>`，写法见下），提交后再打标签：Release 的正文由 `scripts/release-notes.sh` 从 `CHANGELOG.md` 取，两份都作为发布文件上传，面板的更新弹窗按界面语言显示（见 [panel.md](panel.md#更新面板)），哪一份没写都会发布失败。之后修改 `CHANGELOG.md`，`release-notes.yml` 会把改动同步到已发布的 Release。
+发版前先在 `CHANGELOG.md` 和 `CHANGELOG.en.md` 顶部写好这个版本的说明（`## v<版本>`，写法见下），提交后再打标签：Release 的正文由 `scripts/release-notes.sh` 从 `CHANGELOG.md` 取，两份都作为发布文件上传，面板的「关于」按界面语言显示（见 [panel.md](panel.md#更新面板)），哪一份没写都会发布失败。之后修改 `CHANGELOG.md`，`release-notes.yml` 会把改动同步到已发布的 Release。
 
 更新日志参考 Apple 的更新说明，面向用户，简短正式：
 
@@ -128,7 +128,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 
 `scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。
 
-节点安装脚本（面板生成的 `/install.sh`）和面板上节点的一键升级也从 GitHub Release 下载同样的文件（和面板同一版本，地址见 `internal/pkg/release`），面板不提供二进制。本地编译的面板（`dev`）加入的节点会装上最新发布的版本；要在测试环境里用本地编译的 nagi，把 `nagi-linux-<架构>` 和对应的 `SHA256SUMS`（要看更新弹窗里的日志，再放上两份更新日志）放到一个 HTTP 目录下，安装命令加 `--download-url <该地址>`。
+节点安装脚本（面板生成的 `/install.sh`）和面板上节点的一键升级也从 GitHub Release 下载同样的文件（和面板同一版本，地址见 `internal/pkg/release`），面板不提供二进制。本地编译的面板（`dev`）加入的节点会装上最新发布的版本；要在测试环境里用本地编译的 nagi，把 `nagi-linux-<架构>` 和对应的 `SHA256SUMS`（要看「关于」里的更新日志，再放上两份更新日志）放到一个 HTTP 目录下，安装命令加 `--download-url <该地址>`。
 
 面板安装脚本的其他要点：
 

@@ -12,6 +12,5 @@ export default {
     invite: { label: "接收节点" },
     mesh: { label: "节点网络" },
     about: { label: "关于" },
-    update: { label: "版本更新" },
   },
 };

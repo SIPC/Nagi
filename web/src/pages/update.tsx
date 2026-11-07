@@ -1,15 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, Button, Dialog, DialogActions, HelpTip, Notice, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Skeleton, Spinner } from "@/components/ui";
+import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, Waves } from "@/components/ui";
+import { confirmAction } from "@/components/confirm";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Node, UpdateState } from "@/gen/nagi/v1/api_pb";
 
-// 「版本更新」区块和右下角的提示（见 docs/panel.md#更新面板）：检查有没有新版本，一键更新本面板。
+// 「关于」顶部的版本信息和右下角的提示（见 docs/panel.md#更新面板）：检查有没有新版本，一键更新本面板。
 // 进度记在面板上（GetUpdateStatus），刷新页面、换浏览器以后还在。
 
 // 与 internal/pkg/release.IsVersion 一致。
@@ -135,7 +137,7 @@ function useTip(id: string, tip: Tip | null) {
         onClick: () => {
           dismissTip(shown.key);
           if (shown.to === "nodes") navigate({ to: "/nodes" });
-          else navigate({ to: "/settings", search: { tab: "update" } });
+          else navigate({ to: "/settings", search: { tab: "about" } });
         },
       },
     });
@@ -221,19 +223,29 @@ function inline(text: string) {
   return out;
 }
 
+// NotesList：更新日志的列表。圆点贴齐左边、和第一行文字居中，文字跟在圆点后面，和列表上下的文字左对齐。
+function NotesList({ items }: { items: string[] }) {
+  return (
+    <ul className="grid gap-1">
+      {items.map((it, i) => (
+        <li key={i} className="flex gap-2.5">
+          <span aria-hidden className="flex h-[1lh] shrink-0 items-center">
+            <span className="size-1 rounded-full bg-muted-foreground/70" />
+          </span>
+          <span className="min-w-0">{inline(it)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // NotesBody：一个版本的更新日志。只有「### 分组」和列表两种写法（见 docs/development.md#发布），其他行当作段落。
 function NotesBody({ body }: { body: string }) {
   const blocks: React.ReactNode[] = [];
   let items: string[] = [];
   const flushList = () => {
     if (items.length === 0) return;
-    blocks.push(
-      <ul key={blocks.length} className="grid list-disc gap-1 pl-5 marker:text-muted-foreground">
-        {items.map((it, i) => (
-          <li key={i}>{inline(it)}</li>
-        ))}
-      </ul>,
-    );
+    blocks.push(<NotesList key={blocks.length} items={items} />);
     items = [];
   };
   for (const raw of body.split("\n")) {
@@ -256,91 +268,60 @@ function NotesBody({ body }: { body: string }) {
   return <div className="grid gap-2">{blocks}</div>;
 }
 
-// UpdateDialog：确认更新面板，列出本面板到新版本之间各版本的更新日志。
-function UpdateDialog({ open, version, releaseUrl, onClose, onConfirm }: { open: boolean; version: string; releaseUrl: string; onClose: () => void; onConfirm: () => void }) {
-  const notes = useQuery({
+// useReleaseNotes：本面板到最新版本之间各版本的更新日志。
+function useReleaseNotes(version: string, enabled: boolean) {
+  return useQuery({
     queryKey: ["panel-release-notes", version],
     queryFn: () => settingsClient.getPanelReleaseNotes({}),
-    enabled: open && !!version,
+    enabled: enabled && !!version,
     retry: false,
     staleTime: Infinity,
   });
-  const releases = notes.data?.releases ?? [];
-  // 日志框不显示滚动条；下面还有内容时底部渐隐，滚到底后去掉。
-  const box = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState(false);
-  const measure = () => {
-    const el = box.current;
-    setMore(!!el && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
-  };
-  useLayoutEffect(measure, [notes.data, open]);
-  return (
-    <Dialog open={open} onClose={onClose} title={t.update.dialogTitle(version)} description={t.update.dialogDescription} className="max-w-[560px]">
-      <div className="overflow-hidden rounded-lg border">
-        <div
-          ref={box}
-          onScroll={measure}
-          className={cn(
-            "max-h-[min(50vh,26rem)] overflow-y-auto px-4 py-3 text-sm leading-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-            more && "[mask-image:linear-gradient(to_bottom,#000_calc(100%-3rem),transparent)]",
-          )}
-        >
-          {notes.isPending ? (
-            <div role="status" aria-label={t.common.feedback.loading} className="grid gap-3 py-1">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-4/5" />
-            </div>
-          ) : releases.length === 0 ? (
-            <p className="text-muted-foreground">
-              {t.update.notesUnavailable}{" "}
-              <a className="text-foreground underline-offset-4 hover:underline" href={releaseUrl} target="_blank" rel="noreferrer">
-                {t.update.notesOnGitHub}
-              </a>
-            </p>
-          ) : (
-            <div className="grid gap-5">
-              {releases.map((r) => (
-                <section key={r.version} className="grid gap-1">
-                  {/* 版本号用等宽字体。 */}
-                  <h3 className="font-mono font-medium">{r.version}</h3>
-                  <NotesBody body={r.body} />
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <DialogActions>
-        <Button readOnlyOk size="sm" variant="outline" onClick={onClose}>
-          {t.common.actions.cancel}
-        </Button>
-        <Button readOnlyOk size="sm" onClick={onConfirm}>
-          {t.update.updatePanel}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
 }
 
-export function UpdateCard() {
+// notesPreview：最新版本日志的第一组，最多三条，放在「关于」的版本信息下面。
+function notesPreview(body: string) {
+  let group = "";
+  const items: string[] = [];
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("#")) {
+      if (group || items.length) break;
+      group = line.replace(/^#+\s*/, "");
+    } else if (line.startsWith("- ")) {
+      items.push(line.slice(2));
+      if (items.length === 3) break;
+    }
+  }
+  return { group, items };
+}
+
+// PanelVersion：「关于」顶部的品牌和版本（见 docs/panel.md#更新面板）。参考 macOS「软件更新」：名称、版本和状态在一起，
+// 右边是这时唯一的操作；有新版本时下面列出最新版本的几条更新说明，「更多信息」就地展开全部。只有管理员能检查和更新，其他角色只看版本和状态。
+export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const q = usePanelUpdate();
-  const status = useUpdateStatus();
+  const status = useUpdateStatus(isAdmin);
   const standbys = useStandbys().data;
   const [checking, setChecking] = useState(false);
-  const [checked, setChecked] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  const [confirming, setConfirming] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const notesRef = useRef<HTMLDivElement>(null);
+  // 收起时内容变短：在底部点收起，日志的开头已经滚出屏幕时滚回开头，不然收起后的内容和按钮都在视野外。
+  const toggleNotes = () => {
+    setExpanded(!expanded);
+    const el = notesRef.current;
+    if (expanded && el && el.getBoundingClientRect().top < 0) {
+      el.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+  };
 
   const check = async () => {
     setChecking(true);
-    setChecked(false);
     setError("");
     try {
       queryClient.setQueryData(["panel-update"], await settingsClient.checkPanelUpdate({ force: true }));
-      setChecked(true);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -348,8 +329,8 @@ export function UpdateCard() {
     }
   };
 
-  const update = async () => {
-    setConfirming(false);
+  const update = async (version: string) => {
+    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel }))) return;
     setStarting(true);
     setError("");
     try {
@@ -363,84 +344,132 @@ export function UpdateCard() {
   };
 
   const d = q.data;
-  const panel = status.data?.panel;
+  const panel = isAdmin ? status.data?.panel : undefined;
   const active = updateActive(panel);
   const failed = panel?.phase === "failed";
+  const canUpdate = isAdmin && !!d?.available && !active;
+  const notes = useReleaseNotes(d?.latest ?? "", canUpdate);
+  const releases = notes.data?.releases ?? [];
+  const latest = releases[0];
+  const preview = latest && notesPreview(latest.body);
   // 主面板有备用面板时提醒它们要单独更新；备用面板上提醒只更新自己。
   const scopeHint = standbys?.isStandby
     ? { text: t.update.standbyHint, help: t.update.standbyHelp }
     : standbys?.standbys.length
       ? { text: t.update.primaryHint, help: t.update.primaryHelp }
       : null;
-  const updateButton = (label: string) =>
-    d?.available && (
-      <Button readOnlyOk onClick={() => setConfirming(true)} disabled={starting}>
+
+  // 版本号后面的状态：同一时间只有一种，按进行中、失败、可更新、已是最新的顺序。
+  let tone: keyof typeof dotColor | null = null;
+  let state = "";
+  if (panel && active) {
+    state = panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target);
+  } else if (panel && failed) {
+    [tone, state] = ["danger", t.update.tips.panelFailed(panel.target)];
+  } else if (d?.available) {
+    [tone, state] = ["info", t.update.availableTitle(d.latest)];
+  } else if (d && !d.unsupported) {
+    [tone, state] = ["success", t.update.upToDate];
+  }
+  const checkedAt = d?.checkedAt && timestampDate(d.checkedAt);
+  const showChecked = !!checkedAt && !!d && !d.available && !d.unsupported && !active && !failed;
+
+  // 右边的按钮：可更新时是更新（失败后是重试），其余是检查更新。更新进行中、不能一键更新时没有按钮。
+  let action: React.ReactNode = null;
+  if (canUpdate) {
+    action = (
+      <Button readOnlyOk onClick={() => update(d.latest)} disabled={starting}>
         {starting && <Spinner />}
-        {label}
+        {failed ? t.update.retry : t.update.action}
       </Button>
     );
-  const details = d?.available && (
-    <>
-      {scopeHint && (
-        <>
-          {scopeHint.text} <HelpTip>{scopeHint.help}</HelpTip>{" "}
-        </>
-      )}
-      <a className="text-foreground underline-offset-4 hover:underline" href={d.releaseUrl} target="_blank" rel="noreferrer">
-        {t.update.notes}
-      </a>
-    </>
+  } else if (isAdmin && !active && !d?.unsupported && !q.isPending) {
+    action = (
+      <Button readOnlyOk variant="outline" onClick={check} disabled={checking}>
+        {checking && <Spinner />}
+        {t.update.check}
+      </Button>
+    );
+  }
+
+  // 版本信息下面：进行中的进度、失败原因、可更新时的更新说明，和名称左对齐。
+  let below: React.ReactNode = null;
+  if (panel && active) {
+    below = <p className="text-pretty text-muted-foreground">{panel.phase === "restarting" ? t.update.restartingText : t.update.installingText}</p>;
+  } else if (panel && failed && panel.error) {
+    below = <p className="text-pretty text-muted-foreground">{panel.error}</p>;
+  }
+  // 收起时是最新版本的前三条；展开是本面板到最新版本之间的全部，按版本分段，新的在前。高度过渡，下面的内容跟着移动。
+  const notesBlock = canUpdate && latest && preview && preview.items.length > 0 && (
+    <div ref={notesRef} className="grid scroll-mt-20 gap-2 text-muted-foreground">
+      <AutoHeight>
+        {expanded ? (
+          <div className="grid gap-5">
+            {releases.map((r) => (
+              <section key={r.version} className="grid gap-1">
+                {/* 版本号用等宽字体。 */}
+                <h3 className="font-mono text-xs leading-5 text-foreground">{r.version}</h3>
+                <NotesBody body={r.body} />
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-1">
+            <p className="text-xs leading-5">
+              <span className="font-mono text-foreground">{latest.version}</span>
+              {preview.group && ` · ${preview.group}`}
+            </p>
+            <NotesList items={preview.items} />
+          </div>
+        )}
+      </AutoHeight>
+      <button type="button" aria-expanded={expanded} className="justify-self-start rounded-sm text-foreground outline-none hover:underline focus-ring" onClick={toggleNotes}>
+        {expanded ? t.update.lessInfo : t.update.moreInfo}
+      </button>
+    </div>
   );
 
+  // 间距按 HIG 的 8 点网格：logo 到名称 12，名称到介绍 4，介绍到版本 12，版本到下面的说明 16。
   return (
-    <Section title={t.settings.tabs.update.label} help={t.update.help}>
-      {error && <Alert>{error}</Alert>}
-      {status.error && !status.data && <QueryError error={errorMessage(status.error)} onRetry={() => status.refetch()} />}
-      {/* 同一处只放一条提示，按失败、进行中、可更新、已是最新的顺序取第一条。 */}
-      {panel && failed ? (
-        <Notice tone="danger" title={t.update.tips.panelFailed(panel.target)} actions={updateButton(t.update.retry)}>
-          {panel.error}
-          {panel.error && details && " "}
-          {details}
-        </Notice>
-      ) : panel && active ? (
-        <Notice tone="info" title={panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target)}>
-          {panel.phase === "restarting" ? t.update.restartingText : t.update.installingText}
-        </Notice>
-      ) : d?.available ? (
-        <Notice tone="info" title={t.update.availableTitle(d.latest)} actions={updateButton(t.update.action)}>
-          {details}
-        </Notice>
-      ) : (
-        checked && d && <Notice title={t.update.upToDate} />
-      )}
-      {q.isPending ? (
-        <RowsSkeleton count={2} />
-      ) : !d ? (
-        <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
-      ) : (
-        <SettingRows>
-          {/* 版本号用等宽字体。 */}
-          <SettingRow
-            label={t.update.current}
-            description={
-              <>
-                <span className="font-mono">{d.current || "—"}</span>
-                {d.unsupported && ` · ${d.unsupported}`}
-              </>
-            }
-          />
-          {!d.unsupported && (
-            <SettingRow label={t.update.latest} description={<span className="font-mono">{d.latest || "—"}</span>}>
-              <Button readOnlyOk variant="outline" onClick={check} disabled={checking || starting || active}>
-                {checking && <Spinner />}
-                {t.update.check}
-              </Button>
-            </SettingRow>
+    <div className="grid">
+      <Waves className="h-5 w-9 text-wave" />
+      {/* 品牌是第一个区块：标题和区块标题同级（16 / 600），不和页面标题抢层级。 */}
+      <h2 className="mt-3 text-base font-semibold">Nagi</h2>
+      <p className="mt-1 text-pretty text-muted-foreground">{t.about.tagline}</p>
+      {/* 按钮和版本同一行，上下居中。 */}
+      <div className="mt-3 flex min-h-9 items-center gap-4">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+          {q.isPending ? (
+            <Skeleton className="h-3 w-40" />
+          ) : (
+            <>
+              {/* 状态点放在版本号前面，进行中换成转圈；版本号用等宽字体。 */}
+              <span className="inline-flex items-center gap-2">
+                {panel && active ? <Spinner /> : tone && <span className={cn("size-1.5 rounded-full", dotColor[tone])} />}
+                <span className="font-mono text-foreground">{d?.current || status.data?.version || "—"}</span>
+              </span>
+              {d?.unsupported && <span>{d.unsupported}</span>}
+              {!d && q.error && <span>{errorMessage(q.error)}</span>}
+              {state && <span>{state}</span>}
+              {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
+              {canUpdate && scopeHint && (
+                <span className="inline-flex items-center gap-1">
+                  {scopeHint.text}
+                  <HelpTip>{scopeHint.help}</HelpTip>
+                </span>
+              )}
+            </>
           )}
-        </SettingRows>
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {(error || below || notesBlock) && (
+        <div className="mt-4 grid gap-3">
+          {error && <Alert>{error}</Alert>}
+          {below}
+          {notesBlock}
+        </div>
       )}
-      {d?.available && <UpdateDialog open={confirming} version={d.latest} releaseUrl={d.releaseUrl} onClose={() => setConfirming(false)} onConfirm={update} />}
-    </Section>
+    </div>
   );
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // 一键更新面板（见 docs/panel.md#更新面板）：和节点的一键升级一样，从 GitHub Release（安装时指定了镜像就从镜像）
@@ -61,17 +62,23 @@ func (u *panelUpdates) changelog(ctx context.Context, base, version string, lang
 
 // get 返回最新发布的版本号，force 时不用缓存。
 func (u *panelUpdates) get(ctx context.Context, force bool) (string, error) {
+	v, _, err := u.getChecked(ctx, force)
+	return v, err
+}
+
+// getChecked 和 get 一样，另外返回查询的时间。
+func (u *panelUpdates) getChecked(ctx context.Context, force bool) (string, time.Time, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if !force && u.latest != "" && time.Since(u.checked) < updateCheckTTL {
-		return u.latest, nil
+		return u.latest, u.checked, nil
 	}
 	v, err := release.Latest(ctx)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	u.latest, u.checked = v, time.Now()
-	return v, nil
+	return v, u.checked, nil
 }
 
 // updateUnsupported 返回本面板不能一键更新的原因，能更新时返回空。发布的文件只有 Linux 版，本地编译的版本没有对应的发布文件。
@@ -91,11 +98,11 @@ func (s *settingsService) CheckPanelUpdate(ctx context.Context, req *connect.Req
 		out.Unsupported = i18n.Localize(i18n.FromContext(ctx), err)
 		return connect.NewResponse(out), nil
 	}
-	latest, err := s.updates.get(ctx, req.Msg.GetForce())
+	latest, checked, err := s.updates.getChecked(ctx, req.Msg.GetForce())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
-	out.Latest, out.ReleaseUrl = latest, release.PageURL(latest)
+	out.Latest, out.ReleaseUrl, out.CheckedAt = latest, release.PageURL(latest), timestamppb.New(checked)
 	out.Available = release.Older(s.Panel.Version, latest)
 	return connect.NewResponse(out), nil
 }

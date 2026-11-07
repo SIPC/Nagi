@@ -1,8 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
-import { Link } from "@tanstack/react-router";
-import { List, Row, Section, Skeleton, Status, Waves } from "@/components/ui";
+import { List, Row, Section } from "@/components/ui";
 import { useRole } from "@/components/role";
-import { usePanelUpdate } from "@/pages/update";
+import { PanelVersion } from "@/pages/update";
 import { t } from "@/i18n";
 
 const a = t.about;
@@ -31,27 +30,14 @@ function External({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-// AboutCard：设置里的「关于」。所有角色都能看，只有管理员的版本状态能点进版本更新。
+// AboutCard：设置里的「关于」。所有角色都能看，只有管理员能检查和更新版本。
 export function AboutCard() {
   const { isAdmin } = useRole();
-  const update = usePanelUpdate();
-  const d = update.data;
-  const state = d?.available ? <Status tone="info">{a.available(d.latest)}</Status> : d && !d.unsupported ? <Status tone="success">{a.upToDate}</Status> : null;
 
   return (
     <div>
-      {/* 品牌是第一个区块：标题和区块标题同级（16 / 600），不和页面标题抢层级；下面的区块自带分隔线和上下 24。 */}
-      <div className="grid justify-items-start gap-4">
-        <Waves className="h-8 w-14 text-wave" />
-        <div className="grid gap-1">
-          <h2 className="text-base font-semibold">Nagi</h2>
-          <p className="text-pretty text-muted-foreground">{a.tagline}</p>
-        </div>
-        <div className="flex min-h-5 flex-wrap items-center gap-x-4 gap-y-1">
-          {update.isPending ? <Skeleton className="h-3 w-32" /> : <span className="font-mono text-[13px]">{d?.current || "—"}</span>}
-          {state && (isAdmin ? <Link to="/settings" search={{ tab: "update" }}>{state}</Link> : state)}
-        </div>
-      </div>
+      {/* 品牌和版本是第一个区块，下面的区块自带分隔线和上下 24。 */}
+      <PanelVersion isAdmin={isAdmin} />
       <Section title={a.links.title}>
         <List>
           <Row className="relative" title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />

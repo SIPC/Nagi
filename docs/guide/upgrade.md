@@ -4,13 +4,13 @@
 
 ## 更新面板
 
-1. 在面板中点击「设置 → 版本更新」。
+1. 在面板中点击「设置 → 关于」。
 
 2. 如果有新版本，点击「更新」，然后在确认框中点击「更新面板」。
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="../assets/guide/update.dark.png">
-     <img src="../assets/guide/update.png" alt="「版本更新」页面显示可更新的版本">
+     <img src="../assets/guide/update.png" alt="「关于」页面显示可更新的版本">
    </picture>
 
 面板下载并校验新版本后原地重启，页面中断几秒后自动刷新。项目容器照常运行。

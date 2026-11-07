@@ -13,6 +13,5 @@ export default {
     invite: { label: "Receive nodes" },
     mesh: { label: "Node network" },
     about: { label: "About" },
-    update: { label: "Updates" },
   },
 } satisfies typeof zh;

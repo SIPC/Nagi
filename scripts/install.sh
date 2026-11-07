@@ -374,4 +374,4 @@ say "  防火墙需放行面板端口 $PANEL_PORT 的 TCP 和 UDP（UDP 用于�
 [ -n "$NO_AGENT" ] || say "  项目通过域名对外访问时，还需放行 80 和 443 端口。"
 say "  查看日志：journalctl -u $SERVICE -f"
 say "  重置管理员密码：nagi reset password --data-dir $DATA_DIR（更多命令：nagi --help）"
-say "  升级：在面板的「设置 → 版本更新」一键更新，或再次执行本脚本；节点在面板的节点页一键升级。"
+say "  升级：在面板的「设置 → 关于」一键更新，或再次执行本脚本；节点在面板的节点页一键升级。"

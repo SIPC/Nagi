@@ -1,8 +1,6 @@
 // 设置页「关于」（pages/about.tsx）。
 export default {
   tagline: "跨节点部署和管理容器的自托管面板。",
-  upToDate: "已是最新版本",
-  available: (version: string) => `可更新到 ${version}`,
   links: {
     title: "项目",
     source: "源代码",
