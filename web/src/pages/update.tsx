@@ -436,8 +436,8 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
       {/* 品牌是第一个区块：标题和区块标题同级（16 / 600），不和页面标题抢层级。 */}
       <h2 className="mt-3 text-base font-semibold">Nagi</h2>
       <p className="mt-1 text-pretty text-muted-foreground">{t.about.tagline}</p>
-      {/* 按钮和版本同一行，上下居中。 */}
-      <div className="mt-3 flex min-h-9 items-center gap-4">
+      {/* 按钮和版本同一行，上下居中；按钮（32）上下各收进 6，不撑高这一行（20），文字间距才是 12 和 16。 */}
+      <div className="mt-3 flex min-h-5 items-center gap-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
           {q.isPending ? (
             <Skeleton className="h-3 w-40" />
@@ -461,7 +461,7 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
             </>
           )}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="-my-1.5 shrink-0">{action}</div>}
       </div>
       {(error || below || notesBlock) && (
         <div className="mt-4 grid gap-3">
