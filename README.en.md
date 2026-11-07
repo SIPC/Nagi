@@ -16,56 +16,56 @@
 
 # Nagi
 
-Nagi is an open-source, self-hosted container deployment platform. You can manage Docker containers across many Linux servers from one web panel. Nagi is built on Docker and Docker Compose and supports multiple nodes and high availability.
+Nagi is an open-source, self-hosted container deployment platform. Manage Docker containers across many Linux servers from one web panel, with multiple nodes and high availability.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/overview.en.dark.png">
   <img src="docs/assets/screenshots/overview.en.png" alt="Overview: node status and live traffic">
 </picture>
 
-The panel UI is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
+The panel is available in English and Chinese. The [design docs](docs/README.md) are in Chinese.
 
 ## How it works
 
-- **Built on Docker Compose**: every app is a standard compose file plus environment variables and secrets. A single container created from the image form also gets a generated compose file. Deployments, versions and rollbacks all work per compose file, and Nagi doesn't rewrite your compose files.
-- **One panel, many nodes**: the panel is the web console and holds project configuration. Nodes are the servers that run containers; they connect out to the panel, so they don't need inbound ports. The panel includes a built-in node by default, so you can start with a single server.
-- **Node network**: nodes connect to each other over encrypted WireGuard links. Containers in the same project reach each other by name, whichever server they run on.
-- **Public access**: Caddy is built in. When you bind a domain, Nagi requests HTTPS certificates automatically. You can also open TCP and UDP ports directly.
-- **Data protection**: per-container scheduled snapshots with kopia, which can be synced to another node as an off-site copy. When a node fails, its containers fail over automatically to a failover node you choose in advance.
-- **A single program**: the panel and nodes are the same program, written in Go. Data is stored in a built-in SQLite database, and Nagi needs nothing besides Docker.
+- **Built on Docker Compose**: every app is a standard compose file. Deployments, versions and rollbacks all work per compose file.
+- **One panel, many nodes**: nodes connect out to the panel, so they don't need inbound ports. The panel includes a built-in node, so one server is enough to start.
+- **Node network**: nodes connect to each other over encrypted WireGuard links, and containers in a project reach each other by name across nodes.
+- **Public access**: Caddy is built in. Bind a domain and HTTPS is set up automatically, or open TCP and UDP ports directly.
+- **Data protection**: scheduled per-container snapshots can be synced to another node. When a node fails, a failover node you choose takes over.
+- **A single program**: the panel and nodes are the same Go program. Data is stored in a built-in SQLite database, and Docker is the only dependency.
 
 ### Core concepts
 
 | Concept | Meaning |
 | --- | --- |
-| Node | A Linux server running the Nagi node program. Containers run on nodes |
-| Project | A group of containers that work together, such as a frontend, a backend and a database. Projects live on the panel, and their containers can be spread across nodes. Projects are isolated from each other by default |
-| Container | The unit deployed on its own within a project: a single container, or a container group defined by one compose file. Each is deployed, rolled back, snapshotted and migrated on its own |
+| Node | A Linux server that runs containers |
+| Project | A group of containers that work together and can run across nodes. Projects are isolated from each other by default |
+| Container | The unit you deploy: a single container, or a container group defined by one compose file. Each one is deployed, rolled back, snapshotted and moved on its own |
 
 ## Interface
 
-**Projects**: a group of containers that work together, spread across nodes, deployed and monitored in one place.
+**Projects**: deploy and monitor the containers in a project in one place.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/project.en.dark.png">
   <img src="docs/assets/screenshots/project.en.png" alt="Project page: containers and monitoring">
 </picture>
 
-**Containers**: every container has its own page with its status, resource usage, versions and recent events.
+**Containers**: see the status, resource usage, versions and recent events.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/container.en.dark.png">
   <img src="docs/assets/screenshots/container.en.png" alt="Container page: image, node, version and resource usage">
 </picture>
 
-**Nodes**: shows the CPU, memory and disk usage of every server.
+**Nodes**: see the CPU, memory and disk usage of every server.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/nodes.en.dark.png">
   <img src="docs/assets/screenshots/nodes.en.png" alt="Nodes page: resource usage of each node">
 </picture>
 
-**Node network**: shows how nodes connect to each other and the latency between them, including direct and relayed connections.
+**Node network**: see how nodes connect and the latency between them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/network.en.dark.png">
@@ -88,9 +88,11 @@ The panel UI is available in English and Chinese. The [design docs](docs/README.
 
 Also included:
 
-- Snapshots: scheduled per-container backup and restore, with an optional backup node as an off-site replica; move containers between nodes with their data; redeploy containers to another node if a node can't be recovered
+- Container snapshots and restore, with backups kept on another node
+- Moving containers between nodes along with their data
+- Redeploying containers to another node when a node can't be recovered
 - Primary and standby panels, and handing nodes over between panels
-- Node terminal and files: no SSH needed, administrators only, identity verified first, recorded in Activity, can be turned off on the node
+- Node terminal and files without SSH, for administrators only and recorded in Activity
 
 ### Basics
 
@@ -102,19 +104,16 @@ Also included:
 
 Also included:
 
-- Logs, terminal, monitoring and alerts (webhook, Telegram); alerts are still sent while the panel is offline
-- Environment variables at three levels (project, container group, container), secrets, private registry credentials, health checks and resource limits
+- Logs, terminal, monitoring and alerts, with alerts sent even while the panel is offline
+- Environment variables and secrets, private registries, health checks and resource limits
 - Image update notices and registry mirrors for nodes in mainland China
-- Projects are isolated by default and can be linked to each other when needed
-- Panel security: two-factor authentication, login rate limiting and a secure entry; one-click panel updates and node upgrades
-
-### Not supported yet
-
-Automatic scheduling, multiple replicas of one container, several panels managing the same node, restore drills, adopting existing projects, building images on nodes, and app templates. Cross-node traffic between containers is limited to TCP and unicast UDP.
+- Links between projects
+- Two-factor authentication, login rate limiting and a secure entry
+- Panel updates and node upgrades from the panel
 
 ## Quick start
 
-Run this command as root on a Linux server to install the panel. The panel includes a built-in node, so you can start with a single server.
+Run this command as root on a Linux server to install the panel:
 
 ```bash
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
@@ -133,20 +132,20 @@ For step-by-step instructions, see the [guides](docs/guide/README.en.md):
 ## Requirements
 
 - Linux (amd64 / arm64); systemd recommended
-- Docker with the compose plugin 2.24 or later (the install script installs it)
-- Open these ports:
+- Docker with the compose plugin 2.24 or later, which the install script installs
+- These open ports:
 
 | Port | Protocol | Purpose |
 | --- | --- | --- |
-| Panel port | TCP, UDP | Web console and node connections; must be reachable from browsers and all nodes. UDP is used for WireGuard relaying |
-| 80, 443 | TCP | Project domains and certificate issuance; only on nodes that serve projects by domain |
+| Panel port | TCP, UDP | Web console and node connections; must be reachable from browsers and all nodes. UDP carries relayed node traffic |
+| 80, 443 | TCP | Project domains and certificates; only on nodes that serve projects by domain |
 | Node WireGuard port | UDP | Direct node-to-node traffic, picked at random on first start; relayed through the panel if blocked |
 
-Ports you open for containers in the panel must also be allowed on the corresponding nodes.
+Ports you open for containers must also be allowed on their nodes.
 
 ## Development
 
-See the [design docs](docs/README.md) for each module and the [development guide](docs/development.md#本地开发) for building from source and local development (both in Chinese).
+See the [design docs](docs/README.md) for each module and the [development guide](docs/development.md#本地开发) for building and local development (both in Chinese).
 
 ## Security
 
