@@ -82,11 +82,11 @@ export function ElevateHost() {
             <Input id="elevate-value" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus required />
           </Field>
         ) : (
-          <Field label={m.password} htmlFor="elevate-value" help={
+          <Field label={m.password} htmlFor="elevate-value" hint={
               req?.suggestTotp ? (
                 <>
                   {m.enableTotp}{" "}
-                  <Link to="/settings" search={{ tab: "security" }} className="underline underline-offset-4" onClick={() => finish(false)}>
+                  <Link to="/settings" search={{ tab: "security" }} className="text-foreground underline underline-offset-4" onClick={() => finish(false)}>
                     {m.securityLink}
                   </Link>
                 </>

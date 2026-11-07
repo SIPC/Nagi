@@ -384,8 +384,10 @@ function CardsSkeleton() {
 
 function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
   const u = n.online && !n.pending ? n.usage : undefined;
+  // 整张卡片可点：链接铺满卡片，「批准」按钮叠在链接上面，不放进链接里（链接里不能嵌按钮）。
   return (
-    <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} className={cn(cardClass, "min-w-0 gap-3 p-4")}>
+    <div className={cn(cardClass, "relative min-w-0 gap-3 p-4 has-[>a:focus-visible]:border-ring has-[>a:focus-visible]:ring-3 has-[>a:focus-visible]:ring-ring/15")}>
+      <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} aria-label={n.name} className="absolute inset-0 rounded-lg outline-none" />
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{n.name}</span>
@@ -408,8 +410,8 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
           <p className="text-[13px] leading-5 text-muted-foreground">{t.nodes.pendingHint}</p>
           <Button
             variant="outline"
-            onClick={async (e) => {
-              e.preventDefault();
+            className="relative"
+            onClick={async () => {
               if (await approve(n)) onApproved();
             }}
           >
@@ -427,7 +429,7 @@ function NodeCard({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade:
         <Roll value={t.nodes.containers(n.containers)} n={n.containers} className="shrink-0" />
         <span className="truncate">{n.info?.dockerVersion ? `Docker ${n.info.dockerVersion}` : "—"}</span>
       </div>
-    </Link>
+    </div>
   );
 }
 

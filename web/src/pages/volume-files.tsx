@@ -461,7 +461,7 @@ function EditFile({
     >
       <MobileBar
         left={
-          <Button variant="ghost" className={mobileBarText} onClick={onCancel}>
+          <Button variant="ghost" className={mobileBarText} onClick={() => guard(onCancel)}>
             {t.common.actions.cancel}
           </Button>
         }
@@ -478,7 +478,7 @@ function EditFile({
         <Crumbs parts={trail(guard, segments)} current={name} />
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-[13px] text-muted-foreground max-md:hidden">{m.editHint}</span>
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={() => guard(onCancel)}>
             {t.common.actions.cancel}
           </Button>
           <Button type="submit" disabled={busy}>

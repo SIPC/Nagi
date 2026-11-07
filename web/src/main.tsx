@@ -43,8 +43,16 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !isNotFound(err) && count < 2 } },
 });
 
+// 确认框、身份验证框和 Toast 挂在根路由里：其中的链接要用到路由。
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  component: Outlet,
+  component: () => (
+    <>
+      <Outlet />
+      <ConfirmHost />
+      <ElevateHost />
+      <Toaster />
+    </>
+  ),
 });
 
 const setupRoute = createRoute({
@@ -280,9 +288,6 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
-      <ConfirmHost />
-      <ElevateHost />
-      <Toaster />
     </QueryClientProvider>
   </StrictMode>,
 );

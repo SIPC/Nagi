@@ -1150,11 +1150,13 @@ export function Waves({ className, ...props }: React.ComponentProps<"svg">) {
 // ---- 对话框、菜单、占用条 ----
 
 // Dialog：对话框（shadcn）。点遮罩或按 Esc 关闭，焦点限制在框内。
+// dismissible={false}：只能用框里的按钮关闭，用于只显示一次的内容（例如新令牌），免得误触关掉。
 export function Dialog({
   open,
   onClose,
   title,
   description,
+  dismissible = true,
   children,
   className,
 }: {
@@ -1162,6 +1164,7 @@ export function Dialog({
   onClose: () => void;
   title: React.ReactNode;
   description?: React.ReactNode;
+  dismissible?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -1170,6 +1173,8 @@ export function Dialog({
       <DialogContent
         className={cn("group/dialog", className)}
         {...(description ? {} : { "aria-describedby": undefined })}
+        onInteractOutside={dismissible ? undefined : (e) => e.preventDefault()}
+        onEscapeKeyDown={dismissible ? undefined : (e) => e.preventDefault()}
         // 默认焦点给第一个输入框；没有输入框时给对话框本身。默认的第一个可聚焦元素常是问号，焦点一落上去说明就弹出来盖住标题。
         onOpenAutoFocus={(e) => {
           e.preventDefault();

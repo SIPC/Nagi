@@ -233,7 +233,7 @@ export function AccessTokenSection() {
           }}
         />
       </Dialog>
-      <Dialog open={!!created} onClose={() => setCreated(null)} title={t.tokens.created} description={created?.token?.name}>
+      <Dialog open={!!created} onClose={() => setCreated(null)} dismissible={false} title={t.tokens.created} description={created?.token?.name}>
         {created && <CreatedToken secret={created.secret} url={mcp.url} onDone={() => setCreated(null)} />}
       </Dialog>
     </Section>

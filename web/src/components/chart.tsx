@@ -161,10 +161,13 @@ export function TimeChart({
     <div className={cn("grid gap-3", className)}>
       <div
         ref={ref}
-        className="relative touch-none"
+        // 触屏上横向拖动查看数值，竖向滑动照常滚动页面。
+        className="relative touch-pan-y"
         style={{ height }}
+        onPointerDown={(e) => setHover(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
         onPointerMove={(e) => setHover(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
         onPointerLeave={() => setHover(null)}
+        onPointerCancel={() => setHover(null)}
       >
         {width > 0 && (
           <svg width={width} height={height} className="absolute inset-0 block overflow-visible" role="img" aria-label={t.common.list(series.map((s) => s.label))}>

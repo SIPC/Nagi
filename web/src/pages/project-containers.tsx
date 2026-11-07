@@ -152,7 +152,7 @@ export function ContainersTab({
   if (project.containers.length === 0) {
     return (
       <div className="relative">
-        <div aria-hidden className="pointer-events-none opacity-60 blur-[4px] select-none">
+        <div inert className="pointer-events-none opacity-60 blur-[4px] select-none">
           <Section title={t.projectContainers.monitoring} actions={picker}>
             <EmptyProjectMetrics range={range} />
           </Section>
