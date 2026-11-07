@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { CircleArrowUp, Plus } from "lucide-react";
 import { authClient, errorMessage, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
@@ -13,6 +13,8 @@ import {
   Badge,
   Button,
   ButtonLink,
+  CardGrid,
+  cardClass,
   Dialog,
   DialogActions,
   Empty,
@@ -25,7 +27,7 @@ import {
   Select,
   Skeleton,
   Spinner,
-  Status,
+  dotColor,
 } from "@/components/ui";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
@@ -137,25 +139,8 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
 // 卡片里最多列几行容器：放不下时列前两个，第三行写「还有 N 个」，同一行的卡片高低差不多。
 const cardContainers = 3;
 
-const dot = {
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-destructive",
-  neutral: "bg-muted-foreground",
-};
-
-function ImageUpdateIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="size-3.5 shrink-0 text-info" role="img" aria-label={t.projects.card.imageUpdate}>
-      <title>{t.projects.card.imageUpdate}</title>
-      <circle cx="8" cy="8" r="6.5" />
-      <path d="M8 11V5M5.5 7.5 8 5l2.5 2.5" />
-    </svg>
-  );
-}
-
-const projectCard = "flex min-w-0 flex-col gap-3 rounded-lg border bg-background p-4 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
-const projectGrid = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4";
+// 卡片共用 cardClass（和其他可点的卡片同一种边框、悬停和焦点），这里只加内边距和间距。
+const projectCard = cn(cardClass, "min-w-0 gap-3 p-4");
 
 function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[] | undefined }) {
   const p = summary.project!;
@@ -166,10 +151,11 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
   const updates = summary.status?.imageUpdates ?? [];
   const shown = p.containers.length > cardContainers ? p.containers.slice(0, cardContainers - 1) : p.containers;
   return (
-    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={cn(projectCard, "hover:border-ring")}>
+    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={projectCard}>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate font-medium">{p.name}</span>
-        {p.containers.length === 0 ? <Status>{t.projects.card.noContainers}</Status> : <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}
+        {/* 没有容器时不写状态，下面的内容区已经写了「暂无容器」。 */}
+        {p.containers.length > 0 && <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}
       </div>
       <div className="-mt-2 truncate font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</div>
       <div className="grid gap-1 max-md:hidden">
@@ -186,10 +172,15 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
             const tookOver = c.failover && c.failover.a?.nodeId !== c.nodeId;
             return (
               <div key={c.name} className="flex min-w-0 items-center gap-2 text-[13px]" title={st.label}>
-                <span className={cn("size-1.5 shrink-0 rounded-full", dot[st.tone])} />
+                <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
                 <span className="flex min-w-0 flex-1 items-center gap-1">
-                  <span className="min-w-0 truncate">{c.name}</span>
-                  {updates.some((u) => u.container === c.name) && <ImageUpdateIcon />}
+                  {/* 和项目栏、容器页一样显示显示名称，没设时是容器名。 */}
+                  <span className="min-w-0 truncate">{c.displayName || c.name}</span>
+                  {updates.some((u) => u.container === c.name) && (
+                    <span title={t.projects.card.imageUpdate} className="inline-flex">
+                      <CircleArrowUp className="size-3.5 shrink-0 text-info" role="img" aria-label={t.projects.card.imageUpdate} />
+                    </span>
+                  )}
                 </span>
                 {c.failover ? <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? t.projects.card.tookOver : t.projects.card.failover}</Badge> : c.stateful && <Badge>{t.projects.card.stateful}</Badge>}
                 <span className="max-w-[40%] min-w-6 shrink-0 truncate text-right font-mono text-xs leading-5 text-muted-foreground">{nodeName(c.nodeId)}</span>
@@ -215,14 +206,14 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
 function CardsSkeleton() {
   const line = "my-1 h-3";
   return (
-    <div role="status" aria-label={t.common.feedback.loading} className={projectGrid}>
+    <CardGrid role="status" aria-label={t.common.feedback.loading}>
       {[0, 1, 2].map((i) => (
         <div key={i} className={projectCard}>
           <Skeleton className={cn(line, "w-3/5")} />
           <Skeleton className={cn(line, "w-4/5")} />
         </div>
       ))}
-    </div>
+    </CardGrid>
   );
 }
 
@@ -297,9 +288,9 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
             {shownProjects.length === 0 ? (
               <EmptyRow>{t.projects.filter.empty}</EmptyRow>
             ) : (
-              <div className={projectGrid}>
+              <CardGrid>
                 {shownProjects.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}
-              </div>
+              </CardGrid>
             )}
           </div>
         )}

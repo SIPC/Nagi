@@ -658,50 +658,15 @@ export function SettingRows({ children }: { children: React.ReactNode }) {
 
 // ---- 卡片 ----
 
-// Card：概览网格里的一项（项目、节点），整张可以是链接。四边内边距 16px，头、内容、底栏之间 12px。
-// 其他地方不用卡片（见 docs/ui.md）；监控数值块用 Tile。
+// cardClass：项目页网格里的卡片，整张是链接。其他地方不用卡片（见 docs/ui.md）。
 export const cardClass =
   "group flex flex-col rounded-lg border bg-background outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/15";
 
-export function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn(cardClass, className)} {...props} />;
-}
-
-// CardHeader：标题和副标题在左，状态在右。
-export function CardHeader({ title, subtitle, aside }: { title: React.ReactNode; subtitle?: React.ReactNode; aside?: React.ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3 px-4 pt-4">
-      <div className="grid min-w-0 gap-1">
-        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">{title}</div>
-        {subtitle && <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">{subtitle}</div>}
-      </div>
-      {aside && <div className="shrink-0">{aside}</div>}
-    </div>
-  );
-}
-
-export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("grid flex-1 content-start gap-2 px-4 pt-3 pb-4", className)} {...props} />;
-}
-
-export function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex items-center justify-between gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground", className)} {...props} />;
-}
-
-// CardGrid：卡片的网格，每张至少 18rem，卡片之间 16px。
+// CardGrid：卡片的网格，每张至少 240px，卡片之间 16px。
 export function CardGrid({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("grid animate-fade-in grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4", className)} {...props} />;
+  return <div className={cn("grid animate-fade-in grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4", className)} {...props} />;
 }
 
-// Tile：监控数值块。没有框，靠留白分组。min-w-0：里面的图表不能撑破网格。
-export function Tile({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("grid min-w-0 gap-1", className)} {...props} />;
-}
-
-// TileGrid：按所在区域的宽度排列（不是窗口宽度：宽屏的项目页内容区只有窗口的一半多），每块至少 9.5rem。
-export function TileGrid({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-6", className)} {...props} />;
-}
 
 // ---- 表格 ----
 
@@ -1317,19 +1282,4 @@ export function Menu({ items: all, label = t.common.actions.more, rowStyle, ghos
   );
 }
 
-// Meter：资源占用条。超过 90% 红色，超过 75% 琥珀色。
-export function Meter({ label, value }: { label: string; value?: number }) {
-  const v = value === undefined ? undefined : Math.max(0, Math.min(100, value));
-  const tone = v === undefined ? "bg-muted-foreground/30" : v >= 90 ? "bg-destructive" : v >= 75 ? "bg-warning" : "bg-success";
-  return (
-    <div className="grid grid-cols-[2.5rem_1fr_2.75rem] items-center gap-2 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full transition-[width]", tone)} style={{ width: `${v ?? 0}%` }} />
-      </div>
-      <Roll value={v === undefined ? "—" : `${v.toFixed(0)}%`} className="text-right font-mono tabular-nums text-muted-foreground" />
-
-    </div>
-  );
-}
 

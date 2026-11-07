@@ -1,6 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, MemoryStick } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
@@ -251,35 +250,7 @@ export function fmtBytesShort(v: number) {
 
 // 悬停提示里的百分比：最多一位小数，整数不带 .0（如 0.3%、1200%）。
 const fmtPct = (v: number) => `${Number(v.toFixed(1))}%`;
-const tone = (r: number) => (r >= 0.9 ? "bg-destructive" : r >= 0.75 ? "bg-warning" : "bg-info");
 
-// UsageBars：一个容器的 CPU 和内存占用条，上下两行。宽度由调用方定；数值列定宽、左对齐紧跟在条后面，几个容器之间对齐。
-// 满格是容器的上限（设了限制按限制，没设按主机），超过 75% 变黄、90% 变红。
-// 旧版本的节点不报上限：CPU 满格按 1 核，内存满格是 memFallback（同一列表里占用最多的容器），只用来相互对比。
-export function UsageBars({ usage, memFallback, className }: { usage?: Usage; memFallback: number; className?: string }) {
-  const cpuMax = usage?.cpuLimit ?? 100;
-  const memMax = usage?.memLimit ?? memFallback;
-  const cpu = usage ? usage.cpu / cpuMax : 0;
-  const mem = usage && memMax > 0 ? usage.mem / memMax : 0;
-  return (
-    <span className={cn("grid gap-1", className)}>
-      <UsageBar
-        icon={<Cpu />}
-        ratio={cpu}
-        value={usage ? fmtCpuShort(usage.cpu) : "—"}
-        title={usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —"}
-        fill={tone(cpu)}
-      />
-      <UsageBar
-        icon={<MemoryStick />}
-        ratio={mem}
-        value={usage ? fmtBytesShort(usage.mem) : "—"}
-        title={m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem))}
-        fill={usage?.memLimit ? tone(mem) : "bg-info"}
-      />
-    </span>
-  );
-}
 
 // UsageRing：16px 的占用圆环。超过 75% 变黄、90% 变红。
 function UsageRing({ ratio }: { ratio: number }) {
@@ -382,22 +353,6 @@ export function UsageCell({ percent, value, limit, title }: { percent?: number; 
   );
 }
 
-function UsageBar({ icon, ratio, value, title, fill }: { icon: ReactNode; ratio: number; value: string; title: string; fill: string }) {
-  // 很小但不是 0 的占用也留一点长度，和没有数据区分开。
-  const r = ratio > 0 ? Math.min(Math.max(ratio, 0.03), 1) : 0;
-  return (
-    <span className="flex min-w-0 items-center gap-1 text-muted-foreground" title={title}>
-      <span className="shrink-0 opacity-70 [&_svg]:size-3">{icon}</span>
-      <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/10">
-        <span
-          className={cn("block h-full origin-left rounded-full transition-transform duration-220 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", fill)}
-          style={{ transform: `scaleX(${r})` }}
-        />
-      </span>
-      <Roll value={value} n={ratio} className="min-w-[2.125rem] shrink-0 pl-0.5 text-xs leading-4 tabular-nums" />
-    </span>
-  );
-}
 
 const cellOrder = ["cpu", "mem", "net_rx", "net_tx"];
 
