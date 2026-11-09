@@ -31,8 +31,6 @@ const (
 	nodeShellIdle = time.Hour
 	// nodeShellMaxAge 是节点终端最长的使用时间，节点上也有同样的限制。
 	nodeShellMaxAge = 12 * time.Hour
-	// nodeShellRecheck 是重查会话和角色的间隔：踢出登录、降权之后要断开。
-	nodeShellRecheck = 30 * time.Second
 	// maxNodeUpload 是上传到节点的单个文件的上限。
 	maxNodeUpload = 8 << 30
 )
@@ -285,36 +283,20 @@ func (a *API) NodeShellHandler() http.Handler {
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。
 		lastActive := newActivityClock()
-		go func() {
-			t := time.NewTicker(nodeShellRecheck)
-			defer t.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-t.C:
-				}
-				msg := ""
-				cur, err := a.Auth.SessionUser(ctx, token)
-				switch {
-				case ctx.Err() != nil:
-					return
-				case err != nil || cur.ID != u.ID:
-					msg = i18n.Sprintf(lang, "登录已过期，连接已断开")
-				case cur.Role != auth.RoleAdmin:
-					msg = i18n.Sprintf(lang, "权限已变更，连接已断开")
-				case time.Since(began) > nodeShellMaxAge:
-					msg = i18n.Sprintf(lang, "已达到最长使用时间（12 小时），连接已断开")
-				case lastActive.since() > nodeShellIdle:
-					msg = i18n.Sprintf(lang, "空闲超过 1 小时，连接已断开")
-				}
-				if msg != "" {
-					fail(msg)
-					cancel()
-					return
-				}
+		go a.watchSession(ctx, token, u, func(cur auth.User) error {
+			switch {
+			case cur.Role != auth.RoleAdmin:
+				return errRoleChanged
+			case time.Since(began) > nodeShellMaxAge:
+				return i18n.New("已达到最长使用时间（12 小时），连接已断开")
+			case lastActive.since() > nodeShellIdle:
+				return i18n.New("空闲超过 1 小时，连接已断开")
 			}
-		}()
+			return nil
+		}, func(err error) {
+			fail(i18n.Localize(lang, err))
+			cancel()
+		})
 
 		bridgeTerminal(ctx, cancel, ws, lang, lastActive, terminalStream{
 			stdin: func(b []byte) error {

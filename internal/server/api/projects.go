@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/projects"
 	"google.golang.org/grpc/status"
@@ -215,6 +217,20 @@ func (s *projectService) RestoreDeployment(ctx context.Context, req *connect.Req
 
 func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[nagiv1.StreamLogsApiRequest], out *connect.ServerStream[nagiv1.LogLine]) error {
 	m := req.Msg
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// 浏览器打开的日志流定时重查：踢出登录、降权、移出项目范围之后断开。MCP 在进程内调用，没有会话，只取一段就结束。
+	var stopped atomic.Pointer[error]
+	if token := auth.SessionToken(req.Header()); token != "" {
+		u := auth.CurrentUser(ctx)
+		procedure := req.Spec().Procedure
+		go s.watchSession(ctx, token, u, func(cur auth.User) error {
+			return s.containerAccess(ctx, cur, m.GetProjectId(), func(role string) bool { return auth.Allowed(role, procedure) })
+		}, func(err error) {
+			stopped.Store(&err)
+			cancel()
+		})
+	}
 	stream, err := s.Projects.Logs(ctx, m.GetProjectId(), m.GetContainer(), m.GetService(), m.GetTail(), m.GetFollow())
 	if err != nil {
 		return toConnect(err)
@@ -222,6 +238,9 @@ func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[na
 	for {
 		line, err := stream.Recv()
 		if err != nil {
+			if p := stopped.Load(); p != nil {
+				return connect.NewError(connect.CodePermissionDenied, *p)
+			}
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {
 				return nil
 			}

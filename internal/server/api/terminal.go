@@ -27,7 +27,8 @@ import (
 func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
-		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		token := auth.SessionToken(r.Header)
+		u, err := a.Auth.SessionUser(r.Context(), token)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
@@ -85,6 +86,14 @@ func (a *API) TerminalHandler() http.Handler {
 		}
 		a.recordOperation(ctx, "/OpenTerminal", start, "")
 
+		// 定时重查：踢出登录、降权、移出项目范围之后要断开。
+		go a.watchSession(ctx, token, u, func(cur auth.User) error {
+			return a.containerAccess(ctx, cur, start.ProjectId, auth.CanOperate)
+		}, func(err error) {
+			fail(i18n.Localize(lang, err))
+			cancel()
+		})
+
 		bridgeTerminal(ctx, cancel, ws, lang, newActivityClock(), terminalStream{
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Stdin{Stdin: b}})
@@ -96,6 +105,55 @@ func (a *API) TerminalHandler() http.Handler {
 			recv:      stream.Recv,
 		})
 	})
+}
+
+// sessionRecheck 是重查打开着的连接（终端、日志流）的间隔：踢出登录、降权、移出项目范围之后要断开。测试里会改短。
+var sessionRecheck = 30 * time.Second
+
+var (
+	errSessionExpired = i18n.New("登录已过期，连接已断开")
+	errRoleChanged    = i18n.New("权限已变更，连接已断开")
+)
+
+// watchSession 每隔 sessionRecheck 重查一次会话，直到 ctx 结束：会话失效或者换了账号，或者 check（拿到重新读出的用户）
+// 返回错误时，调用 stop 并返回。
+func (a *API) watchSession(ctx context.Context, token string, u auth.User, check func(cur auth.User) error, stop func(error)) {
+	t := time.NewTicker(sessionRecheck)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		cur, err := a.Auth.SessionUser(ctx, token)
+		switch {
+		case ctx.Err() != nil:
+			return
+		case err != nil || cur.ID != u.ID:
+			err = errSessionExpired
+		default:
+			err = check(cur)
+		}
+		if err != nil {
+			stop(err)
+			return
+		}
+	}
+}
+
+// containerAccess 重查用户还能不能进入项目的容器：角色和项目范围。
+func (a *API) containerAccess(ctx context.Context, cur auth.User, projectID string, allowed func(role string) bool) error {
+	if !allowed(cur.Role) {
+		return errRoleChanged
+	}
+	if err := a.projectAllowed(ctx, cur, projectID); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return errRoleChanged
+	}
+	return nil
 }
 
 // terminalError 返回终端出错时给浏览器看的说明：节点返回的说明按语言翻译，连接层面的错误（EOF、
