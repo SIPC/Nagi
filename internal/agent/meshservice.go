@@ -16,22 +16,17 @@ type meshService struct {
 	a *agent
 }
 
-// isPanel 判断调用方是不是节点信任的面板。面板的 mesh 公钥是它经控制连接告诉我们的，可信。
-func (n *meshNode) isPanel(k mesh.Key) bool {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	for _, pk := range n.panelKeys {
-		if pk == k {
-			return true
-		}
-	}
-	return false
+// isPanel 判断调用方是不是节点现在信任的面板。面板的 mesh 公钥是它经控制连接告诉我们的，可信；
+// 但移除的面板的公钥为了网络连续性还会留一段时间（见 meshNode.prune），所以还要查信任列表。
+func (a *agent) isPanel(k mesh.Key) bool {
+	fp, ok := a.mesh.panelOf(k)
+	return ok && a.id.trusts(fp)
 }
 
 // VolumeDownload 把卷里（或快照里）的文件发给面板。
 func (s *meshService) VolumeDownload(req *nagiv1.VolumeFileRef, stream nagiv1.MeshService_VolumeDownloadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
-	if !ok || !s.a.mesh.isPanel(caller) {
+	if !ok || !s.a.isPanel(caller) {
 		return status.Error(codes.PermissionDenied, "只接受受信任的面板下载文件")
 	}
 	return toStatus(s.a.projects.ReadVolumeFile(stream.Context(), req, stream.Send))
@@ -40,7 +35,7 @@ func (s *meshService) VolumeDownload(req *nagiv1.VolumeFileRef, stream nagiv1.Me
 // VolumeUpload 把面板传来的文件写进卷里。有顶替的容器只在持有租约时能写。
 func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
-	if !ok || !s.a.mesh.isPanel(caller) {
+	if !ok || !s.a.isPanel(caller) {
 		return status.Error(codes.PermissionDenied, "只接受受信任的面板上传文件")
 	}
 	first, err := stream.Recv()
@@ -78,7 +73,7 @@ func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer)
 
 func (s *meshService) Upload(stream nagiv1.MeshService_UploadServer) error {
 	caller, ok := mesh.Caller(stream.Context(), s.M)
-	if !ok || !s.a.mesh.isPanel(caller) {
+	if !ok || !s.a.isPanel(caller) {
 		return status.Error(codes.PermissionDenied, "只接受受信任的面板上传文件")
 	}
 	first, err := stream.Recv()

@@ -111,3 +111,26 @@ func TestMeshRates(t *testing.T) {
 		t.Fatalf("中转不该记延迟：%v", got)
 	}
 }
+
+// 移除的面板的 mesh 公钥为了网络连续性还留着，但不能再调用只给面板的接口。
+func TestIsPanelFollowsTrustList(t *testing.T) {
+	id, err := loadIdentity(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := mesh.PublicKey(randKey())
+	n := &meshNode{panelKeys: map[string]mesh.Key{"fp-old": k}}
+	a := &agent{id: id, mesh: n}
+	if a.isPanel(k) {
+		t.Fatal("不在信任列表里的面板不能通过")
+	}
+	if err := id.addPanel(trustedPanel{Address: "a:1", Fingerprint: "fp-old"}); err != nil {
+		t.Fatal(err)
+	}
+	if !a.isPanel(k) {
+		t.Fatal("信任的面板应该通过")
+	}
+	if a.isPanel(mesh.PublicKey(randKey())) {
+		t.Fatal("不是面板的公钥不能通过")
+	}
+}
