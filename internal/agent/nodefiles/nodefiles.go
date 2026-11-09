@@ -27,6 +27,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,6 +45,8 @@ const (
 const (
 	// MaxEdit 是能在线编辑的文件大小，也是覆盖时保留备份的上限。
 	MaxEdit = 1 << 20
+	// MaxUpload 是上传的单个文件的上限，和面板的一致（server/api 的 maxNodeUpload）。
+	MaxUpload = 8 << 30
 
 	maxEntries     = 5000
 	chunkSize      = 256 << 10
@@ -84,9 +87,12 @@ const conflictMessage = "文件已被修改"
 func fsErr(err error) error {
 	var pe *fs.PathError
 	var le *os.LinkError
+	var low *metrics.LowDiskError
 	switch {
 	case err == nil:
 		return nil
+	case errors.As(err, &low):
+		return status.Error(codes.ResourceExhausted, low.Error())
 	case errors.Is(err, fs.ErrNotExist):
 		return invalid("文件不存在")
 	case errors.Is(err, fs.ErrExist):
@@ -951,6 +957,10 @@ func (s *Service) Upload(p string, confirmed bool, r io.Reader) (int64, error) {
 		return 0, fsErr(err)
 	}
 	defer f.Close()
+	// 写到目标位置还要再占一份空间（暂存的文件写完才删）。
+	if err := metrics.CheckDisk(path.Dir(real), n); err != nil {
+		return 0, fsErr(err)
+	}
 	if _, err := writeAt(root, base, f, mode, uid, gid); err != nil {
 		return 0, err
 	}
@@ -958,8 +968,12 @@ func (s *Service) Upload(p string, confirmed bool, r io.Reader) (int64, error) {
 }
 
 // stage 把内容写到暂存目录。失败时不留下文件；节点中途重启留下的旧文件顺便清掉。
+// 超过 MaxUpload 或者磁盘剩余空间不够（metrics.DiskGuard）时停下。
 func (s *Service) stage(r io.Reader) (string, int64, error) {
 	if err := os.MkdirAll(s.StagingDir, 0o700); err != nil {
+		return "", 0, fsErr(err)
+	}
+	if err := metrics.CheckDisk(s.StagingDir, 0); err != nil {
 		return "", 0, fsErr(err)
 	}
 	if old, err := os.ReadDir(s.StagingDir); err == nil {
@@ -973,9 +987,13 @@ func (s *Service) stage(r io.Reader) (string, int64, error) {
 	if err != nil {
 		return "", 0, fsErr(err)
 	}
-	n, err := io.Copy(f, r)
+	guard := &metrics.DiskGuard{Dir: s.StagingDir}
+	n, err := io.Copy(guard.Writer(f), io.LimitReader(r, MaxUpload+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
+	}
+	if err == nil && n > MaxUpload {
+		err = invalid("单个文件不能超过 8 GB")
 	}
 	if err != nil {
 		_ = os.Remove(f.Name())

@@ -430,6 +430,7 @@ var en = map[string]string{
 	"没有访问权限":                                     "Permission denied",
 	"磁盘已满，请清理空间后重试":                              "The disk is full. Free up space and try again",
 	"节点磁盘剩余空间不足（剩余 %.1f GiB，共 %.1f GiB）":         "The node is low on disk space (%.1f GiB free of %.1f GiB)",
+	"节点正在接收其他上传，请稍后重试":                           "The node is busy with other uploads. Try again later",
 	"同步副本时长时间没有收到数据":                             "Replica sync timed out waiting for data",
 	"文件系统只读，无法写入":                                "The file system is read-only",
 	"目录不为空":                                      "The directory isn't empty",

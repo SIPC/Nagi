@@ -16,12 +16,15 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/SIPC/nagi/internal/agent/metrics"
 )
 
 // 面板上传的容器文件：压缩包经 mesh 传到节点，解压到容器目录的 .upload/files 暂存，
 // 下次部署这个容器（useUpload）时替换它的 data/，规则和 git 拉取一样（保留路径不动）。
 
-// maxUploadSize 是解压后的总大小上限，防止压缩炸弹写满磁盘。
+// maxUploadSize 是压缩包和解压后的总大小上限，防止压缩炸弹写满磁盘。面板那边的上限和它一致（server/api 的 maxProjectUpload）。
+// 另外接收和解压时都检查磁盘剩余空间（metrics.DiskGuard），同时接收的上传数由调用方限制。
 const maxUploadSize = 10 << 30
 
 // maxUploadEntries 是压缩包里文件和目录数的上限：几百万个空文件不占多少空间，但会耗尽 inode。
@@ -46,6 +49,9 @@ func (m *Manager) ReceiveUpload(ctx context.Context, projectID, container string
 		return res, err
 	}
 	p := containerPaths{root: c.Spec.GetDir()}
+	if err := metrics.CheckDisk(p.root, 0); err != nil {
+		return res, err
+	}
 	// 接收和解压不持有项目锁，可能很慢；放到单独的临时目录，完成后再替换暂存的文件。
 	var suffix [6]byte
 	_, _ = rand.Read(suffix[:])
@@ -60,9 +66,14 @@ func (m *Manager) ReceiveUpload(ctx context.Context, projectID, container string
 	if err != nil {
 		return res, err
 	}
-	res.Bytes, err = io.Copy(f, io.LimitReader(r, maxUploadSize+1))
+	guard := &metrics.DiskGuard{Dir: p.root}
+	res.Bytes, err = io.Copy(guard.Writer(f), io.LimitReader(r, maxUploadSize+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
+	}
+	var low *metrics.LowDiskError
+	if errors.As(err, &low) {
+		return res, low
 	}
 	if err != nil {
 		return res, fmt.Errorf("接收压缩包: %w", err)
@@ -71,7 +82,7 @@ func (m *Manager) ReceiveUpload(ctx context.Context, projectID, container string
 		return res, invalid("压缩包超过 %d GiB，无法上传", maxUploadSize>>30)
 	}
 	out := filepath.Join(tmp, "files")
-	if res.Files, err = extract(archive, out); err != nil {
+	if res.Files, err = extract(archive, out, guard); err != nil {
 		return res, err
 	}
 	root := out
@@ -94,7 +105,7 @@ func (m *Manager) ReceiveUpload(ctx context.Context, projectID, container string
 
 // extract 解压到 dst，返回文件数。只解出普通文件和目录，跳过符号链接等其他类型；
 // 路径一律限制在 dst 里面。
-func extract(archive, dst string) (int, error) {
+func extract(archive, dst string, guard *metrics.DiskGuard) (int, error) {
 	f, err := os.Open(archive)
 	if err != nil {
 		return 0, err
@@ -106,7 +117,7 @@ func extract(archive, dst string) (int, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return 0, err
 	}
-	x := &extractor{dst: dst}
+	x := &extractor{dst: dst, guard: guard}
 	switch {
 	case bytes.HasPrefix(head, []byte("PK\x03\x04")) || bytes.HasPrefix(head, []byte("PK\x05\x06")):
 		err = x.zip(archive)
@@ -132,6 +143,7 @@ func extract(archive, dst string) (int, error) {
 
 type extractor struct {
 	dst     string
+	guard   *metrics.DiskGuard // 检查磁盘剩余空间
 	files   int
 	entries int
 	written int64
@@ -173,7 +185,7 @@ func (x *extractor) file(name string, mode os.FileMode, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(f, io.LimitReader(r, maxUploadSize-x.written+1))
+	n, err := io.Copy(x.guard.Writer(f), io.LimitReader(r, maxUploadSize-x.written+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}

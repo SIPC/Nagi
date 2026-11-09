@@ -371,6 +371,8 @@ func toStatus(err error) error {
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, err.Error())
+	case errors.As(err, new(*metrics.LowDiskError)):
+		return status.Error(codes.ResourceExhausted, err.Error())
 	}
 	return status.Error(codes.Internal, err.Error())
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -10,6 +11,9 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 )
+
+// maxProjectUpload 是容器文件压缩包的大小上限，和节点上的一致（agent/project 的 maxUploadSize）。
+const maxProjectUpload = 10 << 30
 
 // UploadHandler 接收浏览器上传的容器文件压缩包，经 mesh 转给容器所在的节点：POST /api/upload?project=&container=，
 // 请求体就是压缩包。节点解压后暂存，随后用 Deploy(use_upload) 部署。
@@ -43,6 +47,12 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return
 		}
+		// 先看长度，免得白传一遍才报错。
+		tooBig := i18n.Errorf("压缩包超过 %d GiB，无法上传", maxProjectUpload>>30)
+		if r.ContentLength > maxProjectUpload {
+			fail(http.StatusRequestEntityTooLarge, tooBig)
+			return
+		}
 		q := r.URL.Query()
 		m := a.Nodes.Mesh()
 		if m == nil {
@@ -74,9 +84,10 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusBadGateway, err)
 			return
 		}
+		body := http.MaxBytesReader(w, r.Body, maxProjectUpload)
 		buf := make([]byte, 256<<10)
 		for {
-			n, rerr := r.Body.Read(buf)
+			n, rerr := body.Read(buf)
 			if n > 0 {
 				if err := stream.Send(&nagiv1.UploadChunk{Data: buf[:n]}); err != nil {
 					// 节点提前结束（例如拒绝），真正的原因在 CloseAndRecv 里。
@@ -87,6 +98,11 @@ func (a *API) UploadHandler() http.Handler {
 				break
 			}
 			if rerr != nil {
+				var mbe *http.MaxBytesError
+				if errors.As(rerr, &mbe) {
+					fail(http.StatusRequestEntityTooLarge, tooBig)
+					return
+				}
 				fail(http.StatusBadRequest, rerr)
 				return
 			}

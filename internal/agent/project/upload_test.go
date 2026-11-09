@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/SIPC/nagi/internal/agent/metrics"
 )
 
 func TestExtractZip(t *testing.T) {
@@ -32,7 +34,7 @@ func TestExtractZip(t *testing.T) {
 	_ = os.WriteFile(archive, buf.Bytes(), 0o600)
 
 	out := filepath.Join(dir, "out")
-	n, err := extract(archive, out)
+	n, err := extract(archive, out, &metrics.DiskGuard{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestExtractTarGz(t *testing.T) {
 	archive := filepath.Join(dir, "a.tgz")
 	_ = os.WriteFile(archive, buf.Bytes(), 0o600)
 	out := filepath.Join(dir, "out")
-	if n, err := extract(archive, out); err != nil || n != 1 {
+	if n, err := extract(archive, out, &metrics.DiskGuard{}); err != nil || n != 1 {
 		t.Fatalf("n=%d err=%v", n, err)
 	}
 	if _, err := os.Stat(filepath.Join(out, "dist", "run.sh")); err != nil {
@@ -74,7 +76,7 @@ func TestExtractTarGz(t *testing.T) {
 	}
 
 	_ = os.WriteFile(archive, []byte("not an archive"), 0o600)
-	if _, err := extract(archive, filepath.Join(dir, "bad")); err == nil {
+	if _, err := extract(archive, filepath.Join(dir, "bad"), &metrics.DiskGuard{}); err == nil {
 		t.Fatal("不认识的格式应该报错")
 	}
 }

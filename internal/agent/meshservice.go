@@ -12,6 +12,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// maxUploads 是同时接收的大文件上传数（容器文件和节点文件合计）。都要先写到磁盘上暂存，多了直接拒绝，不排队。
+const maxUploads = 2
+
+var uploadSlots = make(chan struct{}, maxUploads)
+
+// acquireUpload 占一个上传名额，返回的函数释放它。满了时返回 ResourceExhausted。
+func acquireUpload() (func(), error) {
+	select {
+	case uploadSlots <- struct{}{}:
+		return func() { <-uploadSlots }, nil
+	default:
+		return nil, status.Error(codes.ResourceExhausted, "节点正在接收其他上传，请稍后重试")
+	}
+}
+
 // meshService 是节点在 mesh 上提供的服务。mesh 只说明网络能通，每个方法都要单独校验调用方。
 type meshService struct {
 	mesh.Service
@@ -89,6 +104,11 @@ func (s *meshService) Upload(stream nagiv1.MeshService_UploadServer) error {
 	if err := s.checkMeshPanel(stream.Context(), nagiv1.MeshService_Upload_FullMethodName); err != nil {
 		return err
 	}
+	release, err := acquireUpload()
+	if err != nil {
+		return err
+	}
+	defer release()
 	first, err := stream.Recv()
 	if err != nil {
 		return err

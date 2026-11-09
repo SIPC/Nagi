@@ -302,6 +302,11 @@ func (s *meshService) NodeFileUpload(stream nagiv1.MeshService_NodeFileUploadSer
 	if err := s.a.files.CheckUpload(ref.GetPath(), first.GetConfirmed()); err != nil {
 		return err
 	}
+	release, err := acquireUpload()
+	if err != nil {
+		return err
+	}
+	defer release()
 	pr, pw := io.Pipe()
 	go func() {
 		for {
