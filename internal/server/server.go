@@ -366,6 +366,10 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.acceptLoop(ctx, httpLn)
 	// 备用面板不发告警、不当 mesh 中转（节点还没连它，见 docs/standby.md）。
 	if s.standby == nil {
+		// 旧版本的告警规则是全局的，搬到各个节点和项目上（见 docs/monitoring.md#告警）。
+		if err := s.nodes.MigrateAlertRules(ctx, func(r *nagiv1.AlertRules) error { return s.projects.MigrateAlertRules(ctx, r) }); err != nil {
+			s.log.Warn("搬迁告警规则失败", "err", err)
+		}
 		go s.nodes.RunOfflineAlerts(ctx)
 		go s.nodes.ServeMesh(ctx)
 	}

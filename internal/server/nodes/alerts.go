@@ -109,6 +109,11 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 	}
 	cfg = proto.CloneOf(cfg)
 	cfg.NodeName = c.Name()
+	// 规则按节点下发：节点自己的规则（内存、磁盘、证书）。容器的规则随容器配置下发（ContainerSpec.alert_rules）。
+	cfg.Rules = nil
+	if row, err := r.q.GetNode(ctx, c.NodeID); err == nil {
+		cfg.Rules = NodeAlertRules(row)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if _, err := c.Agent.SetAlertConfig(ctx, &nagiv1.SetAlertConfigRequest{Config: cfg}); err != nil {
@@ -277,7 +282,6 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 		if err != nil || len(cfg.GetChannels()) == 0 {
 			continue
 		}
-		rules := alert.EffectiveRules(cfg.GetRules())
 		list, err := r.q.ListNodes(ctx)
 		if err != nil {
 			continue
@@ -299,6 +303,12 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 				}
 				continue
 			}
+			nodeRules := NodeAlertRules(n)
+			if !alert.Enabled(nodeRules, alert.RuleOffline) {
+				delete(firing, n.ID)
+				continue
+			}
+			rules := alert.EffectiveRules(nodeRules)
 			// 面板刚启动时节点需要时间重连，离线时间从面板启动开始算。
 			since := time.Unix(n.LastSeen, 0)
 			if since.Before(start) {
@@ -352,4 +362,77 @@ func clipText(s string, n int) string {
 // SendPanelAlert 发送面板自己的告警（例如备用面板连不上主面板），记日志，失败只记日志。
 func (r *Registry) SendPanelAlert(ctx context.Context, a *nagiv1.Alert) {
 	r.sendLogged(ctx, a)
+}
+
+// NodeAlertRules 返回节点的告警规则，没有设置时为 nil（全用默认值）。
+func NodeAlertRules(n store.Node) *nagiv1.AlertRules {
+	if len(n.AlertRules) == 0 {
+		return nil
+	}
+	rules := &nagiv1.AlertRules{}
+	if proto.Unmarshal(n.AlertRules, rules) != nil {
+		return nil
+	}
+	return rules
+}
+
+// SetNodeAlertRules 保存节点的告警规则（只留节点的那几条），节点在线时立即下发。
+func (r *Registry) SetNodeAlertRules(ctx context.Context, nodeID string, rules *nagiv1.AlertRules) error {
+	if err := alert.CheckRules(rules); err != nil {
+		return err
+	}
+	if _, err := r.q.GetNode(ctx, nodeID); err != nil {
+		return i18n.New("节点不存在")
+	}
+	var b []byte
+	if rules = alert.NodePart(rules); !alert.IsEmpty(rules) {
+		var err error
+		if b, err = proto.Marshal(rules); err != nil {
+			return err
+		}
+	}
+	if err := r.q.SetNodeAlertRules(ctx, store.SetNodeAlertRulesParams{AlertRules: b, ID: nodeID}); err != nil {
+		return err
+	}
+	if c, err := r.Get(nodeID); err == nil {
+		go r.pushAlertConfig(context.Background(), c, nil)
+	}
+	return nil
+}
+
+// MigrateAlertRules 把旧版本的全局告警规则搬到各个节点上（节点的规则），返回其中容器的规则，
+// 由调用方写进各个项目；搬完以后去掉全局规则。没有全局规则时返回 nil。只在主面板上运行一次。
+func (r *Registry) MigrateAlertRules(ctx context.Context, setProjects func(*nagiv1.AlertRules) error) error {
+	if r.ReadOnly || r.AlertConfigLost(ctx) {
+		return nil
+	}
+	cfg, err := r.AlertConfig(ctx)
+	if err != nil || cfg.GetRules() == nil {
+		return err
+	}
+	if node := alert.NodePart(cfg.GetRules()); !alert.IsEmpty(node) {
+		b, err := proto.Marshal(node)
+		if err != nil {
+			return err
+		}
+		list, err := r.q.ListNodes(ctx)
+		if err != nil {
+			return err
+		}
+		for _, n := range list {
+			if len(n.AlertRules) == 0 {
+				if err := r.q.SetNodeAlertRules(ctx, store.SetNodeAlertRulesParams{AlertRules: b, ID: n.ID}); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if c := alert.ContainerPart(cfg.GetRules()); !alert.IsEmpty(c) {
+		if err := setProjects(c); err != nil {
+			return err
+		}
+	}
+	cfg.Rules = nil
+	r.log.Info("已把全局告警规则搬到各个节点和项目上")
+	return r.SetAlertConfig(ctx, cfg)
 }

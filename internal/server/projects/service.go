@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -74,8 +75,8 @@ type Service struct {
 	// unknown：节点上有、面板不认识、没有自动加入的容器（节点 ID → "项目/容器" → 容器）。
 	unknown map[string]map[string]*nagiv1.UnknownContainer
 	// stale：节点说配置由别的面板写过的项目（节点 ID → 项目 ID 集合），等管理员确认后才以节点为准重建。
-	stale map[string]map[string]bool
-	warned  map[string]time.Time
+	stale  map[string]map[string]bool
+	warned map[string]time.Time
 	// 第一次上报已经处理完的连接（之后才给它推代理计划）。
 	synced map[*nodes.Conn]bool
 }
@@ -332,7 +333,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		Name: c.Name, Revision: c.Revision, LatestVersion: v.Version, DeployedVersion: c.DeployedVersion,
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
-		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName,
+		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
 	}
 	if cfg := failoverOf(c); cfg != nil {
 		mem.Failover = cfg
@@ -443,6 +444,14 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 	if n := out.SnapshotLimit; n != 0 && (n < minSnapshotLimit || n > maxSnapshotLimit) {
 		return nil, invalid("快照份数上限须在 %d–%d 之间", minSnapshotLimit, maxSnapshotLimit)
 	}
+	if r := in.GetAlertRules(); r != nil {
+		if err := alert.CheckRules(r); err != nil {
+			return nil, err
+		}
+		if r = alert.ContainerPart(r); !alert.IsEmpty(r) {
+			out.AlertRules = r
+		}
+	}
 	return out, nil
 }
 
@@ -547,6 +556,10 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 		return nil, err
 	}
 	next.SharedEnv = old.GetSharedEnv()
+	// 没带告警规则（只改别的设置）时保留原来的；要清空就带一组空规则。
+	if in.GetAlertRules() == nil {
+		next.AlertRules = old.GetAlertRules()
+	}
 	sealed, err := s.seal(next, settingsCtx(id))
 	if err != nil {
 		return nil, err

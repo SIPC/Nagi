@@ -24,6 +24,7 @@ export default {
     network: "Network",
     storage: "Storage",
     ha: "High availability",
+    alerts: "Alerts",
   },
   columns: {
     name: "Container name",

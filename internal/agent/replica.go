@@ -16,6 +16,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -431,7 +432,9 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 	key := "backup:" + id
 	if err != nil {
 		a.log.Warn("同步到备份节点失败", "project", projectID, "container", container, "err", err)
-		a.alerts.Fire(ctx, key, "容器 "+container+" 同步到备份节点失败", err.Error(), projectID)
+		if a.alerts.ContainerEnabled(projectID, container, alert.RuleBackup) {
+			a.alerts.Fire(ctx, key, "容器 "+container+" 同步到备份节点失败", err.Error(), projectID)
+		}
 		return err
 	}
 	a.alerts.Resolve(ctx, key)

@@ -239,6 +239,12 @@ DELETE FROM containers WHERE project_id = ? AND name = ?;
 -- name: SetContainerDisplayName :exec
 UPDATE containers SET display_name = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
 
+-- name: SetContainerAlertRules :exec
+UPDATE containers SET alert_rules = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
+-- name: SetNodeAlertRules :exec
+UPDATE nodes SET alert_rules = ? WHERE id = ? AND revoked = 0;
+
 -- name: SetContainerBackupNode :exec
 UPDATE containers SET backup_node_id = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
 

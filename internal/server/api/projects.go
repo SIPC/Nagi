@@ -273,6 +273,11 @@ func (s *projectService) SetBackupNode(ctx context.Context, req *connect.Request
 	return reply(s.Projects.SetBackupNode(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDeleteReplica()))
 }
 
+func (s *projectService) SetContainerAlertRules(ctx context.Context, req *connect.Request[nagiv1.SetContainerAlertRulesRequest]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SetContainerAlertRules(ctx, m.GetProjectId(), m.GetContainer(), m.GetRules()))
+}
+
 func (s *projectService) SetContainerDisplayName(ctx context.Context, req *connect.Request[nagiv1.SetContainerDisplayNameRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
 	return reply(s.Projects.SetDisplayName(ctx, m.GetProjectId(), m.GetContainer(), m.GetDisplayName()))

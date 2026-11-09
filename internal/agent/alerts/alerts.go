@@ -42,6 +42,10 @@ type Engine struct {
 	Report func(context.Context, *nagiv1.Alert)
 	// Domains 返回现在还在用的域名（项目映射和面板域名），只检查这些域名的证书。为 nil 时检查全部。
 	Domains func() map[string]bool
+	// ContainerRules 返回容器生效的告警规则（面板随容器配置下发）。旧版本的面板不下发，ok 为 false，
+	// 这时按告警配置里的规则判断。RouteRules 同样返回 http 规则所属容器的规则，用于判断 5xx 比例。
+	ContainerRules func(projectID, container string) (*nagiv1.AlertRules, bool)
+	RouteRules     func(projectID, route string) (*nagiv1.AlertRules, bool)
 
 	mu       sync.Mutex
 	configs  map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
@@ -211,6 +215,56 @@ func (e *Engine) rules() alert.Rules {
 	return r
 }
 
+// nodeEnabled 判断节点的规则开着没有：任何一个面板的配置里开着就判断（和阈值一样取最严格的）。调用方持有 e.mu。
+func (e *Engine) nodeEnabled(rule string) bool {
+	if len(e.configs) == 0 {
+		return true
+	}
+	for _, cfg := range e.configs {
+		if alert.Enabled(cfg.GetRules(), rule) {
+			return true
+		}
+	}
+	return false
+}
+
+// NodeEnabled 判断节点的规则开着没有，给事件类告警（证书申请失败）用。
+func (e *Engine) NodeEnabled(rule string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nodeEnabled(rule)
+}
+
+// judge 是判断一个容器用的规则：阈值和开关。
+type judge struct {
+	alert.Rules
+	on func(rule string) bool
+}
+
+// forRules 按面板下发的容器规则判断；没有下发（旧版本的面板）时用告警配置里的。
+func forRules(r *nagiv1.AlertRules, ok bool, fallback judge) judge {
+	if !ok {
+		return fallback
+	}
+	return judge{alert.EffectiveRules(r), func(rule string) bool { return alert.Enabled(r, rule) }}
+}
+
+func (e *Engine) forContainer(projectID, container string, fallback judge) judge {
+	if e.ContainerRules == nil {
+		return fallback
+	}
+	r, ok := e.ContainerRules(projectID, container)
+	return forRules(r, ok, fallback)
+}
+
+// ContainerEnabled 判断容器的规则开着没有，给事件类告警（快照失败、备份同步失败）用。
+func (e *Engine) ContainerEnabled(projectID, container, rule string) bool {
+	e.mu.Lock()
+	fallback := e.nodeEnabled(rule)
+	e.mu.Unlock()
+	return e.forContainer(projectID, container, judge{on: func(string) bool { return fallback }}).on(rule)
+}
+
 // ---- 规则判断 ----
 
 // Run 每 30 秒判断一次规则，并补发队列里的告警，直到 ctx 取消。
@@ -231,20 +285,25 @@ func (e *Engine) Run(ctx context.Context) {
 func (e *Engine) evaluate(ctx context.Context) {
 	e.mu.Lock()
 	rules := e.rules()
+	enabled := map[string]bool{}
+	for _, k := range append(append([]string{}, alert.NodeRules...), alert.ContainerRules...) {
+		enabled[k] = e.nodeEnabled(k)
+	}
 	e.mu.Unlock()
+	node := judge{rules, func(rule string) bool { return enabled[rule] }}
 	now := time.Now()
 	latest := e.metrics.Latest()
 	active := map[string]*nagiv1.Alert{}
 
-	if v, ok := latest["node:disk"]; ok && v > rules.DiskPercent {
+	if v, ok := latest["node:disk"]; ok && v > rules.DiskPercent && enabled[alert.RuleDisk] {
 		active["disk"] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘使用 %.0f%%，超过 %.0f%%", v, rules.DiskPercent)}
 	}
 	for series, v := range latest {
-		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && v > rules.DiskPercent {
+		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && v > rules.DiskPercent && enabled[alert.RuleDisk] {
 			active["disk:"+mount] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘 %s（项目目录所在）使用 %.0f%%，超过 %.0f%%", mount, v, rules.DiskPercent)}
 		}
 	}
-	if v, ok := latest["node:mem"]; ok && v > rules.MemPercent {
+	if v, ok := latest["node:mem"]; ok && v > rules.MemPercent && enabled[alert.RuleMem] {
 		if e.memSince.IsZero() {
 			e.memSince = now
 		}
@@ -261,15 +320,17 @@ func (e *Engine) evaluate(ctx context.Context) {
 		if !ok {
 			continue
 		}
+		project, service := splitContainer(name)
+		container, _, _ := strings.Cut(service, "/")
+		j := e.forContainer(project, container, node)
 		hist := append(e.restarts[series], restartSample{at: now, count: count})
-		for len(hist) > 0 && now.Sub(hist[0].at) > rules.RestartWindow {
+		for len(hist) > 0 && now.Sub(hist[0].at) > j.RestartWindow {
 			hist = hist[1:]
 		}
 		e.restarts[series] = hist
-		if n := int(count - hist[0].count); n >= rules.RestartCount {
-			project, service := splitContainer(name)
+		if n := int(count - hist[0].count); n >= j.RestartCount && j.on(alert.RuleRestart) {
 			active["restart:"+name] = &nagiv1.Alert{
-				Title:   fmt.Sprintf("%s 在 %d 分钟内重启了 %d 次", describeService(service), int(rules.RestartWindow.Minutes()), n),
+				Title:   fmt.Sprintf("%s 在 %d 分钟内重启了 %d 次", describeService(service), int(j.RestartWindow.Minutes()), n),
 				Project: e.projectName(project),
 			}
 		}
@@ -277,8 +338,13 @@ func (e *Engine) evaluate(ctx context.Context) {
 
 	// http 规则的 5xx 比例。
 	for route, x := range e.errorRates(ctx, now) {
-		if x.requests >= alert.ErrorMinRequests && 100*x.errors/x.requests > rules.ErrorPercent {
-			project, name := splitContainer(route)
+		project, name := splitContainer(route)
+		j := node
+		if e.RouteRules != nil {
+			r, ok := e.RouteRules(project, name)
+			j = forRules(r, ok, node)
+		}
+		if x.requests >= alert.ErrorMinRequests && 100*x.errors/x.requests > j.ErrorPercent && j.on(alert.RuleErrors) {
 			active["errors:"+route] = &nagiv1.Alert{
 				Title: fmt.Sprintf("规则 %s 最近 %d 分钟 5xx 占 %.0f%%（共 %.0f 个请求）",
 					name, int(alert.ErrorWindow.Minutes()), 100*x.errors/x.requests, x.requests),
@@ -290,7 +356,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 	// 健康检查失败。
 	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
-			if c.Health == "unhealthy" {
+			if c.Health == "unhealthy" && e.forContainer(c.Project, c.Container, node).on(alert.RuleHealth) {
 				what := describeService(c.Container + "/" + c.Service)
 				active["health:"+c.Project+"/"+c.Container+"/"+c.Service] = &nagiv1.Alert{
 					Title: what + " 健康检查失败", Project: e.projectName(c.Project),
@@ -301,7 +367,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 
 	// 证书快过期。
 	for domain, notAfter := range e.CertExpiries() {
-		if left := time.Until(notAfter); left < time.Duration(rules.CertDays)*24*time.Hour {
+		if left := time.Until(notAfter); left < time.Duration(rules.CertDays)*24*time.Hour && enabled[alert.RuleCert] {
 			active["cert:"+domain] = &nagiv1.Alert{
 				Title: fmt.Sprintf("域名 %s 的证书将在 %d 天内过期", domain, int(left.Hours()/24)),
 			}

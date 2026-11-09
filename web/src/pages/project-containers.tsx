@@ -55,7 +55,9 @@ import {
   Tabs,
   Textarea,
 } from "@/components/ui";
-import type { Container, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { create } from "@bufbuild/protobuf";
+import { AlertRulesSchema, type AlertRules, type Container, type Project, type ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { AlertRulesFields, AlertRulesForm, containerRules } from "@/components/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
@@ -66,7 +68,7 @@ import { actionLabel } from "@/pages/activity";
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
 
 type ImageUpdate = { container: string; service: string; image: string };
-export const containerTabs = ["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha"] as const;
+export const containerTabs = ["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha", "alerts"] as const;
 export type DetailView = (typeof containerTabs)[number];
 
 // useProjectActions：项目概览页头的操作：更新有新版本的容器、部署全部容器、⋯。部署的输出显示在概览里。
@@ -715,9 +717,10 @@ function ContainerDetail({
           { value: "network", label: t.projectContainers.tabs.network },
           { value: "storage", label: t.projectContainers.tabs.storage },
           { value: "ha", label: t.projectContainers.tabs.ha },
+          { value: "alerts", label: t.projectContainers.tabs.alerts },
         ]}
       />
-      <Slide id={view} index={["overview", "logs", "terminal", "config", "versions", "network", "storage", "ha"].indexOf(view)}>
+      <Slide id={view} index={containerTabs.indexOf(view)}>
         {view !== "storage" && view !== "ha" && hasOutput && <div className="mb-6">{output}</div>}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
         {view === "config" && !isViewer && <ContainerConfig
@@ -758,8 +761,48 @@ function ContainerDetail({
         {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
         {view === "storage" && <ContainerStorage project={project} container={container} />}
         {view === "ha" && <ContainerHA project={project} container={container} />}
+        {view === "alerts" && <ContainerAlerts key={`alerts-${container.revision}`} project={project} container={container} />}
       </Slide>
     </>
+  );
+}
+
+// ContainerAlerts：容器的告警规则。默认用项目的；单独设置时整组替换项目的，起点是项目现在的规则。
+function ContainerAlerts({ project, container }: { project: Project; container: Container }) {
+  const queryClient = useQueryClient();
+  const { isViewer } = useRole();
+  const projectRules = project.settings?.alertRules;
+  const [own, setOwn] = useState(!!container.alertRules);
+  const save = async (rules: AlertRules | undefined) => {
+    await projectClient.setContainerAlertRules({ projectId: project.id, container: container.name, rules });
+    toast.success(t.alerts.savedAndPushed);
+    await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+  };
+  const toggle = async (v: boolean) => {
+    setOwn(v);
+    // 改回用项目的规则时立即保存：没有别的要填。
+    if (!v && container.alertRules) {
+      try {
+        await save(undefined);
+      } catch (err) {
+        setOwn(true);
+        toast.error(errorMessage(err));
+      }
+    }
+  };
+  return (
+    <Section title={t.alerts.rules} help={t.alerts.containerRulesHelp}>
+      <div className="grid gap-6">
+        <Check checked={own} disabled={isViewer} onChange={toggle} help={t.alerts.containerOwnHelp}>
+          {t.alerts.containerOwn}
+        </Check>
+        {own ? (
+          <AlertRulesForm id={`container-alerts-${container.name}`} defs={containerRules} initial={container.alertRules ?? projectRules} disabled={isViewer} onSave={save} />
+        ) : (
+          <AlertRulesFields id={`container-alerts-${container.name}`} defs={containerRules} value={projectRules ?? create(AlertRulesSchema)} onChange={() => {}} disabled />
+        )}
+      </div>
+    </Section>
   );
 }
 

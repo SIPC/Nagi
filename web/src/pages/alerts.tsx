@@ -4,13 +4,12 @@ import { create } from "@bufbuild/protobuf";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { AlertChannelSchema, AlertConfigSchema, AlertRulesSchema, type AlertChannel, type AlertConfig, type AlertRules } from "@/gen/nagi/v1/common_pb";
+import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormActions, FormBody, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
-import { useUnsaved } from "@/components/unsaved";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 
-// ---- 告警设置：通知渠道和触发规则 ----
+// ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
 
 const channelName = (c: AlertChannel) => c.name || c.type;
 
@@ -97,30 +96,23 @@ function ChannelDialog({ initial, adding, onClose, onSave }: { initial: AlertCha
 }
 
 // 查询成功才挂载，所以这里拿到的一定是面板上的配置，不会用空配置覆盖。
-// 面板上的规则变了（包括刚保存）时由上层换 key 重新挂载，正在填写的规则和「未保存」的起点一起更新。
+// 告警规则在各节点和项目的设置里（见 components/alert-rules.tsx），这里只有渠道。
 function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: boolean }) {
   const queryClient = useQueryClient();
   const channels = config?.channels ?? [];
-  const savedRules = config?.rules ?? create(AlertRulesSchema);
-  const [rules, setRules] = useState<AlertRules>(savedRules);
   const [editing, setEditing] = useState<{ index: number | null; channel: AlertChannel } | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
   const [channelError, setChannelError] = useState("");
-  const [rulesError, setRulesError] = useState("");
 
-  const dirty = useUnsaved(rules);
-
-  // 渠道和规则存在同一份配置里。各自保存时另一半用面板上已保存的值，不带上还没点保存的修改。
-  // 渠道的增删改在列表上就看得到，不另外提示；规则保存后页面没有变化，才提示已下发。
-  const push = async (nextChannels: AlertChannel[], nextRules: AlertRules) => {
-    await settingsClient.updateAlertConfig({ config: create(AlertConfigSchema, { channels: nextChannels, rules: nextRules }) });
+  // 渠道的增删改在列表上就看得到，不另外提示。
+  const push = async (nextChannels: AlertChannel[]) => {
+    await settingsClient.updateAlertConfig({ config: create(AlertConfigSchema, { channels: nextChannels }) });
     await queryClient.invalidateQueries({ queryKey: ["alert-config"] });
   };
 
   const saveChannel = async (c: AlertChannel) => {
     const index = editing?.index ?? null;
-    await push(index === null ? [...channels, c] : channels.map((x, i) => (i === index ? c : x)), savedRules);
+    await push(index === null ? [...channels, c] : channels.map((x, i) => (i === index ? c : x)));
     setEditing(null);
   };
 
@@ -128,10 +120,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
     if (!(await confirmAction(t.alerts.deleteChannelConfirm(channelName(channels[i])), { action: t.alerts.deleteChannel, danger: true }))) return;
     setChannelError("");
     try {
-      await push(
-        channels.filter((_, j) => j !== i),
-        savedRules,
-      );
+      await push(channels.filter((_, j) => j !== i));
     } catch (err) {
       setChannelError(errorMessage(err));
     }
@@ -150,57 +139,15 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
     }
   };
 
-  const saveRules = async () => {
-    setSaving(true);
-    setRulesError("");
-    try {
-      await push(channels, rules);
-      toast.success(t.alerts.savedAndPushed);
-    } catch (err) {
-      setRulesError(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const ruleField = (label: string, key: keyof AlertRules, placeholder: number, help?: string) => (
-    <Field label={label} htmlFor={`rule-${key}`} help={help}>
-      <Input
-        id={`rule-${key}`}
-        type="number"
-        min={0}
-        inputMode="numeric"
-        placeholder={t.alerts.defaultValue(placeholder)}
-        value={(rules[key] as number) || ""}
-        onChange={(e) =>
-          setRules(
-            create(AlertRulesSchema, {
-              ...rules,
-              [key]: Number(e.target.value) || 0,
-            }),
-          )
-        }
-      />
-    </Field>
-  );
-
   const addButton = (
     <Button variant="outline" onClick={() => setEditing({ index: null, channel: create(AlertChannelSchema, { type: "webhook" }) })}>
       <Plus />
       {t.alerts.addChannel}
     </Button>
   );
-  // 一组规则：小标题加字段。
-  const group = (title: string, children: React.ReactNode) => (
-    <fieldset className="grid gap-4">
-      <legend className="mb-4 font-medium">{title}</legend>
-      {children}
-    </fieldset>
-  );
-
   return (
     <>
-      <Section title={t.settings.tabs.alerts.label} help={t.alerts.channelsHelp} actions={addButton}>
+      <Section title={t.settings.tabs.alerts.label} help={`${t.alerts.channelsHelp}${t.alerts.rulesWhere}`} actions={addButton}>
         {lost && (
           <Notice tone="warning" title={t.alerts.lostTitle}>
             {t.alerts.lostBody} <HelpTip>{t.alerts.lostHelp}</HelpTip>
@@ -237,53 +184,6 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
         )}
       </Section>
 
-      <Section title={t.alerts.rules} help={t.alerts.rulesHelp}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveRules();
-          }}
-        >
-          <FormBody className="gap-6">
-            {group(
-              t.alerts.ruleGroups.resources,
-              <>
-                <FormRow>
-                  {ruleField(t.alerts.rule.memPercent, "memPercent", 90)}
-                  {ruleField(t.alerts.rule.memMinutes, "memMinutes", 5)}
-                </FormRow>
-                <FormRow>{ruleField(t.alerts.rule.diskPercent, "diskPercent", 90)}</FormRow>
-              </>,
-            )}
-            {group(
-              t.alerts.ruleGroups.containers,
-              <>
-                <FormRow>
-                  {ruleField(t.alerts.rule.restartCount, "restartCount", 3)}
-                  {ruleField(t.alerts.rule.restartMinutes, "restartMinutes", 10)}
-                </FormRow>
-                <FormRow>{ruleField(t.alerts.rule.errorPercent, "errorPercent", 5, t.alerts.rule.errorPercentHelp)}</FormRow>
-              </>,
-            )}
-            {group(
-              t.alerts.ruleGroups.availability,
-              <FormRow>
-                {ruleField(t.alerts.rule.offlineSeconds, "offlineSeconds", 60)}
-                {ruleField(t.alerts.rule.certDays, "certDays", 7)}
-              </FormRow>,
-            )}
-            {rulesError && <Alert>{rulesError}</Alert>}
-            {/* 和面板访问的保存一样用主按钮；没有改动时没有可保存的，置灰。 */}
-            <FormActions>
-              <Button type="submit" disabled={saving || !dirty}>
-                {saving && <Spinner />}
-                {t.common.actions.save}
-              </Button>
-            </FormActions>
-          </FormBody>
-        </form>
-      </Section>
-
       {editing && <ChannelDialog initial={editing.channel} adding={editing.index === null} onClose={() => setEditing(null)} onSave={saveChannel} />}
     </>
   );
@@ -307,5 +207,5 @@ export function AlertSettings() {
         <QueryError error={errorMessage(cfg.error)} onRetry={() => cfg.refetch()} />
       </Section>
     );
-  return <AlertForm key={JSON.stringify(cfg.data.config?.rules ?? {})} config={cfg.data.config} lost={cfg.data.lost} />;
+  return <AlertForm config={cfg.data.config} lost={cfg.data.lost} />;
 }

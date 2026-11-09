@@ -612,6 +612,7 @@ const (
 	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
 	NodeService_AdoptNodeContainer_FullMethodName    = "/nagi.v1.NodeService/AdoptNodeContainer"
 	NodeService_AdoptStaleProject_FullMethodName     = "/nagi.v1.NodeService/AdoptStaleProject"
+	NodeService_SetNodeAlertRules_FullMethodName     = "/nagi.v1.NodeService/SetNodeAlertRules"
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 )
 
@@ -678,6 +679,8 @@ type NodeServiceClient interface {
 	AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(ctx context.Context, in *AdoptStaleProjectRequest, opts ...grpc.CallOption) (*AdoptStaleProjectResponse, error)
+	// 修改节点的告警规则（内存、磁盘、离线、证书）。
+	SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error)
 }
@@ -1029,6 +1032,16 @@ func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, in *AdoptStal
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeAlertRulesResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeAlertRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ComposeDirPreview)
@@ -1102,6 +1115,8 @@ type NodeServiceServer interface {
 	AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error)
+	// 修改节点的告警规则（内存、磁盘、离线、证书）。
+	SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error)
 	mustEmbedUnimplementedNodeServiceServer()
@@ -1212,6 +1227,9 @@ func (UnimplementedNodeServiceServer) AdoptNodeContainer(context.Context, *Adopt
 }
 func (UnimplementedNodeServiceServer) AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdoptStaleProject not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeAlertRules not implemented")
 }
 func (UnimplementedNodeServiceServer) InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
@@ -1824,6 +1842,24 @@ func _NodeService_AdoptStaleProject_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_SetNodeAlertRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeAlertRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeAlertRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeAlertRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeAlertRules(ctx, req.(*SetNodeAlertRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_InspectComposeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeFileRef)
 	if err := dec(in); err != nil {
@@ -1976,6 +2012,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdoptStaleProject",
 			Handler:    _NodeService_AdoptStaleProject_Handler,
+		},
+		{
+			MethodName: "SetNodeAlertRules",
+			Handler:    _NodeService_SetNodeAlertRules_Handler,
 		},
 		{
 			MethodName: "InspectComposeDir",
@@ -3342,6 +3382,7 @@ const (
 	ProjectService_RetryDomainCert_FullMethodName         = "/nagi.v1.ProjectService/RetryDomainCert"
 	ProjectService_SetBackupNode_FullMethodName           = "/nagi.v1.ProjectService/SetBackupNode"
 	ProjectService_SetContainerDisplayName_FullMethodName = "/nagi.v1.ProjectService/SetContainerDisplayName"
+	ProjectService_SetContainerAlertRules_FullMethodName  = "/nagi.v1.ProjectService/SetContainerAlertRules"
 	ProjectService_SyncBackup_FullMethodName              = "/nagi.v1.ProjectService/SyncBackup"
 	ProjectService_ListBackupSnapshots_FullMethodName     = "/nagi.v1.ProjectService/ListBackupSnapshots"
 	ProjectService_RestoreFromBackup_FullMethodName       = "/nagi.v1.ProjectService/RestoreFromBackup"
@@ -3421,6 +3462,8 @@ type ProjectServiceClient interface {
 	SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(ctx context.Context, in *SetContainerDisplayNameRequest, opts ...grpc.CallOption) (*Project, error)
+	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
+	SetContainerAlertRules(ctx context.Context, in *SetContainerAlertRulesRequest, opts ...grpc.CallOption) (*Project, error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
 	// 备份节点上副本里的快照。
@@ -3788,6 +3831,16 @@ func (c *projectServiceClient) SetContainerDisplayName(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *projectServiceClient) SetContainerAlertRules(ctx context.Context, in *SetContainerAlertRulesRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetContainerAlertRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -4135,6 +4188,8 @@ type ProjectServiceServer interface {
 	SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error)
+	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
+	SetContainerAlertRules(context.Context, *SetContainerAlertRulesRequest) (*Project, error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *ContainerRef) (*Project, error)
 	// 备份节点上副本里的快照。
@@ -4267,6 +4322,9 @@ func (UnimplementedProjectServiceServer) SetBackupNode(context.Context, *SetBack
 }
 func (UnimplementedProjectServiceServer) SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContainerDisplayName not implemented")
+}
+func (UnimplementedProjectServiceServer) SetContainerAlertRules(context.Context, *SetContainerAlertRulesRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetContainerAlertRules not implemented")
 }
 func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *ContainerRef) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
@@ -4815,6 +4873,24 @@ func _ProjectService_SetContainerDisplayName_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_SetContainerAlertRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetContainerAlertRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetContainerAlertRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetContainerAlertRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetContainerAlertRules(ctx, req.(*SetContainerAlertRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -5324,6 +5400,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetContainerDisplayName",
 			Handler:    _ProjectService_SetContainerDisplayName_Handler,
+		},
+		{
+			MethodName: "SetContainerAlertRules",
+			Handler:    _ProjectService_SetContainerAlertRules_Handler,
 		},
 		{
 			MethodName: "SyncBackup",

@@ -296,6 +296,8 @@ type ProjectSettings struct {
 	InternalPorts []string `protobuf:"bytes,3,rep,name=internal_ports,json=internalPorts,proto3" json:"internal_ports,omitempty"`
 	// 每个容器最多保留的快照份数（定时、手动、部署前合计，不含版本文件），超过时删除最老的。0 表示默认（10 份）。
 	SnapshotLimit uint32 `protobuf:"varint,4,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
+	// 项目里容器的告警规则（重启、5xx、健康检查、快照、备份同步）。容器可以单独设置（Container.alert_rules）。
+	AlertRules    *AlertRules `protobuf:"bytes,5,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -358,6 +360,13 @@ func (x *ProjectSettings) GetSnapshotLimit() uint32 {
 	return 0
 }
 
+func (x *ProjectSettings) GetAlertRules() *AlertRules {
+	if x != nil {
+		return x.AlertRules
+	}
+	return nil
+}
+
 // Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
 // 每个容器指定一个节点运行，各自部署、记版本、回滚、快照。
 type Container struct {
@@ -408,7 +417,9 @@ type Container struct {
 	// 见证人是面板时，是不是本面板（不是时是换面板以前的旧面板，本面板会自动换成自己）。
 	FailoverWitnessSelf bool `protobuf:"varint,24,opt,name=failover_witness_self,json=failoverWitnessSelf,proto3" json:"failover_witness_self,omitempty"`
 	// 显示名称：只用于界面显示，可以随时改；为空时显示容器名。
-	DisplayName   string `protobuf:"bytes,25,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	DisplayName string `protobuf:"bytes,25,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// 容器单独设置的告警规则，为空时用项目的（ProjectSettings.alert_rules）。
+	AlertRules    *AlertRules `protobuf:"bytes,26,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -616,6 +627,13 @@ func (x *Container) GetDisplayName() string {
 		return x.DisplayName
 	}
 	return ""
+}
+
+func (x *Container) GetAlertRules() *AlertRules {
+	if x != nil {
+		return x.AlertRules
+	}
+	return nil
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -1877,6 +1895,8 @@ type ContainerSpec struct {
 	DisplayName string `protobuf:"bytes,22,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	// 项目设置里的快照份数上限，0 表示默认 10。
 	SnapshotLimit uint32 `protobuf:"varint,23,opt,name=snapshot_limit,json=snapshotLimit,proto3" json:"snapshot_limit,omitempty"`
+	// 这个容器生效的告警规则：容器单独设置了就是它的，否则是项目的。节点按它判断容器的告警。
+	AlertRules    *AlertRules `protobuf:"bytes,24,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2070,6 +2090,13 @@ func (x *ContainerSpec) GetSnapshotLimit() uint32 {
 		return x.SnapshotLimit
 	}
 	return 0
+}
+
+func (x *ContainerSpec) GetAlertRules() *AlertRules {
+	if x != nil {
+		return x.AlertRules
+	}
+	return nil
 }
 
 // BackupTarget 是接收副本的节点。
@@ -3061,7 +3088,10 @@ type AlertRules struct {
 	// 节点失联超过这么多秒，默认 60。
 	OfflineSeconds uint32 `protobuf:"varint,7,opt,name=offline_seconds,json=offlineSeconds,proto3" json:"offline_seconds,omitempty"`
 	// 一条 http 规则最近 5 分钟的 5xx 比例超过这个百分比（至少 20 个请求），默认 5。
-	ErrorPercent  uint32 `protobuf:"varint,8,opt,name=error_percent,json=errorPercent,proto3" json:"error_percent,omitempty"`
+	ErrorPercent uint32 `protobuf:"varint,8,opt,name=error_percent,json=errorPercent,proto3" json:"error_percent,omitempty"`
+	// 规则的开关：键是规则（mem、disk、offline、cert、restart、errors、health、snapshot、backup，见 internal/pkg/alert），
+	// 值为 false 时不发这条规则的告警。没有写的规则开着。
+	Enabled       map[string]bool `protobuf:"bytes,9,rep,name=enabled,proto3" json:"enabled,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3150,6 +3180,13 @@ func (x *AlertRules) GetErrorPercent() uint32 {
 		return x.ErrorPercent
 	}
 	return 0
+}
+
+func (x *AlertRules) GetEnabled() map[string]bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return nil
 }
 
 type AlertConfig struct {
@@ -4624,9 +4661,11 @@ type LinkEntry struct {
 	Domains   []string `protobuf:"bytes,7,rep,name=domains,proto3" json:"domains,omitempty"`
 	HttpOnly  bool     `protobuf:"varint,8,opt,name=http_only,json=httpOnly,proto3" json:"http_only,omitempty"`
 	// 目标在项目内网里的名字：单个容器是"容器名"，容器组里的是"服务.容器组"。
-	TargetName    string      `protobuf:"bytes,9,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
-	TargetPort    uint32      `protobuf:"varint,10,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`
-	Nodes         []*LinkNode `protobuf:"bytes,11,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	TargetName string      `protobuf:"bytes,9,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	TargetPort uint32      `protobuf:"varint,10,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`
+	Nodes      []*LinkNode `protobuf:"bytes,11,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
+	AlertRules    *AlertRules `protobuf:"bytes,12,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4734,6 +4773,13 @@ func (x *LinkEntry) GetTargetPort() uint32 {
 func (x *LinkEntry) GetNodes() []*LinkNode {
 	if x != nil {
 		return x.Nodes
+	}
+	return nil
+}
+
+func (x *LinkEntry) GetAlertRules() *AlertRules {
+	if x != nil {
+		return x.AlertRules
 	}
 	return nil
 }
@@ -5055,13 +5101,15 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
-	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\xcb\x01\n" +
+	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\"\x81\x02\n" +
 	"\x0fProjectSettings\x12.\n" +
 	"\n" +
 	"shared_env\x18\x01 \x03(\v2\x0f.nagi.v1.EnvVarR\tsharedEnv\x12:\n" +
 	"\x19snapshot_interval_minutes\x18\x02 \x01(\rR\x17snapshotIntervalMinutes\x12%\n" +
 	"\x0einternal_ports\x18\x03 \x03(\tR\rinternalPorts\x12%\n" +
-	"\x0esnapshot_limit\x18\x04 \x01(\rR\rsnapshotLimit\"\xff\a\n" +
+	"\x0esnapshot_limit\x18\x04 \x01(\rR\rsnapshotLimit\x124\n" +
+	"\valert_rules\x18\x05 \x01(\v2\x13.nagi.v1.AlertRulesR\n" +
+	"alertRules\"\xb5\b\n" +
 	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -5091,7 +5139,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0ffailover_holder\x18\x16 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0efailoverHolder\x12B\n" +
 	"\x10failover_standby\x18\x17 \x01(\v2\x17.nagi.v1.FailoverStatusR\x0ffailoverStandby\x122\n" +
 	"\x15failover_witness_self\x18\x18 \x01(\bR\x13failoverWitnessSelf\x12!\n" +
-	"\fdisplay_name\x18\x19 \x01(\tR\vdisplayName\"\xf5\x03\n" +
+	"\fdisplay_name\x18\x19 \x01(\tR\vdisplayName\x124\n" +
+	"\valert_rules\x18\x1a \x01(\v2\x13.nagi.v1.AlertRulesR\n" +
+	"alertRules\"\xf5\x03\n" +
 	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +
@@ -5210,7 +5260,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xa0\a\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xd6\a\n" +
 	"\rContainerSpec\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -5238,7 +5288,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05panel\x18\x14 \x01(\tR\x05panel\x12%\n" +
 	"\x0einternal_ports\x18\x15 \x03(\tR\rinternalPorts\x12!\n" +
 	"\fdisplay_name\x18\x16 \x01(\tR\vdisplayName\x12%\n" +
-	"\x0esnapshot_limit\x18\x17 \x01(\rR\rsnapshotLimit\x1a9\n" +
+	"\x0esnapshot_limit\x18\x17 \x01(\rR\rsnapshotLimit\x124\n" +
+	"\valert_rules\x18\x18 \x01(\v2\x13.nagi.v1.AlertRulesR\n" +
+	"alertRules\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
@@ -5328,7 +5380,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x04type\x18\x03 \x01(\tR\x04type\x12\x10\n" +
 	"\x03url\x18\x04 \x01(\tR\x03url\x12%\n" +
 	"\x0etelegram_token\x18\x05 \x01(\tR\rtelegramToken\x12(\n" +
-	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\xaa\x02\n" +
+	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\xa2\x03\n" +
 	"\n" +
 	"AlertRules\x12!\n" +
 	"\fdisk_percent\x18\x01 \x01(\rR\vdiskPercent\x12\x1f\n" +
@@ -5340,7 +5392,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x0frestart_minutes\x18\x05 \x01(\rR\x0erestartMinutes\x12\x1b\n" +
 	"\tcert_days\x18\x06 \x01(\rR\bcertDays\x12'\n" +
 	"\x0foffline_seconds\x18\a \x01(\rR\x0eofflineSeconds\x12#\n" +
-	"\rerror_percent\x18\b \x01(\rR\ferrorPercent\"\x88\x01\n" +
+	"\rerror_percent\x18\b \x01(\rR\ferrorPercent\x12:\n" +
+	"\aenabled\x18\t \x03(\v2 .nagi.v1.AlertRules.EnabledEntryR\aenabled\x1a:\n" +
+	"\fEnabledEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"\x88\x01\n" +
 	"\vAlertConfig\x121\n" +
 	"\bchannels\x18\x01 \x03(\v2\x15.nagi.v1.AlertChannelR\bchannels\x12)\n" +
 	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\x12\x1b\n" +
@@ -5476,7 +5532,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\aproxies\x18\x01 \x03(\v2\x12.nagi.v1.LinkProxyR\aproxies\x12*\n" +
 	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\x12,\n" +
 	"\aentries\x18\x03 \x03(\v2\x12.nagi.v1.LinkEntryR\aentries\x12:\n" +
-	"\fentry_allows\x18\x04 \x03(\v2\x17.nagi.v1.LinkEntryAllowR\ventryAllows\"\xd2\x02\n" +
+	"\fentry_allows\x18\x04 \x03(\v2\x17.nagi.v1.LinkEntryAllowR\ventryAllows\"\x88\x03\n" +
 	"\tLinkEntry\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -5492,7 +5548,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtarget_port\x18\n" +
 	" \x01(\rR\n" +
 	"targetPort\x12'\n" +
-	"\x05nodes\x18\v \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\"\x9a\x01\n" +
+	"\x05nodes\x18\v \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\x124\n" +
+	"\valert_rules\x18\f \x01(\v2\x13.nagi.v1.AlertRulesR\n" +
+	"alertRules\"\x9a\x01\n" +
 	"\x0eLinkEntryAllow\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1f\n" +
@@ -5537,7 +5595,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 58)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -5597,81 +5655,87 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	nil,                           // 55: nagi.v1.Deployment.VersionsEntry
 	nil,                           // 56: nagi.v1.ContainerSpec.ImagesEntry
 	nil,                           // 57: nagi.v1.DeployResult.ImagesEntry
-	(*timestamppb.Timestamp)(nil), // 58: google.protobuf.Timestamp
+	nil,                           // 58: nagi.v1.AlertRules.EnabledEntry
+	(*timestamppb.Timestamp)(nil), // 59: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	58, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	59, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	10, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	4,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
 	3,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
 	11, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
 	2,  // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
-	58, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
+	59, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
 	11, // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
-	58, // 8: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
-	5,  // 9: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
-	5,  // 10: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
-	42, // 11: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
-	45, // 12: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
-	46, // 13: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
-	46, // 14: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
-	11, // 15: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	53, // 16: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
-	13, // 17: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
-	9,  // 18: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
-	0,  // 19: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	58, // 20: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	58, // 21: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	54, // 22: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	58, // 23: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	55, // 24: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	58, // 25: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
-	11, // 26: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
-	14, // 27: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
-	11, // 28: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
-	15, // 29: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
-	17, // 30: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	58, // 31: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	1,  // 32: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
-	16, // 33: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	5,  // 34: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
-	11, // 35: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	56, // 36: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
-	10, // 37: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
-	20, // 38: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
-	15, // 39: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
-	17, // 40: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	58, // 41: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	42, // 42: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
-	23, // 43: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
-	58, // 44: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
-	58, // 45: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	28, // 46: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	57, // 47: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
-	30, // 48: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
-	31, // 49: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	58, // 50: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	58, // 51: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	36, // 52: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	58, // 53: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	58, // 54: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	44, // 55: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	44, // 56: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	44, // 57: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	45, // 58: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	58, // 59: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	50, // 60: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	52, // 61: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	48, // 62: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	49, // 63: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	51, // 64: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	51, // 65: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	12, // 66: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	67, // [67:67] is the sub-list for method output_type
-	67, // [67:67] is the sub-list for method input_type
-	67, // [67:67] is the sub-list for extension type_name
-	67, // [67:67] is the sub-list for extension extendee
-	0,  // [0:67] is the sub-list for field type_name
+	31, // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
+	59, // 9: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	5,  // 10: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
+	5,  // 11: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
+	42, // 12: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
+	45, // 13: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
+	46, // 14: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
+	46, // 15: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
+	31, // 16: nagi.v1.Container.alert_rules:type_name -> nagi.v1.AlertRules
+	11, // 17: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
+	53, // 18: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	13, // 19: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
+	9,  // 20: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
+	0,  // 21: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
+	59, // 22: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	59, // 23: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	54, // 24: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	59, // 25: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	55, // 26: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	59, // 27: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	11, // 28: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
+	14, // 29: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
+	11, // 30: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
+	15, // 31: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
+	17, // 32: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	59, // 33: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	1,  // 34: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
+	16, // 35: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
+	5,  // 36: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
+	11, // 37: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
+	56, // 38: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	10, // 39: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
+	20, // 40: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
+	31, // 41: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
+	15, // 42: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
+	17, // 43: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	59, // 44: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	42, // 45: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
+	23, // 46: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
+	59, // 47: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
+	59, // 48: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	28, // 49: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	57, // 50: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	58, // 51: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
+	30, // 52: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	31, // 53: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	59, // 54: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	59, // 55: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	36, // 56: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	59, // 57: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	59, // 58: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	44, // 59: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	44, // 60: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	44, // 61: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	45, // 62: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	59, // 63: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	50, // 64: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	52, // 65: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	48, // 66: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	49, // 67: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	51, // 68: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	31, // 69: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	51, // 70: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	12, // 71: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	72, // [72:72] is the sub-list for method output_type
+	72, // [72:72] is the sub-list for method input_type
+	72, // [72:72] is the sub-list for extension type_name
+	72, // [72:72] is the sub-list for extension extendee
+	0,  // [0:72] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -5689,7 +5753,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   57,
+			NumMessages:   58,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

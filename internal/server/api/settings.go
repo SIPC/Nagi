@@ -170,9 +170,8 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		}
 		ids[ch.GetId()] = true
 	}
-	if r := cfg.GetRules(); r != nil && (r.GetDiskPercent() > 100 || r.GetMemPercent() > 100) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("百分比须在 0–100 之间"))
-	}
+	// 规则改在节点和项目上设置（SetNodeAlertRules、项目设置），这里只存渠道。
+	cfg.Rules = nil
 	if err := s.Nodes.SetAlertConfig(ctx, cfg); err != nil {
 		return nil, err
 	}

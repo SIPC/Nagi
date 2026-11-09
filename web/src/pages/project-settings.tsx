@@ -12,6 +12,7 @@ import { HelpParts } from "@/components/help-parts";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction } from "@/components/confirm";
 import { EnvEditor } from "@/components/env-editor";
+import { AlertRulesForm, containerRules } from "@/components/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
 
@@ -21,6 +22,7 @@ export function SettingsTab({ project }: { project: Project }) {
   return (
     <div>
       <GeneralSettings project={project} />
+      <AlertRulesSection project={project} />
       <SharedEnv project={project} />
       <Deployments project={project} />
       <DeleteProject project={project} />
@@ -238,6 +240,38 @@ function SharedEnv({ project }: { project: Project }) {
           )}
         </FormActions>
       </FormBody>
+    </Section>
+  );
+}
+
+// ---- 告警规则 ----
+
+// AlertRulesSection：项目里容器的告警规则，容器可以在自己的「告警」标签里单独设置。
+// 接口每次提交完整的设置，其余设置照原样带上；保存后项目重新加载，换 key 让表单的起点跟着更新。
+function AlertRulesSection({ project }: { project: Project }) {
+  const queryClient = useQueryClient();
+  const { isViewer } = useRole();
+  const s = project.settings;
+  return (
+    <Section title={t.alerts.rules} help={t.alerts.projectRulesHelp}>
+      <AlertRulesForm
+        key={`${project.revision}`}
+        id={`project-alerts-${project.id}`}
+        defs={containerRules}
+        initial={s?.alertRules}
+        disabled={isViewer}
+        onSave={async (rules) => {
+          await projectClient.updateProjectSettings({
+            projectId: project.id,
+            baseRevision: project.revision,
+            name: project.name,
+            networkName: project.networkName,
+            settings: { internalPorts: s?.internalPorts, snapshotIntervalMinutes: s?.snapshotIntervalMinutes, snapshotLimit: s?.snapshotLimit, alertRules: rules },
+          });
+          toast.success(t.alerts.savedAndPushed);
+          await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+        }}
+      />
     </Section>
   );
 }

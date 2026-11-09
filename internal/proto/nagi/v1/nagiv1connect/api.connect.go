@@ -160,6 +160,9 @@ const (
 	// NodeServiceAdoptStaleProjectProcedure is the fully-qualified name of the NodeService's
 	// AdoptStaleProject RPC.
 	NodeServiceAdoptStaleProjectProcedure = "/nagi.v1.NodeService/AdoptStaleProject"
+	// NodeServiceSetNodeAlertRulesProcedure is the fully-qualified name of the NodeService's
+	// SetNodeAlertRules RPC.
+	NodeServiceSetNodeAlertRulesProcedure = "/nagi.v1.NodeService/SetNodeAlertRules"
 	// NodeServiceInspectComposeDirProcedure is the fully-qualified name of the NodeService's
 	// InspectComposeDir RPC.
 	NodeServiceInspectComposeDirProcedure = "/nagi.v1.NodeService/InspectComposeDir"
@@ -338,6 +341,9 @@ const (
 	// ProjectServiceSetContainerDisplayNameProcedure is the fully-qualified name of the
 	// ProjectService's SetContainerDisplayName RPC.
 	ProjectServiceSetContainerDisplayNameProcedure = "/nagi.v1.ProjectService/SetContainerDisplayName"
+	// ProjectServiceSetContainerAlertRulesProcedure is the fully-qualified name of the ProjectService's
+	// SetContainerAlertRules RPC.
+	ProjectServiceSetContainerAlertRulesProcedure = "/nagi.v1.ProjectService/SetContainerAlertRules"
 	// ProjectServiceSyncBackupProcedure is the fully-qualified name of the ProjectService's SyncBackup
 	// RPC.
 	ProjectServiceSyncBackupProcedure = "/nagi.v1.ProjectService/SyncBackup"
@@ -864,6 +870,8 @@ type NodeServiceClient interface {
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
+	// 修改节点的告警规则（内存、磁盘、离线、证书）。
+	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
@@ -1077,6 +1085,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeAlertRules: connect.NewClient[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeAlertRulesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeAlertRules")),
+			connect.WithClientOptions(opts...),
+		),
 		inspectComposeDir: connect.NewClient[v1.NodeFileRef, v1.ComposeDirPreview](
 			httpClient,
 			baseURL+NodeServiceInspectComposeDirProcedure,
@@ -1121,6 +1135,7 @@ type nodeServiceClient struct {
 	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
 	adoptNodeContainer    *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
 	adoptStaleProject     *connect.Client[v1.AdoptStaleProjectRequest, v1.AdoptStaleProjectResponse]
+	setNodeAlertRules     *connect.Client[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse]
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 }
 
@@ -1289,6 +1304,11 @@ func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, req *connect.
 	return c.adoptStaleProject.CallUnary(ctx, req)
 }
 
+// SetNodeAlertRules calls nagi.v1.NodeService.SetNodeAlertRules.
+func (c *nodeServiceClient) SetNodeAlertRules(ctx context.Context, req *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error) {
+	return c.setNodeAlertRules.CallUnary(ctx, req)
+}
+
 // InspectComposeDir calls nagi.v1.NodeService.InspectComposeDir.
 func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
 	return c.inspectComposeDir.CallUnary(ctx, req)
@@ -1355,6 +1375,8 @@ type NodeServiceHandler interface {
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
+	// 修改节点的告警规则（内存、磁盘、离线、证书）。
+	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
@@ -1564,6 +1586,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeAlertRulesHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeAlertRulesProcedure,
+		svc.SetNodeAlertRules,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeAlertRules")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceInspectComposeDirHandler := connect.NewUnaryHandler(
 		NodeServiceInspectComposeDirProcedure,
 		svc.InspectComposeDir,
@@ -1638,6 +1666,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceAdoptNodeContainerHandler.ServeHTTP(w, r)
 		case NodeServiceAdoptStaleProjectProcedure:
 			nodeServiceAdoptStaleProjectHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeAlertRulesProcedure:
+			nodeServiceSetNodeAlertRulesHandler.ServeHTTP(w, r)
 		case NodeServiceInspectComposeDirProcedure:
 			nodeServiceInspectComposeDirHandler.ServeHTTP(w, r)
 		default:
@@ -1779,6 +1809,10 @@ func (UnimplementedNodeServiceHandler) AdoptNodeContainer(context.Context, *conn
 
 func (UnimplementedNodeServiceHandler) AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AdoptStaleProject is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeAlertRules is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
@@ -2753,6 +2787,8 @@ type ProjectServiceClient interface {
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
+	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
+	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照。
@@ -2970,6 +3006,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SetContainerDisplayName")),
 			connect.WithClientOptions(opts...),
 		),
+		setContainerAlertRules: connect.NewClient[v1.SetContainerAlertRulesRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetContainerAlertRulesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetContainerAlertRules")),
+			connect.WithClientOptions(opts...),
+		),
 		syncBackup: connect.NewClient[v1.ContainerRef, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceSyncBackupProcedure,
@@ -3152,6 +3194,7 @@ type projectServiceClient struct {
 	retryDomainCert         *connect.Client[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse]
 	setBackupNode           *connect.Client[v1.SetBackupNodeRequest, v1.Project]
 	setContainerDisplayName *connect.Client[v1.SetContainerDisplayNameRequest, v1.Project]
+	setContainerAlertRules  *connect.Client[v1.SetContainerAlertRulesRequest, v1.Project]
 	syncBackup              *connect.Client[v1.ContainerRef, v1.Project]
 	listBackupSnapshots     *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	restoreFromBackup       *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
@@ -3312,6 +3355,11 @@ func (c *projectServiceClient) SetBackupNode(ctx context.Context, req *connect.R
 // SetContainerDisplayName calls nagi.v1.ProjectService.SetContainerDisplayName.
 func (c *projectServiceClient) SetContainerDisplayName(ctx context.Context, req *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error) {
 	return c.setContainerDisplayName.CallUnary(ctx, req)
+}
+
+// SetContainerAlertRules calls nagi.v1.ProjectService.SetContainerAlertRules.
+func (c *projectServiceClient) SetContainerAlertRules(ctx context.Context, req *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error) {
+	return c.setContainerAlertRules.CallUnary(ctx, req)
 }
 
 // SyncBackup calls nagi.v1.ProjectService.SyncBackup.
@@ -3489,6 +3537,8 @@ type ProjectServiceHandler interface {
 	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
+	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
+	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 立即同步到备份节点，同步完才返回。
 	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照。
@@ -3702,6 +3752,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("SetContainerDisplayName")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetContainerAlertRulesHandler := connect.NewUnaryHandler(
+		ProjectServiceSetContainerAlertRulesProcedure,
+		svc.SetContainerAlertRules,
+		connect.WithSchema(projectServiceMethods.ByName("SetContainerAlertRules")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceSyncBackupHandler := connect.NewUnaryHandler(
 		ProjectServiceSyncBackupProcedure,
 		svc.SyncBackup,
@@ -3908,6 +3964,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSetBackupNodeHandler.ServeHTTP(w, r)
 		case ProjectServiceSetContainerDisplayNameProcedure:
 			projectServiceSetContainerDisplayNameHandler.ServeHTTP(w, r)
+		case ProjectServiceSetContainerAlertRulesProcedure:
+			projectServiceSetContainerAlertRulesHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncBackupProcedure:
 			projectServiceSyncBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceListBackupSnapshotsProcedure:
@@ -4073,6 +4131,10 @@ func (UnimplementedProjectServiceHandler) SetBackupNode(context.Context, *connec
 
 func (UnimplementedProjectServiceHandler) SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetContainerDisplayName is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetContainerAlertRules is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {

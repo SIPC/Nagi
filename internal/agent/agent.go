@@ -26,6 +26,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
@@ -201,6 +202,8 @@ func Run(ctx context.Context, cfg Config) error {
 		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
 	a.alerts.Report = a.reportAlert
+	a.alerts.ContainerRules = a.containerAlertRules
+	a.alerts.RouteRules = a.routeAlertRules
 	a.alerts.Domains = func() map[string]bool {
 		routes, err := a.allRoutes(context.Background())
 		if err != nil {
@@ -228,6 +231,9 @@ func Run(ctx context.Context, cfg Config) error {
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
 		if err == nil {
 			go a.alerts.Resolve(ctx, "cert_failed:"+domain)
+			return
+		}
+		if !a.alerts.NodeEnabled(alert.RuleCert) {
 			return
 		}
 		go a.alerts.Fire(ctx, "cert_failed:"+domain, fmt.Sprintf("域名 %s 申请证书失败", domain), err.Error(),
@@ -711,6 +717,9 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 					return
 				}
 				a.log.Warn("快照仓库维护失败", "project", projectID, "container", container, "err", err)
+				if !a.alerts.ContainerEnabled(projectID, container, alert.RuleSnapshot) {
+					return
+				}
 				a.alerts.Fire(ctx, key, "容器 "+container+" 快照仓库维护失败", err.Error(), projectID)
 				return
 			}
@@ -723,6 +732,9 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 				return
 			}
 			a.log.Warn("定时快照失败", "project", projectID, "container", container, "err", err)
+			if !a.alerts.ContainerEnabled(projectID, container, alert.RuleSnapshot) {
+				return
+			}
 			a.alerts.Fire(ctx, key, "容器 "+container+" 定时快照失败", err.Error(), projectID)
 		})
 	}
@@ -754,4 +766,36 @@ func trustedFingerprints(panels []trustedPanel) []string {
 		out = append(out, p.Fingerprint)
 	}
 	return out
+}
+
+// containerAlertRules 返回容器生效的告警规则（面板随容器配置下发）。本节点上没有这个容器，或者面板是旧版本、没有下发时 ok 为 false。
+func (a *agent) containerAlertRules(projectID, container string) (*nagiv1.AlertRules, bool) {
+	c, err := a.projects.Get(context.Background(), projectID, container)
+	if err != nil || c.Spec.GetAlertRules() == nil {
+		return nil, false
+	}
+	return c.Spec.GetAlertRules(), true
+}
+
+// routeAlertRules 返回 http 规则（映射）所属容器的告警规则：容器在本节点上时看它的配置，
+// 本节点只是入口节点时看入口计划里带的。
+func (a *agent) routeAlertRules(projectID, route string) (*nagiv1.AlertRules, bool) {
+	for _, c := range a.projects.List(context.Background()) {
+		if c.Spec.GetProjectId() != projectID {
+			continue
+		}
+		for _, r := range c.Spec.GetRoutes() {
+			if r.GetName() == route && c.Spec.GetAlertRules() != nil {
+				return c.Spec.GetAlertRules(), true
+			}
+		}
+	}
+	if a.intranet != nil {
+		for _, e := range a.intranet.current().GetEntries() {
+			if e.GetProjectId() == projectID && e.GetName() == route && e.GetAlertRules() != nil {
+				return e.GetAlertRules(), true
+			}
+		}
+	}
+	return nil, false
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/lease"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -606,6 +607,9 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 	f.mu.Unlock()
 	a.changed()
 	if err != nil {
+		if !a.alerts.ContainerEnabled(cfg.GetProjectId(), cfg.GetContainer(), alert.RuleBackup) {
+			return
+		}
 		a.alerts.Fire(ctx, "standby:"+id, "容器 "+cfg.GetContainer()+" 同步给热备节点失败", err.Error(), cfg.GetProjectId())
 	} else {
 		a.alerts.Resolve(ctx, "standby:"+id)

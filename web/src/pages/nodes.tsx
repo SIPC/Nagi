@@ -49,6 +49,7 @@ import {
   CodeBlock,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
+import { AlertRulesForm, nodeRules, rulesSummary } from "@/components/alert-rules";
 import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
@@ -856,7 +857,8 @@ function AddNode({ onClose }: { onClose: () => void }) {
 function NodeSettings({ n }: { n: Node }) {
   const { isAdmin } = useRole();
   const reclaim = useRun("");
-  const [editing, setEditing] = useState<"root" | "mirrors" | null>(null);
+  const [editing, setEditing] = useState<"root" | "mirrors" | "alerts" | null>(null);
+  const queryClient = useQueryClient();
   const root = n.info?.projectsRoot || "/srv/nagi";
   const mirrors = useQuery({ queryKey: ["node-mirrors", n.id], queryFn: () => nodeClient.getNodeMirrors({ nodeId: n.id }), enabled: isAdmin });
   const denied = !isAdmin || (mirrors.error instanceof ConnectError && mirrors.error.code === Code.PermissionDenied);
@@ -888,6 +890,13 @@ function NodeSettings({ n }: { n: Node }) {
             </Button>
           )}
         </SettingRow>
+        <SettingRow label={t.alerts.rules} help={t.alerts.nodeRulesHelp} description={rulesSummary(nodeRules, n.alertRules)}>
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setEditing("alerts")}>
+              {t.common.actions.edit}
+            </Button>
+          )}
+        </SettingRow>
         <NodeQUIC nodeId={n.id} online={n.online} />
         <SettingRow label={m.title} help={m.description} description={!isAdmin ? m.adminOnly : undefined}>
           {isAdmin && (
@@ -902,6 +911,19 @@ function NodeSettings({ n }: { n: Node }) {
       {reclaim.hasOutput && <div className="mt-4">{reclaim.output}</div>}
       <Dialog open={editing === "root"} onClose={() => setEditing(null)} title={t.nodes.settings.root}>
         <RootForm nodeId={n.id} root={root} onDone={() => setEditing(null)} />
+      </Dialog>
+      <Dialog open={editing === "alerts"} onClose={() => setEditing(null)} title={t.alerts.rules} description={t.alerts.nodeRulesHelp} className="max-w-[560px]">
+        <AlertRulesForm
+          id={`node-alerts-${n.id}`}
+          defs={nodeRules}
+          initial={n.alertRules}
+          onCancel={() => setEditing(null)}
+          onSave={async (rules) => {
+            await nodeClient.setNodeAlertRules({ nodeId: n.id, rules });
+            await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+            setEditing(null);
+          }}
+        />
       </Dialog>
       <Dialog open={editing === "mirrors" && !!mirrors.data} onClose={() => setEditing(null)} title={t.nodes.mirrors.title} description={t.nodes.mirrors.description} className="max-w-[520px]">
         {mirrors.data && <MirrorsForm nodeId={n.id} mirrors={mirrors.data} onDone={() => setEditing(null)} />}

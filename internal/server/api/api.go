@@ -258,6 +258,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		}
 		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
 		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
+		n.AlertRules = nodes.NodeAlertRules(row)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -492,4 +493,11 @@ func (s *nodeService) AdoptStaleProject(ctx context.Context, req *connect.Reques
 		return nil, toConnect(err)
 	}
 	return connect.NewResponse(&nagiv1.AdoptStaleProjectResponse{}), nil
+}
+
+func (s *nodeService) SetNodeAlertRules(ctx context.Context, req *connect.Request[nagiv1.SetNodeAlertRulesRequest]) (*connect.Response[nagiv1.SetNodeAlertRulesResponse], error) {
+	if err := s.Nodes.SetNodeAlertRules(ctx, req.Msg.GetNodeId(), req.Msg.GetRules()); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	return connect.NewResponse(&nagiv1.SetNodeAlertRulesResponse{}), nil
 }

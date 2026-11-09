@@ -23,6 +23,7 @@ export default {
     network: "网络",
     storage: "存储",
     ha: "高可用",
+    alerts: "告警",
   },
   columns: {
     name: "容器名称",

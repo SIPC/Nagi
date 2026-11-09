@@ -41,6 +41,7 @@ type Container struct {
 	FailoverEpoch   int64
 	DeclaredPorts   string
 	DisplayName     string
+	AlertRules      []byte
 }
 
 type Deployment struct {
@@ -65,14 +66,15 @@ type EnrollToken struct {
 }
 
 type Node struct {
-	ID        string
-	Name      string
-	CreatedAt int64
-	LastSeen  int64
-	Info      []byte
-	Revoked   int64
-	MeshKey   []byte
-	Pending   int64
+	ID         string
+	Name       string
+	CreatedAt  int64
+	LastSeen   int64
+	Info       []byte
+	Revoked    int64
+	MeshKey    []byte
+	Pending    int64
+	AlertRules []byte
 }
 
 type Project struct {

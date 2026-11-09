@@ -158,3 +158,34 @@ func TestStrictestRules(t *testing.T) {
 		t.Fatalf("规则合并不对：%+v", r)
 	}
 }
+
+// 容器的规则按面板随容器配置下发的判断；没有下发（旧版本面板）时用告警配置里的。节点的规则任何一个面板开着就判断。
+func TestRuleSwitches(t *testing.T) {
+	e := newEngine(t, nil)
+	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{RestartCount: 9, Enabled: map[string]bool{"mem": false, "snapshot": false}}})
+	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"mem": true, "snapshot": false}}})
+	e.ContainerRules = func(project, container string) (*nagiv1.AlertRules, bool) {
+		if container == "web" {
+			return &nagiv1.AlertRules{RestartCount: 5, Enabled: map[string]bool{"backup": false}}, true
+		}
+		return nil, false
+	}
+	if !e.NodeEnabled("mem") {
+		t.Error("p2 开着内存告警，应该判断")
+	}
+	if e.ContainerEnabled("p", "web", "backup") || !e.ContainerEnabled("p", "web", "snapshot") {
+		t.Error("web 按它自己的规则：备份关、快照开")
+	}
+	if e.ContainerEnabled("p", "old", "snapshot") {
+		t.Error("没有下发规则的容器按告警配置：两个面板都关了快照告警")
+	}
+	e.mu.Lock()
+	fallback := judge{e.rules(), func(string) bool { return true }}
+	e.mu.Unlock()
+	if j := e.forContainer("p", "web", fallback); j.RestartCount != 5 {
+		t.Errorf("web 的重启次数 %d，应该是 5", j.RestartCount)
+	}
+	if j := e.forContainer("p", "old", fallback); j.RestartCount != 3 {
+		t.Errorf("old 用告警配置里最严格的重启次数，得到 %d", j.RestartCount)
+	}
+}

@@ -244,6 +244,18 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 	for _, c := range all {
 		containers[c.ProjectID+"/"+c.Name] = c
 	}
+	settings := map[string]*nagiv1.ProjectSettings{}
+	settingsOf := func(id string) *nagiv1.ProjectSettings {
+		if x, ok := settings[id]; ok {
+			return x
+		}
+		var x *nagiv1.ProjectSettings
+		if p, err := s.Q.GetProject(ctx, id); err == nil {
+			x, _ = s.settings(p)
+		}
+		settings[id] = x
+		return x
+	}
 	for _, row := range routes {
 		r := RouteProto(row)
 		c, ok := containers[row.ProjectID+"/"+row.Container]
@@ -266,6 +278,7 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 			e := &nagiv1.LinkEntry{
 				ProjectId: row.ProjectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Protocol: r.GetProtocol(),
 				Published: r.GetPublished(), Domains: r.GetDomains(), HttpOnly: r.GetHttpOnly(), TargetName: name, TargetPort: r.GetTarget(),
+				AlertRules: effectiveAlertRules(settingsOf(row.ProjectID), c),
 			}
 			for _, n := range failoverNodes(c) {
 				if len(keys[n]) > 0 {

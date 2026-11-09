@@ -70,9 +70,10 @@ var en = map[string]string{
 	"验证码或密码不正确":                            "Incorrect verification code or password",
 
 	// ---- 节点 ----
-	"节点不存在":    "Node not found",
-	"节点离线":     "The node is offline",
-	"节点 %s 离线": "Node %s is offline",
+	"没有告警规则 %s": "Unknown alert rule %s",
+	"节点不存在":     "Node not found",
+	"节点离线":      "The node is offline",
+	"节点 %s 离线":  "Node %s is offline",
 	"节点名称不能为空，且不超过 64 个字符":                   "Node name is required and must be at most 64 characters",
 	"节点名称不能包含控制字符":                           "Node name can't contain control characters",
 	"已有名为 %s 的节点":                            "A node named %s already exists",

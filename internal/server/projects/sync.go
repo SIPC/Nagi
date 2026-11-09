@@ -53,7 +53,7 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		Revision: c.Revision, ProjectRevision: p.Revision, Version: version,
 		DeployKey: sec.DeployKey, DeployKeyPub: c.DeployKeyPub, DockerConfig: docker, BackupPassword: sec.BackupPassword,
 		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(), SnapshotLimit: settings.GetSnapshotLimit(), InternalPorts: settings.GetInternalPorts(),
-		DisplayName: c.DisplayName,
+		DisplayName: c.DisplayName, AlertRules: effectiveAlertRules(settings, c),
 	}
 	var v store.Version
 	if version > 0 {
