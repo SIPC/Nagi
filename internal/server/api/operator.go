@@ -46,13 +46,14 @@ func (r privilegeReasons) Localize(l i18n.Lang) string {
 }
 
 // checkOperatorConfig 检查配置里有没有只有管理员能保存的内容。管理员保存过的配置可以留着，
-// 操作员只能改和这些内容无关的部分：compose 不变；特权字段用了变量时，变量也不能变。
+// 操作员只能改和这些内容无关的部分：compose、现有目录不变，变量和文件来源也不变——容器以特权运行时，
+// 变量（例如 LD_PRELOAD、启动命令里引用的变量）和 git 仓库里的文件决定了它以 root 运行什么。
 // projectID 为空表示新建容器。
 func (s *projectService) checkOperatorConfig(ctx context.Context, projectID, container string, cfg *nagiv1.ContainerConfig) error {
 	if !operatorLimited(ctx) {
 		return nil
 	}
-	reasons, dynamic := spec.PrivilegeReasons(cfg, container)
+	reasons, _ := spec.PrivilegeReasons(cfg, container)
 	if len(reasons) == 0 {
 		return nil
 	}
@@ -68,7 +69,7 @@ func (s *projectService) checkOperatorConfig(ctx context.Context, projectID, con
 			for _, cur := range []*nagiv1.ContainerConfig{c.GetDraft(), c.GetConfig()} {
 				// 现有目录和快照子目录也是特权内容，要和 compose 一起不变：只比 compose 的话，
 				// 操作员先存一份没有特权的草稿，再只改目录，就能把相对挂载指到节点上任意目录。
-				if cur != nil && sameCompose(cur, cfg, container) && sameDirs(cur, cfg) && (!dynamic || sameVars(cur, cfg)) {
+				if cur != nil && sameCompose(cur, cfg, container) && sameDirs(cur, cfg) && sameVars(cur, cfg) && proto.Equal(cur.GetSource(), cfg.GetSource()) {
 					return nil
 				}
 			}
@@ -101,12 +102,18 @@ func sameDirs(a, b *nagiv1.ContainerConfig) bool {
 	return ok1 && ok2 && da == db && slices.Equal(pa, pb)
 }
 
+// sameVars 比较容器变量和服务级环境变量。
 func sameVars(a, b *nagiv1.ContainerConfig) bool {
-	if len(a.GetEnv()) != len(b.GetEnv()) {
+	if len(a.GetEnv()) != len(b.GetEnv()) || len(a.GetServiceEnv()) != len(b.GetServiceEnv()) {
 		return false
 	}
 	for i := range a.GetEnv() {
 		if !proto.Equal(a.GetEnv()[i], b.GetEnv()[i]) {
+			return false
+		}
+	}
+	for svc, x := range a.GetServiceEnv() {
+		if y, ok := b.GetServiceEnv()[svc]; !ok || !proto.Equal(x, y) {
 			return false
 		}
 	}
@@ -144,8 +151,9 @@ func (a *API) checkPrivilegedWrite(ctx context.Context, role, projectID, contain
 
 var errPrivilegedWrite = i18n.New("特权容器的文件仅限管理员修改")
 
-// checkOperatorSharedEnv：项目里有容器的特权字段用了变量时，共享变量能改变它的含义，只有管理员能改。
-func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID string) error {
+// checkOperatorSharedEnv：有特权的容器引用的共享变量，操作员不能改（和容器自己的变量一样，见 checkOperatorConfig）。
+// 和已部署的共享变量或者现有的草稿比，这些变量的值都没变才放行；容器自己的同名变量覆盖了的不算。
+func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID string, vars []*nagiv1.EnvVar) error {
 	if !operatorLimited(ctx) {
 		return nil
 	}
@@ -153,13 +161,19 @@ func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID s
 	if err != nil {
 		return toConnect(err)
 	}
-	for _, c := range summary.GetProject().GetContainers() {
+	p := summary.GetProject()
+	for _, c := range p.GetContainers() {
 		for _, cfg := range []*nagiv1.ContainerConfig{c.GetDraft(), c.GetConfig()} {
 			if cfg == nil {
 				continue
 			}
-			if reasons, dynamic := spec.PrivilegeReasons(cfg, c.GetName()); dynamic {
-				return adminOnlyConfig(reasons)
+			if reasons, _ := spec.PrivilegeReasons(cfg, c.GetName()); len(reasons) == 0 {
+				continue
+			}
+			same := !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSettings().GetSharedEnv(), vars) ||
+				p.GetHasSharedEnvDraft() && !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSharedEnvDraft(), vars)
+			if !same {
+				return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("容器 %s 有特权，它引用的共享变量仅管理员可修改", c.GetName()))
 			}
 		}
 	}

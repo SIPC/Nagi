@@ -110,7 +110,7 @@ func (s *projectService) UpdateProjectSettings(ctx context.Context, req *connect
 }
 
 func (s *projectService) SaveSharedEnv(ctx context.Context, req *connect.Request[nagiv1.SaveSharedEnvRequest]) (*connect.Response[nagiv1.SaveSharedEnvResponse], error) {
-	if err := s.checkOperatorSharedEnv(ctx, req.Msg.GetProjectId()); err != nil {
+	if err := s.checkOperatorSharedEnv(ctx, req.Msg.GetProjectId(), req.Msg.GetVars()); err != nil {
 		return nil, err
 	}
 	p, affected, err := s.Projects.SaveSharedEnv(ctx, req.Msg.GetProjectId(), req.Msg.GetBaseRevision(), req.Msg.GetVars())
