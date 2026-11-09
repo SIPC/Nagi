@@ -69,9 +69,10 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 		if remote.IsValid() {
 			add(netip.AddrPortFrom(remote, uint16(info.GetPort())))
 		}
+		// 节点自己报的地址不可信，只留能用来直连的；上面两个是面板看到的，不过滤（自带节点经本机连接）。
 		for _, e := range info.GetEndpoints() {
-			if ap, err := netip.ParseAddrPort(e); err == nil {
-				add(ap)
+			if ap, err := netip.ParseAddrPort(e); err == nil && mesh.UsableEndpoint(ap) {
+				add(netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()))
 			}
 		}
 		peers = append(peers, mesh.Peer{Key: k, Endpoints: eps})

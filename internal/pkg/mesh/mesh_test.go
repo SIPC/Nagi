@@ -281,3 +281,37 @@ func TestAddress(t *testing.T) {
 		t.Fatalf("地址不对：%s", a)
 	}
 }
+
+func TestUsableEndpoint(t *testing.T) {
+	var k Key
+	_, _ = rand.Read(k[:])
+	for s, want := range map[string]bool{
+		"203.0.113.5:51820":                   true,
+		"192.168.1.10:51820":                  true, // 内网地址要留着
+		"10.0.0.2:51820":                      true,
+		"[fd00::1]:51820":                     true,
+		"[2001:db8::1]:51820":                 true,
+		"[::ffff:203.0.113.5]:51820":          true,
+		"203.0.113.5:0":                       false,
+		"0.0.0.0:51820":                       false,
+		"[::]:51820":                          false,
+		"127.0.0.1:51820":                     false,
+		"[::1]:51820":                         false,
+		"[::ffff:127.0.0.1]:51820":            false,
+		"169.254.1.1:51820":                   false,
+		"[fe80::1]:51820":                     false,
+		"224.0.0.1:51820":                     false,
+		"239.1.2.3:51820":                     false,
+		"[ff01::1]:51820":                     false,
+		"[ff02::1]:51820":                     false,
+		"255.255.255.255:51820":               false,
+		"[" + Address(k).String() + "]:51820": false,
+	} {
+		if got := UsableEndpoint(netip.MustParseAddrPort(s)); got != want {
+			t.Errorf("%s：得到 %v，应为 %v", s, got, want)
+		}
+	}
+	if UsableEndpoint(netip.AddrPort{}) {
+		t.Error("零值不应能用")
+	}
+}
