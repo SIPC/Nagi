@@ -15,9 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 用 1.26 的最新补丁版本编译，带上标准库的安全修复；go.mod 里的版本只是最低要求。
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26'
+          check-latest: true
           cache: false
 
       - uses: actions/cache@v4
@@ -33,6 +35,10 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # 检查依赖和标准库里会被调用到的已知漏洞。
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -43,7 +49,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26'
+          check-latest: true
           cache: false
 
       - uses: actions/cache@v4
