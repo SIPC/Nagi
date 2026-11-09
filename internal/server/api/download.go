@@ -21,7 +21,23 @@ import (
 // 从 GitHub Release 下载面板自己这个版本的二进制，按 SHA256SUMS 核对后缓存在 <面板数据目录>/release/<版本>/ 下再提供。
 // 面板不是正式版本（dev）时没有对应的发布文件，返回 404。
 
-var releaseCacheMu sync.Mutex
+// releaseFetches 是正在下载（或者刚下载失败）的发布文件，键是缓存路径：同一个文件同时只下载一次，
+// 失败的结果留 releaseRetry，期间直接返回同样的错误，不再一个接一个地访问 GitHub。
+var releaseFetches = struct {
+	sync.Mutex
+	m map[string]*releaseFetch
+}{m: map[string]*releaseFetch{}}
+
+type releaseFetch struct {
+	done chan struct{}
+	err  error
+	at   time.Time // 结束的时间
+}
+
+var (
+	releaseRetry = time.Minute
+	releaseBase  = release.DownloadBase
+)
 
 // DownloadHandler 提供 GET /download/nagi-linux-<架构>，只给旧版本的节点升级用。
 func (a *API) DownloadHandler() http.Handler {
@@ -43,32 +59,72 @@ func (a *API) DownloadHandler() http.Handler {
 }
 
 // cachedRelease 返回某个版本的发布文件在本地缓存里的路径，没有时先从 GitHub Release 下载并核对 SHA-256。
+// 下载不跟着请求取消（别的请求可能在等同一个文件）；ctx 只决定这个请求等多久。
 func cachedRelease(ctx context.Context, dataDir, version, name string) (string, error) {
 	dir := filepath.Join(dataDir, "release", version)
 	path := filepath.Join(dir, name)
-	releaseCacheMu.Lock()
-	defer releaseCacheMu.Unlock()
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	base := release.DownloadBase(version)
+	releaseFetches.Lock()
+	f := releaseFetches.m[path]
+	if f == nil || f.expired() {
+		f = &releaseFetch{done: make(chan struct{})}
+		releaseFetches.m[path] = f
+		go func() {
+			fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+			err := fetchRelease(fctx, dir, version, name)
+			cancel()
+			releaseFetches.Lock()
+			f.err, f.at = err, time.Now()
+			if err == nil {
+				delete(releaseFetches.m, path)
+			}
+			releaseFetches.Unlock()
+			close(f.done)
+		}()
+	}
+	releaseFetches.Unlock()
+	select {
+	case <-f.done:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	if f.err != nil {
+		return "", f.err
+	}
+	return path, nil
+}
+
+// expired 判断下载已经结束、可以重新开始：成功了（文件已经在缓存里），或者失败已经超过 releaseRetry。调用时持有锁。
+func (f *releaseFetch) expired() bool {
+	select {
+	case <-f.done:
+		return f.err == nil || time.Since(f.at) >= releaseRetry
+	default:
+		return false
+	}
+}
+
+// fetchRelease 下载发布文件 name 到 dir，核对 SHA-256 后改名。
+func fetchRelease(ctx context.Context, dir, version, name string) error {
+	path := filepath.Join(dir, name)
+	base := releaseBase(version)
 	sums, err := httpGet(ctx, base+"/SHA256SUMS", nil)
 	if err != nil {
-		return "", err
+		return err
 	}
 	want := release.Checksum(string(sums), name)
 	if want == "" {
-		return "", fmt.Errorf("%s/SHA256SUMS 里没有 %s", base, name)
+		return fmt.Errorf("%s/SHA256SUMS 里没有 %s", base, name)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return err
 	}
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
 	if err != nil {
-		return "", err
+		return err
 	}
 	h := sha256.New()
 	_, err = httpGet(ctx, base+"/"+name, io.MultiWriter(f, h))
@@ -80,9 +136,9 @@ func cachedRelease(ctx context.Context, dataDir, version, name string) (string, 
 	}
 	if err != nil {
 		os.Remove(tmp)
-		return "", err
+		return err
 	}
-	return path, os.Rename(tmp, path)
+	return os.Rename(tmp, path)
 }
 
 // httpGet 下载 url：w 不为空时写进 w，否则读进内存返回（最多 64 KB）。
