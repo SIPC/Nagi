@@ -446,7 +446,9 @@ func (d *fecDecoder) resync(out [][]byte) [][]byte {
 func (d *fecDecoder) group(gid uint32, k int) *fecGroupState {
 	g := d.groups[gid]
 	if g == nil {
-		g = &fecGroupState{k: k, shards: make([][]byte, k+3)}
+		// 按最大的组分配：同一组的包可能声明不同的大小（数据包按计划的大小，校验包按实际的大小，
+		// 也可能是伪造的），按第一个包的大小分配的话，后面的包会越界。
+		g = &fecGroupState{k: k, shards: make([][]byte, fecGroup+3)}
 		d.groups[gid] = g
 		if !d.seen || int32(gid-d.newest) > 0 {
 			d.newest, d.seen = gid, true

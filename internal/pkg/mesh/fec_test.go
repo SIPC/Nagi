@@ -411,3 +411,57 @@ func recoveredFrom(m *Mesh, k Key) uint64 {
 	}
 	return 0
 }
+
+func fecDataPkt(gid uint32, idx, k int, protect bool, payload ...byte) []byte {
+	b := []byte{fecData, byte(gid >> 24), byte(gid >> 16), byte(gid >> 8), byte(gid), byte(idx), byte(k)}
+	if protect {
+		b[6] |= fecProtect
+	}
+	return append(b, payload...)
+}
+
+func fecParityPkt(gid uint32, idx, k, m int, payload ...byte) []byte {
+	b := []byte{fecParity, byte(gid >> 24), byte(gid >> 16), byte(gid >> 8), byte(gid), byte(idx), byte(k), byte(m)}
+	return append(b, payload...)
+}
+
+// 同一组的包声明不同的组大小时不能越界（FEC 在 WireGuard 解密之前处理，包头可能是伪造的）。
+func TestFECConflictingGroupSize(t *testing.T) {
+	now := time.Now()
+	d := newFECDecoder()
+	d.push(fecDataPkt(7, 0, 1, true, 1, 2, 3), now)
+	d.push(fecDataPkt(7, 9, 10, true, 1, 2, 3), now)
+
+	d = newFECDecoder()
+	d.push(fecDataPkt(8, 0, 1, true, 1, 2, 3), now)
+	d.push(fecParityPkt(8, 12, 10, 3, 0, 5, 1, 2, 3), now)
+
+	d = newFECDecoder()
+	d.push(fecParityPkt(9, 1, 1, 1, 0, 3, 1, 2, 3), now)
+	d.push(fecDataPkt(9, 9, 10, true, 1, 2, 3), now)
+}
+
+// 任意的包序列都不能让解码器 panic。
+func FuzzFECDecoder(f *testing.F) {
+	f.Add(fecDataPkt(7, 0, 1, true, 1, 2, 3), fecDataPkt(7, 9, 10, true, 1, 2, 3))
+	f.Add(fecDataPkt(8, 0, 1, true, 1), fecParityPkt(8, 12, 10, 3, 0, 1, 1))
+	f.Add(fecParityPkt(9, 1, 1, 1, 0, 1, 1), fecDataPkt(9, 0, 1, true, 1))
+	f.Add([]byte{fecData}, []byte{fecParity})
+	f.Fuzz(func(t *testing.T, a, b []byte) {
+		d := newFECDecoder()
+		now := time.Now()
+		for _, p := range [][]byte{a, b, a, b} {
+			if len(p) == 0 {
+				continue
+			}
+			p = append([]byte(nil), p...)
+			if p[0]&1 == 0 {
+				p[0] = fecData
+			} else {
+				p[0] = fecParity
+			}
+			d.push(p, now)
+		}
+		d.release(now.Add(time.Second))
+	})
+}
