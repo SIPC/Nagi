@@ -59,6 +59,7 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 		checkService(name, svc, services, add)
 	}
 	checkTopLevel(doc, add)
+	checkNestedBinds(doc, services, add)
 	// 现有目录：compose 在节点上的任意目录里运行，相对路径都指向那里。
 	if cfg.GetProjectDir() != "" {
 		add(false, "project_dir")
@@ -147,6 +148,60 @@ func checkTopLevel(doc map[string]any, add func(bool, string, ...any)) {
 			}
 		}
 	}
+}
+
+// checkNestedBinds：一个挂载的源路径在另一个挂载（或 secrets、configs 的文件）的上级目录时，
+// 能写上级目录的容器可以把下级换成指向宿主机的符号链接，Docker 每次启动容器都会重新解析源路径，
+// 下次启动就把宿主机的目录挂进去。部署前的检查管不到之后的重启，所以这种写法只有管理员能保存。
+func checkNestedBinds(doc map[string]any, services map[string]any, add func(bool, string, ...any)) {
+	type bind struct{ owner, path string }
+	var binds, files []bind
+	for name, raw := range services {
+		svc, _ := raw.(map[string]any)
+		for _, m := range listOf(svc["volumes"]) {
+			if p, ok := relativeBind(m); ok {
+				binds = append(binds, bind{name, p})
+			}
+		}
+	}
+	for _, section := range []string{"secrets", "configs"} {
+		m, _ := doc[section].(map[string]any)
+		for name, raw := range m {
+			e, _ := raw.(map[string]any)
+			if f, ok := e["file"].(string); ok && safeRelative(f) {
+				files = append(files, bind{section + ": " + name, path.Clean(f)})
+			}
+		}
+	}
+	for _, parent := range binds {
+		for _, child := range append(binds, files...) {
+			if child.path != parent.path && (parent.path == "." || strings.HasPrefix(child.path, parent.path+"/")) {
+				add(false, "%s: volumes（%s 包含 %s）", parent.owner, parent.path, child.path)
+			}
+		}
+	}
+}
+
+// relativeBind 返回挂载里容器目录下的相对源路径（已规范化）。
+func relativeBind(m any) (string, bool) {
+	src := ""
+	switch v := m.(type) {
+	case string:
+		s, _, hasTarget := strings.Cut(v, ":")
+		if !hasTarget || !strings.HasPrefix(s, ".") {
+			return "", false
+		}
+		src = s
+	case map[string]any:
+		if typ, _ := v["type"].(string); typ != "bind" {
+			return "", false
+		}
+		src, _ = v["source"].(string)
+	}
+	if !safeRelative(src) {
+		return "", false
+	}
+	return path.Clean(src), true
 }
 
 // safeMount 判断挂载是不是留在容器自己的目录里：匿名卷、命名卷（不带 driver，上面单独查）、容器目录里的相对路径。

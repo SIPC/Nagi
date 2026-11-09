@@ -34,11 +34,12 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 - `privileged`，`cap_add`、`devices`、`security_opt` 等扩大权限的字段
 - `network_mode`、`pid`、`ipc`、`uts`、`userns_mode`、`cgroup` 设为 `none`、`bridge`、`default`、`private`、`shareable` 和指向同一个 compose 里的服务的 `service:<服务>` 以外的值：`host` 和节点共用，`container:<名字>` 和节点上任意一个容器（包括别的项目的）共用，`network_mode` 写网络名时直接接进那个网络
 - `volumes_from`
+- 一个挂载的源路径包含另一个挂载的源路径或 `secrets`、`configs` 的文件（例如同时挂载 `.` 和 `./uploads`）：能写上级目录的容器可以把下级换成符号链接，Docker 下次启动容器时会跟着它挂载宿主机的目录
 - 挂载绝对路径、`~`、带 `..` 的路径（包括 `docker.sock`）；`env_file`、`secrets`、`configs` 读取容器目录以外的文件
 - `include`、`extends` 引用文件，`build`，指定了 driver 的 volume，`external` 的 volume 和网络，指定了 `name` 的 volume 和网络（不加 compose 项目的前缀，节点上有同名的就直接用它）
 - 上面这些字段的值里有变量：变量的值操作员能改
 
-容器目录里的路径可能是容器写的、或者从 git 仓库同步来的符号链接，所以部署时节点还会检查：挂载的源路径和 `env_file`、`secrets`、`configs` 的文件在容器目录以下不能经过符号链接，否则拒绝部署。
+容器目录里的路径可能是容器写的、或者从 git 仓库同步来的符号链接，所以部署时和代管重启前节点还会检查：挂载的源路径和 `env_file`、`secrets`、`configs` 的文件在容器目录以下不能经过符号链接，否则拒绝部署。
 
 规则按"读不懂就当作有特权"判断。管理员保存过的配置，操作员可以部署和回滚，也可以改和这些字段无关的部分；但配置里的特权字段用了变量时，操作员不能改容器变量和项目共享变量。操作员也不能把容器目录放到目标节点的项目根目录以外（按目标节点自己的设置判断，节点离线时不能用自定义目录）。已有的配置不受影响。
 

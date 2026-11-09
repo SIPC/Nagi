@@ -56,6 +56,10 @@ func (m *Manager) policies(ctx context.Context, projectID, container string) (ma
 	if err != nil {
 		return nil, err
 	}
+	// Docker 每次启动都重新解析挂载的源路径，代管重启前再查一遍符号链接（见 checkMountSources）。
+	if err := checkMountSources(cp, s.GetDir()); err != nil {
+		return nil, err
+	}
 	out := map[string]restartPolicy{}
 	for name, svc := range cp.Services {
 		out[name] = policyOf(svc)

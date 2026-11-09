@@ -26,6 +26,7 @@ func TestPrivilegeReasons(t *testing.T) {
 		{"network_mode none", svc("    network_mode: none\n"), "", false},
 		{"ipc private", svc("    ipc: private\n"), "", false},
 		{"相对路径的 env_file", svc("    env_file: ./a.env\n"), "", false},
+		{"并列的挂载", svc("    volumes:\n      - ./a:/a\n      - ./ab:/ab\n") + "  db:\n    image: postgres\n    volumes:\n      - ./a:/a\n", "", false},
 
 		{"privileged", svc("    privileged: true\n"), "web: privileged", false},
 		{"privileged 变量", svc("    privileged: ${P}\n"), "web: privileged", true},
@@ -56,6 +57,9 @@ func TestPrivilegeReasons(t *testing.T) {
 		{"外部网络", svc("") + "networks:\n  n:\n    external: true\n", "networks: n", false},
 		{"include", "include:\n  - /etc/x.yml\n" + svc(""), "include", false},
 		{"合并写法藏着特权", "x-a: &a\n  privileged: true\nservices:\n  web:\n    <<: *a\n    image: nginx\n", "web: privileged", false},
+		{"嵌套的挂载", svc("    volumes:\n      - .:/app\n      - ./uploads:/app/uploads\n"), "web: volumes（. 包含 uploads）", false},
+		{"跨服务嵌套的挂载", svc("    volumes:\n      - ./a:/a\n") + "  db:\n    image: postgres\n    volumes:\n      - type: bind\n        source: ./a/b\n        target: /b\n", "web: volumes（a 包含 a/b）", false},
+		{"挂载包含 secret 的文件", svc("    volumes:\n      - ./conf:/c\n") + "secrets:\n  s:\n    file: ./conf/s\n", "web: volumes（conf 包含 conf/s）", false},
 		{"读不懂", "services: [", "compose", false},
 		{"服务不是表", "services:\n  web: 1\n", "web", false},
 	}

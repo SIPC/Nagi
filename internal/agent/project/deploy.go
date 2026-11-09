@@ -222,6 +222,11 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 			return res, err
 		}
 	}
+	// 写 override 时查过挂载的源路径，之后还拉了镜像、接管了原来的容器，启动前再查一遍。
+	if err := checkMountSources(cp, mp.root); err != nil {
+		undo()
+		return res, err
+	}
 	if err := compose.Up(ctx, files, onLine); err != nil {
 		undo()
 		return res, err
