@@ -63,6 +63,11 @@ func (a *API) TerminalHandler() http.Handler {
 			Service:   q.Get("service"),
 			Size:      &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)},
 		}
+		if err := a.checkPrivilegedEntry(ctx, u.Role, start.ProjectId, start.Container); err != nil {
+			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
+			fail(i18n.Localize(lang, err))
+			return
+		}
 		nodeID, err := a.Projects.Locate(ctx, q.Get("project"), q.Get("container"))
 		if err != nil {
 			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
@@ -86,9 +91,15 @@ func (a *API) TerminalHandler() http.Handler {
 		}
 		a.recordOperation(ctx, "/OpenTerminal", start, "")
 
-		// 定时重查：踢出登录、降权、移出项目范围之后要断开。
+		// 定时重查：踢出登录、降权、移出项目范围之后要断开。管理员降为操作员时，特权容器的终端也要断开。
 		go a.watchSession(ctx, token, u, func(cur auth.User) error {
-			return a.containerAccess(ctx, cur, start.ProjectId, auth.CanOperate)
+			if err := a.containerAccess(ctx, cur, start.ProjectId, auth.CanOperate); err != nil {
+				return err
+			}
+			if err := a.checkPrivilegedEntry(ctx, cur.Role, start.ProjectId, start.Container); errors.Is(err, errPrivilegedEntry) {
+				return err
+			}
+			return nil
 		}, func(err error) {
 			fail(i18n.Localize(lang, err))
 			cancel()

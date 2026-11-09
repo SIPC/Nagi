@@ -354,6 +354,27 @@ func (s *Service) ContainerByWebhook(ctx context.Context, token string) (project
 	return r.ProjectID, r.Name, err
 }
 
+// RunningConfig 返回容器当前部署的配置，从未部署时返回最新版本的。终端和执行命令按它判断容器有没有特权。
+func (s *Service) RunningConfig(ctx context.Context, projectID, name string) (*nagiv1.ContainerConfig, error) {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	v, err := s.deployed(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		cur, err := s.Q.LatestVersion(ctx, store.LatestVersionParams{ProjectID: c.ProjectID, Container: c.Name})
+		if err != nil {
+			return nil, err
+		}
+		v = &cur
+	}
+	cfg, _, err := s.versionData(*v)
+	return cfg, err
+}
+
 // Locate 返回容器所在的节点（上传文件、终端用）。
 func (s *Service) Locate(ctx context.Context, projectID, name string) (string, error) {
 	c, err := s.container(ctx, projectID, name)

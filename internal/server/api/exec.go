@@ -49,6 +49,9 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	if err := a.projectAllowed(ctx, u, projectID); err != nil {
 		return fail(err)
 	}
+	if err := a.checkPrivilegedEntry(ctx, u.Role, projectID, container); err != nil {
+		return fail(err)
+	}
 	if a.Panel.Standby != nil {
 		return fail(a.standbyError())
 	}

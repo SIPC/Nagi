@@ -112,6 +112,24 @@ func sameVars(a, b *nagiv1.ContainerConfig) bool {
 	return true
 }
 
+// checkPrivilegedEntry：容器部署的配置有特权（以特权运行、挂载主机目录等）时，进入容器就等于拿到节点的 root，
+// 终端和执行命令只有管理员能用。role 是当前的角色（打开着的终端重查时传重新读出的）。
+func (a *API) checkPrivilegedEntry(ctx context.Context, role, projectID, container string) error {
+	if role == auth.RoleAdmin {
+		return nil
+	}
+	cfg, err := a.Projects.RunningConfig(ctx, projectID, container)
+	if err != nil {
+		return err
+	}
+	if reasons, _ := spec.PrivilegeReasons(cfg, container); len(reasons) > 0 {
+		return errPrivilegedEntry
+	}
+	return nil
+}
+
+var errPrivilegedEntry = i18n.New("特权容器仅限管理员进入")
+
 // checkOperatorSharedEnv：项目里有容器的特权字段用了变量时，共享变量能改变它的含义，只有管理员能改。
 func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID string) error {
 	if !operatorLimited(ctx) {
