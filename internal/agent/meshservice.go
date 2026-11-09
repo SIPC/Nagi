@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
@@ -75,7 +76,8 @@ func (s *meshService) VolumeUpload(stream nagiv1.MeshService_VolumeUploadServer)
 			}
 		}
 	}()
-	n, err := s.a.projects.UploadVolumeFile(stream.Context(), ref, pr, check)
+	want := project.UploadCheck{ExpectedSHA256: first.GetExpectedSha256(), CreateOnly: first.GetCreateOnly()}
+	n, err := s.a.projects.UploadVolumeFile(stream.Context(), ref, pr, want, check)
 	pr.Close()
 	if err != nil {
 		return toStatus(err)

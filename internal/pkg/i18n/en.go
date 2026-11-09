@@ -448,6 +448,7 @@ var en = map[string]string{
 	"同名目录或特殊文件已存在":                               "A directory or special file with this name already exists",
 	"文件超过 1 MB，请使用上传":                            "The file is larger than 1 MB. Upload it instead",
 	"同名文件已存在":                                    "A file with this name already exists",
+	"文件已被修改":                                     "The file has changed",
 	"备份不存在":                                      "Backup not found",
 	"不能删除根目录或一级目录":                               "The root directory and top-level directories can't be deleted",
 	"请输入名称确认":                                    "Enter the name to confirm",

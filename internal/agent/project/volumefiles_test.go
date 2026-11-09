@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -27,6 +29,40 @@ func TestCleanVolumePath(t *testing.T) {
 	for _, in := range []string{"..", "../x", "a/../../x"} {
 		if got, err := cleanVolumePath(in); err == nil {
 			t.Errorf("%q 应该被拒绝，得到 %q", in, got)
+		}
+	}
+}
+
+func TestUploadCheck(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	sum := sha256.Sum256([]byte("one"))
+	one := strings.ToUpper(hex.EncodeToString(sum[:])) // 大小写都认
+	for _, c := range []struct {
+		check UploadCheck
+		path  string
+		want  error
+	}{
+		{UploadCheck{}, "f", nil},
+		{UploadCheck{ExpectedSHA256: one}, "f", nil},
+		{UploadCheck{ExpectedSHA256: strings.Repeat("0", 64)}, "f", ErrFileChanged},
+		{UploadCheck{ExpectedSHA256: one}, "missing", ErrFileChanged},
+		{UploadCheck{ExpectedSHA256: one}, "d", ErrFileChanged},
+		{UploadCheck{CreateOnly: true}, "f", ErrFileExists},
+		{UploadCheck{CreateOnly: true}, "missing", nil},
+	} {
+		if err := c.check.verify(root, c.path); !errors.Is(err, c.want) {
+			t.Errorf("%+v %s = %v，应为 %v", c.check, c.path, err, c.want)
 		}
 	}
 }

@@ -162,7 +162,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | --- | --- | --- |
 | `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的 | `ListVolumes`、`ListVolumeFiles` |
 | `read_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256。二进制文件和目录拒绝 | 节点的 `VolumeDownload` |
-| `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+| `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝，原来不在的文件期间被建了也拒绝（节点在写入前、持有容器锁时核对）；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
 | `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 | `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |

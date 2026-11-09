@@ -365,6 +365,10 @@ func toStatus(err error) error {
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, project.ErrInvalidArgument):
 		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, project.ErrFileChanged):
+		return status.Error(codes.Aborted, err.Error())
+	case errors.Is(err, project.ErrFileExists):
+		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, err.Error())
 	}

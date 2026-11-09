@@ -214,7 +214,19 @@ func toolWriteFile(c *call, in WriteFileArgs) (any, error) {
 			return nil, errors.New("the file changed since it was read; read it again before writing")
 		}
 	}
-	if err := c.h.o.Files.Write(auth.WithUser(c.ctx, c.u), ref, []byte(in.Content)); err != nil {
+	// 节点在写入前再核对一次（旧版本节点不支持，上面的检查兜底）：读和写之间文件被改了或被建了就拒绝。
+	expected := ""
+	if exists {
+		expected = in.ExpectedSHA256
+	}
+	err = c.h.o.Files.Write(auth.WithUser(c.ctx, c.u), ref, []byte(in.Content), expected, !exists)
+	switch connect.CodeOf(err) {
+	case connect.CodeAborted:
+		return nil, errors.New("the file changed since it was read; read it again before writing")
+	case connect.CodeAlreadyExists:
+		return nil, errors.New("the file was created since it was checked; read it with read_file and pass its sha256 as expected_sha256")
+	}
+	if err != nil {
 		return nil, err
 	}
 	out := map[string]any{"path": ref.GetPath(), "created": !exists, "size_bytes": len(in.Content), "sha256": digest([]byte(in.Content))}
@@ -252,5 +264,5 @@ func (c *call) fileExists(ref *nagiv1.VolumeFileRef) (bool, error) {
 // FileAccess 是读写卷里文件的入口（api.API.ReadVolumeFile、WriteVolumeFile）。
 type FileAccess struct {
 	Read  func(ctx context.Context, ref *nagiv1.VolumeFileRef, limit int64) ([]byte, error)
-	Write func(ctx context.Context, ref *nagiv1.VolumeFileRef, data []byte) error
+	Write func(ctx context.Context, ref *nagiv1.VolumeFileRef, data []byte, expectedSHA256 string, createOnly bool) error
 }

@@ -110,11 +110,13 @@ func (a *API) readVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, lim
 }
 
 // WriteVolumeFile 把 data 写成卷里的一个文件（新建或整个覆盖）。节点先写临时文件再改名，沿用原文件的权限和属主。
-func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, data []byte) error {
+// expectedSHA256 非空时，节点在写入前核对现在文件的 SHA-256，对不上返回 Aborted；createOnly 时文件已存在返回 AlreadyExists。
+// 旧版本的节点不认识这两个字段，会直接写入，调用方要自己先检查一遍。
+func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, data []byte, expectedSHA256 string, createOnly bool) error {
 	if err := a.checkAgentFiles(ctx, ref.GetProjectId(), true); err != nil {
 		return err
 	}
-	err := a.writeVolumeFile(ctx, ref, data)
+	err := a.writeVolumeFile(ctx, &nagiv1.VolumeUploadChunk{Ref: ref, ExpectedSha256: expectedSHA256, CreateOnly: createOnly}, data)
 	failure := ""
 	if err != nil {
 		failure = activityFailure(err)
@@ -126,8 +128,8 @@ func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, da
 	return nil
 }
 
-func (a *API) writeVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, data []byte) error {
-	client, cc, err := a.meshFiles(ctx, ref)
+func (a *API) writeVolumeFile(ctx context.Context, first *nagiv1.VolumeUploadChunk, data []byte) error {
+	client, cc, err := a.meshFiles(ctx, first.GetRef())
 	if err != nil {
 		return err
 	}
@@ -136,7 +138,7 @@ func (a *API) writeVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, da
 	if err != nil {
 		return err
 	}
-	if err := stream.Send(&nagiv1.VolumeUploadChunk{Ref: ref}); err != nil {
+	if err := stream.Send(first); err != nil {
 		return err
 	}
 	for len(data) > 0 {

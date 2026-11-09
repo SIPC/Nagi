@@ -1724,9 +1724,13 @@ func (x *VolumeFileChunk) GetArchive() bool {
 }
 
 type VolumeUploadChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ref           *VolumeFileRef         `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Ref   *VolumeFileRef         `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Data  []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	// 下面两个只在第一条里有。现在文件的 SHA-256，对不上就拒绝；空表示不检查。
+	ExpectedSha256 string `protobuf:"bytes,3,opt,name=expected_sha256,json=expectedSha256,proto3" json:"expected_sha256,omitempty"`
+	// 只新建：已经存在就拒绝。
+	CreateOnly    bool `protobuf:"varint,4,opt,name=create_only,json=createOnly,proto3" json:"create_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1773,6 +1777,20 @@ func (x *VolumeUploadChunk) GetData() []byte {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *VolumeUploadChunk) GetExpectedSha256() string {
+	if x != nil {
+		return x.ExpectedSha256
+	}
+	return ""
+}
+
+func (x *VolumeUploadChunk) GetCreateOnly() bool {
+	if x != nil {
+		return x.CreateOnly
+	}
+	return false
 }
 
 type VolumeUploadResponse struct {
@@ -5209,10 +5227,13 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x18\n" +
-	"\aarchive\x18\x04 \x01(\bR\aarchive\"Q\n" +
+	"\aarchive\x18\x04 \x01(\bR\aarchive\"\x9b\x01\n" +
 	"\x11VolumeUploadChunk\x12(\n" +
 	"\x03ref\x18\x01 \x01(\v2\x16.nagi.v1.VolumeFileRefR\x03ref\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"*\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12'\n" +
+	"\x0fexpected_sha256\x18\x03 \x01(\tR\x0eexpectedSha256\x12\x1f\n" +
+	"\vcreate_only\x18\x04 \x01(\bR\n" +
+	"createOnly\"*\n" +
 	"\x14VolumeUploadResponse\x12\x12\n" +
 	"\x04size\x18\x01 \x01(\x03R\x04size\"\x16\n" +
 	"\x14VolumeFileOpResponse\"v\n" +

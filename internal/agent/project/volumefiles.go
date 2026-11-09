@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -31,6 +32,12 @@ const (
 	fileChunkSize    = 256 << 10
 	// uploadStagingKeep：暂存目录里超过这么久的文件是节点中途重启留下的。上传不会传这么久。
 	uploadStagingKeep = 7 * 24 * time.Hour
+)
+
+// ErrFileChanged：要覆盖的文件和预期的不一样（或已经不在了）。ErrFileExists：只新建时文件已经在了。
+var (
+	ErrFileChanged = errors.New("文件已被修改")
+	ErrFileExists  = errors.New("同名文件已存在")
 )
 
 func (p containerPaths) stagingDir() string { return filepath.Join(p.root, ".staging") }
@@ -501,10 +508,51 @@ func inheritedOwner(root *os.Root, rel string) (fs.FileMode, int, int) {
 	}
 }
 
-// UploadVolumeFile 把 r 写到卷里的 ref.path，已有的文件被覆盖。
+// UploadCheck 是写入前对目标文件的要求，拿到锁后检查，检查和写入之间面板不会插进别的写入。
+type UploadCheck struct {
+	ExpectedSHA256 string // 现在文件的 SHA-256，空表示不检查
+	CreateOnly     bool   // 只新建，已经存在就拒绝
+}
+
+// verify 按要求检查 rel。不是普通文件（例如换成了符号链接）算作已被修改。
+func (c UploadCheck) verify(root *os.Root, rel string) error {
+	if c.ExpectedSHA256 == "" && !c.CreateOnly {
+		return nil
+	}
+	info, err := root.Lstat(rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		if c.ExpectedSHA256 != "" {
+			return ErrFileChanged
+		}
+		return nil
+	} else if err != nil {
+		return fileErr(err)
+	}
+	if c.CreateOnly {
+		return ErrFileExists
+	}
+	if !info.Mode().IsRegular() {
+		return ErrFileChanged
+	}
+	f, err := root.Open(rel)
+	if err != nil {
+		return fileErr(err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fileErr(err)
+	}
+	if !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), c.ExpectedSHA256) {
+		return ErrFileChanged
+	}
+	return nil
+}
+
+// UploadVolumeFile 把 r 写到卷里的 ref.path，已有的文件被覆盖（check 有要求时先检查）。
 // 传输可能很慢甚至卡住，所以传输时不占容器的锁，先写到暂存目录，传完拿到锁才写进卷，不挡部署和快照。
 // beforeCommit 在拿到锁后调用：传输期间容器可能已经被切走，这时要放弃，否则文件写在了不再用的副本上。
-func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, r io.Reader, beforeCommit func() error) (int64, error) {
+func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, r io.Reader, check UploadCheck, beforeCommit func() error) (int64, error) {
 	rel, err := cleanVolumePath(ref.GetPath())
 	if err != nil {
 		return 0, err
@@ -537,6 +585,9 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	}
 	defer unlock()
 	if err := beforeCommit(); err != nil {
+		return 0, err
+	}
+	if err := check.verify(root, rel); err != nil {
 		return 0, err
 	}
 	f, err := os.Open(staged)

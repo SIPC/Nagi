@@ -311,6 +311,10 @@ message VolumeFileChunk {
 message VolumeUploadChunk {
   VolumeFileRef ref = 1;
   bytes data = 2;
+  // 下面两个只在第一条里有。现在文件的 SHA-256，对不上就拒绝；空表示不检查。
+  string expected_sha256 = 3;
+  // 只新建：已经存在就拒绝。
+  bool create_only = 4;
 }
 
 message VolumeUploadResponse {
