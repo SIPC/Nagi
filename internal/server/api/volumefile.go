@@ -53,6 +53,12 @@ func (a *API) VolumeFileHandler() http.Handler {
 			return
 		}
 		q := r.URL.Query()
+		if r.Method != http.MethodGet {
+			if err := a.checkPrivilegedWrite(r.Context(), u.Role, q.Get("project"), q.Get("container")); err != nil {
+				fail(http.StatusForbidden, err)
+				return
+			}
+		}
 		ref := &nagiv1.VolumeFileRef{
 			ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot"),
 		}

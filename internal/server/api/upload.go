@@ -43,6 +43,10 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusNotFound, err)
 			return
 		}
+		if err := a.checkPrivilegedWrite(r.Context(), u.Role, r.URL.Query().Get("project"), r.URL.Query().Get("container")); err != nil {
+			fail(http.StatusForbidden, err)
+			return
+		}
 		if r.Header.Get("X-Nagi-Upload") != "1" {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"path"
 	"slices"
 	"strings"
@@ -129,6 +130,19 @@ func (a *API) checkPrivilegedEntry(ctx context.Context, role, projectID, contain
 }
 
 var errPrivilegedEntry = i18n.New("特权容器仅限管理员进入")
+
+// checkPrivilegedWrite：同样的道理，往特权容器的卷和容器目录里写文件（上传、MCP 写文件）只给管理员，
+// 容器会以 root 运行这些文件。
+func (a *API) checkPrivilegedWrite(ctx context.Context, role, projectID, container string) error {
+	if err := a.checkPrivilegedEntry(ctx, role, projectID, container); errors.Is(err, errPrivilegedEntry) {
+		return errPrivilegedWrite
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+var errPrivilegedWrite = i18n.New("特权容器的文件仅限管理员修改")
 
 // checkOperatorSharedEnv：项目里有容器的特权字段用了变量时，共享变量能改变它的含义，只有管理员能改。
 func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID string) error {

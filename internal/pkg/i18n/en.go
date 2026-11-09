@@ -24,6 +24,7 @@ var en = map[string]string{
 	"节点版本过低，升级后才能管理文件":       "The node is out of date. Upgrade it to manage files",
 	"与节点的连接已断开":              "Connection to the node lost",
 	"特权容器仅限管理员进入":            "Only admins can enter privileged containers",
+	"特权容器的文件仅限管理员修改":         "Only admins can change files in privileged containers",
 	"无法连接节点，请稍后重试":           "Can't reach the node. Try again later",
 	"无法连接容器所在的节点，请稍后重试":      "Can't reach the container's node. Try again later",
 	"登录已过期，连接已断开":            "Disconnected because your session expired",

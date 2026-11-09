@@ -89,5 +89,10 @@ func TestCheckPrivilegedEntry(t *testing.T) {
 		if got := errors.Is(err, errPrivilegedEntry); got != c.denied || err != nil && !got {
 			t.Errorf("%s 进入 %s：%v", c.role, c.container, err)
 		}
+		// 往容器里写文件按同样的规则。
+		err = a.checkPrivilegedWrite(ctx, c.role, project, c.container)
+		if got := errors.Is(err, errPrivilegedWrite); got != c.denied || err != nil && !got {
+			t.Errorf("%s 写入 %s：%v", c.role, c.container, err)
+		}
 	}
 }
