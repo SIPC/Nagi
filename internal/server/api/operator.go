@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"path"
+	"slices"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -64,7 +65,9 @@ func (s *projectService) checkOperatorConfig(ctx context.Context, projectID, con
 				continue
 			}
 			for _, cur := range []*nagiv1.ContainerConfig{c.GetDraft(), c.GetConfig()} {
-				if cur != nil && sameCompose(cur, cfg, container) && (!dynamic || sameVars(cur, cfg)) {
+				// 现有目录和快照子目录也是特权内容，要和 compose 一起不变：只比 compose 的话，
+				// 操作员先存一份没有特权的草稿，再只改目录，就能把相对挂载指到节点上任意目录。
+				if cur != nil && sameCompose(cur, cfg, container) && sameDirs(cur, cfg) && (!dynamic || sameVars(cur, cfg)) {
 					return nil
 				}
 			}
@@ -77,6 +80,24 @@ func sameCompose(a, b *nagiv1.ContainerConfig, container string) bool {
 	x, err1 := spec.ComposeText(a, container)
 	y, err2 := spec.ComposeText(b, container)
 	return err1 == nil && err2 == nil && x == y
+}
+
+// sameDirs 比较现有目录和快照子目录（按保存时的规范化比较，cfg 这时还没规范化）。
+func sameDirs(a, b *nagiv1.ContainerConfig) bool {
+	clean := func(c *nagiv1.ContainerConfig) (string, []string, bool) {
+		dir := ""
+		if d := c.GetProjectDir(); d != "" {
+			var err error
+			if dir, err = spec.CleanProjectDir(d); err != nil {
+				return "", nil, false
+			}
+		}
+		paths, err := spec.CleanBackupPaths(c.GetBackupPaths())
+		return dir, paths, err == nil
+	}
+	da, pa, ok1 := clean(a)
+	db, pb, ok2 := clean(b)
+	return ok1 && ok2 && da == db && slices.Equal(pa, pb)
 }
 
 func sameVars(a, b *nagiv1.ContainerConfig) bool {

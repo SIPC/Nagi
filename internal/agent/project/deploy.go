@@ -55,6 +55,9 @@ func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployO
 	l.Lock()
 	defer l.Unlock()
 
+	if err := m.checkProjectDir(ctx, s); err != nil {
+		return res, err
+	}
 	s = proto.Clone(s).(*nagiv1.ContainerSpec)
 	cached, err := m.Get(ctx, s.GetProjectId(), s.GetName())
 	filesRoot := ""
