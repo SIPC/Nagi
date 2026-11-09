@@ -8,6 +8,26 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.24.1
+
+### New features
+
+- Alert rules can be set for each node in the node's "Settings".
+- Container alert rules can be set for each project, and a container can have its own rules on the new "Alerts" tab.
+- Each alert rule can be turned off.
+
+### Fixes
+
+- Fixes an issue where "About" showed "Checked soon" right after checking for updates.
+
+### Behavior changes
+
+- "Settings → Alerts" now contains only notification channels. Existing alert rules are moved to each node and project after upgrading.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.24.1 for project and container alert rules to take effect.
+
 ## v0.24.0
 
 ### Improvements
