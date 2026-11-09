@@ -234,6 +234,16 @@ func (m *Mesh) Port() uint16 {
 
 // SetPeers 更新成员列表。只增减有变化的成员，已有成员的 WireGuard 会话不受影响。
 func (m *Mesh) SetPeers(peers []Peer) error {
+	// 公钥是低阶点的成员整个不加：WireGuard 和控制包、QUIC 的认证都要和它算共享密钥，算出来是全零。
+	valid := make([]Peer, 0, len(peers))
+	for _, p := range peers {
+		if ValidPublicKey(p.Key) {
+			valid = append(valid, p)
+		} else {
+			m.log.Warn("成员的公钥无效，不加入", "peer", p.Key.Short())
+		}
+	}
+	peers = valid
 	m.bind.setPeers(peers)
 	want := map[Key]bool{}
 	for _, p := range peers {

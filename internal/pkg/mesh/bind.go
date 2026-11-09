@@ -625,11 +625,14 @@ func (b *Bind) setPeers(peers []Peer) {
 		if pe.Key == b.pub {
 			continue
 		}
-		keep[pe.Key] = true
 		p := b.peers[pe.Key]
 		if p == nil {
+			mac, ok := macKey(b.priv, pe.Key)
+			if !ok {
+				continue // SetPeers 已经滤掉了，这里再防一次
+			}
 			p = &peerState{
-				key: pe.Key, ep: &endpoint{key: pe.Key}, mac: macKey(b.priv, pe.Key),
+				key: pe.Key, ep: &endpoint{key: pe.Key}, mac: mac,
 				learned: map[netip.AddrPort]time.Time{}, lastPing: map[netip.AddrPort]time.Time{},
 				pings: map[[txidLen]byte]pingInfo{},
 				// 一开始就加 1 个校验包，对方报告丢包很少时再关：等测出丢包再开，TCP 早就降速了。
@@ -637,6 +640,7 @@ func (b *Bind) setPeers(peers []Peer) {
 			}
 			b.peers[pe.Key] = p
 		}
+		keep[pe.Key] = true
 		p.candidates = pe.Endpoints
 		if len(p.candidates) > maxCandidates {
 			p.candidates = p.candidates[:maxCandidates]

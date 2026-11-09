@@ -53,12 +53,13 @@ func isControl(pkt []byte) bool {
 }
 
 // macKey 是和某个对端之间的 MAC 密钥：X25519(自己私钥, 对端公钥)，双方算出来一样。
-func macKey(priv, peer Key) [32]byte {
+// 对端公钥是低阶点时算不出来，返回 false：不能用全零当密钥，谁都算得出来。
+func macKey(priv, peer Key) ([32]byte, bool) {
 	shared, err := curve25519.X25519(priv[:], peer[:])
 	if err != nil {
-		return [32]byte{}
+		return [32]byte{}, false
 	}
-	return sha256.Sum256(append([]byte("nagi-mesh-control"), shared...))
+	return sha256.Sum256(append([]byte("nagi-mesh-control"), shared...)), true
 }
 
 func sum(key [32]byte, data []byte) []byte {

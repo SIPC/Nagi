@@ -30,6 +30,15 @@ func ParseKey(b []byte) (Key, error) {
 	return k, nil
 }
 
+// ValidPublicKey 判断公钥能不能用：低阶点（包括全零）和谁算出的共享密钥都是全零，不能用来认证。
+func ValidPublicKey(k Key) bool {
+	_, err := curve25519.X25519(lowOrderProbe[:], k[:])
+	return err == nil
+}
+
+// lowOrderProbe 是检查低阶点用的任意标量：X25519 的结果是全零当且仅当公钥是低阶点，和标量无关。
+var lowOrderProbe = Key{9}
+
 func (k Key) String() string { return base64.StdEncoding.EncodeToString(k[:]) }
 func (k Key) hex() string    { return hex.EncodeToString(k[:]) }
 func (k Key) IsZero() bool   { return k == Key{} }

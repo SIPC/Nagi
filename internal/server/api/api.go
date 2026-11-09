@@ -17,6 +17,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
@@ -388,7 +389,7 @@ type enrollService struct{ *API }
 func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.EnrollRequest]) (*connect.Response[nagiv1.EnrollResponse], error) {
 	// 先检查请求本身，全部合格再消耗令牌、改数据库：无效的请求不能用掉令牌，也不能借令牌恢复别的已移除节点。
 	meshKey := req.Msg.GetWireguardPublicKey()
-	if len(meshKey) != 32 {
+	if k, err := mesh.ParseKey(meshKey); err != nil || !mesh.ValidPublicKey(k) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点的 WireGuard 公钥格式不正确，请在节点上重新执行加入命令"))
 	}
 	csr, err := x509.ParseCertificateRequest(req.Msg.GetCsr())

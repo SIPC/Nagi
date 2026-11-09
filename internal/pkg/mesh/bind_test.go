@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"io"
 	"log/slog"
 	"net"
@@ -44,5 +45,51 @@ func TestReceiveEmptyUDP(t *testing.T) {
 	}
 	if n != 1 || string(packets[0][:sizes[0]]) != string(want) || eps[0] != b.peers[k].ep {
 		t.Fatalf("收到 %d 个包，大小 %d", n, sizes[0])
+	}
+}
+
+// 低阶点算出的共享密钥是全零，谁都算得出来，这样的公钥不能用。
+func TestLowOrderPublicKey(t *testing.T) {
+	bad := []string{
+		"0000000000000000000000000000000000000000000000000000000000000000",
+		"0100000000000000000000000000000000000000000000000000000000000000",
+		"e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+		"5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+		"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+	}
+	for _, h := range bad {
+		raw, _ := hex.DecodeString(h)
+		k, err := ParseKey(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ValidPublicKey(k) {
+			t.Fatalf("%s 应该无效", h)
+		}
+		if _, ok := macKey(Key{1}, k); ok {
+			t.Fatalf("%s 不能算出 MAC 密钥", h)
+		}
+	}
+	if !ValidPublicKey(PublicKey(Key{1})) {
+		t.Fatal("正常的公钥应该有效")
+	}
+
+	m, err := New(Config{PrivateKey: Key{8}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	good := PublicKey(Key{16}) // 私钥低 3 位会被清掉，Key{1} 和 Key{2} 是同一个
+	if err := m.SetPeers([]Peer{{Key: Key{}}, {Key: good}}); err != nil {
+		t.Fatal(err)
+	}
+	m.bind.mu.Lock()
+	n, ok := len(m.bind.peers), m.bind.peers[good] != nil
+	m.bind.mu.Unlock()
+	m.mu.Lock()
+	wg := len(m.configured) == 1 && m.configured[good]
+	m.mu.Unlock()
+	if n != 1 || !ok || !wg {
+		t.Fatal("应该只加入有效的成员")
 	}
 }
