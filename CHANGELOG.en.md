@@ -8,6 +8,41 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.24.0
+
+### Improvements
+
+- Nodes accept at most 2 uploads at a time, and stop uploads and replica sync when free disk space runs low.
+- Established connections are closed when project link or entry permissions are revoked.
+- Open container terminals and logs are closed when an account is removed, demoted, or loses access to the project.
+
+### Fixes
+
+- Fixes an issue where operators could change the existing directory when reusing an admin's configuration and gain root on the node.
+- Fixes an issue where operators could place a container directory outside the target node's projects root.
+- Fixes an issue where env_file, secrets, and configs files and mounted directories referenced by compose could point to other files on the node through symbolic links.
+- Fixes an issue where a compromised node could make the panel clear and rebuild a project.
+- Fixes an issue where a node reporting many addresses could make every node's connection to the panel drop repeatedly.
+- Fixes an issue where a removed panel could still read node data and transfer files for a short time.
+- Fixes an issue where certain network packets could make a node exit.
+- Fixes an issue where other nodes could keep the speed test busy.
+- Fixes an issue where concurrent refreshes of an MCP access token could all succeed.
+- Fixes an issue where concurrent MCP writes to the same file could overwrite each other.
+
+### Behavior changes
+
+- For privileged containers deployed by an admin, operators can't open a terminal, run commands, change files, or change the container's variables and file source.
+- Only admins can save a compose in which one mount contains another (for example, mounting both . and ./uploads).
+- Compose no longer reads the node process's environment variables. Add the values you need as container or shared project variables.
+- Git repository URLs can't include a username or token, or point to the node itself. For private repositories, use an SSH URL and a deploy key.
+- Deployments are refused when a mount or file reference in the container directory passes through a symbolic link.
+- When a node reports that another panel changed a project, the panel no longer rebuilds it from the node automatically. The project is listed on the "Nodes" page for an admin to confirm.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.24.0.
+- For containers that use a Git URL with a username or token, switch to an SSH URL and a deploy key before deploying.
+
 ## v0.23.1
 
 ### Fixes
