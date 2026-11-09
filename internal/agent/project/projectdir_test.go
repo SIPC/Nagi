@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -51,5 +52,36 @@ func TestCheckProjectDir(t *testing.T) {
 	// 自己原来的现有目录不算重叠。
 	if err := m.checkProjectDir(ctx, shared); err != nil {
 		t.Errorf("own dir: %v", err)
+	}
+}
+
+// 项目根目录以下经过符号链接的容器目录要拒绝；根目录本身是链接不算。
+func TestLinkBelow(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "disk")
+	if err := os.MkdirAll(filepath.Join(real, "p", "old", "data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(base, "srv")
+	if err := os.Symlink(real, root); err != nil {
+		t.Skip("不能创建符号链接：", err)
+	}
+	outside := filepath.Join(base, "etc")
+	if err := os.Mkdir(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(real, "p", "old", "data", "link")); err != nil {
+		t.Fatal(err)
+	}
+	for dir, want := range map[string]bool{
+		filepath.Join(root, "p", "new"):                      false,
+		filepath.Join(root, "p", "old", "data", "x"):         false,
+		filepath.Join(root, "p", "old", "data", "link", "x"): true,
+		filepath.Join(root, "p", "old", "data", "link"):      true,
+		filepath.Join(base, "elsewhere", "link", "x"):        false,
+	} {
+		if got := linkBelow(root, dir); got != want {
+			t.Errorf("%s: linkBelow = %v, want %v", dir, got, want)
+		}
 	}
 }

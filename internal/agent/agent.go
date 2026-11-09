@@ -157,6 +157,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.Embedded {
 		projects.ReservedDirs = append(projects.ReservedDirs, filepath.Dir(cfg.DataDir))
 	}
+	projects.ProjectsRoot = a.projectsRoot
 	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.status

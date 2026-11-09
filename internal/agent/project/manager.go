@@ -75,6 +75,8 @@ type Manager struct {
 	ProxyPorts func() []spec.PortKey
 	// ReservedDirs 是 Nagi 自己的目录（数据目录等），现有目录不能放在里面。
 	ReservedDirs []string
+	// ProjectsRoot 返回节点的项目根目录。
+	ProjectsRoot func() string
 
 	restarts managedRestarts
 	images   imageUpdates
@@ -385,7 +387,36 @@ func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 			return "", invalid("目录与此节点上容器 %s 的目录 %s 重叠，请更换目录", c.Spec.GetName(), c.Spec.GetDir())
 		}
 	}
+	if m.ProjectsRoot != nil && linkBelow(m.ProjectsRoot(), dir) {
+		return "", invalid("目录 %s 经过符号链接，请更换目录", dir)
+	}
 	return dir, nil
+}
+
+// linkBelow 判断 dir 在 root 下面时，root 以下已经存在的各级里有没有符号链接。目录由节点以 root 身份创建，
+// 链接可能是删除容器后留下的目录里、容器自己写的，会把目录带到根目录以外（面板只按字面检查）。
+// root 本身和它上面的链接（例如 /srv 指向数据盘）不算；不在 root 下面的目录只有管理员能设置，不检查。
+func linkBelow(root, dir string) bool {
+	root = filepath.Clean(root)
+	if !within(dir, root) || dir == root {
+		return false
+	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil {
+		return true
+	}
+	p := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		p = filepath.Join(p, part)
+		info, err := os.Lstat(p)
+		if err != nil {
+			return false // 下面的还不存在，由节点创建
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // within 判断 child 是否等于 parent 或位于 parent 之内。
