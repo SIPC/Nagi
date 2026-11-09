@@ -413,3 +413,48 @@ func TestDownloadSkipsDenied(t *testing.T) {
 		}
 	}
 }
+
+// 检查和打开之间路径被换成符号链接时，核对出打开的不是检查过的那个文件。
+func TestVerifyOpened(t *testing.T) {
+	_, dir := newService(t)
+	a := filepath.Join(dir, "work", "a")
+	write(t, a, "a")
+	secret := filepath.Join(dir, "data", "identity", "key")
+	write(t, secret, "secret")
+
+	f, err := os.Open(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := verifyOpened(a, f); err != nil {
+		t.Fatalf("没有变化时应该通过: %v", err)
+	}
+	// 打开以后换成指向数据目录的符号链接。
+	if err := os.Remove(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyOpened(a, f); err == nil {
+		t.Fatal("路径换成符号链接后应该拒绝")
+	}
+	// 最后一段是符号链接时不跟随。
+	if _, _, err := openRegular(a); code(err) != codes.InvalidArgument {
+		t.Fatalf("不应该跟随符号链接打开: %v", err)
+	}
+	// 上级目录换成了符号链接：打开的是数据目录里的文件。
+	sub := filepath.Join(dir, "work", "sub")
+	if err := os.Symlink(filepath.Join(dir, "data", "identity"), sub); err != nil {
+		t.Fatal(err)
+	}
+	g, err := os.Open(filepath.Join(sub, "key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	if _, err := verifyOpened(filepath.Join(sub, "key"), g); err == nil {
+		t.Fatal("路径里有符号链接时应该拒绝")
+	}
+}

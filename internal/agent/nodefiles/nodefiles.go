@@ -296,11 +296,14 @@ func (s *Service) List(p string) (*nagiv1.ListNodeDirResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := os.Open(real)
+	dir, err := openNoFollow(real)
 	if err != nil {
 		return nil, fsErr(err)
 	}
 	defer dir.Close()
+	if _, err := verifyOpened(real, dir); err != nil {
+		return nil, err
+	}
 	entries, err := dir.ReadDir(maxEntries + 1)
 	if err != nil && !errors.Is(err, io.EOF) {
 		var pe *fs.PathError
@@ -349,20 +352,58 @@ func hashOf(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// openRegular 打开普通文件。先看类型再打开，打开管道这类文件会卡住；O_NONBLOCK 防止这中间被换掉。
+// errChanged 是打开以后发现路径和检查时不一样了。
+var errChanged = invalid("路径已变更，请重试")
+
+// verifyOpened 核对打开的 f 就是路径 p 现在指向的东西，而且 p 里没有符号链接，返回 f 的属性。
+// 解析路径、检查访问级别和打开之间，路径里的某一段可能被换成了符号链接（例如指向 Nagi 数据目录）：
+// 打开以后 p 仍然没有符号链接、而且和打开的是同一个文件，打开的就是检查过的那个。
+func verifyOpened(p string, f *os.File) (fs.FileInfo, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fsErr(err)
+	}
+	p = filepath.Clean(filepath.FromSlash(p))
+	if again, err := filepath.EvalSymlinks(p); err != nil || again != p {
+		return nil, errChanged
+	}
+	if cur, err := os.Lstat(p); err != nil || !os.SameFile(cur, info) {
+		return nil, errChanged
+	}
+	return info, nil
+}
+
+// openNoFollow 只读打开 p，最后一段是符号链接时不跟随。O_NONBLOCK：打开前看过类型，中间被换成管道时不会卡住。
+func openNoFollow(p string) (*os.File, error) {
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK|oNoFollow, 0)
+	if errors.Is(err, syscall.ELOOP) {
+		return nil, errChanged
+	}
+	return f, err
+}
+
+// openRegular 打开真实路径 real 上的普通文件，并核对打开的就是检查过的那个（见 verifyOpened）。
+// 先看类型再打开，打开管道这类文件会卡住。
 func openRegular(real string) (*os.File, fs.FileInfo, error) {
-	info, err := os.Stat(real)
+	info, err := os.Lstat(real)
 	if err != nil {
 		return nil, nil, fsErr(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, nil, errChanged
 	}
 	if !info.Mode().IsRegular() {
 		return nil, nil, invalid("该路径不是普通文件")
 	}
-	f, err := os.OpenFile(real, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	f, err := openNoFollow(real)
 	if err != nil {
 		return nil, nil, fsErr(err)
 	}
-	if info, err = f.Stat(); err != nil || !info.Mode().IsRegular() {
+	if info, err = verifyOpened(real, f); err != nil {
+		f.Close()
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() {
 		f.Close()
 		return nil, nil, invalid("该路径不是普通文件")
 	}
@@ -880,11 +921,16 @@ func (s *Service) tarDir(ctx context.Context, real string, tw *tar.Writer) error
 		case info.IsDir():
 			return tw.WriteHeader(&tar.Header{Name: sub + "/", Mode: int64(info.Mode().Perm()), ModTime: info.ModTime(), Typeflag: tar.TypeDir})
 		case info.Mode().IsRegular():
-			f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+			f, err := openNoFollow(p)
 			if err != nil {
 				return nil
 			}
 			defer f.Close()
+			// 遍历和打开之间路径可能被换掉（例如某一级目录换成指向数据目录的符号链接）：
+			// 打开的不是遍历时看到的那个文件，或者路径里有了符号链接，就跳过。
+			if cur, err := verifyOpened(p, f); err != nil || !os.SameFile(cur, info) {
+				return nil
+			}
 			// 边打包边有人写时，文件可能变长或变短，只取打开时的大小，不够的补零，否则 tar 会报错。
 			if err := tw.WriteHeader(&tar.Header{Name: sub, Mode: int64(info.Mode().Perm()), Size: info.Size(), ModTime: info.ModTime(), Typeflag: tar.TypeReg}); err != nil {
 				return err
