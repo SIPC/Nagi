@@ -120,19 +120,6 @@ type Conn struct {
 }
 
 // Pending 返回节点是否在等管理员批准。
-// ProjectsRoots 返回在线节点的项目根目录。
-func (r *Registry) ProjectsRoots() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]string, 0, len(r.conns))
-	for _, c := range r.conns {
-		if root := c.LastReport().GetNode().GetProjectsRoot(); root != "" {
-			out = append(out, root)
-		}
-	}
-	return out
-}
-
 func (c *Conn) Pending() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

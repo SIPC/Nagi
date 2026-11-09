@@ -78,7 +78,7 @@ func (s *projectService) CreateProject(ctx context.Context, req *connect.Request
 		if err := s.checkOperatorConfig(ctx, "", m.GetContainerName(), m.GetContainer()); err != nil {
 			return nil, err
 		}
-		if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+		if err := s.checkOperatorDir(ctx, m.GetNodeId(), m.GetDir()); err != nil {
 			return nil, err
 		}
 		cr.Container = &projects.AddRequest{Name: m.GetContainerName(), Config: m.GetContainer(), NodeID: m.GetNodeId(), Dir: m.GetDir()}
@@ -134,7 +134,7 @@ func (s *projectService) AddContainer(ctx context.Context, req *connect.Request[
 	if err := s.checkOperatorConfig(ctx, "", m.GetName(), m.GetConfig()); err != nil {
 		return nil, err
 	}
-	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+	if err := s.checkOperatorDir(ctx, m.GetNodeId(), m.GetDir()); err != nil {
 		return nil, err
 	}
 	p, err := s.Projects.AddContainer(ctx, projects.AddRequest{ProjectID: m.GetProjectId(), Name: m.GetName(), Config: m.GetConfig(), NodeID: m.GetNodeId(), Dir: m.GetDir()})
@@ -270,7 +270,7 @@ func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.R
 
 func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Request[nagiv1.RestoreFromBackupRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+	if err := s.checkOperatorDir(ctx, s.backupNode(ctx, m.GetProjectId(), m.GetContainer()), m.GetDir()); err != nil {
 		return err
 	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
@@ -278,9 +278,23 @@ func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Req
 	})
 }
 
+// backupNode 返回容器的备份节点，从备份恢复时容器放在那里。
+func (s *projectService) backupNode(ctx context.Context, projectID, container string) string {
+	summary, err := s.Projects.Get(ctx, projectID)
+	if err != nil {
+		return ""
+	}
+	for _, c := range summary.GetProject().GetContainers() {
+		if c.GetName() == container {
+			return c.GetBackupNodeId()
+		}
+	}
+	return ""
+}
+
 func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+	if err := s.checkOperatorDir(ctx, m.GetNodeId(), m.GetDir()); err != nil {
 		return err
 	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
@@ -290,7 +304,7 @@ func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Requ
 
 func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	if err := s.checkOperatorDir(ctx, m.GetDir()); err != nil {
+	if err := s.checkOperatorDir(ctx, m.GetNodeId(), m.GetDir()); err != nil {
 		return err
 	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
@@ -300,7 +314,7 @@ func (s *projectService) RedeployElsewhere(ctx context.Context, req *connect.Req
 
 func (s *projectService) SetFailover(ctx context.Context, req *connect.Request[nagiv1.SetFailoverApiRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
-	if err := s.checkOperatorDir(ctx, m.GetStandbyDir()); err != nil {
+	if err := s.checkOperatorDir(ctx, m.GetStandbyNodeId(), m.GetStandbyDir()); err != nil {
 		return nil, err
 	}
 	return reply(s.Projects.SetFailover(ctx, projects.SetFailoverRequest{

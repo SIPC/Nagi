@@ -134,17 +134,20 @@ func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID s
 	return nil
 }
 
-// checkOperatorDir：操作员不能把容器目录放到项目根目录以外。目录由节点创建，权限是 root，
-// 放到 /etc 这样的地方再上传文件，一样能改节点。
-func (s *projectService) checkOperatorDir(ctx context.Context, dir string) error {
+// checkOperatorDir：操作员不能把容器目录放到目标节点的项目根目录以外。目录由节点创建，权限是 root，
+// 放到 /etc 这样的地方再上传文件，一样能改节点。只看目标节点自己上报的根目录：各节点的根目录可以不同，
+// 待批准的节点也不能算。
+func (s *projectService) checkOperatorDir(ctx context.Context, nodeID, dir string) error {
 	if !operatorLimited(ctx) || dir == "" {
 		return nil
 	}
+	root := ""
+	if c, err := s.Nodes.Get(nodeID); err == nil {
+		root = path.Clean(c.LastReport().GetNode().GetProjectsRoot())
+	}
 	clean := path.Clean(dir)
-	for _, root := range s.Nodes.ProjectsRoots() {
-		if strings.HasPrefix(clean, strings.TrimSuffix(path.Clean(root), "/")+"/") {
-			return nil
-		}
+	if root != "." && root != "/" && path.IsAbs(root) && strings.HasPrefix(clean, root+"/") {
+		return nil
 	}
 	return connect.NewError(connect.CodePermissionDenied, i18n.New("项目根目录以外的容器目录仅管理员可设置"))
 }
