@@ -176,7 +176,7 @@ func checkNestedBinds(doc map[string]any, services map[string]any, add func(bool
 	for _, parent := range binds {
 		for _, child := range append(binds, files...) {
 			if child.path != parent.path && (parent.path == "." || strings.HasPrefix(child.path, parent.path+"/")) {
-				add(false, "%s: volumes（%s 包含 %s）", parent.owner, parent.path, child.path)
+				add(false, "%s: volumes: %s, %s", parent.owner, parent.path, child.path)
 			}
 		}
 	}

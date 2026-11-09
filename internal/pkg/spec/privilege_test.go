@@ -57,9 +57,9 @@ func TestPrivilegeReasons(t *testing.T) {
 		{"外部网络", svc("") + "networks:\n  n:\n    external: true\n", "networks: n", false},
 		{"include", "include:\n  - /etc/x.yml\n" + svc(""), "include", false},
 		{"合并写法藏着特权", "x-a: &a\n  privileged: true\nservices:\n  web:\n    <<: *a\n    image: nginx\n", "web: privileged", false},
-		{"嵌套的挂载", svc("    volumes:\n      - .:/app\n      - ./uploads:/app/uploads\n"), "web: volumes（. 包含 uploads）", false},
-		{"跨服务嵌套的挂载", svc("    volumes:\n      - ./a:/a\n") + "  db:\n    image: postgres\n    volumes:\n      - type: bind\n        source: ./a/b\n        target: /b\n", "web: volumes（a 包含 a/b）", false},
-		{"挂载包含 secret 的文件", svc("    volumes:\n      - ./conf:/c\n") + "secrets:\n  s:\n    file: ./conf/s\n", "web: volumes（conf 包含 conf/s）", false},
+		{"嵌套的挂载", svc("    volumes:\n      - .:/app\n      - ./uploads:/app/uploads\n"), "web: volumes: ., uploads", false},
+		{"跨服务嵌套的挂载", svc("    volumes:\n      - ./a:/a\n") + "  db:\n    image: postgres\n    volumes:\n      - type: bind\n        source: ./a/b\n        target: /b\n", "web: volumes: a, a/b", false},
+		{"挂载包含 secret 的文件", svc("    volumes:\n      - ./conf:/c\n") + "secrets:\n  s:\n    file: ./conf/s\n", "web: volumes: conf, conf/s", false},
 		{"读不懂", "services: [", "compose", false},
 		{"服务不是表", "services:\n  web: 1\n", "web", false},
 	}

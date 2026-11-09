@@ -320,10 +320,13 @@ var en = map[string]string{
 	"不能使用根目录作为容器目录": "The root directory can't be a container directory",
 	"目录 %s 已存在且不为空，请更换目录。如果是迁移、顶替或删除后留下的旧目录，确认不再需要后请在节点上删除": "Directory %s already exists and isn't empty. Choose another directory. If it was left behind by a migration, failover, or deletion, delete it on the node once you've confirmed it's no longer needed",
 	"目录与此节点上容器 %s 的目录 %s 重叠，请更换目录":                          "The directory overlaps directory %[2]s of container %[1]s on this node. Choose another directory",
+	"目录 %s 经过符号链接，请更换目录":                                    "Directory %s passes through a symbolic link. Choose another directory",
+	"现有目录 %s 是（或包含）Nagi 的数据目录":                              "Existing directory %s is (or contains) Nagi's data directory",
+	"现有目录 %s 与此节点上容器 %s 的目录重叠":                              "Existing directory %[1]s overlaps the directory of container %[2]s on this node",
 	"%s 是符号链接（可能由容器创建），为安全起见不挂载。请删除该链接后重新部署":                "%s is a symbolic link (possibly created by the container) and isn't mounted for security. Delete the link and deploy again",
-	"容器没有设置 git 仓库":     "The container has no git repository",
-	"压缩包超过 %d GiB，无法上传": "The archive is larger than %d GiB and can't be uploaded",
-	"该容器需要 data/ 中的文件，但没有文件来源，请先上传文件再部署": "This container uses files in data/ but has no file source. Upload files first, then deploy",
+	"容器没有设置 git 仓库":                                         "The container has no git repository",
+	"压缩包超过 %d GiB，无法上传":                                     "The archive is larger than %d GiB and can't be uploaded",
+	"该容器需要 data/ 中的文件，但没有文件来源，请先上传文件再部署":                    "This container uses files in data/ but has no file source. Upload files first, then deploy",
 
 	// ---- 备份节点与迁移 ----
 	"备份节点不能是容器所在的节点":                               "The backup node can't be the container's own node",
