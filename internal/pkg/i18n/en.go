@@ -408,6 +408,7 @@ var en = map[string]string{
 	"经节点网络连接超时":                      "The connection over the node network timed out",
 	"speed_via 只能是 path 或 wireguard": "speed_via must be path or wireguard",
 	"对方正在测速，请稍后重试":                   "The other node is running a speed test. Try again later",
+	"测速太频繁，请稍后重试":                    "Too many speed tests. Try again later",
 	"对方节点版本过低，升级后才能测速":               "The other node is out of date. Upgrade it to run a speed test",
 	"测速超时，请稍后重试":                     "The speed test timed out. Try again later",
 

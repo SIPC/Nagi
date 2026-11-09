@@ -149,3 +149,45 @@ func TestQUICLoss(t *testing.T) {
 		}
 	}
 }
+
+// 同一个成员最多连着测 speedBurst 轮，之后每 speedRefill 补一轮；别的成员不受影响。
+func TestSpeedLimiter(t *testing.T) {
+	l := newSpeedLimiter()
+	now := time.Now()
+	a, b := Key{1}, Key{2}
+	for i := range speedBurst {
+		if !l.take(a, now) {
+			t.Fatalf("第 %d 轮应该放行", i+1)
+		}
+	}
+	if l.take(a, now) {
+		t.Fatal("用完以后应该拒绝")
+	}
+	if !l.take(b, now) {
+		t.Fatal("别的成员不受影响")
+	}
+	if l.take(a, now.Add(speedRefill-time.Second)) {
+		t.Fatal("还没补上一轮")
+	}
+	if !l.take(a, now.Add(speedRefill)) || l.take(a, now.Add(speedRefill)) {
+		t.Fatal("过了 speedRefill 应该正好补一轮")
+	}
+}
+
+// TestSpeedLimited：测得太频繁时对方拒绝，报 ErrSpeedLimited。
+func TestSpeedLimited(t *testing.T) {
+	dropUDP = nil
+	_, a, b := setup(t)
+	waitPath(t, a.m, b.m.PublicKey(), "direct")
+	serveSpeedFor(t, b.m)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for i := range speedBurst {
+		if _, _, err := speedRound(ctx, a.m.Dial, b.m.PublicKey(), 'd', 100*time.Millisecond); err != nil {
+			t.Fatalf("第 %d 轮：%v", i+1, err)
+		}
+	}
+	if _, _, err := speedRound(ctx, a.m.Dial, b.m.PublicKey(), 'd', 100*time.Millisecond); !errors.Is(err, ErrSpeedLimited) {
+		t.Fatalf("应该说测速太频繁，实际 %v", err)
+	}
+}

@@ -15,7 +15,8 @@ import (
 // 测速（见 docs/mesh.md#测速）：经 mesh 和某个成员互传数据，量两个方向的吞吐。走的是和业务一样的路
 // （能走 QUIC 就走 QUIC），测出来的就是容器跨节点访问、迁移、同步时能拿到的速度。
 //
-// 协议：调用方连对方的 SpeedPort，发一个字节的方向和四个字节的时长（毫秒）。对方先回一个字节：0 接受，1 正在测（拒绝）。
+// 协议：调用方连对方的 SpeedPort，发一个字节的方向和四个字节的时长（毫秒）。对方先回一个字节：0 接受，1 正在测（拒绝），
+// 2 这个成员测得太频繁（拒绝）。
 //   - 上传（'u'）：调用方发 duration，然后半关闭；对方读到结束，回 8 字节的速率（字节/秒，float64 的位）。
 //   - 下载（'d'）：对方发 duration，然后半关闭；调用方自己算。
 //
@@ -27,7 +28,14 @@ const (
 	speedMax    = 10 * time.Second
 	speedWarmup = time.Second
 	speedChunk  = 64 << 10
+	// speedBurst、speedRefill：每个成员最多连着测 speedBurst 轮（一次完整的测速：平时那条路和 WireGuard
+	// 各上传、下载一轮），之后每 speedRefill 补一轮。免得某个成员一直占着测速、刷流量。
+	speedBurst  = 4
+	speedRefill = 30 * time.Second
 )
+
+// ErrSpeedLimited：本节点向对方测速太频繁。
+var ErrSpeedLimited = errors.New("测速太频繁")
 
 // ErrSpeedBusy：对方正在和别的成员测速。
 var ErrSpeedBusy = errors.New("对方正在测速")
@@ -59,6 +67,7 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 		_ = ln.Close()
 	}()
 	var busy sync.Mutex
+	limit := newSpeedLimiter()
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -71,11 +80,19 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 			if _, err := io.ReadFull(c, hdr[:]); err != nil {
 				return
 			}
+			caller, ok := m.KeyOf(c.RemoteAddr())
+			if !ok {
+				return
+			}
 			if !busy.TryLock() {
 				_, _ = c.Write([]byte{1})
 				return
 			}
 			defer busy.Unlock()
+			if !limit.take(caller, time.Now()) {
+				_, _ = c.Write([]byte{2})
+				return
+			}
 			d := min(time.Duration(binary.BigEndian.Uint32(hdr[1:]))*time.Millisecond, speedMax)
 			if _, err := c.Write([]byte{0}); err != nil {
 				return
@@ -166,7 +183,11 @@ func speedRound(ctx context.Context, dial dialer, k Key, dir byte, d time.Durati
 		// 旧版本没有这个端口：gVisor TCP 连不上，QUIC 的流被对方重置。
 		return 0, viaQUIC, ErrSpeedUnsupported
 	}
-	if ack[0] != 0 {
+	switch ack[0] {
+	case 0:
+	case 2:
+		return 0, viaQUIC, ErrSpeedLimited
+	default:
 		return 0, viaQUIC, ErrSpeedBusy
 	}
 	if dir == 'd' {
@@ -230,4 +251,42 @@ func receive(c net.Conn) (float64, error) {
 		return float64(total-atWarm) / end.Sub(warm).Seconds(), nil
 	}
 	return float64(total) / max(end.Sub(start).Seconds(), 0.001), nil
+}
+
+// speedLimiter 按成员限制测速的次数（令牌桶，见 speedBurst）。
+type speedLimiter struct {
+	mu      sync.Mutex
+	buckets map[Key]speedBucket
+}
+
+type speedBucket struct {
+	tokens float64
+	at     time.Time
+}
+
+func newSpeedLimiter() *speedLimiter { return &speedLimiter{buckets: map[Key]speedBucket{}} }
+
+// take 给 k 用掉一轮，用完了返回 false。
+func (l *speedLimiter) take(k Key, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	fill := func(b speedBucket) float64 {
+		return min(speedBurst, b.tokens+float64(now.Sub(b.at))/float64(speedRefill))
+	}
+	// 补满的不用记着：成员会变，不清理的话一直留着。
+	for key, b := range l.buckets {
+		if key != k && fill(b) >= speedBurst {
+			delete(l.buckets, key)
+		}
+	}
+	b, ok := l.buckets[k]
+	t := float64(speedBurst)
+	if ok {
+		t = fill(b)
+	}
+	if t < 1 {
+		return false
+	}
+	l.buckets[k] = speedBucket{tokens: t - 1, at: now}
+	return true
 }

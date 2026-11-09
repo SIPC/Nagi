@@ -454,6 +454,8 @@ func (s *agentService) MeshSpeedTest(ctx context.Context, req *nagiv1.MeshPingRe
 	switch {
 	case errors.Is(err, mesh.ErrSpeedBusy):
 		return nil, status.Error(codes.Unavailable, "对方正在测速，请稍后重试")
+	case errors.Is(err, mesh.ErrSpeedLimited):
+		return nil, status.Error(codes.ResourceExhausted, "测速太频繁，请稍后重试")
 	case errors.Is(err, mesh.ErrSpeedUnsupported):
 		return nil, status.Error(codes.FailedPrecondition, "对方节点版本过低，升级后才能测速")
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
