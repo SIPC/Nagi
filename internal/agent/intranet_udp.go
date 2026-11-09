@@ -524,9 +524,8 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		reply("ERR 请求格式不对")
 		return
 	}
-	member, internal := n.allowed(projectID, caller)
-	entry := n.entryAllowed(projectID, name, port, spec.ProtoUDP, caller)
-	if !member && !entry {
+	member, _ := n.allowed(projectID, caller)
+	if !member && !n.entryAllowed(projectID, name, port, spec.ProtoUDP, caller) {
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -536,7 +535,8 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		return
 	}
 	// 只转发开放的 UDP 端口（容器声明的和项目设置里补的，以及入口节点的映射指向的端口），理由同 TCP。
-	if !entry && !(member && (slices.Contains(e.UDPPorts, uint32(port)) || slices.Contains(spec.InternalUDPPortMap(internal)[name], uint32(port)))) {
+	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoUDP, caller, e.UDPPorts) }
+	if !still() {
 		reply(fmt.Sprintf("ERR %s 没有开放 UDP 端口 %d", name, port))
 		return
 	}
@@ -571,10 +571,8 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		}
 	}()
 	// 容器不在了或者换了地址（重建、被顶替走）时拆掉通道，调用方重新找。
-	// 只靠入口放行连进来的，放行被撤销时也拆掉，和 TCP 一样（见 watchEntry）。
-	if !member {
-		defer n.watchEntry(func() { c.Close() }, projectID, name, port, spec.ProtoUDP, caller)()
-	}
+	// 放行被撤销时也拆掉，和 TCP 一样（见 watchAccess）：通道还开着，调用方就能开新的流。
+	defer n.watchAccess(func() { flows.close(); c.Close() }, still)()
 	keepAlive(c, br, flows.done(), func() bool {
 		cur, ok := n.endpoint(ctx, projectID, name)
 		return ok && cur.IP == e.IP

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"slices"
-	"time"
 
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
@@ -17,9 +16,6 @@ import (
 //   - 每条映射在 127.0.0.1 上开一个随机端口作为 Caddy 的上游，收到的连接和数据报沿用项目内网的转发，
 //     按计划里的顺序经 mesh 交给目标所在的节点，所以顶替以后不用改配置；
 //   - 目标节点只放行计划（LinkEntryAllow）里写的那个端口。
-
-// entryRecheck 是目标节点检查入口节点的放行还在不在的间隔。
-const entryRecheck = 5 * time.Second
 
 // entryForward 是一条映射在本节点上的本地转发口。
 type entryForward struct {
@@ -167,28 +163,6 @@ func (n *intranet) entryAllowed(projectID, name string, port uint16, protocol st
 		}
 	}
 	return false
-}
-
-// watchEntry 在入口节点的放行被撤销（映射删了、节点被移除）时关掉连接：Caddy 会复用到上游的连接，只在建立时检查不够。
-// 撤销时调用 drop，返回的函数停止检查。
-func (n *intranet) watchEntry(drop func(), projectID, name string, port uint16, protocol string, k mesh.Key) func() {
-	stop := make(chan struct{})
-	go func() {
-		t := time.NewTicker(entryRecheck)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-t.C:
-			}
-			if !n.entryAllowed(projectID, name, port, protocol, k) {
-				drop()
-				return
-			}
-		}
-	}()
-	return func() { close(stop) }
 }
 
 // entryPorts 返回本节点作为入口节点占用的端口。

@@ -243,9 +243,28 @@ func TestEntryEndToEnd(t *testing.T) {
 	C.a.intranet.mu.Lock()
 	C.a.intranet.plan = &nagiv1.LinkPlan{}
 	C.a.intranet.mu.Unlock()
-	_ = mc.SetReadDeadline(time.Now().Add(3 * entryRecheck))
+	_ = mc.SetReadDeadline(time.Now().Add(3 * accessRecheck))
 	if _, err := mc.Read(make([]byte, 1)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatalf("撤销放行后连接应该被断开: %v", err)
+	}
+
+	// 项目放行被撤销（例如断开项目连接）：经项目放行建立的连接也断开，计划换掉时立刻检查。
+	if err := C.a.intranet.set(&nagiv1.LinkPlan{Allows: []*nagiv1.LinkAllow{
+		{ProjectId: testProject, Callers: [][]byte{kA[:]}, InternalPorts: []string{fmt.Sprintf("dns:%d", silentPort)}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	mc2, _, ok := A.a.intranet.dialRemote(C.m.PublicKey(), "C", entryProxy(A.a.intranet.plan.GetEntries()[0]), silentPort)
+	if !ok {
+		t.Fatal("项目放行的端口应该能连上")
+	}
+	defer mc2.Close()
+	if err := C.a.intranet.set(&nagiv1.LinkPlan{}); err != nil {
+		t.Fatal(err)
+	}
+	_ = mc2.SetReadDeadline(time.Now().Add(accessRecheck / 2))
+	if _, err := mc2.Read(make([]byte, 1)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("撤销项目放行后连接应该立刻断开: %v", err)
 	}
 
 	// 映射从计划里去掉：转发口关掉。

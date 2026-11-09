@@ -55,6 +55,8 @@ type intranet struct {
 	usocks map[string]net.Listener // 项目 ID → 代理连进来的 unixpacket socket（UDP）
 	// entries 是跨节点入口的本地转发口（见 entry.go）：项目 ID/映射名/tcp 或 udp → 转发口。
 	entries map[string]*entryForward
+	// changed 在计划换掉时关闭并换一个新的，让检查放行的连接立刻重新检查（见 watchAccess）。
+	changed chan struct{}
 	build   string // 代理容器标签：nagi 换了版本就重建
 	// endpoint 找本节点上项目内网里的容器（project.Manager.FindEndpoint），测试时替换。
 	endpoint func(ctx context.Context, projectID, name string) (project.Endpoint, bool)
@@ -101,9 +103,23 @@ func (n *intranet) set(p *nagiv1.LinkPlan) error {
 	}
 	n.mu.Lock()
 	n.plan = p
+	if n.changed != nil {
+		close(n.changed)
+	}
+	n.changed = make(chan struct{})
 	n.mu.Unlock()
 	n.trigger()
 	return nil
+}
+
+// planChanged 返回一个在计划下次换掉时关闭的 channel。
+func (n *intranet) planChanged() <-chan struct{} {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.changed == nil {
+		n.changed = make(chan struct{})
+	}
+	return n.changed
 }
 
 func (n *intranet) current() *nagiv1.LinkPlan {
@@ -459,6 +475,50 @@ func (n *intranet) allowed(projectID string, k mesh.Key) (bool, []string) {
 	return false, nil
 }
 
+// portOpen 判断节点 k 能不能经 7001 端口连到容器 name 的端口 port（protocol 是 tcp 或 udp）：
+// 它是这个端口的入口节点；或者有权访问这个项目，而且端口是容器声明的（declared）或项目设置里补的内部端口。
+func (n *intranet) portOpen(projectID, name string, port uint16, protocol string, k mesh.Key, declared []uint32) bool {
+	if n.entryAllowed(projectID, name, port, protocol, k) {
+		return true
+	}
+	ok, internal := n.allowed(projectID, k)
+	if !ok {
+		return false
+	}
+	extra := spec.InternalPortMap(internal)
+	if protocol == spec.ProtoUDP {
+		extra = spec.InternalUDPPortMap(internal)
+	}
+	return slices.Contains(declared, uint32(port)) || slices.Contains(extra[name], uint32(port))
+}
+
+// accessRecheck 是目标节点检查已经建立的连接还被不被放行的间隔，计划换掉时另外立刻检查。
+const accessRecheck = 5 * time.Second
+
+// watchAccess 在放行被撤销时调用 drop：连接建立以后，项目放行、入口放行都可能被撤销（断开项目连接、删掉映射、移除节点），
+// 只在建立时检查不够（Caddy 也会复用到上游的连接）。still 返回 false 时调用 drop，返回的函数停止检查。
+func (n *intranet) watchAccess(drop func(), still func() bool) func() {
+	stop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(accessRecheck)
+		defer t.Stop()
+		for {
+			changed := n.planChanged()
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+			case <-changed:
+			}
+			if !still() {
+				drop()
+				return
+			}
+		}
+	}()
+	return func() { close(stop) }
+}
+
 // handleRemote 处理其他节点经 mesh 连进来的一个连接：第一行是"项目 名字 端口"。
 func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	defer c.Close()
@@ -484,9 +544,8 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		reply("ERR 请求格式不对")
 		return
 	}
-	ok, internal := n.allowed(projectID, caller)
-	entry := n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller)
-	if !ok && !entry {
+	ok, _ = n.allowed(projectID, caller)
+	if !ok && !n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller) {
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -496,8 +555,8 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		return
 	}
 	// 只转发开放的端口（容器声明的和项目设置里补的内部端口，以及入口节点的映射指向的端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
-	open := entry || (ok && (slices.Contains(e.Ports, uint32(port)) || slices.Contains(spec.InternalPortMap(internal)[name], uint32(port))))
-	if !open {
+	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoTCP, caller, e.Ports) }
+	if !still() {
 		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
 	}
@@ -510,9 +569,7 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	if _, err := io.WriteString(c, "OK\n"); err != nil {
 		return
 	}
-	if !ok {
-		defer n.watchEntry(func() { c.Close(); tc.Close() }, projectID, name, port, spec.ProtoTCP, caller)()
-	}
+	defer n.watchAccess(func() { c.Close(); tc.Close() }, still)()
 	splice(c, br, tc, tc)
 }
 

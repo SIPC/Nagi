@@ -25,8 +25,6 @@ import (
 // 代理容器那一侧（udpProxy）→ unixpacket → 节点 A → mesh 握手 → 节点 B/C → "容器"（本机 UDP 回显）。
 // 只把找容器（FindEndpoint）换成假的，其余都是真的代码和真的 mesh。
 
-const testProject = "p000000000000001"
-
 // taggedEcho 在 ip 上开 UDP 回显，回"标记:来源端口:内容"。
 func taggedEcho(t *testing.T, ip netip.Addr, port uint16, tag string) uint16 {
 	t.Helper()
