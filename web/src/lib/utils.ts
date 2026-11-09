@@ -10,12 +10,23 @@ export function cn(...inputs: ClassValue[]) {
 const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 const rtfNumeric = new Intl.RelativeTimeFormat(locale, { numeric: "always" });
 
-// 相对时间，例如“3 分钟前”。英文是小写（"just now"），可以直接嵌在句子里；单独显示时用 capitalize。
+// 已经发生的事的相对时间，例如“3 分钟前”。英文是小写（"just now"），可以直接嵌在句子里；单独显示时用 capitalize。
+// 面板的时钟比浏览器快时，刚发生的事会落在“未来”，按“刚刚”显示，不显示成“即将”。
 export function timeAgo(date: Date | undefined): string {
   if (!date) return t.common.time.never;
+  return relative(Math.min(0, Math.round((date.getTime() - Date.now()) / 1000)));
+}
+
+// 将来的时间，例如到期时间“2 小时后”，一分钟内是“即将”。
+export function timeUntil(date: Date | undefined): string {
+  if (!date) return t.common.time.never;
   const seconds = Math.round((date.getTime() - Date.now()) / 1000);
-  const abs = Math.abs(seconds);
   if (seconds > 0 && seconds < 60) return t.common.time.soon;
+  return relative(seconds);
+}
+
+function relative(seconds: number): string {
+  const abs = Math.abs(seconds);
   // 只有「昨天」用词语，其余写数字；中文「秒钟前」写成「秒前」。
   const fmt = (v: number, unit: Intl.RelativeTimeFormatUnit) => (unit === "day" && v === -1 ? rtf : rtfNumeric).format(v, unit).replace(/(\d)\s*([^\d\s])/, "$1 $2").replace("秒钟", "秒"); // i18n-ignore
   if (abs < 60) return seconds > -10 ? t.common.time.justNow : fmt(seconds, "second");

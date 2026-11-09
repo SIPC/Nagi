@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
 import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
-import { formatDateTime, timeAgo } from "@/lib/utils";
+import { formatDateTime, timeUntil } from "@/lib/utils";
 import { t } from "@/i18n";
 
 // InviteCard：本面板生成接入码，其他面板用它把节点交过来。
@@ -86,7 +86,7 @@ export function InviteCard() {
               title={<span className="truncate">{i.id}</span>}
               sub={t.invite.usedCount(i.uses)}
               // 时间靠左（见 docs/ui.md「列表行」），英文「Expires in 59 minutes」放不进默认的列宽。
-              cols={[{ content: <span title={formatDateTime(toDate(i.expiresAt))}>{t.invite.expiresIn(timeAgo(toDate(i.expiresAt)))}</span>, width: "w-40" }]}
+              cols={[{ content: <span title={formatDateTime(toDate(i.expiresAt))}>{t.invite.expiresIn(timeUntil(toDate(i.expiresAt)))}</span>, width: "w-40" }]}
               actions={
                 <Button size="row" variant="ghost" disabled={revoking !== ""} onClick={() => revoke(i.id)}>
                   {revoking === i.id && <Spinner />}
