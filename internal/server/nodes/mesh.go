@@ -30,6 +30,38 @@ func (r *Registry) Mesh() *mesh.Mesh {
 	return r.mesh
 }
 
+const (
+	// maxReportedEndpoints 是节点上报的直连地址最多采用几个。IPv6 地址多的机器可能超过 16 个，多的截掉。
+	maxReportedEndpoints = 32
+	// maxReportedRaw：上报的地址超过这么多个时整份不采用，正常节点不会报这么多。
+	maxReportedRaw = 256
+)
+
+// cleanEndpoints 整理节点上报的直连地址：去掉不能用的和重复的，最多留 maxReportedEndpoints 个。
+// 超过 maxReportedRaw 个时一个都不留，ok 为 false。
+func cleanEndpoints(raw []string) (out []string, ok bool) {
+	if len(raw) > maxReportedRaw {
+		return nil, false
+	}
+	seen := make(map[netip.AddrPort]bool, len(raw))
+	for _, e := range raw {
+		ap, err := netip.ParseAddrPort(e)
+		if err != nil || !mesh.UsableEndpoint(ap) {
+			continue
+		}
+		ap = netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
+		if seen[ap] {
+			continue
+		}
+		seen[ap] = true
+		out = append(out, ap.String())
+		if len(out) == maxReportedEndpoints {
+			break
+		}
+	}
+	return out, true
+}
+
 // meshPeers 返回所有已上报 mesh 信息的在线节点。
 func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 	m := r.Mesh()
@@ -59,8 +91,10 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 			continue
 		}
 		var eps []netip.AddrPort
+		seen := map[netip.AddrPort]bool{}
 		add := func(ap netip.AddrPort) {
-			if ap.IsValid() && ap.Port() != 0 && !slices.Contains(eps, ap) {
+			if ap.IsValid() && ap.Port() != 0 && !seen[ap] && len(eps) < mesh.MaxEndpoints {
+				seen[ap] = true
 				eps = append(eps, ap)
 			}
 		}

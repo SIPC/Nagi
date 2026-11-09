@@ -272,7 +272,17 @@ func (n *meshNode) apply() {
 	self := n.m.PublicKey()
 	n.mu.Lock()
 	merged := map[mesh.Key]*mesh.Peer{}
+	seen := map[mesh.Key]map[netip.AddrPort]bool{}
 	var order []mesh.Key
+	// addEp 加一个直连地址，去重，每个成员最多 mesh.MaxEndpoints 个（多的 mesh 也不用）。
+	addEp := func(k mesh.Key, ap netip.AddrPort) {
+		p := merged[k]
+		if seen[k][ap] || len(p.Endpoints) >= mesh.MaxEndpoints {
+			return
+		}
+		seen[k][ap] = true
+		p.Endpoints = append(p.Endpoints, ap)
+	}
 	for fp, peers := range n.panelPeers {
 		pk := n.panelKeys[fp]
 		for _, mp := range peers {
@@ -284,17 +294,18 @@ func (n *meshNode) apply() {
 			if p == nil {
 				p = &mesh.Peer{Key: k}
 				merged[k] = p
+				seen[k] = map[netip.AddrPort]bool{}
 				order = append(order, k)
 			}
 			for _, e := range mp.GetEndpoints() {
-				if ap, err := netip.ParseAddrPort(e); err == nil && !slices.Contains(p.Endpoints, ap) {
-					p.Endpoints = append(p.Endpoints, ap)
+				if ap, err := netip.ParseAddrPort(e); err == nil {
+					addEp(k, ap)
 				}
 			}
 			if mp.GetIsPanel() && k == pk {
 				// 面板的 UDP 和控制连接用同一个地址和端口。
-				if ap, ok := resolve(n.panelAddr[fp]); ok && !slices.Contains(p.Endpoints, ap) {
-					p.Endpoints = append(p.Endpoints, ap)
+				if ap, ok := resolve(n.panelAddr[fp]); ok {
+					addEp(k, ap)
 				}
 			} else if !slices.Contains(p.Relays, pk) {
 				p.Relays = append(p.Relays, pk)

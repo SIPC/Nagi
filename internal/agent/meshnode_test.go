@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"path/filepath"
 	"testing"
 	"time"
@@ -68,6 +70,43 @@ func TestMeshKeepsRecentPeers(t *testing.T) {
 	n.apply()
 	if has(y) {
 		t.Fatal("过了 meshGrace 应该删掉")
+	}
+}
+
+// 两个面板给的同一个成员的地址合并时去重，最多留 mesh.MaxEndpoints 个。
+func TestMeshMergesEndpoints(t *testing.T) {
+	m, err := mesh.New(mesh.Config{PrivateKey: randKey(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	n := &meshNode{m: m, log: slog.New(slog.NewTextHandler(io.Discard, nil)), panelPeers: map[string][]*nagiv1.MeshPeer{},
+		panelKeys: map[string]mesh.Key{}, panelAddr: map[string]string{}, names: map[mesh.Key]string{},
+		file: filepath.Join(t.TempDir(), "mesh-peers.json")}
+	x := mesh.PublicKey(randKey())
+	cfg := func(eps ...string) *nagiv1.MeshConfig {
+		panel := mesh.PublicKey(randKey())
+		return &nagiv1.MeshConfig{PanelKey: panel[:], Peers: []*nagiv1.MeshPeer{{PublicKey: panel[:], IsPanel: true},
+			{PublicKey: x[:], Endpoints: eps}}}
+	}
+	endpoints := func() []netip.AddrPort {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return n.recent[x].peer.Endpoints
+	}
+
+	n.update("a", "127.0.0.1:2", cfg("203.0.113.1:1", "203.0.113.2:1"))
+	n.update("b", "127.0.0.1:2", cfg("203.0.113.2:1", "203.0.113.1:1", "203.0.113.3:1"))
+	if got := endpoints(); len(got) != 3 {
+		t.Fatalf("应去重成 3 个：%v", got)
+	}
+	var many []string
+	for i := range 40 {
+		many = append(many, fmt.Sprintf("203.0.113.%d:1", i+10))
+	}
+	n.update("b", "127.0.0.1:2", cfg(many...))
+	if got := endpoints(); len(got) != mesh.MaxEndpoints {
+		t.Fatalf("应最多 %d 个：%d", mesh.MaxEndpoints, len(got))
 	}
 }
 

@@ -361,6 +361,9 @@ func (m *Mesh) Endpoints() []netip.AddrPort {
 	return out
 }
 
+// MaxEndpoints 是每个成员最多尝试的直连地址数，多给的不用。
+const MaxEndpoints = maxCandidates
+
 // UsableEndpoint 判断别的成员上报的地址能不能拿来尝试直连。
 // 本机、链路本地、组播、广播、mesh 自己的地址不能用；内网地址可以（同一内网的节点靠它直连）。
 func UsableEndpoint(ap netip.AddrPort) bool {

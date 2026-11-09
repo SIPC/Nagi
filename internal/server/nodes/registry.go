@@ -338,6 +338,14 @@ type panelService struct {
 }
 
 func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*nagiv1.ReportResponse, error) {
+	// 上报的直连地址要转给所有节点，先整理好再存：每次上报都要给所有节点重算成员列表。
+	if m := req.GetMesh(); m != nil {
+		eps, ok := cleanEndpoints(m.GetEndpoints())
+		if !ok {
+			p.r.log.Warn("节点上报的直连地址过多，不采用", "node", p.conn.NodeID, "count", len(m.GetEndpoints()))
+		}
+		m.Endpoints = eps
+	}
 	p.conn.mu.Lock()
 	p.conn.report = req
 	pending := p.conn.pending
