@@ -31,9 +31,6 @@ const (
 	maintainGap         = 24 * time.Hour
 	// maintainRetry 是仓库维护失败以后多久再试。
 	maintainRetry = time.Hour
-	// 磁盘剩余空间低于这两个值之一时跳过定时快照，免得把磁盘写满（见 docs/snapshot.md#失败与退避）。
-	minFreeBytes   = 2 << 30
-	minFreePercent = 5
 )
 
 // snapshotBackoff 是定时快照连续失败以后的重试间隔：第 1、2、3 次及以后。不会超过快照间隔本身。
@@ -175,13 +172,13 @@ func retryDelay(failures int64, gap time.Duration) time.Duration {
 	return min(d, max(gap, snapshotBackoff[0]))
 }
 
-// lowDisk 检查容器目录所在磁盘的剩余空间，不够时返回原因。读不到时不拦。
+// lowDisk 检查容器目录所在磁盘的剩余空间（见 metrics.CheckDisk 和 docs/snapshot.md#失败与退避），不够时返回原因。读不到时不拦。
 func lowDisk(dir string) string {
-	total, free := metrics.DiskSpace(dir)
-	if total <= 0 || free >= minFreeBytes && free*100 >= total*minFreePercent {
+	var le *metrics.LowDiskError
+	if !errors.As(metrics.CheckDisk(dir, 0), &le) {
 		return ""
 	}
-	return fmt.Sprintf("磁盘剩余空间不足（剩余 %.1f GiB，共 %.1f GiB），已跳过定时快照", float64(free)/(1<<30), float64(total)/(1<<30))
+	return fmt.Sprintf("磁盘剩余空间不足（剩余 %.1f GiB，共 %.1f GiB），已跳过定时快照", float64(le.Free)/(1<<30), float64(le.Total)/(1<<30))
 }
 
 // scheduledSnapshot 做一份定时快照。拿到锁以后重新核对是否到期，失败时记下次数和下次重试的时间（存在节点数据库里，重启后照样生效）。

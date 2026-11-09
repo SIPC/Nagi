@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -238,6 +239,10 @@ func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaMa
 	return out, nil
 }
 
+// replicaIdle 是同步副本时多久收不到数据就放弃：源节点挂了、网络断了时不一直占着锁和临时文件。
+const replicaIdle = 2 * time.Minute
+
+// ReplicaPut 接收源节点同步来的文件。不限大小（快照仓库可以很大），但磁盘剩余空间不够时停下（见 metrics.CheckDisk）。
 func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
 	var (
 		files, path string
@@ -245,6 +250,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 		tmp, dest   string
 		count       uint32
 		unlock      func()
+		guard       *metrics.DiskGuard
 	)
 	finish := func() error {
 		if f == nil {
@@ -271,8 +277,36 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			unlock()
 		}
 	}()
+	// 单独的 goroutine 收数据，这里等的时候能超时。返回以后流结束，Recv 随之出错退出。
+	type recv struct {
+		c   *nagiv1.ReplicaChunk
+		err error
+	}
+	ch := make(chan recv)
+	go func() {
+		for {
+			c, err := stream.Recv()
+			select {
+			case ch <- recv{c, err}:
+			case <-stream.Context().Done():
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	idle := time.NewTimer(replicaIdle)
+	defer idle.Stop()
 	for {
-		c, err := stream.Recv()
+		var r recv
+		select {
+		case r = <-ch:
+		case <-idle.C:
+			return status.Error(codes.DeadlineExceeded, "同步副本时长时间没有收到数据")
+		}
+		idle.Reset(replicaIdle)
+		c, err := r.c, r.err
 		if err == io.EOF {
 			if err := finish(); err != nil {
 				return err
@@ -287,6 +321,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 				return err
 			}
 			unlock = s.a.replicas.lock(c.GetProjectId(), c.GetContainer())
+			guard = &metrics.DiskGuard{Dir: files}
 		}
 		if c.GetPath() != path {
 			if err := finish(); err != nil {
@@ -303,6 +338,9 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			if f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
 				return err
 			}
+		}
+		if err := guard.Check(len(c.GetData())); err != nil {
+			return status.Error(codes.ResourceExhausted, err.Error())
 		}
 		if _, err := f.Write(c.GetData()); err != nil {
 			return err
