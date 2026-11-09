@@ -515,6 +515,43 @@ func (s *Service) UnknownContainers(ctx context.Context, nodeID string) []*nagiv
 	return out
 }
 
+// StaleProjects 返回节点最近一次上报时，配置由别的面板写过、等管理员确认的项目。
+func (s *Service) StaleProjects(ctx context.Context, nodeID string) []*nagiv1.StaleProject {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.stale[nodeID]))
+	for id := range s.stale[nodeID] {
+		ids = append(ids, id)
+	}
+	s.mu.Unlock()
+	var out []*nagiv1.StaleProject
+	for _, id := range ids {
+		if p, err := s.Q.GetProject(ctx, id); err == nil {
+			out = append(out, &nagiv1.StaleProject{ProjectId: id, ProjectName: p.Name})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].GetProjectName() < out[j].GetProjectName() })
+	return out
+}
+
+// AdoptStaleProject 管理员确认后，以节点为准重建项目：删掉面板上的记录（草稿、版本、部署记录等），按节点缓存拼回。
+func (s *Service) AdoptStaleProject(ctx context.Context, nodeID, projectID string) error {
+	s.mu.Lock()
+	ok := s.stale[nodeID][projectID]
+	s.mu.Unlock()
+	if !ok {
+		return invalid("节点未报告该项目被其他面板修改")
+	}
+	conn, err := s.Nodes.Get(nodeID)
+	if err != nil {
+		return s.nodeErr(ctx, nodeID, err)
+	}
+	s.adoptFrom(ctx, conn, []string{projectID})
+	s.mu.Lock()
+	delete(s.stale[nodeID], projectID)
+	s.mu.Unlock()
+	return nil
+}
+
 // AdoptContainer 管理员确认后，按节点缓存里的配置把这个容器加入项目（所在节点就是这个节点）。
 func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name string) error {
 	l := s.lock(projectID)

@@ -94,6 +94,7 @@ export default {
     RemoveNode: "Remove node",
     ApproveNode: "Approve node",
     RenameNode: "Rename node",
+    AdoptStaleProject: "Rebuild project from node",
     AdoptNodeContainer: "Adopt container",
     UpdateSettings: "Update panel settings",
     SetPanelDomain: "Bind panel domain",

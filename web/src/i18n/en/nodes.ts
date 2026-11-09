@@ -159,6 +159,13 @@ export default {
     synced: (ago) => `Synced ${ago}`,
     neverSynced: "Not synced yet",
   },
+  stale: {
+    adoptConfirm: (project) =>
+      `Rebuild project ${project} from this node? The project's drafts, version history, deployment records, routes, and member access on the panel are deleted, and it's rebuilt from the configuration cached on this node.`,
+    title: "Project records may be out of date",
+    text: "This node reports that another panel changed these projects. If so, rebuild them from the node; if not, check whether the node is secure. Until then, their configuration isn't pushed to this node.",
+    adopt: "Rebuild from node",
+  },
   unknown: {
     adoptConfirm: (container, project) =>
       `Add container ${container} to project ${project}? It's added with the configuration cached on this node and runs here. Make sure you deployed it.`,

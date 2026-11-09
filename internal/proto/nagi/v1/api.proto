@@ -206,6 +206,8 @@ service NodeService {
   rpc RenameNode(RenameNodeRequest) returns (RenameNodeResponse);
   // 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
   rpc AdoptNodeContainer(AdoptNodeContainerRequest) returns (AdoptNodeContainerResponse);
+  // 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
+  rpc AdoptStaleProject(AdoptStaleProjectRequest) returns (AdoptStaleProjectResponse);
   // 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
   rpc InspectComposeDir(NodeFileRef) returns (ComposeDirPreview);
 }
@@ -583,7 +585,22 @@ message Node {
   repeated UnknownContainer unknown_containers = 10;
   // 本面板自带的节点：和本面板在同一台机器上。概览据此把节点和面板之间的流量算到这台机器上。
   bool own_embedded = 11;
+  // 节点报告配置由别的面板写过的项目：面板上的记录可能旧了。节点可能被攻破，所以不自动以节点为准，
+  // 管理员确认后才重建（AdoptStaleProject）。
+  repeated StaleProject stale_projects = 12;
 }
+
+message StaleProject {
+  string project_id = 1;
+  string project_name = 2;
+}
+
+message AdoptStaleProjectRequest {
+  string node_id = 1;
+  string project_id = 2;
+}
+
+message AdoptStaleProjectResponse {}
 
 message UnknownContainer {
   string project_id = 1;

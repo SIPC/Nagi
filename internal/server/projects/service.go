@@ -73,6 +73,8 @@ type Service struct {
 	restamped map[string]time.Time
 	// unknown：节点上有、面板不认识、没有自动加入的容器（节点 ID → "项目/容器" → 容器）。
 	unknown map[string]map[string]*nagiv1.UnknownContainer
+	// stale：节点说配置由别的面板写过的项目（节点 ID → 项目 ID 集合），等管理员确认后才以节点为准重建。
+	stale map[string]map[string]bool
 	warned  map[string]time.Time
 	// 第一次上报已经处理完的连接（之后才给它推代理计划）。
 	synced map[*nodes.Conn]bool

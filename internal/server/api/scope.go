@@ -272,7 +272,7 @@ func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesRes
 	}
 	kept := m.Nodes[:0]
 	for _, n := range m.GetNodes() {
-		n.UnknownContainers = nil
+		n.UnknownContainers, n.StaleProjects = nil, nil
 		if x.projects != nil {
 			n.Containers = count[n.GetId()]
 		}

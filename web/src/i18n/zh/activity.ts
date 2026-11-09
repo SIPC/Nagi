@@ -94,6 +94,7 @@ export default {
     RemoveNode: "移除节点",
     ApproveNode: "批准节点",
     RenameNode: "重命名节点",
+    AdoptStaleProject: "以节点为准重建项目",
     AdoptNodeContainer: "接管容器",
     UpdateSettings: "修改面板设置",
     SetPanelDomain: "绑定面板域名",

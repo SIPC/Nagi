@@ -157,6 +157,9 @@ const (
 	// NodeServiceAdoptNodeContainerProcedure is the fully-qualified name of the NodeService's
 	// AdoptNodeContainer RPC.
 	NodeServiceAdoptNodeContainerProcedure = "/nagi.v1.NodeService/AdoptNodeContainer"
+	// NodeServiceAdoptStaleProjectProcedure is the fully-qualified name of the NodeService's
+	// AdoptStaleProject RPC.
+	NodeServiceAdoptStaleProjectProcedure = "/nagi.v1.NodeService/AdoptStaleProject"
 	// NodeServiceInspectComposeDirProcedure is the fully-qualified name of the NodeService's
 	// InspectComposeDir RPC.
 	NodeServiceInspectComposeDirProcedure = "/nagi.v1.NodeService/InspectComposeDir"
@@ -859,6 +862,8 @@ type NodeServiceClient interface {
 	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
+	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
+	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
@@ -1066,6 +1071,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("AdoptNodeContainer")),
 			connect.WithClientOptions(opts...),
 		),
+		adoptStaleProject: connect.NewClient[v1.AdoptStaleProjectRequest, v1.AdoptStaleProjectResponse](
+			httpClient,
+			baseURL+NodeServiceAdoptStaleProjectProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
+			connect.WithClientOptions(opts...),
+		),
 		inspectComposeDir: connect.NewClient[v1.NodeFileRef, v1.ComposeDirPreview](
 			httpClient,
 			baseURL+NodeServiceInspectComposeDirProcedure,
@@ -1109,6 +1120,7 @@ type nodeServiceClient struct {
 	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
 	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
 	adoptNodeContainer    *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
+	adoptStaleProject     *connect.Client[v1.AdoptStaleProjectRequest, v1.AdoptStaleProjectResponse]
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 }
 
@@ -1272,6 +1284,11 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, req *connect
 	return c.adoptNodeContainer.CallUnary(ctx, req)
 }
 
+// AdoptStaleProject calls nagi.v1.NodeService.AdoptStaleProject.
+func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, req *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error) {
+	return c.adoptStaleProject.CallUnary(ctx, req)
+}
+
 // InspectComposeDir calls nagi.v1.NodeService.InspectComposeDir.
 func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, req *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
 	return c.inspectComposeDir.CallUnary(ctx, req)
@@ -1336,6 +1353,8 @@ type NodeServiceHandler interface {
 	RenameNode(context.Context, *connect.Request[v1.RenameNodeRequest]) (*connect.Response[v1.RenameNodeResponse], error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
+	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
+	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
 }
@@ -1539,6 +1558,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("AdoptNodeContainer")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceAdoptStaleProjectHandler := connect.NewUnaryHandler(
+		NodeServiceAdoptStaleProjectProcedure,
+		svc.AdoptStaleProject,
+		connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceInspectComposeDirHandler := connect.NewUnaryHandler(
 		NodeServiceInspectComposeDirProcedure,
 		svc.InspectComposeDir,
@@ -1611,6 +1636,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceRenameNodeHandler.ServeHTTP(w, r)
 		case NodeServiceAdoptNodeContainerProcedure:
 			nodeServiceAdoptNodeContainerHandler.ServeHTTP(w, r)
+		case NodeServiceAdoptStaleProjectProcedure:
+			nodeServiceAdoptStaleProjectHandler.ServeHTTP(w, r)
 		case NodeServiceInspectComposeDirProcedure:
 			nodeServiceInspectComposeDirHandler.ServeHTTP(w, r)
 		default:
@@ -1748,6 +1775,10 @@ func (UnimplementedNodeServiceHandler) RenameNode(context.Context, *connect.Requ
 
 func (UnimplementedNodeServiceHandler) AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AdoptNodeContainer is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AdoptStaleProject is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {

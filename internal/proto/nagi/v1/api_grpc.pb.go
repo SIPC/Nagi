@@ -611,6 +611,7 @@ const (
 	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
 	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
 	NodeService_AdoptNodeContainer_FullMethodName    = "/nagi.v1.NodeService/AdoptNodeContainer"
+	NodeService_AdoptStaleProject_FullMethodName     = "/nagi.v1.NodeService/AdoptStaleProject"
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 )
 
@@ -675,6 +676,8 @@ type NodeServiceClient interface {
 	RenameNode(ctx context.Context, in *RenameNodeRequest, opts ...grpc.CallOption) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error)
+	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
+	AdoptStaleProject(ctx context.Context, in *AdoptStaleProjectRequest, opts ...grpc.CallOption) (*AdoptStaleProjectResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error)
 }
@@ -1016,6 +1019,16 @@ func (c *nodeServiceClient) AdoptNodeContainer(ctx context.Context, in *AdoptNod
 	return out, nil
 }
 
+func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, in *AdoptStaleProjectRequest, opts ...grpc.CallOption) (*AdoptStaleProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdoptStaleProjectResponse)
+	err := c.cc.Invoke(ctx, NodeService_AdoptStaleProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ComposeDirPreview)
@@ -1087,6 +1100,8 @@ type NodeServiceServer interface {
 	RenameNode(context.Context, *RenameNodeRequest) (*RenameNodeResponse, error)
 	// 把节点上面板不认识的容器按节点的缓存加入项目（见 Node.unknown_containers）。
 	AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error)
+	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
+	AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error)
 	mustEmbedUnimplementedNodeServiceServer()
@@ -1194,6 +1209,9 @@ func (UnimplementedNodeServiceServer) RenameNode(context.Context, *RenameNodeReq
 }
 func (UnimplementedNodeServiceServer) AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdoptNodeContainer not implemented")
+}
+func (UnimplementedNodeServiceServer) AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdoptStaleProject not implemented")
 }
 func (UnimplementedNodeServiceServer) InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
@@ -1788,6 +1806,24 @@ func _NodeService_AdoptNodeContainer_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_AdoptStaleProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdoptStaleProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).AdoptStaleProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_AdoptStaleProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).AdoptStaleProject(ctx, req.(*AdoptStaleProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_InspectComposeDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeFileRef)
 	if err := dec(in); err != nil {
@@ -1936,6 +1972,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdoptNodeContainer",
 			Handler:    _NodeService_AdoptNodeContainer_Handler,
+		},
+		{
+			MethodName: "AdoptStaleProject",
+			Handler:    _NodeService_AdoptStaleProject_Handler,
 		},
 		{
 			MethodName: "InspectComposeDir",

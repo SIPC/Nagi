@@ -107,3 +107,25 @@ func TestStaleProjectsOnlyOwnContainers(t *testing.T) {
 		t.Fatalf("本组面板写的不应算别的面板写的: %v", got)
 	}
 }
+
+// 节点报告的过期项目只列出来，不自动重建；没报告过的项目不能以节点为准。
+func TestStaleProjectsNeedConfirmation(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.ExecContext(ctx, `INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('aaaaaaaaaaaaaaaa', 'shop', 'shop', 1, 0, x'')`); err != nil {
+		t.Fatal(err)
+	}
+	s := &Service{Q: store.New(d), Log: slog.Default()}
+	s.stale = map[string]map[string]bool{"n1": {"aaaaaaaaaaaaaaaa": true, "cccccccccccccccc": true}}
+	got := s.StaleProjects(ctx, "n1")
+	if len(got) != 1 || got[0].GetProjectId() != "aaaaaaaaaaaaaaaa" || got[0].GetProjectName() != "shop" {
+		t.Fatalf("stale = %v，应该只有项目 shop（已删除的项目不列）", got)
+	}
+	if err := s.AdoptStaleProject(ctx, "n2", "aaaaaaaaaaaaaaaa"); err == nil {
+		t.Fatal("别的节点没有报告过这个项目，不能以它为准")
+	}
+}

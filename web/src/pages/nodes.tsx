@@ -49,7 +49,7 @@ import {
   CodeBlock,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
-import type { Node, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
+import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
@@ -563,9 +563,10 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
         <RenameNode n={n} onDone={() => setRenaming(false)} />
       </Dialog>
-      {(target || upgradeState || n.unknownContainers.length > 0 || n.pending) && (
+      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending) && (
         <div className="mb-6 grid gap-2">
           {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
+          {n.staleProjects.length > 0 && <StaleProjects nodeId={n.id} list={n.staleProjects} onDone={() => nodes.refetch()} />}
           {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
           {n.pending && (
             <Notice
@@ -1091,6 +1092,43 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
         </List>
       )}
     </Section>
+  );
+}
+
+// StaleProjects：节点报告配置由别的面板写过的项目。以节点为准要删掉面板上的记录，节点又可能被攻破，所以由管理员确认。
+function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StaleProject[]; onDone: () => void }) {
+  const [error, setError] = useState("");
+  const adopt = async (p: StaleProject) => {
+    if (!(await confirmAction(t.nodes.stale.adoptConfirm(p.projectName), { action: t.nodes.stale.adopt, danger: true }))) return;
+    setError("");
+    try {
+      await nodeClient.adoptStaleProject({ nodeId, projectId: p.projectId });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <div className="grid gap-4">
+      <Notice tone="warning" title={t.nodes.stale.title}>
+        {t.nodes.stale.text}
+      </Notice>
+      {error && <Alert>{error}</Alert>}
+      <List>
+        {list.map((p) => (
+          <Row
+            key={p.projectId}
+            title={<span className="truncate">{p.projectName}</span>}
+            actionsWidth="w-auto"
+            actions={
+              <Button size="row" variant="ghost" onClick={() => adopt(p)}>
+                {t.nodes.stale.adopt}
+              </Button>
+            }
+          />
+        ))}
+      </List>
+    </div>
   );
 }
 

@@ -159,6 +159,13 @@ export default {
     synced: (ago: string) => `${ago}同步`,
     neverSynced: "尚未同步",
   },
+  stale: {
+    adoptConfirm: (project: string) =>
+      `以节点为准重建项目 ${project}？面板上该项目的草稿、版本历史、部署记录、路由和成员范围将被删除，按本节点缓存的配置重建。`,
+    title: "项目记录可能已过期",
+    text: "节点报告以下项目由其他面板修改过。属实时以节点为准重建，否则请检查节点是否安全。确认前不向该节点推送这些项目的配置。",
+    adopt: "以节点为准",
+  },
   unknown: {
     adoptConfirm: (container: string, project: string) =>
       `将容器 ${container} 加入项目 ${project}？容器按本节点缓存的配置加入并在本节点运行，请确认为自行部署。`,

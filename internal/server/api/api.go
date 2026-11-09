@@ -257,6 +257,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 			n.Containers = int32(c)
 		}
 		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
+		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -484,4 +485,11 @@ func (s *nodeService) AdoptNodeContainer(ctx context.Context, req *connect.Reque
 		return nil, toConnect(err)
 	}
 	return connect.NewResponse(&nagiv1.AdoptNodeContainerResponse{}), nil
+}
+
+func (s *nodeService) AdoptStaleProject(ctx context.Context, req *connect.Request[nagiv1.AdoptStaleProjectRequest]) (*connect.Response[nagiv1.AdoptStaleProjectResponse], error) {
+	if err := s.Projects.AdoptStaleProject(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId()); err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&nagiv1.AdoptStaleProjectResponse{}), nil
 }

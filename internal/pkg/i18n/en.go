@@ -209,10 +209,11 @@ var en = map[string]string{
 	"节点上已没有该容器":                              "This container is no longer on the node",
 
 	// ---- 容器 ----
-	"容器 %s 不存在":  "Container %s not found",
-	"缺少容器配置":     "Container configuration is missing",
-	"项目中已有容器 %s": "The project already has a container named %s",
-	"容器目录须为绝对路径": "The container directory must be an absolute path",
+	"容器 %s 不存在":       "Container %s not found",
+	"缺少容器配置":          "Container configuration is missing",
+	"节点未报告该项目被其他面板修改": "The node hasn't reported that another panel changed this project",
+	"项目中已有容器 %s":      "The project already has a container named %s",
+	"容器目录须为绝对路径":      "The container directory must be an absolute path",
 	"此节点上的容器 %s 已在使用目录 %s（或顶替时使用），请更换目录":                      "Container %s on this node already uses directory %s (or will during failover). Choose another directory",
 	"容器名称 %s 与容器组 %s 内的容器重名，在项目内网中会解析冲突，请更换名称":                "Container name %s is also used inside container group %s and would conflict on the project network. Choose another name",
 	"compose 中的服务 %s 与容器 %s 重名，在项目内网中会解析冲突，请更改 compose 中的服务名": "Service %s in the compose file has the same name as container %s and would conflict on the project network. Rename the service in the compose file",

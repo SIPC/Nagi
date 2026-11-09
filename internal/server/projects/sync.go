@@ -138,14 +138,24 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 		have[cs.GetProjectId()+"/"+cs.GetName()] = cs
 	}
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
+	stale := map[string]bool{}
 	if !c.Pending() {
-		// 节点上的配置是别的面板写的（本面板离开期间节点归别的面板管过）：本面板的记录旧了，以节点的为准。
-		if stale := s.staleProjects(ctx, c.NodeID, req.GetContainers(), req.GetPanels()); len(stale) > 0 {
-			s.adoptFrom(ctx, c, stale)
-		} else if s.needsRebuild(ctx, req.GetContainers()) {
+		// 节点上的配置是别的面板写的（本面板离开期间节点归别的面板管过）：本面板的记录可能旧了。
+		// 这只是节点的一面之词，以节点为准要删掉项目的记录，所以列在节点页上，等管理员确认（AdoptStaleProject）。
+		for _, id := range s.staleProjects(ctx, c.NodeID, req.GetContainers(), req.GetPanels()) {
+			stale[id] = true
+			s.warnOnce("stale:"+c.NodeID+"/"+id, "节点上的配置由别的面板写过，等管理员确认后以节点为准", "project", id, "node", c.NodeID)
+		}
+		if s.needsRebuild(ctx, req.GetContainers()) {
 			s.rebuildFrom(ctx, c, false)
 		}
 	}
+	s.mu.Lock()
+	if s.stale == nil {
+		s.stale = map[string]map[string]bool{}
+	}
+	s.stale[c.NodeID] = stale
+	s.mu.Unlock()
 	rows, err := s.Q.ListNodeContainers(ctx, c.NodeID)
 	if err != nil {
 		return
@@ -182,6 +192,9 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 			projects[r.ProjectID] = p
 		}
 		cs := have[r.ProjectID+"/"+r.Name]
+		if stale[r.ProjectID] {
+			continue // 等管理员确认，不拿本面板可能过期的配置覆盖节点上的
+		}
 		if cs != nil && otherPanelActive(cs, self, req.GetPanels()) {
 			s.warnOnce("conflict:"+c.NodeID+"/"+r.ProjectID+"/"+r.Name, "节点同时被另一个面板管着，它改过这个容器的配置；本面板不覆盖。请在节点上移除不用的那个面板",
 				"project", r.ProjectID, "container", r.Name, "node", c.NodeID)
