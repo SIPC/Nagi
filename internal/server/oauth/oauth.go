@@ -33,8 +33,10 @@ const (
 	codeTTL   = 5 * time.Minute
 	// maxClients 是动态注册的客户端上限；24 小时没被授权的由 auth.CleanupLoop 删掉。
 	maxClients = 100
-	// registerPerHour 是每个来源地址每小时能注册的客户端数。
+	// registerPerHour 是每个来源地址（IPv6 按 /64）每小时能注册的客户端数。
 	registerPerHour = 10
+	// maxRegisterSources 是注册限速最多记多少个来源，满了以后新来源先拒绝，免得内存被撑大。
+	maxRegisterSources = 10000
 	// MaxTokens 是每个成员的访问令牌上限（个人令牌和 OAuth 授权一起算）。
 	MaxTokens = 20
 	maxBody   = 16 << 10
@@ -57,6 +59,7 @@ type Server struct {
 	mu       sync.Mutex
 	codes    map[string]grant
 	register map[string][]time.Time
+	swept    time.Time // 上一次清理 register 的时间
 	docs     map[string]cachedDoc
 	fetch    *http.Client
 }
@@ -354,6 +357,43 @@ func (s *Server) handleServerMetadata(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// allowRegister 记下来源 key 的一次注册，超过限额时返回 false。一个小时以内的记录才算；没有记录的来源删掉，
+// 每分钟整体清理一次，来源数到了上限时新来源先拒绝。
+func (s *Server) allowRegister(key string, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recent := func(list []time.Time) []time.Time {
+		out := list[:0]
+		for _, t := range list {
+			if now.Sub(t) < time.Hour {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	if now.Sub(s.swept) >= time.Minute {
+		s.swept = now
+		for k, list := range s.register {
+			if list = recent(list); len(list) == 0 {
+				delete(s.register, k)
+			} else {
+				s.register[k] = list
+			}
+		}
+	}
+	list, ok := s.register[key]
+	if !ok && len(s.register) >= maxRegisterSources {
+		return false
+	}
+	list = recent(list)
+	if len(list) >= registerPerHour {
+		s.register[key] = list
+		return false
+	}
+	s.register[key] = append(list, now)
+	return true
+}
+
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if cors(w, r) {
 		return
@@ -363,21 +403,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 经面板自带的 Caddy 转发时来源都是本机，要用它转发来的客户端地址，否则所有人共用一份注册限额。
-	ip := auth.RequestIP(r.RemoteAddr, r.Header)
-	s.mu.Lock()
-	recent := s.register[ip][:0]
-	for _, t := range s.register[ip] {
-		if time.Since(t) < time.Hour {
-			recent = append(recent, t)
-		}
-	}
-	limited := len(recent) >= registerPerHour
-	if !limited {
-		recent = append(recent, time.Now())
-	}
-	s.register[ip] = recent
-	s.mu.Unlock()
-	if limited {
+	if !s.allowRegister(auth.LimitKey(auth.RequestIP(r.RemoteAddr, r.Header)), time.Now()) {
 		oauthError(w, http.StatusTooManyRequests, "invalid_request", "too many registrations, try again later")
 		return
 	}

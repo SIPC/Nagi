@@ -128,7 +128,7 @@ var ErrTOTPRequired = i18n.New("请输入两步验证码")
 
 // Login 校验用户名、密码和两步验证码（开启了的话），成功时返回新会话的 cookie。按客户端 IP 限速。
 func (s *Service) Login(ctx context.Context, ip, username, password, code string) (*http.Cookie, error) {
-	key := limitKey(ip)
+	key := LimitKey(ip)
 	done, wait := s.limiter.begin(key)
 	if done == nil && wait == 0 {
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录仍在处理，请稍后重试"))
@@ -474,8 +474,8 @@ type attempts struct {
 
 func newLimiter() *limiter { return &limiter{state: map[string]*attempts{}} }
 
-// limitKey 是限速的来源：IPv4 按地址，IPv6 按 /64（一个用户通常有一整个 /64，可以随便换地址）。
-func limitKey(ip string) string {
+// LimitKey 是限速的来源：IPv4 按地址，IPv6 按 /64（一个用户通常有一整个 /64，可以随便换地址）。
+func LimitKey(ip string) string {
 	if a, err := netip.ParseAddr(ip); err == nil && a.Is6() && !a.Is4In6() {
 		p, _ := a.Prefix(64)
 		return p.String()

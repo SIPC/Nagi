@@ -19,7 +19,7 @@ func (u User) Elevated() bool { return u.ElevatedUntil > time.Now().Unix() }
 // Elevate 再验证一次身份：开了两步验证的账号用验证码，没开的用密码。失败次数和登录共用限速。
 // 记在会话上，只在服务端，客户端伪造不了。
 func (s *Service) Elevate(ctx context.Context, ip, token, password, code string) (time.Time, error) {
-	key := limitKey(ip)
+	key := LimitKey(ip)
 	done, wait := s.limiter.begin(key)
 	if done == nil && wait == 0 {
 		return time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.New("验证进行中，请稍后重试"))

@@ -46,7 +46,7 @@ func TestLimiter(t *testing.T) {
 	if d, _ := l2.begin("5.6.7.8"); d == nil {
 		t.Fatal("上一个请求结束后应该可以继续")
 	}
-	if limitKey("2001:db8::1") != limitKey("2001:db8::ffff") {
+	if LimitKey("2001:db8::1") != LimitKey("2001:db8::ffff") {
 		t.Fatal("同一个 /64 的 IPv6 地址应该合并计数")
 	}
 }
