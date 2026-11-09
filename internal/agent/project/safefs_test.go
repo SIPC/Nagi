@@ -1,9 +1,12 @@
 package project
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/SIPC/nagi/internal/pkg/spec"
 )
 
 // 容器把 data/ 里的路径换成指向外面的符号链接，同步文件时不能写到外面去。
@@ -51,5 +54,40 @@ func TestNoSymlinkBelow(t *testing.T) {
 	}
 	if err := noSymlinkBelow(base, "/etc"); err != nil {
 		t.Fatalf("不在容器目录下的路径不检查：%v", err)
+	}
+}
+
+// env_file、secrets 和 configs 的 file 是容器目录下的符号链接时也要拒绝：compose 会跟着链接读宿主机的文件。
+func TestCheckMountSourcesFiles(t *testing.T) {
+	base := t.TempDir()
+	data := filepath.Join(base, "data")
+	if err := os.MkdirAll(data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "shadow")
+	if err := os.WriteFile(outside, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "ok.env"), []byte("A=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(data, "link")); err != nil {
+		t.Skip("不能创建符号链接：", err)
+	}
+	cases := map[string]bool{
+		"services:\n  a:\n    image: x\n    env_file: ./ok.env\n":                               true,
+		"services:\n  a:\n    image: x\n    env_file: ./link\n":                                 false,
+		"services:\n  a:\n    image: x\n    secrets: [s]\nsecrets:\n  s:\n    file: ./link\n":   false,
+		"services:\n  a:\n    image: x\n    configs: [c]\nconfigs:\n  c:\n    file: ./link\n":   false,
+		"services:\n  a:\n    image: x\n    secrets: [s]\nsecrets:\n  s:\n    file: ./ok.env\n": true,
+	}
+	for text, ok := range cases {
+		proj, err := spec.LoadCompose(context.Background(), text, nil, data, "nagi-test")
+		if err != nil {
+			t.Fatalf("%s: %v", text, err)
+		}
+		if err := checkMountSources(proj, base); (err == nil) != ok {
+			t.Errorf("%s: err = %v", text, err)
+		}
 	}
 }

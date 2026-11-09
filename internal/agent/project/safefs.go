@@ -149,16 +149,34 @@ func copyFileInto(root *os.Root, rel, src string, mode os.FileMode) error {
 	return out.Close()
 }
 
-// checkMountSources 检查 compose 里绑定挂载的、位于容器目录下的源路径（例如 ./uploads，即 data/uploads）。
-// 源路径如果被容器换成了指向外面的符号链接，Docker 挂载时会跟着链接走，把宿主机的目录挂进容器。
+// checkMountSources 检查 compose 里引用的、位于容器目录下的宿主机路径：绑定挂载的源路径（例如 ./uploads，
+// 即 data/uploads），以及 env_file、secrets 和 configs 的 file。这些路径如果是符号链接（容器写的、
+// 或者从 git 仓库同步来的），Docker 和 compose 会跟着链接走，把宿主机的目录或文件挂进容器。
 func checkMountSources(proj *types.Project, base string) error {
+	var paths []string
 	for _, svc := range proj.Services {
 		for _, v := range svc.Volumes {
 			if v.Type == types.VolumeTypeBind {
-				if err := noSymlinkBelow(base, v.Source); err != nil {
-					return err
-				}
+				paths = append(paths, v.Source)
 			}
+		}
+		for _, f := range svc.EnvFiles {
+			paths = append(paths, f.Path)
+		}
+	}
+	for _, s := range proj.Secrets {
+		if s.File != "" {
+			paths = append(paths, s.File)
+		}
+	}
+	for _, c := range proj.Configs {
+		if c.File != "" {
+			paths = append(paths, c.File)
+		}
+	}
+	for _, p := range paths {
+		if err := noSymlinkBelow(base, p); err != nil {
+			return err
 		}
 	}
 	return nil
