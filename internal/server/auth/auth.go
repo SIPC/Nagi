@@ -172,8 +172,11 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 	return s.NewSession(ctx, user.ID, ip)
 }
 
-// verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。
-var verifySem = make(chan struct{}, max(2, runtime.NumCPU()))
+// verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。按可用的 CPU 算
+// （GOMAXPROCS 会按容器的 CPU 限额调整，NumCPU 不会），最多 4 个，内存最多占 256 MiB。
+var verifySem = make(chan struct{}, verifySlots(runtime.GOMAXPROCS(0)))
+
+func verifySlots(procs int) int { return min(max(2, procs), 4) }
 
 func verifyLimited(ctx context.Context, password, hash string) (bool, error) {
 	select {

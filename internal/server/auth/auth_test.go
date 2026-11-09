@@ -51,6 +51,18 @@ func TestLimiter(t *testing.T) {
 	}
 }
 
+// 同时校验的密码数按 GOMAXPROCS 算，至少 2 个，最多 4 个（每个要 64 MiB）。
+func TestVerifySlots(t *testing.T) {
+	for procs, want := range map[int]int{1: 2, 2: 2, 3: 3, 4: 4, 64: 4} {
+		if got := verifySlots(procs); got != want {
+			t.Errorf("GOMAXPROCS=%d：%d，应该是 %d", procs, got, want)
+		}
+	}
+	if n := cap(verifySem); n < 2 || n > 4 {
+		t.Fatalf("verifySem 容量 %d", n)
+	}
+}
+
 func TestSessionToken(t *testing.T) {
 	h := http.Header{}
 	h.Add("Cookie", "a=1; "+CookieName+"=tok")

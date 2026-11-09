@@ -56,7 +56,11 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, token, curre
 	if err != nil {
 		return err
 	}
-	if !VerifyPassword(current, u.PasswordHash) {
+	ok, err := verifyLimited(ctx, current, u.PasswordHash)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return connect.NewError(connect.CodePermissionDenied, i18n.New("当前密码不正确"))
 	}
 	if len([]rune(next)) < 8 {
@@ -121,7 +125,12 @@ func (s *Service) DisableTOTP(ctx context.Context, userID int64, code, password 
 	if u.TotpSecret == "" {
 		return nil
 	}
-	ok := password != "" && VerifyPassword(password, u.PasswordHash)
+	ok := false
+	if password != "" {
+		if ok, err = verifyLimited(ctx, password, u.PasswordHash); err != nil {
+			return err
+		}
+	}
 	if !ok && code != "" {
 		ok = s.useTOTP(ctx, u, code) == nil
 	}
