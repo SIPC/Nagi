@@ -554,7 +554,11 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	access, refresh := auth.NewSecret(), auth.NewSecret()
-	if err := s.Q.RotateAccessToken(ctx, t.ID, auth.HashToken(access), now.Add(AccessTTL).Unix(), auth.HashToken(refresh), hash); err != nil {
+	if err := s.Q.RotateAccessToken(ctx, t.ID, auth.HashToken(access), now.Add(AccessTTL).Unix(), auth.HashToken(refresh), hash); errors.Is(err, sql.ErrNoRows) {
+		// 同一个刷新令牌的另一个请求先换成了。不吊销：这个令牌再出现时按重复使用处理。
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid")
+		return
+	} else if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}

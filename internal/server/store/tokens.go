@@ -85,11 +85,20 @@ func (q *Queries) AccessTokenByPrevRefresh(ctx context.Context, hash string) (Ac
 	return q.accessTokenWhere(ctx, "prev_refresh_hash = ?", hash)
 }
 
-// RotateAccessToken 换一对新的访问令牌和刷新令牌，旧的刷新令牌记为上一个。
+// RotateAccessToken 换一对新的访问令牌和刷新令牌，旧的刷新令牌记为上一个。只在刷新令牌还是 prevRefreshHash 时换，
+// 否则返回 sql.ErrNoRows：同一个刷新令牌同时用了两次，只有一次能换成。
 func (q *Queries) RotateAccessToken(ctx context.Context, id int64, tokenHash string, expiresAt int64, refreshHash, prevRefreshHash string) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ?, expires_at = ?, refresh_hash = ?, prev_refresh_hash = ? WHERE id = ?`,
-		tokenHash, expiresAt, refreshHash, prevRefreshHash, id)
-	return err
+	res, err := q.db.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ?, expires_at = ?, refresh_hash = ?, prev_refresh_hash = ? WHERE id = ? AND refresh_hash = ?`,
+		tokenHash, expiresAt, refreshHash, prevRefreshHash, id, prevRefreshHash)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // TouchAccessToken 记下最后使用的时间和地址。

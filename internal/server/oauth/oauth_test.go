@@ -3,8 +3,10 @@ package oauth
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,6 +14,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -236,5 +240,61 @@ func TestOAuthNodeExec(t *testing.T) {
 	st, tok = post(t, hs, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client}})
 	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeExec+" "+ScopeNode {
 		t.Fatalf("刷新后权限不对：%d %v", st, tok)
+	}
+}
+
+// 同一个刷新令牌同时用多次，最多一次能换成新令牌。
+func TestOAuthRefreshConcurrent(t *testing.T) {
+	s, _, hs := testServer(t)
+	redirect := "https://claude.ai/api/mcp/auth_callback"
+	client := register(t, hs, redirect)
+	code := authorize(t, s, client, redirect, false)
+	st, tok := post(t, hs, "/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {code}, "client_id": {client},
+		"redirect_uri": {redirect}, "code_verifier": {verifier}})
+	if st != http.StatusOK {
+		t.Fatalf("换令牌失败：%d %v", st, tok)
+	}
+	refresh := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client}}
+	var wg sync.WaitGroup
+	var ok atomic.Int32
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := hs.Client().PostForm(hs.URL+"/oauth/token", refresh)
+			if err != nil {
+				return
+			}
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				ok.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := ok.Load(); n > 1 {
+		t.Fatalf("%d 个请求都换成了新令牌", n)
+	}
+}
+
+// 换令牌时刷新令牌已经被换掉了：不换，返回 sql.ErrNoRows。
+func TestRotateAccessTokenOnce(t *testing.T) {
+	s, _, hs := testServer(t)
+	redirect := "https://claude.ai/api/mcp/auth_callback"
+	client := register(t, hs, redirect)
+	code := authorize(t, s, client, redirect, false)
+	_, tok := post(t, hs, "/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {code}, "client_id": {client},
+		"redirect_uri": {redirect}, "code_verifier": {verifier}})
+	ctx := context.Background()
+	old := auth.HashToken(tok["refresh_token"].(string))
+	at, err := s.Q.AccessTokenByRefresh(ctx, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Q.RotateAccessToken(ctx, at.ID, "t1", 1, "r1", old); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Q.RotateAccessToken(ctx, at.ID, "t2", 1, "r2", old); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("第二次应该换不成：%v", err)
 	}
 }
