@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -86,10 +87,28 @@ func Version(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(strings.TrimSpace(string(out)), "v"), nil
 }
 
+// passEnv 是传给 docker 命令的节点进程环境变量：docker 命令本身要用的，其余的不传。
+// compose 会用调用它的进程的环境变量替换 compose 里的 ${变量}、补上 environment 里只写了名字的变量，
+// 而且优先于 --env-file；全部继承的话，节点进程环境里的值（例如 systemd 里配的令牌）就能被项目配置读到。
+var passEnv = []string{"PATH", "HOME", "USER", "LANG", "TZ", "TMPDIR", "XDG_RUNTIME_DIR",
+	"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_API_VERSION"}
+
+// baseEnv 返回 passEnv 和 LC_* 里节点进程设置了的那些。
+func baseEnv() []string {
+	var out []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(passEnv, k) || strings.HasPrefix(k, "LC_") {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
 func run(ctx context.Context, dockerConfig string, args []string, onLine func(string)) error {
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	// 不让 compose 输出颜色和进度动画，方便按行转发。
-	cmd.Env = append(os.Environ(), "COMPOSE_ANSI=never", "COMPOSE_PROGRESS=plain", "NO_COLOR=1")
+	cmd.Env = append(baseEnv(), "COMPOSE_ANSI=never", "COMPOSE_PROGRESS=plain", "NO_COLOR=1")
 	if dockerConfig != "" {
 		cmd.Env = append(cmd.Env, "DOCKER_CONFIG="+dockerConfig)
 	}
@@ -141,7 +160,7 @@ func run(ctx context.Context, dockerConfig string, args []string, onLine func(st
 // Login 用 docker login 验证账号并把登录信息写进 dockerConfig 目录（不碰机器全局的 ~/.docker）。
 func Login(ctx context.Context, dockerConfig, registry, username, password string) error {
 	cmd := exec.CommandContext(ctx, "docker", "login", "--username", username, "--password-stdin", registry)
-	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+dockerConfig)
+	cmd.Env = append(baseEnv(), "DOCKER_CONFIG="+dockerConfig)
 	cmd.Stdin = strings.NewReader(password)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -153,7 +172,7 @@ func Login(ctx context.Context, dockerConfig, registry, username, password strin
 // Logout 删除 dockerConfig 里某个仓库的登录信息。
 func Logout(ctx context.Context, dockerConfig, registry string) error {
 	cmd := exec.CommandContext(ctx, "docker", "logout", registry)
-	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+dockerConfig)
+	cmd.Env = append(baseEnv(), "DOCKER_CONFIG="+dockerConfig)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
 	}
