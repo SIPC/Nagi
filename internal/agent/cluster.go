@@ -254,14 +254,14 @@ var readOnlyRPCs = map[string]bool{
 	nagiv1.AgentService_GetMirrors_FullMethodName:           true,
 }
 
-// checkPrimary 判断面板 fp 能不能调用 method：查询接口都可以；修改只接受主面板的。
+// checkPrimary 判断面板 fp 能不能调用 method：先要在信任列表里（移除的面板在连接断开前也不能再调用），查询接口都可以，修改只接受主面板的。
 func (a *agent) checkPrimary(fp, method string) error {
-	if readOnlyRPCs[method] {
-		return nil
-	}
 	p, ok := a.id.panel(fp)
 	if !ok {
 		return status.Error(codes.PermissionDenied, "该面板不在节点的信任列表中")
+	}
+	if readOnlyRPCs[method] {
+		return nil
 	}
 	st := a.id.cluster(p.clusterID())
 	if st.Primary == "" || st.Primary == fp {

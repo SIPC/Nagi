@@ -59,6 +59,12 @@ func TestClusterStandbys(t *testing.T) {
 	if _, ok := id.panel("fp-b"); ok {
 		t.Fatal("备用面板应已移除")
 	}
+	// 移除以后连接还没断开的这段时间，查询接口也不能再调用。
+	for _, m := range []string{nagiv1.AgentService_GetCache_FullMethodName, nagiv1.AgentService_StreamLogs_FullMethodName, nagiv1.AgentService_PutContainer_FullMethodName} {
+		if err := a.checkPrimary("fp-b", m); status.Code(err) != codes.PermissionDenied {
+			t.Fatalf("已移除的面板调用 %s 应被拒绝: %v", m, err)
+		}
+	}
 
 	// 节点直接加入的同组面板（例如提升以后的原主面板），新主面板的列表里没有了也移除。
 	old := trustedPanel{Address: "o:1", Fingerprint: "fp-old", NodeID: "n1", CertPEM: "cert", CAPEM: caPEM}
