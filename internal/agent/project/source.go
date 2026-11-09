@@ -104,7 +104,7 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 	}
 	defer os.RemoveAll(p.checkoutDir())
 
-	onLine("拉取 " + url)
+	onLine("拉取 " + spec.RedactGitURL(url))
 	opts := &git.CloneOptions{
 		URL:          url,
 		Depth:        1,

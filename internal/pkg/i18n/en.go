@@ -243,6 +243,7 @@ var en = map[string]string{
 	"快照包含的子目录只用于现有目录":                                                     "Snapshot subdirectories are only for an existing directory",
 	"环境变量中的容器 %s 不在该容器组的 compose 中":                                       "Container %s in the environment variables isn't in this container group's compose file",
 	"git 仓库地址只支持 SSH（git@host:repo.git、ssh://）和 HTTPS":                    "Git repository URLs must use SSH (git@host:repo.git, ssh://) or HTTPS",
+	"git 仓库地址不能包含账号或令牌，私有仓库请使用 SSH 地址和 deploy key":                        "Git repository URLs can't contain credentials. For private repositories, use an SSH URL with a deploy key",
 	"容器不能依赖自身":                                                            "A container can't depend on itself",
 	"依赖的容器名称 %s 只能用小写字母、数字和 -":                                            "Dependency %s may only contain lowercase letters, digits, and -",
 	"变量名 %s 只能包含字母、数字和下划线，且不能以数字开头":                                       "Variable name %s may only contain letters, digits, and underscores, and can't start with a digit",

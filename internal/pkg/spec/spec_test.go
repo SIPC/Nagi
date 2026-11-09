@@ -67,10 +67,29 @@ func TestValidate(t *testing.T) {
 		"self depend":   {Compose: ok.Compose, DependsOn: []string{"web"}},
 		"bad depend":    {Compose: ok.Compose, DependsOn: []string{"Bad_Name"}},
 		"local git":     {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "/srv/repo@x:y"}},
+		"git token":     {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "https://ghp_x@github.com/a/b.git"}},
+		"git password":  {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "http://u:p@git.example.com/a/b.git"}},
 	}
 	for name, cfg := range cases {
 		if _, err := Validate(ctx, cfg, "web", nil, dir, "nagi-test"); err == nil {
 			t.Errorf("%s: expected error", name)
+		}
+	}
+}
+
+func TestRedactGitURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/a/b.git":           "https://github.com/a/b.git",
+		"https://ghp_x@github.com/a/b.git":     "https://github.com/a/b.git",
+		"https://u:p@git.example.com:8443/a/b": "https://git.example.com:8443/a/b",
+		"http://u:p@host":                      "http://host",
+		"https://github.com/a/b@c":             "https://github.com/a/b@c",
+		"ssh://git@github.com/a/b.git":         "ssh://git@github.com/a/b.git",
+		"ssh://git:secret@github.com/a/b.git":  "ssh://git@github.com/a/b.git",
+		"git@github.com:a/b.git":               "git@github.com:a/b.git",
+	} {
+		if got := RedactGitURL(in); got != want {
+			t.Errorf("%q = %q，应为 %q", in, got, want)
 		}
 	}
 }

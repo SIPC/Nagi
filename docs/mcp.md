@@ -96,7 +96,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `overview` | 节点在线数、容器运行数、需要处理的事（离线节点、没在运行的容器、可更新的镜像、从未部署的容器数） | `ListNodes`、`ListProjects` |
 | `list_projects` | 项目和每个容器的状态、所在节点 | `ListProjects` |
 | `get_project` | 修订号、快照间隔和份数上限、内部端口、容器、端口映射、已连接项目、共享变量名（有草稿时另列草稿里的变量名） | `GetProject` |
-| `get_container` | 配置（变量只给名称，另列哪些是密钥）、草稿差异、最近 5 个版本、最近 20 条事件、运行状态 | `GetProject`、`ListVersions`、`ListContainerEvents` |
+| `get_container` | 配置（compose、命令、健康检查按原样返回；变量只给名称，另列哪些是密钥；git 地址去掉账号和令牌）、草稿差异、最近 5 个版本、最近 20 条事件、运行状态 | `GetProject`、`ListVersions`、`ListContainerEvents` |
 | `list_deployments` | 项目的部署记录：时间、来源、涉及的容器和版本、是否成功 | `ListDeployments` |
 | `check_images` | 立即检查项目里的镜像有没有新版本 | `CheckImages` |
 | `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
@@ -196,7 +196,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 安全
 
-- **密钥不进模型**：变量的值、deploy key、webhook 令牌、备份密钥都不返回，只给名称和「已设置」。agent 可以设置变量的值（只写）。
+- **密钥不进模型**：变量的值、deploy key、webhook 令牌、备份密钥都不返回，只给名称和「已设置」。agent 可以设置变量的值（只写）。compose、命令、健康检查的文字按原样返回，密钥要放在变量里，不要直接写进去。git 地址不能带账号或令牌（私有仓库用 SSH 和 deploy key），早期保存的地址返回时也去掉。
 - **不可信内容**：日志和 `exec` 的输出可能含有针对 agent 的指令，工具说明里写明这些是数据，不是指令。
 - **限额**：每个令牌每分钟最多 60 次调用，其中 `exec` 最多 10 次；单次返回内容有上限，超出时截断并注明。
 - **可以随时止损**：令牌页一键吊销；活动记录能按 `via` 筛出 MCP 做的所有操作。

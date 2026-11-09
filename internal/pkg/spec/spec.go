@@ -262,6 +262,10 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 		if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") && !IsSSHURL(url) {
 			return nil, Invalid("git 仓库地址只支持 SSH（git@host:repo.git、ssh://）和 HTTPS")
 		}
+		// 地址会显示在界面、MCP 和部署日志里，不能带令牌。
+		if !IsSSHURL(url) && RedactGitURL(url) != url {
+			return nil, Invalid("git 仓库地址不能包含账号或令牌，私有仓库请使用 SSH 地址和 deploy key")
+		}
 		cfg.Source.GitUrl = url
 		cfg.Source.GitRef = strings.TrimSpace(cfg.Source.GetGitRef())
 	} else {
@@ -404,6 +408,29 @@ func CleanProjectDir(dir string) (string, error) {
 		return "", Invalid("现有目录不能是根目录")
 	}
 	return d, nil
+}
+
+// RedactGitURL 去掉 git 地址里的凭据，用于显示和日志：http(s) 去掉整个账号部分，ssh:// 只去掉密码。
+func RedactGitURL(u string) string {
+	i := strings.Index(u, "://")
+	if i < 0 {
+		return u
+	}
+	rest := u[i+3:]
+	end := strings.IndexAny(rest, "/?#")
+	if end < 0 {
+		end = len(rest)
+	}
+	at := strings.LastIndex(rest[:end], "@")
+	if at < 0 {
+		return u
+	}
+	user := ""
+	if strings.EqualFold(u[:i], "ssh") {
+		user, _, _ = strings.Cut(rest[:at], ":")
+		user += "@"
+	}
+	return u[:i+3] + user + rest[at+1:]
 }
 
 // IsSSHURL 判断 git 地址是不是 SSH 地址。

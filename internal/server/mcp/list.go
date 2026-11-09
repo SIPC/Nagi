@@ -658,7 +658,8 @@ func sourceText(src *nagiv1.Source) string {
 	if src.GetGitUrl() == "" {
 		return ""
 	}
-	return strings.TrimSpace("git " + src.GetGitUrl() + " " + src.GetGitRef())
+	// 早期保存的地址可能带着令牌，不交给客户端。
+	return strings.TrimSpace("git " + spec.RedactGitURL(src.GetGitUrl()) + " " + src.GetGitRef())
 }
 
 func toolGetContainer(c *call, in ContainerArg) (any, error) {
