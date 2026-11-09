@@ -69,10 +69,33 @@ func TestValidate(t *testing.T) {
 		"local git":     {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "/srv/repo@x:y"}},
 		"git token":     {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "https://ghp_x@github.com/a/b.git"}},
 		"git password":  {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "http://u:p@git.example.com/a/b.git"}},
+		"git loopback":  {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "http://127.0.0.1:8080/a.git"}},
+		"git localhost": {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "git@localhost:a.git"}},
 	}
 	for name, cfg := range cases {
 		if _, err := Validate(ctx, cfg, "web", nil, dir, "nagi-test"); err == nil {
 			t.Errorf("%s: expected error", name)
+		}
+	}
+}
+
+func TestLocalGitHost(t *testing.T) {
+	for _, u := range []string{
+		"http://127.0.0.1/a.git", "https://localhost:3000/a.git", "https://LOCALHOST./a", "http://x.localhost/a",
+		"ssh://git@[::1]:22/a.git", "ssh://git@127.1.2.3/a", "git@localhost:a.git", "git@127.0.0.1:a.git",
+		"http://0.0.0.0/a", "http://169.254.169.254/latest", "https://[fe80::1]/a", "http://[::ffff:127.0.0.1]/a",
+		"http://224.0.0.1/a",
+	} {
+		if !localGitHost(u) {
+			t.Errorf("%s 应该被拒绝", u)
+		}
+	}
+	for _, u := range []string{
+		"https://github.com/a/b.git", "git@github.com:a/b.git", "ssh://git@10.0.0.5:2222/a.git",
+		"http://192.168.1.10/a.git", "https://[2001:db8::1]/a", "https://localhost.example.com/a",
+	} {
+		if localGitHost(u) {
+			t.Errorf("%s 不应该被拒绝", u)
 		}
 	}
 }

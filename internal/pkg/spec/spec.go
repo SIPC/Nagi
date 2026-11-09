@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -266,6 +267,10 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 		if !IsSSHURL(url) && RedactGitURL(url) != url {
 			return nil, Invalid("git 仓库地址不能包含账号或令牌，私有仓库请使用 SSH 地址和 deploy key")
 		}
+		// 拉取在节点上进行，不能借此访问节点上只监听本机的服务。域名解析到本机的情况由节点在连接时拦下。
+		if localGitHost(url) {
+			return nil, Invalid("git 仓库地址不能指向节点本机")
+		}
 		cfg.Source.GitUrl = url
 		cfg.Source.GitRef = strings.TrimSpace(cfg.Source.GetGitRef())
 	} else {
@@ -431,6 +436,38 @@ func RedactGitURL(u string) string {
 		user += "@"
 	}
 	return u[:i+3] + user + rest[at+1:]
+}
+
+// BlockedGitIP 判断拉取 git 时不能连接的地址：本机、未指定、链路本地（含 169.254.0.0/16）和组播。局域网地址可以连接。
+func BlockedGitIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast() ||
+		ip.Is4() && ip.As4()[0] == 0
+}
+
+// localGitHost 判断 git 地址的主机是不是 localhost 或写成了不能连接的 IP。
+func localGitHost(u string) bool {
+	var host string
+	if i := strings.Index(u, "://"); i >= 0 {
+		rest := u[i+3:]
+		if end := strings.IndexAny(rest, "/?#"); end >= 0 {
+			rest = rest[:end]
+		}
+		rest = rest[strings.LastIndex(rest, "@")+1:]
+		if strings.HasPrefix(rest, "[") {
+			host, _, _ = strings.Cut(rest[1:], "]")
+		} else {
+			host, _, _ = strings.Cut(rest, ":")
+		}
+	} else if at := strings.Index(u, "@"); at >= 0 { // scp 风格：用户@主机:路径
+		host, _, _ = strings.Cut(u[at+1:], ":")
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && BlockedGitIP(ip)
 }
 
 // IsSSHURL 判断 git 地址是不是 SSH 地址。

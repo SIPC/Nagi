@@ -24,6 +24,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.57.0
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
+	golang.org/x/net v0.60.0
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -205,7 +206,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20260929172509-b39ff6d641ec // indirect
-	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

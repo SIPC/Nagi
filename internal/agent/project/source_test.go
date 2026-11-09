@@ -1,12 +1,63 @@
 package project
 
 import (
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/pkg/spec"
+	"github.com/go-git/go-git/v5"
+	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"golang.org/x/crypto/ssh"
 )
+
+// 域名解析到本机时，HTTP 和 SSH 都在连接前被拒绝，本机的服务收不到连接。
+func TestGitGuardRejectsLoopback(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits.Add(1) }))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	opts := &git.CloneOptions{URL: "http://localhost:" + port + "/a.git"}
+	guardClone(opts)
+	if _, err := git.PlainClone(t.TempDir(), false, opts); err == nil || !strings.Contains(err.Error(), "已拒绝连接") {
+		t.Errorf("HTTP 应该被拒绝：%v", err)
+	}
+	if hits.Load() != 0 {
+		t.Error("本机的 HTTP 服务收到了请求")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan struct{}, 1)
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			accepted <- struct{}{}
+			c.Close()
+		}
+	}()
+	_, port, _ = net.SplitHostPort(ln.Addr().String())
+	opts = &git.CloneOptions{
+		URL:  "ssh://git@localhost:" + port + "/a.git",
+		Auth: &gitssh.Password{User: "git", Password: "x", HostKeyCallbackHelper: gitssh.HostKeyCallbackHelper{HostKeyCallback: ssh.InsecureIgnoreHostKey()}},
+	}
+	guardClone(opts)
+	if _, err := git.PlainClone(t.TempDir(), false, opts); err == nil || !strings.Contains(err.Error(), "已拒绝连接") {
+		t.Errorf("SSH 应该被拒绝：%v", err)
+	}
+	select {
+	case <-accepted:
+		t.Error("本机的 SSH 端口收到了连接")
+	default:
+	}
+}
 
 func write(t *testing.T, root, rel, content string) {
 	t.Helper()

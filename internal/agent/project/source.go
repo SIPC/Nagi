@@ -6,17 +6,27 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/client"
+	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/net/proxy"
 )
 
 func (p containerPaths) sshDir() string       { return filepath.Join(p.root, "ssh") }
@@ -69,6 +79,49 @@ func trustOnFirstUse(file string) ssh.HostKeyCallback {
 	}
 }
 
+// git 地址是操作员填的，拉取在节点上进行，不能借此访问节点上只监听本机的服务（network_mode: host 仅限管理员）。
+// 所以在域名解析之后检查实际连接的地址（spec.BlockedGitIP），重定向也一样。局域网地址照常允许（私有 git 服务器）。
+// HTTP(S) 换掉 go-git 的全局客户端（本包以外没有用 go-git）；SSH 没有全局入口，每次拉取用登记过的代理类型接管连接。
+const guardProxyScheme = "nagi-git-guard"
+
+var installGuardOnce sync.Once
+
+func guardedDialer() *net.Dialer {
+	return &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: checkGitAddr}
+}
+
+func checkGitAddr(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return err
+	}
+	if spec.BlockedGitIP(ip) {
+		return fmt.Errorf("git 服务器的地址 %s 是节点本机或保留地址，已拒绝连接", host)
+	}
+	return nil
+}
+
+// guardClone 让这次拉取只连接允许的地址。
+func guardClone(opts *git.CloneOptions) {
+	installGuardOnce.Do(func() {
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		tr.DialContext = guardedDialer().DialContext
+		c := githttp.NewClient(&http.Client{Transport: tr})
+		client.InstallProtocol("http", c)
+		client.InstallProtocol("https", c)
+		proxy.RegisterDialerType(guardProxyScheme, func(*url.URL, proxy.Dialer) (proxy.Dialer, error) {
+			return guardedDialer(), nil
+		})
+	})
+	if spec.IsSSHURL(opts.URL) {
+		opts.ProxyOptions = transport.ProxyOptions{URL: guardProxyScheme + "://"}
+	}
+}
+
 // lineWriter 把 git 的进度输出按行转发。
 type lineWriter struct {
 	onLine func(string)
@@ -114,6 +167,7 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 	if auth != nil {
 		opts.Auth = auth
 	}
+	guardClone(opts)
 	ref := strings.TrimSpace(src.GetGitRef())
 	clone := func(name plumbing.ReferenceName) (*git.Repository, error) {
 		os.RemoveAll(p.checkoutDir())
