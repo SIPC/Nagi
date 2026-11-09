@@ -198,6 +198,9 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			if err != nil {
 				return 0, err
 			}
+			if n == 0 {
+				continue // 空包：下面要读第一个字节，UDP 来源地址又能伪造
+			}
 			addr = netip.AddrPortFrom(addr.Addr().Unmap(), addr.Port())
 			pkt := packets[0][:n]
 			if isControl(pkt) {
