@@ -3,6 +3,7 @@ package agent
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/pem"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -10,7 +11,10 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func randKey() mesh.Key {
@@ -112,25 +116,40 @@ func TestMeshRates(t *testing.T) {
 	}
 }
 
-// 移除的面板的 mesh 公钥为了网络连续性还留着，但不能再调用只给面板的接口。
-func TestIsPanelFollowsTrustList(t *testing.T) {
+// 移除的面板的 mesh 公钥为了网络连续性还留着，但不能再调用只给面板的接口；备用面板不能修改。
+func TestAuthorizePanel(t *testing.T) {
 	id, err := loadIdentity(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := mesh.PublicKey(randKey())
-	n := &meshNode{panelKeys: map[string]mesh.Key{"fp-old": k}}
-	a := &agent{id: id, mesh: n}
-	if a.isPanel(k) {
-		t.Fatal("不在信任列表里的面板不能通过")
-	}
-	if err := id.addPanel(trustedPanel{Address: "a:1", Fingerprint: "fp-old"}); err != nil {
+	ca, err := tlsutil.NewCA("test")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !a.isPanel(k) {
-		t.Fatal("信任的面板应该通过")
+	caPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Cert.Raw}))
+	primary := trustedPanel{Address: "a:1", Fingerprint: "fp-a", NodeID: "n1", CertPEM: "cert", CAPEM: caPEM}
+	if err := id.addPanel(primary); err != nil {
+		t.Fatal(err)
 	}
-	if a.isPanel(mesh.PublicKey(randKey())) {
-		t.Fatal("不是面板的公钥不能通过")
+	ka, kb, kold := mesh.PublicKey(randKey()), mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
+	a := &agent{id: id, log: slog.Default(), reload: make(chan struct{}, 1),
+		mesh: &meshNode{panelKeys: map[string]mesh.Key{"fp-a": ka, "fp-b": kb, "fp-old": kold}}}
+	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: []*nagiv1.ClusterPanel{
+		{Address: "a:1", Fingerprint: "fp-a"}, {Address: "b:1", Fingerprint: "fp-b"}}})
+
+	code := func(k mesh.Key, method string) codes.Code { return status.Code(a.authorizePanel(k, method)) }
+	for _, m := range []string{nagiv1.MeshService_VolumeDownload_FullMethodName, nagiv1.MeshService_VolumeUpload_FullMethodName, nagiv1.MeshService_Upload_FullMethodName} {
+		if c := code(ka, m); c != codes.OK {
+			t.Fatalf("%s: 主面板应该通过，得到 %v", m, c)
+		}
+		if c := code(kb, m); c != codes.FailedPrecondition {
+			t.Fatalf("%s: 备用面板不能调用，得到 %v", m, c)
+		}
+		if c := code(kold, m); c != codes.PermissionDenied {
+			t.Fatalf("%s: 移除的面板不能调用，得到 %v", m, c)
+		}
+		if c := code(mesh.PublicKey(randKey()), m); c != codes.PermissionDenied {
+			t.Fatalf("%s: 不是面板的公钥不能调用，得到 %v", m, c)
+		}
 	}
 }

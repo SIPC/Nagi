@@ -275,15 +275,7 @@ func (n *meshNode) panelOf(k mesh.Key) (string, bool) {
 
 // checkMeshNodeAccess 检查 mesh 上传来的节点文件请求：mesh 上有别的节点，只接受主面板。primaryGuard 只挂在控制连接上，这里要自己查。
 func (s *meshService) checkMeshNodeAccess(ctx context.Context, method string) error {
-	caller, ok := mesh.Caller(ctx, s.M)
-	if !ok {
-		return status.Error(codes.PermissionDenied, "仅接受受信任的面板")
-	}
-	fp, ok := s.a.mesh.panelOf(caller)
-	if !ok {
-		return status.Error(codes.PermissionDenied, "仅接受受信任的面板")
-	}
-	if err := s.a.checkPrimary(fp, method); err != nil {
+	if err := s.checkMeshPanel(ctx, method); err != nil {
 		return err
 	}
 	return s.a.checkNodeAccess()
