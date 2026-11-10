@@ -8,6 +8,23 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.25.0
+
+### New features
+
+- When two nodes can't connect directly, traffic is relayed through a node connected directly to both, which is closer than relaying through the panel.
+- Adds "Relay for other nodes" to a node's "Settings", which can stop the node from relaying for other nodes.
+- The node network probes direct connections from several UDP ports and switches to a working port when one link on the route fails.
+
+### Improvements
+
+- "Nodes → Network" shows which node a connection is relayed through.
+- The node network shows the local port used by each direct connection.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.25.0.
+
 ## v0.24.2
 
 ### New features
