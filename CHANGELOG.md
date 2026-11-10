@@ -8,6 +8,16 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.24.2
+
+### 新功能
+
+- 「节点 → 网络」的未直连的连接中显示无法直连的原因，例如两端都在 NAT 后面，或防火墙未放行 UDP 端口。
+
+### 升级说明
+
+- 需将节点升级到 v0.24.2 后才显示原因。
+
 ## v0.24.1
 
 ### 新功能

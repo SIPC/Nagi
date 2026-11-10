@@ -8,6 +8,16 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.24.2
+
+### New features
+
+- Unconnected links under "Nodes → Network" now show why a direct connection failed, for example when both ends are behind NAT or a firewall blocks the UDP port.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.24.2 to see the reasons.
+
 ## v0.24.1
 
 ### New features
