@@ -21,10 +21,11 @@ export default {
   map: {
     panel: "面板",
     direct: "直连",
-    relay: "经面板中转",
+    relay: "中转",
     none: "不可达",
-    help: "线条是在线节点之间的节点网络（WireGuard）连接。无法直连时流量经面板中转，线条经过面板。节点外圈是 CPU、内存、磁盘中占用最高的一项。悬停节点查看延迟。",
+    help: "线条是在线节点之间的节点网络（WireGuard）连接。无法直连时经与两端都直连的节点中转（直的虚线），没有这样的节点时经面板中转（虚线经过面板）。节点外圈是 CPU、内存、磁盘中占用最高的一项。悬停节点查看延迟。",
     issues: "未直连的连接",
+    viaNode: (n: string) => `经 ${n} 中转`,
     reason: {
       symmetric: (a: string, b: string, sym: string) => `${a} 和 ${b} 都在 NAT 后面，${sym} 的 NAT 按目的地更换端口，无法打洞。在任一端放行或转发 UDP 端口后可直连。`,
       noAddress: (n: string) => `${n} 没有可尝试直连的地址。`,

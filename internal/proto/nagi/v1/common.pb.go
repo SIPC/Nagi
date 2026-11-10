@@ -3442,8 +3442,10 @@ type MeshPeer struct {
 	Endpoints []string `protobuf:"bytes,2,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
 	Name      string   `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// 节点 ID；面板为空。
-	NodeId        string `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	IsPanel       bool   `protobuf:"varint,5,opt,name=is_panel,json=isPanel,proto3" json:"is_panel,omitempty"`
+	NodeId  string `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	IsPanel bool   `protobuf:"varint,5,opt,name=is_panel,json=isPanel,proto3" json:"is_panel,omitempty"`
+	// 可以替收到这份列表的节点中转到这个成员的节点（mesh 公钥），按两段延迟之和从低到高。面板按接收方分别算。
+	Relays        [][]byte `protobuf:"bytes,6,rep,name=relays,proto3" json:"relays,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3513,6 +3515,13 @@ func (x *MeshPeer) GetIsPanel() bool {
 	return false
 }
 
+func (x *MeshPeer) GetRelays() [][]byte {
+	if x != nil {
+		return x.Relays
+	}
+	return nil
+}
+
 // MeshPeerStatus 是到一个 mesh 成员的连接状态。
 type MeshPeerStatus struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
@@ -3520,7 +3529,8 @@ type MeshPeerStatus struct {
 	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// mesh 地址（IPv6）。
 	Address string `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
-	// direct（UDP 直连）、link（直接经控制连接）、udp-relay（UDP 经面板中转）、tls-relay（经面板的控制连接中转）、none。
+	// direct（UDP 直连）、link（直接经控制连接）、node-relay（UDP 经别的节点中转）、udp-relay（UDP 经面板中转）、
+	// tls-relay（经面板的控制连接中转）、none。
 	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
 	// 直连时的对方地址。
 	Endpoint string `protobuf:"bytes,5,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
@@ -3750,7 +3760,9 @@ type MeshStatus struct {
 	// 这一端关闭了 QUIC 快速通道（节点的网络设置，见 docs/mesh.md#quic-快速通道）。
 	QuicOff bool `protobuf:"varint,6,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
 	// 按别的成员看到的地址判断这一端的 NAT：none（不在 NAT 后面）、nat、symmetric（按目的地换端口）；不知道时为空。
-	Nat           string `protobuf:"bytes,7,opt,name=nat,proto3" json:"nat,omitempty"`
+	Nat string `protobuf:"bytes,7,opt,name=nat,proto3" json:"nat,omitempty"`
+	// 这一端不替别的节点中转（节点的网络设置，见 docs/mesh.md#经节点中转）。
+	RelayOff      bool `protobuf:"varint,8,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3832,6 +3844,13 @@ func (x *MeshStatus) GetNat() string {
 		return x.Nat
 	}
 	return ""
+}
+
+func (x *MeshStatus) GetRelayOff() bool {
+	if x != nil {
+		return x.RelayOff
+	}
+	return false
 }
 
 type MeshPingRequest struct {
@@ -4041,7 +4060,9 @@ func (x *MeshSpeedResponse) GetQuicOffPeer() bool {
 type MeshOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 关闭 QUIC 快速通道：和所有成员之间的 TCP 连接都走 WireGuard。
-	QuicOff       bool `protobuf:"varint,1,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
+	QuicOff bool `protobuf:"varint,1,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
+	// 不替别的节点中转（流量按量计费的节点可以关掉）。
+	RelayOff      bool `protobuf:"varint,2,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4079,6 +4100,13 @@ func (*MeshOptions) Descriptor() ([]byte, []int) {
 func (x *MeshOptions) GetQuicOff() bool {
 	if x != nil {
 		return x.QuicOff
+	}
+	return false
+}
+
+func (x *MeshOptions) GetRelayOff() bool {
+	if x != nil {
+		return x.RelayOff
 	}
 	return false
 }
@@ -5452,14 +5480,15 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\ais_self\x18\x04 \x01(\bR\x06isSelf\x12\x12\n" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
-	"last_error\x18\x06 \x01(\tR\tlastError\"\x8f\x01\n" +
+	"last_error\x18\x06 \x01(\tR\tlastError\"\xa7\x01\n" +
 	"\bMeshPeer\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\x87\x05\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\x12\x16\n" +
+	"\x06relays\x18\x06 \x03(\fR\x06relays\"\x87\x05\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -5486,7 +5515,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05tried\x18\x14 \x01(\rR\x05tried\x12\x14\n" +
 	"\x05heard\x18\x15 \x01(\bR\x05heard\x12\x1d\n" +
 	"\n" +
-	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xd3\x01\n" +
+	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xf0\x01\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +
@@ -5496,7 +5525,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tendpoints\x18\x04 \x03(\tR\tendpoints\x12-\n" +
 	"\x05peers\x18\x05 \x03(\v2\x17.nagi.v1.MeshPeerStatusR\x05peers\x12\x19\n" +
 	"\bquic_off\x18\x06 \x01(\bR\aquicOff\x12\x10\n" +
-	"\x03nat\x18\a \x01(\tR\x03nat\"M\n" +
+	"\x03nat\x18\a \x01(\tR\x03nat\x12\x1b\n" +
+	"\trelay_off\x18\b \x01(\bR\brelayOff\"M\n" +
 	"\x0fMeshPingRequest\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1b\n" +
@@ -5511,9 +5541,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x10wireguard_upload\x18\x05 \x01(\x01R\x0fwireguardUpload\x12-\n" +
 	"\x12wireguard_download\x18\x06 \x01(\x01R\x11wireguardDownload\x12\"\n" +
 	"\rquic_off_here\x18\a \x01(\bR\vquicOffHere\x12\"\n" +
-	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"(\n" +
+	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"E\n" +
 	"\vMeshOptions\x12\x19\n" +
-	"\bquic_off\x18\x01 \x01(\bR\aquicOff\"\xc7\x01\n" +
+	"\bquic_off\x18\x01 \x01(\bR\aquicOff\x12\x1b\n" +
+	"\trelay_off\x18\x02 \x01(\bR\brelayOff\"\xc7\x01\n" +
 	"\fBackupStatus\x12$\n" +
 	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
 	"\vtarget_name\x18\x02 \x01(\tR\n" +

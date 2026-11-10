@@ -387,7 +387,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	if pending {
 		return &nagiv1.ReportResponse{}, nil
 	}
-	resp := &nagiv1.ReportResponse{Mesh: p.r.meshConfig()}
+	resp := &nagiv1.ReportResponse{Mesh: p.r.meshConfig(p.conn)}
 	if p.r.Cluster != nil {
 		resp.Cluster = p.r.Cluster(ctx)
 	}

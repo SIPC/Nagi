@@ -32,6 +32,15 @@ message MeshInfo {
   bytes public_key = 1;
   uint32 port = 2;
   repeated string endpoints = 3;
+  // 和哪些成员直连着、延迟多少：面板据此给直连不通的两个节点挑中转节点（见 docs/mesh.md#经节点中转）。
+  repeated MeshDirect directs = 4;
+  // 这个节点愿意替别的节点中转（支持而且没在网络设置里关掉）。
+  bool relay = 5;
+}
+
+message MeshDirect {
+  bytes public_key = 1;
+  double rtt_ms = 2;
 }
 
 // MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。

@@ -75,6 +75,9 @@ type peerState struct {
 	directAt   time.Time                    // 最近一次 pong 的时间
 	rtt        time.Duration
 	relays     []Key // 可以代为中转的面板
+	nodeRelays []Key // 可以代为中转的节点，先于面板用
+	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
+	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
 	// 不补发的话要等 WireGuard 5 秒后重发，这期间对方还用着重启前的会话，发来的包都被丢掉。
 	pendingInit   []byte
@@ -110,6 +113,8 @@ type delivery struct {
 type Bind struct {
 	priv, pub Key
 	relay     bool // 是否替别人中转（面板）
+	// nodeRelay：节点替别的节点中转（网络设置里可以关）。只经直连的 UDP 转发，不经控制连接，按来源限速。
+	nodeRelay atomic.Bool
 	// relayRx、relayTx：替别人中转收到、转出的字节数（面板），不属于任何一个对端，Status 里没有。
 	relayRx, relayTx atomic.Uint64
 	caps             byte // 自己启用的能力
@@ -134,6 +139,92 @@ type Bind struct {
 	observed  map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
 	recv      chan delivery
 	done      chan struct{}
+	// relayBudget：节点替每个来源中转的字节数配额（令牌桶，见 relayAllowed）。
+	relayBudget map[Key]*relayBucket
+}
+
+// relayBucket 是一个来源的中转配额。
+type relayBucket struct {
+	tokens float64
+	at     time.Time
+}
+
+const (
+	// 节点替一个来源中转的速率上限和突发量：够两个节点之间正常用，又不让一个被攻破的节点借中转刷爆别人的带宽。
+	relayRate  = 32 << 20 // 字节/秒
+	relayBurst = 8 << 20
+)
+
+// relayHealth 是经某个中转节点到某个对端通不通。中转节点关了中转、或者和对端断了直连，发过去的包会被它丢掉，
+// 我们这边看不出来：发了以后 relayProbe 内没有经它收到对端的包，就当它不通，relayBad 内不用它，之后再试
+// （例如刚开始时它还没确认到对端的直连）。
+// 两边都没有流量时不判断，所以空闲时不会来回换。
+type relayHealth struct {
+	waitingSince time.Time // 经它发了、还没收到回包的起点
+	lastRecv     time.Time
+	badUntil     time.Time
+}
+
+const (
+	relayProbe = 10 * time.Second
+	relayBad   = 30 * time.Second
+)
+
+// pickNodeRelay 返回发给 p 用的中转节点，没有可用的时 ok 为 false。sending 为 true 时记下经它发了包。调用时持有 b.mu。
+func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, rp *peerState, ok bool) {
+	for _, r := range p.nodeRelays {
+		rp := b.peers[r]
+		if rp == nil || !rp.directAlive(now) {
+			continue
+		}
+		if p.relayHealth == nil {
+			p.relayHealth = map[Key]*relayHealth{}
+		}
+		h := p.relayHealth[r]
+		if h == nil {
+			h = &relayHealth{}
+			p.relayHealth[r] = h
+		}
+		if now.Before(h.badUntil) {
+			continue
+		}
+		if !h.waitingSince.IsZero() && now.Sub(h.waitingSince) > relayProbe {
+			h.waitingSince, h.badUntil = time.Time{}, now.Add(relayBad)
+			b.log.Debug("mesh 中转节点不通，暂时不用", "peer", p.key.Short(), "relay", r.Short())
+			continue
+		}
+		if sending && h.waitingSince.IsZero() {
+			h.waitingSince = now
+		}
+		return r, rp, true
+	}
+	return Key{}, nil, false
+}
+
+// relayHeard 记下经中转节点 r 收到了 from 的包。调用时持有 b.mu。
+func (b *Bind) relayHeard(from *peerState, r Key, now time.Time) {
+	if h := from.relayHealth[r]; h != nil {
+		h.waitingSince, h.lastRecv, h.badUntil = time.Time{}, now, time.Time{}
+	}
+}
+
+// relayAllowed 扣掉 src 的 n 字节中转配额，不够时返回 false。调用时持有 b.mu。
+func (b *Bind) relayAllowed(src Key, n int, now time.Time) bool {
+	if b.relayBudget == nil {
+		b.relayBudget = map[Key]*relayBucket{}
+	}
+	bk := b.relayBudget[src]
+	if bk == nil {
+		bk = &relayBucket{tokens: relayBurst, at: now}
+		b.relayBudget[src] = bk
+	}
+	bk.tokens = min(relayBurst, bk.tokens+now.Sub(bk.at).Seconds()*relayRate)
+	bk.at = now
+	if bk.tokens < float64(n) {
+		return false
+	}
+	bk.tokens -= float64(n)
+	return true
 }
 
 func newBind(priv Key, relay bool, caps byte, extra int, log *slog.Logger) *Bind {
@@ -395,6 +486,13 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		_ = (*link)(b.pub, dst, pkt)
 		return
 	}
+	// 经和两端都直连的节点中转（面板挑的，延迟低的在前），比绕到面板近。
+	if _, rp, ok := b.pickNodeRelay(p, now, true); ok {
+		addr, c := rp.direct, b.sock(rp.directConn)
+		b.mu.Unlock()
+		b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
+		return
+	}
 	for _, r := range p.relays {
 		if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
 			addr, c := rp.direct, b.sock(rp.directConn)
@@ -478,6 +576,22 @@ func (b *Bind) forward(src, dst Key, payload []byte) {
 	default:
 		return
 	}
+	b.relayTx.Add(uint64(len(payload)))
+}
+
+// forwardNode 是节点替 src 把包转给 dst：只在和 dst 直连时经 UDP 转发（不经控制连接、不再转给别人），
+// 来源超过配额的丢掉。src 已经由调用方按直连地址确认过。
+func (b *Bind) forwardNode(src, dst Key, payload []byte, now time.Time) {
+	b.mu.Lock()
+	p := b.peers[dst]
+	if p == nil || dst == src || !p.directAlive(now) || !b.relayAllowed(src, len(payload), now) {
+		b.mu.Unlock()
+		return
+	}
+	addr, c := p.direct, b.sock(p.directConn)
+	b.mu.Unlock()
+	b.relayRx.Add(uint64(len(payload)))
+	b.write(c, encodeRelay(typeRelayDeliver, src, payload), addr)
 	b.relayTx.Add(uint64(len(payload)))
 }
 
@@ -644,7 +758,7 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			go onCaps(m.key)
 		}
 	case typeRelaySend:
-		if !b.relay {
+		if !b.relay && !b.nodeRelay.Load() {
 			return nil, nil
 		}
 		b.mu.Lock()
@@ -660,7 +774,11 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.mu.Unlock()
 			return ep, m.payload
 		}
-		b.forward(src, m.key, m.payload)
+		if b.relay {
+			b.forward(src, m.key, m.payload)
+		} else {
+			b.forwardNode(src, m.key, m.payload, now)
+		}
 	case typeRelayDeliver:
 		b.mu.Lock()
 		defer b.mu.Unlock()
@@ -669,6 +787,7 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		if !ok || !b.relayKeys[relay] || p == nil {
 			return nil, nil
 		}
+		b.relayHeard(p, relay, now)
 		return p.ep, m.payload
 	}
 	return nil, nil
@@ -708,7 +827,14 @@ func (b *Bind) setPeers(peers []Peer) {
 			p.candidates = p.candidates[:maxCandidates]
 		}
 		p.relays = pe.Relays
-		for _, r := range pe.Relays {
+		p.nodeRelays = nil
+		for _, r := range pe.NodeRelays {
+			if r != b.pub && r != pe.Key {
+				p.nodeRelays = append(p.nodeRelays, r)
+			}
+		}
+		// 中转方转来的包由 WireGuard 按原发送方验证，中转方伪造不了，所以只核对它是不是中转方。
+		for _, r := range append(append([]Key(nil), pe.Relays...), p.nodeRelays...) {
 			b.relayKeys[r] = true
 		}
 		b.byMesh[Address(pe.Key)] = pe.Key
@@ -909,10 +1035,15 @@ func (b *Bind) status() []PeerStatus {
 		case b.links[p.key] != nil:
 			s.Path = "link"
 		default:
-			for _, r := range p.relays {
-				if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
-					s.Path, s.Via = "udp-relay", r
-					break
+			if r, _, ok := b.pickNodeRelay(p, now, false); ok {
+				s.Path, s.Via = "node-relay", r
+			}
+			if s.Path == "none" {
+				for _, r := range p.relays {
+					if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
+						s.Path, s.Via = "udp-relay", r
+						break
+					}
 				}
 			}
 			if s.Path == "none" {

@@ -84,10 +84,14 @@ func (x *MeshPacket) GetPayload() []byte {
 
 // MeshInfo 是节点上报的自己的 mesh 信息。
 type MeshInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	Port          uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	Endpoints     []string               `protobuf:"bytes,3,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Port      uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	Endpoints []string               `protobuf:"bytes,3,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
+	// 和哪些成员直连着、延迟多少：面板据此给直连不通的两个节点挑中转节点（见 docs/mesh.md#经节点中转）。
+	Directs []*MeshDirect `protobuf:"bytes,4,rep,name=directs,proto3" json:"directs,omitempty"`
+	// 这个节点愿意替别的节点中转（支持而且没在网络设置里关掉）。
+	Relay         bool `protobuf:"varint,5,opt,name=relay,proto3" json:"relay,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -143,6 +147,72 @@ func (x *MeshInfo) GetEndpoints() []string {
 	return nil
 }
 
+func (x *MeshInfo) GetDirects() []*MeshDirect {
+	if x != nil {
+		return x.Directs
+	}
+	return nil
+}
+
+func (x *MeshInfo) GetRelay() bool {
+	if x != nil {
+		return x.Relay
+	}
+	return false
+}
+
+type MeshDirect struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	RttMs         float64                `protobuf:"fixed64,2,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MeshDirect) Reset() {
+	*x = MeshDirect{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MeshDirect) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeshDirect) ProtoMessage() {}
+
+func (x *MeshDirect) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeshDirect.ProtoReflect.Descriptor instead.
+func (*MeshDirect) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MeshDirect) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *MeshDirect) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
 // MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。
 type MeshConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -154,7 +224,7 @@ type MeshConfig struct {
 
 func (x *MeshConfig) Reset() {
 	*x = MeshConfig{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[2]
+	mi := &file_nagi_v1_panel_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -166,7 +236,7 @@ func (x *MeshConfig) String() string {
 func (*MeshConfig) ProtoMessage() {}
 
 func (x *MeshConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[2]
+	mi := &file_nagi_v1_panel_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -179,7 +249,7 @@ func (x *MeshConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshConfig.ProtoReflect.Descriptor instead.
 func (*MeshConfig) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{2}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MeshConfig) GetPanelKey() []byte {
@@ -206,7 +276,7 @@ type RelayAlertRequest struct {
 
 func (x *RelayAlertRequest) Reset() {
 	*x = RelayAlertRequest{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[3]
+	mi := &file_nagi_v1_panel_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -218,7 +288,7 @@ func (x *RelayAlertRequest) String() string {
 func (*RelayAlertRequest) ProtoMessage() {}
 
 func (x *RelayAlertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[3]
+	mi := &file_nagi_v1_panel_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -231,7 +301,7 @@ func (x *RelayAlertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelayAlertRequest.ProtoReflect.Descriptor instead.
 func (*RelayAlertRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{3}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RelayAlertRequest) GetAlert() *Alert {
@@ -256,7 +326,7 @@ type RelayAlertResponse struct {
 
 func (x *RelayAlertResponse) Reset() {
 	*x = RelayAlertResponse{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[4]
+	mi := &file_nagi_v1_panel_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -268,7 +338,7 @@ func (x *RelayAlertResponse) String() string {
 func (*RelayAlertResponse) ProtoMessage() {}
 
 func (x *RelayAlertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[4]
+	mi := &file_nagi_v1_panel_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +351,7 @@ func (x *RelayAlertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelayAlertResponse.ProtoReflect.Descriptor instead.
 func (*RelayAlertResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{5}
 }
 
 type ReportAlertRequest struct {
@@ -293,7 +363,7 @@ type ReportAlertRequest struct {
 
 func (x *ReportAlertRequest) Reset() {
 	*x = ReportAlertRequest{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[5]
+	mi := &file_nagi_v1_panel_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -305,7 +375,7 @@ func (x *ReportAlertRequest) String() string {
 func (*ReportAlertRequest) ProtoMessage() {}
 
 func (x *ReportAlertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[5]
+	mi := &file_nagi_v1_panel_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -318,7 +388,7 @@ func (x *ReportAlertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportAlertRequest.ProtoReflect.Descriptor instead.
 func (*ReportAlertRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{5}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ReportAlertRequest) GetAlert() *Alert {
@@ -336,7 +406,7 @@ type ReportAlertResponse struct {
 
 func (x *ReportAlertResponse) Reset() {
 	*x = ReportAlertResponse{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[6]
+	mi := &file_nagi_v1_panel_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +418,7 @@ func (x *ReportAlertResponse) String() string {
 func (*ReportAlertResponse) ProtoMessage() {}
 
 func (x *ReportAlertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[6]
+	mi := &file_nagi_v1_panel_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +431,7 @@ func (x *ReportAlertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportAlertResponse.ProtoReflect.Descriptor instead.
 func (*ReportAlertResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{6}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{7}
 }
 
 type RenewCertificateRequest struct {
@@ -373,7 +443,7 @@ type RenewCertificateRequest struct {
 
 func (x *RenewCertificateRequest) Reset() {
 	*x = RenewCertificateRequest{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[7]
+	mi := &file_nagi_v1_panel_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -385,7 +455,7 @@ func (x *RenewCertificateRequest) String() string {
 func (*RenewCertificateRequest) ProtoMessage() {}
 
 func (x *RenewCertificateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[7]
+	mi := &file_nagi_v1_panel_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -398,7 +468,7 @@ func (x *RenewCertificateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewCertificateRequest.ProtoReflect.Descriptor instead.
 func (*RenewCertificateRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{7}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RenewCertificateRequest) GetCsr() []byte {
@@ -417,7 +487,7 @@ type RenewCertificateResponse struct {
 
 func (x *RenewCertificateResponse) Reset() {
 	*x = RenewCertificateResponse{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[8]
+	mi := &file_nagi_v1_panel_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -429,7 +499,7 @@ func (x *RenewCertificateResponse) String() string {
 func (*RenewCertificateResponse) ProtoMessage() {}
 
 func (x *RenewCertificateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[8]
+	mi := &file_nagi_v1_panel_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -442,7 +512,7 @@ func (x *RenewCertificateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewCertificateResponse.ProtoReflect.Descriptor instead.
 func (*RenewCertificateResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{8}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RenewCertificateResponse) GetCertificate() []byte {
@@ -478,7 +548,7 @@ type ReportRequest struct {
 
 func (x *ReportRequest) Reset() {
 	*x = ReportRequest{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[9]
+	mi := &file_nagi_v1_panel_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -490,7 +560,7 @@ func (x *ReportRequest) String() string {
 func (*ReportRequest) ProtoMessage() {}
 
 func (x *ReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[9]
+	mi := &file_nagi_v1_panel_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -503,7 +573,7 @@ func (x *ReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRequest.ProtoReflect.Descriptor instead.
 func (*ReportRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{9}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ReportRequest) GetNode() *NodeInfo {
@@ -587,7 +657,7 @@ type ReportResponse struct {
 
 func (x *ReportResponse) Reset() {
 	*x = ReportResponse{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[10]
+	mi := &file_nagi_v1_panel_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +669,7 @@ func (x *ReportResponse) String() string {
 func (*ReportResponse) ProtoMessage() {}
 
 func (x *ReportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[10]
+	mi := &file_nagi_v1_panel_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +682,7 @@ func (x *ReportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResponse.ProtoReflect.Descriptor instead.
 func (*ReportResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{10}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ReportResponse) GetMesh() *MeshConfig {
@@ -644,7 +714,7 @@ type PanelCluster struct {
 
 func (x *PanelCluster) Reset() {
 	*x = PanelCluster{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[11]
+	mi := &file_nagi_v1_panel_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -656,7 +726,7 @@ func (x *PanelCluster) String() string {
 func (*PanelCluster) ProtoMessage() {}
 
 func (x *PanelCluster) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[11]
+	mi := &file_nagi_v1_panel_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -669,7 +739,7 @@ func (x *PanelCluster) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PanelCluster.ProtoReflect.Descriptor instead.
 func (*PanelCluster) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{11}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PanelCluster) GetTerm() uint64 {
@@ -710,7 +780,7 @@ type ClusterPanel struct {
 
 func (x *ClusterPanel) Reset() {
 	*x = ClusterPanel{}
-	mi := &file_nagi_v1_panel_proto_msgTypes[12]
+	mi := &file_nagi_v1_panel_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -722,7 +792,7 @@ func (x *ClusterPanel) String() string {
 func (*ClusterPanel) ProtoMessage() {}
 
 func (x *ClusterPanel) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_panel_proto_msgTypes[12]
+	mi := &file_nagi_v1_panel_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -735,7 +805,7 @@ func (x *ClusterPanel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterPanel.ProtoReflect.Descriptor instead.
 func (*ClusterPanel) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{12}
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ClusterPanel) GetAddress() string {
@@ -761,12 +831,19 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"MeshPacket\x12\x10\n" +
 	"\x03src\x18\x01 \x01(\fR\x03src\x12\x10\n" +
 	"\x03dst\x18\x02 \x01(\fR\x03dst\x12\x18\n" +
-	"\apayload\x18\x03 \x01(\fR\apayload\"[\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload\"\xa0\x01\n" +
 	"\bMeshInfo\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x1c\n" +
-	"\tendpoints\x18\x03 \x03(\tR\tendpoints\"R\n" +
+	"\tendpoints\x18\x03 \x03(\tR\tendpoints\x12-\n" +
+	"\adirects\x18\x04 \x03(\v2\x13.nagi.v1.MeshDirectR\adirects\x12\x14\n" +
+	"\x05relay\x18\x05 \x01(\bR\x05relay\"B\n" +
+	"\n" +
+	"MeshDirect\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x15\n" +
+	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\"R\n" +
 	"\n" +
 	"MeshConfig\x12\x1b\n" +
 	"\tpanel_key\x18\x01 \x01(\fR\bpanelKey\x12'\n" +
@@ -828,57 +905,59 @@ func file_nagi_v1_panel_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_panel_proto_rawDescData
 }
 
-var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_nagi_v1_panel_proto_goTypes = []any{
 	(*MeshPacket)(nil),               // 0: nagi.v1.MeshPacket
 	(*MeshInfo)(nil),                 // 1: nagi.v1.MeshInfo
-	(*MeshConfig)(nil),               // 2: nagi.v1.MeshConfig
-	(*RelayAlertRequest)(nil),        // 3: nagi.v1.RelayAlertRequest
-	(*RelayAlertResponse)(nil),       // 4: nagi.v1.RelayAlertResponse
-	(*ReportAlertRequest)(nil),       // 5: nagi.v1.ReportAlertRequest
-	(*ReportAlertResponse)(nil),      // 6: nagi.v1.ReportAlertResponse
-	(*RenewCertificateRequest)(nil),  // 7: nagi.v1.RenewCertificateRequest
-	(*RenewCertificateResponse)(nil), // 8: nagi.v1.RenewCertificateResponse
-	(*ReportRequest)(nil),            // 9: nagi.v1.ReportRequest
-	(*ReportResponse)(nil),           // 10: nagi.v1.ReportResponse
-	(*PanelCluster)(nil),             // 11: nagi.v1.PanelCluster
-	(*ClusterPanel)(nil),             // 12: nagi.v1.ClusterPanel
-	(*MeshPeer)(nil),                 // 13: nagi.v1.MeshPeer
-	(*Alert)(nil),                    // 14: nagi.v1.Alert
-	(*NodeInfo)(nil),                 // 15: nagi.v1.NodeInfo
-	(*ContainerStatus)(nil),          // 16: nagi.v1.ContainerStatus
-	(*FailoverStatus)(nil),           // 17: nagi.v1.FailoverStatus
-	(*NodeUsage)(nil),                // 18: nagi.v1.NodeUsage
-	(*DomainCert)(nil),               // 19: nagi.v1.DomainCert
+	(*MeshDirect)(nil),               // 2: nagi.v1.MeshDirect
+	(*MeshConfig)(nil),               // 3: nagi.v1.MeshConfig
+	(*RelayAlertRequest)(nil),        // 4: nagi.v1.RelayAlertRequest
+	(*RelayAlertResponse)(nil),       // 5: nagi.v1.RelayAlertResponse
+	(*ReportAlertRequest)(nil),       // 6: nagi.v1.ReportAlertRequest
+	(*ReportAlertResponse)(nil),      // 7: nagi.v1.ReportAlertResponse
+	(*RenewCertificateRequest)(nil),  // 8: nagi.v1.RenewCertificateRequest
+	(*RenewCertificateResponse)(nil), // 9: nagi.v1.RenewCertificateResponse
+	(*ReportRequest)(nil),            // 10: nagi.v1.ReportRequest
+	(*ReportResponse)(nil),           // 11: nagi.v1.ReportResponse
+	(*PanelCluster)(nil),             // 12: nagi.v1.PanelCluster
+	(*ClusterPanel)(nil),             // 13: nagi.v1.ClusterPanel
+	(*MeshPeer)(nil),                 // 14: nagi.v1.MeshPeer
+	(*Alert)(nil),                    // 15: nagi.v1.Alert
+	(*NodeInfo)(nil),                 // 16: nagi.v1.NodeInfo
+	(*ContainerStatus)(nil),          // 17: nagi.v1.ContainerStatus
+	(*FailoverStatus)(nil),           // 18: nagi.v1.FailoverStatus
+	(*NodeUsage)(nil),                // 19: nagi.v1.NodeUsage
+	(*DomainCert)(nil),               // 20: nagi.v1.DomainCert
 }
 var file_nagi_v1_panel_proto_depIdxs = []int32{
-	13, // 0: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
-	14, // 1: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
-	14, // 2: nagi.v1.ReportAlertRequest.alert:type_name -> nagi.v1.Alert
-	15, // 3: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
-	1,  // 4: nagi.v1.ReportRequest.mesh:type_name -> nagi.v1.MeshInfo
-	16, // 5: nagi.v1.ReportRequest.containers:type_name -> nagi.v1.ContainerStatus
-	17, // 6: nagi.v1.ReportRequest.failovers:type_name -> nagi.v1.FailoverStatus
-	18, // 7: nagi.v1.ReportRequest.usage:type_name -> nagi.v1.NodeUsage
-	19, // 8: nagi.v1.ReportRequest.certs:type_name -> nagi.v1.DomainCert
-	2,  // 9: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
-	11, // 10: nagi.v1.ReportResponse.cluster:type_name -> nagi.v1.PanelCluster
-	12, // 11: nagi.v1.PanelCluster.panels:type_name -> nagi.v1.ClusterPanel
-	9,  // 12: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
-	7,  // 13: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
-	3,  // 14: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
-	5,  // 15: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
-	0,  // 16: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
-	10, // 17: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
-	8,  // 18: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
-	4,  // 19: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
-	6,  // 20: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
-	0,  // 21: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
-	17, // [17:22] is the sub-list for method output_type
-	12, // [12:17] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	2,  // 0: nagi.v1.MeshInfo.directs:type_name -> nagi.v1.MeshDirect
+	14, // 1: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
+	15, // 2: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
+	15, // 3: nagi.v1.ReportAlertRequest.alert:type_name -> nagi.v1.Alert
+	16, // 4: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
+	1,  // 5: nagi.v1.ReportRequest.mesh:type_name -> nagi.v1.MeshInfo
+	17, // 6: nagi.v1.ReportRequest.containers:type_name -> nagi.v1.ContainerStatus
+	18, // 7: nagi.v1.ReportRequest.failovers:type_name -> nagi.v1.FailoverStatus
+	19, // 8: nagi.v1.ReportRequest.usage:type_name -> nagi.v1.NodeUsage
+	20, // 9: nagi.v1.ReportRequest.certs:type_name -> nagi.v1.DomainCert
+	3,  // 10: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
+	12, // 11: nagi.v1.ReportResponse.cluster:type_name -> nagi.v1.PanelCluster
+	13, // 12: nagi.v1.PanelCluster.panels:type_name -> nagi.v1.ClusterPanel
+	10, // 13: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
+	8,  // 14: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
+	4,  // 15: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
+	6,  // 16: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
+	0,  // 17: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
+	11, // 18: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
+	9,  // 19: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
+	5,  // 20: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
+	7,  // 21: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
+	0,  // 22: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
+	18, // [18:23] is the sub-list for method output_type
+	13, // [13:18] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_panel_proto_init() }
@@ -893,7 +972,7 @@ func file_nagi_v1_panel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_panel_proto_rawDesc), len(file_nagi_v1_panel_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

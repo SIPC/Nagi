@@ -73,3 +73,37 @@ func TestMeshPeersCapsEndpoints(t *testing.T) {
 		t.Fatalf("应最多 %d 个、面板看到的在前：%v", mesh.MaxEndpoints, got)
 	}
 }
+
+// 两端直连时不给中转节点；不直连时只挑和两端都直连、愿意中转的节点，按两段延迟之和从低到高，最多两个。
+func TestPickRelays(t *testing.T) {
+	k := func(b byte) mesh.Key { return mesh.Key{b} }
+	la, jp, sg, hk, cn, off := k(1), k(2), k(3), k(4), k(5), k(6)
+	links := map[mesh.Key]map[mesh.Key]float64{}
+	add := func(a, b mesh.Key, rtt float64) {
+		for _, x := range [][2]mesh.Key{{a, b}, {b, a}} {
+			if links[x[0]] == nil {
+				links[x[0]] = map[mesh.Key]float64{}
+			}
+			links[x[0]][x[1]] = rtt
+		}
+	}
+	add(la, sg, 200)
+	add(sg, jp, 70)
+	add(la, hk, 199)
+	add(hk, jp, 50)
+	add(la, cn, 166) // CN 和 JP 不直连，不能中转
+	add(la, off, 10)
+	add(off, jp, 10) // 最近，但关了中转
+	add(sg, hk, 30)
+	relayOK := map[mesh.Key]bool{la: true, jp: true, sg: true, hk: true, cn: true, off: false}
+	got := pickRelays(links, relayOK, la, jp)
+	if len(got) != 2 || got[0] != hk || got[1] != sg {
+		t.Fatalf("LA 到 JP 的中转节点 %v，应该是 HK、SG", got)
+	}
+	if got := pickRelays(links, relayOK, sg, hk); got != nil {
+		t.Fatalf("直连的两端不该有中转节点：%v", got)
+	}
+	if got := pickRelays(links, relayOK, cn, jp); len(got) != 0 {
+		t.Fatalf("CN 到 JP 没有和两端都直连的节点（LA 和 JP 不直连）：%v", got)
+	}
+}

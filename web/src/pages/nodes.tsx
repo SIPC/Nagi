@@ -11,7 +11,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
-import { NodeMesh, NodeQUIC, ratePair } from "@/pages/mesh";
+import { NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import {
   Alert,
@@ -898,6 +898,7 @@ function NodeSettings({ n }: { n: Node }) {
           )}
         </SettingRow>
         <NodeQUIC nodeId={n.id} online={n.online} />
+        <NodeRelay nodeId={n.id} online={n.online} />
         <SettingRow label={m.title} help={m.description} description={!isAdmin ? m.adminOnly : undefined}>
           {isAdmin && (
             <Button variant="outline" disabled={reclaim.busy || !n.online} onClick={startReclaim}>

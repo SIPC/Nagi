@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMIj8KCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkiQQoKTWVzaENvbmZpZxIRCglwYW5lbF9rZXkYASABKAwSIAoFcGVlcnMYAiADKAsyES5uYWdpLnYxLk1lc2hQZWVyIkcKEVJlbGF5QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydBITCgtjaGFubmVsX2lkcxgCIAMoCSIUChJSZWxheUFsZXJ0UmVzcG9uc2UiMwoSUmVwb3J0QWxlcnRSZXF1ZXN0Eh0KBWFsZXJ0GAEgASgLMg4ubmFnaS52MS5BbGVydCIVChNSZXBvcnRBbGVydFJlc3BvbnNlIiYKF1JlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0EgsKA2NzchgBIAEoDCIvChhSZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USEwoLY2VydGlmaWNhdGUYASABKAwiugIKDVJlcG9ydFJlcXVlc3QSHwoEbm9kZRgBIAEoCzIRLm5hZ2kudjEuTm9kZUluZm8SHwoEbWVzaBgCIAEoCzIRLm5hZ2kudjEuTWVzaEluZm8SLAoKY29udGFpbmVycxgDIAMoCzIYLm5hZ2kudjEuQ29udGFpbmVyU3RhdHVzEioKCWZhaWxvdmVycxgEIAMoCzIXLm5hZ2kudjEuRmFpbG92ZXJTdGF0dXMSIQoFdXNhZ2UYBSABKAsyEi5uYWdpLnYxLk5vZGVVc2FnZRIMCgR0ZXJtGAYgASgEEg8KB3ByaW1hcnkYByABKAkSFwoPcHJpbWFyeV9hZGRyZXNzGAggASgJEg4KBnBhbmVscxgJIAMoCRIiCgVjZXJ0cxgKIAMoCzITLm5hZ2kudjEuRG9tYWluQ2VydCJbCg5SZXBvcnRSZXNwb25zZRIhCgRtZXNoGAEgASgLMhMubmFnaS52MS5NZXNoQ29uZmlnEiYKB2NsdXN0ZXIYAiABKAsyFS5uYWdpLnYxLlBhbmVsQ2x1c3RlciJlCgxQYW5lbENsdXN0ZXISDAoEdGVybRgBIAEoBBIPCgdwcmltYXJ5GAIgASgJEiUKBnBhbmVscxgDIAMoCzIVLm5hZ2kudjEuQ2x1c3RlclBhbmVsEg8KB3JlbW92ZWQYBCADKAkiNAoMQ2x1c3RlclBhbmVsEg8KB2FkZHJlc3MYASABKAkSEwoLZmluZ2VycHJpbnQYAiABKAky7gIKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USRQoKUmVsYXlBbGVydBIaLm5hZ2kudjEuUmVsYXlBbGVydFJlcXVlc3QaGy5uYWdpLnYxLlJlbGF5QWxlcnRSZXNwb25zZRJICgtSZXBvcnRBbGVydBIbLm5hZ2kudjEuUmVwb3J0QWxlcnRSZXF1ZXN0GhwubmFnaS52MS5SZXBvcnRBbGVydFJlc3BvbnNlEjkKCU1lc2hSZWxheRITLm5hZ2kudjEuTWVzaFBhY2tldBoTLm5hZ2kudjEuTWVzaFBhY2tldCgBMAFCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMInQKCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkSJAoHZGlyZWN0cxgEIAMoCzITLm5hZ2kudjEuTWVzaERpcmVjdBINCgVyZWxheRgFIAEoCCIwCgpNZXNoRGlyZWN0EhIKCnB1YmxpY19rZXkYASABKAwSDgoGcnR0X21zGAIgASgBIkEKCk1lc2hDb25maWcSEQoJcGFuZWxfa2V5GAEgASgMEiAKBXBlZXJzGAIgAygLMhEubmFnaS52MS5NZXNoUGVlciJHChFSZWxheUFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQSEwoLY2hhbm5lbF9pZHMYAiADKAkiFAoSUmVsYXlBbGVydFJlc3BvbnNlIjMKElJlcG9ydEFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQiFQoTUmVwb3J0QWxlcnRSZXNwb25zZSImChdSZW5ld0NlcnRpZmljYXRlUmVxdWVzdBILCgNjc3IYASABKAwiLwoYUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEhMKC2NlcnRpZmljYXRlGAEgASgMIroCCg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEh8KBG1lc2gYAiABKAsyES5uYWdpLnYxLk1lc2hJbmZvEiwKCmNvbnRhaW5lcnMYAyADKAsyGC5uYWdpLnYxLkNvbnRhaW5lclN0YXR1cxIqCglmYWlsb3ZlcnMYBCADKAsyFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEiEKBXVzYWdlGAUgASgLMhIubmFnaS52MS5Ob2RlVXNhZ2USDAoEdGVybRgGIAEoBBIPCgdwcmltYXJ5GAcgASgJEhcKD3ByaW1hcnlfYWRkcmVzcxgIIAEoCRIOCgZwYW5lbHMYCSADKAkSIgoFY2VydHMYCiADKAsyEy5uYWdpLnYxLkRvbWFpbkNlcnQiWwoOUmVwb3J0UmVzcG9uc2USIQoEbWVzaBgBIAEoCzITLm5hZ2kudjEuTWVzaENvbmZpZxImCgdjbHVzdGVyGAIgASgLMhUubmFnaS52MS5QYW5lbENsdXN0ZXIiZQoMUGFuZWxDbHVzdGVyEgwKBHRlcm0YASABKAQSDwoHcHJpbWFyeRgCIAEoCRIlCgZwYW5lbHMYAyADKAsyFS5uYWdpLnYxLkNsdXN0ZXJQYW5lbBIPCgdyZW1vdmVkGAQgAygJIjQKDENsdXN0ZXJQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJMu4CCgxQYW5lbFNlcnZpY2USOQoGUmVwb3J0EhYubmFnaS52MS5SZXBvcnRSZXF1ZXN0GhcubmFnaS52MS5SZXBvcnRSZXNwb25zZRJXChBSZW5ld0NlcnRpZmljYXRlEiAubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBohLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEkUKClJlbGF5QWxlcnQSGi5uYWdpLnYxLlJlbGF5QWxlcnRSZXF1ZXN0GhsubmFnaS52MS5SZWxheUFsZXJ0UmVzcG9uc2USSAoLUmVwb3J0QWxlcnQSGy5uYWdpLnYxLlJlcG9ydEFsZXJ0UmVxdWVzdBocLm5hZ2kudjEuUmVwb3J0QWxlcnRSZXNwb25zZRI5CglNZXNoUmVsYXkSEy5uYWdpLnYxLk1lc2hQYWNrZXQaEy5uYWdpLnYxLk1lc2hQYWNrZXQoATABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.MeshPacket
@@ -63,6 +63,20 @@ export type MeshInfo = Message<"nagi.v1.MeshInfo"> & {
    * @generated from field: repeated string endpoints = 3;
    */
   endpoints: string[];
+
+  /**
+   * 和哪些成员直连着、延迟多少：面板据此给直连不通的两个节点挑中转节点（见 docs/mesh.md#经节点中转）。
+   *
+   * @generated from field: repeated nagi.v1.MeshDirect directs = 4;
+   */
+  directs: MeshDirect[];
+
+  /**
+   * 这个节点愿意替别的节点中转（支持而且没在网络设置里关掉）。
+   *
+   * @generated from field: bool relay = 5;
+   */
+  relay: boolean;
 };
 
 /**
@@ -71,6 +85,28 @@ export type MeshInfo = Message<"nagi.v1.MeshInfo"> & {
  */
 export const MeshInfoSchema: GenMessage<MeshInfo> = /*@__PURE__*/
   messageDesc(file_nagi_v1_panel, 1);
+
+/**
+ * @generated from message nagi.v1.MeshDirect
+ */
+export type MeshDirect = Message<"nagi.v1.MeshDirect"> & {
+  /**
+   * @generated from field: bytes public_key = 1;
+   */
+  publicKey: Uint8Array;
+
+  /**
+   * @generated from field: double rtt_ms = 2;
+   */
+  rttMs: number;
+};
+
+/**
+ * Describes the message nagi.v1.MeshDirect.
+ * Use `create(MeshDirectSchema)` to create a new message.
+ */
+export const MeshDirectSchema: GenMessage<MeshDirect> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 2);
 
 /**
  * MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。
@@ -94,7 +130,7 @@ export type MeshConfig = Message<"nagi.v1.MeshConfig"> & {
  * Use `create(MeshConfigSchema)` to create a new message.
  */
 export const MeshConfigSchema: GenMessage<MeshConfig> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 2);
+  messageDesc(file_nagi_v1_panel, 3);
 
 /**
  * @generated from message nagi.v1.RelayAlertRequest
@@ -116,7 +152,7 @@ export type RelayAlertRequest = Message<"nagi.v1.RelayAlertRequest"> & {
  * Use `create(RelayAlertRequestSchema)` to create a new message.
  */
 export const RelayAlertRequestSchema: GenMessage<RelayAlertRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 3);
+  messageDesc(file_nagi_v1_panel, 4);
 
 /**
  * @generated from message nagi.v1.RelayAlertResponse
@@ -129,7 +165,7 @@ export type RelayAlertResponse = Message<"nagi.v1.RelayAlertResponse"> & {
  * Use `create(RelayAlertResponseSchema)` to create a new message.
  */
 export const RelayAlertResponseSchema: GenMessage<RelayAlertResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 4);
+  messageDesc(file_nagi_v1_panel, 5);
 
 /**
  * @generated from message nagi.v1.ReportAlertRequest
@@ -146,7 +182,7 @@ export type ReportAlertRequest = Message<"nagi.v1.ReportAlertRequest"> & {
  * Use `create(ReportAlertRequestSchema)` to create a new message.
  */
 export const ReportAlertRequestSchema: GenMessage<ReportAlertRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 5);
+  messageDesc(file_nagi_v1_panel, 6);
 
 /**
  * @generated from message nagi.v1.ReportAlertResponse
@@ -159,7 +195,7 @@ export type ReportAlertResponse = Message<"nagi.v1.ReportAlertResponse"> & {
  * Use `create(ReportAlertResponseSchema)` to create a new message.
  */
 export const ReportAlertResponseSchema: GenMessage<ReportAlertResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 6);
+  messageDesc(file_nagi_v1_panel, 7);
 
 /**
  * @generated from message nagi.v1.RenewCertificateRequest
@@ -176,7 +212,7 @@ export type RenewCertificateRequest = Message<"nagi.v1.RenewCertificateRequest">
  * Use `create(RenewCertificateRequestSchema)` to create a new message.
  */
 export const RenewCertificateRequestSchema: GenMessage<RenewCertificateRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 7);
+  messageDesc(file_nagi_v1_panel, 8);
 
 /**
  * @generated from message nagi.v1.RenewCertificateResponse
@@ -193,7 +229,7 @@ export type RenewCertificateResponse = Message<"nagi.v1.RenewCertificateResponse
  * Use `create(RenewCertificateResponseSchema)` to create a new message.
  */
 export const RenewCertificateResponseSchema: GenMessage<RenewCertificateResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 8);
+  messageDesc(file_nagi_v1_panel, 9);
 
 /**
  * @generated from message nagi.v1.ReportRequest
@@ -270,7 +306,7 @@ export type ReportRequest = Message<"nagi.v1.ReportRequest"> & {
  * Use `create(ReportRequestSchema)` to create a new message.
  */
 export const ReportRequestSchema: GenMessage<ReportRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 9);
+  messageDesc(file_nagi_v1_panel, 10);
 
 /**
  * @generated from message nagi.v1.ReportResponse
@@ -294,7 +330,7 @@ export type ReportResponse = Message<"nagi.v1.ReportResponse"> & {
  * Use `create(ReportResponseSchema)` to create a new message.
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 10);
+  messageDesc(file_nagi_v1_panel, 11);
 
 /**
  * PanelCluster：任期、主面板，以及主面板和所有备用面板。节点只执行主面板的修改，自动连接备用面板。
@@ -332,7 +368,7 @@ export type PanelCluster = Message<"nagi.v1.PanelCluster"> & {
  * Use `create(PanelClusterSchema)` to create a new message.
  */
 export const PanelClusterSchema: GenMessage<PanelCluster> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 11);
+  messageDesc(file_nagi_v1_panel, 12);
 
 /**
  * @generated from message nagi.v1.ClusterPanel
@@ -354,7 +390,7 @@ export type ClusterPanel = Message<"nagi.v1.ClusterPanel"> & {
  * Use `create(ClusterPanelSchema)` to create a new message.
  */
 export const ClusterPanelSchema: GenMessage<ClusterPanel> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_panel, 12);
+  messageDesc(file_nagi_v1_panel, 13);
 
 /**
  * PanelService：节点调用面板，走控制连接。

@@ -15,6 +15,7 @@ import { locale, t } from "@/i18n";
 export const pathLabel: Record<string, string> = {
   direct: t.mesh.path.direct,
   link: t.mesh.path.link,
+  "node-relay": t.mesh.path.nodeRelay,
   "udp-relay": t.mesh.path.udpRelay,
   "tls-relay": t.mesh.path.tlsRelay,
   none: t.mesh.path.none,
@@ -24,6 +25,7 @@ export const pathLabel: Record<string, string> = {
 const pathShort: Record<string, string> = {
   direct: t.mesh.pathShort.direct,
   link: t.mesh.path.link,
+  "node-relay": t.mesh.pathShort.nodeRelay,
   "udp-relay": t.mesh.pathShort.relay,
   "tls-relay": t.mesh.pathShort.relay,
   none: t.mesh.path.none,
@@ -32,7 +34,7 @@ const pathShort: Record<string, string> = {
 // pathClass：路径文字的颜色，和组网图的连线一致：直连灰，中转黄，不可达红。
 function pathClass(path: string) {
   if (path === "direct" || path === "link") return undefined;
-  return path === "udp-relay" || path === "tls-relay" ? "text-warning-text" : "text-destructive";
+  return path === "node-relay" || path === "udp-relay" || path === "tls-relay" ? "text-warning-text" : "text-destructive";
 }
 
 // meshSummary：本端在 mesh 中的地址、端口和直连地址，写在区块标题右边。标题旁只写第一个直连地址（面板不写），全部在悬停提示里。
@@ -355,20 +357,22 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
   return <MeshSection q={q} nodeId={nodeId} title={t.mesh.title} />;
 }
 
-// NodeQUIC：节点设置里的 QUIC 快速通道（见 docs/mesh.md#quic-快速通道），保存在节点上。一行设置：状态加一个按钮。
-export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }) {
+// MeshOption：节点设置里的一项组网开关（保存在节点上）。一行设置：状态加一个按钮。
+// 接口每次提交全部开关，另一项照原样带上。
+function MeshOption({ nodeId, online, field, title, help, confirm }: { nodeId: string; online: boolean; field: "quicOff" | "relayOff"; title: string; help: string; confirm: string }) {
   const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const q = useQuery({ queryKey: ["node-mesh", nodeId], queryFn: () => nodeClient.getNodeMesh({ nodeId }), enabled: online });
-  const off = q.data?.quicOff;
+  const off = q.data?.[field];
   // 结果直接显示在这一行，不另外提示「已保存」。
   const toggle = async () => {
-    if (!off && !(await confirmAction(t.mesh.quicConfirm, { action: t.mesh.quicDisable }))) return;
+    if (!q.data) return;
+    if (!off && !(await confirmAction(confirm, { action: t.mesh.optionDisable }))) return;
     setBusy(true);
     try {
-      const r = await nodeClient.setNodeMeshOptions({ nodeId, options: { quicOff: !off } });
-      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff });
+      const r = await nodeClient.setNodeMeshOptions({ nodeId, options: { quicOff: q.data.quicOff, relayOff: q.data.relayOff, [field]: !off } });
+      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff, relayOff: r.relayOff });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", nodeId] });
     } catch (err) {
       await notify(errorMessage(err));
@@ -379,8 +383,8 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
   const failed = q.error && !q.data;
   return (
     <SettingRow
-      label={t.mesh.quicTitle}
-      help={t.mesh.quicHelp}
+      label={title}
+      help={help}
       description={
         failed ? (
           <span className="text-destructive">{errorMessage(q.error)}</span>
@@ -403,12 +407,22 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
         q.data && (
           <Button variant="outline" disabled={busy || !online} onClick={toggle}>
             {busy && <Spinner />}
-            {off ? t.mesh.quicEnable : t.mesh.quicDisable}
+            {off ? t.mesh.quicEnable : t.mesh.optionDisable}
           </Button>
         )
       )}
     </SettingRow>
   );
+}
+
+// NodeQUIC：QUIC 快速通道（见 docs/mesh.md#quic-快速通道）。
+export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }) {
+  return <MeshOption nodeId={nodeId} online={online} field="quicOff" title={t.mesh.quicTitle} help={t.mesh.quicHelp} confirm={t.mesh.quicConfirm} />;
+}
+
+// NodeRelay：替别的节点中转（见 docs/mesh.md#经节点中转）。
+export function NodeRelay({ nodeId, online }: { nodeId: string; online: boolean }) {
+  return <MeshOption nodeId={nodeId} online={online} field="relayOff" title={t.mesh.relayTitle} help={t.mesh.relayHelp} confirm={t.mesh.relayConfirm} />;
 }
 
 // PanelMeshCard：设置页上面板自己的 mesh 状态。

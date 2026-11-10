@@ -1,6 +1,8 @@
 package nodes
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"net/netip"
 	"slices"
@@ -11,6 +13,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // 面板也是 mesh 成员，同时替自己的节点中转：UDP 中转用面板端口（UDP），TLS 中转走控制连接。
@@ -131,8 +134,8 @@ func (r *Registry) updateMesh() {
 	}
 }
 
-// meshConfig 是告诉节点的成员列表：面板自己加上所有在线节点。
-func (r *Registry) meshConfig() *nagiv1.MeshConfig {
+// meshConfig 是告诉节点 to 的成员列表：面板自己加上所有在线节点。和 to 直连不通的节点，带上替 to 中转的节点。
+func (r *Registry) meshConfig(to *Conn) *nagiv1.MeshConfig {
 	m := r.Mesh()
 	if m == nil {
 		return nil
@@ -142,10 +145,117 @@ func (r *Registry) meshConfig() *nagiv1.MeshConfig {
 	r.mu.RLock()
 	name := r.meshName
 	r.mu.RUnlock()
+	if to != nil {
+		list = r.withRelays(to, list)
+	}
 	return &nagiv1.MeshConfig{
 		PanelKey: self[:],
 		Peers:    append([]*nagiv1.MeshPeer{{PublicKey: self[:], Name: name, IsPanel: true}}, list...),
 	}
+}
+
+// maxNodeRelays 是每对节点最多给几个中转节点：第一个不通时节点自己换下一个，都不通再经面板。
+const maxNodeRelays = 2
+
+// withRelays 给成员列表里和 to 直连不通的节点挑中转节点（见 docs/mesh.md#经节点中转）。按各节点上报的直连情况算，
+// 不改 list 里原来的条目。
+func (r *Registry) withRelays(to *Conn, list []*nagiv1.MeshPeer) []*nagiv1.MeshPeer {
+	to.mu.RLock()
+	from, err := mesh.ParseKey(to.mesh.GetPublicKey())
+	to.mu.RUnlock()
+	if err != nil {
+		return list
+	}
+	r.mu.RLock()
+	conns := make([]*Conn, 0, len(r.conns))
+	for _, c := range r.conns {
+		conns = append(conns, c)
+	}
+	r.mu.RUnlock()
+	links := map[mesh.Key]map[mesh.Key]float64{}
+	relayOK := map[mesh.Key]bool{}
+	link := func(a, b mesh.Key, rtt float64) {
+		if links[a] == nil {
+			links[a] = map[mesh.Key]float64{}
+		}
+		if old, ok := links[a][b]; !ok || rtt < old {
+			links[a][b] = rtt
+		}
+	}
+	for _, c := range conns {
+		c.mu.RLock()
+		info := c.mesh
+		pending := c.pending
+		c.mu.RUnlock()
+		k, err := mesh.ParseKey(info.GetPublicKey())
+		if err != nil || pending {
+			continue
+		}
+		relayOK[k] = info.GetRelay()
+		for i, d := range info.GetDirects() {
+			if i >= maxReportedRaw {
+				break
+			}
+			if p, err := mesh.ParseKey(d.GetPublicKey()); err == nil && p != k {
+				// 任一端报了直连就算通，两端报的延迟取小的。
+				link(k, p, d.GetRttMs())
+				link(p, k, d.GetRttMs())
+			}
+		}
+	}
+	out := make([]*nagiv1.MeshPeer, 0, len(list))
+	for _, mp := range list {
+		k, err := mesh.ParseKey(mp.GetPublicKey())
+		if err != nil || k == from {
+			out = append(out, mp)
+			continue
+		}
+		relays := pickRelays(links, relayOK, from, k)
+		if len(relays) == 0 {
+			out = append(out, mp)
+			continue
+		}
+		x := proto.CloneOf(mp)
+		for _, rk := range relays {
+			x.Relays = append(x.Relays, rk[:])
+		}
+		out = append(out, x)
+	}
+	return out
+}
+
+// pickRelays 给 from 到 to 挑中转节点：两端之间没有直连时，找和两端都直连、愿意中转的节点，
+// 按两段延迟之和从低到高，最多 maxNodeRelays 个。links[a][b] 是 a 和 b 直连的延迟（毫秒）。
+func pickRelays(links map[mesh.Key]map[mesh.Key]float64, relayOK map[mesh.Key]bool, from, to mesh.Key) []mesh.Key {
+	if _, ok := links[from][to]; ok {
+		return nil
+	}
+	type cand struct {
+		k   mesh.Key
+		rtt float64
+	}
+	var cands []cand
+	for rk, ok := range relayOK {
+		if !ok || rk == from || rk == to {
+			continue
+		}
+		a, ok1 := links[from][rk]
+		b, ok2 := links[rk][to]
+		if ok1 && ok2 {
+			cands = append(cands, cand{rk, a + b})
+		}
+	}
+	slices.SortFunc(cands, func(x, y cand) int {
+		if x.rtt != y.rtt {
+			return cmp.Compare(x.rtt, y.rtt)
+		}
+		return bytes.Compare(x.k[:], y.k[:])
+	})
+	var out []mesh.Key
+	for _, c := range cands[:min(len(cands), maxNodeRelays)] {
+		out = append(out, c.k)
+	}
+	return out
 }
 
 // NodeMeshKey 返回在线节点的 mesh 公钥。

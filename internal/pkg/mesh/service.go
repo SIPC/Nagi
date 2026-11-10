@@ -85,7 +85,7 @@ func Ping(ctx context.Context, m *Mesh, k Key) (time.Duration, error) {
 // StatusProto 把 mesh 状态转成接口格式。name 返回成员的显示名称。
 func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 	self := m.PublicKey()
-	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port()), QuicOff: !m.QUIC(), Nat: m.NAT()}
+	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port()), QuicOff: !m.QUIC(), Nat: m.NAT(), RelayOff: !m.NodeRelay()}
 	for _, e := range m.Endpoints() {
 		out.Endpoints = append(out.Endpoints, e.String())
 	}

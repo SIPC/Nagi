@@ -379,3 +379,69 @@ func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
 	echo(t, a, b)
 	echo(t, b, a)
 }
+
+// A、B 之间直连不通、都和 R 直连：经 R 中转（node-relay），不绕到面板。
+// R 关掉中转以后，A 发过去的包被丢，过一会儿 A 不再用 R，改走面板。
+func TestNodeRelay(t *testing.T) {
+	defer func() { dropUDP = nil }()
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mk := func(relay, nodeRelay bool) testNode {
+		var priv Key
+		_, _ = rand.Read(priv[:])
+		m, err := New(Config{PrivateKey: priv, Relay: relay, NodeRelay: nodeRelay, Logger: quiet})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		return testNode{m: m, port: m.Port()}
+	}
+	p, a, b, r := mk(true, false), mk(false, true), mk(false, true), mk(false, true)
+	dropUDP = func(from uint16, to netip.AddrPort) bool {
+		return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
+	}
+	pk, ak, bk, rk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()
+	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}, {Key: rk, Endpoints: local(r.port)}})
+	_ = r.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: ak, Endpoints: local(a.port), Relays: []Key{pk}}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
+	peers := func(other Key, relays []Key) []Peer {
+		return []Peer{{Key: pk, Endpoints: local(p.port)}, {Key: rk, Endpoints: local(r.port), Relays: []Key{pk}},
+			{Key: other, Endpoints: local(map[Key]uint16{ak: a.port, bk: b.port}[other]), Relays: []Key{pk}, NodeRelays: relays}}
+	}
+	_ = a.m.SetPeers(peers(bk, nil))
+	_ = b.m.SetPeers(peers(ak, nil))
+	// 和面板一样：R 和两端都直连了才把它当中转节点。
+	for _, w := range []struct {
+		n testNode
+		k Key
+	}{{a, rk}, {b, rk}, {r, ak}, {r, bk}} {
+		waitPath(t, w.n.m, w.k, "direct")
+	}
+	_ = a.m.SetPeers(peers(bk, []Key{rk}))
+	_ = b.m.SetPeers(peers(ak, []Key{rk}))
+	waitPath(t, a.m, bk, "node-relay")
+	echo(t, a, b)
+	if r.m.bind.relayRx.Load() == 0 {
+		for _, x := range []testNode{a, b, r} {
+			for _, st := range x.m.Status() {
+				t.Logf("%s -> %s: %s via %s", x.m.PublicKey().Short(), st.Key.Short(), st.Path, st.Via.Short())
+			}
+		}
+		t.Logf("panel relay rx %d", p.m.bind.relayRx.Load())
+		t.Fatal("R 没有替 A、B 中转")
+	}
+
+	// R 关掉中转：A 经 R 发的包没有回音，relayProbe 以后改走面板。
+	r.m.SetNodeRelay(false)
+	deadline := time.Now().Add(3 * relayProbe)
+	for time.Now().Before(deadline) && pathTo(a.m, bk) != "udp-relay" {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if c, err := a.m.Dial(ctx, bk, 7001); err == nil {
+			c.Close()
+		}
+		cancel()
+		time.Sleep(500 * time.Millisecond)
+	}
+	if got := pathTo(a.m, bk); got != "udp-relay" {
+		t.Fatalf("R 不中转以后 A 到 B 应该改走面板，实际 %s", got)
+	}
+	echo(t, b, a)
+}

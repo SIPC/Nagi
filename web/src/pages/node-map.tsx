@@ -382,7 +382,7 @@ type Kind = "direct" | "relay" | "none";
 type MeshEdge = { a: string; b: string; path: string; kind: Kind; rtt: number; views: Map<string, MeshPeerStatus> };
 
 // 路径从好到差。两端看到的可能不一样（A→B 直连、B→A 中转），取差的那个。
-const rank: Record<string, number> = { direct: 0, link: 0, "udp-relay": 1, "tls-relay": 2, none: 3 };
+const rank: Record<string, number> = { direct: 0, link: 0, "node-relay": 1, "udp-relay": 1, "tls-relay": 2, none: 3 };
 const rankOf = (path: string) => rank[path] ?? 3;
 const kindOf = (path: string): Kind => (rankOf(path) === 0 ? "direct" : rankOf(path) === 3 ? "none" : "relay");
 
@@ -424,11 +424,18 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
   return [...edges.values()];
 }
 
-// meshGeometry：都是直线；只有节点之间中转的线经过面板（控制点取中点关于面板的对称点，曲线中点正好在面板上）。
-function meshGeometry(A: Pt, B: Pt, panel: Pt, toPanel: boolean, kind: Kind) {
+// meshGeometry：都是直线；只有经面板中转的线经过面板（控制点取中点关于面板的对称点，曲线中点正好在面板上）。
+// 经节点中转的画成直的虚线，经过哪个节点写在标签和「未直连的连接」里。
+function meshGeometry(A: Pt, B: Pt, panel: Pt, toPanel: boolean, kind: Kind, path: string) {
   const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-  return curve(A, B, kind === "relay" && !toPanel ? { x: 2 * panel.x - M.x, y: 2 * panel.y - M.y } : M);
+  return curve(A, B, kind === "relay" && !toPanel && path !== "node-relay" ? { x: 2 * panel.x - M.x, y: 2 * panel.y - M.y } : M);
 }
+
+// relayVia：经节点中转时经过的节点名（两端看到的可能不同，取第一个报的）。
+const relayVia = (e: MeshEdge) => [...e.views.values()].find((v) => v.path === "node-relay" && v.via)?.via ?? "";
+
+// edgePathLabel：连线的路径，经节点中转时写出经过的节点。
+const edgePathLabel = (e: MeshEdge) => (e.path === "node-relay" && relayVia(e) ? t.nodes.map.viaNode(relayVia(e)) : (pathLabel[e.path] ?? e.path));
 
 // relayReason：按两端各自的探测情况说明为什么没有直连。旧版本的节点不报这些，看不出来时返回空。
 // 先看 NAT（两端都在 NAT 后面、其中一端按目的地换端口时打洞基本不会成功），再看地址，最后看包是哪个方向过不去。
@@ -459,7 +466,7 @@ function relayReason(e: MeshEdge, statuses: Map<string, MeshStatus>, nameOf: (id
 
 const meshLabel = (e: MeshEdge) => {
   if (e.kind === "direct") return e.rtt > 0 ? `${e.rtt.toFixed(1)} ms` : e.path ? (pathLabel[e.path] ?? e.path) : "";
-  return pathLabel[e.path] ?? e.path;
+  return edgePathLabel(e);
 };
 
 function NetworkMap({ nodes }: { nodes: Node[] }) {
@@ -488,7 +495,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
   const neighbors = new Set(edges.filter(touches).flatMap((e) => [e.a, e.b]));
   const dim = (id: string) => active !== null && !neighbors.has(id) && id !== active;
   const issues = edges.filter((e) => e.kind !== "direct");
-  const geometry = (e: MeshEdge) => meshGeometry(pos.get(e.a)!, pos.get(e.b)!, pos.get(PANEL)!, e.a === PANEL || e.b === PANEL, e.kind);
+  const geometry = (e: MeshEdge) => meshGeometry(pos.get(e.a)!, pos.get(e.b)!, pos.get(PANEL)!, e.a === PANEL || e.b === PANEL, e.kind, e.path);
 
   return (
     <div ref={ref} className="grid gap-4">
@@ -515,7 +522,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
         {edges.filter(touches).map((e) => {
           const label = meshLabel(e);
           // 中转的线中点在面板上，标签放在靠近当前节点的一段。
-          const mid = geometry(e).at(e.kind === "relay" && e.a !== PANEL && e.b !== PANEL ? (e.a === active ? 0.3 : 0.7) : 0.5);
+          const mid = geometry(e).at(e.kind === "relay" && e.path !== "node-relay" && e.a !== PANEL && e.b !== PANEL ? (e.a === active ? 0.3 : 0.7) : 0.5);
           return (
             label && <EdgeLabel key={e.a + "|" + e.b} at={mid} text={label} className={e.kind === "none" ? "text-destructive" : e.kind === "relay" ? "text-warning-text" : "text-foreground"} />
           );
@@ -567,7 +574,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
                   {nameOf(e.a)} ↔ {nameOf(e.b)}
                 </span>
                 <span className={cn("text-[13px]", e.kind === "none" ? "text-destructive" : "text-warning-text")}>
-                  <Status tone={e.kind === "none" ? "danger" : "warning"}>{pathLabel[e.path] ?? e.path}</Status>
+                  <Status tone={e.kind === "none" ? "danger" : "warning"}>{edgePathLabel(e)}</Status>
                 </span>
                 {relayReason(e, statuses, nameOf) && <span className="w-full pb-1 text-[13px] text-muted-foreground">{relayReason(e, statuses, nameOf)}</span>}
               </li>

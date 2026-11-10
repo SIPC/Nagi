@@ -4,6 +4,7 @@ export default {
   path: {
     direct: "Direct UDP",
     link: "Control connection",
+    nodeRelay: "UDP via node",
     udpRelay: "Relayed via panel (UDP)",
     tlsRelay: "Relayed via panel (TLS)",
     none: "Unreachable",
@@ -11,6 +12,7 @@ export default {
   pathShort: {
     direct: "Direct",
     relay: "Relayed via panel",
+    nodeRelay: "Relayed via node",
   },
   endpoints: "Direct endpoints",
   lastHandshakeAgo: (ago) => `Last handshake ${ago}`,
@@ -57,5 +59,9 @@ export default {
   quicOff: "Off",
   quicEnable: "Turn on",
   quicDisable: "Turn off",
+  optionDisable: "Turn off",
+  relayTitle: "Relay for other nodes",
+  relayHelp: "When two nodes can't connect directly, traffic goes through a node connected directly to both, which is closer than relaying through the panel. Relayed traffic counts toward this node.",
+  relayConfirm: "Stop relaying for other nodes? Connections relayed through this node will go through other nodes or the panel instead.",
   quicConfirm: "Turn off the QUIC fast path? TCP connections between this node and other nodes and the panel will use WireGuard, and transfers in progress will be interrupted.",
 } satisfies typeof zh;

@@ -116,6 +116,11 @@ func (n *meshNode) load() {
 // meshPortFile 记住第一次随机选的 UDP 端口，以后重启不变。
 func meshPortFile(dataDir string) string { return filepath.Join(dataDir, "identity", "mesh-port") }
 
+// meshRelayOffFile 存在时不替别的节点中转（网络设置，见 docs/mesh.md#经节点中转）。
+func meshRelayOffFile(dataDir string) string {
+	return filepath.Join(dataDir, "identity", "mesh-relay-off")
+}
+
 // meshQUICOffFile 存在时关闭 QUIC 快速通道（组网设置，见 docs/mesh.md#quic-快速通道）。
 func meshQUICOffFile(dataDir string) string {
 	return filepath.Join(dataDir, "identity", "mesh-quic-off")
@@ -133,10 +138,13 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 	var priv mesh.Key
 	copy(priv[:], a.id.wgKey)
 	log := a.log.With("component", "mesh")
-	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: port, ExtraPorts: mesh.DefaultExtraPorts, Logger: log})
+	_, relayOff := os.Stat(meshRelayOffFile(a.cfg.DataDir))
+	cfg := mesh.Config{PrivateKey: priv, Port: port, ExtraPorts: mesh.DefaultExtraPorts, NodeRelay: relayOff != nil, Logger: log}
+	m, err := mesh.New(cfg)
 	if err != nil && port != 0 && a.cfg.MeshPort == 0 {
 		log.Warn("记住的 mesh 端口不可用，重新随机选择", "port", port, "err", err)
-		m, err = mesh.New(mesh.Config{PrivateKey: priv, ExtraPorts: mesh.DefaultExtraPorts, Logger: log})
+		cfg.Port = 0
+		m, err = mesh.New(cfg)
 	}
 	if err != nil {
 		return err
@@ -170,9 +178,12 @@ func (n *meshNode) info() *nagiv1.MeshInfo {
 		return nil
 	}
 	k := n.m.PublicKey()
-	out := &nagiv1.MeshInfo{PublicKey: k[:], Port: uint32(n.m.Port())}
+	out := &nagiv1.MeshInfo{PublicKey: k[:], Port: uint32(n.m.Port()), Relay: n.m.NodeRelay()}
 	for _, e := range n.m.Endpoints() {
 		out.Endpoints = append(out.Endpoints, e.String())
+	}
+	for _, d := range n.m.Directs() {
+		out.Directs = append(out.Directs, &nagiv1.MeshDirect{PublicKey: d.Key[:], RttMs: float64(d.RTT.Microseconds()) / 1000})
 	}
 	return out
 }
@@ -309,6 +320,12 @@ func (n *meshNode) apply() {
 				}
 			} else if !slices.Contains(p.Relays, pk) {
 				p.Relays = append(p.Relays, pk)
+			}
+			// 面板挑的中转节点（见 docs/mesh.md#经节点中转），几个面板给的合在一起，按给出的顺序。
+			for _, raw := range mp.GetRelays() {
+				if r, err := mesh.ParseKey(raw); err == nil && r != self && r != k && !slices.Contains(p.NodeRelays, r) {
+					p.NodeRelays = append(p.NodeRelays, r)
+				}
 			}
 			if mp.GetName() != "" {
 				n.names[k] = mp.GetName()
@@ -489,19 +506,26 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 	if n == nil {
 		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
-	file := meshQUICOffFile(s.node.cfg.DataDir)
-	var err error
-	if req.GetQuicOff() {
-		err = os.WriteFile(file, nil, 0o600)
-	} else if err = os.Remove(file); errors.Is(err, os.ErrNotExist) {
-		err = nil
+	// 开关都存成文件：存在表示关闭。
+	set := func(file string, off bool) error {
+		if off {
+			return os.WriteFile(file, nil, 0o600)
+		}
+		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
 	}
-	if err != nil {
+	if err := set(meshQUICOffFile(s.node.cfg.DataDir), req.GetQuicOff()); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if err := set(meshRelayOffFile(s.node.cfg.DataDir), req.GetRelayOff()); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	n.m.SetQUIC(!req.GetQuicOff())
-	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC())
-	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC()}, nil
+	n.m.SetNodeRelay(!req.GetRelayOff())
+	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC(), "relay", n.m.NodeRelay())
+	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC(), RelayOff: !n.m.NodeRelay()}, nil
 }
 
 // meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。

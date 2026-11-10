@@ -22,10 +22,11 @@ export default {
   map: {
     panel: "Panel",
     direct: "Direct",
-    relay: "Relayed via panel",
+    relay: "Relayed",
     none: "Unreachable",
-    help: "Lines are node network (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed via panel and the line passes through it. The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
+    help: "Lines are node network (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed through a node connected directly to both (straight dashed line), or through the panel when there is none (dashed line through the panel). The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
     issues: "Indirect connections",
+    viaNode: (n) => `Relayed via ${n}`,
     reason: {
       symmetric: (a, b, sym) => `${a} and ${b} are both behind NAT, and ${sym} changes ports per destination, so hole punching fails. Allow or forward the UDP port on either end to connect directly.`,
       noAddress: (n) => `${n} has no address to try for a direct connection.`,

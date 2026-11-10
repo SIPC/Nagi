@@ -29,6 +29,8 @@ type Peer struct {
 	Endpoints []netip.AddrPort
 	// Relays 是可以代为中转的面板（面板的公钥）。
 	Relays []Key
+	// NodeRelays 是可以代为中转的节点，按延迟从低到高，先于面板使用（见 docs/mesh.md#经节点中转）。
+	NodeRelays []Key
 }
 
 // Config 是 mesh 的配置。
@@ -38,6 +40,8 @@ type Config struct {
 	Port uint16
 	// Relay 为 true 时替别的成员中转（面板）。
 	Relay bool
+	// NodeRelay 为 true 时替别的节点中转：只在和收发两端都直连时经 UDP 转发，按来源限速（见 Bind.relayFor）。
+	NodeRelay bool
 	// ExtraPorts 是主端口以外再开的 UDP 端口数（随机端口，只用来往外发），直连不通时从这些端口也探测一遍，
 	// 避开线路上负载均衡到坏链路的流（见 Bind.extra）。0 表示只用主端口。
 	ExtraPorts int
@@ -45,6 +49,29 @@ type Config struct {
 	NoFEC  bool
 	NoQUIC bool
 	Logger *slog.Logger
+}
+
+// SetNodeRelay 开关替别的节点中转（节点的网络设置）。
+func (m *Mesh) SetNodeRelay(on bool) { m.bind.nodeRelay.Store(on) }
+
+// NodeRelay 返回是否替别的节点中转。
+func (m *Mesh) NodeRelay() bool { return m.bind.nodeRelay.Load() }
+
+// Direct 是和某个成员的直连。
+type Direct struct {
+	Key Key
+	RTT time.Duration
+}
+
+// Directs 返回现在直连着的成员和延迟（上报给面板，面板据此挑中转节点）。
+func (m *Mesh) Directs() []Direct {
+	var out []Direct
+	for _, s := range m.bind.status() {
+		if s.Path == "direct" {
+			out = append(out, Direct{Key: s.Key, RTT: s.RTT})
+		}
+	}
+	return out
 }
 
 // DefaultExtraPorts 是节点和面板默认开的备用端口数。每多一个，所有端口都落在坏链路上的概率减半。
@@ -86,6 +113,7 @@ func New(cfg Config) (*Mesh, error) {
 		caps |= capQUIC
 	}
 	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, cfg.ExtraPorts, log)
+	bind.nodeRelay.Store(cfg.NodeRelay)
 	dev := device.NewDevice(tun, bind, &device.Logger{
 		Verbosef: device.DiscardLogf,
 		Errorf:   func(f string, a ...any) { log.Debug("wireguard: " + fmt.Sprintf(f, a...)) },

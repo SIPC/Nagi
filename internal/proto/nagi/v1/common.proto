@@ -548,6 +548,8 @@ message MeshPeer {
   // 节点 ID；面板为空。
   string node_id = 4;
   bool is_panel = 5;
+  // 可以替收到这份列表的节点中转到这个成员的节点（mesh 公钥），按两段延迟之和从低到高。面板按接收方分别算。
+  repeated bytes relays = 6;
 }
 
 // MeshPeerStatus 是到一个 mesh 成员的连接状态。
@@ -556,7 +558,8 @@ message MeshPeerStatus {
   string name = 2;
   // mesh 地址（IPv6）。
   string address = 3;
-  // direct（UDP 直连）、link（直接经控制连接）、udp-relay（UDP 经面板中转）、tls-relay（经面板的控制连接中转）、none。
+  // direct（UDP 直连）、link（直接经控制连接）、node-relay（UDP 经别的节点中转）、udp-relay（UDP 经面板中转）、
+  // tls-relay（经面板的控制连接中转）、none。
   string path = 4;
   // 直连时的对方地址。
   string endpoint = 5;
@@ -600,6 +603,8 @@ message MeshStatus {
   bool quic_off = 6;
   // 按别的成员看到的地址判断这一端的 NAT：none（不在 NAT 后面）、nat、symmetric（按目的地换端口）；不知道时为空。
   string nat = 7;
+  // 这一端不替别的节点中转（节点的网络设置，见 docs/mesh.md#经节点中转）。
+  bool relay_off = 8;
 }
 
 message MeshPingRequest {
@@ -633,6 +638,8 @@ message MeshSpeedResponse {
 message MeshOptions {
   // 关闭 QUIC 快速通道：和所有成员之间的 TCP 连接都走 WireGuard。
   bool quic_off = 1;
+  // 不替别的节点中转（流量按量计费的节点可以关掉）。
+  bool relay_off = 2;
 }
 
 // BackupStatus 是容器同步到备份节点的状态（在源节点上）。

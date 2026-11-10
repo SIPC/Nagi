@@ -3,6 +3,7 @@ export default {
   path: {
     direct: "UDP 直连",
     link: "控制连接",
+    nodeRelay: "UDP 经节点中转",
     udpRelay: "UDP 经面板中转",
     tlsRelay: "TLS 经面板中转",
     none: "不可达",
@@ -10,6 +11,7 @@ export default {
   pathShort: {
     direct: "直连",
     relay: "经面板中转",
+    nodeRelay: "经节点中转",
   },
   endpoints: "直连地址",
   lastHandshakeAgo: (ago: string) => `最近握手 ${ago}`,
@@ -56,5 +58,9 @@ export default {
   quicOff: "已关闭",
   quicEnable: "开启",
   quicDisable: "关闭",
+  optionDisable: "关闭",
+  relayTitle: "中转其他节点",
+  relayHelp: "两个节点无法直连时，经与两端都直连的节点转发，比经面板中转更近。转发的流量计入本节点。",
+  relayConfirm: "不再中转其他节点？经本节点中转的连接将改经其他节点或面板中转。",
   quicConfirm: "关闭 QUIC 快速通道？本节点与其他节点和面板之间的 TCP 连接将改经 WireGuard 传输，进行中的传输会中断。",
 };
