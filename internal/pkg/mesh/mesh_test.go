@@ -335,8 +335,47 @@ func TestNATKind(t *testing.T) {
 		{[]netip.Addr{pub}, []netip.AddrPort{ap("203.0.113.5:40001")}, "nat"},
 	}
 	for i, c := range cases {
-		if got := natKind(c.local, 51820, c.observed); got != c.want {
+		obs := map[int][]netip.AddrPort{}
+		if len(c.observed) > 0 {
+			obs[0] = c.observed
+		}
+		if got := natKind(c.local, 51820, obs); got != c.want {
 			t.Errorf("%d: natKind = %q, want %q", i, got, c.want)
 		}
 	}
+	// 备用端口映射成别的端口不算按目的地换端口。
+	if got := natKind([]netip.Addr{lan}, 51820, map[int][]netip.AddrPort{0: {ap("198.51.100.7:40001")}, 1: {ap("198.51.100.7:40002")}}); got != "nat" {
+		t.Errorf("两个本地端口各一个映射：natKind = %q, want nat", got)
+	}
+}
+
+// 线路按源端口负载均衡、其中一条链路坏了：A 的主端口发往 B 的包全丢（反方向正常）。
+// A 有备用端口时，换一个能通的源端口直连 B；没有备用端口时只能走中转。
+func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
+	defer func() { dropUDP = nil }()
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mk := func(extra int, relay bool) testNode {
+		var priv Key
+		_, _ = rand.Read(priv[:])
+		m, err := New(Config{PrivateKey: priv, Relay: relay, ExtraPorts: extra, Logger: quiet})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		return testNode{m: m, port: m.Port()}
+	}
+	p, a, b := mk(0, true), mk(4, false), mk(0, false)
+	dropUDP = func(from uint16, to netip.AddrPort) bool { return from == a.port && to.Port() == b.port }
+	pk, ak, bk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
+	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
+	_ = a.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
+	_ = b.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: ak, Endpoints: local(a.port), Relays: []Key{pk}}})
+	waitPath(t, a.m, bk, "direct")
+	for _, s := range a.m.Status() {
+		if s.Key == bk && (s.LocalPort == a.port || s.LocalPort == 0) {
+			t.Fatalf("A 到 B 应该用备用端口，实际本地端口 %d（主端口 %d）", s.LocalPort, a.port)
+		}
+	}
+	echo(t, a, b)
+	echo(t, b, a)
 }

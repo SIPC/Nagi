@@ -96,7 +96,7 @@ func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 			RttMs: float64(s.RTT.Microseconds()) / 1000, RxBytes: s.RxBytes, TxBytes: s.TxBytes,
 			Fec: s.FEC >= 0, FecParity: int32(max(s.FEC, 0)), LossPpm: s.LossPPM, FecRecovered: s.Recovered, Quic: s.QUIC,
 			TxLossKnown: s.TxLoss >= 0, TxLossPpm: uint32(max(s.TxLoss, 0)), RxLossKnown: s.RxLoss >= 0, RxLossPpm: uint32(max(s.RxLoss, 0)),
-			Tried: uint32(s.Tried), Heard: s.Heard,
+			Tried: uint32(s.Tried), Heard: s.Heard, LocalPort: uint32(s.LocalPort),
 		}
 		if s.Direct.IsValid() {
 			ps.Endpoint = s.Direct.String()

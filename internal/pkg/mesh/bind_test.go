@@ -13,7 +13,7 @@ import (
 
 // 已确认地址发来的空包要丢掉，不能读第一个字节时越界（UDP 来源地址能伪造）。
 func TestReceiveEmptyUDP(t *testing.T) {
-	b := newBind(Key{}, false, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	b := newBind(Key{}, false, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestReceiveEmptyUDP(t *testing.T) {
 
 	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	packets, sizes, eps := [][]byte{make([]byte, 1500)}, []int{0}, []conn.Endpoint{nil}
-	n, err := b.receiveUDP(c)(packets, sizes, eps)
+	n, err := b.receiveUDP(c, 0)(packets, sizes, eps)
 	if err != nil {
 		t.Fatal(err)
 	}

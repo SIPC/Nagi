@@ -3548,8 +3548,10 @@ type MeshPeerStatus struct {
 	RxLossPpm   uint32 `protobuf:"varint,19,opt,name=rx_loss_ppm,json=rxLossPpm,proto3" json:"rx_loss_ppm,omitempty"`
 	// 没有直连时用来说明原因：tried 是正在探测的对方地址数，heard 表示最近收到过对方的探测（对方的包能到这一端）。
 	// 旧版本不报，都为 0。
-	Tried         uint32 `protobuf:"varint,20,opt,name=tried,proto3" json:"tried,omitempty"`
-	Heard         bool   `protobuf:"varint,21,opt,name=heard,proto3" json:"heard,omitempty"`
+	Tried uint32 `protobuf:"varint,20,opt,name=tried,proto3" json:"tried,omitempty"`
+	Heard bool   `protobuf:"varint,21,opt,name=heard,proto3" json:"heard,omitempty"`
+	// 直连用的本地 UDP 端口：主端口，或者主端口落在线路的坏链路上时换用的备用端口（见 docs/mesh.md#路径选择）。
+	LocalPort     uint32 `protobuf:"varint,22,opt,name=local_port,json=localPort,proto3" json:"local_port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3729,6 +3731,13 @@ func (x *MeshPeerStatus) GetHeard() bool {
 		return x.Heard
 	}
 	return false
+}
+
+func (x *MeshPeerStatus) GetLocalPort() uint32 {
+	if x != nil {
+		return x.LocalPort
+	}
+	return 0
 }
 
 type MeshStatus struct {
@@ -5450,7 +5459,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xe8\x04\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\x87\x05\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -5475,7 +5484,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\rrx_loss_known\x18\x12 \x01(\bR\vrxLossKnown\x12\x1e\n" +
 	"\vrx_loss_ppm\x18\x13 \x01(\rR\trxLossPpm\x12\x14\n" +
 	"\x05tried\x18\x14 \x01(\rR\x05tried\x12\x14\n" +
-	"\x05heard\x18\x15 \x01(\bR\x05heard\"\xd3\x01\n" +
+	"\x05heard\x18\x15 \x01(\bR\x05heard\x12\x1d\n" +
+	"\n" +
+	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xd3\x01\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +

@@ -133,10 +133,10 @@ func (a *agent) startMesh(ctx context.Context, port uint16) error {
 	var priv mesh.Key
 	copy(priv[:], a.id.wgKey)
 	log := a.log.With("component", "mesh")
-	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: port, Logger: log})
+	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: port, ExtraPorts: mesh.DefaultExtraPorts, Logger: log})
 	if err != nil && port != 0 && a.cfg.MeshPort == 0 {
 		log.Warn("记住的 mesh 端口不可用，重新随机选择", "port", port, "err", err)
-		m, err = mesh.New(mesh.Config{PrivateKey: priv, Logger: log})
+		m, err = mesh.New(mesh.Config{PrivateKey: priv, ExtraPorts: mesh.DefaultExtraPorts, Logger: log})
 	}
 	if err != nil {
 		return err

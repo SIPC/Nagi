@@ -586,6 +586,8 @@ message MeshPeerStatus {
   // 旧版本不报，都为 0。
   uint32 tried = 20;
   bool heard = 21;
+  // 直连用的本地 UDP 端口：主端口，或者主端口落在线路的坏链路上时换用的备用端口（见 docs/mesh.md#路径选择）。
+  uint32 local_port = 22;
 }
 
 message MeshStatus {

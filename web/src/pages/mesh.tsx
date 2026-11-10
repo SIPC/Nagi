@@ -84,7 +84,7 @@ function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
   const handshake = toDate(p.lastHandshake);
   const fecDetail = p.fec && t.mesh.fecDetail(p.fecRecovered.toLocaleString(locale));
   const loss = lossText(p);
-  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, p.address, p.endpoint || p.via, p.quic && t.mesh.quicHint, fecDetail, loss && t.mesh.lossHint]
+  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, p.address, p.endpoint || p.via, p.localPort > 0 && t.mesh.localPort(p.localPort), p.quic && t.mesh.quicHint, fecDetail, loss && t.mesh.lossHint]
     .filter(Boolean)
     .join(" · ");
   const path = [pathShort[p.path] ?? p.path, p.quic && t.mesh.quic, p.fec && p.fecParity > 0 && t.mesh.fec(p.fecParity), loss].filter(Boolean).join(" · ");

@@ -22,6 +22,7 @@ export default {
   fec: (m: number) => `纠错 ${m}/10`,
   quic: "QUIC",
   quicHint: "TCP 连接经 QUIC 传输（BBR）",
+  localPort: (port: number) => `本地端口 ${port}`,
   fecDetail: (recovered: string) => `纠错已恢复 ${recovered} 个包`,
   loss: (s: string) => `丢包 ${s}`,
   lossHint: "丢包率：↑ 发往对方，↓ 来自对方",

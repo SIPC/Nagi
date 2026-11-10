@@ -23,6 +23,7 @@ export default {
   fec: (m) => `FEC ${m}/10`,
   quic: "QUIC",
   quicHint: "TCP connections use QUIC (BBR)",
+  localPort: (port) => `Local port ${port}`,
   fecDetail: (recovered) => `FEC recovered ${recovered} packets`,
   loss: (s) => `Loss ${s}`,
   lossHint: "Packet loss: ↑ to peer, ↓ from peer",

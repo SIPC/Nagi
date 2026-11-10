@@ -38,11 +38,17 @@ type Config struct {
 	Port uint16
 	// Relay 为 true 时替别的成员中转（面板）。
 	Relay bool
+	// ExtraPorts 是主端口以外再开的 UDP 端口数（随机端口，只用来往外发），直连不通时从这些端口也探测一遍，
+	// 避开线路上负载均衡到坏链路的流（见 Bind.extra）。0 表示只用主端口。
+	ExtraPorts int
 	// NoFEC、NoQUIC 关掉 FEC（见 fec.go）、QUIC（见 quic.go），只用于测试对比。
 	NoFEC  bool
 	NoQUIC bool
 	Logger *slog.Logger
 }
+
+// DefaultExtraPorts 是节点和面板默认开的备用端口数。每多一个，所有端口都落在坏链路上的概率减半。
+const DefaultExtraPorts = 4
 
 // Mesh 是一个运行中的 mesh 成员。
 type Mesh struct {
@@ -79,7 +85,7 @@ func New(cfg Config) (*Mesh, error) {
 	if !cfg.NoQUIC {
 		caps |= capQUIC
 	}
-	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, log)
+	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, cfg.ExtraPorts, log)
 	dev := device.NewDevice(tun, bind, &device.Logger{
 		Verbosef: device.DiscardLogf,
 		Errorf:   func(f string, a ...any) { log.Debug("wireguard: " + fmt.Sprintf(f, a...)) },
@@ -375,27 +381,31 @@ func (m *Mesh) NAT() string {
 	for _, e := range m.localEndpoints() {
 		local = append(local, e.Addr())
 	}
-	return natKind(local, m.Port(), m.bind.observedAddrs())
+	return natKind(local, m.Port(), m.bind.observedBySocket())
 }
 
-func natKind(local []netip.Addr, port uint16, observed []netip.AddrPort) string {
+// natKind 按每个本地端口被别人看到的地址判断 NAT（键是本地端口的下标，0 是主端口）。
+// 同一个本地端口在同一个出口地址上被看到不同的端口，才是 NAT 按目的地换端口；不同的本地端口本来就映射成不同的端口。
+func natKind(local []netip.Addr, port uint16, observed map[int][]netip.AddrPort) string {
 	if len(observed) == 0 {
 		return ""
 	}
-	ports := map[netip.Addr]map[uint16]bool{}
 	public := false
-	for _, a := range observed {
-		if slices.Contains(local, a.Addr()) && a.Port() == port && !a.Addr().IsPrivate() {
-			public = true
+	for i, list := range observed {
+		ports := map[netip.Addr]map[uint16]bool{}
+		for _, a := range list {
+			if i == 0 && slices.Contains(local, a.Addr()) && a.Port() == port && !a.Addr().IsPrivate() {
+				public = true
+			}
+			if ports[a.Addr()] == nil {
+				ports[a.Addr()] = map[uint16]bool{}
+			}
+			ports[a.Addr()][a.Port()] = true
 		}
-		if ports[a.Addr()] == nil {
-			ports[a.Addr()] = map[uint16]bool{}
-		}
-		ports[a.Addr()][a.Port()] = true
-	}
-	for _, ps := range ports {
-		if len(ps) > 1 {
-			return "symmetric"
+		for _, ps := range ports {
+			if len(ps) > 1 {
+				return "symmetric"
+			}
 		}
 	}
 	if public {

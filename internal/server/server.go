@@ -265,7 +265,7 @@ func (s *Server) startMesh() (*mesh.Mesh, error) {
 		}
 		copy(priv[:], raw)
 	}
-	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: uint16(s.port), Relay: true, Logger: s.log.With("component", "mesh")})
+	m, err := mesh.New(mesh.Config{PrivateKey: priv, Port: uint16(s.port), Relay: true, ExtraPorts: mesh.DefaultExtraPorts, Logger: s.log.With("component", "mesh")})
 	if err != nil {
 		return nil, err
 	}

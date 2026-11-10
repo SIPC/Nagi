@@ -48,8 +48,15 @@ func (e *endpoint) DstIP() netip.Addr   { return Address(e.key) }
 func (e *endpoint) SrcIP() netip.Addr   { return netip.Addr{} }
 
 type pingInfo struct {
-	addr netip.AddrPort
-	sent time.Time
+	addr  netip.AddrPort
+	local int // 从哪个本地端口发出的（Bind.conns 的下标）
+	sent  time.Time
+}
+
+// pingKey 是「从哪个本地端口、发往哪个地址」：同一个地址从不同的本地端口探测，分开计时。
+type pingKey struct {
+	local int
+	addr  netip.AddrPort
 }
 
 type peerState struct {
@@ -58,9 +65,13 @@ type peerState struct {
 	mac        [32]byte
 	candidates []netip.AddrPort             // 别人告诉我们的地址
 	learned    map[netip.AddrPort]time.Time // 从对方的 ping 学到的地址
-	lastPing   map[netip.AddrPort]time.Time // 每个地址上次发 ping 的时间
+	lastPing   map[pingKey]time.Time        // 每个本地端口、每个地址上次发 ping 的时间
 	pings      map[[txidLen]byte]pingInfo   // 等待 pong 的 ping
 	direct     netip.AddrPort               // 确认能直连的地址
+	directConn int                          // 直连用的本地端口（Bind.conns 的下标）
+	// confirmed 是最近经 ping/pong 确认过的对方地址（对方有备用端口时可能不止一个）。这些地址发来的包都收，
+	// 发只走 direct：两端各自选端口，对方用来发的端口不一定是我们选来发给它的那个。
+	confirmed map[netip.AddrPort]time.Time
 	directAt   time.Time                    // 最近一次 pong 的时间
 	rtt        time.Duration
 	relays     []Key // 可以代为中转的面板
@@ -104,8 +115,14 @@ type Bind struct {
 	caps             byte // 自己启用的能力
 	log              *slog.Logger
 
+	// extra 是主端口以外再开的 UDP 端口数。线路按「源地址、源端口、目的地址、目的端口」做负载均衡、
+	// 其中一条链路坏了时，落在它上面的流一个包也过不去，换一个源端口就可能落到好的链路上：
+	// 直连不通时从每个端口都探测一遍，哪个端口先收到回复就和这个对端一直用它（见 docs/mesh.md#路径选择）。
+	// 备用端口只用来往外发，对方的回复是同一条流的回包，所以不用固定端口，也不用在防火墙上放行。
+	extra int
+
 	mu        sync.Mutex
-	conn      *net.UDPConn
+	conns     []*net.UDPConn // 第一个是主端口，其余是备用端口
 	port      uint16
 	peers     map[Key]*peerState
 	byAddr    map[netip.AddrPort]Key // 已确认的直连地址 → 对端
@@ -114,17 +131,40 @@ type Bind struct {
 	links     map[Key]*Link
 	quic      *quicPacketConn              // 收到的 QUIC 包交给它（见 quic.go）
 	onCaps    func(Key)                    // 对方刚表示支持 QUIC 时调用
-	observed  map[netip.AddrPort]time.Time // 别人看到的我们的地址
+	observed  map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
 	recv      chan delivery
 	done      chan struct{}
 }
 
-func newBind(priv Key, relay bool, caps byte, log *slog.Logger) *Bind {
+func newBind(priv Key, relay bool, caps byte, extra int, log *slog.Logger) *Bind {
 	return &Bind{
-		priv: priv, pub: PublicKey(priv), relay: relay, caps: caps, log: log,
+		priv: priv, pub: PublicKey(priv), relay: relay, caps: caps, extra: extra, log: log,
 		peers: map[Key]*peerState{}, byAddr: map[netip.AddrPort]Key{}, byMesh: map[netip.Addr]Key{},
-		relayKeys: map[Key]bool{}, links: map[Key]*Link{}, observed: map[netip.AddrPort]time.Time{},
+		relayKeys: map[Key]bool{}, links: map[Key]*Link{}, observed: map[pingKey]time.Time{},
 	}
+}
+
+// confirmedFrom 判断 from 是不是最近确认过的 k 的地址（QUIC 接受连接时核对来源）。
+func (b *Bind) confirmedFrom(k Key, from netip.AddrPort) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p := b.peers[k]
+	if p == nil {
+		return false
+	}
+	t, ok := p.confirmed[from]
+	return ok && time.Since(t) < directTimeout
+}
+
+// sock 返回第 i 个本地端口，没有时用主端口。调用时持有 b.mu。
+func (b *Bind) sock(i int) *net.UDPConn {
+	if i >= 0 && i < len(b.conns) {
+		return b.conns[i]
+	}
+	if len(b.conns) > 0 {
+		return b.conns[0]
+	}
+	return nil
 }
 
 // ---- conn.Bind ----
@@ -132,30 +172,45 @@ func newBind(priv Key, relay bool, caps byte, log *slog.Logger) *Bind {
 func (b *Bind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.conn != nil {
+	if len(b.conns) > 0 {
 		return nil, 0, conn.ErrBindAlreadyOpen
 	}
 	c, err := net.ListenUDP("udp", &net.UDPAddr{Port: int(port)})
 	if err != nil {
 		return nil, 0, err
 	}
-	b.conn = c
+	b.conns = []*net.UDPConn{c}
+	for range b.extra {
+		x, err := net.ListenUDP("udp", &net.UDPAddr{})
+		if err != nil {
+			b.log.Warn("mesh 备用端口打不开", "err", err)
+			continue
+		}
+		b.conns = append(b.conns, x)
+	}
 	b.port = uint16(c.LocalAddr().(*net.UDPAddr).Port)
 	b.recv = make(chan delivery, 256)
 	b.done = make(chan struct{})
-	return []conn.ReceiveFunc{b.receiveUDP(c), b.receiveRelayed(b.recv, b.done)}, b.port, nil
+	fns := make([]conn.ReceiveFunc, 0, len(b.conns)+1)
+	for i, x := range b.conns {
+		fns = append(fns, b.receiveUDP(x, i))
+	}
+	return append(fns, b.receiveRelayed(b.recv, b.done)), b.port, nil
 }
 
 func (b *Bind) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.conn == nil {
+	if len(b.conns) == 0 {
 		return nil
 	}
-	err := b.conn.Close()
+	var errs []error
+	for _, c := range b.conns {
+		errs = append(errs, c.Close())
+	}
 	close(b.done)
-	b.conn, b.recv, b.done = nil, nil, nil
-	return err
+	b.conns, b.recv, b.done = nil, nil, nil
+	return errors.Join(errs...)
 }
 
 func (b *Bind) SetMark(uint32) error { return nil }
@@ -191,7 +246,8 @@ func (b *Bind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	return nil
 }
 
-func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
+// receiveUDP 是第 local 个本地端口的收包循环。
+func (b *Bind) receiveUDP(c *net.UDPConn, local int) conn.ReceiveFunc {
 	return func(packets [][]byte, sizes []int, eps []conn.Endpoint) (int, error) {
 		for {
 			n, addr, err := c.ReadFromUDPAddrPort(packets[0])
@@ -205,7 +261,7 @@ func (b *Bind) receiveUDP(c *net.UDPConn) conn.ReceiveFunc {
 			pkt := packets[0][:n]
 			if isControl(pkt) {
 				if _, ok := parse(pkt); ok {
-					if ep, payload := b.handleControl(c, addr, pkt); ep != nil {
+					if ep, payload := b.handleControl(c, local, addr, pkt); ep != nil {
 						sizes[0] = copy(packets[0], payload)
 						eps[0] = ep
 						return 1, nil
@@ -301,7 +357,7 @@ func (b *Bind) receiveRelayed(ch chan delivery, done chan struct{}) conn.Receive
 // ---- 发送 ----
 
 func (b *Bind) write(c *net.UDPConn, pkt []byte, to netip.AddrPort) {
-	if c == nil || (dropUDP != nil && dropUDP(b.port, to)) {
+	if c == nil || (dropUDP != nil && dropUDP(uint16(c.LocalAddr().(*net.UDPAddr).Port), to)) {
 		return
 	}
 	_, _ = c.WriteToUDPAddrPort(pkt, to)
@@ -312,13 +368,12 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 	now := time.Now()
 	b.mu.Lock()
 	p := b.peers[dst]
-	c := b.conn
 	if p == nil {
 		b.mu.Unlock()
 		return
 	}
 	if p.directAlive(now) {
-		addr := p.direct
+		addr, c := p.direct, b.sock(p.directConn)
 		var enc *fecEncoder
 		if b.caps&capFEC != 0 && p.has(capFEC, now) {
 			enc = p.enc
@@ -342,7 +397,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 	}
 	for _, r := range p.relays {
 		if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
-			addr := rp.direct
+			addr, c := rp.direct, b.sock(rp.directConn)
 			b.mu.Unlock()
 			b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
 			return
@@ -366,12 +421,11 @@ func (b *Bind) flushFEC(dst Key) {
 	now := time.Now()
 	b.mu.Lock()
 	p := b.peers[dst]
-	c := b.conn
 	if p == nil || !p.directAlive(now) {
 		b.mu.Unlock()
 		return
 	}
-	addr, enc := p.direct, p.enc
+	addr, enc, c := p.direct, p.enc, b.sock(p.directConn)
 	b.mu.Unlock()
 	for _, x := range enc.flush(now) {
 		b.write(c, x, addr)
@@ -407,11 +461,11 @@ func (b *Bind) forward(src, dst Key, payload []byte) {
 	now := time.Now()
 	b.mu.Lock()
 	p := b.peers[dst]
-	c := b.conn
 	var addr netip.AddrPort
+	var c *net.UDPConn
 	var link *Link
 	if p != nil && p.directAlive(now) {
-		addr = p.direct
+		addr, c = p.direct, b.sock(p.directConn)
 	} else {
 		link = b.links[dst]
 	}
@@ -488,16 +542,18 @@ func (b *Bind) AttachLink(k Key, l Link) (detach func()) {
 
 // ---- 控制包 ----
 
-func (b *Bind) newPing(p *peerState, addr netip.AddrPort, now time.Time) []byte {
+// newPing 生成从第 local 个本地端口发往 addr 的 ping。调用时持有 b.mu。
+func (b *Bind) newPing(p *peerState, local int, addr netip.AddrPort, now time.Time) []byte {
 	var txid [txidLen]byte
 	_, _ = rand.Read(txid[:])
-	p.pings[txid] = pingInfo{addr: addr, sent: now}
-	p.lastPing[addr] = now
+	p.pings[txid] = pingInfo{addr: addr, local: local, sent: now}
+	p.lastPing[pingKey{local, addr}] = now
 	return encodePing(b.pub, txid, p.mac)
 }
 
-// handleControl 处理控制包。返回非空 endpoint 时，payload 是经中转送达的 WireGuard 包。
-func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*endpoint, []byte) {
+// handleControl 处理第 local 个本地端口 c 收到的控制包，回复也从 c 发出。
+// 返回非空 endpoint 时，payload 是经中转送达的 WireGuard 包。
+func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt []byte) (*endpoint, []byte) {
 	m, ok := parse(pkt)
 	if !ok {
 		return nil, nil
@@ -516,8 +572,8 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 		// 对方能找到我们，我们也立刻反向探测，加快打洞。刚发过的 ping 可能在对方还没加上我们时就到了、被丢掉，
 		// 所以只做很短的限流（ping 带 MAC，只有成员触发得了）。
 		var ping []byte
-		if !(p.direct == from && p.directAlive(now)) && now.Sub(p.lastPing[from]) > 100*time.Millisecond {
-			ping = b.newPing(p, from, now)
+		if !(p.direct == from && p.directAlive(now)) && now.Sub(p.lastPing[pingKey{local, from}]) > 100*time.Millisecond {
+			ping = b.newPing(p, local, from, now)
 		}
 		b.mu.Unlock()
 		b.write(c, pong, from)
@@ -532,24 +588,30 @@ func (b *Bind) handleControl(c *net.UDPConn, from netip.AddrPort, pkt []byte) (*
 			return nil, nil
 		}
 		info, ok := p.pings[m.txid]
-		if !ok || info.addr != from {
+		if !ok || info.addr != from || info.local != local {
 			b.mu.Unlock()
 			return nil, nil
 		}
 		delete(p.pings, m.txid)
-		newPath := !p.directAlive(now)
-		if p.direct != from {
-			if p.direct.IsValid() {
-				delete(b.byAddr, p.direct)
-			}
-			b.log.Debug("mesh 直连可用", "peer", p.key.Short(), "addr", from)
+		if m.observed.IsValid() {
+			b.observed[pingKey{local, m.observed}] = now
+		}
+		// 这个地址确认能通：它发来的包都收（对方可能从这里发，见 confirmed）。
+		p.confirmed[from] = now
+		b.byAddr[from] = p.key
+		alive := p.directAlive(now)
+		// 直连可用、最近还确认过，经别的地址或本地端口也通了（反向探测的回复、对方的备用端口）：
+		// 发还走现在这个，不来回换。现在这个有一阵没回了（对方换了地址）才换过去，不用等它超时。
+		if alive && (p.direct != from || p.directConn != local) && now.Sub(p.directAt) < pingDirect+2*time.Second {
+			b.mu.Unlock()
+			return nil, nil
+		}
+		newPath := !alive
+		if p.direct != from || p.directConn != local {
+			b.log.Debug("mesh 直连可用", "peer", p.key.Short(), "addr", from, "local_port", c.LocalAddr().(*net.UDPAddr).Port)
 			newPath = true
 		}
-		p.direct, p.directAt, p.rtt = from, now, now.Sub(info.sent)
-		b.byAddr[from] = p.key
-		if m.observed.IsValid() {
-			b.observed[m.observed] = now
-		}
+		p.direct, p.directConn, p.directAt, p.rtt = from, local, now, now.Sub(info.sent)
 		b.mu.Unlock()
 		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手，告诉对方自己的能力。
 		if newPath {
@@ -633,8 +695,8 @@ func (b *Bind) setPeers(peers []Peer) {
 			}
 			p = &peerState{
 				key: pe.Key, ep: &endpoint{key: pe.Key}, mac: mac,
-				learned: map[netip.AddrPort]time.Time{}, lastPing: map[netip.AddrPort]time.Time{},
-				pings: map[[txidLen]byte]pingInfo{},
+				learned: map[netip.AddrPort]time.Time{}, lastPing: map[pingKey]time.Time{},
+				pings: map[[txidLen]byte]pingInfo{}, confirmed: map[netip.AddrPort]time.Time{},
 				// 一开始就加 1 个校验包，对方报告丢包很少时再关：等测出丢包再开，TCP 早就降速了。
 				enc: newFECEncoder(1), dec: newFECDecoder(),
 			}
@@ -653,8 +715,10 @@ func (b *Bind) setPeers(peers []Peer) {
 	}
 	for k, p := range b.peers {
 		if !keep[k] {
-			if p.direct.IsValid() {
-				delete(b.byAddr, p.direct)
+			for a := range p.confirmed {
+				if b.byAddr[a] == k {
+					delete(b.byAddr, a)
+				}
 			}
 			delete(b.peers, k)
 		}
@@ -664,6 +728,7 @@ func (b *Bind) setPeers(peers []Peer) {
 // maintain 定期探测：直连可用时保活，不可用时探测所有候选地址。
 func (b *Bind) maintain(now time.Time) {
 	type out struct {
+		c    *net.UDPConn
 		pkt  []byte
 		addr netip.AddrPort
 	}
@@ -685,18 +750,30 @@ func (b *Bind) maintain(now time.Time) {
 				delete(p.pings, id)
 			}
 		}
+		for a, t := range p.confirmed {
+			if now.Sub(t) > directTimeout && !(a == p.direct && p.directAlive(now)) {
+				delete(p.confirmed, a)
+				if b.byAddr[a] == p.key {
+					delete(b.byAddr, a)
+				}
+			}
+		}
 		if p.directAlive(now) {
-			if now.Sub(p.lastPing[p.direct]) >= pingDirect {
-				sends = append(sends, out{b.newPing(p, p.direct, now), p.direct})
+			c := b.sock(p.directConn)
+			if now.Sub(p.lastPing[pingKey{p.directConn, p.direct}]) >= pingDirect {
+				sends = append(sends, out{c, b.newPing(p, p.directConn, p.direct, now), p.direct})
 			}
 			// 能力包每轮都发（2 秒一次）：丢包率变了，对方能很快调整冗余。
-			sends = append(sends, out{b.capsPacket(p), p.direct})
+			sends = append(sends, out{c, b.capsPacket(p), p.direct})
 			continue
 		}
 		if p.direct.IsValid() {
 			b.log.Debug("mesh 直连断开", "peer", p.key.Short(), "addr", p.direct)
-			delete(b.byAddr, p.direct)
-			p.direct = netip.AddrPort{}
+			delete(p.confirmed, p.direct)
+			if b.byAddr[p.direct] == p.key {
+				delete(b.byAddr, p.direct)
+			}
+			p.direct, p.directConn = netip.AddrPort{}, 0
 		}
 		addrs := append([]netip.AddrPort(nil), p.candidates...)
 		for a := range p.learned {
@@ -704,9 +781,12 @@ func (b *Bind) maintain(now time.Time) {
 				addrs = append(addrs, a)
 			}
 		}
+		// 每个地址从每个本地端口都探测：哪个端口先收到回复就用哪个。
 		for _, a := range addrs {
-			if now.Sub(p.lastPing[a]) >= pingSearch {
-				sends = append(sends, out{b.newPing(p, a, now), a})
+			for i, c := range b.conns {
+				if now.Sub(p.lastPing[pingKey{i, a}]) >= pingSearch {
+					sends = append(sends, out{c, b.newPing(p, i, a, now), a})
+				}
 			}
 		}
 	}
@@ -715,10 +795,9 @@ func (b *Bind) maintain(now time.Time) {
 			delete(b.observed, a)
 		}
 	}
-	c := b.conn
 	b.mu.Unlock()
 	for _, s := range sends {
-		b.write(c, s.pkt, s.addr)
+		b.write(s.c, s.pkt, s.addr)
 	}
 }
 
@@ -726,6 +805,7 @@ func (b *Bind) maintain(now time.Time) {
 func (b *Bind) announce() {
 	now := time.Now()
 	type out struct {
+		c    *net.UDPConn
 		pkt  []byte
 		addr netip.AddrPort
 	}
@@ -733,13 +813,12 @@ func (b *Bind) announce() {
 	b.mu.Lock()
 	for _, p := range b.peers {
 		if p.directAlive(now) {
-			sends = append(sends, out{b.capsPacket(p), p.direct})
+			sends = append(sends, out{b.sock(p.directConn), b.capsPacket(p), p.direct})
 		}
 	}
-	c := b.conn
 	b.mu.Unlock()
 	for _, s := range sends {
-		b.write(c, s.pkt, s.addr)
+		b.write(s.c, s.pkt, s.addr)
 	}
 }
 
@@ -767,6 +846,8 @@ type PeerStatus struct {
 	// direct、link（直接经控制连接）、udp-relay、tls-relay 或 none。
 	Path   string
 	Direct netip.AddrPort
+	// LocalPort 是直连用的本地端口（主端口或备用端口）。
+	LocalPort uint16
 	Via    Key // 中转的面板
 	RTT    time.Duration
 	// FEC 是发给对方时每 10 个包加的校验包个数，-1 表示没用 FEC（对方不支持或不是直连）。
@@ -819,6 +900,9 @@ func (b *Bind) status() []PeerStatus {
 		switch {
 		case p.directAlive(now):
 			s.Path, s.Direct, s.RTT = "direct", p.direct, p.rtt
+			if c := b.sock(p.directConn); c != nil {
+				s.LocalPort = uint16(c.LocalAddr().(*net.UDPAddr).Port)
+			}
 			if b.caps&capFEC != 0 && p.has(capFEC, now) {
 				s.FEC = p.enc.parityCount()
 			}
@@ -845,13 +929,26 @@ func (b *Bind) status() []PeerStatus {
 	return out
 }
 
-// observedAddrs 返回别人看到的我们的地址（经过 NAT 以后的公网地址）。
+// observedAddrs 返回别人看到的我们主端口的地址（经过 NAT 以后的公网地址）：上报给面板，别人往这里连。
 func (b *Bind) observedAddrs() []netip.AddrPort {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var out []netip.AddrPort
-	for a := range b.observed {
-		out = append(out, a)
+	for k := range b.observed {
+		if k.local == 0 {
+			out = append(out, k.addr)
+		}
+	}
+	return out
+}
+
+// observedBySocket 返回每个本地端口被别人看到的地址，用来判断 NAT（见 natKind）。
+func (b *Bind) observedBySocket() map[int][]netip.AddrPort {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := map[int][]netip.AddrPort{}
+	for k := range b.observed {
+		out[k.local] = append(out[k.local], k.addr)
 	}
 	return out
 }

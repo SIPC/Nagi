@@ -79,10 +79,14 @@ func (c *quicPacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	ap := ua.AddrPort()
 	ap = netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
 	c.b.mu.Lock()
-	conn := c.b.conn
+	conn := c.b.sock(0)
+	// 和 WireGuard 一样走这个对端的直连用的本地端口：别的端口可能落在不通的链路上。
 	if k, ok := c.b.byAddr[ap]; ok {
 		if peer := c.b.peers[k]; peer != nil {
 			peer.quicTx += uint64(len(p))
+			if peer.direct == ap {
+				conn = c.b.sock(peer.directConn)
+			}
 		}
 	}
 	c.b.mu.Unlock()
@@ -98,10 +102,10 @@ func (c *quicPacketConn) Close() error {
 func (c *quicPacketConn) LocalAddr() net.Addr {
 	c.b.mu.Lock()
 	defer c.b.mu.Unlock()
-	if c.b.conn == nil {
-		return &net.UDPAddr{}
+	if s := c.b.sock(0); s != nil {
+		return s.LocalAddr()
 	}
-	return c.b.conn.LocalAddr()
+	return &net.UDPAddr{}
 }
 
 func (c *quicPacketConn) SetDeadline(time.Time) error      { return nil }
@@ -389,7 +393,9 @@ func (q *quicNet) handshake(c *quic.Conn) {
 	copy(k[:], msg[len(quicMagic):])
 	addr, mac, ok := q.peerFor(k)
 	from, _ := netip.ParseAddrPort(c.RemoteAddr().String())
-	if !ok || netip.AddrPortFrom(from.Addr().Unmap(), from.Port()) != addr {
+	// 对方有备用端口时，它发起连接用的端口不一定是我们发给它的那个，确认过的地址都算。
+	from = netip.AddrPortFrom(from.Addr().Unmap(), from.Port())
+	if !ok || (from != addr && !q.m.bind.confirmedFrom(k, from)) {
 		fail()
 		return
 	}
