@@ -25,6 +25,12 @@ export default {
     none: "不可达",
     help: "线条是在线节点之间的节点网络（WireGuard）连接。无法直连时流量经面板中转，线条经过面板。节点外圈是 CPU、内存、磁盘中占用最高的一项。悬停节点查看延迟。",
     issues: "未直连的连接",
+    reason: {
+      symmetric: (a: string, b: string, sym: string) => `${a} 和 ${b} 都在 NAT 后面，${sym} 的 NAT 按目的地更换端口，无法打洞。在任一端放行或转发 UDP 端口后可直连。`,
+      noAddress: (n: string) => `${n} 没有可尝试直连的地址。`,
+      oneWay: (blocked: string, from: string, port: number) => `${from} 能收到 ${blocked} 的包，${blocked} 收不到 ${from} 的包。检查 ${blocked} 的防火墙是否放行 UDP 端口 ${port}。`,
+      noReply: (a: string, pa: number, b: string, pb: number) => `双方的探测包都没有到达对方。检查两端是否放行 UDP 端口（${a} ${pa}，${b} ${pb}）。`,
+    },
   },
   latency: {
     title: "节点间延迟",

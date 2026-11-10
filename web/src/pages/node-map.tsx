@@ -11,7 +11,7 @@ import { RangePicker, metricRanges, type MetricRange } from "@/components/metric
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
-import type { Container, MeshStatus, Project } from "@/gen/nagi/v1/common_pb";
+import type { Container, MeshPeerStatus, MeshStatus, Project } from "@/gen/nagi/v1/common_pb";
 
 // 节点页的拓扑视图：面板在最上面，和节点围成一圈，两个图层的位置相同。
 // - 网络：在线节点之间的 mesh 连接（见 docs/mesh.md）。
@@ -378,7 +378,8 @@ function Legend({ children }: { children: React.ReactNode }) {
 // ---- 网络图层 ----
 
 type Kind = "direct" | "relay" | "none";
-type MeshEdge = { a: string; b: string; path: string; kind: Kind; rtt: number };
+// views：两端各自看到的对方（键是看的那一端），用来说明没有直连的原因。
+type MeshEdge = { a: string; b: string; path: string; kind: Kind; rtt: number; views: Map<string, MeshPeerStatus> };
 
 // 路径从好到差。两端看到的可能不一样（A→B 直连、B→A 中转），取差的那个。
 const rank: Record<string, number> = { direct: 0, link: 0, "udp-relay": 1, "tls-relay": 2, none: 3 };
@@ -393,14 +394,16 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
   const byName = new Map(nodes.map((n) => [n.name, n.id]));
 
   const edges = new Map<string, MeshEdge>();
-  const add = (from: string, to: string | undefined, path: string, rtt: number) => {
+  const add = (from: string, to: string | undefined, peer: MeshPeerStatus) => {
+    const { path, rttMs: rtt } = peer;
     if (!to || from === to || !visible.has(from) || !visible.has(to)) return;
     const [a, b] = from < to ? [from, to] : [to, from];
     const old = edges.get(a + "|" + b);
     if (!old) {
-      edges.set(a + "|" + b, { a, b, path, kind: kindOf(path), rtt: rankOf(path) === 0 ? rtt : 0 });
+      edges.set(a + "|" + b, { a, b, path, kind: kindOf(path), rtt: rankOf(path) === 0 ? rtt : 0, views: new Map([[from, peer]]) });
       return;
     }
+    old.views.set(from, peer);
     if (rankOf(path) > rankOf(old.path)) {
       old.path = path;
       old.kind = kindOf(path);
@@ -408,7 +411,7 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
     if (old.kind === "direct" && rtt > 0) old.rtt = old.rtt > 0 ? (old.rtt + rtt) / 2 : rtt;
   };
   const scan = (from: string, s: MeshStatus) => {
-    for (const p of s.peers) add(from, byAddr.get(p.address) ?? byName.get(p.name), p.path, p.rttMs);
+    for (const p of s.peers) add(from, byAddr.get(p.address) ?? byName.get(p.name), p);
   };
   for (const [id, s] of statuses) scan(id, s);
   if (panel) scan(PANEL, panel);
@@ -416,7 +419,7 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
   for (const id of visible) {
     if (id === PANEL) continue;
     const [a, b] = id < PANEL ? [id, PANEL] : [PANEL, id];
-    if (!edges.has(a + "|" + b)) edges.set(a + "|" + b, { a, b, path: "", kind: "direct", rtt: 0 });
+    if (!edges.has(a + "|" + b)) edges.set(a + "|" + b, { a, b, path: "", kind: "direct", rtt: 0, views: new Map() });
   }
   return [...edges.values()];
 }
@@ -425,6 +428,33 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
 function meshGeometry(A: Pt, B: Pt, panel: Pt, toPanel: boolean, kind: Kind) {
   const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
   return curve(A, B, kind === "relay" && !toPanel ? { x: 2 * panel.x - M.x, y: 2 * panel.y - M.y } : M);
+}
+
+// relayReason：按两端各自的探测情况说明为什么没有直连。旧版本的节点不报这些，看不出来时返回空。
+// 先看 NAT（两端都在 NAT 后面、其中一端按目的地换端口时打洞基本不会成功），再看地址，最后看包是哪个方向过不去。
+function relayReason(e: MeshEdge, statuses: Map<string, MeshStatus>, nameOf: (id: string) => string): string {
+  const m = t.nodes.map.reason;
+  const ends = [e.a, e.b].filter((id) => id !== PANEL);
+  if (ends.length < 2) return "";
+  const [a, b] = ends;
+  const sa = statuses.get(a);
+  const sb = statuses.get(b);
+  const reported = (s: MeshStatus | undefined, v: MeshPeerStatus | undefined) => !!v && (!!s?.nat || v.tried > 0 || v.heard);
+  const va = e.views.get(a); // a 看到的 b
+  const vb = e.views.get(b); // b 看到的 a
+  const behind = (s?: MeshStatus) => s?.nat === "nat" || s?.nat === "symmetric";
+  if (behind(sa) && behind(sb) && (sa?.nat === "symmetric" || sb?.nat === "symmetric")) {
+    const sym = [a, b].filter((id) => statuses.get(id)?.nat === "symmetric").map(nameOf);
+    return m.symmetric(nameOf(a), nameOf(b), t.common.list(sym));
+  }
+  if (reported(sa, va) && va!.tried === 0 && !va!.heard) return m.noAddress(nameOf(b));
+  if (reported(sb, vb) && vb!.tried === 0 && !vb!.heard) return m.noAddress(nameOf(a));
+  const port = (s?: MeshStatus) => s?.port ?? 0;
+  // a 收得到 b 的探测、b 收不到 a 的：a 到 b 这个方向过不去。
+  if (va?.heard && reported(sb, vb) && !vb!.heard) return m.oneWay(nameOf(b), nameOf(a), port(sb));
+  if (vb?.heard && reported(sa, va) && !va!.heard) return m.oneWay(nameOf(a), nameOf(b), port(sa));
+  if (reported(sa, va) || reported(sb, vb)) return m.noReply(nameOf(a), port(sa), nameOf(b), port(sb));
+  return "";
 }
 
 const meshLabel = (e: MeshEdge) => {
@@ -539,6 +569,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
                 <span className={cn("text-[13px]", e.kind === "none" ? "text-destructive" : "text-warning-text")}>
                   <Status tone={e.kind === "none" ? "danger" : "warning"}>{pathLabel[e.path] ?? e.path}</Status>
                 </span>
+                {relayReason(e, statuses, nameOf) && <span className="w-full pb-1 text-[13px] text-muted-foreground">{relayReason(e, statuses, nameOf)}</span>}
               </li>
             ))}
           </ul>

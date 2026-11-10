@@ -3542,10 +3542,14 @@ type MeshPeerStatus struct {
 	FecRecovered uint64 `protobuf:"varint,13,opt,name=fec_recovered,json=fecRecovered,proto3" json:"fec_recovered,omitempty"`
 	// 最近测到的两个方向的丢包率（百万分之几，见 docs/mesh.md#丢包率）：tx 是这一端发给对方的包，rx 是对方发来的包。
 	// 只在直连时测，没测到（流量太少、旧版本）时 known 为 false。
-	TxLossKnown   bool   `protobuf:"varint,16,opt,name=tx_loss_known,json=txLossKnown,proto3" json:"tx_loss_known,omitempty"`
-	TxLossPpm     uint32 `protobuf:"varint,17,opt,name=tx_loss_ppm,json=txLossPpm,proto3" json:"tx_loss_ppm,omitempty"`
-	RxLossKnown   bool   `protobuf:"varint,18,opt,name=rx_loss_known,json=rxLossKnown,proto3" json:"rx_loss_known,omitempty"`
-	RxLossPpm     uint32 `protobuf:"varint,19,opt,name=rx_loss_ppm,json=rxLossPpm,proto3" json:"rx_loss_ppm,omitempty"`
+	TxLossKnown bool   `protobuf:"varint,16,opt,name=tx_loss_known,json=txLossKnown,proto3" json:"tx_loss_known,omitempty"`
+	TxLossPpm   uint32 `protobuf:"varint,17,opt,name=tx_loss_ppm,json=txLossPpm,proto3" json:"tx_loss_ppm,omitempty"`
+	RxLossKnown bool   `protobuf:"varint,18,opt,name=rx_loss_known,json=rxLossKnown,proto3" json:"rx_loss_known,omitempty"`
+	RxLossPpm   uint32 `protobuf:"varint,19,opt,name=rx_loss_ppm,json=rxLossPpm,proto3" json:"rx_loss_ppm,omitempty"`
+	// 没有直连时用来说明原因：tried 是正在探测的对方地址数，heard 表示最近收到过对方的探测（对方的包能到这一端）。
+	// 旧版本不报，都为 0。
+	Tried         uint32 `protobuf:"varint,20,opt,name=tried,proto3" json:"tried,omitempty"`
+	Heard         bool   `protobuf:"varint,21,opt,name=heard,proto3" json:"heard,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3713,6 +3717,20 @@ func (x *MeshPeerStatus) GetRxLossPpm() uint32 {
 	return 0
 }
 
+func (x *MeshPeerStatus) GetTried() uint32 {
+	if x != nil {
+		return x.Tried
+	}
+	return 0
+}
+
+func (x *MeshPeerStatus) GetHeard() bool {
+	if x != nil {
+		return x.Heard
+	}
+	return false
+}
+
 type MeshStatus struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
@@ -3721,7 +3739,9 @@ type MeshStatus struct {
 	Endpoints []string               `protobuf:"bytes,4,rep,name=endpoints,proto3" json:"endpoints,omitempty"`
 	Peers     []*MeshPeerStatus      `protobuf:"bytes,5,rep,name=peers,proto3" json:"peers,omitempty"`
 	// 这一端关闭了 QUIC 快速通道（节点的网络设置，见 docs/mesh.md#quic-快速通道）。
-	QuicOff       bool `protobuf:"varint,6,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
+	QuicOff bool `protobuf:"varint,6,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
+	// 按别的成员看到的地址判断这一端的 NAT：none（不在 NAT 后面）、nat、symmetric（按目的地换端口）；不知道时为空。
+	Nat           string `protobuf:"bytes,7,opt,name=nat,proto3" json:"nat,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3796,6 +3816,13 @@ func (x *MeshStatus) GetQuicOff() bool {
 		return x.QuicOff
 	}
 	return false
+}
+
+func (x *MeshStatus) GetNat() string {
+	if x != nil {
+		return x.Nat
+	}
+	return ""
 }
 
 type MeshPingRequest struct {
@@ -5423,7 +5450,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tendpoints\x18\x02 \x03(\tR\tendpoints\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xbc\x04\n" +
+	"\bis_panel\x18\x05 \x01(\bR\aisPanel\"\xe8\x04\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -5446,7 +5473,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\rtx_loss_known\x18\x10 \x01(\bR\vtxLossKnown\x12\x1e\n" +
 	"\vtx_loss_ppm\x18\x11 \x01(\rR\ttxLossPpm\x12\"\n" +
 	"\rrx_loss_known\x18\x12 \x01(\bR\vrxLossKnown\x12\x1e\n" +
-	"\vrx_loss_ppm\x18\x13 \x01(\rR\trxLossPpm\"\xc1\x01\n" +
+	"\vrx_loss_ppm\x18\x13 \x01(\rR\trxLossPpm\x12\x14\n" +
+	"\x05tried\x18\x14 \x01(\rR\x05tried\x12\x14\n" +
+	"\x05heard\x18\x15 \x01(\bR\x05heard\"\xd3\x01\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +
@@ -5455,7 +5484,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\rR\x04port\x12\x1c\n" +
 	"\tendpoints\x18\x04 \x03(\tR\tendpoints\x12-\n" +
 	"\x05peers\x18\x05 \x03(\v2\x17.nagi.v1.MeshPeerStatusR\x05peers\x12\x19\n" +
-	"\bquic_off\x18\x06 \x01(\bR\aquicOff\"M\n" +
+	"\bquic_off\x18\x06 \x01(\bR\aquicOff\x12\x10\n" +
+	"\x03nat\x18\a \x01(\tR\x03nat\"M\n" +
 	"\x0fMeshPingRequest\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1b\n" +

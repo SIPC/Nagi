@@ -315,3 +315,28 @@ func TestUsableEndpoint(t *testing.T) {
 		t.Error("零值不应能用")
 	}
 }
+
+// 按别人看到的地址判断 NAT：看到的就是本机的公网地址和端口时不在 NAT 后面；
+// 同一个出口地址上看到不同的端口时，NAT 按目的地换端口。
+func TestNATKind(t *testing.T) {
+	pub := netip.MustParseAddr("203.0.113.5")
+	lan := netip.MustParseAddr("192.168.1.10")
+	ap := func(s string) netip.AddrPort { return netip.MustParseAddrPort(s) }
+	cases := []struct {
+		local    []netip.Addr
+		observed []netip.AddrPort
+		want     string
+	}{
+		{[]netip.Addr{pub}, nil, ""},
+		{[]netip.Addr{pub}, []netip.AddrPort{ap("203.0.113.5:51820")}, "none"},
+		{[]netip.Addr{lan}, []netip.AddrPort{ap("198.51.100.7:51820")}, "nat"},
+		{[]netip.Addr{lan}, []netip.AddrPort{ap("198.51.100.7:40001")}, "nat"},
+		{[]netip.Addr{lan}, []netip.AddrPort{ap("198.51.100.7:40001"), ap("198.51.100.7:40002")}, "symmetric"},
+		{[]netip.Addr{pub}, []netip.AddrPort{ap("203.0.113.5:40001")}, "nat"},
+	}
+	for i, c := range cases {
+		if got := natKind(c.local, 51820, c.observed); got != c.want {
+			t.Errorf("%d: natKind = %q, want %q", i, got, c.want)
+		}
+	}
+}

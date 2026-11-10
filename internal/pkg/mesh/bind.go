@@ -780,6 +780,10 @@ type PeerStatus struct {
 	txLossAt       time.Time
 	// QUIC：和对方之间有建好的 QUIC 连接，mesh 上的 TCP 连接走它（见 quic.go）。
 	QUIC bool
+	// 没有直连时用来说明原因：Tried 是正在探测的对方地址数（对方上报的加上从它的探测学到的），
+	// Heard 表示最近收到过对方发来的探测（对方的包能到这一端）。
+	Tried int
+	Heard bool
 	// quicBytes：收、发的 QUIC 字节数，Status 把它加进 RxBytes、TxBytes。
 	quicBytes [2]uint64
 	// fecBytes：FEC 在收、发两个方向上比 WireGuard 统计的多出的字节数，Status 同样加进去。
@@ -801,6 +805,15 @@ func (b *Bind) status() []PeerStatus {
 			}
 			if now.Sub(p.rxLossAt) < lossFresh {
 				s.RxLoss = int64(p.rxLoss)
+			}
+		}
+		if !p.directAlive(now) {
+			s.Heard = len(p.learned) > 0
+			s.Tried = len(p.candidates)
+			for a := range p.learned {
+				if !slices.Contains(p.candidates, a) {
+					s.Tried++
+				}
 			}
 		}
 		switch {

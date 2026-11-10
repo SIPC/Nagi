@@ -337,6 +337,17 @@ func (m *Mesh) KeyOf(addr net.Addr) (Key, bool) {
 
 // Endpoints 返回可以告诉别人的直连地址：本机网卡地址，加上别人看到的我们的公网地址。
 func (m *Mesh) Endpoints() []netip.AddrPort {
+	out := m.localEndpoints()
+	for _, a := range m.bind.observedAddrs() {
+		if !slices.Contains(out, a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// localEndpoints 返回本机网卡上的地址（加上 mesh 的端口）。
+func (m *Mesh) localEndpoints() []netip.AddrPort {
 	port := m.Port()
 	var out []netip.AddrPort
 	ifaces, _ := net.Interfaces()
@@ -353,12 +364,44 @@ func (m *Mesh) Endpoints() []netip.AddrPort {
 			out = append(out, netip.AddrPortFrom(p.Addr().Unmap(), port))
 		}
 	}
-	for _, a := range m.bind.observedAddrs() {
-		if !slices.Contains(out, a) {
-			out = append(out, a)
+	return out
+}
+
+// NAT 按别的成员看到的这一端的地址（直连的 pong 里带回来的）判断这一端在不在 NAT 后面：
+// none 表示看到的就是本机网卡上的地址和端口；nat 表示在 NAT 后面；symmetric 表示同一个出口地址上
+// 看到了不同的端口，NAT 按目的地换端口，两端都在 NAT 后面时打洞基本不会成功。还没有人看到过时为空。
+func (m *Mesh) NAT() string {
+	var local []netip.Addr
+	for _, e := range m.localEndpoints() {
+		local = append(local, e.Addr())
+	}
+	return natKind(local, m.Port(), m.bind.observedAddrs())
+}
+
+func natKind(local []netip.Addr, port uint16, observed []netip.AddrPort) string {
+	if len(observed) == 0 {
+		return ""
+	}
+	ports := map[netip.Addr]map[uint16]bool{}
+	public := false
+	for _, a := range observed {
+		if slices.Contains(local, a.Addr()) && a.Port() == port && !a.Addr().IsPrivate() {
+			public = true
+		}
+		if ports[a.Addr()] == nil {
+			ports[a.Addr()] = map[uint16]bool{}
+		}
+		ports[a.Addr()][a.Port()] = true
+	}
+	for _, ps := range ports {
+		if len(ps) > 1 {
+			return "symmetric"
 		}
 	}
-	return out
+	if public {
+		return "none"
+	}
+	return "nat"
 }
 
 // MaxEndpoints 是每个成员最多尝试的直连地址数，多给的不用。

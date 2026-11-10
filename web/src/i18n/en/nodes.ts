@@ -26,6 +26,12 @@ export default {
     none: "Unreachable",
     help: "Lines are node network (WireGuard) connections between online nodes. When two nodes can't connect directly, traffic is relayed via panel and the line passes through it. The ring around a node shows the highest of CPU, memory and disk usage. Hover a node to see latencies.",
     issues: "Indirect connections",
+    reason: {
+      symmetric: (a, b, sym) => `${a} and ${b} are both behind NAT, and ${sym} changes ports per destination, so hole punching fails. Allow or forward the UDP port on either end to connect directly.`,
+      noAddress: (n) => `${n} has no address to try for a direct connection.`,
+      oneWay: (blocked, from, port) => `${from} receives packets from ${blocked}, but ${blocked} doesn't receive packets from ${from}. Check that ${blocked}'s firewall allows UDP port ${port}.`,
+      noReply: (a, pa, b, pb) => `Neither end's probes reach the other. Check that both ends allow their UDP port (${a} ${pa}, ${b} ${pb}).`,
+    },
   },
   latency: {
     title: "Latency between nodes",

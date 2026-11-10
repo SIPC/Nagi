@@ -85,7 +85,7 @@ func Ping(ctx context.Context, m *Mesh, k Key) (time.Duration, error) {
 // StatusProto 把 mesh 状态转成接口格式。name 返回成员的显示名称。
 func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 	self := m.PublicKey()
-	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port()), QuicOff: !m.QUIC()}
+	out := &nagiv1.MeshStatus{PublicKey: self[:], Address: m.Addr().String(), Port: uint32(m.Port()), QuicOff: !m.QUIC(), Nat: m.NAT()}
 	for _, e := range m.Endpoints() {
 		out.Endpoints = append(out.Endpoints, e.String())
 	}
@@ -96,6 +96,7 @@ func StatusProto(m *Mesh, name func(Key) string) *nagiv1.MeshStatus {
 			RttMs: float64(s.RTT.Microseconds()) / 1000, RxBytes: s.RxBytes, TxBytes: s.TxBytes,
 			Fec: s.FEC >= 0, FecParity: int32(max(s.FEC, 0)), LossPpm: s.LossPPM, FecRecovered: s.Recovered, Quic: s.QUIC,
 			TxLossKnown: s.TxLoss >= 0, TxLossPpm: uint32(max(s.TxLoss, 0)), RxLossKnown: s.RxLoss >= 0, RxLossPpm: uint32(max(s.RxLoss, 0)),
+			Tried: uint32(s.Tried), Heard: s.Heard,
 		}
 		if s.Direct.IsValid() {
 			ps.Endpoint = s.Direct.String()

@@ -582,6 +582,10 @@ message MeshPeerStatus {
   uint32 tx_loss_ppm = 17;
   bool rx_loss_known = 18;
   uint32 rx_loss_ppm = 19;
+  // 没有直连时用来说明原因：tried 是正在探测的对方地址数，heard 表示最近收到过对方的探测（对方的包能到这一端）。
+  // 旧版本不报，都为 0。
+  uint32 tried = 20;
+  bool heard = 21;
 }
 
 message MeshStatus {
@@ -592,6 +596,8 @@ message MeshStatus {
   repeated MeshPeerStatus peers = 5;
   // 这一端关闭了 QUIC 快速通道（节点的网络设置，见 docs/mesh.md#quic-快速通道）。
   bool quic_off = 6;
+  // 按别的成员看到的地址判断这一端的 NAT：none（不在 NAT 后面）、nat、symmetric（按目的地换端口）；不知道时为空。
+  string nat = 7;
 }
 
 message MeshPingRequest {
