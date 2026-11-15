@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
-import { Alert, Button, Field, Input, Notice, QueryError, Spinner, Waves } from "@/components/ui";
+import { Alert, Button, Field, Input, Notice, QueryError, Slide, Spinner, Waves } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { LanguageButton } from "@/components/language";
 import { t } from "@/i18n";
 
@@ -12,24 +13,27 @@ export const returnToKey = "nagi.returnTo";
 
 // AuthShell：登录、初始化页面的外框。居中 360 宽，没有卡片：品牌、标题、内容。
 // 只有一条提示（未初始化、连不上面板）时不写标题。
-export function AuthShell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {
+// 标题和内容第一次显示时淡入；step 变了（例如输完密码进入两步验证）按 stepIndex 的先后左右滑动换内容，
+// 和面板里的切换控件一样（见 docs/ui.md#动画）。标志不动。
+export function AuthShell({ title, description, step = "", stepIndex = 0, children }: { title?: string; description?: string; step?: string; stepIndex?: number; children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="fixed top-4 right-4">
         <LanguageButton />
       </div>
-      <main className="grid w-full max-w-[320px] gap-6">
-        <div className="grid justify-items-start gap-3">
-          <Waves className="h-6 w-[42px] text-wave" />
-          <span className="sr-only">Nagi</span>
+      <main className="grid w-full max-w-[320px] gap-3">
+        <Waves className="h-6 w-[42px] text-wave" />
+        <span className="sr-only">Nagi</span>
+        {/* 没有标题时，提示和标志之间留出原来标题的间距。 */}
+        <Slide id={step} index={stepIndex} inner={cn("grid gap-6", !title && "pt-3")}>
           {title && (
             <div className="grid gap-1">
               <h1 className="text-2xl leading-8 font-semibold tracking-tight">{title}</h1>
               {description && <p className="text-muted-foreground">{description}</p>}
             </div>
           )}
-        </div>
-        {children}
+          {children}
+        </Slide>
       </main>
     </div>
   );
@@ -165,7 +169,7 @@ export function LoginPage() {
 
   if (needCode)
     return (
-      <AuthShell title={t.auth.login.totpTitle} description={t.auth.login.totpDescription}>
+      <AuthShell title={t.auth.login.totpTitle} description={t.auth.login.totpDescription} step="totp" stepIndex={1}>
         <form className="grid gap-4" onSubmit={submit}>
           {/* 密码管理器按用户名找出这次登录的账号，才知道填哪一个的验证码；这一步看不到用户名框，所以留一个隐藏的。 */}
           <input type="text" name="username" autoComplete="username" value={username} readOnly tabIndex={-1} aria-hidden className="sr-only" />
@@ -210,7 +214,7 @@ export function LoginPage() {
     );
 
   return (
-    <AuthShell title={t.auth.login.title}>
+    <AuthShell title={t.auth.login.title} step="login">
       <form className="grid gap-4" onSubmit={submit}>
         <Field label={t.auth.username} htmlFor="username">
           <Input id="username" name="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required />
