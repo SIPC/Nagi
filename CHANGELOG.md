@@ -8,6 +8,18 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.26.0
+
+### 新功能
+
+- 端口映射新增「TCP+UDP」协议，同一个端口同时开放 TCP 和 UDP，适用于游戏、语音等服务。
+- TCP 和 UDP 端口映射支持「发送客户端地址（PROXY protocol）」，容器内的服务可以获取客户端的真实地址。
+- 安装脚本自动识别中国大陆网络，经加速代理下载，并为 Docker 使用国内软件源和镜像加速。之后在面板上更新面板、升级节点时也经同一代理下载。
+
+### 升级说明
+
+- 作为 TCP+UDP 端口映射的入口节点，或使用 PROXY protocol 时，需将相关节点升级到 v0.26.0。
+
 ## v0.25.1
 
 ### 改进

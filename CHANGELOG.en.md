@@ -8,6 +8,18 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.26.0
+
+### New features
+
+- Adds the TCP+UDP protocol to port mappings, which opens TCP and UDP on the same port for services such as game and voice servers.
+- TCP and UDP port mappings support "Send client address (PROXY protocol)", so services in the container can get the client's real address.
+- The install scripts detect mainland China networks, download through a proxy, and use domestic package and registry mirrors for Docker. Panel updates and node upgrades from the panel later download through the same proxy.
+
+### Upgrade notes
+
+- Nodes used as entry nodes for TCP+UDP port mappings, and nodes involved in mappings that use PROXY protocol, must be upgraded to v0.26.0.
+
 ## v0.25.1
 
 ### Improvements
