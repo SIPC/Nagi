@@ -11,8 +11,6 @@ export default {
     networkNameHelp: "更改后须同步更新这些项目中引用的地址。已有容器的目录不变。",
     renameConfirm: (name: string) => `将网络名改为 ${name}？已连接项目中引用的地址需同步更新。`,
     rename: "更改网络名",
-    snapshotInterval: "定时快照间隔（分钟）",
-    snapshotIntervalHint: "留空则为 720 分钟。",
     snapshotLimit: "快照份数上限",
     snapshotLimitHint: "每个容器的定时、手动和部署前快照合计，超出时删除最早的。版本文件不计入。留空则为 10 份。",
     positiveInteger: "须为正整数",

@@ -4,7 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
+import { defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
+import { projectSchedule, sameForm, scheduleErrors, ScheduleFields, scheduleForm, toSchedule } from "@/components/snapshot-schedule";
 import { useRun } from "@/components/run";
 import { useRole } from "@/components/role";
 import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
@@ -22,6 +23,7 @@ export function SettingsTab({ project }: { project: Project }) {
   return (
     <div>
       <GeneralSettings project={project} />
+      <SnapshotScheduleSection project={project} />
       <AlertRulesSection project={project} />
       <SharedEnv project={project} />
       <Deployments project={project} />
@@ -30,14 +32,13 @@ export function SettingsTab({ project }: { project: Project }) {
   );
 }
 
-// GeneralSettings 修改名称、网络名、快照间隔和份数上限；内部端口照原样提交（接口每次提交完整的设置）。
+// GeneralSettings 修改名称、网络名和快照份数上限；内部端口、快照间隔照原样提交（接口每次提交完整的设置，没带的定时快照计划面板保留）。
 function GeneralSettings({ project }: { project: Project }) {
   const m = t.projectSettings.general;
   const queryClient = useQueryClient();
   const s = project.settings;
   const [name, setName] = useState(project.name);
   const [network, setNetwork] = useState(project.networkName);
-  const [interval, setInterval] = useState(s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "");
   const [limit, setLimit] = useState(s?.snapshotLimit ? String(s.snapshotLimit) : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,19 +48,17 @@ function GeneralSettings({ project }: { project: Project }) {
   const numberError = (v: string) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? m.positiveInteger : "");
   const nameError = checked && !name.trim() ? m.nameRequired : "";
   const networkError = checked && !network.trim() ? m.networkNameRequired : "";
-  const intervalError = checked ? numberError(interval) : "";
   const limitError = checked ? numberError(limit) : "";
   // 和已保存的设置比较（不是和第一次渲染比）：保存后项目重新加载，就不再算未保存。
   useUnsaved(
     name !== project.name ||
       network !== project.networkName ||
-      interval !== (s?.snapshotIntervalMinutes ? String(s.snapshotIntervalMinutes) : "") ||
       limit !== (s?.snapshotLimit ? String(s.snapshotLimit) : ""),
   );
 
   const save = async () => {
     setChecked(true);
-    if (!name.trim() || !network.trim() || numberError(interval) || numberError(limit)) return;
+    if (!name.trim() || !network.trim() || numberError(limit)) return;
     // 改网络名后，已连接项目里写的地址会失效，先确认。
     const renamed = network.trim() !== project.networkName;
     if (renamed && project.links.length > 0 && !(await confirmAction(m.renameConfirm(network.trim()), { action: m.rename }))) return;
@@ -73,7 +72,7 @@ function GeneralSettings({ project }: { project: Project }) {
         networkName: network,
         settings: {
           internalPorts: s?.internalPorts,
-          snapshotIntervalMinutes: Number(interval.trim() || 0),
+          snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
           snapshotLimit: Number(limit.trim() || 0),
         },
       });
@@ -103,9 +102,6 @@ function GeneralSettings({ project }: { project: Project }) {
             <Field label={m.networkName} htmlFor="p-network" hint={m.networkNameFormat} help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />} error={networkError}>
               <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
             </Field>
-            <Field label={m.snapshotInterval} htmlFor="p-interval" help={m.snapshotIntervalHint} error={intervalError}>
-              <Input id="p-interval" value={interval} onChange={(e) => setInterval(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotIntervalMinutes)} />
-            </Field>
             <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint} error={limitError}>
               <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotLimit)} />
             </Field>
@@ -117,6 +113,74 @@ function GeneralSettings({ project }: { project: Project }) {
               {t.common.actions.save}
             </Button>
           </FormActions>
+        </FormBody>
+      </form>
+    </Section>
+  );
+}
+
+// ---- 定时快照 ----
+
+// SnapshotScheduleSection：项目里容器的定时快照计划，容器可以在「存储」标签里单独设置。其余设置照原样提交。
+function SnapshotScheduleSection({ project }: { project: Project }) {
+  const m = t.projectData.schedule;
+  const queryClient = useQueryClient();
+  const { isViewer } = useRole();
+  const s = project.settings;
+  const saved = scheduleForm(projectSchedule(s));
+  const [form, setForm] = useState(saved);
+  const [checked, setChecked] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const errors = checked ? scheduleErrors(form) : {};
+  useUnsaved(!sameForm(form, saved), !isViewer);
+
+  const save = async () => {
+    setChecked(true);
+    if (Object.keys(scheduleErrors(form)).length > 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.updateProjectSettings({
+        projectId: project.id,
+        baseRevision: project.revision,
+        name: project.name,
+        networkName: project.networkName,
+        settings: {
+          internalPorts: s?.internalPorts,
+          snapshotLimit: s?.snapshotLimit ?? 0,
+          snapshotSchedule: toSchedule(form, s?.snapshotSchedule),
+        },
+      });
+      toast.success(m.saved);
+      setChecked(false);
+      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title={m.title}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <FormBody>
+          <ScheduleFields id="p-schedule" value={form} onChange={setForm} errors={errors} disabled={isViewer} note={m.disabledNote} />
+          {error && <Alert>{error}</Alert>}
+          {!isViewer && (
+            <FormActions>
+              <Button type="submit" variant="outline" disabled={busy}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </FormActions>
+          )}
         </FormBody>
       </form>
     </Section>

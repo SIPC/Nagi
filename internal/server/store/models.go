@@ -22,26 +22,27 @@ type Activity struct {
 }
 
 type Container struct {
-	ProjectID       string
-	Name            string
-	Position        int64
-	NodeID          string
-	Dir             string
-	Revision        int64
-	CreatedAt       int64
-	DeployedVersion int64
-	Draft           []byte
-	WebhookHash     string
-	Secrets         []byte
-	DeployKeyPub    string
-	ImportedPorts   string
-	LastCommit      string
-	BackupNodeID    string
-	Failover        []byte
-	FailoverEpoch   int64
-	DeclaredPorts   string
-	DisplayName     string
-	AlertRules      []byte
+	ProjectID        string
+	Name             string
+	Position         int64
+	NodeID           string
+	Dir              string
+	Revision         int64
+	CreatedAt        int64
+	DeployedVersion  int64
+	Draft            []byte
+	WebhookHash      string
+	Secrets          []byte
+	DeployKeyPub     string
+	ImportedPorts    string
+	LastCommit       string
+	BackupNodeID     string
+	Failover         []byte
+	FailoverEpoch    int64
+	DeclaredPorts    string
+	DisplayName      string
+	AlertRules       []byte
+	SnapshotSchedule []byte
 }
 
 type Deployment struct {

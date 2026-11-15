@@ -40,7 +40,8 @@ import { confirmAction } from "@/components/confirm";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRole } from "@/components/role";
 import { snapshotTime, VolumeFiles } from "@/pages/volume-files";
-import { defaultSnapshotIntervalMinutes, defaultSnapshotLimit } from "@/lib/config";
+import { defaultSnapshotLimit } from "@/lib/config";
+import { browserTimeZone, projectSchedule, sameForm, scheduleErrors, ScheduleFields, scheduleForm, scheduleSummary, toSchedule } from "@/components/snapshot-schedule";
 
 // 容器的数据：快照、顶替、备份节点、更换节点（迁移、从备份节点恢复、重新部署到其他节点）。
 // 见 docs/snapshot.md、docs/failover.md。
@@ -431,9 +432,6 @@ function NotDeployed({ project, container }: { project: Project; container: Cont
 
 // ---- 快照 ----
 
-// interval：快照间隔，整小时的写成小时。
-const interval = (min: number) => (min % 60 === 0 ? t.common.time.hours(min / 60) : t.common.time.minutes(min));
-
 function Snapshots({
   project,
   container,
@@ -447,6 +445,7 @@ function Snapshots({
   const s = t.projectData.snapshots;
   const deployed = container.deployedVersion > 0n;
   const online = nodes.online(container.nodeId);
+  const [editing, setEditing] = useState(false);
   return (
     <Section
       title={s.title}
@@ -454,12 +453,15 @@ function Snapshots({
       actions={
         <>
           <span>
-            {s.scheduleShort(interval(project.settings?.snapshotIntervalMinutes || defaultSnapshotIntervalMinutes))}
+            {scheduleSummary(container.snapshotSchedule ?? projectSchedule(project.settings))}
             {s.limitShort(project.settings?.snapshotLimit || defaultSnapshotLimit)} ·{" "}
-            <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="hover:underline">
+            <button type="button" className="cursor-pointer rounded-sm outline-none hover:underline focus-ring" onClick={() => setEditing(true)}>
               {s.scheduleLink}
-            </Link>
+            </button>
           </span>
+          <Dialog open={editing} onClose={() => setEditing(false)} title={t.projectData.schedule.title}>
+            {editing && <ContainerSchedule project={project} container={container} onDone={() => setEditing(false)} />}
+          </Dialog>
           {deployed && online && (
             <Button
               variant="outline"
@@ -492,6 +494,88 @@ function Snapshots({
         <SnapshotList project={project} container={container} busy={run.busy} run={run.run} />
       )}
     </Section>
+  );
+}
+
+// ContainerSchedule：容器的定时快照计划。默认用项目的；单独设置时整个替换项目的，起点是项目现在的计划。
+function ContainerSchedule({ project, container, onDone }: { project: Project; container: Container; onDone: () => void }) {
+  const m = t.projectData.schedule;
+  const queryClient = useQueryClient();
+  const { isViewer } = useRole();
+  const fromProject = projectSchedule(project.settings);
+  const [own, setOwn] = useState(!!container.snapshotSchedule);
+  const [form, setForm] = useState(scheduleForm(container.snapshotSchedule ?? fromProject));
+  const [checked, setChecked] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const errors = checked && own ? scheduleErrors(form) : {};
+  // 关闭时的说明：设置了顶替仍每 15 分钟快照，设置了备份节点就不再同步。
+  const note = container.failover ? m.failoverNote : container.backupNodeId ? m.backupNote : undefined;
+  const shown = own ? form : scheduleForm(fromProject);
+  const unchanged = own === !!container.snapshotSchedule && (!own || sameForm(form, scheduleForm(container.snapshotSchedule)));
+
+  const save = async () => {
+    setChecked(true);
+    if (own && Object.keys(scheduleErrors(form)).length > 0) return;
+    if (unchanged) return onDone();
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.setContainerSnapshotSchedule({
+        projectId: project.id,
+        container: container.name,
+        schedule: own ? toSchedule(form, container.snapshotSchedule ?? fromProject) : undefined,
+      });
+      toast.success(m.saved);
+      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Check checked={own} disabled={isViewer} onChange={setOwn} help={m.ownHelp}>
+        {m.own}
+      </Check>
+      <ScheduleFields
+        id="c-schedule"
+        value={shown}
+        onChange={setForm}
+        errors={errors}
+        disabled={isViewer || !own}
+        timeZone={own ? browserTimeZone() : fromProject.timeZone || "UTC"}
+        note={note}
+      />
+      {!own && (
+        <p className="leading-5 text-muted-foreground">
+          <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="text-foreground underline underline-offset-4">
+            {m.projectLink}
+          </Link>
+        </p>
+      )}
+      {error && <Alert>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        {!isViewer && (
+          <Button type="submit" disabled={busy}>
+            {busy && <Spinner />}
+            {t.common.actions.save}
+          </Button>
+        )}
+      </DialogActions>
+    </form>
   );
 }
 

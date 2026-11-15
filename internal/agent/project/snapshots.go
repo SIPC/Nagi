@@ -152,18 +152,22 @@ func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string,
 	return sid, nil
 }
 
-// snapshotGap 是容器的定时快照间隔。设置了顶替的容器每 15 分钟一次（与同步给热备的频率一致），除非用户设得更短。
-func (m *Manager) snapshotGap(s *nagiv1.ContainerSpec) time.Duration {
-	gap := time.Duration(spec.SnapshotIntervalMinutes(s.GetSnapshotIntervalMinutes())) * time.Minute
-	if m.FastSnapshot != nil && m.FastSnapshot(s.GetProjectId(), s.GetName()) && gap > failoverSnapshotGap {
-		gap = failoverSnapshotGap
+// fastGap 是设置了顶替的容器另外的快照间隔：每 15 分钟一次（与同步给热备的频率一致），关闭了定时快照也照做。其他容器为 0。
+func (m *Manager) fastGap(s *nagiv1.ContainerSpec) time.Duration {
+	if m.FastSnapshot != nil && m.FastSnapshot(s.GetProjectId(), s.GetName()) {
+		return failoverSnapshotGap
 	}
-	return gap
+	return 0
 }
 
-// snapshotDue：到了间隔时间，而且不在失败退避里。
+// snapshotGap 是容器两份定时快照之间大致的间隔（见 spec.SnapshotGap）。
+func (m *Manager) snapshotGap(s *nagiv1.ContainerSpec) time.Duration {
+	return spec.SnapshotGap(spec.SnapshotScheduleOf(s), m.fastGap(s))
+}
+
+// snapshotDue：按计划到了时间（见 spec.SnapshotDue），而且不在失败退避里。
 func (m *Manager) snapshotDue(c *Cached, now time.Time) bool {
-	return now.Sub(c.LastSnapshot) >= m.snapshotGap(c.Spec) && !now.Before(c.SnapshotRetryAt)
+	return spec.SnapshotDue(spec.SnapshotScheduleOf(c.Spec), c.LastSnapshot, now, m.fastGap(c.Spec)) && !now.Before(c.SnapshotRetryAt)
 }
 
 // retryDelay 是第 failures 次连续失败以后等多久再试：按 snapshotBackoff 逐级拉长，不超过快照间隔（至少 5 分钟）。

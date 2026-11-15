@@ -89,7 +89,7 @@ var allTools = []tool{
 		procedures:  []string{nagiv1connect.ProjectServiceCreateProjectProcedure}},
 		toolCreateProject),
 	def(tool{name: "update_project", title: "Update project settings", write: true,
-		description: "Change a project's name, network name, snapshot interval, snapshot limit or internal ports. Takes effect immediately. Shared variables are changed with update_shared_env.",
+		description: "Change a project's name, network name, scheduled snapshots (on or off, every N minutes or at daily times), snapshot limit or internal ports. Takes effect immediately. A container can override the snapshot schedule with set_snapshot_schedule. Shared variables are changed with update_shared_env.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceUpdateProjectSettingsProcedure}},
 		toolUpdateProject),
 	def(tool{name: "update_shared_env", title: "Update shared variables", write: true,
@@ -129,6 +129,10 @@ var allTools = []tool{
 		description: "Change the name a container is shown with in the web UI. The container name itself cannot change.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSetContainerDisplayNameProcedure}},
 		toolSetDisplayName),
+	def(tool{name: "set_snapshot_schedule", title: "Set snapshot schedule", write: true, idempotent: true,
+		description: "Give one container its own scheduled snapshot settings (on or off, every N minutes or at daily times), replacing the project's, or make it follow the project's again with use_project. Takes effect immediately.",
+		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSetContainerSnapshotScheduleProcedure}},
+		toolSetSnapshotSchedule),
 	def(tool{name: "discard_draft", title: "Discard draft", write: true, idempotent: true,
 		description: "Throw away a container's unsaved draft.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceDiscardDraftProcedure}},
@@ -564,14 +568,14 @@ func toolGetProject(c *call, in ProjectArg) (any, error) {
 		Links           []link      `json:"linked_projects"`
 		SharedVariables []string    `json:"shared_variables"`
 		// 共享变量的草稿（还没部署），没有草稿时为空。
-		SharedDraft             []string `json:"shared_variables_draft,omitempty"`
-		InternalPorts           []string `json:"internal_ports,omitempty"`
-		Revision                int64    `json:"revision"`
-		SnapshotIntervalMinutes uint32   `json:"snapshot_interval_minutes"`
-		SnapshotLimit           uint32   `json:"snapshot_limit"`
+		SharedDraft      []string     `json:"shared_variables_draft,omitempty"`
+		InternalPorts    []string     `json:"internal_ports,omitempty"`
+		Revision         int64        `json:"revision"`
+		SnapshotSchedule scheduleView `json:"snapshot_schedule"`
+		SnapshotLimit    uint32       `json:"snapshot_limit"`
 	}{projectView: projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Containers: []containerView{}},
 		Routes: []routeView{}, Links: []link{}, SharedVariables: envNames(p.GetSettings().GetSharedEnv()), InternalPorts: p.GetSettings().GetInternalPorts(),
-		Revision: p.GetRevision(), SnapshotIntervalMinutes: spec.SnapshotIntervalMinutes(p.GetSettings().GetSnapshotIntervalMinutes()),
+		Revision: p.GetRevision(), SnapshotSchedule: scheduleOf(spec.ProjectSnapshotSchedule(p.GetSettings())),
 		SnapshotLimit: spec.SnapshotLimit(p.GetSettings().GetSnapshotLimit())}
 	if p.GetHasSharedEnvDraft() {
 		out.SharedDraft = envNames(p.GetSharedEnvDraft())
@@ -705,7 +709,8 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 		Events      []event       `json:"recent_events"`
 		LastCommit  string        `json:"last_commit,omitempty"`
 		NotSnapshot []string      `json:"volumes_not_in_snapshots,omitempty"`
-	}{containerView: containerSummary(s, m, nodes), Dir: m.GetDir(), Config: configOf(m.GetConfig()), Routes: []routeView{},
+		Schedule    scheduleView  `json:"snapshot_schedule"`
+	}{Schedule: containerSchedule(s.GetProject(), m), containerView: containerSummary(s, m, nodes), Dir: m.GetDir(), Config: configOf(m.GetConfig()), Routes: []routeView{},
 		Versions: []version{}, Events: []event{}, LastCommit: m.GetLastCommit(), NotSnapshot: m.GetUnmanagedVolumes()}
 	if m.GetHasDraft() {
 		out.Draft = configOf(m.GetDraft())

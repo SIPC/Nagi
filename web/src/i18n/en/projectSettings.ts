@@ -12,8 +12,6 @@ export default {
     networkNameHelp: "After changing it, update the addresses those projects use. Existing container directories don't change.",
     renameConfirm: (name) => `Change the network name to ${name}? Addresses in linked projects must be updated.`,
     rename: "Change network name",
-    snapshotInterval: "Snapshot interval (minutes)",
-    snapshotIntervalHint: "Defaults to 720 minutes if empty.",
     snapshotLimit: "Snapshot limit",
     snapshotLimitHint: "Scheduled, manual and pre-deploy snapshots per container. The oldest are deleted beyond this. Version files don't count. Defaults to 10 if empty.",
     positiveInteger: "Must be a positive whole number",

@@ -313,6 +313,12 @@ func (s *Service) rebuildProject(ctx context.Context, specs []*nagiv1.ContainerS
 	settings := &nagiv1.ProjectSettings{
 		SharedEnv: newest.GetSharedEnv(), SnapshotIntervalMinutes: newest.GetSnapshotIntervalMinutes(), SnapshotLimit: newest.GetSnapshotLimit(), InternalPorts: internalPorts,
 	}
+	if sch := newest.GetProjectSnapshotSchedule(); sch != nil {
+		if clean, err := spec.CleanSnapshotSchedule(sch); err == nil {
+			settings.SnapshotSchedule = clean
+			settings.SnapshotIntervalMinutes = clean.GetIntervalMinutes()
+		}
+	}
 	sealed, err := s.seal(settings, settingsCtx(id))
 	if err != nil {
 		return false, err
@@ -371,6 +377,12 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 	if d, err := checkDisplayName(sp.GetDisplayName()); err == nil && d != "" {
 		if err := s.Q.SetContainerDisplayName(ctx, store.SetContainerDisplayNameParams{DisplayName: d, ProjectID: pid, Name: name}); err != nil {
 			return fail(err)
+		}
+	}
+	// 生效的计划和项目的不同：容器单独设置过定时快照计划。
+	if sch := sp.GetSnapshotSchedule(); sch != nil && sp.GetProjectSnapshotSchedule() != nil && !proto.Equal(sch, sp.GetProjectSnapshotSchedule()) {
+		if clean, err := spec.CleanSnapshotSchedule(sch); err == nil {
+			_ = s.Q.SetContainerSnapshotSchedule(ctx, store.SetContainerSnapshotScheduleParams{SnapshotSchedule: marshalSchedule(clean), ProjectID: pid, Name: name})
 		}
 	}
 	// 记下拼回的那份缓存的修订号：别的节点上报同一个容器的更新的一份时（例如旧的原节点先报上来），据此换成更新的那份。

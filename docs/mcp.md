@@ -114,7 +114,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
-| `update_project` | 修改项目名称、网络名、快照间隔、份数上限、内部端口，立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
+| `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口，立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
 | `update_shared_env` | 设置、删除共享变量，或标为密钥，存为草稿，返回引用了改动变量的容器。用 `deploy` 的 `apply_shared_env` 生效 | `SaveSharedEnv` |
 | `discard_shared_env` | 丢弃共享变量的草稿 | `DiscardSharedEnv` |
 | `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效 | `ConnectProject`、`DisconnectProject` |
@@ -122,6 +122,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
 | `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项 | `SaveDraft` |
 | `set_display_name` | 修改容器的显示名称 | `SetContainerDisplayName` |
+| `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的 | `SetContainerSnapshotSchedule` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |

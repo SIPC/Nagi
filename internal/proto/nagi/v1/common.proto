@@ -46,7 +46,8 @@ message LinkedProject {
 message ProjectSettings {
   // 共享变量：所有容器的 compose 里都能用 ${变量} 引用，同名时以容器自己的变量为准。
   repeated EnvVar shared_env = 1;
-  // 定时快照间隔（分钟），0 表示默认（720 分钟）。对项目里的所有容器生效。
+  // 定时快照间隔（分钟），0 表示默认（720 分钟）。对项目里的所有容器生效。设置了 snapshot_schedule 时和它的
+  // interval_minutes 一致，留着给旧版本用。
   uint32 snapshot_interval_minutes = 2;
   // 内部端口：容器没有声明、但要让别的节点上的容器访问的端口，形如"容器:端口"（容器组写"服务.容器组:端口"）。
   repeated string internal_ports = 3;
@@ -54,6 +55,20 @@ message ProjectSettings {
   uint32 snapshot_limit = 4;
   // 项目里容器的告警规则（重启、5xx、健康检查、快照、备份同步）。容器可以单独设置（Container.alert_rules）。
   AlertRules alert_rules = 5;
+  // 定时快照的计划，容器可以单独设置（Container.snapshot_schedule）。为空时按 snapshot_interval_minutes 的间隔。
+  SnapshotSchedule snapshot_schedule = 6;
+}
+
+// SnapshotSchedule 是定时快照的计划（见 docs/snapshot.md#定时快照）。
+message SnapshotSchedule {
+  // 关闭定时快照。设置了顶替的容器仍每 15 分钟一份（同步给热备要用）。
+  bool disabled = 1;
+  // 每隔多少分钟一份（最多 7 天），0 表示默认 720。times 为空时按它。
+  uint32 interval_minutes = 2;
+  // 每天在这些时刻各做一份，"HH:MM"（24 小时制），按 time_zone 计算。不为空时不按间隔。
+  repeated string times = 3;
+  // 计算 times 的时区（IANA 名称，例如 Asia/Shanghai），保存时取浏览器的时区。为空时按 UTC。
+  string time_zone = 4;
 }
 
 // Container 是项目里独立部署的单位：单个容器（镜像表单），或者容器组（一份 compose，里面有几个容器）。
@@ -108,6 +123,8 @@ message Container {
   string display_name = 25;
   // 容器单独设置的告警规则，为空时用项目的（ProjectSettings.alert_rules）。
   AlertRules alert_rules = 26;
+  // 容器单独设置的定时快照计划，为空时用项目的（ProjectSettings.snapshot_schedule）。
+  SnapshotSchedule snapshot_schedule = 27;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -336,7 +353,7 @@ message ContainerSpec {
   bytes docker_config = 15;
   // 快照仓库的密码。
   string backup_password = 16;
-  // 定时快照间隔（分钟），0 表示默认 720。
+  // 定时快照间隔（分钟），0 表示默认 720。给不认识 snapshot_schedule 的旧版本节点用：按计划换算成大致的间隔。
   uint32 snapshot_interval_minutes = 17;
   // 是否有状态（面板按配置判定）。
   bool stateful = 18;
@@ -352,6 +369,10 @@ message ContainerSpec {
   uint32 snapshot_limit = 23;
   // 这个容器生效的告警规则：容器单独设置了就是它的，否则是项目的。节点按它判断容器的告警。
   AlertRules alert_rules = 24;
+  // 这个容器生效的定时快照计划（容器单独设置的，否则是项目的）。为空时（旧版本面板）按 snapshot_interval_minutes。
+  SnapshotSchedule snapshot_schedule = 25;
+  // 项目设置里的定时快照计划（换面板时据此拼回项目设置；和 snapshot_schedule 不同说明容器单独设置过）。
+  SnapshotSchedule project_snapshot_schedule = 26;
 }
 
 // BackupTarget 是接收副本的节点。

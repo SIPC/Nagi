@@ -334,6 +334,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
 		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
+		SnapshotSchedule: containerSnapshotSchedule(c),
 	}
 	if cfg := failoverOf(c); cfg != nil {
 		mem.Failover = cfg
@@ -438,8 +439,14 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 		return nil, err
 	}
 	out.InternalPorts = ports
-	if out.SnapshotIntervalMinutes > 7*24*60 {
+	if out.SnapshotIntervalMinutes > spec.MaxSnapshotIntervalMinutes {
 		return nil, invalid("定时快照间隔不能超过 7 天")
+	}
+	if sch := in.GetSnapshotSchedule(); sch != nil {
+		if out.SnapshotSchedule, err = spec.CleanSnapshotSchedule(sch); err != nil {
+			return nil, err
+		}
+		out.SnapshotIntervalMinutes = out.SnapshotSchedule.GetIntervalMinutes()
 	}
 	if n := out.SnapshotLimit; n != 0 && (n < minSnapshotLimit || n > maxSnapshotLimit) {
 		return nil, invalid("快照份数上限须在 %d–%d 之间", minSnapshotLimit, maxSnapshotLimit)
@@ -560,6 +567,7 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 	if in.GetAlertRules() == nil {
 		next.AlertRules = old.GetAlertRules()
 	}
+	mergeSnapshotSchedule(next, old)
 	sealed, err := s.seal(next, settingsCtx(id))
 	if err != nil {
 		return nil, err

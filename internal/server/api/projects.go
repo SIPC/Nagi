@@ -278,6 +278,11 @@ func (s *projectService) SetContainerAlertRules(ctx context.Context, req *connec
 	return reply(s.Projects.SetContainerAlertRules(ctx, m.GetProjectId(), m.GetContainer(), m.GetRules()))
 }
 
+func (s *projectService) SetContainerSnapshotSchedule(ctx context.Context, req *connect.Request[nagiv1.SetContainerSnapshotScheduleRequest]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SetContainerSnapshotSchedule(ctx, m.GetProjectId(), m.GetContainer(), m.GetSchedule()))
+}
+
 func (s *projectService) SetContainerDisplayName(ctx context.Context, req *connect.Request[nagiv1.SetContainerDisplayNameRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
 	return reply(s.Projects.SetDisplayName(ctx, m.GetProjectId(), m.GetContainer(), m.GetDisplayName()))

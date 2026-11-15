@@ -24,12 +24,12 @@ func projectRevision(expected int64, p *nagiv1.Project) int64 {
 
 type UpdateProjectArgs struct {
 	ProjectArg
-	ExpectedRevision        int64    `json:"expected_revision,omitempty" jsonschema:"the project's revision from get_project; the change is refused if someone changed the project since"`
-	Name                    *string  `json:"name,omitempty" jsonschema:"display name, can repeat"`
-	NetworkName             *string  `json:"network_name,omitempty" jsonschema:"unique network name (lowercase letters, digits and -). Linked projects reach this project's containers at container.network-name and must update those addresses"`
-	SnapshotIntervalMinutes *uint32  `json:"snapshot_interval_minutes,omitempty" jsonschema:"minutes between scheduled snapshots of every container, at most 10080; 0 means the default (720)"`
-	SnapshotLimit           *uint32  `json:"snapshot_limit,omitempty" jsonschema:"scheduled, manual and predeploy snapshots kept per container, 3 to 1000; 0 means the default (10). The oldest beyond it are deleted after the next snapshot"`
-	InternalPorts           []string `json:"internal_ports,omitempty" jsonschema:"replaces the internal ports: ports that containers on other nodes reach although the compose file does not publish them, as service:port"`
+	ExpectedRevision int64   `json:"expected_revision,omitempty" jsonschema:"the project's revision from get_project; the change is refused if someone changed the project since"`
+	Name             *string `json:"name,omitempty" jsonschema:"display name, can repeat"`
+	NetworkName      *string `json:"network_name,omitempty" jsonschema:"unique network name (lowercase letters, digits and -). Linked projects reach this project's containers at container.network-name and must update those addresses"`
+	ScheduleArgs
+	SnapshotLimit *uint32  `json:"snapshot_limit,omitempty" jsonschema:"scheduled, manual and predeploy snapshots kept per container, 3 to 1000; 0 means the default (10). The oldest beyond it are deleted after the next snapshot"`
+	InternalPorts []string `json:"internal_ports,omitempty" jsonschema:"replaces the internal ports: ports that containers on other nodes reach although the compose file does not publish them, as service:port"`
 }
 
 func toolUpdateProject(c *call, in UpdateProjectArgs) (any, error) {
@@ -40,7 +40,8 @@ func toolUpdateProject(c *call, in UpdateProjectArgs) (any, error) {
 	p := s.GetProject()
 	old := p.GetSettings()
 	name, network := p.GetName(), p.GetNetworkName()
-	set := &nagiv1.ProjectSettings{SnapshotIntervalMinutes: old.GetSnapshotIntervalMinutes(), SnapshotLimit: old.GetSnapshotLimit(), InternalPorts: old.GetInternalPorts()}
+	set := &nagiv1.ProjectSettings{SnapshotIntervalMinutes: old.GetSnapshotIntervalMinutes(), SnapshotLimit: old.GetSnapshotLimit(), InternalPorts: old.GetInternalPorts(),
+		SnapshotSchedule: spec.ProjectSnapshotSchedule(old)}
 	var changed []string
 	if in.Name != nil && *in.Name != name {
 		name = *in.Name
@@ -50,10 +51,12 @@ func toolUpdateProject(c *call, in UpdateProjectArgs) (any, error) {
 		network = *in.NetworkName
 		changed = append(changed, "network_name → "+network)
 	}
-	if in.SnapshotIntervalMinutes != nil && *in.SnapshotIntervalMinutes != set.SnapshotIntervalMinutes {
-		set.SnapshotIntervalMinutes = *in.SnapshotIntervalMinutes
-		changed = append(changed, fmt.Sprintf("snapshot_interval_minutes → %d", spec.SnapshotIntervalMinutes(set.SnapshotIntervalMinutes)))
+	sch, schChanged := in.ScheduleArgs.apply(set.SnapshotSchedule)
+	if len(sch.GetTimes()) > 0 && sch.GetTimeZone() == "" {
+		return nil, errNeedTimeZone
 	}
+	set.SnapshotSchedule = sch
+	changed = append(changed, schChanged...)
 	if in.SnapshotLimit != nil && *in.SnapshotLimit != set.SnapshotLimit {
 		set.SnapshotLimit = *in.SnapshotLimit
 		changed = append(changed, fmt.Sprintf("snapshot_limit → %d", spec.SnapshotLimit(set.SnapshotLimit)))

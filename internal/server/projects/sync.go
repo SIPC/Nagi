@@ -53,9 +53,11 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 		ProjectId: p.ID, ProjectName: p.Name, NetworkName: p.NetworkName, Name: c.Name, Dir: c.Dir,
 		Revision: c.Revision, ProjectRevision: p.Revision, Version: version,
 		DeployKey: sec.DeployKey, DeployKeyPub: c.DeployKeyPub, DockerConfig: docker, BackupPassword: sec.BackupPassword,
-		SnapshotIntervalMinutes: settings.GetSnapshotIntervalMinutes(), SnapshotLimit: settings.GetSnapshotLimit(), InternalPorts: settings.GetInternalPorts(),
+		SnapshotLimit: settings.GetSnapshotLimit(), InternalPorts: settings.GetInternalPorts(),
 		DisplayName: c.DisplayName, AlertRules: effectiveAlertRules(settings, c),
+		SnapshotSchedule: effectiveSnapshotSchedule(settings, c), ProjectSnapshotSchedule: spec.ProjectSnapshotSchedule(settings),
 	}
+	sp.SnapshotIntervalMinutes = spec.LegacySnapshotInterval(sp.SnapshotSchedule)
 	var v store.Version
 	if version > 0 {
 		v, err = s.Q.GetVersion(ctx, store.GetVersionParams{ProjectID: p.ID, Container: c.Name, Version: version})

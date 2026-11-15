@@ -690,6 +690,8 @@ service ProjectService {
   rpc SetContainerDisplayName(SetContainerDisplayNameRequest) returns (Project);
   // 容器单独设置告警规则（rules 为空表示改回用项目的）。
   rpc SetContainerAlertRules(SetContainerAlertRulesRequest) returns (Project);
+  // 容器单独设置定时快照计划，schedule 为空时改回用项目的。
+  rpc SetContainerSnapshotSchedule(SetContainerSnapshotScheduleRequest) returns (Project);
   // 立即同步到备份节点，同步完才返回。
   rpc SyncBackup(ContainerRef) returns (Project);
   // 备份节点上副本里的快照。
@@ -751,6 +753,12 @@ message SetContainerAlertRulesRequest {
   string project_id = 1;
   string container = 2;
   AlertRules rules = 3;
+}
+
+message SetContainerSnapshotScheduleRequest {
+  string project_id = 1;
+  string container = 2;
+  SnapshotSchedule schedule = 3;
 }
 
 message SetContainerDisplayNameRequest {
