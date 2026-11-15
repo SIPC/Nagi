@@ -8,6 +8,16 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.25.1
+
+### 改进
+
+- 登录页首次打开时淡入，进入两步验证和返回时左右滑动切换，与面板其他页面一致。
+
+### 修复
+
+- 修复了密码管理器无法识别登录和身份验证中的验证码输入框的问题。
+
 ## v0.25.0
 
 ### 新功能

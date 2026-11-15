@@ -8,6 +8,16 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.25.1
+
+### Improvements
+
+- The sign-in page fades in when first opened and slides sideways when moving to and from two-step verification, consistent with the rest of the panel.
+
+### Fixes
+
+- Fixes an issue where password managers couldn't recognize the verification code fields at sign-in and in identity verification.
+
 ## v0.25.0
 
 ### New features
