@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
@@ -20,6 +21,8 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -46,7 +49,7 @@ type replicas struct {
 	dir string // <节点目录>/replicas
 	mu  sync.Mutex
 	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。
-	locks map[string]*sync.Mutex
+	locks map[string]*sync.RWMutex
 }
 
 func replicaID(projectID, container string) (string, error) {
@@ -68,19 +71,32 @@ func (r *replicas) root(projectID, container string) (string, error) {
 }
 
 func (r *replicas) lock(projectID, container string) func() {
+	l := r.lockOf(projectID, container)
+	l.Lock()
+	return l.Unlock
+}
+
+// rlock 是接收文件时加的锁：同一次同步的几条流（见 syncStreams）各写各的文件，可以同时拿；
+// 提交、恢复等要改整个副本的操作用 lock，等它们都结束。
+func (r *replicas) rlock(projectID, container string) func() {
+	l := r.lockOf(projectID, container)
+	l.RLock()
+	return l.RUnlock
+}
+
+func (r *replicas) lockOf(projectID, container string) *sync.RWMutex {
 	id := projectID + "-" + container
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.locks == nil {
-		r.locks = map[string]*sync.Mutex{}
+		r.locks = map[string]*sync.RWMutex{}
 	}
 	l := r.locks[id]
 	if l == nil {
-		l = &sync.Mutex{}
+		l = &sync.RWMutex{}
 		r.locks[id] = l
 	}
-	r.mu.Unlock()
-	l.Lock()
-	return l.Unlock
+	return l
 }
 
 // load 读取副本的登记信息和恢复用的配置。
@@ -283,7 +299,8 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 		c   *nagiv1.ReplicaChunk
 		err error
 	}
-	ch := make(chan recv)
+	// 带缓冲：这边写盘的时候那边接着收，写盘慢一点也不会马上让发送方停下来。
+	ch := make(chan recv, 16)
 	go func() {
 		for {
 			c, err := stream.Recv()
@@ -321,7 +338,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer()); err != nil {
 				return err
 			}
-			unlock = s.a.replicas.lock(c.GetProjectId(), c.GetContainer())
+			unlock = s.a.replicas.rlock(c.GetProjectId(), c.GetContainer())
 			guard = &metrics.DiskGuard{Dir: files}
 		}
 		if c.GetPath() != path {
@@ -509,22 +526,95 @@ func (a *agent) syncOnce(ctx context.Context, projectID, container string, targe
 	if err != nil {
 		return 0, err
 	}
-	put, err := c.ReplicaPut(ctx)
-	if err != nil {
-		return 0, err
-	}
+	// 对方已经有、而且不会再变的文件不用传，直接算进提交的清单。数据包先传，都到了再传引用它们的索引等文件：
+	// 中途断开时，备份节点上不会出现指向还没收到的数据包的索引。
 	var paths []string
-	var sent int64
-	buf := make([]byte, 256<<10)
-	first := true
+	var packs, others []project.ReplicaFile
 	for _, f := range files {
-		if size, ok := remote[f.Path]; ok && f.Immutable && size == f.Size {
+		switch size, ok := remote[f.Path]; {
+		case ok && f.Immutable && size == f.Size:
 			paths = append(paths, f.Path)
-			continue
+		case f.Pack:
+			packs = append(packs, f)
+		default:
+			others = append(others, f)
 		}
+	}
+	var sent atomic.Int64
+	for _, batch := range [][]project.ReplicaFile{packs, others} {
+		dial := func() (*grpc.ClientConn, error) { return mesh.Client(a.mesh.m, key) }
+		done, err := sendReplicaFiles(ctx, dial, cc, projectID, container, batch, &sent)
+		paths = append(paths, done...)
+		if err != nil {
+			return sent.Load(), err
+		}
+	}
+	if _, err := c.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: projectID, Container: container, Paths: paths}); err != nil {
+		return sent.Load(), fmt.Errorf("提交: %w", err)
+	}
+	a.log.Info("已同步副本", "project", projectID, "container", container, "target", target.GetName(), "bytes", sent.Load())
+	return sent.Load(), nil
+}
+
+// syncStreams 是同步副本时最多同时开几条流（每条是单独的一个 mesh 连接，走 QUIC 时是同一条连接上的不同流）。
+// 文件多、线路延迟高时，几个文件一起传比一个接一个快；对方写盘也能并行。
+const syncStreams = 4
+
+// sendReplicaFiles 用最多 syncStreams 条 ReplicaPut 流把 files 传给对方，各条流从同一个队列里取文件。
+// 返回传完了的文件（对方收到并确认了）。first 是已经建好的连接，第一条流用它，其余的各用 dial 建一个。
+func sendReplicaFiles(ctx context.Context, dial func() (*grpc.ClientConn, error), first *grpc.ClientConn, projectID, container string,
+	files []project.ReplicaFile, sent *atomic.Int64) ([]string, error) {
+	if len(files) == 0 {
+		return nil, nil
+	}
+	queue := make(chan project.ReplicaFile, len(files))
+	for _, f := range files {
+		queue <- f
+	}
+	close(queue)
+	var mu sync.Mutex
+	var done []string
+	g, gctx := errgroup.WithContext(ctx)
+	for i := range min(syncStreams, len(files)) {
+		g.Go(func() error {
+			cc := first
+			if i > 0 {
+				var err error
+				if cc, err = dial(); err != nil {
+					return err
+				}
+				defer cc.Close()
+			}
+			ok, err := sendReplicaStream(gctx, nagiv1.NewMeshServiceClient(cc), projectID, container, queue, sent)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			done = append(done, ok...)
+			mu.Unlock()
+			return nil
+		})
+	}
+	err := g.Wait()
+	return done, err
+}
+
+// sendReplicaStream 在一条 ReplicaPut 流上传队列里的文件，直到队列空了，返回这条流上传完的文件。
+func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectID, container string,
+	queue <-chan project.ReplicaFile, sent *atomic.Int64) ([]string, error) {
+	var put nagiv1.MeshService_ReplicaPutClient
+	var paths []string
+	buf := make([]byte, 256<<10)
+	for f := range queue {
 		in, err := os.Open(f.Abs)
 		if err != nil {
 			continue // 维护时被删掉了，不再同步
+		}
+		if put == nil {
+			if put, err = c.ReplicaPut(ctx); err != nil {
+				in.Close()
+				return nil, err
+			}
 		}
 		start := true
 		var sendErr error
@@ -532,14 +622,14 @@ func (a *agent) syncOnce(ctx context.Context, projectID, container string, targe
 			n, rerr := in.Read(buf)
 			if n > 0 || start {
 				chunk := &nagiv1.ReplicaChunk{Path: f.Path, Data: buf[:n]}
-				if first {
+				// 每条流的第一块带上容器，对方据此核对权限、加锁。
+				if start && len(paths) == 0 {
 					chunk.ProjectId, chunk.Container = projectID, container
-					first = false
 				}
 				if sendErr = put.Send(chunk); sendErr != nil {
 					break
 				}
-				sent += int64(n)
+				sent.Add(int64(n))
 				start = false
 			}
 			if rerr != nil {
@@ -552,14 +642,13 @@ func (a *agent) syncOnce(ctx context.Context, projectID, container string, targe
 		}
 		paths = append(paths, f.Path)
 	}
+	if put == nil {
+		return nil, nil
+	}
 	if _, err := put.CloseAndRecv(); err != nil {
-		return sent, fmt.Errorf("传输文件: %w", err)
+		return nil, fmt.Errorf("传输文件: %w", err)
 	}
-	if _, err := c.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: projectID, Container: container, Paths: paths}); err != nil {
-		return sent, fmt.Errorf("提交: %w", err)
-	}
-	a.log.Info("已同步副本", "project", projectID, "container", container, "target", target.GetName(), "bytes", sent)
-	return sent, nil
+	return paths, nil
 }
 
 // ---- AgentService ----

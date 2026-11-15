@@ -158,8 +158,9 @@ func quicConfig() *quic.Config {
 		InitialStreamReceiveWindow:     4 << 20,
 		MaxStreamReceiveWindow:         16 << 20,
 		InitialConnectionReceiveWindow: 8 << 20,
-		MaxConnectionReceiveWindow:     32 << 20,
-		MaxIncomingStreams:             4096,
+		// 副本同步会在同一条 QUIC 连接上开几个流并行传（每个流最多 16 MiB），连接的窗口要容得下。
+		MaxConnectionReceiveWindow: 64 << 20,
+		MaxIncomingStreams:         4096,
 	}
 }
 

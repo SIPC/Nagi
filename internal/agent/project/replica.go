@@ -28,6 +28,8 @@ type ReplicaFile struct {
 	// Immutable 表示内容写入后不会再变，大小相同就不用再传。kopia 仓库里的文件名都由内容决定、写入后不变，
 	// 只有 kopia.* 开头的几个（例如维护进度 kopia.maintenance）会被改写。
 	Immutable bool
+	// Pack 是数据包（p、q 开头）。索引等其他文件引用它们，同步时要等数据包都到了再传其他文件。
+	Pack bool
 }
 
 // ReplicaFiles 返回容器快照仓库里要同步的文件。先数据包、再其他文件：仓库的索引写在数据包之后，
@@ -49,8 +51,9 @@ func (m *Manager) ReplicaFiles(ctx context.Context, projectID, container string)
 		}
 		rel, _ := filepath.Rel(dir, full)
 		b := d.Name()
-		f := ReplicaFile{Path: "repo/" + filepath.ToSlash(rel), Abs: full, Size: info.Size(), Immutable: !strings.HasPrefix(b, "kopia.")}
-		if strings.HasPrefix(b, "p") || strings.HasPrefix(b, "q") {
+		f := ReplicaFile{Path: "repo/" + filepath.ToSlash(rel), Abs: full, Size: info.Size(), Immutable: !strings.HasPrefix(b, "kopia."),
+			Pack: strings.HasPrefix(b, "p") || strings.HasPrefix(b, "q")}
+		if f.Pack {
 			packs = append(packs, f)
 		} else {
 			others = append(others, f)

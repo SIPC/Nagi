@@ -32,7 +32,8 @@ func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 			m.log.Warn("mesh 测速服务停止", "err", err)
 		}
 	}()
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.InitialWindowSize(grpcWindow), grpc.InitialConnWindowSize(grpcWindow),
+		grpc.ReadBufferSize(grpcBuffer), grpc.WriteBufferSize(grpcBuffer))
 	nagiv1.RegisterMeshServiceServer(srv, impl)
 	go func() {
 		<-ctx.Done()
@@ -61,10 +62,20 @@ func (s *Service) Ping(ctx context.Context, _ *nagiv1.PingRequest) (*nagiv1.Ping
 	return &nagiv1.PingResponse{Caller: k[:]}, nil
 }
 
-// Client 经 mesh 连接某个成员的 MeshService。
+// 大文件传输（副本同步、文件上传下载）用的 gRPC 窗口和缓冲。默认窗口从 64 KiB 起步、按测出的带宽时延积慢慢涨，
+// 高延迟线路上前面很长一段跑不满；直接给 16 MiB（和 QUIC 一条流的接收窗口上限一样），一条连接只有一个流在传大文件。
+// 窗口只是上限，数据积压时才占内存。
+const (
+	grpcWindow = 16 << 20
+	grpcBuffer = 256 << 10
+)
+
+// Client 经 mesh 连接某个成员的 MeshService。每个 ClientConn 是一条 mesh 连接（QUIC 的一个流），要并行传输就建几个。
 func Client(m *Mesh, k Key) (*grpc.ClientConn, error) {
 	return grpc.NewClient("passthrough:///"+Address(k).String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithInitialWindowSize(grpcWindow), grpc.WithInitialConnWindowSize(grpcWindow),
+		grpc.WithReadBufferSize(grpcBuffer), grpc.WithWriteBufferSize(grpcBuffer),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return m.Dial(ctx, k, ServicePort)
 		}))
