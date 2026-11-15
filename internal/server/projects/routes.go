@@ -67,6 +67,9 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 	if err := s.checkEntries(ctx, c, old, r); err != nil {
 		return nil, err
 	}
+	if err := s.checkRouteNodes(ctx, c, r); err != nil {
+		return nil, err
+	}
 	if err := s.upsertRoute(ctx, projectID, r); err != nil {
 		return nil, err
 	}
@@ -102,7 +105,7 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 	return s.Q.UpsertRoute(ctx, store.UpsertRouteParams{
 		ProjectID: projectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Target: int64(r.GetTarget()),
 		Protocol: r.GetProtocol(), Published: int64(r.GetPublished()), Domains: string(domains), HttpOnly: boolInt(r.GetHttpOnly()),
-		EntryNodes: string(entries), NoLocalEntry: boolInt(r.GetNoLocalEntry()),
+		EntryNodes: string(entries), NoLocalEntry: boolInt(r.GetNoLocalEntry()), ProxyProtocol: boolInt(r.GetProxyProtocol()),
 	})
 }
 
@@ -119,7 +122,7 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 		if conn, err := s.Nodes.Get(c.NodeID); err == nil {
 			if info := conn.LastReport().GetNode(); info.GetCrossNodeEntry() && !info.GetProxyDisabled() {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				_, err := conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: []*nagiv1.Exposure{r}})
+				_, err := conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: spec.SplitRoute(r)})
 				cancel()
 				if err != nil {
 					return err
@@ -151,10 +154,31 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 			return invalid("节点 %s 没有启动 Caddy，无法作为入口节点", n.Name)
 		}
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		_, err = conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: []*nagiv1.Exposure{r}})
+		_, err = conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: spec.SplitRoute(r)})
 		cancel()
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// checkRouteNodes 检查映射用到的新功能节点是否支持：PROXY protocol 要容器所在的节点、顶替节点（从本地进来时）和入口节点都支持；
+// 同时开 TCP 和 UDP 时入口节点要支持（旧版本的入口节点分不清两条同名的入口）。只查在线的节点，不在线的上线后由用户自己留意。
+func (s *Service) checkRouteNodes(ctx context.Context, c store.Container, r *nagiv1.Exposure) error {
+	var ids []string
+	if r.GetProxyProtocol() && !r.GetNoLocalEntry() {
+		ids = append(ids, failoverNodes(c)...)
+	}
+	if r.GetProxyProtocol() || r.GetProtocol() == spec.ProtoTCPUDP {
+		ids = append(ids, r.GetEntryNodes()...)
+	}
+	for _, id := range ids {
+		if conn, err := s.Nodes.Peek(id); err == nil && !conn.LastReport().GetNode().GetProxyProtocol() {
+			if r.GetProxyProtocol() {
+				return invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeName(ctx, id))
+			}
+			return invalid("节点 %s 版本过低，升级后才能作为同时开 TCP 和 UDP 的入口节点", s.NodeName(ctx, id))
 		}
 	}
 	return nil

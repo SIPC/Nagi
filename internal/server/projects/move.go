@@ -67,6 +67,9 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 		if err := s.checkConflicts(ctx, conn.NodeID, p.ID, r.GetName(), r); err != nil {
 			return nil, err
 		}
+		if r.GetProxyProtocol() && !r.GetNoLocalEntry() && !conn.LastReport().GetNode().GetProxyProtocol() {
+			return nil, invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeName(ctx, conn.NodeID))
+		}
 	}
 	sp.Dir = dir
 	sp.Backup = nil

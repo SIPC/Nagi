@@ -50,6 +50,8 @@ type Route struct {
 	UpstreamTLS *UpstreamTLS
 	// RequestHeaders 是转发给上游时设置的请求头（覆盖客户端带的同名请求头）。
 	RequestHeaders map[string]string
+	// ProxyProtocol：tcp/udp 转发给上游时在前面加 PROXY protocol v2 头，带着客户端的地址。
+	ProxyProtocol bool
 }
 
 // UpstreamTLS 是连上游时用的 TLS 设置。
@@ -216,12 +218,13 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 					dial = append(dial, u)
 				}
 			}
+			h := obj{"handler": "proxy", "upstreams": []obj{{"dial": dial}}}
+			if r.ProxyProtocol {
+				h["proxy_protocol"] = "v2"
+			}
 			l4Servers[r.Protocol+"_"+strconv.Itoa(int(r.Published))] = obj{
 				"listen": []string{r.Protocol + "/:" + strconv.Itoa(int(r.Published))},
-				"routes": []obj{{"handle": []obj{{
-					"handler":   "proxy",
-					"upstreams": []obj{{"dial": dial}},
-				}}}},
+				"routes": []obj{{"handle": []obj{h}}},
 			}
 		}
 	}

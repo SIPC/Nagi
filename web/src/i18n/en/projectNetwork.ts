@@ -56,6 +56,9 @@ export default {
     entryList: (nodes) => `Entry ${nodes}`,
     entryDomainWarningShort: "Every entry node requests a certificate. Select only nodes the domain resolves to.",
     httpOnlyHelp: "For multiple entries, terminate HTTPS at a CDN and select this.",
+    proxyProtocol: "Send client address (PROXY protocol)",
+    proxyProtocolHelp: "Passes the client's real address to the service. The service must accept PROXY protocol, or connections fail.",
+    proxyProtocolBadge: "PROXY protocol",
   },
   intranet: {
     title: "Project network",

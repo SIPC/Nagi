@@ -33,6 +33,8 @@ func (m *Manager) Routes(ctx context.Context) ([]proxy.Route, error) {
 				Published: e.GetPublished(),
 				Domains:   e.GetDomains(),
 				HTTPOnly:  e.GetHttpOnly(),
+				// 面板只给 tcp/udp 的映射打开。
+				ProxyProtocol: e.GetProxyProtocol() && e.GetProtocol() != spec.ProtoHTTP,
 			}
 			// 优先用容器组自己的默认网络里的地址，其次是项目内网（单个容器）。
 			groupNet := spec.ComposeProjectName(s.GetProjectId(), s.GetName()) + "_default"

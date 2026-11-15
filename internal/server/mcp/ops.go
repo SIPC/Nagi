@@ -716,13 +716,15 @@ type RouteArgs struct {
 	Container string   `json:"container,omitempty" jsonschema:"container the traffic goes to (required for a new mapping)"`
 	Service   string   `json:"service,omitempty" jsonschema:"service inside a container group"`
 	Port      uint32   `json:"port,omitempty" jsonschema:"port inside the container (required for a new mapping)"`
-	Protocol  string   `json:"protocol,omitempty" jsonschema:"http (default), tcp or udp"`
+	Protocol  string   `json:"protocol,omitempty" jsonschema:"http (default), tcp, udp, or tcp+udp (both on the same public port, e.g. game servers)"`
 	Domains   []string `json:"domains,omitempty" jsonschema:"domains for http; HTTPS certificates are issued automatically"`
 	Published uint32   `json:"published_port,omitempty" jsonschema:"public port for tcp/udp"`
 	HTTPOnly  *bool    `json:"http_only,omitempty" jsonschema:"serve plain HTTP without HTTPS"`
 	// 跨节点入口（见 docs/exposure.md#跨节点入口）。
 	EntryNodes   []string `json:"entry_nodes,omitempty" jsonschema:"also take traffic in on these nodes (names or IDs) besides the container's own node; replaces the list, [] clears it"`
 	NoLocalEntry *bool    `json:"no_local_entry,omitempty" jsonschema:"take traffic in only on entry_nodes, not on the container's own node"`
+	// PROXY protocol（见 docs/exposure.md#tcp--udp-服务）。
+	ProxyProtocol *bool `json:"proxy_protocol,omitempty" jsonschema:"tcp/udp only: prepend a PROXY protocol v2 header carrying the client address; the service must be configured to accept it or connections fail"`
 }
 
 func toolSaveRoute(c *call, in RouteArgs) (any, error) {
@@ -781,6 +783,9 @@ func toolSaveRoute(c *call, in RouteArgs) (any, error) {
 	}
 	if in.NoLocalEntry != nil {
 		r.NoLocalEntry = *in.NoLocalEntry
+	}
+	if in.ProxyProtocol != nil {
+		r.ProxyProtocol = *in.ProxyProtocol
 	}
 	if r.GetContainer() == "" || r.GetTarget() == 0 {
 		return nil, errors.New("container and port are required for a new mapping")

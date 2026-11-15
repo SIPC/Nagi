@@ -28,10 +28,10 @@ func entryProxy(e *nagiv1.LinkEntry) *nagiv1.LinkProxy {
 	return &nagiv1.LinkProxy{ProjectId: e.GetProjectId(), Alias: e.GetName(), TargetProject: e.GetProjectId(), TargetName: e.GetTargetName(), Nodes: e.GetNodes()}
 }
 
-// entryFor 找计划里的入口，已经不在计划里时返回 nil。
-func (n *intranet) entryFor(projectID, name string) *nagiv1.LinkEntry {
+// entryFor 找计划里的入口，已经不在计划里时返回 nil。同时开 TCP 和 UDP 的映射有两条同名的入口，按 network 区分。
+func (n *intranet) entryFor(projectID, name, network string) *nagiv1.LinkEntry {
 	for _, e := range n.current().GetEntries() {
-		if e.GetProjectId() == projectID && e.GetName() == name {
+		if e.GetProjectId() == projectID && e.GetName() == name && entryNetwork(e) == network {
 			return e
 		}
 	}
@@ -83,6 +83,7 @@ func (n *intranet) entryRoutes() []proxy.Route {
 		routes = append(routes, proxy.Route{
 			Project: e.GetProjectId(), Name: e.GetName(), Service: e.GetContainer() + "/" + e.GetService(), Protocol: e.GetProtocol(),
 			Published: e.GetPublished(), Domains: e.GetDomains(), HTTPOnly: e.GetHttpOnly(), Upstreams: []string{f.addr},
+			ProxyProtocol: e.GetProxyProtocol() && e.GetProtocol() != spec.ProtoHTTP,
 		})
 	}
 	for key, f := range n.entries {
@@ -99,8 +100,8 @@ func (n *intranet) openEntry(e *nagiv1.LinkEntry) (*entryForward, error) {
 	projectID, name := e.GetProjectId(), e.GetName()
 	// 每次都按计划里最新的目标找：映射改了容器或端口时不用重开转发口。
 	lookup := func() (*nagiv1.LinkProxy, uint16) {
-		cur := n.entryFor(projectID, name)
-		if cur == nil || entryNetwork(cur) != entryNetwork(e) {
+		cur := n.entryFor(projectID, name, entryNetwork(e))
+		if cur == nil {
 			return nil, 0
 		}
 		return entryProxy(cur), uint16(cur.GetTargetPort())
@@ -176,6 +177,7 @@ func (n *intranet) entryPorts() []spec.PortKey {
 
 // allRoutes 返回本节点要开的全部映射：容器在本节点上的，加上作为入口节点的。
 // 同一条映射两边都有时（例如顶替过来的容器，本节点本来就是它的入口）只开一次，直接连容器。
+// 同时开 TCP 和 UDP 的映射是两条同名的，按协议分开算。
 func (a *agent) allRoutes(ctx context.Context) ([]proxy.Route, error) {
 	routes, err := a.projects.Routes(ctx)
 	if err != nil {
@@ -183,10 +185,10 @@ func (a *agent) allRoutes(ctx context.Context) ([]proxy.Route, error) {
 	}
 	have := map[string]bool{}
 	for _, r := range routes {
-		have[r.Project+"/"+r.Name] = true
+		have[r.Project+"/"+r.Name+"/"+r.Protocol] = true
 	}
 	for _, r := range a.intranet.entryRoutes() {
-		if !have[r.Project+"/"+r.Name] {
+		if !have[r.Project+"/"+r.Name+"/"+r.Protocol] {
 			routes = append(routes, r)
 		}
 	}

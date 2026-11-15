@@ -10,6 +10,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/compose-spec/compose-go/v2/types"
+	"google.golang.org/protobuf/proto"
 )
 
 // 端口映射（见 docs/exposure.md）：属于容器，存在面板上，开在入口节点（默认是容器所在的节点）上，经 Caddy 对外开放。
@@ -19,6 +20,9 @@ const (
 	ProtoHTTP = "http"
 	ProtoTCP  = "tcp"
 	ProtoUDP  = "udp"
+	// ProtoTCPUDP 在同一个端口上同时开 TCP 和 UDP（游戏、语音服务器等）。只存在面板上：下发给节点时拆成 tcp、udp 两条同名的映射
+	// （见 SplitRoute），旧版本的节点也能用。
+	ProtoTCPUDP = "tcp+udp"
 )
 
 var (
@@ -32,7 +36,7 @@ func NormalizeRoute(r *nagiv1.Exposure) *nagiv1.Exposure {
 		Name: strings.TrimSpace(r.GetName()), Container: strings.TrimSpace(r.GetContainer()), Service: strings.TrimSpace(r.GetService()),
 		Target: r.GetTarget(), Protocol: strings.ToLower(strings.TrimSpace(r.GetProtocol())), Published: r.GetPublished(),
 		Domains: NormalizeDomains(r.GetDomains()), HttpOnly: r.GetHttpOnly(),
-		EntryNodes: normalizeEntryNodes(r.GetEntryNodes()), NoLocalEntry: r.GetNoLocalEntry(),
+		EntryNodes: normalizeEntryNodes(r.GetEntryNodes()), NoLocalEntry: r.GetNoLocalEntry(), ProxyProtocol: r.GetProxyProtocol(),
 	}
 	if out.Protocol == ProtoHTTP && len(out.Domains) > 0 {
 		out.Published = 0
@@ -103,6 +107,9 @@ func CheckRoute(r *nagiv1.Exposure) error {
 	if r.GetTarget() == 0 || r.GetTarget() > 65535 {
 		return Invalid("容器 %s 的端口须在 1–65535 之间", r.GetService())
 	}
+	if r.GetProxyProtocol() && r.GetProtocol() == ProtoHTTP {
+		return Invalid("PROXY protocol 只能用于 TCP 和 UDP 端口映射")
+	}
 	switch r.GetProtocol() {
 	case ProtoHTTP:
 		for _, d := range r.GetDomains() {
@@ -113,15 +120,48 @@ func CheckRoute(r *nagiv1.Exposure) error {
 		if len(r.GetDomains()) == 0 {
 			return checkPublished(r)
 		}
-	case ProtoTCP, ProtoUDP:
+	case ProtoTCP, ProtoUDP, ProtoTCPUDP:
 		if len(r.GetDomains()) > 0 {
 			return Invalid("只有 HTTP 端口映射能绑定域名")
 		}
 		return checkPublished(r)
 	default:
-		return Invalid("开放方式只能是 HTTP、TCP 或 UDP")
+		return Invalid("开放方式只能是 HTTP、TCP、UDP 或 TCP+UDP")
 	}
 	return nil
+}
+
+// SplitRoute 把 tcp+udp 的映射拆成 tcp、udp 两条同名的映射（下发给节点时），其他的原样返回。
+func SplitRoute(r *nagiv1.Exposure) []*nagiv1.Exposure {
+	if r.GetProtocol() != ProtoTCPUDP {
+		return []*nagiv1.Exposure{r}
+	}
+	t, u := proto.Clone(r).(*nagiv1.Exposure), proto.Clone(r).(*nagiv1.Exposure)
+	t.Protocol, u.Protocol = ProtoTCP, ProtoUDP
+	return []*nagiv1.Exposure{t, u}
+}
+
+// JoinRoutes 是 SplitRoute 的反过程：把同名、只有协议不同的 tcp 和 udp 映射合回一条 tcp+udp（从节点的配置缓存拼回项目时）。
+func JoinRoutes(list []*nagiv1.Exposure) []*nagiv1.Exposure {
+	var out []*nagiv1.Exposure
+	for _, r := range list {
+		if r.GetProtocol() == ProtoUDP {
+			if i := slices.IndexFunc(out, func(t *nagiv1.Exposure) bool {
+				if t.GetProtocol() != ProtoTCP || t.GetName() != r.GetName() {
+					return false
+				}
+				x := proto.Clone(r).(*nagiv1.Exposure)
+				x.Protocol = ProtoTCP
+				return proto.Equal(t, x)
+			}); i >= 0 {
+				out[i] = proto.Clone(out[i]).(*nagiv1.Exposure)
+				out[i].Protocol = ProtoTCPUDP
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func checkPublished(r *nagiv1.Exposure) error {
@@ -163,6 +203,8 @@ type PortKey struct {
 // UsedPorts 返回映射占用的节点端口。
 func UsedPorts(r *nagiv1.Exposure) []PortKey {
 	switch {
+	case r.GetProtocol() == ProtoTCPUDP:
+		return []PortKey{{ProtoTCP, r.GetPublished()}, {ProtoUDP, r.GetPublished()}}
 	case r.GetProtocol() == ProtoUDP:
 		return []PortKey{{ProtoUDP, r.GetPublished()}}
 	case r.GetProtocol() == ProtoTCP || len(r.GetDomains()) == 0:

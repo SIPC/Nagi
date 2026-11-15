@@ -1127,7 +1127,7 @@ type Exposure struct {
 	Service string `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
 	// 容器内的端口。
 	Target uint32 `protobuf:"varint,2,opt,name=target,proto3" json:"target,omitempty"`
-	// http、tcp 或 udp。
+	// http、tcp、udp 或 tcp+udp（同一个端口同时开 TCP 和 UDP；面板下发给节点时拆成 tcp、udp 两条同名的映射）。
 	Protocol string `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	// 节点上对外的端口。tcp/udp 必填；http 没绑域名时必填。
 	Published uint32 `protobuf:"varint,4,opt,name=published,proto3" json:"published,omitempty"`
@@ -1144,7 +1144,10 @@ type Exposure struct {
 	// 跨节点入口：除容器所在节点外，还从这些节点进来（节点 ID，见 docs/exposure.md#跨节点入口）。
 	EntryNodes []string `protobuf:"bytes,10,rep,name=entry_nodes,json=entryNodes,proto3" json:"entry_nodes,omitempty"`
 	// 不从容器所在节点进来，只走 entry_nodes。
-	NoLocalEntry  bool `protobuf:"varint,11,opt,name=no_local_entry,json=noLocalEntry,proto3" json:"no_local_entry,omitempty"`
+	NoLocalEntry bool `protobuf:"varint,11,opt,name=no_local_entry,json=noLocalEntry,proto3" json:"no_local_entry,omitempty"`
+	// 转发给容器时在前面加上 PROXY protocol v2 头，带着客户端的真实地址（只用于 tcp、udp）。容器里的服务要开启接收，
+	// 否则连不上（见 docs/exposure.md#tcp--udp-服务）。
+	ProxyProtocol bool `protobuf:"varint,12,opt,name=proxy_protocol,json=proxyProtocol,proto3" json:"proxy_protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1252,6 +1255,13 @@ func (x *Exposure) GetEntryNodes() []string {
 func (x *Exposure) GetNoLocalEntry() bool {
 	if x != nil {
 		return x.NoLocalEntry
+	}
+	return false
+}
+
+func (x *Exposure) GetProxyProtocol() bool {
+	if x != nil {
+		return x.ProxyProtocol
 	}
 	return false
 }
@@ -2443,7 +2453,9 @@ type NodeInfo struct {
 	// 节点在本地关闭了节点访问（nagi node access disable）。
 	NodeAccessDisabled bool `protobuf:"varint,16,opt,name=node_access_disabled,json=nodeAccessDisabled,proto3" json:"node_access_disabled,omitempty"`
 	// 节点进程跑在容器里：终端进的是这个容器，文件也是容器里的。
-	InContainer   bool `protobuf:"varint,17,opt,name=in_container,json=inContainer,proto3" json:"in_container,omitempty"`
+	InContainer bool `protobuf:"varint,17,opt,name=in_container,json=inContainer,proto3" json:"in_container,omitempty"`
+	// 节点支持 PROXY protocol，作为入口节点时也能开同时开 TCP 和 UDP 的映射（旧版本的节点不报）。
+	ProxyProtocol bool `protobuf:"varint,18,opt,name=proxy_protocol,json=proxyProtocol,proto3" json:"proxy_protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2593,6 +2605,13 @@ func (x *NodeInfo) GetNodeAccessDisabled() bool {
 func (x *NodeInfo) GetInContainer() bool {
 	if x != nil {
 		return x.InContainer
+	}
+	return false
+}
+
+func (x *NodeInfo) GetProxyProtocol() bool {
+	if x != nil {
+		return x.ProxyProtocol
 	}
 	return false
 }
@@ -4728,6 +4747,8 @@ type LinkEntry struct {
 	TargetName string      `protobuf:"bytes,9,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
 	TargetPort uint32      `protobuf:"varint,10,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`
 	Nodes      []*LinkNode `protobuf:"bytes,11,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// 转发给容器时加 PROXY protocol 头（见 Exposure.proxy_protocol）。
+	ProxyProtocol bool `protobuf:"varint,13,opt,name=proxy_protocol,json=proxyProtocol,proto3" json:"proxy_protocol,omitempty"`
 	// 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
 	AlertRules    *AlertRules `protobuf:"bytes,12,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4839,6 +4860,13 @@ func (x *LinkEntry) GetNodes() []*LinkNode {
 		return x.Nodes
 	}
 	return nil
+}
+
+func (x *LinkEntry) GetProxyProtocol() bool {
+	if x != nil {
+		return x.ProxyProtocol
+	}
+	return false
 }
 
 func (x *LinkEntry) GetAlertRules() *AlertRules {
@@ -5265,7 +5293,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x06 \x01(\tR\tcontainer\":\n" +
 	"\x06Source\x12\x17\n" +
 	"\agit_url\x18\x01 \x01(\tR\x06gitUrl\x12\x17\n" +
-	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xbc\x02\n" +
+	"\agit_ref\x18\x02 \x01(\tR\x06gitRef\"\xe3\x02\n" +
 	"\bExposure\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\rR\x06target\x12\x1a\n" +
@@ -5279,7 +5307,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\ventry_nodes\x18\n" +
 	" \x03(\tR\n" +
 	"entryNodes\x12$\n" +
-	"\x0eno_local_entry\x18\v \x01(\bR\fnoLocalEntry\"H\n" +
+	"\x0eno_local_entry\x18\v \x01(\bR\fnoLocalEntry\x12%\n" +
+	"\x0eproxy_protocol\x18\f \x01(\bR\rproxyProtocol\"H\n" +
 	"\x06EnvVar\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
@@ -5385,7 +5414,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xb7\x04\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xde\x04\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -5406,7 +5435,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vnode_access\x18\x0f \x01(\bR\n" +
 	"nodeAccess\x120\n" +
 	"\x14node_access_disabled\x18\x10 \x01(\bR\x12nodeAccessDisabled\x12!\n" +
-	"\fin_container\x18\x11 \x01(\bR\vinContainer\"\x89\x01\n" +
+	"\fin_container\x18\x11 \x01(\bR\vinContainer\x12%\n" +
+	"\x0eproxy_protocol\x18\x12 \x01(\bR\rproxyProtocol\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +
@@ -5604,7 +5634,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\aproxies\x18\x01 \x03(\v2\x12.nagi.v1.LinkProxyR\aproxies\x12*\n" +
 	"\x06allows\x18\x02 \x03(\v2\x12.nagi.v1.LinkAllowR\x06allows\x12,\n" +
 	"\aentries\x18\x03 \x03(\v2\x12.nagi.v1.LinkEntryR\aentries\x12:\n" +
-	"\fentry_allows\x18\x04 \x03(\v2\x17.nagi.v1.LinkEntryAllowR\ventryAllows\"\x88\x03\n" +
+	"\fentry_allows\x18\x04 \x03(\v2\x17.nagi.v1.LinkEntryAllowR\ventryAllows\"\xaf\x03\n" +
 	"\tLinkEntry\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
@@ -5620,7 +5650,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtarget_port\x18\n" +
 	" \x01(\rR\n" +
 	"targetPort\x12'\n" +
-	"\x05nodes\x18\v \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\x124\n" +
+	"\x05nodes\x18\v \x03(\v2\x11.nagi.v1.LinkNodeR\x05nodes\x12%\n" +
+	"\x0eproxy_protocol\x18\r \x01(\bR\rproxyProtocol\x124\n" +
 	"\valert_rules\x18\f \x01(\v2\x13.nagi.v1.AlertRulesR\n" +
 	"alertRules\"\x9a\x01\n" +
 	"\x0eLinkEntryAllow\x12\x1d\n" +

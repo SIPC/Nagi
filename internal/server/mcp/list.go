@@ -524,14 +524,16 @@ type routeView struct {
 	Published uint32   `json:"published_port,omitempty"`
 	HTTPOnly  bool     `json:"http_only,omitempty"`
 	// 跨节点入口：节点 ID（见 list_nodes）。
-	EntryNodes   []string `json:"entry_nodes,omitempty"`
-	NoLocalEntry bool     `json:"no_local_entry,omitempty"`
-	Error        string   `json:"error,omitempty"`
+	EntryNodes    []string `json:"entry_nodes,omitempty"`
+	NoLocalEntry  bool     `json:"no_local_entry,omitempty"`
+	ProxyProtocol bool     `json:"proxy_protocol,omitempty"`
+	Error         string   `json:"error,omitempty"`
 }
 
 func routeOf(r *nagiv1.Exposure) routeView {
 	return routeView{Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Target: r.GetTarget(), Protocol: r.GetProtocol(),
-		Domains: r.GetDomains(), Published: r.GetPublished(), HTTPOnly: r.GetHttpOnly(), EntryNodes: r.GetEntryNodes(), NoLocalEntry: r.GetNoLocalEntry(), Error: r.GetError()}
+		Domains: r.GetDomains(), Published: r.GetPublished(), HTTPOnly: r.GetHttpOnly(), EntryNodes: r.GetEntryNodes(), NoLocalEntry: r.GetNoLocalEntry(),
+		ProxyProtocol: r.GetProxyProtocol(), Error: r.GetError()}
 }
 
 func envNames(vars []*nagiv1.EnvVar) []string {

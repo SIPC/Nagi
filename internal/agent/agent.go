@@ -464,6 +464,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		Cpus:         int32(runtime.NumCPU()),
 
 		CrossNodeEntry: true,
+		ProxyProtocol:  true,
 		ProxyDisabled:  a.cfg.DisableProxy,
 		ReportsCerts:   true,
 

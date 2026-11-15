@@ -274,33 +274,36 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 		if !spec.IsSingle(cfg) {
 			name = r.GetService() + "." + c.Name
 		}
-		if isEntry {
-			e := &nagiv1.LinkEntry{
-				ProjectId: row.ProjectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Protocol: r.GetProtocol(),
-				Published: r.GetPublished(), Domains: r.GetDomains(), HttpOnly: r.GetHttpOnly(), TargetName: name, TargetPort: r.GetTarget(),
-				AlertRules: effectiveAlertRules(settingsOf(row.ProjectID), c),
-			}
-			for _, n := range failoverNodes(c) {
-				if len(keys[n]) > 0 {
-					e.Nodes = append(e.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
+		// tcp+udp 的映射拆成 tcp、udp 两条同名的入口（见 spec.SplitRoute）。
+		for _, r := range spec.SplitRoute(r) {
+			if isEntry {
+				e := &nagiv1.LinkEntry{
+					ProjectId: row.ProjectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Protocol: r.GetProtocol(),
+					Published: r.GetPublished(), Domains: r.GetDomains(), HttpOnly: r.GetHttpOnly(), TargetName: name, TargetPort: r.GetTarget(),
+					ProxyProtocol: r.GetProxyProtocol(), AlertRules: effectiveAlertRules(settingsOf(row.ProjectID), c),
+				}
+				for _, n := range failoverNodes(c) {
+					if len(keys[n]) > 0 {
+						e.Nodes = append(e.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
+					}
+				}
+				if len(e.GetNodes()) > 0 {
+					plan.Entries = append(plan.Entries, e)
 				}
 			}
-			if len(e.GetNodes()) > 0 {
-				plan.Entries = append(plan.Entries, e)
-			}
-		}
-		if isTarget {
-			a := &nagiv1.LinkEntryAllow{ProjectId: row.ProjectID, TargetName: name, Port: r.GetTarget(), Protocol: spec.ProtoTCP}
-			if r.GetProtocol() == spec.ProtoUDP {
-				a.Protocol = spec.ProtoUDP
-			}
-			for _, n := range r.GetEntryNodes() {
-				if n != nodeID && len(keys[n]) > 0 {
-					a.Callers = append(a.Callers, keys[n])
+			if isTarget {
+				a := &nagiv1.LinkEntryAllow{ProjectId: row.ProjectID, TargetName: name, Port: r.GetTarget(), Protocol: spec.ProtoTCP}
+				if r.GetProtocol() == spec.ProtoUDP {
+					a.Protocol = spec.ProtoUDP
 				}
-			}
-			if len(a.GetCallers()) > 0 {
-				plan.EntryAllows = append(plan.EntryAllows, a)
+				for _, n := range r.GetEntryNodes() {
+					if n != nodeID && len(keys[n]) > 0 {
+						a.Callers = append(a.Callers, keys[n])
+					}
+				}
+				if len(a.GetCallers()) > 0 {
+					plan.EntryAllows = append(plan.EntryAllows, a)
+				}
 			}
 		}
 	}

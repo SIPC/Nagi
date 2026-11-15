@@ -129,7 +129,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
-| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、跨节点入口） | `SaveRoute` |
+| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口） | `SaveRoute` |
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 立即同步到备份节点，同步完才返回 | `SyncBackup` |

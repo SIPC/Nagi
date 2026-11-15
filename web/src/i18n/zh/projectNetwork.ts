@@ -55,6 +55,9 @@ export default {
     entryList: (nodes: string) => `入口 ${nodes}`,
     entryDomainWarningShort: "多个入口都会申请证书，只勾选域名解析到的节点。",
     httpOnlyHelp: "需要多个入口时，建议由 CDN 终结 HTTPS 并勾选此项。",
+    proxyProtocol: "发送客户端地址（PROXY protocol）",
+    proxyProtocolHelp: "转发时附带客户端的真实地址。服务须开启 PROXY protocol 接收，否则无法连接。",
+    proxyProtocolBadge: "PROXY protocol",
   },
   intranet: {
     title: "项目内网",

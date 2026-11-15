@@ -121,3 +121,27 @@ func TestRelatedNodesIncludesEntryNodes(t *testing.T) {
 		}
 	}
 }
+
+// tcp+udp 的映射和 PROXY protocol 能存进数据库读回来；同一节点上的 tcp 或 udp 映射占了同一个端口时冲突。
+func TestTCPUDPRouteStored(t *testing.T) {
+	ctx := context.Background()
+	s := entryTestService(t)
+	const project = "aaaaaaaaaaaaaaaa"
+	in := &nagiv1.Exposure{Name: "mc", Container: "web", Service: "web", Target: 25565, Protocol: "tcp+udp", Published: 25565, ProxyProtocol: true}
+	if err := s.upsertRoute(ctx, project, in); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.Q.ListRoutes(ctx, project)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows %v err %v", rows, err)
+	}
+	if got := RouteProto(rows[0]); got.GetProtocol() != "tcp+udp" || !got.GetProxyProtocol() {
+		t.Fatalf("读回来不对: %+v", got)
+	}
+	for _, proto := range []string{"tcp", "udp", "tcp+udp"} {
+		r := &nagiv1.Exposure{Name: "db-1", Container: "db", Service: "db", Target: 1, Protocol: proto, Published: 25565}
+		if err := s.checkConflicts(ctx, "n1", project, "db-1", r); err == nil {
+			t.Errorf("%s/25565 应该和 tcp+udp 冲突", proto)
+		}
+	}
+}

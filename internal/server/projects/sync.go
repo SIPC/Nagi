@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -76,7 +77,7 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 	}
 	for _, r := range routes {
 		if r.Container == c.Name {
-			sp.Routes = append(sp.Routes, RouteProto(r))
+			sp.Routes = append(sp.Routes, spec.SplitRoute(RouteProto(r))...)
 		}
 	}
 	sp.Stateful = s.stateful(ctx, sp.GetConfig(), c, sp.GetSharedEnv())
@@ -280,7 +281,7 @@ var errNoEntry = i18n.New("没有入口节点，请编辑端口映射重新选�
 func RouteProto(r store.Route) *nagiv1.Exposure {
 	e := &nagiv1.Exposure{
 		Name: r.Name, Container: r.Container, Service: r.Service, Target: uint32(r.Target), Protocol: r.Protocol,
-		Published: uint32(r.Published), HttpOnly: r.HttpOnly != 0, NoLocalEntry: r.NoLocalEntry != 0,
+		Published: uint32(r.Published), HttpOnly: r.HttpOnly != 0, NoLocalEntry: r.NoLocalEntry != 0, ProxyProtocol: r.ProxyProtocol != 0,
 	}
 	_ = json.Unmarshal([]byte(r.Domains), &e.Domains)
 	_ = json.Unmarshal([]byte(r.EntryNodes), &e.EntryNodes)

@@ -205,7 +205,7 @@ message Exposure {
   string service = 1;
   // 容器内的端口。
   uint32 target = 2;
-  // http、tcp 或 udp。
+  // http、tcp、udp 或 tcp+udp（同一个端口同时开 TCP 和 UDP；面板下发给节点时拆成 tcp、udp 两条同名的映射）。
   string protocol = 3;
   // 节点上对外的端口。tcp/udp 必填；http 没绑域名时必填。
   uint32 published = 4;
@@ -223,6 +223,9 @@ message Exposure {
   repeated string entry_nodes = 10;
   // 不从容器所在节点进来，只走 entry_nodes。
   bool no_local_entry = 11;
+  // 转发给容器时在前面加上 PROXY protocol v2 头，带着客户端的真实地址（只用于 tcp、udp）。容器里的服务要开启接收，
+  // 否则连不上（见 docs/exposure.md#tcp--udp-服务）。
+  bool proxy_protocol = 12;
 }
 
 message EnvVar {
@@ -423,6 +426,8 @@ message NodeInfo {
   bool node_access_disabled = 16;
   // 节点进程跑在容器里：终端进的是这个容器，文件也是容器里的。
   bool in_container = 17;
+  // 节点支持 PROXY protocol，作为入口节点时也能开同时开 TCP 和 UDP 的映射（旧版本的节点不报）。
+  bool proxy_protocol = 18;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -752,6 +757,8 @@ message LinkEntry {
   string target_name = 9;
   uint32 target_port = 10;
   repeated LinkNode nodes = 11;
+  // 转发给容器时加 PROXY protocol 头（见 Exposure.proxy_protocol）。
+  bool proxy_protocol = 13;
   // 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
   AlertRules alert_rules = 12;
 }

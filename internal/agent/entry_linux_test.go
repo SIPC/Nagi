@@ -87,9 +87,9 @@ func linkNode(n *testNodeAgent) *nagiv1.LinkNode {
 	return &nagiv1.LinkNode{Key: k[:], Name: "n"}
 }
 
-func routeNamed(routes []proxy.Route, name string) proxy.Route {
+func routeNamed(routes []proxy.Route, name, protocol string) proxy.Route {
 	for _, r := range routes {
-		if r.Name == name {
+		if r.Name == name && r.Protocol == protocol {
 			return r
 		}
 	}
@@ -149,9 +149,10 @@ func TestEntryEndToEnd(t *testing.T) {
 	connectMesh(t, A, B, C)
 
 	nodes := []*nagiv1.LinkNode{linkNode(B), linkNode(C)}
+	// 两条同名的入口：同时开 TCP 和 UDP 的映射下发时拆成这样（见 spec.SplitRoute），转发时要按协议分开找。
 	A.a.intranet.plan = &nagiv1.LinkPlan{Entries: []*nagiv1.LinkEntry{
 		{ProjectId: testProject, Name: "web", Container: "dns", Service: "dns", Protocol: "tcp", Published: 18080, TargetName: "dns", TargetPort: uint32(tcpPort), Nodes: nodes},
-		{ProjectId: testProject, Name: "game", Container: "dns", Service: "dns", Protocol: "udp", Published: 18081, TargetName: "dns", TargetPort: uint32(udpPort), Nodes: nodes},
+		{ProjectId: testProject, Name: "web", Container: "dns", Service: "dns", Protocol: "udp", Published: 18081, TargetName: "dns", TargetPort: uint32(udpPort), Nodes: nodes},
 	}}
 	kA := A.m.PublicKey()
 	allow := &nagiv1.LinkPlan{EntryAllows: []*nagiv1.LinkEntryAllow{
@@ -168,7 +169,7 @@ func TestEntryEndToEnd(t *testing.T) {
 	if len(routes) != 2 {
 		t.Fatalf("入口规则: %+v", routes)
 	}
-	web, game := routeNamed(routes, "web"), routeNamed(routes, "game")
+	web, game := routeNamed(routes, "web", "tcp"), routeNamed(routes, "web", "udp")
 	if len(web.Upstreams) != 1 || !strings.HasPrefix(web.Upstreams[0], "127.0.0.1:") || web.Published != 18080 {
 		t.Fatalf("web 规则不对: %+v", web)
 	}

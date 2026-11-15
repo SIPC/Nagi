@@ -215,7 +215,8 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
     );
   }
   const protocol = r.protocol.toUpperCase();
-  const last = r.domains.length > 0 ? (r.httpOnly ? m.httpOnlyBadge : certSummary(checks)) : hasAddress ? protocol : `${protocol}/${r.published}`;
+  const plain = r.domains.length > 0 ? (r.httpOnly ? m.httpOnlyBadge : certSummary(checks)) : hasAddress ? protocol : `${protocol}/${r.published}`;
+  const last = r.proxyProtocol ? `${plain} · ${m.proxyProtocolBadge}` : plain;
   const entry = entries.length > 0 ? m.entryList(t.common.list([...entries].sort())) : "";
   const parts = r.domains.length > 0 ? [entry, overview ? "" : last] : overview ? [last, entry] : hasAddress ? [last] : [entry, last];
   const line = [`${r.name} → ${target}`, ...parts].filter(Boolean);
@@ -337,6 +338,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
     published: "",
     domains: "",
     httpOnly: false,
+    proxyProtocol: false,
     localEntry: true,
     entryNodes: [] as string[],
   };
@@ -372,6 +374,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
     published: hasDomains ? 0 : Number(form.published || 0),
     domains: domainList,
     httpOnly: hasDomains && form.httpOnly,
+    proxyProtocol: !isHTTP && form.proxyProtocol,
     entryNodes: form.entryNodes,
     noLocalEntry: !form.localEntry,
   };
@@ -401,6 +404,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       published: r.published ? String(r.published) : "",
       domains: r.domains.join(", "),
       httpOnly: r.httpOnly,
+      proxyProtocol: r.proxyProtocol,
       localEntry: !r.noLocalEntry,
       entryNodes: r.entryNodes,
     });
@@ -573,6 +577,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
                 <option value="http">HTTP</option>
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
+                <option value="tcp+udp">TCP+UDP</option>
               </Select>
             </Field>
           </FormRow>
@@ -614,6 +619,11 @@ function RoutesSection({ project, services, container }: { project: Project; ser
           {hasDomains && (
             <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
               {m.httpOnly}
+            </Check>
+          )}
+          {!isHTTP && (
+            <Check checked={form.proxyProtocol} onChange={(v) => setForm({ ...form, proxyProtocol: v })} help={m.proxyProtocolHelp}>
+              {m.proxyProtocol}
             </Check>
           )}
           {formError && <Alert>{formError}</Alert>}
