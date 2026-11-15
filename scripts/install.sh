@@ -34,7 +34,8 @@ usage() {
   --data-dir <目录>       数据目录（默认 /var/lib/nagi）
   --download-url <地址>   从该地址下载 nagi-linux-<架构> 和 SHA256SUMS（镜像或内网），
                           也可用环境变量 NAGI_DOWNLOAD_URL 指定
-  --docker-mirror <名称>  自动安装 Docker 时使用的软件源镜像：Aliyun 或 AzureChinaCloud（国内服务器适用）
+  --docker-mirror <名称>  自动安装 Docker 时使用的软件源镜像：Aliyun 或 AzureChinaCloud
+                          （检测到中国大陆网络时默认用 Aliyun，并经加速代理下载 GitHub 上的文件）
   -h, --help              显示帮助
 
 已安装时再次执行即为升级：只更换 nagi，服务配置（端口、数据目录、是否带内嵌节点）保持不变。
@@ -72,6 +73,41 @@ case "$DATA_DIR" in "" | /*) ;; *) fail "数据目录须为绝对路径" ;; esac
 # >>> 共用代码开始：scripts/install.sh 与 internal/server/api/install.go 中的这一段须保持一致（有测试检查）。
 # 用到调用方定义的 say、fail、BIN、ARCH、TMP（临时目录）、DOCKER_MIRROR、BASE（下载地址）。
 
+# 中国大陆网络（见 docs/guide/install.md#中国大陆服务器）：detect_cn 检测到以后 CN=1，GitHub 上的文件经加速代理下载，
+# Docker 用阿里云的软件源，并配置 Docker Hub 镜像加速。代理和加速地址都是第三方服务，按顺序试，失效了换下一个。
+GH_PROXIES="https://ghfast.top/ https://gh-proxy.com/ https://ghproxy.net/"
+REGISTRY_MIRRORS='"https://docker.m.daocloud.io", "https://docker.1ms.run"'
+CN=""
+# GH_PROXY 是下载 nagi 时实际用上的代理（没用代理时为空），记下来给面板上的一键升级用。
+GH_PROXY=""
+
+# detect_cn 判断本机是否在中国大陆网络：按 Cloudflare 看到的所在地；查不到时看能不能连上 GitHub。
+detect_cn() {
+  LOC=$(curl -fsS --max-time 5 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | sed -n 's/^loc=//p' || true)
+  if [ -n "$LOC" ]; then
+    [ "$LOC" != CN ] || CN=1
+  elif ! curl -fsS --max-time 8 -o /dev/null https://github.com 2>/dev/null; then
+    CN=1
+  fi
+  [ -z "$CN" ] || say "检测到中国大陆网络，GitHub 上的文件经加速代理下载，Docker 使用国内镜像"
+}
+
+# gh_urls 列出下载 GitHub 上一个文件可以用的地址，每行一个：中国大陆网络时先列加速代理，最后是原地址。
+gh_urls() {
+  if [ -n "$CN" ]; then
+    for P in $GH_PROXIES; do printf '%s%s\n' "$P" "$1"; done
+  fi
+  printf '%s\n' "$1"
+}
+
+# gh_fetch 把 GitHub 上的文件 $1 下载到 $2，按 gh_urls 的顺序试。
+gh_fetch() {
+  for U in $(gh_urls "$1"); do
+    curl -fsSL --retry 2 --connect-timeout 10 --speed-limit 1024 --speed-time 30 -o "$2" "$U" && return 0
+  done
+  return 1
+}
+
 # compose_version 打印 docker compose 插件的版本号（不带 v），没有插件时失败。
 compose_version() {
   docker compose version --short 2>/dev/null | sed 's/^v//'
@@ -99,17 +135,28 @@ install_compose() {
   fi
   case "$ARCH" in amd64) CARCH=x86_64 ;; *) CARCH=aarch64 ;; esac
   mkdir -p /usr/local/lib/docker/cli-plugins
-  curl -fL --retry 3 --progress-bar -o "$TMP/docker-compose" \
-    "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$CARCH" &&
+  gh_fetch "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$CARCH" "$TMP/docker-compose" &&
     install -m 0755 "$TMP/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
 }
 
+# registry_mirrors 在中国大陆网络时给 Docker 配置 Docker Hub 镜像加速，部署时拉取镜像不会卡住。
+# 只在还没有 /etc/docker/daemon.json 时写，已有的配置不动；写完让 Docker 重新加载配置，不会重启容器。
+registry_mirrors() {
+  [ -n "$CN" ] && [ ! -e /etc/docker/daemon.json ] || return 0
+  mkdir -p /etc/docker
+  printf '{\n  "registry-mirrors": [%s]\n}\n' "$REGISTRY_MIRRORS" >/etc/docker/daemon.json
+  say "已配置 Docker Hub 镜像加速：/etc/docker/daemon.json"
+  MIRRORS_ADDED=1
+}
+
 # ensure_docker 确保 Docker 和 compose 插件（2.24 或更新）可用：没有 Docker 时用官方脚本 get.docker.com 安装
-# （DOCKER_MIRROR 非空时作为它的 --mirror 参数），并启动 Docker；compose 插件缺失或过旧时单独安装。
+# （DOCKER_MIRROR 非空时作为它的 --mirror 参数；中国大陆网络时默认用 Aliyun），并启动 Docker；compose 插件缺失或过旧时单独安装。
 ensure_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     say "未找到 Docker，使用官方脚本 get.docker.com 安装……"
-    curl -fsSL --retry 3 -o "$TMP/get-docker.sh" https://get.docker.com ||
+    [ -z "$CN" ] || [ -n "$DOCKER_MIRROR" ] || DOCKER_MIRROR=Aliyun
+    curl -fsSL --retry 3 --max-time 60 -o "$TMP/get-docker.sh" https://get.docker.com ||
+      { [ -n "$CN" ] && gh_fetch https://raw.githubusercontent.com/docker/docker-install/master/install.sh "$TMP/get-docker.sh"; } ||
       fail "下载 Docker 安装脚本失败，请先手动安装 Docker：https://docs.docker.com/engine/install/"
     if [ -n "$DOCKER_MIRROR" ]; then
       sh "$TMP/get-docker.sh" --mirror "$DOCKER_MIRROR"
@@ -117,8 +164,11 @@ ensure_docker() {
       sh "$TMP/get-docker.sh"
     fi || fail "安装 Docker 失败，请先手动安装 Docker：https://docs.docker.com/engine/install/"
   fi
+  MIRRORS_ADDED=""
+  registry_mirrors
   if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
     systemctl enable --now docker >/dev/null 2>&1 || true
+    [ -z "$MIRRORS_ADDED" ] || systemctl reload docker >/dev/null 2>&1 || true
   fi
   docker info >/dev/null 2>&1 || fail "Docker 未运行，请检查后重试：systemctl status docker"
   if ! compose_ok; then
@@ -140,8 +190,19 @@ link_command() {
   fi
 }
 
+# fetch_nagi 从 $1 下载 nagi-linux-<架构> 和 SHA256SUMS 并校验，成功时文件在 $TMP/nagi。
+fetch_nagi() {
+  curl -fL --retry 2 --connect-timeout 10 --speed-limit 1024 --speed-time 30 --progress-bar -o "$TMP/nagi" "$1/nagi-linux-$ARCH" || return 1
+  curl -fsSL --retry 2 --connect-timeout 10 -o "$TMP/SHA256SUMS" "$1/SHA256SUMS" || { say "下载校验文件失败：$1/SHA256SUMS"; return 1; }
+  WANT=$(awk -v f="nagi-linux-$ARCH" '$2 == f || $2 == "*" f { print $1 }' "$TMP/SHA256SUMS")
+  [ -n "$WANT" ] || { say "SHA256SUMS 中没有 nagi-linux-$ARCH：$1"; return 1; }
+  GOT=$($SHA "$TMP/nagi" | awk '{ print $1 }')
+  [ "$WANT" = "$GOT" ] || { say "SHA-256 校验失败：应为 $WANT，实际为 $GOT（$1）"; return 1; }
+}
+
 # download_nagi 从 BASE 下载 nagi-linux-<架构> 到 $TMP/nagi，按同一地址下的 SHA256SUMS 校验，
-# 试运行确认能在本机运行，版本号放在 NEW_VERSION。BASE 是 GitHub Release 或 --download-url 指定的镜像。
+# 试运行确认能在本机运行，版本号放在 NEW_VERSION。BASE 是 GitHub Release 或 --download-url 指定的镜像；
+# 是 GitHub 时按 gh_urls 的顺序试，用上的代理放在 GH_PROXY。
 download_nagi() {
   if command -v sha256sum >/dev/null 2>&1; then
     SHA="sha256sum"
@@ -150,14 +211,20 @@ download_nagi() {
   else
     fail "需要 sha256sum 或 shasum 以校验下载的文件"
   fi
-  say "下载 nagi（linux/$ARCH）：$BASE"
-  curl -fL --retry 3 --progress-bar -o "$TMP/nagi" "$BASE/nagi-linux-$ARCH" ||
-    fail "下载失败：$BASE/nagi-linux-$ARCH（网络不通时可用 --download-url 指定镜像）"
-  curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || fail "下载校验文件失败：$BASE/SHA256SUMS"
-  WANT=$(awk -v f="nagi-linux-$ARCH" '$2 == f || $2 == "*" f { print $1 }' "$TMP/SHA256SUMS")
-  [ -n "$WANT" ] || fail "SHA256SUMS 中没有 nagi-linux-$ARCH"
-  GOT=$($SHA "$TMP/nagi" | awk '{ print $1 }')
-  [ "$WANT" = "$GOT" ] || fail "SHA-256 校验失败：应为 $WANT，实际为 $GOT"
+  case "$BASE" in
+    https://github.com/*) URLS=$(gh_urls "$BASE") ;;
+    *) URLS=$BASE ;;
+  esac
+  OK=""
+  for U in $URLS; do
+    say "下载 nagi（linux/$ARCH）：$U"
+    if fetch_nagi "$U"; then
+      OK=1
+      [ "$U" = "$BASE" ] || GH_PROXY=${U%"$BASE"}
+      break
+    fi
+  done
+  [ -n "$OK" ] || fail "下载失败：$BASE/nagi-linux-$ARCH（网络不通时可用 --download-url 指定镜像）"
   chmod 0755 "$TMP/nagi"
   NEW_VERSION=$("$TMP/nagi" version 2>/dev/null) || fail "下载的 nagi 无法在本机运行"
 }
@@ -223,6 +290,8 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+detect_cn
+
 # 面板自带节点，节点需要 Docker；只运行面板（含备用面板）时不需要。
 [ -n "$NO_AGENT" ] || ensure_docker
 
@@ -238,12 +307,17 @@ if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
 elif [ "$VERSION" = latest ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
-  TARGET=$(curl -sI --retry 3 -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" || true)
-  TARGET=${TARGET##*/}
-  case "$TARGET" in
-    v[0-9]*) BASE="https://github.com/$REPO/releases/download/$TARGET" ;;
-    *) TARGET="" ;;
-  esac
+  for U in $(gh_urls "https://github.com/$REPO/releases/latest"); do
+    TARGET=$(curl -sI --retry 2 --max-time 10 -o /dev/null -w '%{redirect_url}' "$U" || true)
+    TARGET=${TARGET##*/}
+    case "$TARGET" in
+      v[0-9]*)
+        BASE="https://github.com/$REPO/releases/download/$TARGET"
+        break
+        ;;
+      *) TARGET="" ;;
+    esac
+  done
 else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
   TARGET=$VERSION
@@ -263,10 +337,16 @@ download_nagi
 
 install -m 0755 "$TMP/nagi" "$BIN"
 link_command
-# 用了镜像时记下来，面板上一键更新时也从这里下载（见 internal/pkg/release/install.go）。
+# 用了镜像或加速代理时记下来，面板上一键更新时也从这里下载（见 internal/pkg/release/install.go）。
 if [ -n "$DOWNLOAD_URL" ]; then
   mkdir -p "$DATA_DIR/panel"
   printf '%s\n' "$DOWNLOAD_URL" >"$DATA_DIR/panel/download-url"
+fi
+if [ -n "$GH_PROXY" ]; then
+  mkdir -p "$DATA_DIR/panel"
+  printf '%s\n' "$GH_PROXY" >"$DATA_DIR/panel/github-proxy"
+else
+  rm -f "$DATA_DIR/panel/github-proxy"
 fi
 if [ -n "$OLD_VERSION" ] && [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
   say "已安装 nagi $NEW_VERSION（原版本 $OLD_VERSION）：$BIN"

@@ -60,20 +60,20 @@ func (u *panelUpdates) changelog(ctx context.Context, base, version string, lang
 	return text, nil
 }
 
-// get 返回最新发布的版本号，force 时不用缓存。
-func (u *panelUpdates) get(ctx context.Context, force bool) (string, error) {
-	v, _, err := u.getChecked(ctx, force)
+// get 返回最新发布的版本号，force 时不用缓存。连不上 GitHub 时经 proxy（安装时用上的加速代理，可以为空）查。
+func (u *panelUpdates) get(ctx context.Context, force bool, proxy string) (string, error) {
+	v, _, err := u.getChecked(ctx, force, proxy)
 	return v, err
 }
 
 // getChecked 和 get 一样，另外返回查询的时间。
-func (u *panelUpdates) getChecked(ctx context.Context, force bool) (string, time.Time, error) {
+func (u *panelUpdates) getChecked(ctx context.Context, force bool, proxy string) (string, time.Time, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if !force && u.latest != "" && time.Since(u.checked) < updateCheckTTL {
 		return u.latest, u.checked, nil
 	}
-	v, err := release.Latest(ctx)
+	v, err := release.Latest(ctx, proxy)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -98,7 +98,7 @@ func (s *settingsService) CheckPanelUpdate(ctx context.Context, req *connect.Req
 		out.Unsupported = i18n.Localize(i18n.FromContext(ctx), err)
 		return connect.NewResponse(out), nil
 	}
-	latest, checked, err := s.updates.getChecked(ctx, req.Msg.GetForce())
+	latest, checked, err := s.updates.getChecked(ctx, req.Msg.GetForce(), release.ProxyFor(s.Panel.DataDir))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
@@ -111,7 +111,7 @@ func (s *settingsService) GetPanelReleaseNotes(ctx context.Context, _ *connect.R
 	if err := s.Panel.updateUnsupported(); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
-	latest, err := s.updates.get(ctx, false)
+	latest, err := s.updates.get(ctx, false, release.ProxyFor(s.Panel.DataDir))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
@@ -151,7 +151,7 @@ func (s *settingsService) UpdatePanel(ctx context.Context, _ *connect.Request[na
 		s.withUpdates(ctx, func(r *updateRecords) { r.Panel = nil })
 		return nil, connect.NewError(code, err)
 	}
-	latest, err := s.updates.get(ctx, true)
+	latest, err := s.updates.get(ctx, true, release.ProxyFor(s.Panel.DataDir))
 	if err != nil {
 		return abort(connect.CodeUnavailable, err)
 	}

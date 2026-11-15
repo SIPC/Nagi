@@ -108,7 +108,7 @@ func TestLatest(t *testing.T) {
 			}))
 			defer srv.Close()
 			latestURL = srv.URL
-			got, err := Latest(context.Background())
+			got, err := Latest(context.Background(), "")
 			if got != c.want || (err == nil) != (c.want != "") {
 				t.Fatalf("得到 %q、%v，应为 %q", got, err, c.want)
 			}
@@ -134,5 +134,50 @@ func TestOlder(t *testing.T) {
 		if got := Older(c.a, c.b); got != c.want {
 			t.Errorf("Older(%q, %q) = %v，应为 %v", c.a, c.b, got, c.want)
 		}
+	}
+}
+
+// 安装时用了 GitHub 加速代理：升级也经代理下载；同时有镜像地址时用镜像。
+func TestBaseForProxy(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, githubProxyFile), []byte("https://ghfast.top\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := BaseFor(dir, "v0.1.0"); got != "https://ghfast.top/"+DownloadBase("v0.1.0") {
+		t.Errorf("经代理：%s", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, githubProxyFile), []byte("ftp://bad/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ProxyFor(dir); got != "" {
+		t.Errorf("不是 https 的代理应忽略：%s", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, downloadURLFile), []byte("https://mirror.example.com/nagi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := BaseFor(dir, "v0.1.0"); got != "https://mirror.example.com/nagi" {
+		t.Errorf("有镜像：%s", got)
+	}
+}
+
+// 直接连不上 GitHub 时经代理查最新版本。
+func TestLatestViaProxy(t *testing.T) {
+	old := latestURL
+	t.Cleanup(func() { latestURL = old })
+	latestURL = "http://127.0.0.1:1/releases/latest" // 连不上
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+latestURL {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Location", "https://github.com/SIPC/Nagi/releases/tag/v0.6.0")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer srv.Close()
+	if got, err := Latest(context.Background(), srv.URL+"/"); got != "v0.6.0" || err != nil {
+		t.Fatalf("得到 %q、%v", got, err)
+	}
+	if _, err := Latest(context.Background(), ""); err == nil {
+		t.Fatal("没有代理时应报错")
 	}
 }

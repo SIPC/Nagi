@@ -27,6 +27,22 @@ Before you start, make sure the server meets the [requirements](../../README.en.
 
 When setup is complete, the panel signs you in as the administrator.
 
+## Servers in mainland China
+
+The script detects whether the server is on a mainland China network. If it is:
+
+- nagi and the compose plugin are downloaded through a GitHub download proxy and verified against the same SHA256SUMS. Panel updates and node upgrades from the panel also download through this proxy.
+- Docker is installed from the Aliyun package mirror.
+- If the server has no `/etc/docker/daemon.json` yet, Docker Hub registry mirrors are configured. An existing configuration is left unchanged.
+
+If the server can't reach GitHub, download the script itself through the proxy:
+
+```bash
+curl -fsSL https://ghfast.top/https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
+```
+
+The download proxies and registry mirrors are third-party services and may stop working. The script tries several of each in order. If none works, use `--download-url` to set another mirror.
+
 ## Installation options
 
 To change how the panel is installed, append these options to the command, for example `| sudo sh -s -- --port 28443`.
@@ -35,7 +51,7 @@ To change how the panel is installed, append these options to the command, for e
 | --- | --- |
 | `--port <port>` | Sets the panel port. By default, a port is picked at random on first start |
 | `--no-agent` | Runs only the panel, without a built-in node. Use it to run the panel on a server of its own |
-| `--docker-mirror <name>` | Sets the package mirror used to install Docker: `Aliyun` or `AzureChinaCloud`. Use it for servers in mainland China |
+| `--docker-mirror <name>` | Sets the package mirror used to install Docker: `Aliyun` or `AzureChinaCloud`. On mainland China networks, `Aliyun` is used by default |
 | `--download-url <url>` | Downloads nagi from a mirror or internal address. Use it when GitHub is unreachable; updates from the panel also download from this address |
 | `--version <version>` | Installs a specific version. By default, the latest version is installed |
 

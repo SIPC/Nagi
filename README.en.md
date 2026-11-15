@@ -119,6 +119,12 @@ Run this command as root on a Linux server to install the panel:
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+On servers in mainland China that can't reach GitHub:
+
+```bash
+curl -fsSL https://ghfast.top/https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
+```
+
 When the installation finishes, open the setup link it prints in a browser and create the administrator account.
 
 For step-by-step instructions, see the [guides](docs/guide/README.en.md):

@@ -24,12 +24,32 @@ import (
 // 一键升级也从这里下载；没有时从 GitHub Release 下载。
 const downloadURLFile = "download-url"
 
-// BaseFor 返回 dir 对应的安装下载某个版本时用的地址：安装时指定了镜像就用镜像。
+// githubProxyFile 记着安装脚本在中国大陆网络下载时用上的 GitHub 加速代理（地址前缀，例如 https://ghfast.top/），
+// 和 download-url 在同一个目录。一键升级时 GitHub 上的文件也经它下载。
+const githubProxyFile = "github-proxy"
+
+// BaseFor 返回 dir 对应的安装下载某个版本时用的地址：安装时指定了镜像就用镜像，用了加速代理就经代理下载 GitHub Release。
 func BaseFor(dir, version string) string {
 	if b, err := os.ReadFile(filepath.Join(dir, downloadURLFile)); err == nil && strings.TrimSpace(string(b)) != "" {
 		return strings.TrimRight(strings.TrimSpace(string(b)), "/")
 	}
-	return DownloadBase(version)
+	return ProxyFor(dir) + DownloadBase(version)
+}
+
+// ProxyFor 返回 dir 对应的安装用上的 GitHub 加速代理，没有时为空。
+func ProxyFor(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, githubProxyFile))
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(string(b))
+	if !strings.HasPrefix(p, "https://") {
+		return ""
+	}
+	if !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p
 }
 
 // unusable 表示下载到的文件不能用：在这台机器上运行不了，或者不是要求的版本。
@@ -174,9 +194,19 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 // 用重定向而不是 GitHub API：不占 API 的限额（每个 IP 每小时 60 次）。
 var latestURL = "https://github.com/" + Repo + "/releases/latest"
 
-// Latest 返回最新发布的版本号。
-func Latest(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestURL, nil)
+// Latest 返回最新发布的版本号。直接连不上 GitHub 时，proxy 不为空就经这个加速代理再查一次（代理也转发重定向）。
+func Latest(ctx context.Context, proxy string) (string, error) {
+	v, err := latest(ctx, latestURL)
+	if err != nil && proxy != "" && ctx.Err() == nil {
+		if pv, perr := latest(ctx, proxy+latestURL); perr == nil {
+			return pv, nil
+		}
+	}
+	return v, err
+}
+
+func latest(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}

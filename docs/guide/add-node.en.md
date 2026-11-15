@@ -23,7 +23,7 @@ Before you start, make sure the new server meets the [requirements](../../README
 
    The script downloads the same nagi version as the panel from GitHub Releases and verifies its SHA-256. If Docker isn't installed, the script installs it.
 
-   If the server can't reach GitHub, append `--download-url <mirror-url>` to the command. Upgrades of this node from the panel then download from the same address.
+   On a mainland China network, the script downloads through a proxy and uses mirrors for Docker (see [Servers in mainland China](install.en.md#servers-in-mainland-china)). If downloads still fail, append `--download-url <mirror-url>` to the command. Upgrades of this node from the panel then download from the same address.
 
 When the command finishes, the new node appears on the **Nodes** page as **Online**.
 

@@ -117,6 +117,12 @@ Nagi 是开源、自托管的容器部署平台。在一个网页面板上管理
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+中国大陆的服务器无法访问 GitHub 时：
+
+```bash
+curl -fsSL https://ghfast.top/https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
+```
+
 安装完成后，在浏览器中打开终端输出的初始化链接，设置管理员账号。
 
 详细步骤见 [使用教程](docs/guide/README.md)：

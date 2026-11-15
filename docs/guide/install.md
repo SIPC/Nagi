@@ -27,6 +27,22 @@
 
 初始化完成后，面板自动登录管理员账号。
 
+## 中国大陆服务器
+
+安装脚本自动检测服务器是否位于中国大陆网络。检测到时：
+
+- 经 GitHub 加速代理下载 nagi 和 compose 插件，并用同一份 SHA256SUMS 校验。之后在面板上更新面板、升级节点时，也经这个代理下载。
+- 自动安装 Docker 时使用阿里云软件源。
+- 服务器上还没有 `/etc/docker/daemon.json` 时，配置 Docker Hub 镜像加速。已有的配置不修改。
+
+如果服务器无法访问 GitHub，安装脚本本身也要经加速代理下载：
+
+```bash
+curl -fsSL https://ghfast.top/https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
+```
+
+加速代理和镜像加速都是第三方服务，可能失效。安装脚本内置了多个地址，按顺序尝试。都不可用时，用 `--download-url` 指定其他镜像。
+
 ## 安装选项
 
 在命令末尾追加以下选项，可以调整安装方式，例如 `| sudo sh -s -- --port 28443`。
@@ -35,7 +51,7 @@
 | --- | --- |
 | `--port <端口>` | 指定面板端口。默认在首次启动时随机选择 |
 | `--no-agent` | 只运行面板，不内嵌节点。适用于把面板单独放在一台服务器上 |
-| `--docker-mirror <名称>` | 自动安装 Docker 时使用的软件源镜像：`Aliyun` 或 `AzureChinaCloud`。适用于中国大陆的服务器 |
+| `--docker-mirror <名称>` | 自动安装 Docker 时使用的软件源镜像：`Aliyun` 或 `AzureChinaCloud`。检测到中国大陆网络时默认使用 `Aliyun` |
 | `--download-url <地址>` | 从镜像或内网地址下载 nagi。适用于无法访问 GitHub 的环境；之后在面板上更新时也从该地址下载 |
 | `--version <版本>` | 安装指定版本。默认安装最新版本 |
 
