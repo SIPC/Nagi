@@ -8,6 +8,23 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.27.0
+
+### New features
+
+- Scheduled snapshots can be turned off. Containers with failover still take a snapshot every 15 minutes.
+- Scheduled snapshots can run at fixed times each day. You can set several times, in the browser's time zone when saved.
+- A container's "Storage" tab can set its own scheduled snapshots, replacing the project's settings.
+- Adds the MCP tool set_snapshot_schedule. update_project can turn snapshots on or off and set daily times.
+
+### Fixes
+
+- Fixes the spacing of request counts of ten thousand or more in Chinese.
+
+### Upgrade notes
+
+- Nodes must be upgraded to v0.27.0 to turn scheduled snapshots off or take them at daily times as set.
+
 ## v0.26.0
 
 ### New features
