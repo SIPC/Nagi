@@ -14,7 +14,8 @@ export default {
   netRx: "入站",
   netTx: "出站",
   restarts: "重启次数",
-  count: (n: string) => `${n} 次`,
+  // unit：上万时的紧凑单位（万、亿），和「次」连写，与数字之间空一格，例如「1.9 万次」。
+  count: (n: string, unit = "") => `${n} ${unit}次`,
   memTitle: (usage: string) => `内存 ${usage}`,
   noData: "暂无数据",
   allContainersTotal: "全部容器合计",

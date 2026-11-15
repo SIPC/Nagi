@@ -15,7 +15,7 @@ export default {
   netRx: "In",
   netTx: "Out",
   restarts: "Restarts",
-  count: (n) => n,
+  count: (n, unit = "") => n + unit,
   memTitle: (usage) => `Memory ${usage}`,
   noData: "No data",
   allContainersTotal: "Total for all containers",

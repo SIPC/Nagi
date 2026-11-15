@@ -124,9 +124,15 @@ function MetricsSkeleton() {
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 
 const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
-// 上万的次数用紧凑写法（23.9万、239.3K），统计格放得下。
+// 上万的次数用紧凑写法（1.9 万次、239.3K），统计格放得下。数字和单位分开交给文案拼，中文的单位和「次」连写。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
-export const fmtCount = (v: number) => m.count(v >= 10_000 ? compactCount.format(v) : Math.round(v).toLocaleString(locale));
+export const fmtCount = (v: number) => {
+  if (v < 10_000) return m.count(Math.round(v).toLocaleString(locale));
+  const parts = compactCount.formatToParts(v);
+  const unit = parts.filter((p) => p.type === "compact").map((p) => p.value).join("");
+  const num = parts.filter((p) => p.type !== "compact" && p.type !== "literal").map((p) => p.value).join("");
+  return m.count(num, unit);
+};
 
 const containerMetricFormat: Record<string, [string, (v: number) => string]> = {
   cpu: ["CPU", (v) => fmtCpu(v)],
