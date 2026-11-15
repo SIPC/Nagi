@@ -209,6 +209,7 @@ function useHeldFlows(flows: Flow[]) {
 // 切换视图时图不重建：不属于这个视图的路径和行淡出，其余的平滑换位。所以 flows 传全部路径，这里再按视图筛选；
 // 断流保留也在筛选之前算，否则切走的路径会被当成断流留下来。
 // 离线节点（offline）照常占一行，名称变灰，没有路径。
+// 线上不写名称和速率（线多时挤在一起看不清），悬停或点一下线时在旁边显示「发出 → 接收 速率」。
 function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; flows: Flow[]; view: FlowView }) {
   const { ref, width } = useWidth();
   const held = useHeldFlows(allFlows);
@@ -227,7 +228,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   const x2 = x3 - Math.min(120, (x3 - x0) * 0.2);
   const cx = (x1 + x2) / 2;
 
-  const leftGap = 22; // 起点上方要放标注。
+  const leftGap = 4;
   const rightGap = 4;
   const groupGap = 42;
   const stackHeight = (list: Flow[], gap: number) => (list.length === 0 ? 2 : list.reduce((sum, f) => sum + strokeOf(f.rate), 0) + (list.length - 1) * gap);
@@ -246,12 +247,12 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   const starts = new Map<Flow, number>();
   const ends = new Map<Flow, number>();
   for (const g of groups) {
-    let py = g.center - g.left / 2;
+    // 两边的线都靠近名称那一行，比中心高 7。
+    let py = g.center - 7 - g.left / 2;
     for (const f of g.out) {
       starts.set(f, py + strokeOf(f.rate) / 2);
       py += strokeOf(f.rate) + leftGap;
     }
-    // 右边的线靠近名称那一行，比中心高 7。
     let ry = g.center - 7 - g.right / 2;
     for (const f of g.into) {
       ends.set(f, ry + strokeOf(f.rate) / 2);
@@ -311,8 +312,22 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   }, [allGone]);
   const drawn = [...next.entries(), ...leaving.current.entries()];
 
+  // hover：悬停（或触屏上点到）的路径和指针在图里的位置。速率跟着刷新；路径没了就不显示。
+  const [hover, setHover] = useState<{ key: string; x: number; y: number }>();
+  const point = (key: string, e: React.PointerEvent) => {
+    const box = ref.current?.getBoundingClientRect();
+    if (box) setHover({ key, x: e.clientX - box.left, y: e.clientY - box.top });
+  };
+  const hovered = hover && next.get(hover.key)?.flow;
+
   return (
-    <div ref={ref} className="relative min-w-0">
+    <div
+      ref={ref}
+      className="relative min-w-0"
+      onPointerLeave={(e) => e.pointerType === "mouse" && setHover(undefined)}
+      // 触屏上点到线以外的地方收起提示。
+      onPointerDown={(e) => !(e.target as Element).hasAttribute("data-flow") && setHover(undefined)}
+    >
       {width > 0 && (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block overflow-visible" role="img" aria-label={top ? o.flow.aria(nameOf(top.from), nameOf(top.to), fmtRate(top.rate)) : o.flow.empty}>
           <text x={0} y={12} className="fill-muted-foreground text-xs">
@@ -328,11 +343,27 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
             const d = `M${x0} ${y1} L${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2} L${x3} ${y2}`;
             const op = now[`${key}:op`] ?? 0;
             return (
-              <g key={key} className="group" opacity={op} pointerEvents={op < 0.5 ? "none" : undefined}>
-                <title>{`${nameOf(f.from)} → ${nameOf(f.to)} ${fmtRate(f.rate)}${f.relay ? ` · ${o.flow.relayed}` : ""}`}</title>
-                <path d={d} fill="none" strokeWidth={w} strokeDasharray={f.relay ? `${Math.max(w, 4)} 4` : undefined} className={cn("transition-opacity duration-150 group-hover:opacity-100", f.kind === "ext" ? "stroke-wave opacity-60" : "stroke-muted-foreground opacity-45")} />
+              <g key={key} opacity={op} pointerEvents={op < 0.5 ? "none" : undefined}>
+                <path
+                  d={d}
+                  fill="none"
+                  strokeWidth={w}
+                  strokeDasharray={f.relay ? `${Math.max(w, 4)} 4` : undefined}
+                  className={cn("transition-opacity duration-150", f.kind === "ext" ? "stroke-wave" : "stroke-muted-foreground", hover?.key === key ? "opacity-100" : f.kind === "ext" ? "opacity-60" : "opacity-45")}
+                />
                 {/* 细线不好对准：叠一条看不见的宽线接鼠标，比线宽两边各多 8，至少 20。 */}
-                <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(w + 16, 20)} pointerEvents="stroke" />
+                <path
+                  d={d}
+                  data-flow=""
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={Math.max(w + 16, 20)}
+                  pointerEvents="stroke"
+                  onPointerEnter={(e) => point(key, e)}
+                  onPointerMove={(e) => point(key, e)}
+                  onPointerDown={(e) => point(key, e)}
+                  onPointerLeave={(e) => e.pointerType === "mouse" && setHover((h) => (h?.key === key ? undefined : h))}
+                />
               </g>
             );
           })}
@@ -355,16 +386,6 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
       {/* 数字放在图上面的一层：SVG 文字不能逐位滚动。读屏读下面的表格。 */}
       {width > 0 && (
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          {drawn.map(([key, { flow: f, y1: toY1 }]) => (
-            <div
-              key={key}
-              className="absolute flex items-baseline gap-2 text-[13px] leading-4 whitespace-nowrap text-foreground"
-              style={{ left: x0, top: (now[`${key}:y1`] ?? toY1) - (now[`${key}:w`] ?? 0) / 2 - 5 - 12, opacity: now[`${key}:op`] ?? 0 }}
-            >
-              {fit(nameOf(f.to), x1 - x0, 13)}
-              <Roll value={fmtRate(f.rate)} n={f.rate} className="text-xs text-muted-foreground" />
-            </div>
-          ))}
           {[...nextRows.values(), ...leavingRows.current.values()].map((n) => {
             const top = (now[`row:${n.id}`] ?? n.center) + 8 - 12;
             const opacity = now[`row:${n.id}:op`] ?? 0;
@@ -380,6 +401,24 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
               </Fragment>
             );
           })}
+        </div>
+      )}
+      {hover && hovered && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute z-10 grid gap-0.5 rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap text-popover-foreground shadow-md"
+          style={{
+            // 放在指针右上方；靠右边时放到左边，免得超出图。
+            left: hover.x > width - 200 ? undefined : hover.x + 12,
+            right: hover.x > width - 200 ? width - hover.x + 12 : undefined,
+            top: Math.max(0, hover.y - 44),
+          }}
+        >
+          <div className="text-foreground">{`${nameOf(hovered.from)} → ${nameOf(hovered.to)}`}</div>
+          <div className="text-muted-foreground">
+            <Roll value={fmtRate(hovered.rate)} n={hovered.rate} />
+            {hovered.relay && ` · ${o.flow.relayed}`}
+          </div>
         </div>
       )}
       {/* 读屏：图只有一句总结，具体路径在表格里。 */}
