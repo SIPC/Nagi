@@ -79,7 +79,7 @@ export function ElevateHost() {
       >
         {req?.totp ? (
           <Field label={m.code} htmlFor="elevate-value">
-            <Input id="elevate-value" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus required />
+            <Input id="elevate-value" name="totp" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" pattern="[0-9]*" maxLength={6} autoComplete="one-time-code" autoFocus required />
           </Field>
         ) : (
           <Field label={m.password} htmlFor="elevate-value" hint={

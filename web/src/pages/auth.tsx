@@ -167,10 +167,14 @@ export function LoginPage() {
     return (
       <AuthShell title={t.auth.login.totpTitle} description={t.auth.login.totpDescription}>
         <form className="grid gap-4" onSubmit={submit}>
+          {/* 密码管理器按用户名找出这次登录的账号，才知道填哪一个的验证码；这一步看不到用户名框，所以留一个隐藏的。 */}
+          <input type="text" name="username" autoComplete="username" value={username} readOnly tabIndex={-1} aria-hidden className="sr-only" />
           <Field label={t.auth.login.code} htmlFor="totp" error={error}>
             <Input
               id="totp"
+              name="totp"
               inputMode="numeric"
+              pattern="[0-9]*"
               maxLength={6}
               value={totpCode}
               onChange={(e) => {
