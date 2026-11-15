@@ -1445,8 +1445,12 @@ type VolumeFileRef struct {
 	// 卷名，.data 表示容器的 data/ 目录。
 	Volume string `protobuf:"bytes,3,opt,name=volume,proto3" json:"volume,omitempty"`
 	// 相对卷根目录的路径，/ 分隔，空表示根目录。
-	Path          string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
-	SnapshotId    string `protobuf:"bytes,5,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	Path       string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	SnapshotId string `protobuf:"bytes,5,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	// 下载时只读一段（断点续传、多线程下载，见 internal/pkg/byterange）：只用于普通文件，目录照常打包。
+	// offset 小于 0 表示最后 -offset 个字节；length 为 0 表示读到末尾。都是 0 时读整个文件。
+	Offset        int64 `protobuf:"varint,6,opt,name=offset,proto3" json:"offset,omitempty"`
+	Length        int64 `protobuf:"varint,7,opt,name=length,proto3" json:"length,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1514,6 +1518,20 @@ func (x *VolumeFileRef) GetSnapshotId() string {
 		return x.SnapshotId
 	}
 	return ""
+}
+
+func (x *VolumeFileRef) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *VolumeFileRef) GetLength() int64 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
 }
 
 type VolumeFileEntry struct {
@@ -1660,9 +1678,14 @@ type VolumeFileChunk struct {
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Size int64  `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
 	// 目录打包成了 tar.gz，大小事先不知道。
-	Archive       bool `protobuf:"varint,4,opt,name=archive,proto3" json:"archive,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Archive bool `protobuf:"varint,4,opt,name=archive,proto3" json:"archive,omitempty"`
+	// 按请求的 offset、length 只发了一段（旧版本的节点不认识，总是发整个文件）。size 仍是整个文件的大小，
+	// 实际的起点和长度按 byterange.Resolve 算；起点超出文件时没有内容。
+	Ranged bool `protobuf:"varint,5,opt,name=ranged,proto3" json:"ranged,omitempty"`
+	// 文件的修改时间（Unix 纳秒），面板据此生成 ETag，续传前核对文件没有变。
+	ModifiedUnixNano int64 `protobuf:"varint,6,opt,name=modified_unix_nano,json=modifiedUnixNano,proto3" json:"modified_unix_nano,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *VolumeFileChunk) Reset() {
@@ -1721,6 +1744,20 @@ func (x *VolumeFileChunk) GetArchive() bool {
 		return x.Archive
 	}
 	return false
+}
+
+func (x *VolumeFileChunk) GetRanged() bool {
+	if x != nil {
+		return x.Ranged
+	}
+	return false
+}
+
+func (x *VolumeFileChunk) GetModifiedUnixNano() int64 {
+	if x != nil {
+		return x.ModifiedUnixNano
+	}
+	return 0
 }
 
 type VolumeUploadChunk struct {
@@ -3718,9 +3755,12 @@ func (x *NodeShellStart) GetActor() string {
 
 // NodeFileRef 指向节点上的一个路径。path 是绝对路径。node_id 面板用，节点不看。
 type NodeFileRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Path   string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	// 下载时只读一段，同 VolumeFileRef 的 offset、length。
+	Offset        int64 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	Length        int64 `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3767,6 +3807,20 @@ func (x *NodeFileRef) GetPath() string {
 		return x.Path
 	}
 	return ""
+}
+
+func (x *NodeFileRef) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *NodeFileRef) GetLength() int64 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
 }
 
 type NodeFileEntry struct {
@@ -5203,7 +5257,7 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x13ListVolumesResponse\x12-\n" +
 	"\avolumes\x18\x01 \x03(\v2\x13.nagi.v1.VolumeInfoR\avolumes\x12(\n" +
 	"\x10disk_total_bytes\x18\x02 \x01(\x03R\x0ediskTotalBytes\x12&\n" +
-	"\x0fdisk_free_bytes\x18\x03 \x01(\x03R\rdiskFreeBytes\"\x99\x01\n" +
+	"\x0fdisk_free_bytes\x18\x03 \x01(\x03R\rdiskFreeBytes\"\xc9\x01\n" +
 	"\rVolumeFileRef\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
@@ -5211,7 +5265,9 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x06volume\x18\x03 \x01(\tR\x06volume\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12\x1f\n" +
 	"\vsnapshot_id\x18\x05 \x01(\tR\n" +
-	"snapshotId\"\xbb\x01\n" +
+	"snapshotId\x12\x16\n" +
+	"\x06offset\x18\x06 \x01(\x03R\x06offset\x12\x16\n" +
+	"\x06length\x18\a \x01(\x03R\x06length\"\xbb\x01\n" +
 	"\x0fVolumeFileEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x15\n" +
 	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x1d\n" +
@@ -5222,12 +5278,14 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x04mode\x18\x06 \x01(\tR\x04mode\"k\n" +
 	"\x17ListVolumeFilesResponse\x122\n" +
 	"\aentries\x18\x01 \x03(\v2\x18.nagi.v1.VolumeFileEntryR\aentries\x12\x1c\n" +
-	"\ttruncated\x18\x02 \x01(\bR\ttruncated\"g\n" +
+	"\ttruncated\x18\x02 \x01(\bR\ttruncated\"\xad\x01\n" +
 	"\x0fVolumeFileChunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x18\n" +
-	"\aarchive\x18\x04 \x01(\bR\aarchive\"\x9b\x01\n" +
+	"\aarchive\x18\x04 \x01(\bR\aarchive\x12\x16\n" +
+	"\x06ranged\x18\x05 \x01(\bR\x06ranged\x12,\n" +
+	"\x12modified_unix_nano\x18\x06 \x01(\x03R\x10modifiedUnixNano\"\x9b\x01\n" +
 	"\x11VolumeUploadChunk\x12(\n" +
 	"\x03ref\x18\x01 \x01(\v2\x16.nagi.v1.VolumeFileRefR\x03ref\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12'\n" +
@@ -5344,10 +5402,12 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x0eNodeShellStart\x12)\n" +
 	"\x04size\x18\x01 \x01(\v2\x15.nagi.v1.TerminalSizeR\x04size\x12\x10\n" +
 	"\x03cwd\x18\x02 \x01(\tR\x03cwd\x12\x14\n" +
-	"\x05actor\x18\x03 \x01(\tR\x05actor\":\n" +
+	"\x05actor\x18\x03 \x01(\tR\x05actor\"j\n" +
 	"\vNodeFileRef\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\"\x88\x02\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x03R\x06offset\x12\x16\n" +
+	"\x06length\x18\x04 \x01(\x03R\x06length\"\x88\x02\n" +
 	"\rNodeFileEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x15\n" +
 	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x1d\n" +

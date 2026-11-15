@@ -14,7 +14,7 @@ import type { VolumeFileEntry } from "@/gen/nagi/v1/agent_pb";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { capitalize, cn, formatClock, formatDateTime, formatMonthDay, timeAgo } from "@/lib/utils";
+import { capitalize, cn, eachLimit, formatClock, formatDateTime, formatMonthDay, timeAgo, uploadConcurrency } from "@/lib/utils";
 
 // 目录一次显示的条数，内容多时点「显示更多」。
 const pageSize = 200;
@@ -175,7 +175,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
       "upload",
       async () => {
         if (first) await snapshotFirst();
-        for (const f of list) await uploadFile(join(f.name), f);
+        await eachLimit(list, uploadConcurrency, (f) => uploadFile(join(f.name), f));
       },
       m.uploaded(list.length),
     );

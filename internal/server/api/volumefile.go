@@ -1,12 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
-	"strconv"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
@@ -14,6 +13,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // maxVolumeUpload 是上传到卷的单个文件的上限。
@@ -87,44 +87,18 @@ func (a *API) VolumeFileHandler() http.Handler {
 		client := nagiv1.NewMeshServiceClient(cc)
 
 		if r.Method == http.MethodGet {
-			stream, err := client.VolumeDownload(ctx, ref)
-			if err != nil {
-				a.recordOperation(ctx, "/DownloadVolumeFile", ref, activityFailure(err))
-				fail(http.StatusBadGateway, err)
-				return
-			}
-			head, err := stream.Recv()
-			if err != nil {
-				a.recordOperation(ctx, "/DownloadVolumeFile", ref, activityFailure(err))
-				fail(http.StatusBadRequest, err)
-				return
-			}
 			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
-			if q.Get("check") == "1" {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			a.recordOperation(ctx, "/DownloadVolumeFile", ref, "")
-			// 一律作为附件下载，并禁止猜类型：文件内容来自容器，不能在面板的域名下当网页打开。
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": head.GetName()}))
-			if !head.GetArchive() {
-				w.Header().Set("Content-Length", strconv.FormatInt(head.GetSize(), 10))
-			}
-			for {
-				c, err := stream.Recv()
-				if errors.Is(err, io.EOF) {
-					return
-				}
-				if err != nil {
-					// 已经开始发内容了，只能断开连接，让浏览器知道下载没有完成。
-					panic(http.ErrAbortHandler)
-				}
-				if _, err := w.Write(c.GetData()); err != nil {
-					return
-				}
-			}
+			fileDownload{
+				open: func(ctx context.Context, offset, length int64) (chunkStream, error) {
+					part := proto.CloneOf(ref)
+					part.Offset, part.Length = offset, length
+					return client.VolumeDownload(ctx, part)
+				},
+				record: func(failure string) { a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure) },
+				fail:   fail,
+				check:  q.Get("check") == "1",
+			}.serve(w, r)
+			return
 		}
 
 		if r.Header.Get("X-Nagi-Upload") != "1" {

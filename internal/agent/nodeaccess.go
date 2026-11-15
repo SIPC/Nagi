@@ -286,7 +286,7 @@ func (s *meshService) NodeFileDownload(req *nagiv1.NodeFileRef, stream nagiv1.Me
 	if err := s.checkMeshNodeAccess(stream.Context(), nagiv1.MeshService_NodeFileDownload_FullMethodName); err != nil {
 		return err
 	}
-	return s.a.files.Download(stream.Context(), req.GetPath(), stream.Send)
+	return s.a.files.Download(stream.Context(), req.GetPath(), req.GetOffset(), req.GetLength(), stream.Send)
 }
 
 // NodeFileUpload 把面板传来的文件写到节点上。

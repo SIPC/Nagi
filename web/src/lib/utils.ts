@@ -78,3 +78,25 @@ export function slugName(name: string, fallback: string) {
     .replace(/-+$/, "");
   return s || fallback;
 }
+
+// uploadConcurrency：一次选了多个文件时同时上传几个。节点同时接收的大文件上传有上限（internal/agent/meshservice.go 的 maxUploads），
+// 要比它小，留出名额给别人。
+export const uploadConcurrency = 3;
+
+// eachLimit 对 items 逐个调用 fn，最多同时 limit 个。有一个失败就不再开始新的，等正在进行的结束后抛出第一个错误。
+export async function eachLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  let failed: { err: unknown } | undefined;
+  const worker = async () => {
+    while (!failed && next < items.length) {
+      const item = items[next++];
+      try {
+        await fn(item);
+      } catch (err) {
+        failed ??= { err };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  if (failed) throw failed.err;
+}

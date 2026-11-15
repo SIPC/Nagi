@@ -17,7 +17,7 @@ import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { NodeFileEntry, ReadNodeFileResponse } from "@/gen/nagi/v1/agent_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
-import { cn, formatDateTime, timeAgo } from "@/lib/utils";
+import { cn, eachLimit, formatDateTime, timeAgo, uploadConcurrency } from "@/lib/utils";
 
 const pageSize = 200;
 const maxEditBytes = 1 << 20;
@@ -222,10 +222,10 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     await run(
       "upload",
       async () => {
-        for (const f of list) {
+        await eachLimit(list, uploadConcurrency, async (f) => {
           const res = await fetch(fileURL(join(real, f.name), sensitive), { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: f });
           if (!res.ok) throw await failure(res);
-        }
+        });
       },
       m.uploaded(list.length),
     );

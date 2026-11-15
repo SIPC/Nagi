@@ -337,7 +337,7 @@ func TestDownloadDir(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	head := false
-	err := s.Download(context.Background(), dir+"/work", func(c *nagiv1.VolumeFileChunk) error {
+	err := s.Download(context.Background(), dir+"/work", 0, 0, func(c *nagiv1.VolumeFileChunk) error {
 		if !head {
 			head = true
 			if !c.GetArchive() || c.GetName() != "work.tar.gz" {
@@ -371,10 +371,10 @@ func TestDownloadDir(t *testing.T) {
 	if strings.Join(names, ",") != "a,sub/,sub/b" {
 		t.Fatalf("打包内容：%v", names)
 	}
-	if err := s.Download(context.Background(), "/", func(*nagiv1.VolumeFileChunk) error { return nil }); code(err) != codes.InvalidArgument {
+	if err := s.Download(context.Background(), "/", 0, 0, func(*nagiv1.VolumeFileChunk) error { return nil }); code(err) != codes.InvalidArgument {
 		t.Fatalf("根目录不能打包：%v", err)
 	}
-	if err := s.Download(context.Background(), dir+"/data", func(*nagiv1.VolumeFileChunk) error { return nil }); code(err) != codes.PermissionDenied {
+	if err := s.Download(context.Background(), dir+"/data", 0, 0, func(*nagiv1.VolumeFileChunk) error { return nil }); code(err) != codes.PermissionDenied {
 		t.Fatalf("数据目录不能下载：%v", err)
 	}
 }
@@ -385,7 +385,7 @@ func TestDownloadSkipsDenied(t *testing.T) {
 	write(t, dir+"/work/a", "a")
 	var buf bytes.Buffer
 	first := true
-	err := s.Download(context.Background(), dir, func(c *nagiv1.VolumeFileChunk) error {
+	err := s.Download(context.Background(), dir, 0, 0, func(c *nagiv1.VolumeFileChunk) error {
 		if !first {
 			buf.Write(c.GetData())
 		}

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/snapshot"
+	"github.com/SIPC/nagi/internal/pkg/byterange"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -243,10 +244,7 @@ func (m *Manager) ReadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef,
 			return fileErr(err)
 		}
 		defer f.Close()
-		if err := send(&nagiv1.VolumeFileChunk{Name: name, Size: info.Size()}); err != nil {
-			return err
-		}
-		return sendChunks(f, send)
+		return sendFile(f, name, info.Size(), info.ModTime(), ref.GetOffset(), ref.GetLength(), send)
 	case info.IsDir():
 		if err := send(&nagiv1.VolumeFileChunk{Name: name + ".tar.gz", Archive: true}); err != nil {
 			return err
@@ -280,9 +278,6 @@ func (m *Manager) readSnapshotFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 		if top.IsSymlink {
 			return invalid("该文件是符号链接或特殊文件，无法下载")
 		}
-		if err := send(&nagiv1.VolumeFileChunk{Name: name, Size: top.Size}); err != nil {
-			return err
-		}
 		return rep.WalkFiles(ctx, ref.GetSnapshotId(), src, func(_ string, _ snapshot.FileInfo, open func() (io.ReadCloser, error)) error {
 			if open == nil {
 				return nil
@@ -292,7 +287,7 @@ func (m *Manager) readSnapshotFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 				return err
 			}
 			defer r.Close()
-			return sendChunks(r, send)
+			return sendFile(r, name, top.Size, top.Modified, ref.GetOffset(), ref.GetLength(), send)
 		})
 	}
 	if err := send(&nagiv1.VolumeFileChunk{Name: name + ".tar.gz", Archive: true}); err != nil {
@@ -330,6 +325,20 @@ func downloadName(ref *nagiv1.VolumeFileRef, rel string) string {
 		return ref.GetContainer() + "-data"
 	}
 	return ref.GetVolume()
+}
+
+// sendFile 发一个普通文件（r 从文件开头读）：第一条带文件名、大小和修改时间，之后是内容。
+// 请求只要一段（offset、length）时只发那一段，并在第一条里注明；那一段不在文件里时只发第一条。
+func sendFile(r io.Reader, name string, size int64, modified time.Time, offset, length int64, send func(*nagiv1.VolumeFileChunk) error) error {
+	head := &nagiv1.VolumeFileChunk{Name: name, Size: size, ModifiedUnixNano: modified.UnixNano(), Ranged: offset != 0 || length != 0}
+	if err := send(head); err != nil {
+		return err
+	}
+	part, ok, err := byterange.Section(r, offset, length, size)
+	if err != nil || !ok {
+		return err
+	}
+	return sendChunks(part, send)
 }
 
 func sendChunks(r io.Reader, send func(*nagiv1.VolumeFileChunk) error) error {
@@ -426,6 +435,25 @@ func (m *Manager) lockForWrite(projectID, container string) (func(), error) {
 		return nil, invalid("容器正在进行其他操作，请稍后重试")
 	}
 	return l.Unlock, nil
+}
+
+// uploadLockWait 是上传的文件写进卷之前最多等多久容器的锁（别的上传正在写进卷时）。
+const uploadLockWait = 2 * time.Minute
+
+// lockForWriteWait 和 lockForWrite 一样，但锁被占着时每隔一会儿再试，最多等 wait。
+func (m *Manager) lockForWriteWait(ctx context.Context, projectID, container string, wait time.Duration) (func(), error) {
+	deadline := time.Now().Add(wait)
+	for {
+		unlock, err := m.lockForWrite(projectID, container)
+		if err == nil || !time.Now().Before(deadline) {
+			return unlock, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // writeRootFile 原子地写一个文件：先写临时文件，再改名。目标是符号链接时替换链接本身，不写到它指向的地方。
@@ -560,7 +588,9 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	if rel == "." {
 		return 0, invalid("请填写文件名")
 	}
-	unlock, err := m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
+	// 同时上传的几个文件（见 web/src/lib/utils.ts 的 uploadConcurrency）各自拿锁写进卷，拿不到时等一等；
+	// 部署、快照恢复这类长操作等不到就报错：传之前只等一小会儿，免得白传；传完再写进卷时多等一些。
+	unlock, err := m.lockForWriteWait(ctx, ref.GetProjectId(), ref.GetContainer(), 10*time.Second)
 	if err != nil {
 		return 0, err
 	}
@@ -579,7 +609,7 @@ func (m *Manager) UploadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRe
 	}
 	defer os.Remove(staged)
 
-	unlock, err = m.lockForWrite(ref.GetProjectId(), ref.GetContainer())
+	unlock, err = m.lockForWriteWait(ctx, ref.GetProjectId(), ref.GetContainer(), uploadLockWait)
 	if err != nil {
 		return 0, err
 	}

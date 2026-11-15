@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"strconv"
 	"time"
@@ -397,44 +396,16 @@ func (a *API) NodeFileHandler() http.Handler {
 		ref := &nagiv1.NodeFileRef{NodeId: nodeID, Path: path}
 
 		if r.Method == http.MethodGet {
-			stream, err := client.NodeFileDownload(ctx, ref)
-			if err != nil {
-				record(activityFailure(err))
-				fail(http.StatusBadGateway, err)
-				return
-			}
-			head, err := stream.Recv()
-			if err != nil {
-				record(activityFailure(err))
-				fail(http.StatusBadRequest, err)
-				return
-			}
 			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
-			if q.Get("check") == "1" {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			record("")
-			// 一律作为附件下载，并禁止猜类型：不能在面板的域名下把节点上的文件当网页打开。
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": head.GetName()}))
-			if !head.GetArchive() {
-				w.Header().Set("Content-Length", strconv.FormatInt(head.GetSize(), 10))
-			}
-			for {
-				c, err := stream.Recv()
-				if errors.Is(err, io.EOF) {
-					return
-				}
-				if err != nil {
-					// 已经开始发内容了，只能断开连接，让浏览器知道下载没有完成。
-					panic(http.ErrAbortHandler)
-				}
-				if _, err := w.Write(c.GetData()); err != nil {
-					return
-				}
-			}
+			fileDownload{
+				open: func(ctx context.Context, offset, length int64) (chunkStream, error) {
+					return client.NodeFileDownload(ctx, &nagiv1.NodeFileRef{NodeId: nodeID, Path: path, Offset: offset, Length: length})
+				},
+				record: record,
+				fail:   fail,
+				check:  q.Get("check") == "1",
+			}.serve(w, r)
+			return
 		}
 
 		if r.Header.Get("X-Nagi-Upload") != "1" {

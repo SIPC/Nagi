@@ -28,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/pkg/byterange"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -820,7 +821,8 @@ func (s *Service) Mkdir(p string) error {
 }
 
 // Download 把文件发给 send：第一条带文件名和大小，之后是内容。目录打包成 tar.gz。
-func (s *Service) Download(ctx context.Context, p string, send func(*nagiv1.VolumeFileChunk) error) error {
+// offset、length 不为 0 时只发普通文件的一段（见 byterange），第一条里注明。
+func (s *Service) Download(ctx context.Context, p string, offset, length int64, send func(*nagiv1.VolumeFileChunk) error) error {
 	real, _, err := s.readable(p)
 	if err != nil {
 		return err
@@ -837,10 +839,15 @@ func (s *Service) Download(ctx context.Context, p string, send func(*nagiv1.Volu
 			return err
 		}
 		defer f.Close()
-		if err := send(&nagiv1.VolumeFileChunk{Name: name, Size: info.Size()}); err != nil {
+		head := &nagiv1.VolumeFileChunk{Name: name, Size: info.Size(), ModifiedUnixNano: info.ModTime().UnixNano(), Ranged: offset != 0 || length != 0}
+		if err := send(head); err != nil {
 			return err
 		}
-		return sendChunks(f, send)
+		part, ok, err := byterange.Section(f, offset, length, info.Size())
+		if err != nil || !ok {
+			return err
+		}
+		return sendChunks(part, send)
 	case info.IsDir():
 		if real == "/" {
 			return invalid("不能下载根目录")

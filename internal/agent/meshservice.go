@@ -12,8 +12,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// maxUploads 是同时接收的大文件上传数（容器文件和节点文件合计）。都要先写到磁盘上暂存，多了直接拒绝，不排队。
-const maxUploads = 2
+// maxUploads 是同时接收的大文件上传数（项目压缩包和节点文件合计）。都要先写到磁盘上暂存，多了直接拒绝，不排队。
+// 面板一次选多个文件时同时传 3 个（web/src/lib/utils.ts 的 uploadConcurrency），这里要比它大。
+const maxUploads = 4
 
 var uploadSlots = make(chan struct{}, maxUploads)
 

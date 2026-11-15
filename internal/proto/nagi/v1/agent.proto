@@ -282,6 +282,10 @@ message VolumeFileRef {
   // 相对卷根目录的路径，/ 分隔，空表示根目录。
   string path = 4;
   string snapshot_id = 5;
+  // 下载时只读一段（断点续传、多线程下载，见 internal/pkg/byterange）：只用于普通文件，目录照常打包。
+  // offset 小于 0 表示最后 -offset 个字节；length 为 0 表示读到末尾。都是 0 时读整个文件。
+  int64 offset = 6;
+  int64 length = 7;
 }
 
 message VolumeFileEntry {
@@ -306,6 +310,11 @@ message VolumeFileChunk {
   int64 size = 3;
   // 目录打包成了 tar.gz，大小事先不知道。
   bool archive = 4;
+  // 按请求的 offset、length 只发了一段（旧版本的节点不认识，总是发整个文件）。size 仍是整个文件的大小，
+  // 实际的起点和长度按 byterange.Resolve 算；起点超出文件时没有内容。
+  bool ranged = 5;
+  // 文件的修改时间（Unix 纳秒），面板据此生成 ETag，续传前核对文件没有变。
+  int64 modified_unix_nano = 6;
 }
 
 message VolumeUploadChunk {
@@ -511,6 +520,9 @@ message NodeShellStart {
 message NodeFileRef {
   string node_id = 1;
   string path = 2;
+  // 下载时只读一段，同 VolumeFileRef 的 offset、length。
+  int64 offset = 3;
+  int64 length = 4;
 }
 
 message NodeFileEntry {
