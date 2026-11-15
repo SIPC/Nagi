@@ -442,24 +442,37 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 }
 
 // syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用。
-// 连接中途断了（例如对方节点刚重启，旧的 QUIC 连接收到无状态重置）时换一条新连接重试一次：同步是增量的，
-// 已经传过去的文件不会再传。
+// 连接中途断了（大文件走慢线路时连接超时，或者对方节点刚重启，旧的 QUIC 连接收到无状态重置）时换一条新连接接着传：
+// 对方每收完一个文件就落盘，下次核对清单时跳过，所以每次重试都从断开的地方往后。上一次传过去了数据就继续重试，
+// 最多 syncAttempts 次；一点都没传过去就不再试（线路是真的不通）。
 func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
-	n, err := a.syncOnce(ctx, projectID, container, target)
-	if err == nil || !connectionLost(err) {
-		return n, err
-	}
-	a.log.Info("同步时连接断开，重试", "project", projectID, "container", container, "target", target.GetName(), "err", err)
-	select {
-	case <-ctx.Done():
-		return n, err
-	case <-time.After(syncRetryDelay):
-	}
-	m, err := a.syncOnce(ctx, projectID, container, target)
-	return n + m, err
+	return resumeSync(ctx, func() (int64, error) { return a.syncOnce(ctx, projectID, container, target) }, func(attempt int, n int64, err error) {
+		a.log.Info("同步时连接断开，接着传", "project", projectID, "container", container, "target", target.GetName(),
+			"attempt", attempt, "bytes", n, "err", err)
+	})
 }
 
-// syncRetryDelay 是同步断开以后等多久重试。
+// resumeSync 按 syncTo 说的规则反复调用 once，返回一共传了多少字节和最后一次的结果。
+func resumeSync(ctx context.Context, once func() (int64, error), onRetry func(attempt int, n int64, err error)) (int64, error) {
+	var total int64
+	for attempt := 1; ; attempt++ {
+		n, err := once()
+		total += n
+		if err == nil || !connectionLost(err) || attempt == syncAttempts || (attempt > 1 && n == 0) {
+			return total, err
+		}
+		onRetry(attempt, n, err)
+		select {
+		case <-ctx.Done():
+			return total, err
+		case <-time.After(syncRetryDelay):
+		}
+	}
+}
+
+// syncAttempts 是一次同步最多连接几次；syncRetryDelay 是断开以后等多久再连。
+const syncAttempts = 10
+
 var syncRetryDelay = 2 * time.Second
 
 // connectionLost 判断同步失败是不是因为连接断了（gRPC 的 Unavailable），而不是对方拒绝。
