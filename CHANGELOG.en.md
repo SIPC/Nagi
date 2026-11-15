@@ -8,6 +8,16 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.27.1
+
+### Improvements
+
+- The live traffic chart on the overview no longer labels each path. Hover over or tap a path to see its nodes and rate.
+
+### Fixes
+
+- Fixes an issue where syncing a large snapshot repository to a backup or standby node over a slow link failed when the connection dropped midway. The sync now reconnects and continues where it stopped.
+
 ## v0.27.0
 
 ### New features
