@@ -442,7 +442,33 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 }
 
 // syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用。
+// 连接中途断了（例如对方节点刚重启，旧的 QUIC 连接收到无状态重置）时换一条新连接重试一次：同步是增量的，
+// 已经传过去的文件不会再传。
 func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
+	n, err := a.syncOnce(ctx, projectID, container, target)
+	if err == nil || !connectionLost(err) {
+		return n, err
+	}
+	a.log.Info("同步时连接断开，重试", "project", projectID, "container", container, "target", target.GetName(), "err", err)
+	select {
+	case <-ctx.Done():
+		return n, err
+	case <-time.After(syncRetryDelay):
+	}
+	m, err := a.syncOnce(ctx, projectID, container, target)
+	return n + m, err
+}
+
+// syncRetryDelay 是同步断开以后等多久重试。
+var syncRetryDelay = 2 * time.Second
+
+// connectionLost 判断同步失败是不是因为连接断了（gRPC 的 Unavailable），而不是对方拒绝。
+func connectionLost(err error) bool {
+	var se interface{ GRPCStatus() *status.Status }
+	return errors.As(err, &se) && se.GRPCStatus().Code() == codes.Unavailable
+}
+
+func (a *agent) syncOnce(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
 	// 同步期间仓库的文件不能被立即清理删掉，否则备份节点会收到不完整的一套文件。
 	defer a.projects.ReadRepo(projectID, container)()
 	if a.mesh == nil {
