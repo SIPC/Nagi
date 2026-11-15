@@ -140,6 +140,9 @@ function bend(A: Pt, B: Pt, k: number): Pt {
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
 
+// haLaneGap：高可用图里同一对节点之间几条平行的线相隔多远。
+const haLaneGap = 10;
+
 // arrow：从 A 指向 B 的有向曲线，停在 B 的外圈外面，末端画箭头。
 function arrow(A: Pt, B: Pt, P: Pt) {
   const c = curve(A, B, P);
@@ -796,15 +799,35 @@ function HaMap({ nodes }: { nodes: Node[] }) {
   const edges = [...edgeMap.values()].filter((e) => nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to));
   const { ref, width } = useWidth();
   const { pos: layoutPos, box, spacing } = layout(nodes, width);
-  // 箭头都朝外弯。两个节点互相指向时，ID 大的一方发出的弯得更多，两条一里一外；
-  // 同一方向既有顶替又有备份时，备份弯得多一些。
-  const directed = new Set(edges.map((e) => e.from + "|" + e.to));
+  // 箭头都是直线。同一对节点之间有几条（互相指向，或者同一方向既有顶替又有备份）时平行错开，间隔 haLaneGap。
+  const lanes = new Map<string, HaEdge[]>();
+  for (const e of edges) {
+    const pair = [e.from, e.to].sort().join("|");
+    lanes.set(pair, [...(lanes.get(pair) ?? []), e]);
+  }
+  for (const list of lanes.values()) list.sort((x, y) => (x.from + x.type).localeCompare(y.from + y.type));
   const geometry = (e: HaEdge) => {
     const A = layoutPos.get(e.from)!;
     const B = layoutPos.get(e.to)!;
-    const outer = e.from > e.to && directed.has(e.to + "|" + e.from);
-    const k = (e.type === "backup" ? 0.28 : 0.14) * (outer ? 2.4 : 1);
-    return arrow(A, B, bend(A, B, k));
+    const [lo, hi] = [e.from, e.to].sort();
+    const list = lanes.get(lo + "|" + hi)!;
+    // 法线按 ID 小的一端指向大的一端算，两个方向的线错开的方向一致。
+    const L = layoutPos.get(lo)!;
+    const H = layoutPos.get(hi)!;
+    const len = dist(L, H) || 1;
+    const shift = (list.indexOf(e) - (list.length - 1) / 2) * haLaneGap;
+    const n = { x: (-(H.y - L.y) / len) * shift, y: ((H.x - L.x) / len) * shift };
+    const A2 = { x: A.x + n.x, y: A.y + n.y };
+    const B2 = { x: B.x + n.x, y: B.y + n.y };
+    return arrow(A2, B2, { x: (A2.x + B2.x) / 2, y: (A2.y + B2.y) / 2 });
+  };
+  // labelAt：线上标签的位置。同一对节点之间有几条线时，标签沿线错开，不叠在一起。
+  const labelAt = (e: HaEdge) => {
+    const [lo, hi] = [e.from, e.to].sort();
+    const list = lanes.get(lo + "|" + hi)!;
+    const s = 0.5 + (list.indexOf(e) - (list.length - 1) / 2) * 0.2;
+    // 线的方向不同，参数 s 从不同的一端算；按 ID 小的一端换算，错开的顺序才一致。
+    return geometry(e).at(e.from === lo ? s : 1 - s);
   };
 
   const focus = hover ?? selected;
@@ -837,7 +860,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
           );
         })}
         {edges.map((e) => {
-          const mid = geometry(e).at(0.5);
+          const mid = labelAt(e);
           return (
             <EdgeLabel
               key={`${e.from}|${e.to}|${e.type}`}
