@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 )
@@ -21,6 +23,38 @@ func (h *handler) recordDenied(ctx context.Context, u auth.User, tool, reason st
 	if h.o.Record != nil {
 		h.o.Record(ctx, u, tool, reason)
 	}
+}
+
+// record 记一次工具调用（见 docs/audit.md#mcp-调用）。
+func (h *handler) record(ctx context.Context, u auth.User, tool string, args []byte, result, errMsg string, bytes int, d time.Duration, col *audit.Collector) {
+	if h.o.Audit == nil {
+		return
+	}
+	params := map[string]any{}
+	if p := audit.JSONParams(args); p != "" {
+		params["arguments"] = json.RawMessage(p)
+	}
+	if bytes > 0 {
+		params["result_bytes"] = bytes
+	}
+	b, _ := json.Marshal(params)
+	e := audit.Event{Category: audit.MCP, Action: "mcp:" + tool, TargetType: "tool", TargetID: tool, TargetName: tool,
+		Params: audit.TruncateParams(string(b)), Result: result, Error: errMsg, DurationMS: d.Milliseconds()}
+	var in struct {
+		Project   string `json:"project"`
+		Container string `json:"container"`
+		Node      string `json:"node"`
+	}
+	_ = json.Unmarshal(args, &in)
+	if in.Container != "" {
+		e.TargetType, e.TargetID, e.TargetName = "container", in.Container, in.Container
+	} else if in.Node != "" {
+		e.TargetType, e.TargetID, e.TargetName = "node", in.Node, in.Node
+	}
+	if col == nil {
+		_, col = audit.WithCollector(ctx)
+	}
+	h.o.Audit(ctx, u, e, in.Project, col)
 }
 
 // watchDenied 在交给 SDK 之前，找出请求里调用的、这个令牌不能用的工具。

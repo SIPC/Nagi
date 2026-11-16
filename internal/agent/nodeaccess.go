@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -133,6 +135,12 @@ func (s *agentService) NodeExec(req *nagiv1.NodeExecRequest, stream nagiv1.Agent
 	log.Info("在节点上执行命令", "command", req.GetCommand())
 	code := runNodeCommand(ctx, req.GetCwd(), req.GetCommand(), &streamWriter{send: stream.Send})
 	log.Info("节点命令结束", "exit_code", code)
+	result := "ok"
+	if code != 0 {
+		result = "failed"
+	}
+	s.node.audit.Record(auditlog.Event{Panel: s.panel, Actor: req.GetActor(), IP: req.GetIp(), Action: "node_exec", Target: req.GetCwd(),
+		Detail: fmt.Sprintf("%s（退出码 %d）", req.GetCommand(), code), Result: result})
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
 }
 
@@ -162,8 +170,17 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 	// 面板的记录被篡改时还能在节点上查。用户名是面板说的，指纹是控制连接确认过的。
 	log := s.node.log.With("panel", s.panel, "user", start.GetActor())
 	log.Info("打开了节点终端")
+	ev := auditlog.Event{Panel: s.panel, Actor: start.GetActor(), IP: start.GetIp(), Target: start.GetCwd()}
+	open := ev
+	open.Action = "node_shell_open"
+	s.node.audit.Record(open)
 	began := time.Now()
-	defer func() { log.Info("关闭了节点终端", "duration", time.Since(began).Round(time.Second).String()) }()
+	defer func() {
+		d := time.Since(began).Round(time.Second).String()
+		log.Info("关闭了节点终端", "duration", d)
+		ev.Action, ev.Detail = "node_shell_close", "时长 "+d
+		s.node.audit.Record(ev)
+	}()
 	defer sh.Close()
 
 	ctx, cancel := context.WithTimeout(stream.Context(), nodeShellMaxAge)

@@ -15,8 +15,8 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/coder/websocket"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -54,8 +54,17 @@ var elevationRequired = map[string]bool{
 	// 开启两步验证：否则拿到会话的人能换上自己的密钥，再用它通过高权限确认，账号主人也登不上了。
 	// 已开启时确认要用当前的验证码，相当于换密钥前先验证旧的。EnableTOTP 只认这里发出的密钥，不用再拦。
 	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
+	// 添加通行密钥：和两步验证一样，拿到会话的人不能借它给自己留一个登录凭据。
+	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
+	// 管理员登录地址：拿到会话的人不能借它把账号主人锁在外面（见 docs/panel.md#管理员登录地址）。
+	nagiv1connect.SettingsServiceSetAdminNetworksProcedure: true,
 	// 恢复从节点缓存拼回的顶替和备份设置：会让别的节点接收并运行这个容器的配置（见 docs/panel.md#项目数据）。
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure: true,
+	// 回放终端录制：输出里可能有密钥（见 docs/audit.md#终端与命令录制）。
+	nagiv1connect.SettingsServiceGetRecordingProcedure: true,
+	// 隔离和解除隔离节点（见 docs/mesh.md#隔离）。
+	nagiv1connect.NodeServiceIsolateNodeProcedure:   true,
+	nagiv1connect.NodeServiceUnisolateNodeProcedure: true,
 }
 
 func elevationError() error {
@@ -81,7 +90,12 @@ func (elevationCheck) WrapStreamingClient(next connect.StreamingClientFunc) conn
 }
 
 func (elevationCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+			return elevationError()
+		}
+		return next(ctx, conn)
+	}
 }
 
 func (s *authService) Elevate(ctx context.Context, req *connect.Request[nagiv1.ElevateRequest]) (*connect.Response[nagiv1.ElevateResponse], error) {
@@ -199,20 +213,14 @@ func (a *API) nodeName(ctx context.Context, nodeID string) string {
 // recordNodeAccess 记下一次节点访问。不走 Connect 的入口（终端、上传下载）用它。
 func (a *API) recordNodeAccess(ctx context.Context, action, nodeID, detail string, failed bool) {
 	ctx = context.WithoutCancel(ctx)
-	err := a.Q.InsertActivity(ctx, store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(),
-		Kind:      "operation",
-		Actor:     clipActivity(auth.Username(ctx), 64),
-		Action:    action,
-		Target:    clipActivity(a.nodeName(ctx, nodeID), 200),
-		Detail:    clipActivity(detail, 500),
-		Failed:    boolInt(failed),
-	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-		return
+	e := audit.Event{Action: action, TargetType: "node", TargetID: nodeID, TargetName: a.nodeName(ctx, nodeID)}
+	if failed {
+		e.Result, e.Error = audit.ResultFailed, detail
+	} else if detail != "" {
+		b, _ := json.Marshal(map[string]string{"detail": detail})
+		e.Params = string(b)
 	}
-	_ = a.Q.PruneActivityKeepSensitive(ctx, activityKeep)
+	a.Record(ctx, e)
 }
 
 // ---- 节点终端 ----
@@ -223,14 +231,14 @@ func (a *API) NodeShellHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		token := auth.SessionToken(r.Header)
-		u, err := a.Auth.SessionUser(r.Context(), token)
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
 		}
 		q := r.URL.Query()
 		nodeID := q.Get("node")
-		ctx, cancel := context.WithCancel(auth.WithUser(r.Context(), u))
+		ctx, cancel := context.WithCancel(auth.WithRequest(auth.WithUser(r.Context(), u), r))
 		defer cancel()
 		ip := auth.RequestIP(r.RemoteAddr, r.Header)
 		if u.Role != auth.RoleAdmin {
@@ -266,7 +274,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		stream, err := conn.Agent.NodeShell(ctx)
 		if err == nil {
 			err = stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Start{Start: &nagiv1.NodeShellStart{
-				Size: &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)}, Cwd: q.Get("cwd"), Actor: u.Name,
+				Size: &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)}, Cwd: q.Get("cwd"), Actor: u.Name, Ip: ip,
 			}}})
 		}
 		if err != nil {
@@ -278,9 +286,8 @@ func (a *API) NodeShellHandler() http.Handler {
 		began := time.Now()
 		a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "IP "+ip, false)
 		a.alertNodeShell(ctx, nodeID, u.Name, ip)
-		defer func() {
-			a.recordNodeAccess(ctx, "CloseNodeShell", nodeID, fmt.Sprintf("%s，%s", time.Since(began).Round(time.Second), ip), false)
-		}()
+		rec := a.Recordings.Start(ctx, cols, rows)
+		defer func() { a.recordSessionEnd(ctx, "CloseNodeShell", "node", nodeID, "", rec.Close()) }()
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。
 		lastActive := newActivityClock()
@@ -300,6 +307,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		})
 
 		bridgeTerminal(ctx, cancel, ws, lang, lastActive, terminalStream{
+			rec: rec,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Stdin{Stdin: b}})
 			},
@@ -348,14 +356,14 @@ func (a *API) NodeFileHandler() http.Handler {
 			w.WriteHeader(code)
 			_ = json.NewEncoder(w).Encode(map[string]string{"message": msg})
 		}
-		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
 		q := r.URL.Query()
 		nodeID, path := q.Get("node"), q.Get("path")
-		ctx := auth.WithUser(r.Context(), u)
+		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		action := "DownloadNodeFile"
 		if r.Method != http.MethodGet {
 			action = "UploadNodeFile"

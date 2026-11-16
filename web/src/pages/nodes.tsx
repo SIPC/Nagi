@@ -54,6 +54,8 @@ import { AlertRulesForm, nodeRules, rulesSummary } from "@/components/alert-rule
 import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
+import { requireElevation } from "@/components/elevate";
+import { toast } from "sonner";
 import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
@@ -576,6 +578,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             {n.name}
             <NodeStatus n={n} />
             {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
+            {n.isolated && <Badge tone="danger">{t.nodes.isolation.badge}</Badge>}
           </>
         }
         meta={
@@ -607,6 +610,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             items={[
               { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
               ...(canSeeUpgrades ? [{ label: t.labels.editTags, onSelect: () => setEditingTags(true) }] : []),
+              ...(canSeeUpgrades ? [{ label: n.isolated ? t.nodes.isolation.unisolate : t.nodes.isolation.isolate, onSelect: () => toggleIsolation(n, () => nodes.refetch()), danger: !n.isolated }] : []),
               { label: t.nodes.removeNode, onSelect: remove, danger: true },
             ]}
           />
@@ -618,11 +622,22 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       <Dialog open={editingTags} onClose={() => setEditingTags(false)} title={t.labels.editTags} description={t.labels.editTagsDescription}>
         <EditNodeTags node={n} allTags={tagsOf(nodes.data.nodes).map((x) => x.name)} onDone={() => setEditingTags(false)} />
       </Dialog>
-      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending) && (
+      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending || n.info?.egressError || n.isolated) && (
         <div className="mb-6 grid gap-2">
           {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
           {n.staleProjects.length > 0 && <StaleProjects nodeId={n.id} list={n.staleProjects} onDone={() => nodes.refetch()} />}
           {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
+          {n.isolated && (
+            <Notice tone="danger" title={t.nodes.isolation.notice}>
+              {t.nodes.isolation.noticeHint}
+            </Notice>
+          )}
+          {/* 不能限制容器出站时（例如没有 nftables），这台节点上的项目按「关闭」处理（见 docs/agent.md#出站限制）。 */}
+          {n.info?.egressError && (
+            <Notice tone="warning" title={t.nodes.egressUnavailable}>
+              {n.info.egressError}
+            </Notice>
+          )}
           {n.pending && (
             <Notice
               tone="warning"
@@ -1245,4 +1260,26 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
       </List>
     </div>
   );
+}
+
+// toggleIsolation 隔离或解除隔离节点（见 docs/mesh.md#隔离）：先验证身份，再输入节点名确认。
+async function toggleIsolation(n: Node, done: () => void) {
+  const m = t.nodes.isolation;
+  const on = !n.isolated;
+  if (!(await requireElevation(on ? m.elevate : m.elevateUndo, { suggestTotp: false }))) return;
+  const ok = await ask(on ? m.confirm(n.name) : m.confirmUndo(n.name), {
+    action: on ? m.isolate : m.unisolate,
+    danger: on,
+    checkDefault: true,
+    typeToConfirm: { label: m.typeName, value: n.name },
+  });
+  if (!ok) return;
+  try {
+    if (on) await nodeClient.isolateNode({ nodeId: n.id, confirmName: n.name });
+    else await nodeClient.unisolateNode({ nodeId: n.id, confirmName: n.name });
+    toast.success(on ? m.done : m.undone);
+    done();
+  } catch (err) {
+    toast.error(errorMessage(err));
+  }
 }

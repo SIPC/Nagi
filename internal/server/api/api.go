@@ -21,6 +21,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/oauth"
@@ -57,8 +58,17 @@ type API struct {
 	Log      *slog.Logger
 	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
 	OAuth *oauth.Server
+	// Audit 是审计日志（见 docs/audit.md）。
+	Audit *audit.Log
+	// Recordings 是终端和命令的录制（见 docs/audit.md#终端与命令录制）。
+	Recordings *audit.Recordings
+	// AuditView 是界面上查看的审计库：备用面板上是从主面板同步来的那份，主面板上为 nil（就是 Audit）。
+	AuditView *audit.Log
+	// Shipper 把审计记录外送（见 docs/audit.md#外送），备用面板上为 nil。
+	Shipper *audit.Shipper
 
 	updates panelUpdates
+	reads   readDedup
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -67,7 +77,11 @@ func (a *API) Mount(mux *http.ServeMux) {
 		nagiv1connect.SetupServiceGetSetupStateProcedure,
 		nagiv1connect.SetupServiceSetupProcedure,
 		nagiv1connect.AuthServiceLoginProcedure,
+		nagiv1connect.AuthServiceBeginPasskeyLoginProcedure,
+		nagiv1connect.AuthServicePasskeyLoginProcedure,
 		nagiv1connect.AuthServiceLogoutProcedure,
+		// 要求重新验证的会话，其他接口都被拒绝，只有这个能用（处理函数自己找会话）。
+		nagiv1connect.AuthServiceReverifyProcedure,
 		nagiv1connect.EnrollServiceEnrollProcedure,
 	)}
 	if a.Panel.Standby != nil {
@@ -105,7 +119,7 @@ func (s *setupService) GetSetupState(ctx context.Context, _ *connect.Request[nag
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&nagiv1.GetSetupStateResponse{Initialized: ok}), nil
+	return connect.NewResponse(&nagiv1.GetSetupStateResponse{Initialized: ok, PasskeyDomain: s.Auth.PasskeyDomain(ctx)}), nil
 }
 
 func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.SetupRequest]) (*connect.Response[nagiv1.SetupResponse], error) {
@@ -163,7 +177,11 @@ func (s *authService) Login(ctx context.Context, req *connect.Request[nagiv1.Log
 }
 
 func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.LogoutRequest]) (*connect.Response[nagiv1.LogoutResponse], error) {
-	cookie := s.Auth.Logout(ctx, auth.SessionToken(req.Header()))
+	token := auth.SessionToken(req.Header())
+	if u, err := s.Auth.SessionUser(ctx, token); err == nil {
+		s.Record(auth.WithUser(ctx, u), audit.Event{Category: audit.Login, Action: "Logout"})
+	}
+	cookie := s.Auth.Logout(ctx, token)
 	resp := connect.NewResponse(&nagiv1.LogoutResponse{})
 	resp.Header().Set("Set-Cookie", cookie.String())
 	return resp, nil
@@ -259,6 +277,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		if n.Tags, err = s.Q.NodeTags(ctx, row.ID); err != nil {
 			return nil, err
 		}
+		n.Isolated = s.Nodes.Isolated(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -449,6 +468,18 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	s.Log.Info("节点已加入", "node", nodeID, "hostname", req.Msg.GetHostname())
+	// 节点加入记进审计并通知（见 docs/audit.md#安全告警）。加入命令是管理员生成的，加入本身由节点发起，没有登录的成员。
+	ip := auth.RequestIP(req.Peer().Addr, req.Header())
+	s.Audit.Record(ctx, audit.Event{Category: audit.Operation, Action: "Enroll", ActorType: audit.ActorNode, ActorID: nodeID,
+		ActorName: req.Msg.GetHostname(), Via: audit.ViaNode, IP: ip, TargetType: "node", TargetID: nodeID, TargetName: s.nodeName(ctx, nodeID)})
+	if s.Panel != nil && s.Panel.Standby == nil {
+		title := i18n.Errorf("节点 %s 已加入", s.nodeName(ctx, nodeID)).Error()
+		if pending != 0 {
+			title = i18n.Errorf("节点 %s 用接入码加入，等待批准", s.nodeName(ctx, nodeID)).Error()
+		}
+		go s.Nodes.PanelAlert(context.WithoutCancel(ctx), &nagiv1.Alert{Key: "security:enroll:" + nodeID, Title: title,
+			Message: i18n.Errorf("地址：%s", ip).Error(), Time: timestamppb.Now()})
+	}
 	return connect.NewResponse(&nagiv1.EnrollResponse{
 		NodeId: nodeID, Certificate: cert.Raw, CaCertificate: s.CA.Cert.Raw,
 	}), nil
@@ -510,4 +541,35 @@ func (s *nodeService) SetNodeAlertRules(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	return connect.NewResponse(&nagiv1.SetNodeAlertRulesResponse{}), nil
+}
+
+// IsolateNode 隔离节点（见 docs/mesh.md#隔离）：只有管理员（角色检查）、先做高权限确认、输入节点名。
+func (s *nodeService) IsolateNode(ctx context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	return s.setIsolated(ctx, req.Msg, true)
+}
+
+// UnisolateNode 解除隔离，同样要高权限确认。
+func (s *nodeService) UnisolateNode(ctx context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	return s.setIsolated(ctx, req.Msg, false)
+}
+
+func (s *nodeService) setIsolated(ctx context.Context, m *nagiv1.IsolateNodeRequest, on bool) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	n, err := s.Q.GetNode(ctx, m.GetNodeId())
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("节点不存在"))
+	} else if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(m.GetConfirmName()) != n.Name {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("需输入名称确认"))
+	}
+	if err := s.Nodes.SetIsolated(ctx, n.ID, on); err != nil {
+		return nil, err
+	}
+	title := i18n.Errorf("节点 %s 已被隔离", n.Name).Error()
+	if !on {
+		title = i18n.Errorf("节点 %s 已解除隔离", n.Name).Error()
+	}
+	s.notify(ctx, "isolate", title, "")
+	return connect.NewResponse(&nagiv1.IsolateNodeResponse{}), nil
 }

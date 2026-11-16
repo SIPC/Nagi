@@ -32,6 +32,7 @@ function tokenSummary(tk: AccessToken) {
     tk.allowWrite ? k.write : k.readOnly,
     ...(tk.allowExec ? [k.exec] : []),
     ...(tk.allowNodeExec ? [k.nodeExec] : []),
+    ...(tk.networks.length ? [k.networksLimited(t.common.list(tk.networks))] : []),
     !expires ? k.neverExpires : expires.getTime() < Date.now() ? k.expired : k.expiresOn(formatDate(expires) ?? ""),
   ];
   return parts.join(" · ");
@@ -71,7 +72,7 @@ export function AccessTokenList({ userId = 0n, emptyAction }: { userId?: bigint;
                 sub={<span className="block truncate">{tokenSummary(tk)}</span>}
                 cols={[
                   {
-                    content: <span title={used ? `${formatDateTime(used)} · ${tk.lastIp}` : undefined}>{used ? t.tokens.lastUsed(timeAgo(used)) : t.tokens.neverUsed}</span>,
+                    content: <span title={used ? [formatDateTime(used), tk.lastIp, tk.lastClient].filter(Boolean).join(" · ") : undefined}>{used ? t.tokens.lastUsed(timeAgo(used)) : t.tokens.neverUsed}</span>,
                     width: "w-36",
                   },
                 ]}
@@ -96,9 +97,17 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
   const [write, setWrite] = useState(false);
   const [exec, setExec] = useState(false);
   const [nodeExec, setNodeExec] = useState(false);
+  const [networks, setNetworks] = useState("");
   const create = useMutation({
     mutationFn: async () => {
-      const req = { name, days, allowWrite: write, allowExec: exec, allowNodeExec: isAdmin && nodeExec };
+      const req = {
+        name,
+        days,
+        allowWrite: write,
+        allowExec: exec,
+        allowNodeExec: isAdmin && nodeExec,
+        networks: networks.split(/[\s,，、]+/).filter(Boolean), // i18n-ignore：输入时中英文的分隔符都认
+      };
       try {
         return await settingsClient.createAccessToken(req);
       } catch (err) {
@@ -159,6 +168,9 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
           )}
         </div>
       )}
+      <Field label={t.tokens.networks} htmlFor="token-networks" hint={t.tokens.networksHint} help={t.tokens.networksHelp}>
+        <Input id="token-networks" value={networks} onChange={(e) => setNetworks(e.target.value)} placeholder="203.0.113.0/24" autoComplete="off" spellCheck={false} />
+      </Field>
       {create.error && <Alert>{errorMessage(create.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>

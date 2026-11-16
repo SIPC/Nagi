@@ -91,3 +91,14 @@ func ResetEntrance(ctx context.Context, dataDir string) (string, error) {
 	old, _ := q.GetSetting(ctx, auth.SettingEntrance)
 	return old, q.DeleteSetting(ctx, auth.SettingEntrance)
 }
+
+// ResetAdminNetworks 清除管理员登录地址，返回原来的列表（见 docs/panel.md#管理员登录地址）。
+func ResetAdminNetworks(ctx context.Context, dataDir string) (string, error) {
+	q, done, err := openPanelDB(ctx, dataDir)
+	if err != nil {
+		return "", err
+	}
+	defer done()
+	old, _ := q.GetSetting(ctx, auth.SettingAdminNetworks)
+	return old, q.DeleteSetting(ctx, auth.SettingAdminNetworks)
+}

@@ -39,6 +39,10 @@ export default {
   neverUsed: "Never used",
   lastUsed: (time) => `Last used ${time}`,
   forUser: (name) => `Access tokens of ${name}. Administrators can revoke them but can't see the tokens themselves.`,
+  networks: "Allowed addresses",
+  networksHint: "Optional. IP addresses or ranges, separated by commas",
+  networksHelp: "Use of this token from any other address is refused and triggers an alert.",
+  networksLimited: (list) => `Only ${list}`,
   oauth: {
     title: "Authorize access",
     request: (client) => `${client} wants to access Nagi`,

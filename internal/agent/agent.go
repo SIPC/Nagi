@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/alerts"
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
@@ -147,6 +148,9 @@ func Run(ctx context.Context, cfg Config) error {
 	a.files = a.newNodeFiles()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
+	a.egress = newEgress(a)
+	a.violations = newViolations(a)
+	a.openAudit(ctx)
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {
@@ -171,6 +175,7 @@ func Run(ctx context.Context, cfg Config) error {
 	netSync := make(chan struct{}, 1)
 	go dc.WatchProjects(ctx, project.LabelProject, func() {
 		a.changed()
+		a.egress.trigger()
 		select {
 		case netSync <- struct{}{}:
 		default:
@@ -222,6 +227,8 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
 	go a.intranet.run(ctx)
+	go a.egress.run(ctx)
+	go a.violations.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)
 	}
@@ -271,6 +278,13 @@ type agent struct {
 	alerts    *alerts.Engine
 	mesh      *meshNode
 	intranet  *intranet
+	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
+	egress *egress
+	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
+	violations *violations
+	// audit 是节点本地审计，auditShip 按面板下发的配置外送它（见 audit.go）。
+	audit     *auditlog.Log
+	auditShip *auditlog.Shipper
 	replicas  *replicas
 	backups   *backupStates
 	failovers *failovers
@@ -467,6 +481,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		ProxyProtocol:  true,
 		MultiBackup:    true,
 		ProxyDisabled:  a.cfg.DisableProxy,
+		EgressError:    a.egress.Error(),
 		ReportsCerts:   true,
 
 		NodeAccess:         nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir),
@@ -536,7 +551,8 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	defer sess.Close()
 
 	guardUnary, guardStream := a.primaryGuard(p.Fingerprint)
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, guardUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, guardStream, detachStream),
+	auditUnary, auditStream := a.auditInterceptors(p.Fingerprint)
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, auditUnary, guardUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, auditStream, guardStream, detachStream),
 		grpc.MaxRecvMsgSize(64<<20))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,

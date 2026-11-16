@@ -12,6 +12,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/coder/websocket"
 	"google.golang.org/grpc/codes"
@@ -28,7 +29,7 @@ func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		token := auth.SessionToken(r.Header)
-		u, err := a.Auth.SessionUser(r.Context(), token)
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
@@ -53,7 +54,7 @@ func (a *API) TerminalHandler() http.Handler {
 			return
 		}
 		defer ws.CloseNow()
-		ctx, cancel := context.WithCancel(auth.WithUser(r.Context(), u))
+		ctx, cancel := context.WithCancel(auth.WithRequest(auth.WithUser(r.Context(), u), r))
 		defer cancel()
 		fail := wsFail(ctx, ws)
 
@@ -105,7 +106,12 @@ func (a *API) TerminalHandler() http.Handler {
 			cancel()
 		})
 
+		rec := a.Recordings.Start(ctx, cols, rows)
+		defer func() {
+			a.recordSessionEnd(ctx, "CloseTerminal", "container", start.Container, start.ProjectId, rec.Close())
+		}()
 		bridgeTerminal(ctx, cancel, ws, lang, newActivityClock(), terminalStream{
+			rec: rec,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Stdin{Stdin: b}})
 			},
@@ -137,7 +143,8 @@ func (a *API) watchSession(ctx context.Context, token string, u auth.User, check
 			return
 		case <-t.C:
 		}
-		cur, err := a.Auth.SessionUser(ctx, token)
+		// 按会话 ID 重查：令牌每 15 分钟轮换一次，按令牌查会在轮换以后断开（见 docs/panel.md#会话）。
+		cur, err := a.Auth.SessionByID(ctx, u.SessionID)
 		switch {
 		case ctx.Err() != nil:
 			return
@@ -197,6 +204,8 @@ type terminalStream struct {
 	resize    func(cols, rows uint32) error
 	closeSend func() error
 	recv      func() (*nagiv1.ExecOutput, error)
+	// rec 录下输出和窗口大小（没开录制时为 nil）。输入不录：不回显的密码不会进入录制。
+	rec *audit.Recorder
 }
 
 // activityClock 记下终端最后一次有输入输出的时间。
@@ -236,6 +245,7 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 				if json.Unmarshal(data, &msg) != nil || msg.Type != "resize" {
 					continue
 				}
+				st.rec.Resize(msg.Cols, msg.Rows)
 				err = st.resize(msg.Cols, msg.Rows)
 			}
 			if err != nil {
@@ -258,6 +268,7 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 		active.touch()
 		switch v := out.Output.(type) {
 		case *nagiv1.ExecOutput_Stdout:
+			st.rec.Output(v.Stdout)
 			if err := ws.Write(ctx, websocket.MessageBinary, v.Stdout); err != nil {
 				return
 			}

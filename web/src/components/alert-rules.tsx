@@ -31,6 +31,7 @@ export const nodeRules: RuleDef[] = [
   { key: "disk", title: r.disk, fields: [{ key: "diskPercent", label: r.diskPercent, fallback: 90 }] },
   { key: "offline", title: r.offline, fields: [{ key: "offlineSeconds", label: r.offlineSeconds, fallback: 60 }] },
   { key: "cert", title: r.cert, fields: [{ key: "certDays", label: r.certDays, fallback: 7 }] },
+  { key: "cpu", title: r.cpu, fields: [] },
 ];
 
 export const containerRules: RuleDef[] = [
@@ -46,6 +47,10 @@ export const containerRules: RuleDef[] = [
   { key: "health", title: r.health, fields: [] },
   { key: "snapshot", title: r.snapshot, fields: [] },
   { key: "backup", title: r.backup, fields: [] },
+  { key: "container_cpu", title: r.containerCpu, fields: [] },
+  { key: "traffic", title: r.traffic, fields: [] },
+  { key: "4xx", title: r.clientErrors, fields: [] },
+  { key: "egress", title: r.egress, fields: [] },
 ];
 
 export const ruleOn = (rules: AlertRules | undefined, key: string) => rules?.enabled[key] !== false;

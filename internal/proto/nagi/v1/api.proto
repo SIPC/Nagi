@@ -19,13 +19,15 @@ message GetSetupStateRequest {}
 
 message GetSetupStateResponse {
   bool initialized = 1;
+  // 能用通行密钥登录的域名（面板绑定的域名），没绑定时为空。登录页在这个域名下才显示通行密钥。
+  string passkey_domain = 2;
 }
 
 message SetupRequest {
   // 启动日志里初始化链接带的一次性令牌。
-  string token = 1;
+  string token = 1 [debug_redact = true];
   string username = 2;
-  string password = 3;
+  string password = 3 [debug_redact = true];
 }
 
 message SetupResponse {}
@@ -47,6 +49,14 @@ service AuthService {
   rpc GetOAuthRequest(OAuthRequest) returns (GetOAuthRequestResponse);
   // 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
   rpc ApproveOAuth(ApproveOAuthRequest) returns (ApproveOAuthResponse);
+  // 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+  rpc RegisterSessionKey(RegisterSessionKeyRequest) returns (RegisterSessionKeyResponse);
+  rpc RotateSession(RotateSessionRequest) returns (RotateSessionResponse);
+  // 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+  rpc Reverify(ReverifyRequest) returns (ReverifyResponse);
+  // 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+  rpc BeginPasskeyLogin(BeginPasskeyLoginRequest) returns (PasskeyChallenge);
+  rpc PasskeyLogin(PasskeyLoginRequest) returns (LoginResponse);
 }
 
 // OAuthRequest 是客户端打开授权页时带的参数（/oauth/authorize 的查询参数）。
@@ -86,14 +96,14 @@ message ApproveOAuthResponse {
 
 message LoginRequest {
   string username = 1;
-  string password = 2;
+  string password = 2 [debug_redact = true];
   // 两步验证码（开启了才需要）。
-  string totp_code = 3;
+  string totp_code = 3 [debug_redact = true];
 }
 
 message ChangePasswordRequest {
-  string current = 1;
-  string new_password = 2;
+  string current = 1 [debug_redact = true];
+  string new_password = 2 [debug_redact = true];
 }
 
 message ChangePasswordResponse {}
@@ -124,8 +134,8 @@ message MeResponse {
 
 message ElevateRequest {
   // 开了两步验证的账号填验证码，没开的填密码。
-  string password = 1;
-  string totp_code = 2;
+  string password = 1 [debug_redact = true];
+  string totp_code = 2 [debug_redact = true];
 }
 
 message ElevateResponse {
@@ -218,6 +228,10 @@ service NodeService {
   rpc SetNodeTags(SetNodeTagsRequest) returns (SetNodeTagsResponse);
   // 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
   rpc RenameNodeTag(RenameLabelRequest) returns (RenameLabelResponse);
+  // 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+  // 只有管理员能用，要先做高权限确认并输入节点名。
+  rpc IsolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
+  rpc UnisolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
 }
 
 message SetNodeTagsRequest {
@@ -428,6 +442,31 @@ service SettingsService {
   // 生成个人访问令牌，只能给自己生成，要先做高权限确认。
   rpc CreateAccessToken(CreateAccessTokenRequest) returns (CreateAccessTokenResponse);
   rpc RevokeAccessToken(RevokeAccessTokenRequest) returns (RevokeAccessTokenResponse);
+  // 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  // 一条记录的详情，带上级和下级记录。
+  rpc GetAuditEvent(GetAuditEventRequest) returns (GetAuditEventResponse);
+  // 按筛选条件导出 JSON Lines，只有管理员能用。
+  rpc ExportAuditEvents(ExportAuditEventsRequest) returns (stream ExportAuditEventsChunk);
+  // 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+  rpc GetSessionPolicy(GetSessionPolicyRequest) returns (SessionPolicy);
+  rpc SetSessionPolicy(SessionPolicy) returns (SessionPolicy);
+  // 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+  rpc GetRecording(GetRecordingRequest) returns (stream RecordingChunk);
+  // 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+  rpc GetAuditSettings(GetAuditSettingsRequest) returns (AuditSettings);
+  rpc SetAuditSettings(AuditSettings) returns (AuditSettings);
+  // 向外送目标发一条测试消息。
+  rpc TestAuditSink(AuditSink) returns (TestAuditSinkResponse);
+  // 校验审计日志的哈希链（和 nagi audit verify 一样）。
+  rpc VerifyAudit(VerifyAuditRequest) returns (AuditChainStatus);
+  // 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+  rpc BeginPasskeyRegistration(BeginPasskeyRegistrationRequest) returns (BeginPasskeyRegistrationResponse);
+  rpc AddPasskey(AddPasskeyRequest) returns (Security);
+  rpc DeletePasskey(DeletePasskeyRequest) returns (Security);
+  // 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+  rpc GetAdminNetworks(GetAdminNetworksRequest) returns (AdminNetworks);
+  rpc SetAdminNetworks(AdminNetworks) returns (AdminNetworks);
 }
 
 message AccessToken {
@@ -446,6 +485,10 @@ message AccessToken {
   string last_ip = 9;
   // 可以在节点上执行命令（MCP 的 node_exec），只有管理员的个人访问令牌能有。
   bool allow_node_exec = 10;
+  // 允许使用的 IP 或网段，为空表示不限制（见 docs/mcp.md#网段）。
+  repeated string networks = 11;
+  // 最近一次使用的客户端（User-Agent）。
+  string last_client = 12;
 }
 
 message ListAccessTokensRequest {
@@ -464,6 +507,8 @@ message CreateAccessTokenRequest {
   bool allow_exec = 4;
   // 可以在节点上执行命令（等于节点的 root）。只有管理员能勾选。
   bool allow_node_exec = 5;
+  // 允许使用的 IP 或网段，为空表示不限制。
+  repeated string networks = 6;
 }
 
 message CreateAccessTokenResponse {
@@ -486,6 +531,10 @@ message Security {
   string entrance = 2;
   // 开没开安全入口。入口路径只给管理员，其他成员只知道开了：MCP 的地址要带着入口（见 docs/mcp.md#入口），要向管理员要。
   bool entrance_enabled = 3;
+  // 自己的通行密钥。
+  repeated Passkey passkeys = 4;
+  // 能添加通行密钥的域名，没绑定域名时为空。
+  string passkey_domain = 5;
 }
 
 message BeginTOTPRequest {}
@@ -496,12 +545,12 @@ message BeginTOTPResponse {
 }
 
 message EnableTOTPRequest {
-  string code = 1;
+  string code = 1 [debug_redact = true];
 }
 
 message DisableTOTPRequest {
-  string code = 1;
-  string password = 2;
+  string code = 1 [debug_redact = true];
+  string password = 2 [debug_redact = true];
 }
 
 message SetEntranceRequest {
@@ -617,6 +666,8 @@ message Node {
   AlertRules alert_rules = 13;
   // 标签，按名称排序（见 docs/panel.md#分组和标签）。
   repeated string tags = 14;
+  // 已被隔离（见 docs/mesh.md#隔离）。
+  bool isolated = 15;
 }
 
 message SetNodeAlertRulesRequest {
@@ -918,7 +969,7 @@ message ListUsersResponse {
 
 message CreateUserRequest {
   string username = 1;
-  string password = 2;
+  string password = 2 [debug_redact = true];
   string role = 3;
   // 为空表示全部。
   UserScope scope = 4;
@@ -929,7 +980,7 @@ message UpdateUserRequest {
   // 空表示不改。
   string role = 2;
   // 空表示不改。
-  string password = 3;
+  string password = 3 [debug_redact = true];
   bool clear_totp = 4;
   // 为空表示不改。
   UserScope scope = 5;
@@ -950,6 +1001,11 @@ message LoginSession {
   bool current = 3;
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp expires_at = 5;
+  // 浏览器和系统，例如「Chrome · Windows」。
+  string agent = 6;
+  // 最近一次请求的 IP 和时间。
+  string last_ip = 7;
+  google.protobuf.Timestamp last_seen = 8;
 }
 
 message ListSessionsRequest {}
@@ -1314,7 +1370,7 @@ message LoginRegistryApiRequest {
   string project_id = 1;
   string registry = 2;
   string username = 3;
-  string password = 4;
+  string password = 4 [debug_redact = true];
 }
 
 message LogoutRegistryRequest {
@@ -1331,4 +1387,278 @@ message ListProjectEventsRequest {
   // 只要 ID 比它小的（翻页），0 表示从最新的开始。
   int64 before = 4;
   bool failed_only = 5;
+}
+
+// ---- 审计日志（见 docs/audit.md） ----
+
+message AuditEvent {
+  int64 id = 1;
+  google.protobuf.Timestamp time = 2;
+  // operation、read、mcp、session、login、alert、security。
+  string category = 3;
+  // 接口方法名或事件名，例如 Deploy、mcp:deploy、totp_failed。
+  string action = 4;
+  // user、token、node、panel、system。
+  string actor_type = 5;
+  string actor_id = 6;
+  string actor_name = 7;
+  // web、mcp、cli、system、node。
+  string via = 8;
+  int64 token_id = 9;
+  // 访问令牌的名称（令牌还在时）。
+  string token_name = 10;
+  // MCP 客户端：OAuth 客户端名称或 User-Agent。
+  string client = 11;
+  // 登录会话 ID 的哈希前 12 位。非管理员只看得到自己的。
+  string session = 12;
+  // 只有管理员看得到。
+  string ip = 13;
+  string user_agent = 14;
+  string project_id = 15;
+  string project_name = 16;
+  // container、node、member、token、file 等。
+  string target_type = 17;
+  string target_id = 18;
+  string target_name = 19;
+  // 脱敏后的请求参数（JSON）。
+  string params = 20;
+  // ok、failed、denied。
+  string result = 21;
+  string error = 22;
+  int64 duration_ms = 23;
+  int64 parent_id = 24;
+  string recording_id = 25;
+  // 下级记录的条数。
+  int32 children = 26;
+}
+
+message AuditFilter {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+  // 成员的 ID。
+  string actor_id = 3;
+  string via = 4;
+  repeated string categories = 5;
+  string project_id = 6;
+  string node_id = 7;
+  bool failed_only = 8;
+  string search = 9;
+}
+
+message ListAuditEventsRequest {
+  AuditFilter filter = 1;
+  // 只要 ID 比它小的（翻页），0 表示从最新的开始。
+  int64 before = 2;
+  // 默认 50，最多 200。
+  int32 limit = 3;
+  // 不为 0 时返回这条记录的下级记录，忽略 filter。
+  int64 parent_id = 4;
+}
+
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+}
+
+message GetAuditEventRequest {
+  int64 id = 1;
+}
+
+message GetAuditEventResponse {
+  AuditEvent event = 1;
+  AuditEvent parent = 2;
+  repeated AuditEvent children = 3;
+}
+
+message ExportAuditEventsRequest {
+  AuditFilter filter = 1;
+}
+
+message ExportAuditEventsChunk {
+  // 若干行 JSON Lines。
+  bytes data = 1;
+}
+
+// ---- 会话加固（见 docs/panel.md#会话） ----
+
+message RegisterSessionKeyRequest {
+  // ECDSA P-256 公钥，SPKI 格式。
+  bytes public_key = 1;
+}
+
+message RegisterSessionKeyResponse {}
+
+message RotateSessionRequest {
+  // 用会话私钥对响应头 Nagi-Session-Challenge 的签名（WebCrypto 的 r‖s 格式）。
+  bytes signature = 1;
+}
+
+message RotateSessionResponse {}
+
+message ReverifyRequest {
+  string password = 1 [debug_redact = true];
+  string totp_code = 2 [debug_redact = true];
+}
+
+message ReverifyResponse {}
+
+message GetSessionPolicyRequest {}
+
+message SessionPolicy {
+  // 空闲多久退出（分钟），不超过 1440。
+  int32 idle_minutes = 1;
+  // 从登录起最长多久（小时），不超过 168。
+  int32 max_hours = 2;
+  // 管理员的网络绑定：subnet（网段变了要重新验证）、ip（IP 变了就要）、off。
+  string bind = 3;
+  // 把网络绑定用到所有角色。
+  bool bind_all = 4;
+}
+
+message GetRecordingRequest {
+  string id = 1;
+}
+
+message RecordingChunk {
+  // asciicast v2 的若干行。
+  bytes data = 1;
+}
+
+message GetAuditSettingsRequest {}
+
+message AuditSettings {
+  // 录制节点终端、容器终端、exec 和 node_exec 的输出。默认开启。
+  bool recording = 1;
+  // 普通记录保留的天数（默认 90）；security、session、login、mcp 类保留的天数（默认 365）。
+  int32 retention_days = 2;
+  int32 long_retention_days = 3;
+  // 日志外送的目标（见 docs/audit.md#外送）。返回时密钥和请求头的值留空，保存时留空表示不变。
+  repeated AuditSink sinks = 4;
+  // 只读：哈希链的状态。
+  AuditChainStatus chain = 5;
+  // 登录安全告警的开关（「设置 → 告警」，见 docs/audit.md#安全告警），默认开启：密码正确但验证码连续错误 5 次、
+  // 按 IP 的登录限速（每小时汇总）、管理员从新的网段登录。
+  bool alert_totp_failures = 6;
+  bool alert_login_ratelimit = 7;
+  bool alert_admin_network = 8;
+}
+
+message AuditSink {
+  string id = 1;
+  string name = 2;
+  // syslog、http、s3。
+  string type = 3;
+  // syslog：host:port（TCP + TLS），可选的 CA 证书（PEM）。
+  string address = 4;
+  string ca = 5;
+  // http：接收地址和固定的请求头。
+  string url = 6;
+  repeated AuditSinkHeader headers = 7;
+  // s3：兼容 S3 的存储。
+  string endpoint = 8;
+  string region = 9;
+  string bucket = 10;
+  string prefix = 11;
+  string access_key = 12 [debug_redact = true];
+  string secret_key = 13 [debug_redact = true];
+  // s3：同时上传终端录制。
+  bool recordings = 14;
+  // 只读：已经保存过密钥。
+  bool has_secret = 15;
+  // 只读：发送状态。
+  google.protobuf.Timestamp last_success = 16;
+  string last_error = 17;
+  bool failing = 18;
+}
+
+message AuditSinkHeader {
+  string name = 1;
+  string value = 2 [debug_redact = true];
+}
+
+message TestAuditSinkResponse {}
+
+message VerifyAuditRequest {}
+
+message AuditChainStatus {
+  // 最近一次校验。
+  google.protobuf.Timestamp verified_at = 1;
+  bool ok = 2;
+  int64 records = 3;
+  string reason = 4;
+  // 最近一次发往外送目标的锚点。
+  google.protobuf.Timestamp anchor_at = 5;
+  int64 anchor_id = 6;
+  string anchor_hash = 7;
+}
+
+message IsolateNodeRequest {
+  string node_id = 1;
+  // 输入的节点名，和节点名一致才执行。
+  string confirm_name = 2;
+}
+
+message IsolateNodeResponse {}
+
+// ---- 通行密钥（见 docs/panel.md#通行密钥） ----
+
+message Passkey {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+  // 没用过时为空。
+  google.protobuf.Timestamp last_used_at = 4;
+  // 添加时绑定的是别的域名，现在用不了。
+  bool other_domain = 5;
+}
+
+message BeginPasskeyLoginRequest {}
+
+message PasskeyChallenge {
+  string challenge_id = 1;
+  bytes challenge = 2;
+  string rp_id = 3;
+}
+
+message PasskeyLoginRequest {
+  string challenge_id = 1;
+  bytes credential_id = 2;
+  bytes client_data_json = 3 [debug_redact = true];
+  bytes authenticator_data = 4 [debug_redact = true];
+  bytes signature = 5 [debug_redact = true];
+  bytes user_handle = 6;
+}
+
+message BeginPasskeyRegistrationRequest {}
+
+message BeginPasskeyRegistrationResponse {
+  string challenge_id = 1;
+  bytes challenge = 2;
+  string rp_id = 3;
+  bytes user_id = 4;
+  string user_name = 5;
+  string display_name = 6;
+  // 已经添加过的，浏览器不会在同一个验证器上重复添加。
+  repeated bytes exclude_credentials = 7;
+}
+
+message AddPasskeyRequest {
+  string challenge_id = 1;
+  string name = 2;
+  bytes client_data_json = 3 [debug_redact = true];
+  bytes attestation_object = 4 [debug_redact = true];
+}
+
+message DeletePasskeyRequest {
+  int64 id = 1;
+}
+
+// ---- 管理员登录地址（见 docs/panel.md#管理员登录地址） ----
+
+message GetAdminNetworksRequest {}
+
+message AdminNetworks {
+  // IP 或 CIDR，一项一个。为空表示不限制。
+  repeated string networks = 1;
+  // 当前请求的地址（只在回复里），界面据此提示。
+  string current_ip = 2;
 }

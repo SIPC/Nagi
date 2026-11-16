@@ -10,16 +10,16 @@ import (
 
 // AccessToken 是一个访问令牌：个人访问令牌，或者一次 OAuth 授权。
 type AccessToken struct {
-	ID               int64
-	UserID           int64
-	Name             string
-	Source           string
-	ClientID         string
-	TokenHash        string
-	RefreshHash      string
-	PrevRefreshHash  string
-	AllowWrite       bool
-	AllowExec        bool
+	ID              int64
+	UserID          int64
+	Name            string
+	Source          string
+	ClientID        string
+	TokenHash       string
+	RefreshHash     string
+	PrevRefreshHash string
+	AllowWrite      bool
+	AllowExec       bool
 	// AllowNodeExec：可以在节点上执行命令（只给管理员的个人访问令牌）。
 	AllowNodeExec    bool
 	CreatedAt        int64
@@ -27,16 +27,24 @@ type AccessToken struct {
 	RefreshExpiresAt int64
 	LastUsedAt       int64
 	LastIP           string
+	// Networks 是允许使用的 IP 或网段，一行一个，空表示不限制（见 docs/mcp.md#网段）。
+	Networks string
+	// SeenNetworks 是用过的网段，一行一个。
+	SeenNetworks string
+	// LastClient 是最近一次使用的客户端（User-Agent）。
+	LastClient string
 }
 
 const accessTokenColumns = `id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash,
-	allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip`
+	allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip,
+	networks, seen_networks, last_client`
 
 func scanAccessToken(row interface{ Scan(...any) error }) (AccessToken, error) {
 	var t AccessToken
 	var write, exec, nodeExec int64
 	err := row.Scan(&t.ID, &t.UserID, &t.Name, &t.Source, &t.ClientID, &t.TokenHash, &t.RefreshHash, &t.PrevRefreshHash,
-		&write, &exec, &nodeExec, &t.CreatedAt, &t.ExpiresAt, &t.RefreshExpiresAt, &t.LastUsedAt, &t.LastIP)
+		&write, &exec, &nodeExec, &t.CreatedAt, &t.ExpiresAt, &t.RefreshExpiresAt, &t.LastUsedAt, &t.LastIP,
+		&t.Networks, &t.SeenNetworks, &t.LastClient)
 	t.AllowWrite, t.AllowExec, t.AllowNodeExec = write != 0, exec != 0, nodeExec != 0
 	return t, err
 }
@@ -51,9 +59,9 @@ func flag(b bool) int64 {
 // InsertAccessToken 保存新令牌，返回 ID。
 func (q *Queries) InsertAccessToken(ctx context.Context, t AccessToken) (int64, error) {
 	res, err := q.db.ExecContext(ctx, `INSERT INTO api_tokens (user_id, name, source, client_id, token_hash, refresh_hash,
-		allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, networks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.UserID, t.Name, t.Source, t.ClientID, t.TokenHash, t.RefreshHash, flag(t.AllowWrite), flag(t.AllowExec), flag(t.AllowNodeExec),
-		t.CreatedAt, t.ExpiresAt, t.RefreshExpiresAt)
+		t.CreatedAt, t.ExpiresAt, t.RefreshExpiresAt, t.Networks)
 	if err != nil {
 		return 0, err
 	}
@@ -102,8 +110,14 @@ func (q *Queries) RotateAccessToken(ctx context.Context, id int64, tokenHash str
 }
 
 // TouchAccessToken 记下最后使用的时间和地址。
-func (q *Queries) TouchAccessToken(ctx context.Context, id, at int64, ip string) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE api_tokens SET last_used_at = ?, last_ip = ? WHERE id = ?`, at, ip, id)
+func (q *Queries) TouchAccessToken(ctx context.Context, id, at int64, ip, client string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE api_tokens SET last_used_at = ?, last_ip = ?, last_client = ? WHERE id = ?`, at, ip, client, id)
+	return err
+}
+
+// SetTokenSeenNetworks 保存令牌用过的网段。
+func (q *Queries) SetTokenSeenNetworks(ctx context.Context, id int64, seen string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE api_tokens SET seen_networks = ? WHERE id = ?`, seen, id)
 	return err
 }
 
@@ -217,6 +231,25 @@ func (q *Queries) ListProjectActivity(ctx context.Context, projectID, container 
 			return nil, err
 		}
 		out = append(out, i)
+	}
+	return out, rows.Err()
+}
+
+// AccessTokenNames 返回所有访问令牌（包括已过期的）的名称，审计记录显示令牌名用。
+func (q *Queries) AccessTokenNames(ctx context.Context) (map[int64]string, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT id, name FROM api_tokens`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		out[id] = name
 	}
 	return out, rows.Err()
 }

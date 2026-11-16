@@ -1,11 +1,15 @@
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderSVG } from "uqr";
 import { toast } from "sonner";
-import { authClient, errorMessage, settingsClient } from "@/lib/api";
+import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
+import { addPasskey, cancelled, defaultPasskeyName, passkeySupported } from "@/lib/passkey";
+import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
+import type { Passkey, Security } from "@/gen/nagi/v1/api_pb";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { Alert, Button, Dialog, DialogActions, Field, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
@@ -141,6 +145,116 @@ function DisableTotpDialog({ onClose, onDone }: { onClose: () => void; onDone: (
   );
 }
 
+function AddPasskeyDialog({ onClose, onDone }: { onClose: () => void; onDone: (sec: Security) => void }) {
+  const [name, setName] = useState(defaultPasskeyName);
+  const add = useMutation({
+    mutationFn: async () => {
+      try {
+        return await addPasskey(name);
+      } catch (err) {
+        // 添加前要先再验证一次身份。
+        if (!isElevationRequired(err) || !(await requireElevation(t.security.passkeys.elevate, { suggestTotp: false }))) throw err;
+        return addPasskey(name);
+      }
+    },
+    onSuccess: (sec) => {
+      toast.success(t.security.passkeys.added);
+      onDone(sec);
+      onClose();
+    },
+  });
+  return (
+    <Dialog open onClose={onClose} title={t.security.passkeys.add} description={t.security.passkeys.help}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add.mutate();
+        }}
+      >
+        <Field label={t.security.passkeys.name} htmlFor="passkey-name" hint={t.security.passkeys.nameHint}>
+          <Input id="passkey-name" autoFocus required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        {add.error && !cancelled(add.error) && <Alert>{errorMessage(add.error)}</Alert>}
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={add.isPending}>
+            {add.isPending && <Spinner />}
+            {t.security.passkeys.add}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+// 通行密钥（见 docs/panel.md#通行密钥）：只能在绑定的域名下添加和使用。
+function PasskeySection({ sec, onChange }: { sec: Security; onChange: (sec: Security) => void }) {
+  const p = t.security.passkeys;
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const domain = sec.passkeyDomain;
+  const usable = passkeySupported(domain);
+  const remove = async (k: Passkey) => {
+    if (!(await confirmAction(p.removeConfirm(k.name), { action: p.removeAction, danger: true }))) return;
+    setError("");
+    try {
+      onChange(await settingsClient.deletePasskey({ id: k.id }));
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  const { isAdmin } = useRole();
+  const addButton = usable ? (
+    <Button variant="outline" onClick={() => setAdding(true)}>
+      <Plus />
+      {p.add}
+    </Button>
+  ) : !domain && isAdmin ? (
+    <ButtonLink variant="outline" to="/settings" search={{ tab: "access" }} readOnlyOk>
+      {p.bindDomain}
+    </ButtonLink>
+  ) : undefined;
+  // 没绑定域名，或者不是从绑定的域名打开的：说明在哪里才能添加。
+  const unavailable = !domain ? p.noDomain : !usable ? p.otherHost(`https://${domain}`) : "";
+  return (
+    <Section title={p.label} help={p.help} actions={sec.passkeys.length > 0 && usable ? addButton : undefined}>
+      {error && <Alert>{error}</Alert>}
+      {sec.passkeys.length === 0 ? (
+        <EmptyRow action={addButton}>{unavailable || p.empty}</EmptyRow>
+      ) : (
+        <List>
+          {sec.passkeys.map((k) => {
+            const created = toDate(k.createdAt);
+            const used = toDate(k.lastUsedAt);
+            return (
+              <Row
+                key={String(k.id)}
+                title={<span className="truncate">{k.name}</span>}
+                sub={<span className="block truncate">{k.otherDomain ? p.otherDomain : p.addedAt(formatDate(created) ?? "")}</span>}
+                cols={[
+                  {
+                    content: <span title={used ? formatDateTime(used) : undefined}>{used ? p.lastUsed(timeAgo(used)) : p.neverUsed}</span>,
+                    width: "w-36",
+                  },
+                ]}
+                actions={
+                  <Button size="row" variant="ghost" onClick={() => remove(k)}>
+                    {p.remove}
+                  </Button>
+                }
+              />
+            );
+          })}
+        </List>
+      )}
+      {adding && <AddPasskeyDialog onClose={() => setAdding(false)} onDone={onChange} />}
+    </Section>
+  );
+}
+
 // 账号安全：登录密码、两步验证、安全入口（管理员）和登录设备。一项一行，表单放进对话框。
 export function SecurityCard() {
   const queryClient = useQueryClient();
@@ -253,6 +367,7 @@ export function SecurityCard() {
           </SettingRows>
         )}
       </Section>
+      {s && <PasskeySection sec={s} onChange={(next) => queryClient.setQueryData(["security"], next)} />}
       <Section title={t.security.sessions.label} help={t.security.sessions.help}>
         <SessionList />
       </Section>

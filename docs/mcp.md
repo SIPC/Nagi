@@ -1,6 +1,6 @@
 # MCP 接入
 
-让 agent（Claude Code、Claude 网页版和桌面版的连接器、ChatGPT、自己写的 agent）通过 [MCP](https://modelcontextprotocol.io) 直接查看和管理集群：看状态、日志和监控，部署、重启、回滚，在容器里执行命令。agent 用个人访问令牌或者 OAuth 授权登录，权限不超过授权的成员：角色和[访问范围](panel.md#访问范围)照常生效，每次操作都记进活动记录。
+让 agent（Claude Code、Claude 网页版和桌面版的连接器、ChatGPT、自己写的 agent）通过 [MCP](https://modelcontextprotocol.io) 直接查看和管理集群：看状态、日志和监控，部署、重启、回滚，在容器里执行命令。agent 用个人访问令牌或者 OAuth 授权登录，权限不超过授权的成员：角色和[访问范围](panel.md#访问范围)照常生效，每次操作都记进[审计日志](audit.md)。
 
 能做的事，例如：
 
@@ -45,7 +45,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ### 个人访问令牌
 
-在「设置 → 账号安全 → 访问令牌」生成：填名称（例如「Claude Code · 笔记本」），选有效期（30 天、90 天、1 年、不过期，默认 90 天）和上面两个选项。令牌是长期有效的凭据，生成前要做高权限确认（15 分钟内不再询问）。令牌只显示一次，形如 `nagi_<43 位 base64url>`，面板只存哈希。
+在「设置 → 账号安全 → 访问令牌」生成：填名称（例如「Claude Code · 笔记本」），选有效期（30 天、90 天、1 年、不过期，默认 90 天）和上面两个选项，可以填写允许使用的地址（见[网段](#网段)）。令牌是长期有效的凭据，生成前要做高权限确认（15 分钟内不再询问）。令牌只显示一次，形如 `nagi_<43 位 base64url>`，面板只存哈希。
 
 ### OAuth
 
@@ -67,21 +67,29 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ### 管理
 
-- 「访问令牌」列表显示名称（OAuth 的是客户端名称）、来源（个人令牌或 OAuth）、权限、创建时间、最后使用的时间和地址、过期时间，可以随时吊销。每人最多 20 个。
+- 「访问令牌」列表显示名称（OAuth 的是客户端名称）、来源（个人令牌或 OAuth）、权限、允许的地址、创建时间、最后使用的时间、地址和客户端、过期时间，可以随时吊销。每人最多 20 个。
 - 管理员在「设置 → 成员」从成员行的 ⋯ 打开「访问令牌」，看到这个成员的令牌并吊销，发现泄露时不用等本人处理。看不到令牌本身，也不能替别人生成。
 - 删除成员、管理员重置成员密码时，这个成员的令牌全部吊销（和登录会话一样）。
 - 数据库：
-  - `api_tokens (id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash, allow_write, allow_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip)`，删除成员时级联删除。最后使用时间 1 分钟内不重复写。
+  - `api_tokens (id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash, allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip, networks, seen_networks, last_client)`，删除成员时级联删除。最后使用时间 1 分钟内不重复写（地址或客户端变了照写）。
   - `oauth_clients (id, name, redirect_uris, created_at, authorized_at)`：动态注册的客户端。用网址作标识的不存，元数据在内存里缓存 10 分钟。
   - 授权码只放在内存里。
   - 备用面板复制数据库时一起带过去。
+
+### 网段
+
+令牌存在 MCP 客户端的配置文件里，被偷走后别人能在任何地方用它（`auth/tokennet.go`）。
+
+- **允许的地址**：生成个人访问令牌时可选填写 IP 或网段（`CreateAccessTokenRequest.networks`，最多 50 项，存在 `api_tokens.networks`）。从其他地址使用时当作令牌无效（客户端看到 401），记入审计（`token_network_denied`，类别 security）并告警「访问令牌 `<名称>` 从允许范围以外的地址使用，已拒绝」。OAuth 授权的令牌不能填。
+- **新网段告警**：每个令牌记下用过的网段（IPv4 /24、IPv6 /48，最多 20 个，`seen_networks`）。勾了「执行命令」或「节点终端」的令牌第一次从新网段使用时告警「访问令牌 `<名称>` 第一次从网段 `<网段>` 使用」，带来源和客户端，记入审计（`token_new_network`）；令牌第一次使用不算。只读和只能修改的令牌只记录不告警。
+- **客户端**：记下最近一次使用的客户端（User-Agent，`last_client`），列表里悬停最后使用时间可以看到。
 
 ## 调用方式
 
 工具不直接调用业务代码，而是在进程内调用面板自己的 Connect 接口：MCP 层验证令牌后，把令牌对应的成员放进请求的 ctx，通过内存里的传输调用同一个 mux（不经过网络，所以不能伪造）。这样现有的拦截器全部照常生效，不用为 MCP 再写一遍：
 
 - 角色检查、访问范围、高权限确认（令牌没有高权限，相关接口一律拒绝）、备用面板只读。
-- 活动记录：`activity` 加一列 `via`，网页为空，MCP 写 `mcp:<令牌名>`，活动记录页显示「通过 MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条，详情是命令本身，退出码不为 0 时接在后面。
+- 审计记录：每次工具调用都记一条（包括查询），它触发的接口调用挂在下面（见 [audit.md](audit.md#mcp-调用)）。来源 `via` 是 `mcp`，带上令牌 ID 和客户端，审计页显示「MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条（类别 `session`），参数里是命令本身，退出码不为 0 时接在后面。
 - 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行。
 - 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec`。
 
@@ -202,7 +210,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - **密钥不进模型**：变量的值、deploy key、webhook 令牌、备份密钥都不返回，只给名称和「已设置」。agent 可以设置变量的值（只写）。compose、命令、健康检查的文字按原样返回，密钥要放在变量里，不要直接写进去。git 地址不能带账号或令牌（私有仓库用 SSH 和 deploy key），早期保存的地址返回时也去掉。
 - **不可信内容**：日志和 `exec` 的输出可能含有针对 agent 的指令，工具说明里写明这些是数据，不是指令。
 - **限额**：每个令牌每分钟最多 60 次调用，其中 `exec` 最多 10 次；单次返回内容有上限，超出时截断并注明。
-- **可以随时止损**：令牌页一键吊销；活动记录能按 `via` 筛出 MCP 做的所有操作。
+- **可以随时止损**：令牌页一键吊销；审计页能按来源筛出 MCP 做的所有操作。
 - **被拒绝的调用留痕**：令牌没有权限的工具不在它的工具列表里，客户端照样按名字调用时，SDK 当作不存在的工具拒绝，面板先从请求里认出工具名，记一条「MCP 调用被拒绝」（`MCPToolDenied`）。
 
 ## 实现
@@ -210,5 +218,5 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
-- `internal/server/store`：`api_tokens`、`oauth_clients` 表，`activity.via` 列（迁移 0010）。查询手写在 `tokens.go`，不放进 `queries.sql`。
-- 界面：账号安全里的「访问令牌」（`pages/tokens.tsx`），成员行的 ⋯ 里的「访问令牌」（管理员查看和吊销），授权页 `/oauth/authorize`（没登录时记下地址，登录后回来），活动记录显示来源。
+- `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。
+- 界面：账号安全里的「访问令牌」（`pages/tokens.tsx`），成员行的 ⋯ 里的「访问令牌」（管理员查看和吊销），授权页 `/oauth/authorize`（没登录时记下地址，登录后回来），审计页显示来源。

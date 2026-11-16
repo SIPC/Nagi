@@ -37,6 +37,8 @@ export default {
     Login: "Sign in",
     Logout: "Sign out",
     ChangePassword: "Change password",
+    AddPasskey: "Add passkey",
+    DeletePasskey: "Delete passkey",
     UpdateProfile: "Update profile",
     Setup: "Set up panel",
     CreateProject: "Create project",

@@ -30,7 +30,7 @@ func (a *API) UploadHandler() http.Handler {
 			msg := errorText(lang, err)
 			reply(code, map[string]string{"message": msg})
 		}
-		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return

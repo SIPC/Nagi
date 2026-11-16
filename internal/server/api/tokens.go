@@ -20,7 +20,10 @@ import (
 func accessTokenInfo(t store.AccessToken) *nagiv1.AccessToken {
 	out := &nagiv1.AccessToken{
 		Id: t.ID, Name: t.Name, Source: t.Source, AllowWrite: t.AllowWrite, AllowExec: t.AllowExec, AllowNodeExec: t.AllowNodeExec,
-		CreatedAt: timestamppb.New(time.Unix(t.CreatedAt, 0)), LastIp: t.LastIP,
+		CreatedAt: timestamppb.New(time.Unix(t.CreatedAt, 0)), LastIp: t.LastIP, LastClient: t.LastClient,
+	}
+	if t.Networks != "" {
+		out.Networks = strings.Split(t.Networks, "\n")
 	}
 	// OAuth 的访问令牌 1 小时就换，显示的是整个授权的有效期。
 	expires := t.ExpiresAt
@@ -99,6 +102,12 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 	if m.GetDays() > 0 {
 		t.ExpiresAt = now.Add(time.Duration(m.GetDays()) * 24 * time.Hour).Unix()
 	}
+	// 允许使用的网段（见 docs/mcp.md#网段）。
+	networks, err := auth.TokenNetworks(m.GetNetworks())
+	if err != nil {
+		return nil, err
+	}
+	t.Networks = networks
 	id, err := s.Q.InsertAccessToken(ctx, t)
 	if err != nil {
 		return nil, err

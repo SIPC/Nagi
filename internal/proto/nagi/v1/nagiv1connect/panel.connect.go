@@ -45,6 +45,9 @@ const (
 	PanelServiceReportAlertProcedure = "/nagi.v1.PanelService/ReportAlert"
 	// PanelServiceMeshRelayProcedure is the fully-qualified name of the PanelService's MeshRelay RPC.
 	PanelServiceMeshRelayProcedure = "/nagi.v1.PanelService/MeshRelay"
+	// PanelServiceReportViolationsProcedure is the fully-qualified name of the PanelService's
+	// ReportViolations RPC.
+	PanelServiceReportViolationsProcedure = "/nagi.v1.PanelService/ReportViolations"
 )
 
 // PanelServiceClient is a client for the nagi.v1.PanelService service.
@@ -59,6 +62,8 @@ type PanelServiceClient interface {
 	ReportAlert(context.Context, *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(context.Context) *connect.BidiStreamForClient[v1.MeshPacket, v1.MeshPacket]
+	// 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+	ReportViolations(context.Context, *connect.Request[v1.ReportViolationsRequest]) (*connect.Response[v1.ReportViolationsResponse], error)
 }
 
 // NewPanelServiceClient constructs a client for the nagi.v1.PanelService service. By default, it
@@ -102,6 +107,12 @@ func NewPanelServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(panelServiceMethods.ByName("MeshRelay")),
 			connect.WithClientOptions(opts...),
 		),
+		reportViolations: connect.NewClient[v1.ReportViolationsRequest, v1.ReportViolationsResponse](
+			httpClient,
+			baseURL+PanelServiceReportViolationsProcedure,
+			connect.WithSchema(panelServiceMethods.ByName("ReportViolations")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -112,6 +123,7 @@ type panelServiceClient struct {
 	relayAlert       *connect.Client[v1.RelayAlertRequest, v1.RelayAlertResponse]
 	reportAlert      *connect.Client[v1.ReportAlertRequest, v1.ReportAlertResponse]
 	meshRelay        *connect.Client[v1.MeshPacket, v1.MeshPacket]
+	reportViolations *connect.Client[v1.ReportViolationsRequest, v1.ReportViolationsResponse]
 }
 
 // Report calls nagi.v1.PanelService.Report.
@@ -139,6 +151,11 @@ func (c *panelServiceClient) MeshRelay(ctx context.Context) *connect.BidiStreamF
 	return c.meshRelay.CallBidiStream(ctx)
 }
 
+// ReportViolations calls nagi.v1.PanelService.ReportViolations.
+func (c *panelServiceClient) ReportViolations(ctx context.Context, req *connect.Request[v1.ReportViolationsRequest]) (*connect.Response[v1.ReportViolationsResponse], error) {
+	return c.reportViolations.CallUnary(ctx, req)
+}
+
 // PanelServiceHandler is an implementation of the nagi.v1.PanelService service.
 type PanelServiceHandler interface {
 	// 上报节点信息和本节点上所有容器的最新状态，连上时、状态变化时和每 15 秒调用。
@@ -151,6 +168,8 @@ type PanelServiceHandler interface {
 	ReportAlert(context.Context, *connect.Request[v1.ReportAlertRequest]) (*connect.Response[v1.ReportAlertResponse], error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(context.Context, *connect.BidiStream[v1.MeshPacket, v1.MeshPacket]) error
+	// 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+	ReportViolations(context.Context, *connect.Request[v1.ReportViolationsRequest]) (*connect.Response[v1.ReportViolationsResponse], error)
 }
 
 // NewPanelServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -190,6 +209,12 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(panelServiceMethods.ByName("MeshRelay")),
 		connect.WithHandlerOptions(opts...),
 	)
+	panelServiceReportViolationsHandler := connect.NewUnaryHandler(
+		PanelServiceReportViolationsProcedure,
+		svc.ReportViolations,
+		connect.WithSchema(panelServiceMethods.ByName("ReportViolations")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.PanelService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PanelServiceReportProcedure:
@@ -202,6 +227,8 @@ func NewPanelServiceHandler(svc PanelServiceHandler, opts ...connect.HandlerOpti
 			panelServiceReportAlertHandler.ServeHTTP(w, r)
 		case PanelServiceMeshRelayProcedure:
 			panelServiceMeshRelayHandler.ServeHTTP(w, r)
+		case PanelServiceReportViolationsProcedure:
+			panelServiceReportViolationsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -229,4 +256,8 @@ func (UnimplementedPanelServiceHandler) ReportAlert(context.Context, *connect.Re
 
 func (UnimplementedPanelServiceHandler) MeshRelay(context.Context, *connect.BidiStream[v1.MeshPacket, v1.MeshPacket]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.MeshRelay is not implemented"))
+}
+
+func (UnimplementedPanelServiceHandler) ReportViolations(context.Context, *connect.Request[v1.ReportViolationsRequest]) (*connect.Response[v1.ReportViolationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.PanelService.ReportViolations is not implemented"))
 }

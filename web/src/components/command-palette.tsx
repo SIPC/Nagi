@@ -83,12 +83,10 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                     {t.app.search.newProject}
                   </CommandItem>
                 )}
-                {isAdmin && (
-                  <CommandItem value="activity" keywords={[t.app.nav.activity]} onSelect={() => go(() => navigate({ to: "/activity" }))}>
-                    <ScrollText />
-                    {t.app.nav.activity}
-                  </CommandItem>
-                )}
+                <CommandItem value="audit" keywords={[t.app.nav.audit]} onSelect={() => go(() => navigate({ to: "/audit" }))}>
+                  <ScrollText />
+                  {t.app.nav.audit}
+                </CommandItem>
               </CommandGroup>
               {list.length > 0 && (
                 <CommandGroup heading={t.app.nav.projects}>

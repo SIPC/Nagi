@@ -35,6 +35,8 @@ func TestAllowed(t *testing.T) {
 		{RoleOperator, profile, true}, {RoleViewer, profile, true},
 		{RoleViewer, list, true}, {RoleViewer, nodes, true}, {RoleViewer, password, true}, {RoleViewer, sessions, true},
 		{RoleViewer, deploy, false}, {RoleViewer, key, false}, {RoleViewer, settings, false}, {RoleViewer, users, false}, {RoleViewer, alerts, false}, {RoleViewer, removeN, false}, {RoleViewer, unknown, false},
+		{RoleViewer, "/nagi.v1.SettingsService/AddPasskey", true}, {RoleOperator, "/nagi.v1.SettingsService/DeletePasskey", true},
+		{RoleViewer, "/nagi.v1.SettingsService/BeginPasskeyRegistration", true},
 		{"", list, false}, {"root", list, false},
 		// 节点访问只给管理员，查询也一样：名字以 List 开头的默认会放行。
 		{RoleAdmin, "/nagi.v1.NodeService/ListNodeDir", true}, {RoleAdmin, "/nagi.v1.NodeService/ReadNodeFile", true},

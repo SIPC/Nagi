@@ -23,12 +23,17 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/store"
 	"golang.org/x/crypto/argon2"
 )
 
-// CookieName 是会话 cookie 的名字。
-const CookieName = "nagi_session"
+// CookieName 是会话 cookie 的名字。带 __Host- 前缀：浏览器保证它只能由面板自己的域名、通过 HTTPS 设置，
+// 兄弟子域名上的网站覆盖不了（见 docs/panel.md#会话）。
+const CookieName = "__Host-nagi_session"
+
+// legacyCookieName 是以前的名字，在一个版本内仍然接受，收到时换发新名字。
+const legacyCookieName = "nagi_session"
 
 const sessionTTL = 7 * 24 * time.Hour
 
@@ -43,6 +48,15 @@ type Service struct {
 
 	mu      sync.Mutex
 	pending map[int64]pendingTOTP // 正在开启两步验证、还没确认的密钥
+	// challenges 是通行密钥的一次性挑战（见 passkey.go）。
+	challenges map[string]passkeyChallenge
+
+	audit    *audit.Log
+	failures failureSummary
+	streaks  totpStreaks
+
+	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
+	Alert func(ctx context.Context, key, title, message string)
 }
 
 // Sealer 加密两步验证的密钥（面板主密钥）。
@@ -135,6 +149,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录仍在处理，请稍后重试"))
 	}
 	if wait > 0 {
+		s.rateLimited(ip)
 		if n := int(wait.Seconds()) + 1; n > 1 {
 			return nil, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("登录失败次数过多，请 %d 秒后重试", n))
 		}
@@ -158,6 +173,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		return nil, verr
 	}
 	if err != nil || !ok {
+		s.recordLoginFailure(ctx, ip, username)
 		return nil, connect.NewError(connect.CodeUnauthenticated, ErrBadCredentials)
 	}
 	if user.TotpSecret != "" {
@@ -175,12 +191,30 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		}
 		if err := s.useTOTP(ctx, user, code); err != nil {
 			userDone(outcomeFailure)
+			at, aid, an := userActor(user.ID, user.Username)
+			s.loginEvent(ctx, audit.Event{Action: "totp_failed", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
+				Result: audit.ResultFailed, Error: err.Error()})
+			s.totpFailed(ctx, user.ID, user.Username, ip)
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
 		userDone(outcomeSuccess)
+		s.totpOK(user.ID)
+	}
+	// 管理员登录地址：密码和验证码都对了才判断，并告警（凭据很可能泄露了）。
+	if user.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
+		s.adminNetworkDenied(ctx, user.ID, user.Username, ip, "password")
+		return nil, errAdminNetwork()
 	}
 	result = outcomeSuccess
-	return s.NewSession(ctx, user.ID, ip)
+	cookie, err := s.NewSession(ctx, user.ID, ip)
+	if err == nil {
+		at, aid, an := userActor(user.ID, user.Username)
+		st, _, _, _ := s.q.SessionByToken(ctx, HashToken(cookie.Value))
+		s.loginEvent(ctx, audit.Event{Action: "Login", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
+			Session: audit.SessionTag(st.ID)})
+		s.checkNewNetwork(ctx, user.ID, user.Username, user.Role, ip, RequestMeta(ctx).UserAgent)
+	}
+	return cookie, err
 }
 
 // verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。按可用的 CPU 算
@@ -204,37 +238,57 @@ var dummyHash = sync.OnceValue(func() string {
 	return h
 })
 
-// NewSession 为用户创建会话，返回要设置的 cookie。
+// NewSession 为用户创建会话，返回要设置的 cookie。浏览器标识和 TLS 指纹从 ctx 里的请求来源取（RequestMeta）。
 func (s *Service) NewSession(ctx context.Context, userID int64, ip string) (*http.Cookie, error) {
 	token, err := RandomToken()
 	if err != nil {
 		return nil, err
 	}
+	id, err := RandomToken()
+	if err != nil {
+		return nil, err
+	}
+	m := RequestMeta(ctx)
 	now := time.Now()
+	ttl := s.Policy(ctx).MaxAge
 	if err := s.q.CreateSession(ctx, store.CreateSessionParams{
 		TokenHash: HashToken(token),
 		UserID:    userID,
 		CreatedAt: now.Unix(),
-		ExpiresAt: now.Add(sessionTTL).Unix(),
+		ExpiresAt: now.Add(ttl).Unix(),
 		Ip:        ip,
+		ID:        id[:32],
+		RotatedAt: now.Unix(),
+		UserAgent: m.UserAgent,
+		LastIp:    ip,
+		LastSeen:  now.Unix(),
+		TlsFp:     m.Fingerprint,
+		KeyUntil:  now.Add(keyWindow).Unix(),
 	}); err != nil {
 		return nil, err
 	}
-	return &http.Cookie{
-		Name:     CookieName,
-		Value:    token,
-		Path:     "/",
-		Expires:  now.Add(sessionTTL),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	}, nil
+	return sessionCookie(token, now.Add(ttl)), nil
+}
+
+// sessionCookie 是会话的 cookie。
+func sessionCookie(token string, expires time.Time) *http.Cookie {
+	return &http.Cookie{Name: CookieName, Value: token, Path: "/", Expires: expires, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode}
+}
+
+// RotatedCookie 是换发的新令牌的 cookie，有效期和会话一样。
+func (s *Service) RotatedCookie(ctx context.Context, token string) *http.Cookie {
+	st, _, err := s.liveSession(ctx, token)
+	exp := time.Now().Add(sessionTTL)
+	if err == nil {
+		exp = time.Unix(st.ExpiresAt, 0)
+	}
+	return sessionCookie(token, exp)
 }
 
 // Logout 删除会话，返回一个清除 cookie 的 cookie。
 func (s *Service) Logout(ctx context.Context, token string) *http.Cookie {
-	if token != "" {
-		_ = s.q.DeleteSession(ctx, HashToken(token))
+	if st, _, err := s.liveSession(ctx, token); err == nil {
+		_ = s.q.DeleteSessionByID(ctx, st.ID)
 	}
 	return &http.Cookie{Name: CookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode}
 }
@@ -260,6 +314,8 @@ type User struct {
 	Via                   string
 	AllowWrite, AllowExec bool
 	AllowNodeExec         bool
+	// SessionID 是网页会话的固定 ID（审计记录用它的哈希把一次登录里的操作串起来），令牌调用为空。
+	SessionID string
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
@@ -267,20 +323,26 @@ func (s *Service) SessionUser(ctx context.Context, token string) (User, error) {
 	return s.session(ctx, token)
 }
 
+// session 找令牌对应的会话，不做设备和网络的检查，也不轮换（安全入口判断是否已登录用）。
 func (s *Service) session(ctx context.Context, token string) (User, error) {
-	if token == "" {
-		return User{}, i18n.New("请先登录")
-	}
-	row, err := s.q.GetSession(ctx, HashToken(token))
+	st, _, err := s.liveSession(ctx, token)
 	if err != nil {
-		return User{}, i18n.New("请先登录")
+		return User{}, err
 	}
-	if row.ExpiresAt < time.Now().Unix() {
-		_ = s.q.DeleteSession(ctx, HashToken(token))
-		return User{}, i18n.New("登录已过期，请重新登录")
+	if st.Reverify != "" {
+		return User{}, &ErrReverify{Reason: st.Reverify}
 	}
-	return User{ID: row.UserID, Name: row.Username, Role: row.Role, ElevatedUntil: row.ElevatedUntil,
-		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0}, nil
+	return userOf(st), nil
+}
+
+// RequestUser 检查不走 Connect 的请求（终端、上传下载）的会话：和接口一样检查设备和网络，但不轮换令牌。
+func (s *Service) RequestUser(r *http.Request) (User, error) {
+	info := RequestInfo{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header)}
+	res, err := s.authenticate(r.Context(), SessionToken(r.Header), info)
+	if err != nil {
+		return User{}, err
+	}
+	return res.user, nil
 }
 
 // CleanupLoop 定期清理过期的会话、访问令牌和没用的 OAuth 客户端，直到 ctx 取消。
@@ -293,6 +355,15 @@ func (s *Service) CleanupLoop(ctx context.Context) {
 		_ = s.q.DeleteExpiredAccessTokens(ctx, now.Unix())
 		// 注册了一直没人授权的 OAuth 客户端（见 docs/mcp.md#oauth）。
 		_ = s.q.DeleteStaleOAuthClients(ctx, now.Add(-24*time.Hour).Unix())
+		// 空闲超时的会话（见 SessionPolicy），和换下来一周以上的旧令牌。
+		if idle, err := s.q.DeleteIdleSessions(ctx, now.Add(-s.Policy(ctx).Idle).Unix()); err == nil {
+			for _, st := range idle {
+				at, aid, an := userActor(st.UserID, st.Username)
+				s.loginEvent(ctx, audit.Event{Action: "session_expired", ActorType: at, ActorID: aid, ActorName: an, IP: st.LastIP, Session: audit.SessionTag(st.ID)})
+			}
+		}
+		_ = s.q.PruneSessionTokens(ctx, now.Add(-7*24*time.Hour).Unix())
+		s.FlushLoginFailures(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -318,6 +389,28 @@ func WithInternalUser(ctx context.Context, u User) context.Context {
 	return context.WithValue(ctx, internalUserKey{}, u)
 }
 
+// Meta 是请求的来源：客户端 IP（经本机 Caddy 转发时按 RequestIP 核对）和 User-Agent，审计记录用。
+type Meta struct {
+	IP, UserAgent string
+	// Client 是 MCP 客户端的名称（OAuth 客户端名或 User-Agent）。
+	Client string
+	// Fingerprint 是 TLS 指纹（见 ja4.go）。
+	Fingerprint string
+}
+
+type metaKey struct{}
+
+// WithMeta 把请求的来源放进 ctx。
+func WithMeta(ctx context.Context, m Meta) context.Context {
+	return context.WithValue(ctx, metaKey{}, m)
+}
+
+// RequestMeta 返回 ctx 里请求的来源。
+func RequestMeta(ctx context.Context) Meta {
+	m, _ := ctx.Value(metaKey{}).(Meta)
+	return m
+}
+
 // Username 返回当前请求的登录用户名。
 func Username(ctx context.Context) string { return CurrentUser(ctx).Name }
 
@@ -341,28 +434,65 @@ type interceptor struct {
 	public map[string]bool
 }
 
-func (i *interceptor) check(ctx context.Context, procedure string, h http.Header) (context.Context, error) {
+// checked 是登录检查的结果：要发给页面签名的挑战、要换发的 cookie。
+type checked struct {
+	challenge string
+	cookies   []*http.Cookie
+}
+
+func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.Header) (context.Context, checked, error) {
 	// MCP 在进程内调用接口，用户已经按令牌核对过（见 WithInternalUser）。
 	if u, ok := ctx.Value(internalUserKey{}).(User); ok {
-		return context.WithValue(ctx, userKey{}, u), nil
+		return context.WithValue(ctx, userKey{}, u), checked{}, nil
+	}
+	m, ok := ctx.Value(metaKey{}).(Meta)
+	if !ok {
+		m = Meta{IP: RequestIP(addr, h), UserAgent: h.Get("User-Agent"), Fingerprint: RequestFingerprint(ctx, addr, h)}
+		ctx = WithMeta(ctx, m)
 	}
 	if i.public[procedure] {
-		return ctx, nil
+		return ctx, checked{}, nil
 	}
-	user, err := i.s.session(ctx, SessionToken(h))
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	token := SessionToken(h)
+	res, err := i.s.authenticate(ctx, token, RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint})
+	var rv *ErrReverify
+	if errors.As(err, &rv) {
+		return nil, checked{}, i.s.reverifyError(ctx, rv.UserID, rv.Reason)
+	} else if err != nil {
+		return nil, checked{}, connect.NewError(connect.CodeUnauthenticated, err)
 	}
-	return context.WithValue(ctx, userKey{}, user), nil
+	var out checked
+	out.challenge = res.challenge
+	// 旧名字的 cookie：换发新名字，删掉旧的。
+	if legacyOnly(h) {
+		out.cookies = append(out.cookies, sessionCookie(token, time.Unix(res.state.ExpiresAt, 0)),
+			&http.Cookie{Name: legacyCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	}
+	return context.WithValue(ctx, userKey{}, res.user), out, nil
+}
+
+func (c checked) apply(h http.Header) {
+	if c.challenge != "" {
+		h.Set(ChallengeHeader, c.challenge)
+	}
+	for _, ck := range c.cookies {
+		h.Add("Set-Cookie", ck.String())
+	}
 }
 
 func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		ctx, err := i.check(ctx, req.Spec().Procedure, req.Header())
+		ctx, c, err := i.check(ctx, req.Spec().Procedure, req.Peer().Addr, req.Header())
 		if err != nil {
 			return nil, err
 		}
-		return next(ctx, req)
+		res, err := next(ctx, req)
+		if res != nil {
+			c.apply(res.Header())
+		} else if ce := new(connect.Error); errors.As(err, &ce) {
+			c.apply(ce.Meta())
+		}
+		return res, err
 	}
 }
 
@@ -372,28 +502,46 @@ func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		ctx, err := i.check(ctx, conn.Spec().Procedure, conn.RequestHeader())
+		ctx, c, err := i.check(ctx, conn.Spec().Procedure, conn.Peer().Addr, conn.RequestHeader())
 		if err != nil {
 			return err
 		}
+		c.apply(conn.ResponseHeader())
 		return next(ctx, conn)
 	}
 }
 
 // SessionToken 从请求头的 Cookie 里取出会话 token。
 func SessionToken(h http.Header) string {
+	legacy := ""
 	for _, line := range h.Values("Cookie") {
 		cookies, err := http.ParseCookie(line)
 		if err != nil {
 			continue
 		}
 		for _, c := range cookies {
-			if c.Name == CookieName {
+			switch c.Name {
+			case CookieName:
 				return c.Value
+			case legacyCookieName:
+				legacy = c.Value
 			}
 		}
 	}
-	return ""
+	return legacy
+}
+
+// legacyOnly 判断请求只带着旧名字的 cookie。
+func legacyOnly(h http.Header) bool {
+	has, legacy := false, false
+	for _, line := range h.Values("Cookie") {
+		cookies, _ := http.ParseCookie(line)
+		for _, c := range cookies {
+			has = has || c.Name == CookieName
+			legacy = legacy || c.Name == legacyCookieName
+		}
+	}
+	return legacy && !has
 }
 
 // fromLocalProxy 判断请求是不是面板自带节点的 Caddy 转发的：来自本机，并且带着正确的 X-Nagi-Proxy。
@@ -588,4 +736,9 @@ func (l *limiter) begin(keys ...string) (done func(outcome), wait time.Duration)
 			}
 		}
 	}, 0
+}
+
+// WithRequest 把不走 Connect 的请求（终端、上传下载）的来源放进 ctx，审计记录用。
+func WithRequest(ctx context.Context, r *http.Request) context.Context {
+	return WithMeta(ctx, Meta{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header)})
 }

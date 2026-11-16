@@ -20,6 +20,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
@@ -63,6 +64,11 @@ type Registry struct {
 	log    *slog.Logger
 	sealer *sealer.Sealer
 	ca     *tlsutil.CA
+	// Audit 是审计日志（见 docs/audit.md），节点和面板发出的告警记在这里。
+	Audit *audit.Log
+	// OnIsolate 在节点被隔离或解除隔离后调用：面板据此重算各节点的代理计划，撤销它的项目放行。
+	OnIsolate func(ctx context.Context)
+	iso       isolation
 
 	mu       sync.RWMutex
 	conns    map[string]*Conn
@@ -82,6 +88,8 @@ type Registry struct {
 	Self string
 	// ReadOnly：本面板是备用面板，不给节点下发任何东西（告警配置、面板域名），只查询。
 	ReadOnly bool
+	// AuditSinks 返回日志外送目标，随告警配置一起下发给节点，节点外送自己的本地审计（见 docs/audit.md#节点本地审计）。
+	AuditSinks func(ctx context.Context) []*nagiv1.NodeAuditSink
 	// Behind 检查节点上报里的任期：返回 true 表示本面板已经落后（有了新的主面板），不再处理这次上报。
 	Behind func(ctx context.Context, req *nagiv1.ReportRequest) bool
 }
@@ -381,7 +389,8 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	if !pending && p.r.Behind != nil && p.r.Behind(ctx, req) {
 		accepts = false
 	}
-	if !pending && accepts && p.r.OnReport != nil {
+	// 被隔离的节点的上报只记录、不采用（见 docs/mesh.md#隔离）。
+	if !pending && accepts && p.r.OnReport != nil && !p.r.Isolated(ctx, p.conn.NodeID) {
 		go p.r.OnReport(p.conn, req)
 	}
 	if pending {

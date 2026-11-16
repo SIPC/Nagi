@@ -1,5 +1,21 @@
 // 节点列表、节点详情、添加节点、节点设置、副本和未识别的容器。
 export default {
+  // 隔离节点（见 docs/mesh.md#隔离）。
+  isolation: {
+    isolate: "隔离节点",
+    unisolate: "解除隔离",
+    badge: "已隔离",
+    notice: "已隔离",
+    noticeHint: "其他节点已断开和它的节点网络，项目放行已撤销，面板不再为它中转。控制连接保留，上面的容器照常运行。",
+    elevate: "隔离节点前需验证身份。",
+    elevateUndo: "解除隔离前需验证身份。",
+    confirm: (name: string) => `隔离节点 ${name}？其他节点会立即断开和它的节点网络，它上面设置了顶替的容器由顶替节点接替。`,
+    confirmUndo: (name: string) => `解除节点 ${name} 的隔离？它会重新加入节点网络，恢复项目放行。`,
+    typeName: "输入节点名称确认",
+    done: "已隔离",
+    undone: "已解除隔离",
+  },
+  egressUnavailable: "无法限制容器出站",
   tabs: {
     containers: "容器",
     metrics: "监控",

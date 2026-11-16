@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
@@ -39,7 +40,12 @@ type meshService struct {
 // （见 meshNode.prune），所以要再查信任列表。
 func (a *agent) authorizePanel(k mesh.Key, method string) error {
 	fp, ok := a.mesh.panelOf(k)
-	if !ok || !a.id.trusts(fp) {
+	if !ok {
+		// 不是面板的成员（别的节点）调用只给面板的接口：越权。
+		a.violations.add(k, "meshservice:"+methodName(method), "", "", 0, "")
+		return status.Error(codes.PermissionDenied, "仅接受受信任的面板")
+	}
+	if !a.id.trusts(fp) {
 		return status.Error(codes.PermissionDenied, "仅接受受信任的面板")
 	}
 	return a.checkPrimary(fp, method)
@@ -141,4 +147,12 @@ func (s *meshService) Upload(stream nagiv1.MeshService_UploadServer) error {
 	}
 	s.a.log.Info("收到上传的项目文件", "project", first.GetProjectId(), "container", first.GetContainer(), "bytes", res.Bytes, "files", res.Files)
 	return stream.SendAndClose(&nagiv1.UploadResponse{Bytes: uint64(res.Bytes), Files: uint32(res.Files), Stripped: res.Stripped})
+}
+
+// methodName 取 gRPC 方法全名的最后一段。
+func methodName(full string) string {
+	if i := strings.LastIndexByte(full, '/'); i >= 0 {
+		return full[i+1:]
+	}
+	return full
 }

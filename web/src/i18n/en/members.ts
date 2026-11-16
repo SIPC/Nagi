@@ -32,6 +32,7 @@ export default {
   unknownAddress: "Unknown address",
   signedInAt: (date) => `Signed in ${date}`,
   thisDevice: "This device",
+  lastActive: (ago) => `Active ${ago}`,
   signOutDevice: "Sign out",
   scope: {
     projects: "Project access",

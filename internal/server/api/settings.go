@@ -172,6 +172,10 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 	}
 	// 规则改在节点和项目上设置（SetNodeAlertRules、项目设置），这里只存渠道。
 	cfg.Rules = nil
+	// 先用原来的配置发出这条通知，再生效（见 docs/audit.md#安全告警）：攻击者改掉告警渠道之前，原来的渠道已经收到了。
+	u := auth.CurrentUser(ctx)
+	_ = s.Nodes.SendAlert(ctx, &nagiv1.Alert{Key: "security:alert-config", Status: "firing", Title: i18n.Errorf("账号 %s 修改了告警配置", u.Name).Error(),
+		Message: i18n.Errorf("成员：%s；来源：%s", u.Name, auth.RequestMeta(ctx).IP).Error(), Time: timestamppb.Now()}, nil)
 	if err := s.Nodes.SetAlertConfig(ctx, cfg); err != nil {
 		return nil, err
 	}
@@ -208,6 +212,8 @@ func (s *settingsService) security(ctx context.Context) *nagiv1.Security {
 	if u.Role == auth.RoleAdmin {
 		sec.Entrance = entrance
 	}
+	sec.PasskeyDomain = s.Auth.PasskeyDomain(ctx)
+	sec.Passkeys = s.passkeys(ctx, u.ID, sec.PasskeyDomain)
 	return sec
 }
 

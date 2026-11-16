@@ -68,6 +68,20 @@ const (
 	// AuthServiceApproveOAuthProcedure is the fully-qualified name of the AuthService's ApproveOAuth
 	// RPC.
 	AuthServiceApproveOAuthProcedure = "/nagi.v1.AuthService/ApproveOAuth"
+	// AuthServiceRegisterSessionKeyProcedure is the fully-qualified name of the AuthService's
+	// RegisterSessionKey RPC.
+	AuthServiceRegisterSessionKeyProcedure = "/nagi.v1.AuthService/RegisterSessionKey"
+	// AuthServiceRotateSessionProcedure is the fully-qualified name of the AuthService's RotateSession
+	// RPC.
+	AuthServiceRotateSessionProcedure = "/nagi.v1.AuthService/RotateSession"
+	// AuthServiceReverifyProcedure is the fully-qualified name of the AuthService's Reverify RPC.
+	AuthServiceReverifyProcedure = "/nagi.v1.AuthService/Reverify"
+	// AuthServiceBeginPasskeyLoginProcedure is the fully-qualified name of the AuthService's
+	// BeginPasskeyLogin RPC.
+	AuthServiceBeginPasskeyLoginProcedure = "/nagi.v1.AuthService/BeginPasskeyLogin"
+	// AuthServicePasskeyLoginProcedure is the fully-qualified name of the AuthService's PasskeyLogin
+	// RPC.
+	AuthServicePasskeyLoginProcedure = "/nagi.v1.AuthService/PasskeyLogin"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
@@ -174,6 +188,11 @@ const (
 	// NodeServiceRenameNodeTagProcedure is the fully-qualified name of the NodeService's RenameNodeTag
 	// RPC.
 	NodeServiceRenameNodeTagProcedure = "/nagi.v1.NodeService/RenameNodeTag"
+	// NodeServiceIsolateNodeProcedure is the fully-qualified name of the NodeService's IsolateNode RPC.
+	NodeServiceIsolateNodeProcedure = "/nagi.v1.NodeService/IsolateNode"
+	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
+	// RPC.
+	NodeServiceUnisolateNodeProcedure = "/nagi.v1.NodeService/UnisolateNode"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -270,6 +289,51 @@ const (
 	// SettingsServiceRevokeAccessTokenProcedure is the fully-qualified name of the SettingsService's
 	// RevokeAccessToken RPC.
 	SettingsServiceRevokeAccessTokenProcedure = "/nagi.v1.SettingsService/RevokeAccessToken"
+	// SettingsServiceListAuditEventsProcedure is the fully-qualified name of the SettingsService's
+	// ListAuditEvents RPC.
+	SettingsServiceListAuditEventsProcedure = "/nagi.v1.SettingsService/ListAuditEvents"
+	// SettingsServiceGetAuditEventProcedure is the fully-qualified name of the SettingsService's
+	// GetAuditEvent RPC.
+	SettingsServiceGetAuditEventProcedure = "/nagi.v1.SettingsService/GetAuditEvent"
+	// SettingsServiceExportAuditEventsProcedure is the fully-qualified name of the SettingsService's
+	// ExportAuditEvents RPC.
+	SettingsServiceExportAuditEventsProcedure = "/nagi.v1.SettingsService/ExportAuditEvents"
+	// SettingsServiceGetSessionPolicyProcedure is the fully-qualified name of the SettingsService's
+	// GetSessionPolicy RPC.
+	SettingsServiceGetSessionPolicyProcedure = "/nagi.v1.SettingsService/GetSessionPolicy"
+	// SettingsServiceSetSessionPolicyProcedure is the fully-qualified name of the SettingsService's
+	// SetSessionPolicy RPC.
+	SettingsServiceSetSessionPolicyProcedure = "/nagi.v1.SettingsService/SetSessionPolicy"
+	// SettingsServiceGetRecordingProcedure is the fully-qualified name of the SettingsService's
+	// GetRecording RPC.
+	SettingsServiceGetRecordingProcedure = "/nagi.v1.SettingsService/GetRecording"
+	// SettingsServiceGetAuditSettingsProcedure is the fully-qualified name of the SettingsService's
+	// GetAuditSettings RPC.
+	SettingsServiceGetAuditSettingsProcedure = "/nagi.v1.SettingsService/GetAuditSettings"
+	// SettingsServiceSetAuditSettingsProcedure is the fully-qualified name of the SettingsService's
+	// SetAuditSettings RPC.
+	SettingsServiceSetAuditSettingsProcedure = "/nagi.v1.SettingsService/SetAuditSettings"
+	// SettingsServiceTestAuditSinkProcedure is the fully-qualified name of the SettingsService's
+	// TestAuditSink RPC.
+	SettingsServiceTestAuditSinkProcedure = "/nagi.v1.SettingsService/TestAuditSink"
+	// SettingsServiceVerifyAuditProcedure is the fully-qualified name of the SettingsService's
+	// VerifyAudit RPC.
+	SettingsServiceVerifyAuditProcedure = "/nagi.v1.SettingsService/VerifyAudit"
+	// SettingsServiceBeginPasskeyRegistrationProcedure is the fully-qualified name of the
+	// SettingsService's BeginPasskeyRegistration RPC.
+	SettingsServiceBeginPasskeyRegistrationProcedure = "/nagi.v1.SettingsService/BeginPasskeyRegistration"
+	// SettingsServiceAddPasskeyProcedure is the fully-qualified name of the SettingsService's
+	// AddPasskey RPC.
+	SettingsServiceAddPasskeyProcedure = "/nagi.v1.SettingsService/AddPasskey"
+	// SettingsServiceDeletePasskeyProcedure is the fully-qualified name of the SettingsService's
+	// DeletePasskey RPC.
+	SettingsServiceDeletePasskeyProcedure = "/nagi.v1.SettingsService/DeletePasskey"
+	// SettingsServiceGetAdminNetworksProcedure is the fully-qualified name of the SettingsService's
+	// GetAdminNetworks RPC.
+	SettingsServiceGetAdminNetworksProcedure = "/nagi.v1.SettingsService/GetAdminNetworks"
+	// SettingsServiceSetAdminNetworksProcedure is the fully-qualified name of the SettingsService's
+	// SetAdminNetworks RPC.
+	SettingsServiceSetAdminNetworksProcedure = "/nagi.v1.SettingsService/SetAdminNetworks"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -552,6 +616,14 @@ type AuthServiceClient interface {
 	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error)
+	RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(context.Context, *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error)
+	PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -619,20 +691,55 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
 			connect.WithClientOptions(opts...),
 		),
+		registerSessionKey: connect.NewClient[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse](
+			httpClient,
+			baseURL+AuthServiceRegisterSessionKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RegisterSessionKey")),
+			connect.WithClientOptions(opts...),
+		),
+		rotateSession: connect.NewClient[v1.RotateSessionRequest, v1.RotateSessionResponse](
+			httpClient,
+			baseURL+AuthServiceRotateSessionProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RotateSession")),
+			connect.WithClientOptions(opts...),
+		),
+		reverify: connect.NewClient[v1.ReverifyRequest, v1.ReverifyResponse](
+			httpClient,
+			baseURL+AuthServiceReverifyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("Reverify")),
+			connect.WithClientOptions(opts...),
+		),
+		beginPasskeyLogin: connect.NewClient[v1.BeginPasskeyLoginRequest, v1.PasskeyChallenge](
+			httpClient,
+			baseURL+AuthServiceBeginPasskeyLoginProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginPasskeyLogin")),
+			connect.WithClientOptions(opts...),
+		),
+		passkeyLogin: connect.NewClient[v1.PasskeyLoginRequest, v1.LoginResponse](
+			httpClient,
+			baseURL+AuthServicePasskeyLoginProcedure,
+			connect.WithSchema(authServiceMethods.ByName("PasskeyLogin")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login           *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout          *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	me              *connect.Client[v1.MeRequest, v1.MeResponse]
-	elevate         *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
-	changePassword  *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
-	setLanguage     *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
-	updateProfile   *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
-	getOAuthRequest *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
-	approveOAuth    *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
+	login              *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	me                 *connect.Client[v1.MeRequest, v1.MeResponse]
+	elevate            *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
+	changePassword     *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	setLanguage        *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
+	updateProfile      *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	getOAuthRequest    *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
+	approveOAuth       *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
+	registerSessionKey *connect.Client[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse]
+	rotateSession      *connect.Client[v1.RotateSessionRequest, v1.RotateSessionResponse]
+	reverify           *connect.Client[v1.ReverifyRequest, v1.ReverifyResponse]
+	beginPasskeyLogin  *connect.Client[v1.BeginPasskeyLoginRequest, v1.PasskeyChallenge]
+	passkeyLogin       *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -680,6 +787,31 @@ func (c *authServiceClient) ApproveOAuth(ctx context.Context, req *connect.Reque
 	return c.approveOAuth.CallUnary(ctx, req)
 }
 
+// RegisterSessionKey calls nagi.v1.AuthService.RegisterSessionKey.
+func (c *authServiceClient) RegisterSessionKey(ctx context.Context, req *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error) {
+	return c.registerSessionKey.CallUnary(ctx, req)
+}
+
+// RotateSession calls nagi.v1.AuthService.RotateSession.
+func (c *authServiceClient) RotateSession(ctx context.Context, req *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error) {
+	return c.rotateSession.CallUnary(ctx, req)
+}
+
+// Reverify calls nagi.v1.AuthService.Reverify.
+func (c *authServiceClient) Reverify(ctx context.Context, req *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error) {
+	return c.reverify.CallUnary(ctx, req)
+}
+
+// BeginPasskeyLogin calls nagi.v1.AuthService.BeginPasskeyLogin.
+func (c *authServiceClient) BeginPasskeyLogin(ctx context.Context, req *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error) {
+	return c.beginPasskeyLogin.CallUnary(ctx, req)
+}
+
+// PasskeyLogin calls nagi.v1.AuthService.PasskeyLogin.
+func (c *authServiceClient) PasskeyLogin(ctx context.Context, req *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error) {
+	return c.passkeyLogin.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -698,6 +830,14 @@ type AuthServiceHandler interface {
 	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error)
+	RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(context.Context, *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error)
+	PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -761,6 +901,36 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceRegisterSessionKeyHandler := connect.NewUnaryHandler(
+		AuthServiceRegisterSessionKeyProcedure,
+		svc.RegisterSessionKey,
+		connect.WithSchema(authServiceMethods.ByName("RegisterSessionKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceRotateSessionHandler := connect.NewUnaryHandler(
+		AuthServiceRotateSessionProcedure,
+		svc.RotateSession,
+		connect.WithSchema(authServiceMethods.ByName("RotateSession")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceReverifyHandler := connect.NewUnaryHandler(
+		AuthServiceReverifyProcedure,
+		svc.Reverify,
+		connect.WithSchema(authServiceMethods.ByName("Reverify")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceBeginPasskeyLoginHandler := connect.NewUnaryHandler(
+		AuthServiceBeginPasskeyLoginProcedure,
+		svc.BeginPasskeyLogin,
+		connect.WithSchema(authServiceMethods.ByName("BeginPasskeyLogin")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServicePasskeyLoginHandler := connect.NewUnaryHandler(
+		AuthServicePasskeyLoginProcedure,
+		svc.PasskeyLogin,
+		connect.WithSchema(authServiceMethods.ByName("PasskeyLogin")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -781,6 +951,16 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetOAuthRequestHandler.ServeHTTP(w, r)
 		case AuthServiceApproveOAuthProcedure:
 			authServiceApproveOAuthHandler.ServeHTTP(w, r)
+		case AuthServiceRegisterSessionKeyProcedure:
+			authServiceRegisterSessionKeyHandler.ServeHTTP(w, r)
+		case AuthServiceRotateSessionProcedure:
+			authServiceRotateSessionHandler.ServeHTTP(w, r)
+		case AuthServiceReverifyProcedure:
+			authServiceReverifyHandler.ServeHTTP(w, r)
+		case AuthServiceBeginPasskeyLoginProcedure:
+			authServiceBeginPasskeyLoginHandler.ServeHTTP(w, r)
+		case AuthServicePasskeyLoginProcedure:
+			authServicePasskeyLoginHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -824,6 +1004,26 @@ func (UnimplementedAuthServiceHandler) GetOAuthRequest(context.Context, *connect
 
 func (UnimplementedAuthServiceHandler) ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ApproveOAuth is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.RegisterSessionKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.RotateSession is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Reverify is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginPasskeyLogin(context.Context, *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.BeginPasskeyLogin is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.PasskeyLogin is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
@@ -897,6 +1097,10 @@ type NodeServiceClient interface {
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1138,6 +1342,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
 			connect.WithClientOptions(opts...),
 		),
+		isolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
+			httpClient,
+			baseURL+NodeServiceIsolateNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("IsolateNode")),
+			connect.WithClientOptions(opts...),
+		),
+		unisolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
+			httpClient,
+			baseURL+NodeServiceUnisolateNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1181,6 +1397,8 @@ type nodeServiceClient struct {
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 	setNodeTags           *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
 	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
+	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
+	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -1373,6 +1591,16 @@ func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, req *connect.Requ
 	return c.renameNodeTag.CallUnary(ctx, req)
 }
 
+// IsolateNode calls nagi.v1.NodeService.IsolateNode.
+func (c *nodeServiceClient) IsolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return c.isolateNode.CallUnary(ctx, req)
+}
+
+// UnisolateNode calls nagi.v1.NodeService.UnisolateNode.
+func (c *nodeServiceClient) UnisolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return c.unisolateNode.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1444,6 +1672,10 @@ type NodeServiceHandler interface {
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1681,6 +1913,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceIsolateNodeHandler := connect.NewUnaryHandler(
+		NodeServiceIsolateNodeProcedure,
+		svc.IsolateNode,
+		connect.WithSchema(nodeServiceMethods.ByName("IsolateNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceUnisolateNodeHandler := connect.NewUnaryHandler(
+		NodeServiceUnisolateNodeProcedure,
+		svc.UnisolateNode,
+		connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -1759,6 +2003,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeTagsHandler.ServeHTTP(w, r)
 		case NodeServiceRenameNodeTagProcedure:
 			nodeServiceRenameNodeTagHandler.ServeHTTP(w, r)
+		case NodeServiceIsolateNodeProcedure:
+			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
+		case NodeServiceUnisolateNodeProcedure:
+			nodeServiceUnisolateNodeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1920,6 +2168,14 @@ func (UnimplementedNodeServiceHandler) RenameNodeTag(context.Context, *connect.R
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeTag is not implemented"))
 }
 
+func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.IsolateNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UnisolateNode is not implemented"))
+}
+
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.
 type SettingsServiceClient interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -1975,6 +2231,31 @@ type SettingsServiceClient interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
 	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest]) (*connect.ServerStreamForClient[v1.ExportAuditEventsChunk], error)
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
+	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest]) (*connect.ServerStreamForClient[v1.RecordingChunk], error)
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
+	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(context.Context, *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error)
+	AddPasskey(context.Context, *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error)
+	DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
+	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2180,43 +2461,148 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
 			connect.WithClientOptions(opts...),
 		),
+		listAuditEvents: connect.NewClient[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse](
+			httpClient,
+			baseURL+SettingsServiceListAuditEventsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListAuditEvents")),
+			connect.WithClientOptions(opts...),
+		),
+		getAuditEvent: connect.NewClient[v1.GetAuditEventRequest, v1.GetAuditEventResponse](
+			httpClient,
+			baseURL+SettingsServiceGetAuditEventProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAuditEvent")),
+			connect.WithClientOptions(opts...),
+		),
+		exportAuditEvents: connect.NewClient[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk](
+			httpClient,
+			baseURL+SettingsServiceExportAuditEventsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
+			connect.WithClientOptions(opts...),
+		),
+		getSessionPolicy: connect.NewClient[v1.GetSessionPolicyRequest, v1.SessionPolicy](
+			httpClient,
+			baseURL+SettingsServiceGetSessionPolicyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetSessionPolicy")),
+			connect.WithClientOptions(opts...),
+		),
+		setSessionPolicy: connect.NewClient[v1.SessionPolicy, v1.SessionPolicy](
+			httpClient,
+			baseURL+SettingsServiceSetSessionPolicyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
+			connect.WithClientOptions(opts...),
+		),
+		getRecording: connect.NewClient[v1.GetRecordingRequest, v1.RecordingChunk](
+			httpClient,
+			baseURL+SettingsServiceGetRecordingProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetRecording")),
+			connect.WithClientOptions(opts...),
+		),
+		getAuditSettings: connect.NewClient[v1.GetAuditSettingsRequest, v1.AuditSettings](
+			httpClient,
+			baseURL+SettingsServiceGetAuditSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAuditSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		setAuditSettings: connect.NewClient[v1.AuditSettings, v1.AuditSettings](
+			httpClient,
+			baseURL+SettingsServiceSetAuditSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		testAuditSink: connect.NewClient[v1.AuditSink, v1.TestAuditSinkResponse](
+			httpClient,
+			baseURL+SettingsServiceTestAuditSinkProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("TestAuditSink")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyAudit: connect.NewClient[v1.VerifyAuditRequest, v1.AuditChainStatus](
+			httpClient,
+			baseURL+SettingsServiceVerifyAuditProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("VerifyAudit")),
+			connect.WithClientOptions(opts...),
+		),
+		beginPasskeyRegistration: connect.NewClient[v1.BeginPasskeyRegistrationRequest, v1.BeginPasskeyRegistrationResponse](
+			httpClient,
+			baseURL+SettingsServiceBeginPasskeyRegistrationProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("BeginPasskeyRegistration")),
+			connect.WithClientOptions(opts...),
+		),
+		addPasskey: connect.NewClient[v1.AddPasskeyRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceAddPasskeyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("AddPasskey")),
+			connect.WithClientOptions(opts...),
+		),
+		deletePasskey: connect.NewClient[v1.DeletePasskeyRequest, v1.Security](
+			httpClient,
+			baseURL+SettingsServiceDeletePasskeyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("DeletePasskey")),
+			connect.WithClientOptions(opts...),
+		),
+		getAdminNetworks: connect.NewClient[v1.GetAdminNetworksRequest, v1.AdminNetworks](
+			httpClient,
+			baseURL+SettingsServiceGetAdminNetworksProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAdminNetworks")),
+			connect.WithClientOptions(opts...),
+		),
+		setAdminNetworks: connect.NewClient[v1.AdminNetworks, v1.AdminNetworks](
+			httpClient,
+			baseURL+SettingsServiceSetAdminNetworksProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // settingsServiceClient implements SettingsServiceClient.
 type settingsServiceClient struct {
-	getSettings          *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
-	updateSettings       *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
-	setPanelDomain       *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
-	getAlertConfig       *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
-	updateAlertConfig    *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
-	testAlertChannel     *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
-	createInvite         *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
-	listInvites          *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
-	revokeInvite         *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
-	createStandbyCode    *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
-	getStandbys          *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
-	removeStandby        *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
-	promoteStandby       *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
-	checkPanelUpdate     *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
-	updatePanel          *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
-	getPanelReleaseNotes *connect.Client[v1.GetPanelReleaseNotesRequest, v1.GetPanelReleaseNotesResponse]
-	getUpdateStatus      *connect.Client[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse]
-	getSecurity          *connect.Client[v1.GetSecurityRequest, v1.Security]
-	beginTOTP            *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
-	enableTOTP           *connect.Client[v1.EnableTOTPRequest, v1.Security]
-	disableTOTP          *connect.Client[v1.DisableTOTPRequest, v1.Security]
-	setEntrance          *connect.Client[v1.SetEntranceRequest, v1.Security]
-	listActivity         *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
-	listUsers            *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
-	createUser           *connect.Client[v1.CreateUserRequest, v1.PanelUser]
-	updateUser           *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
-	deleteUser           *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
-	listSessions         *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
-	revokeSession        *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
-	listAccessTokens     *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
-	createAccessToken    *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
-	revokeAccessToken    *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
+	getSettings              *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
+	updateSettings           *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
+	setPanelDomain           *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
+	getAlertConfig           *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
+	updateAlertConfig        *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
+	testAlertChannel         *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
+	createInvite             *connect.Client[v1.CreateInviteRequest, v1.CreateInviteResponse]
+	listInvites              *connect.Client[v1.ListInvitesRequest, v1.ListInvitesResponse]
+	revokeInvite             *connect.Client[v1.RevokeInviteRequest, v1.RevokeInviteResponse]
+	createStandbyCode        *connect.Client[v1.CreateStandbyCodeRequest, v1.CreateStandbyCodeResponse]
+	getStandbys              *connect.Client[v1.GetStandbysRequest, v1.GetStandbysResponse]
+	removeStandby            *connect.Client[v1.RemoveStandbyRequest, v1.RemoveStandbyResponse]
+	promoteStandby           *connect.Client[v1.PromoteStandbyRequest, v1.PromoteStandbyResponse]
+	checkPanelUpdate         *connect.Client[v1.CheckPanelUpdateRequest, v1.CheckPanelUpdateResponse]
+	updatePanel              *connect.Client[v1.UpdatePanelRequest, v1.UpdatePanelResponse]
+	getPanelReleaseNotes     *connect.Client[v1.GetPanelReleaseNotesRequest, v1.GetPanelReleaseNotesResponse]
+	getUpdateStatus          *connect.Client[v1.GetUpdateStatusRequest, v1.GetUpdateStatusResponse]
+	getSecurity              *connect.Client[v1.GetSecurityRequest, v1.Security]
+	beginTOTP                *connect.Client[v1.BeginTOTPRequest, v1.BeginTOTPResponse]
+	enableTOTP               *connect.Client[v1.EnableTOTPRequest, v1.Security]
+	disableTOTP              *connect.Client[v1.DisableTOTPRequest, v1.Security]
+	setEntrance              *connect.Client[v1.SetEntranceRequest, v1.Security]
+	listActivity             *connect.Client[v1.ListActivityRequest, v1.ListActivityResponse]
+	listUsers                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
+	createUser               *connect.Client[v1.CreateUserRequest, v1.PanelUser]
+	updateUser               *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
+	deleteUser               *connect.Client[v1.DeleteUserRequest, v1.DeleteUserResponse]
+	listSessions             *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
+	revokeSession            *connect.Client[v1.RevokeSessionRequest, v1.RevokeSessionResponse]
+	listAccessTokens         *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
+	createAccessToken        *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
+	revokeAccessToken        *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
+	listAuditEvents          *connect.Client[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse]
+	getAuditEvent            *connect.Client[v1.GetAuditEventRequest, v1.GetAuditEventResponse]
+	exportAuditEvents        *connect.Client[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk]
+	getSessionPolicy         *connect.Client[v1.GetSessionPolicyRequest, v1.SessionPolicy]
+	setSessionPolicy         *connect.Client[v1.SessionPolicy, v1.SessionPolicy]
+	getRecording             *connect.Client[v1.GetRecordingRequest, v1.RecordingChunk]
+	getAuditSettings         *connect.Client[v1.GetAuditSettingsRequest, v1.AuditSettings]
+	setAuditSettings         *connect.Client[v1.AuditSettings, v1.AuditSettings]
+	testAuditSink            *connect.Client[v1.AuditSink, v1.TestAuditSinkResponse]
+	verifyAudit              *connect.Client[v1.VerifyAuditRequest, v1.AuditChainStatus]
+	beginPasskeyRegistration *connect.Client[v1.BeginPasskeyRegistrationRequest, v1.BeginPasskeyRegistrationResponse]
+	addPasskey               *connect.Client[v1.AddPasskeyRequest, v1.Security]
+	deletePasskey            *connect.Client[v1.DeletePasskeyRequest, v1.Security]
+	getAdminNetworks         *connect.Client[v1.GetAdminNetworksRequest, v1.AdminNetworks]
+	setAdminNetworks         *connect.Client[v1.AdminNetworks, v1.AdminNetworks]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2379,6 +2765,81 @@ func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, req *conn
 	return c.revokeAccessToken.CallUnary(ctx, req)
 }
 
+// ListAuditEvents calls nagi.v1.SettingsService.ListAuditEvents.
+func (c *settingsServiceClient) ListAuditEvents(ctx context.Context, req *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
+	return c.listAuditEvents.CallUnary(ctx, req)
+}
+
+// GetAuditEvent calls nagi.v1.SettingsService.GetAuditEvent.
+func (c *settingsServiceClient) GetAuditEvent(ctx context.Context, req *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error) {
+	return c.getAuditEvent.CallUnary(ctx, req)
+}
+
+// ExportAuditEvents calls nagi.v1.SettingsService.ExportAuditEvents.
+func (c *settingsServiceClient) ExportAuditEvents(ctx context.Context, req *connect.Request[v1.ExportAuditEventsRequest]) (*connect.ServerStreamForClient[v1.ExportAuditEventsChunk], error) {
+	return c.exportAuditEvents.CallServerStream(ctx, req)
+}
+
+// GetSessionPolicy calls nagi.v1.SettingsService.GetSessionPolicy.
+func (c *settingsServiceClient) GetSessionPolicy(ctx context.Context, req *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error) {
+	return c.getSessionPolicy.CallUnary(ctx, req)
+}
+
+// SetSessionPolicy calls nagi.v1.SettingsService.SetSessionPolicy.
+func (c *settingsServiceClient) SetSessionPolicy(ctx context.Context, req *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error) {
+	return c.setSessionPolicy.CallUnary(ctx, req)
+}
+
+// GetRecording calls nagi.v1.SettingsService.GetRecording.
+func (c *settingsServiceClient) GetRecording(ctx context.Context, req *connect.Request[v1.GetRecordingRequest]) (*connect.ServerStreamForClient[v1.RecordingChunk], error) {
+	return c.getRecording.CallServerStream(ctx, req)
+}
+
+// GetAuditSettings calls nagi.v1.SettingsService.GetAuditSettings.
+func (c *settingsServiceClient) GetAuditSettings(ctx context.Context, req *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error) {
+	return c.getAuditSettings.CallUnary(ctx, req)
+}
+
+// SetAuditSettings calls nagi.v1.SettingsService.SetAuditSettings.
+func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, req *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error) {
+	return c.setAuditSettings.CallUnary(ctx, req)
+}
+
+// TestAuditSink calls nagi.v1.SettingsService.TestAuditSink.
+func (c *settingsServiceClient) TestAuditSink(ctx context.Context, req *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error) {
+	return c.testAuditSink.CallUnary(ctx, req)
+}
+
+// VerifyAudit calls nagi.v1.SettingsService.VerifyAudit.
+func (c *settingsServiceClient) VerifyAudit(ctx context.Context, req *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error) {
+	return c.verifyAudit.CallUnary(ctx, req)
+}
+
+// BeginPasskeyRegistration calls nagi.v1.SettingsService.BeginPasskeyRegistration.
+func (c *settingsServiceClient) BeginPasskeyRegistration(ctx context.Context, req *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error) {
+	return c.beginPasskeyRegistration.CallUnary(ctx, req)
+}
+
+// AddPasskey calls nagi.v1.SettingsService.AddPasskey.
+func (c *settingsServiceClient) AddPasskey(ctx context.Context, req *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error) {
+	return c.addPasskey.CallUnary(ctx, req)
+}
+
+// DeletePasskey calls nagi.v1.SettingsService.DeletePasskey.
+func (c *settingsServiceClient) DeletePasskey(ctx context.Context, req *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error) {
+	return c.deletePasskey.CallUnary(ctx, req)
+}
+
+// GetAdminNetworks calls nagi.v1.SettingsService.GetAdminNetworks.
+func (c *settingsServiceClient) GetAdminNetworks(ctx context.Context, req *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error) {
+	return c.getAdminNetworks.CallUnary(ctx, req)
+}
+
+// SetAdminNetworks calls nagi.v1.SettingsService.SetAdminNetworks.
+func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, req *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error) {
+	return c.setAdminNetworks.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2434,6 +2895,31 @@ type SettingsServiceHandler interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
 	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
+	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest], *connect.ServerStream[v1.RecordingChunk]) error
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
+	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(context.Context, *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error)
+	AddPasskey(context.Context, *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error)
+	DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
+	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2635,6 +3121,96 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListAuditEventsHandler := connect.NewUnaryHandler(
+		SettingsServiceListAuditEventsProcedure,
+		svc.ListAuditEvents,
+		connect.WithSchema(settingsServiceMethods.ByName("ListAuditEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetAuditEventHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAuditEventProcedure,
+		svc.GetAuditEvent,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAuditEvent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceExportAuditEventsHandler := connect.NewServerStreamHandler(
+		SettingsServiceExportAuditEventsProcedure,
+		svc.ExportAuditEvents,
+		connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetSessionPolicyHandler := connect.NewUnaryHandler(
+		SettingsServiceGetSessionPolicyProcedure,
+		svc.GetSessionPolicy,
+		connect.WithSchema(settingsServiceMethods.ByName("GetSessionPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetSessionPolicyHandler := connect.NewUnaryHandler(
+		SettingsServiceSetSessionPolicyProcedure,
+		svc.SetSessionPolicy,
+		connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetRecordingHandler := connect.NewServerStreamHandler(
+		SettingsServiceGetRecordingProcedure,
+		svc.GetRecording,
+		connect.WithSchema(settingsServiceMethods.ByName("GetRecording")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetAuditSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAuditSettingsProcedure,
+		svc.GetAuditSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAuditSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetAuditSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceSetAuditSettingsProcedure,
+		svc.SetAuditSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceTestAuditSinkHandler := connect.NewUnaryHandler(
+		SettingsServiceTestAuditSinkProcedure,
+		svc.TestAuditSink,
+		connect.WithSchema(settingsServiceMethods.ByName("TestAuditSink")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceVerifyAuditHandler := connect.NewUnaryHandler(
+		SettingsServiceVerifyAuditProcedure,
+		svc.VerifyAudit,
+		connect.WithSchema(settingsServiceMethods.ByName("VerifyAudit")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceBeginPasskeyRegistrationHandler := connect.NewUnaryHandler(
+		SettingsServiceBeginPasskeyRegistrationProcedure,
+		svc.BeginPasskeyRegistration,
+		connect.WithSchema(settingsServiceMethods.ByName("BeginPasskeyRegistration")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceAddPasskeyHandler := connect.NewUnaryHandler(
+		SettingsServiceAddPasskeyProcedure,
+		svc.AddPasskey,
+		connect.WithSchema(settingsServiceMethods.ByName("AddPasskey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceDeletePasskeyHandler := connect.NewUnaryHandler(
+		SettingsServiceDeletePasskeyProcedure,
+		svc.DeletePasskey,
+		connect.WithSchema(settingsServiceMethods.ByName("DeletePasskey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetAdminNetworksHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAdminNetworksProcedure,
+		svc.GetAdminNetworks,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAdminNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetAdminNetworksHandler := connect.NewUnaryHandler(
+		SettingsServiceSetAdminNetworksProcedure,
+		svc.SetAdminNetworks,
+		connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2701,6 +3277,36 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceCreateAccessTokenHandler.ServeHTTP(w, r)
 		case SettingsServiceRevokeAccessTokenProcedure:
 			settingsServiceRevokeAccessTokenHandler.ServeHTTP(w, r)
+		case SettingsServiceListAuditEventsProcedure:
+			settingsServiceListAuditEventsHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAuditEventProcedure:
+			settingsServiceGetAuditEventHandler.ServeHTTP(w, r)
+		case SettingsServiceExportAuditEventsProcedure:
+			settingsServiceExportAuditEventsHandler.ServeHTTP(w, r)
+		case SettingsServiceGetSessionPolicyProcedure:
+			settingsServiceGetSessionPolicyHandler.ServeHTTP(w, r)
+		case SettingsServiceSetSessionPolicyProcedure:
+			settingsServiceSetSessionPolicyHandler.ServeHTTP(w, r)
+		case SettingsServiceGetRecordingProcedure:
+			settingsServiceGetRecordingHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAuditSettingsProcedure:
+			settingsServiceGetAuditSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceSetAuditSettingsProcedure:
+			settingsServiceSetAuditSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceTestAuditSinkProcedure:
+			settingsServiceTestAuditSinkHandler.ServeHTTP(w, r)
+		case SettingsServiceVerifyAuditProcedure:
+			settingsServiceVerifyAuditHandler.ServeHTTP(w, r)
+		case SettingsServiceBeginPasskeyRegistrationProcedure:
+			settingsServiceBeginPasskeyRegistrationHandler.ServeHTTP(w, r)
+		case SettingsServiceAddPasskeyProcedure:
+			settingsServiceAddPasskeyHandler.ServeHTTP(w, r)
+		case SettingsServiceDeletePasskeyProcedure:
+			settingsServiceDeletePasskeyHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAdminNetworksProcedure:
+			settingsServiceGetAdminNetworksHandler.ServeHTTP(w, r)
+		case SettingsServiceSetAdminNetworksProcedure:
+			settingsServiceSetAdminNetworksHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2836,6 +3442,66 @@ func (UnimplementedSettingsServiceHandler) CreateAccessToken(context.Context, *c
 
 func (UnimplementedSettingsServiceHandler) RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeAccessToken is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListAuditEvents is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAuditEvent is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ExportAuditEvents is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetSessionPolicy is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetSessionPolicy is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest], *connect.ServerStream[v1.RecordingChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetRecording is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAuditSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAuditSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.TestAuditSink is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.VerifyAudit is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) BeginPasskeyRegistration(context.Context, *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.BeginPasskeyRegistration is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) AddPasskey(context.Context, *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.AddPasskey is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.DeletePasskey is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAdminNetworks is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAdminNetworks is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

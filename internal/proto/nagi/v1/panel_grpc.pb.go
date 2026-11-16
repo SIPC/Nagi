@@ -24,6 +24,7 @@ const (
 	PanelService_RelayAlert_FullMethodName       = "/nagi.v1.PanelService/RelayAlert"
 	PanelService_ReportAlert_FullMethodName      = "/nagi.v1.PanelService/ReportAlert"
 	PanelService_MeshRelay_FullMethodName        = "/nagi.v1.PanelService/MeshRelay"
+	PanelService_ReportViolations_FullMethodName = "/nagi.v1.PanelService/ReportViolations"
 )
 
 // PanelServiceClient is the client API for PanelService service.
@@ -42,6 +43,8 @@ type PanelServiceClient interface {
 	ReportAlert(ctx context.Context, in *ReportAlertRequest, opts ...grpc.CallOption) (*ReportAlertResponse, error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MeshPacket, MeshPacket], error)
+	// 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+	ReportViolations(ctx context.Context, in *ReportViolationsRequest, opts ...grpc.CallOption) (*ReportViolationsResponse, error)
 }
 
 type panelServiceClient struct {
@@ -105,6 +108,16 @@ func (c *panelServiceClient) MeshRelay(ctx context.Context, opts ...grpc.CallOpt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PanelService_MeshRelayClient = grpc.BidiStreamingClient[MeshPacket, MeshPacket]
 
+func (c *panelServiceClient) ReportViolations(ctx context.Context, in *ReportViolationsRequest, opts ...grpc.CallOption) (*ReportViolationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportViolationsResponse)
+	err := c.cc.Invoke(ctx, PanelService_ReportViolations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PanelServiceServer is the server API for PanelService service.
 // All implementations must embed UnimplementedPanelServiceServer
 // for forward compatibility.
@@ -121,6 +134,8 @@ type PanelServiceServer interface {
 	ReportAlert(context.Context, *ReportAlertRequest) (*ReportAlertResponse, error)
 	// mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
 	MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error
+	// 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+	ReportViolations(context.Context, *ReportViolationsRequest) (*ReportViolationsResponse, error)
 	mustEmbedUnimplementedPanelServiceServer()
 }
 
@@ -145,6 +160,9 @@ func (UnimplementedPanelServiceServer) ReportAlert(context.Context, *ReportAlert
 }
 func (UnimplementedPanelServiceServer) MeshRelay(grpc.BidiStreamingServer[MeshPacket, MeshPacket]) error {
 	return status.Error(codes.Unimplemented, "method MeshRelay not implemented")
+}
+func (UnimplementedPanelServiceServer) ReportViolations(context.Context, *ReportViolationsRequest) (*ReportViolationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportViolations not implemented")
 }
 func (UnimplementedPanelServiceServer) mustEmbedUnimplementedPanelServiceServer() {}
 func (UnimplementedPanelServiceServer) testEmbeddedByValue()                      {}
@@ -246,6 +264,24 @@ func _PanelService_MeshRelay_Handler(srv interface{}, stream grpc.ServerStream) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PanelService_MeshRelayServer = grpc.BidiStreamingServer[MeshPacket, MeshPacket]
 
+func _PanelService_ReportViolations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportViolationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PanelServiceServer).ReportViolations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PanelService_ReportViolations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PanelServiceServer).ReportViolations(ctx, req.(*ReportViolationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PanelService_ServiceDesc is the grpc.ServiceDesc for PanelService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +304,10 @@ var PanelService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportAlert",
 			Handler:    _PanelService_ReportAlert_Handler,
+		},
+		{
+			MethodName: "ReportViolations",
+			Handler:    _PanelService_ReportViolations_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -34,7 +34,7 @@ func TestWatchSession(t *testing.T) {
 	q := store.New(d)
 	a := &API{Q: q, Auth: auth.New(q, nil)}
 	const token = "tok"
-	u := auth.User{ID: 2, Name: "op", Role: auth.RoleOperator, LimitProjects: true}
+	u := auth.User{ID: 2, Name: "op", Role: auth.RoleOperator, LimitProjects: true, SessionID: "sid"}
 
 	reset := func() {
 		exec(`DELETE FROM users`)
@@ -42,7 +42,7 @@ func TestWatchSession(t *testing.T) {
 		exec(`INSERT INTO users (id, username, password_hash, created_at, role, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'operator', 0, 1)`)
 		exec(`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p1', 'one', 'one', 1, 0, x'')`)
 		exec(`INSERT INTO user_projects (user_id, project_id) VALUES (2, 'p1')`)
-		exec(`INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, 2, 0, ?)`, auth.HashToken(token), time.Now().Add(time.Hour).Unix())
+		exec(`INSERT INTO sessions (token_hash, user_id, created_at, expires_at, id) VALUES (?, 2, 0, ?, 'sid')`, auth.HashToken(token), time.Now().Add(time.Hour).Unix())
 	}
 	// watch 在 limit 之内等重查断开，没断开时返回 nil。
 	watch := func(allowed func(string) bool, limit time.Duration) <-chan error {

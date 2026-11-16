@@ -52,6 +52,7 @@ type Engine struct {
 	states   map[string]*state
 	restarts map[string][]restartSample
 	memSince time.Time
+	load     loadState
 	queue    []queued
 }
 
@@ -353,6 +354,9 @@ func (e *Engine) evaluate(ctx context.Context) {
 		}
 	}
 
+	// CPU 和流量。
+	e.evaluateLoad(ctx, now, latest, node, enabled, active)
+
 	// 健康检查失败。
 	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
@@ -508,6 +512,18 @@ func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
 	node := e.nodeName()
 	e.mu.Unlock()
 	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
+	if projectID != "" {
+		a.Project = e.projectName(projectID)
+	}
+	e.dispatch(ctx, a)
+}
+
+// NotifyKey 和 Notify 一样发一条一次性的通知，带上 key（面板据此归类，例如出站限制的 egress:<容器>:<目标>）。
+func (e *Engine) NotifyKey(ctx context.Context, key, title, message, projectID string) {
+	e.mu.Lock()
+	node := e.nodeName()
+	e.mu.Unlock()
+	a := &nagiv1.Alert{Key: key, Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
 	if projectID != "" {
 		a.Project = e.projectName(projectID)
 	}

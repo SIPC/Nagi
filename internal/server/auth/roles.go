@@ -18,6 +18,8 @@ func ValidRole(role string) bool {
 var selfMethods = map[string]bool{
 	"GetSecurity": true, "BeginTOTP": true, "EnableTOTP": true, "DisableTOTP": true,
 	"ListSessions": true, "RevokeSession": true,
+	// 通行密钥：只能管自己的（见 docs/panel.md#通行密钥）。
+	"BeginPasskeyRegistration": true, "AddPasskey": true, "DeletePasskey": true,
 	// 访问令牌：只能管自己的，管理员才能看、吊销别人的（处理函数里检查）。
 	"ListAccessTokens": true, "CreateAccessToken": true, "RevokeAccessToken": true,
 }
@@ -29,6 +31,10 @@ var adminReads = map[string]bool{
 	"ListNodeDir": true, "ListNodeFileBackups": true,
 	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
 	"GetNodeStorage": true,
+	// 终端录制和审计设置（见 docs/audit.md）。
+	"GetRecording": true, "GetAuditSettings": true,
+	// 管理员登录地址。
+	"GetAdminNetworks": true,
 }
 
 // adminWrites 是项目接口里只有管理员能用的修改：项目分组决定成员的访问范围（见 docs/panel.md#分组和标签）。

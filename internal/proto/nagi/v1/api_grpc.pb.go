@@ -159,15 +159,20 @@ var SetupService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Login_FullMethodName           = "/nagi.v1.AuthService/Login"
-	AuthService_Logout_FullMethodName          = "/nagi.v1.AuthService/Logout"
-	AuthService_Me_FullMethodName              = "/nagi.v1.AuthService/Me"
-	AuthService_Elevate_FullMethodName         = "/nagi.v1.AuthService/Elevate"
-	AuthService_ChangePassword_FullMethodName  = "/nagi.v1.AuthService/ChangePassword"
-	AuthService_SetLanguage_FullMethodName     = "/nagi.v1.AuthService/SetLanguage"
-	AuthService_UpdateProfile_FullMethodName   = "/nagi.v1.AuthService/UpdateProfile"
-	AuthService_GetOAuthRequest_FullMethodName = "/nagi.v1.AuthService/GetOAuthRequest"
-	AuthService_ApproveOAuth_FullMethodName    = "/nagi.v1.AuthService/ApproveOAuth"
+	AuthService_Login_FullMethodName              = "/nagi.v1.AuthService/Login"
+	AuthService_Logout_FullMethodName             = "/nagi.v1.AuthService/Logout"
+	AuthService_Me_FullMethodName                 = "/nagi.v1.AuthService/Me"
+	AuthService_Elevate_FullMethodName            = "/nagi.v1.AuthService/Elevate"
+	AuthService_ChangePassword_FullMethodName     = "/nagi.v1.AuthService/ChangePassword"
+	AuthService_SetLanguage_FullMethodName        = "/nagi.v1.AuthService/SetLanguage"
+	AuthService_UpdateProfile_FullMethodName      = "/nagi.v1.AuthService/UpdateProfile"
+	AuthService_GetOAuthRequest_FullMethodName    = "/nagi.v1.AuthService/GetOAuthRequest"
+	AuthService_ApproveOAuth_FullMethodName       = "/nagi.v1.AuthService/ApproveOAuth"
+	AuthService_RegisterSessionKey_FullMethodName = "/nagi.v1.AuthService/RegisterSessionKey"
+	AuthService_RotateSession_FullMethodName      = "/nagi.v1.AuthService/RotateSession"
+	AuthService_Reverify_FullMethodName           = "/nagi.v1.AuthService/Reverify"
+	AuthService_BeginPasskeyLogin_FullMethodName  = "/nagi.v1.AuthService/BeginPasskeyLogin"
+	AuthService_PasskeyLogin_FullMethodName       = "/nagi.v1.AuthService/PasskeyLogin"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -190,6 +195,14 @@ type AuthServiceClient interface {
 	GetOAuthRequest(ctx context.Context, in *OAuthRequest, opts ...grpc.CallOption) (*GetOAuthRequestResponse, error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(ctx context.Context, in *ApproveOAuthRequest, opts ...grpc.CallOption) (*ApproveOAuthResponse, error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(ctx context.Context, in *RegisterSessionKeyRequest, opts ...grpc.CallOption) (*RegisterSessionKeyResponse, error)
+	RotateSession(ctx context.Context, in *RotateSessionRequest, opts ...grpc.CallOption) (*RotateSessionResponse, error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(ctx context.Context, in *ReverifyRequest, opts ...grpc.CallOption) (*ReverifyResponse, error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(ctx context.Context, in *BeginPasskeyLoginRequest, opts ...grpc.CallOption) (*PasskeyChallenge, error)
+	PasskeyLogin(ctx context.Context, in *PasskeyLoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 }
 
 type authServiceClient struct {
@@ -290,6 +303,56 @@ func (c *authServiceClient) ApproveOAuth(ctx context.Context, in *ApproveOAuthRe
 	return out, nil
 }
 
+func (c *authServiceClient) RegisterSessionKey(ctx context.Context, in *RegisterSessionKeyRequest, opts ...grpc.CallOption) (*RegisterSessionKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterSessionKeyResponse)
+	err := c.cc.Invoke(ctx, AuthService_RegisterSessionKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RotateSession(ctx context.Context, in *RotateSessionRequest, opts ...grpc.CallOption) (*RotateSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RotateSessionResponse)
+	err := c.cc.Invoke(ctx, AuthService_RotateSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) Reverify(ctx context.Context, in *ReverifyRequest, opts ...grpc.CallOption) (*ReverifyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReverifyResponse)
+	err := c.cc.Invoke(ctx, AuthService_Reverify_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) BeginPasskeyLogin(ctx context.Context, in *BeginPasskeyLoginRequest, opts ...grpc.CallOption) (*PasskeyChallenge, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PasskeyChallenge)
+	err := c.cc.Invoke(ctx, AuthService_BeginPasskeyLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) PasskeyLogin(ctx context.Context, in *PasskeyLoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResponse)
+	err := c.cc.Invoke(ctx, AuthService_PasskeyLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -310,6 +373,14 @@ type AuthServiceServer interface {
 	GetOAuthRequest(context.Context, *OAuthRequest) (*GetOAuthRequestResponse, error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(context.Context, *ApproveOAuthRequest) (*ApproveOAuthResponse, error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(context.Context, *RegisterSessionKeyRequest) (*RegisterSessionKeyResponse, error)
+	RotateSession(context.Context, *RotateSessionRequest) (*RotateSessionResponse, error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(context.Context, *ReverifyRequest) (*ReverifyResponse, error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(context.Context, *BeginPasskeyLoginRequest) (*PasskeyChallenge, error)
+	PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -346,6 +417,21 @@ func (UnimplementedAuthServiceServer) GetOAuthRequest(context.Context, *OAuthReq
 }
 func (UnimplementedAuthServiceServer) ApproveOAuth(context.Context, *ApproveOAuthRequest) (*ApproveOAuthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApproveOAuth not implemented")
+}
+func (UnimplementedAuthServiceServer) RegisterSessionKey(context.Context, *RegisterSessionKeyRequest) (*RegisterSessionKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterSessionKey not implemented")
+}
+func (UnimplementedAuthServiceServer) RotateSession(context.Context, *RotateSessionRequest) (*RotateSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RotateSession not implemented")
+}
+func (UnimplementedAuthServiceServer) Reverify(context.Context, *ReverifyRequest) (*ReverifyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Reverify not implemented")
+}
+func (UnimplementedAuthServiceServer) BeginPasskeyLogin(context.Context, *BeginPasskeyLoginRequest) (*PasskeyChallenge, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPasskeyLogin not implemented")
+}
+func (UnimplementedAuthServiceServer) PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PasskeyLogin not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -530,6 +616,96 @@ func _AuthService_ApproveOAuth_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_RegisterSessionKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterSessionKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RegisterSessionKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RegisterSessionKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RegisterSessionKey(ctx, req.(*RegisterSessionKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RotateSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RotateSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RotateSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RotateSession(ctx, req.(*RotateSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_Reverify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReverifyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Reverify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Reverify_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Reverify(ctx, req.(*ReverifyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_BeginPasskeyLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPasskeyLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).BeginPasskeyLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_BeginPasskeyLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).BeginPasskeyLogin(ctx, req.(*BeginPasskeyLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_PasskeyLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PasskeyLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).PasskeyLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_PasskeyLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).PasskeyLogin(ctx, req.(*PasskeyLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -572,6 +748,26 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApproveOAuth",
 			Handler:    _AuthService_ApproveOAuth_Handler,
+		},
+		{
+			MethodName: "RegisterSessionKey",
+			Handler:    _AuthService_RegisterSessionKey_Handler,
+		},
+		{
+			MethodName: "RotateSession",
+			Handler:    _AuthService_RotateSession_Handler,
+		},
+		{
+			MethodName: "Reverify",
+			Handler:    _AuthService_Reverify_Handler,
+		},
+		{
+			MethodName: "BeginPasskeyLogin",
+			Handler:    _AuthService_BeginPasskeyLogin_Handler,
+		},
+		{
+			MethodName: "PasskeyLogin",
+			Handler:    _AuthService_PasskeyLogin_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -617,6 +813,8 @@ const (
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 	NodeService_SetNodeTags_FullMethodName           = "/nagi.v1.NodeService/SetNodeTags"
 	NodeService_RenameNodeTag_FullMethodName         = "/nagi.v1.NodeService/RenameNodeTag"
+	NodeService_IsolateNode_FullMethodName           = "/nagi.v1.NodeService/IsolateNode"
+	NodeService_UnisolateNode_FullMethodName         = "/nagi.v1.NodeService/UnisolateNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -692,6 +890,10 @@ type NodeServiceClient interface {
 	SetNodeTags(ctx context.Context, in *SetNodeTagsRequest, opts ...grpc.CallOption) (*SetNodeTagsResponse, error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
+	UnisolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -1091,6 +1293,26 @@ func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, in *RenameLabelRe
 	return out, nil
 }
 
+func (c *nodeServiceClient) IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsolateNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_IsolateNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) UnisolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsolateNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_UnisolateNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -1164,6 +1386,10 @@ type NodeServiceServer interface {
 	SetNodeTags(context.Context, *SetNodeTagsRequest) (*SetNodeTagsResponse, error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
+	UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -1287,6 +1513,12 @@ func (UnimplementedNodeServiceServer) SetNodeTags(context.Context, *SetNodeTagsR
 }
 func (UnimplementedNodeServiceServer) RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameNodeTag not implemented")
+}
+func (UnimplementedNodeServiceServer) IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IsolateNode not implemented")
+}
+func (UnimplementedNodeServiceServer) UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnisolateNode not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -1986,6 +2218,42 @@ func _NodeService_RenameNodeTag_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_IsolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsolateNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).IsolateNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_IsolateNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).IsolateNode(ctx, req.(*IsolateNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_UnisolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsolateNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).UnisolateNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_UnisolateNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).UnisolateNode(ctx, req.(*IsolateNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2141,6 +2409,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RenameNodeTag",
 			Handler:    _NodeService_RenameNodeTag_Handler,
 		},
+		{
+			MethodName: "IsolateNode",
+			Handler:    _NodeService_IsolateNode_Handler,
+		},
+		{
+			MethodName: "UnisolateNode",
+			Handler:    _NodeService_UnisolateNode_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -2153,38 +2429,53 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SettingsService_GetSettings_FullMethodName          = "/nagi.v1.SettingsService/GetSettings"
-	SettingsService_UpdateSettings_FullMethodName       = "/nagi.v1.SettingsService/UpdateSettings"
-	SettingsService_SetPanelDomain_FullMethodName       = "/nagi.v1.SettingsService/SetPanelDomain"
-	SettingsService_GetAlertConfig_FullMethodName       = "/nagi.v1.SettingsService/GetAlertConfig"
-	SettingsService_UpdateAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/UpdateAlertConfig"
-	SettingsService_TestAlertChannel_FullMethodName     = "/nagi.v1.SettingsService/TestAlertChannel"
-	SettingsService_CreateInvite_FullMethodName         = "/nagi.v1.SettingsService/CreateInvite"
-	SettingsService_ListInvites_FullMethodName          = "/nagi.v1.SettingsService/ListInvites"
-	SettingsService_RevokeInvite_FullMethodName         = "/nagi.v1.SettingsService/RevokeInvite"
-	SettingsService_CreateStandbyCode_FullMethodName    = "/nagi.v1.SettingsService/CreateStandbyCode"
-	SettingsService_GetStandbys_FullMethodName          = "/nagi.v1.SettingsService/GetStandbys"
-	SettingsService_RemoveStandby_FullMethodName        = "/nagi.v1.SettingsService/RemoveStandby"
-	SettingsService_PromoteStandby_FullMethodName       = "/nagi.v1.SettingsService/PromoteStandby"
-	SettingsService_CheckPanelUpdate_FullMethodName     = "/nagi.v1.SettingsService/CheckPanelUpdate"
-	SettingsService_UpdatePanel_FullMethodName          = "/nagi.v1.SettingsService/UpdatePanel"
-	SettingsService_GetPanelReleaseNotes_FullMethodName = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
-	SettingsService_GetUpdateStatus_FullMethodName      = "/nagi.v1.SettingsService/GetUpdateStatus"
-	SettingsService_GetSecurity_FullMethodName          = "/nagi.v1.SettingsService/GetSecurity"
-	SettingsService_BeginTOTP_FullMethodName            = "/nagi.v1.SettingsService/BeginTOTP"
-	SettingsService_EnableTOTP_FullMethodName           = "/nagi.v1.SettingsService/EnableTOTP"
-	SettingsService_DisableTOTP_FullMethodName          = "/nagi.v1.SettingsService/DisableTOTP"
-	SettingsService_SetEntrance_FullMethodName          = "/nagi.v1.SettingsService/SetEntrance"
-	SettingsService_ListActivity_FullMethodName         = "/nagi.v1.SettingsService/ListActivity"
-	SettingsService_ListUsers_FullMethodName            = "/nagi.v1.SettingsService/ListUsers"
-	SettingsService_CreateUser_FullMethodName           = "/nagi.v1.SettingsService/CreateUser"
-	SettingsService_UpdateUser_FullMethodName           = "/nagi.v1.SettingsService/UpdateUser"
-	SettingsService_DeleteUser_FullMethodName           = "/nagi.v1.SettingsService/DeleteUser"
-	SettingsService_ListSessions_FullMethodName         = "/nagi.v1.SettingsService/ListSessions"
-	SettingsService_RevokeSession_FullMethodName        = "/nagi.v1.SettingsService/RevokeSession"
-	SettingsService_ListAccessTokens_FullMethodName     = "/nagi.v1.SettingsService/ListAccessTokens"
-	SettingsService_CreateAccessToken_FullMethodName    = "/nagi.v1.SettingsService/CreateAccessToken"
-	SettingsService_RevokeAccessToken_FullMethodName    = "/nagi.v1.SettingsService/RevokeAccessToken"
+	SettingsService_GetSettings_FullMethodName              = "/nagi.v1.SettingsService/GetSettings"
+	SettingsService_UpdateSettings_FullMethodName           = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_SetPanelDomain_FullMethodName           = "/nagi.v1.SettingsService/SetPanelDomain"
+	SettingsService_GetAlertConfig_FullMethodName           = "/nagi.v1.SettingsService/GetAlertConfig"
+	SettingsService_UpdateAlertConfig_FullMethodName        = "/nagi.v1.SettingsService/UpdateAlertConfig"
+	SettingsService_TestAlertChannel_FullMethodName         = "/nagi.v1.SettingsService/TestAlertChannel"
+	SettingsService_CreateInvite_FullMethodName             = "/nagi.v1.SettingsService/CreateInvite"
+	SettingsService_ListInvites_FullMethodName              = "/nagi.v1.SettingsService/ListInvites"
+	SettingsService_RevokeInvite_FullMethodName             = "/nagi.v1.SettingsService/RevokeInvite"
+	SettingsService_CreateStandbyCode_FullMethodName        = "/nagi.v1.SettingsService/CreateStandbyCode"
+	SettingsService_GetStandbys_FullMethodName              = "/nagi.v1.SettingsService/GetStandbys"
+	SettingsService_RemoveStandby_FullMethodName            = "/nagi.v1.SettingsService/RemoveStandby"
+	SettingsService_PromoteStandby_FullMethodName           = "/nagi.v1.SettingsService/PromoteStandby"
+	SettingsService_CheckPanelUpdate_FullMethodName         = "/nagi.v1.SettingsService/CheckPanelUpdate"
+	SettingsService_UpdatePanel_FullMethodName              = "/nagi.v1.SettingsService/UpdatePanel"
+	SettingsService_GetPanelReleaseNotes_FullMethodName     = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
+	SettingsService_GetUpdateStatus_FullMethodName          = "/nagi.v1.SettingsService/GetUpdateStatus"
+	SettingsService_GetSecurity_FullMethodName              = "/nagi.v1.SettingsService/GetSecurity"
+	SettingsService_BeginTOTP_FullMethodName                = "/nagi.v1.SettingsService/BeginTOTP"
+	SettingsService_EnableTOTP_FullMethodName               = "/nagi.v1.SettingsService/EnableTOTP"
+	SettingsService_DisableTOTP_FullMethodName              = "/nagi.v1.SettingsService/DisableTOTP"
+	SettingsService_SetEntrance_FullMethodName              = "/nagi.v1.SettingsService/SetEntrance"
+	SettingsService_ListActivity_FullMethodName             = "/nagi.v1.SettingsService/ListActivity"
+	SettingsService_ListUsers_FullMethodName                = "/nagi.v1.SettingsService/ListUsers"
+	SettingsService_CreateUser_FullMethodName               = "/nagi.v1.SettingsService/CreateUser"
+	SettingsService_UpdateUser_FullMethodName               = "/nagi.v1.SettingsService/UpdateUser"
+	SettingsService_DeleteUser_FullMethodName               = "/nagi.v1.SettingsService/DeleteUser"
+	SettingsService_ListSessions_FullMethodName             = "/nagi.v1.SettingsService/ListSessions"
+	SettingsService_RevokeSession_FullMethodName            = "/nagi.v1.SettingsService/RevokeSession"
+	SettingsService_ListAccessTokens_FullMethodName         = "/nagi.v1.SettingsService/ListAccessTokens"
+	SettingsService_CreateAccessToken_FullMethodName        = "/nagi.v1.SettingsService/CreateAccessToken"
+	SettingsService_RevokeAccessToken_FullMethodName        = "/nagi.v1.SettingsService/RevokeAccessToken"
+	SettingsService_ListAuditEvents_FullMethodName          = "/nagi.v1.SettingsService/ListAuditEvents"
+	SettingsService_GetAuditEvent_FullMethodName            = "/nagi.v1.SettingsService/GetAuditEvent"
+	SettingsService_ExportAuditEvents_FullMethodName        = "/nagi.v1.SettingsService/ExportAuditEvents"
+	SettingsService_GetSessionPolicy_FullMethodName         = "/nagi.v1.SettingsService/GetSessionPolicy"
+	SettingsService_SetSessionPolicy_FullMethodName         = "/nagi.v1.SettingsService/SetSessionPolicy"
+	SettingsService_GetRecording_FullMethodName             = "/nagi.v1.SettingsService/GetRecording"
+	SettingsService_GetAuditSettings_FullMethodName         = "/nagi.v1.SettingsService/GetAuditSettings"
+	SettingsService_SetAuditSettings_FullMethodName         = "/nagi.v1.SettingsService/SetAuditSettings"
+	SettingsService_TestAuditSink_FullMethodName            = "/nagi.v1.SettingsService/TestAuditSink"
+	SettingsService_VerifyAudit_FullMethodName              = "/nagi.v1.SettingsService/VerifyAudit"
+	SettingsService_BeginPasskeyRegistration_FullMethodName = "/nagi.v1.SettingsService/BeginPasskeyRegistration"
+	SettingsService_AddPasskey_FullMethodName               = "/nagi.v1.SettingsService/AddPasskey"
+	SettingsService_DeletePasskey_FullMethodName            = "/nagi.v1.SettingsService/DeletePasskey"
+	SettingsService_GetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/GetAdminNetworks"
+	SettingsService_SetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/SetAdminNetworks"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2244,6 +2535,31 @@ type SettingsServiceClient interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(ctx context.Context, in *CreateAccessTokenRequest, opts ...grpc.CallOption) (*CreateAccessTokenResponse, error)
 	RevokeAccessToken(ctx context.Context, in *RevokeAccessTokenRequest, opts ...grpc.CallOption) (*RevokeAccessTokenResponse, error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(ctx context.Context, in *GetAuditEventRequest, opts ...grpc.CallOption) (*GetAuditEventResponse, error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(ctx context.Context, in *ExportAuditEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportAuditEventsChunk], error)
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(ctx context.Context, in *GetSessionPolicyRequest, opts ...grpc.CallOption) (*SessionPolicy, error)
+	SetSessionPolicy(ctx context.Context, in *SessionPolicy, opts ...grpc.CallOption) (*SessionPolicy, error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(ctx context.Context, in *GetRecordingRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecordingChunk], error)
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(ctx context.Context, in *GetAuditSettingsRequest, opts ...grpc.CallOption) (*AuditSettings, error)
+	SetAuditSettings(ctx context.Context, in *AuditSettings, opts ...grpc.CallOption) (*AuditSettings, error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(ctx context.Context, in *AuditSink, opts ...grpc.CallOption) (*TestAuditSinkResponse, error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(ctx context.Context, in *VerifyAuditRequest, opts ...grpc.CallOption) (*AuditChainStatus, error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(ctx context.Context, in *BeginPasskeyRegistrationRequest, opts ...grpc.CallOption) (*BeginPasskeyRegistrationResponse, error)
+	AddPasskey(ctx context.Context, in *AddPasskeyRequest, opts ...grpc.CallOption) (*Security, error)
+	DeletePasskey(ctx context.Context, in *DeletePasskeyRequest, opts ...grpc.CallOption) (*Security, error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(ctx context.Context, in *GetAdminNetworksRequest, opts ...grpc.CallOption) (*AdminNetworks, error)
+	SetAdminNetworks(ctx context.Context, in *AdminNetworks, opts ...grpc.CallOption) (*AdminNetworks, error)
 }
 
 type settingsServiceClient struct {
@@ -2574,6 +2890,174 @@ func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, in *Revok
 	return out, nil
 }
 
+func (c *settingsServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditEventsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListAuditEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetAuditEvent(ctx context.Context, in *GetAuditEventRequest, opts ...grpc.CallOption) (*GetAuditEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAuditEventResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetAuditEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) ExportAuditEvents(ctx context.Context, in *ExportAuditEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportAuditEventsChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SettingsService_ServiceDesc.Streams[0], SettingsService_ExportAuditEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ExportAuditEventsRequest, ExportAuditEventsChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_ExportAuditEventsClient = grpc.ServerStreamingClient[ExportAuditEventsChunk]
+
+func (c *settingsServiceClient) GetSessionPolicy(ctx context.Context, in *GetSessionPolicyRequest, opts ...grpc.CallOption) (*SessionPolicy, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPolicy)
+	err := c.cc.Invoke(ctx, SettingsService_GetSessionPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetSessionPolicy(ctx context.Context, in *SessionPolicy, opts ...grpc.CallOption) (*SessionPolicy, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPolicy)
+	err := c.cc.Invoke(ctx, SettingsService_SetSessionPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetRecording(ctx context.Context, in *GetRecordingRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecordingChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SettingsService_ServiceDesc.Streams[1], SettingsService_GetRecording_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetRecordingRequest, RecordingChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_GetRecordingClient = grpc.ServerStreamingClient[RecordingChunk]
+
+func (c *settingsServiceClient) GetAuditSettings(ctx context.Context, in *GetAuditSettingsRequest, opts ...grpc.CallOption) (*AuditSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditSettings)
+	err := c.cc.Invoke(ctx, SettingsService_GetAuditSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, in *AuditSettings, opts ...grpc.CallOption) (*AuditSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditSettings)
+	err := c.cc.Invoke(ctx, SettingsService_SetAuditSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) TestAuditSink(ctx context.Context, in *AuditSink, opts ...grpc.CallOption) (*TestAuditSinkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestAuditSinkResponse)
+	err := c.cc.Invoke(ctx, SettingsService_TestAuditSink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) VerifyAudit(ctx context.Context, in *VerifyAuditRequest, opts ...grpc.CallOption) (*AuditChainStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditChainStatus)
+	err := c.cc.Invoke(ctx, SettingsService_VerifyAudit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) BeginPasskeyRegistration(ctx context.Context, in *BeginPasskeyRegistrationRequest, opts ...grpc.CallOption) (*BeginPasskeyRegistrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginPasskeyRegistrationResponse)
+	err := c.cc.Invoke(ctx, SettingsService_BeginPasskeyRegistration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) AddPasskey(ctx context.Context, in *AddPasskeyRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_AddPasskey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) DeletePasskey(ctx context.Context, in *DeletePasskeyRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_DeletePasskey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetAdminNetworks(ctx context.Context, in *GetAdminNetworksRequest, opts ...grpc.CallOption) (*AdminNetworks, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminNetworks)
+	err := c.cc.Invoke(ctx, SettingsService_GetAdminNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, in *AdminNetworks, opts ...grpc.CallOption) (*AdminNetworks, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminNetworks)
+	err := c.cc.Invoke(ctx, SettingsService_SetAdminNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2631,6 +3115,31 @@ type SettingsServiceServer interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *CreateAccessTokenRequest) (*CreateAccessTokenResponse, error)
 	RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *GetAuditEventRequest) (*GetAuditEventResponse, error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(*ExportAuditEventsRequest, grpc.ServerStreamingServer[ExportAuditEventsChunk]) error
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(context.Context, *GetSessionPolicyRequest) (*SessionPolicy, error)
+	SetSessionPolicy(context.Context, *SessionPolicy) (*SessionPolicy, error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(*GetRecordingRequest, grpc.ServerStreamingServer[RecordingChunk]) error
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *GetAuditSettingsRequest) (*AuditSettings, error)
+	SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *AuditSink) (*TestAuditSinkResponse, error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(context.Context, *BeginPasskeyRegistrationRequest) (*BeginPasskeyRegistrationResponse, error)
+	AddPasskey(context.Context, *AddPasskeyRequest) (*Security, error)
+	DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *GetAdminNetworksRequest) (*AdminNetworks, error)
+	SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -2736,6 +3245,51 @@ func (UnimplementedSettingsServiceServer) CreateAccessToken(context.Context, *Cr
 }
 func (UnimplementedSettingsServiceServer) RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeAccessToken not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAuditEvent(context.Context, *GetAuditEventRequest) (*GetAuditEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuditEvent not implemented")
+}
+func (UnimplementedSettingsServiceServer) ExportAuditEvents(*ExportAuditEventsRequest, grpc.ServerStreamingServer[ExportAuditEventsChunk]) error {
+	return status.Error(codes.Unimplemented, "method ExportAuditEvents not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetSessionPolicy(context.Context, *GetSessionPolicyRequest) (*SessionPolicy, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSessionPolicy not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetSessionPolicy(context.Context, *SessionPolicy) (*SessionPolicy, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSessionPolicy not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetRecording(*GetRecordingRequest, grpc.ServerStreamingServer[RecordingChunk]) error {
+	return status.Error(codes.Unimplemented, "method GetRecording not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAuditSettings(context.Context, *GetAuditSettingsRequest) (*AuditSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuditSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAuditSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) TestAuditSink(context.Context, *AuditSink) (*TestAuditSinkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestAuditSink not implemented")
+}
+func (UnimplementedSettingsServiceServer) VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyAudit not implemented")
+}
+func (UnimplementedSettingsServiceServer) BeginPasskeyRegistration(context.Context, *BeginPasskeyRegistrationRequest) (*BeginPasskeyRegistrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPasskeyRegistration not implemented")
+}
+func (UnimplementedSettingsServiceServer) AddPasskey(context.Context, *AddPasskeyRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddPasskey not implemented")
+}
+func (UnimplementedSettingsServiceServer) DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePasskey not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAdminNetworks(context.Context, *GetAdminNetworksRequest) (*AdminNetworks, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAdminNetworks not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAdminNetworks not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3334,6 +3888,262 @@ func _SettingsService_RevokeAccessToken_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListAuditEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListAuditEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetAuditEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuditEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAuditEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAuditEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAuditEvent(ctx, req.(*GetAuditEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_ExportAuditEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ExportAuditEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SettingsServiceServer).ExportAuditEvents(m, &grpc.GenericServerStream[ExportAuditEventsRequest, ExportAuditEventsChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_ExportAuditEventsServer = grpc.ServerStreamingServer[ExportAuditEventsChunk]
+
+func _SettingsService_GetSessionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSessionPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetSessionPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetSessionPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetSessionPolicy(ctx, req.(*GetSessionPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetSessionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SessionPolicy)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetSessionPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetSessionPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetSessionPolicy(ctx, req.(*SessionPolicy))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetRecording_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetRecordingRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SettingsServiceServer).GetRecording(m, &grpc.GenericServerStream[GetRecordingRequest, RecordingChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_GetRecordingServer = grpc.ServerStreamingServer[RecordingChunk]
+
+func _SettingsService_GetAuditSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuditSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAuditSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAuditSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAuditSettings(ctx, req.(*GetAuditSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetAuditSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuditSettings)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetAuditSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetAuditSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetAuditSettings(ctx, req.(*AuditSettings))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_TestAuditSink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuditSink)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).TestAuditSink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_TestAuditSink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).TestAuditSink(ctx, req.(*AuditSink))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_VerifyAudit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyAuditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).VerifyAudit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_VerifyAudit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).VerifyAudit(ctx, req.(*VerifyAuditRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_BeginPasskeyRegistration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPasskeyRegistrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).BeginPasskeyRegistration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_BeginPasskeyRegistration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).BeginPasskeyRegistration(ctx, req.(*BeginPasskeyRegistrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_AddPasskey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPasskeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).AddPasskey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_AddPasskey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).AddPasskey(ctx, req.(*AddPasskeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_DeletePasskey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePasskeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).DeletePasskey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_DeletePasskey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).DeletePasskey(ctx, req.(*DeletePasskeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetAdminNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAdminNetworksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAdminNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAdminNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAdminNetworks(ctx, req.(*GetAdminNetworksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetAdminNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminNetworks)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetAdminNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetAdminNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetAdminNetworks(ctx, req.(*AdminNetworks))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3469,8 +4279,71 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RevokeAccessToken",
 			Handler:    _SettingsService_RevokeAccessToken_Handler,
 		},
+		{
+			MethodName: "ListAuditEvents",
+			Handler:    _SettingsService_ListAuditEvents_Handler,
+		},
+		{
+			MethodName: "GetAuditEvent",
+			Handler:    _SettingsService_GetAuditEvent_Handler,
+		},
+		{
+			MethodName: "GetSessionPolicy",
+			Handler:    _SettingsService_GetSessionPolicy_Handler,
+		},
+		{
+			MethodName: "SetSessionPolicy",
+			Handler:    _SettingsService_SetSessionPolicy_Handler,
+		},
+		{
+			MethodName: "GetAuditSettings",
+			Handler:    _SettingsService_GetAuditSettings_Handler,
+		},
+		{
+			MethodName: "SetAuditSettings",
+			Handler:    _SettingsService_SetAuditSettings_Handler,
+		},
+		{
+			MethodName: "TestAuditSink",
+			Handler:    _SettingsService_TestAuditSink_Handler,
+		},
+		{
+			MethodName: "VerifyAudit",
+			Handler:    _SettingsService_VerifyAudit_Handler,
+		},
+		{
+			MethodName: "BeginPasskeyRegistration",
+			Handler:    _SettingsService_BeginPasskeyRegistration_Handler,
+		},
+		{
+			MethodName: "AddPasskey",
+			Handler:    _SettingsService_AddPasskey_Handler,
+		},
+		{
+			MethodName: "DeletePasskey",
+			Handler:    _SettingsService_DeletePasskey_Handler,
+		},
+		{
+			MethodName: "GetAdminNetworks",
+			Handler:    _SettingsService_GetAdminNetworks_Handler,
+		},
+		{
+			MethodName: "SetAdminNetworks",
+			Handler:    _SettingsService_SetAdminNetworks_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ExportAuditEvents",
+			Handler:       _SettingsService_ExportAuditEvents_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetRecording",
+			Handler:       _SettingsService_GetRecording_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/api.proto",
 }
 

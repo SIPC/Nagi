@@ -1,0 +1,92 @@
+package auth
+
+import (
+	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+
+	"github.com/SIPC/nagi/internal/pkg/tlsutil"
+)
+
+// TLS 指纹（见 docs/panel.md#会话）：按 JA4 的规则从 ClientHello 算出，用来判断对方是不是真的浏览器。
+// 数据在服务端拿到，客户端改不了上报的内容。
+
+// JA4 按 JA4 的规则算 ClientHello 的指纹，见 tlsutil.JA4。
+func JA4(h *tls.ClientHelloInfo) string { return tlsutil.JA4(h) }
+
+// toolFingerprints 是脚本工具的已知指纹（JA4 的 a、b 两段）：Go、Python、curl、Node 等。
+// 浏览器的指纹都有 h2 和较多的扩展，单靠这份列表认不全工具，所以另有 looksLikeTool。
+var toolFingerprints = map[string]string{}
+
+// looksLikeTool 判断指纹是不是来自脚本工具而不是浏览器。浏览器（Chrome、Edge、Firefox、Safari）的 ClientHello
+// 都声明 h2，扩展在 14 个以上；Go、Python、curl、Node 的 HTTP 客户端扩展少得多，Python 不声明 h2。
+func looksLikeTool(fp string) bool {
+	if fp == "" {
+		return false
+	}
+	parts := strings.SplitN(fp, "_", 3)
+	if len(parts) != 3 || len(parts[0]) != 10 {
+		return false
+	}
+	if _, ok := toolFingerprints[parts[0]+"_"+parts[1]]; ok {
+		return true
+	}
+	a := parts[0]
+	var exts int
+	fmt.Sscanf(a[6:8], "%d", &exts)
+	return a[8:] != "h2" || exts < 14
+}
+
+// fingerprints 记着每个连接的指纹：握手时算好（GetConfigForClient 里只有底层连接），HTTP 服务拿到连接时取走。
+var fingerprints sync.Map // net.Conn → string
+
+// RecordFingerprint 记下底层连接的 ClientHello 指纹，在 GetConfigForClient 里调用。
+func RecordFingerprint(h *tls.ClientHelloInfo) {
+	if h.Conn != nil {
+		fingerprints.Store(h.Conn, JA4(h))
+	}
+}
+
+// TakeFingerprint 取走底层连接的指纹。
+func TakeFingerprint(raw net.Conn) string {
+	v, ok := fingerprints.LoadAndDelete(raw)
+	if !ok {
+		return ""
+	}
+	return v.(string)
+}
+
+type fpKey struct{}
+
+// WithFingerprint 把连接的 TLS 指纹放进 ctx（http.Server.ConnContext 里调用）。
+func WithFingerprint(ctx context.Context, fp string) context.Context {
+	return context.WithValue(ctx, fpKey{}, fp)
+}
+
+// fingerprintHeader 是本机 Caddy 转发时带上的 TLS 指纹（由 Nagi 自己的 Caddy 模块算好，见 agent/proxy）。
+const fingerprintHeader = "X-Nagi-Ja4"
+
+// cdnHeaders 说明请求经过了 CDN：TLS 由 CDN 终结，看到的是 CDN 的指纹，不检查。
+var cdnHeaders = []string{"Cf-Ray", "Cdn-Loop", "X-Amz-Cf-Id", "Fastly-Client-Ip", "Ali-Cdn-Real-Ip", "X-Tencent-Ua", "Eagleid"}
+
+// RequestFingerprint 返回请求的 TLS 指纹：经本机 Caddy 转发时采用它算好的（凭 X-Nagi-Proxy 核对），否则用面板自己
+// 握手时算的。经过 CDN 的、开发时本机代理转发的（来自本机、不是 Caddy）返回空，不做这项检查。
+func RequestFingerprint(ctx context.Context, addr string, h http.Header) string {
+	for _, k := range cdnHeaders {
+		if h.Get(k) != "" {
+			return ""
+		}
+	}
+	if fromLocalProxy(addr, h) {
+		return h.Get(fingerprintHeader)
+	}
+	if ip := net.ParseIP(ClientIP(addr)); ip != nil && ip.IsLoopback() {
+		return ""
+	}
+	fp, _ := ctx.Value(fpKey{}).(string)
+	return fp
+}

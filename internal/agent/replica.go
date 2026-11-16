@@ -283,6 +283,7 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 		return "", err
 	}
 	if !slices.Equal(m.SourceKey, caller[:]) && !slices.ContainsFunc(m.ExtraSourceKeys, func(k []byte) bool { return slices.Equal(k, caller[:]) }) {
+		s.a.violations.add(caller, "replica:sync", projectID, container, 0, "not the replica's source node")
 		return "", status.Error(codes.PermissionDenied, "该容器的副本不接受来自此节点的同步")
 	}
 	return filepath.Join(root, "files"), nil

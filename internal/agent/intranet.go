@@ -102,6 +102,12 @@ func (n *intranet) set(p *nagiv1.LinkPlan) error {
 		return err
 	}
 	n.mu.Lock()
+	// 被撤销放行的节点：2 分钟内它的重连不算越权（见 violations.revoke）。
+	if n.a != nil {
+		for _, k := range removedCallers(n.plan, p) {
+			n.a.violations.revoke(k)
+		}
+	}
 	n.plan = p
 	if n.changed != nil {
 		close(n.changed)
@@ -546,6 +552,7 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	}
 	ok, _ = n.allowed(projectID, caller)
 	if !ok && !n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller) {
+		n.a.violations.add(caller, "intranet:connect", projectID, name, port, "no access to the project")
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -557,6 +564,7 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	// 只转发开放的端口（容器声明的和项目设置里补的内部端口，以及入口节点的映射指向的端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
 	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoTCP, caller, e.Ports) }
 	if !still() {
+		n.a.violations.add(caller, "intranet:connect", projectID, name, port, "port not open")
 		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
 	}
@@ -606,4 +614,25 @@ func parseLinkHeader(s string) (string, uint16, error) {
 		return "", 0, errors.New("请求格式不对")
 	}
 	return alias, uint16(num), nil
+}
+
+// removedCallers 返回旧计划里有、新计划里没有的调用方。
+func removedCallers(old, next *nagiv1.LinkPlan) []mesh.Key {
+	keep := map[mesh.Key]bool{}
+	for _, a := range next.GetAllows() {
+		for _, c := range a.GetCallers() {
+			if k, err := mesh.ParseKey(c); err == nil {
+				keep[k] = true
+			}
+		}
+	}
+	var out []mesh.Key
+	for _, a := range old.GetAllows() {
+		for _, c := range a.GetCallers() {
+			if k, err := mesh.ParseKey(c); err == nil && !keep[k] {
+				out = append(out, k)
+			}
+		}
+	}
+	return out
 }

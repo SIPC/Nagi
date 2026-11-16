@@ -4,6 +4,7 @@ package nagi.v1;
 
 import "google/protobuf/timestamp.proto";
 import "nagi/v1/common.proto";
+import "nagi/v1/panel.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
@@ -117,6 +118,8 @@ service AgentService {
   rpc MeshSpeedTest(MeshPingRequest) returns (MeshSpeedResponse);
   // 修改组网设置，返回修改后的设置。
   rpc SetMeshOptions(MeshOptions) returns (MeshOptions);
+  // 立即更新 mesh 成员列表（隔离节点时用，见 docs/mesh.md#隔离），平时随上报的回复下发。
+  rpc SetMesh(MeshConfig) returns (SetMeshResponse);
   // 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);
@@ -127,6 +130,8 @@ service AgentService {
   // 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
   // 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
   rpc CancelUpgrade(CancelUpgradeRequest) returns (CancelUpgradeResponse);
+  // 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+  rpc SetAuditSink(SetAuditSinkRequest) returns (SetAuditSinkResponse);
 }
 
 message SetLinksResponse {}
@@ -515,6 +520,8 @@ message NodeExecRequest {
   uint32 timeout_seconds = 3;
   // 面板上的用户名和令牌名，只用于节点本地日志。
   string actor = 4;
+  // 发起人的来源地址，只用于节点本地审计。
+  string ip = 5;
 }
 
 message NodeShellStart {
@@ -523,6 +530,8 @@ message NodeShellStart {
   string cwd = 2;
   // 面板上的用户名，只用于节点本地日志。
   string actor = 3;
+  // 发起人的来源地址，只用于节点本地审计。
+  string ip = 4;
 }
 
 // NodeFileRef 指向节点上的一个路径。path 是绝对路径。node_id 面板用，节点不看。
@@ -687,3 +696,31 @@ message NodeStorage {
   // 取 Docker 的统计失败时的原因，其余部分照常返回。
   string docker_error = 9;
 }
+
+message SetMeshResponse {}
+
+// ---- 节点本地审计（见 docs/audit.md#节点本地审计） ----
+
+// NodeAuditSink 是一个外送目标，字段同面板的 AuditSink（不含录制和状态）。
+message NodeAuditSink {
+  string id = 1;
+  string name = 2;
+  // syslog、http、s3。
+  string type = 3;
+  string address = 4;
+  string ca = 5;
+  string url = 6;
+  map<string, string> headers = 7 [debug_redact = true];
+  string endpoint = 8;
+  string region = 9;
+  string bucket = 10;
+  string prefix = 11;
+  string access_key = 12 [debug_redact = true];
+  string secret_key = 13 [debug_redact = true];
+}
+
+message SetAuditSinkRequest {
+  repeated NodeAuditSink sinks = 1;
+}
+
+message SetAuditSinkResponse {}

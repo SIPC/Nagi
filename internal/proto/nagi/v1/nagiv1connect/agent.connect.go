@@ -181,6 +181,8 @@ const (
 	// AgentServiceSetMeshOptionsProcedure is the fully-qualified name of the AgentService's
 	// SetMeshOptions RPC.
 	AgentServiceSetMeshOptionsProcedure = "/nagi.v1.AgentService/SetMeshOptions"
+	// AgentServiceSetMeshProcedure is the fully-qualified name of the AgentService's SetMesh RPC.
+	AgentServiceSetMeshProcedure = "/nagi.v1.AgentService/SetMesh"
 	// AgentServiceGetMirrorsProcedure is the fully-qualified name of the AgentService's GetMirrors RPC.
 	AgentServiceGetMirrorsProcedure = "/nagi.v1.AgentService/GetMirrors"
 	// AgentServiceSetMirrorsProcedure is the fully-qualified name of the AgentService's SetMirrors RPC.
@@ -193,6 +195,9 @@ const (
 	// AgentServiceCancelUpgradeProcedure is the fully-qualified name of the AgentService's
 	// CancelUpgrade RPC.
 	AgentServiceCancelUpgradeProcedure = "/nagi.v1.AgentService/CancelUpgrade"
+	// AgentServiceSetAuditSinkProcedure is the fully-qualified name of the AgentService's SetAuditSink
+	// RPC.
+	AgentServiceSetAuditSinkProcedure = "/nagi.v1.AgentService/SetAuditSink"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -298,6 +303,8 @@ type AgentServiceClient interface {
 	MeshSpeedTest(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
 	// 修改组网设置，返回修改后的设置。
 	SetMeshOptions(context.Context, *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error)
+	// 立即更新 mesh 成员列表（隔离节点时用，见 docs/mesh.md#隔离），平时随上报的回复下发。
+	SetMesh(context.Context, *connect.Request[v1.MeshConfig]) (*connect.Response[v1.SetMeshResponse], error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
@@ -308,6 +315,8 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
+	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -645,6 +654,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetMeshOptions")),
 			connect.WithClientOptions(opts...),
 		),
+		setMesh: connect.NewClient[v1.MeshConfig, v1.SetMeshResponse](
+			httpClient,
+			baseURL+AgentServiceSetMeshProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetMesh")),
+			connect.WithClientOptions(opts...),
+		),
 		getMirrors: connect.NewClient[v1.GetMirrorsRequest, v1.Mirrors](
 			httpClient,
 			baseURL+AgentServiceGetMirrorsProcedure,
@@ -673,6 +688,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceCancelUpgradeProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
+			connect.WithClientOptions(opts...),
+		),
+		setAuditSink: connect.NewClient[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse](
+			httpClient,
+			baseURL+AgentServiceSetAuditSinkProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetAuditSink")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -734,11 +755,13 @@ type agentServiceClient struct {
 	meshPing              *connect.Client[v1.MeshPingRequest, v1.MeshPingResponse]
 	meshSpeedTest         *connect.Client[v1.MeshPingRequest, v1.MeshSpeedResponse]
 	setMeshOptions        *connect.Client[v1.MeshOptions, v1.MeshOptions]
+	setMesh               *connect.Client[v1.MeshConfig, v1.SetMeshResponse]
 	getMirrors            *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
 	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
 	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
 	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
+	setAuditSink          *connect.Client[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -1011,6 +1034,11 @@ func (c *agentServiceClient) SetMeshOptions(ctx context.Context, req *connect.Re
 	return c.setMeshOptions.CallUnary(ctx, req)
 }
 
+// SetMesh calls nagi.v1.AgentService.SetMesh.
+func (c *agentServiceClient) SetMesh(ctx context.Context, req *connect.Request[v1.MeshConfig]) (*connect.Response[v1.SetMeshResponse], error) {
+	return c.setMesh.CallUnary(ctx, req)
+}
+
 // GetMirrors calls nagi.v1.AgentService.GetMirrors.
 func (c *agentServiceClient) GetMirrors(ctx context.Context, req *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
 	return c.getMirrors.CallUnary(ctx, req)
@@ -1034,6 +1062,11 @@ func (c *agentServiceClient) Upgrade(ctx context.Context, req *connect.Request[v
 // CancelUpgrade calls nagi.v1.AgentService.CancelUpgrade.
 func (c *agentServiceClient) CancelUpgrade(ctx context.Context, req *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error) {
 	return c.cancelUpgrade.CallUnary(ctx, req)
+}
+
+// SetAuditSink calls nagi.v1.AgentService.SetAuditSink.
+func (c *agentServiceClient) SetAuditSink(ctx context.Context, req *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error) {
+	return c.setAuditSink.CallUnary(ctx, req)
 }
 
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
@@ -1139,6 +1172,8 @@ type AgentServiceHandler interface {
 	MeshSpeedTest(context.Context, *connect.Request[v1.MeshPingRequest]) (*connect.Response[v1.MeshSpeedResponse], error)
 	// 修改组网设置，返回修改后的设置。
 	SetMeshOptions(context.Context, *connect.Request[v1.MeshOptions]) (*connect.Response[v1.MeshOptions], error)
+	// 立即更新 mesh 成员列表（隔离节点时用，见 docs/mesh.md#隔离），平时随上报的回复下发。
+	SetMesh(context.Context, *connect.Request[v1.MeshConfig]) (*connect.Response[v1.SetMeshResponse], error)
 	// 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
 	GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
@@ -1149,6 +1184,8 @@ type AgentServiceHandler interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
+	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1482,6 +1519,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetMeshOptions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetMeshHandler := connect.NewUnaryHandler(
+		AgentServiceSetMeshProcedure,
+		svc.SetMesh,
+		connect.WithSchema(agentServiceMethods.ByName("SetMesh")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceGetMirrorsHandler := connect.NewUnaryHandler(
 		AgentServiceGetMirrorsProcedure,
 		svc.GetMirrors,
@@ -1510,6 +1553,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceCancelUpgradeProcedure,
 		svc.CancelUpgrade,
 		connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceSetAuditSinkHandler := connect.NewUnaryHandler(
+		AgentServiceSetAuditSinkProcedure,
+		svc.SetAuditSink,
+		connect.WithSchema(agentServiceMethods.ByName("SetAuditSink")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1622,6 +1671,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceMeshSpeedTestHandler.ServeHTTP(w, r)
 		case AgentServiceSetMeshOptionsProcedure:
 			agentServiceSetMeshOptionsHandler.ServeHTTP(w, r)
+		case AgentServiceSetMeshProcedure:
+			agentServiceSetMeshHandler.ServeHTTP(w, r)
 		case AgentServiceGetMirrorsProcedure:
 			agentServiceGetMirrorsHandler.ServeHTTP(w, r)
 		case AgentServiceSetMirrorsProcedure:
@@ -1632,6 +1683,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceCancelUpgradeProcedure:
 			agentServiceCancelUpgradeHandler.ServeHTTP(w, r)
+		case AgentServiceSetAuditSinkProcedure:
+			agentServiceSetAuditSinkHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1857,6 +1910,10 @@ func (UnimplementedAgentServiceHandler) SetMeshOptions(context.Context, *connect
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMeshOptions is not implemented"))
 }
 
+func (UnimplementedAgentServiceHandler) SetMesh(context.Context, *connect.Request[v1.MeshConfig]) (*connect.Response[v1.SetMeshResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetMesh is not implemented"))
+}
+
 func (UnimplementedAgentServiceHandler) GetMirrors(context.Context, *connect.Request[v1.GetMirrorsRequest]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.GetMirrors is not implemented"))
 }
@@ -1875,4 +1932,8 @@ func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Reques
 
 func (UnimplementedAgentServiceHandler) CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CancelUpgrade is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetAuditSink is not implemented"))
 }

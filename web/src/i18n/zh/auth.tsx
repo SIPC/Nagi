@@ -25,5 +25,7 @@ export default {
     code: "验证码",
     submit: "登录",
     verifySubmit: "验证并登录",
+    or: "或",
+    passkey: "使用通行密钥登录",
   },
 };

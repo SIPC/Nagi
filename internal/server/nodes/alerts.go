@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -118,6 +120,29 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 	defer cancel()
 	if _, err := c.Agent.SetAlertConfig(ctx, &nagiv1.SetAlertConfigRequest{Config: cfg}); err != nil {
 		r.log.Warn("下发告警配置失败", "node", c.NodeID, "err", err)
+	}
+	r.pushAuditSinks(ctx, c)
+}
+
+// pushAuditSinks 把日志外送目标下发给一个节点（见 docs/audit.md#节点本地审计）。旧版本的节点没有这个接口，不报错。
+func (r *Registry) pushAuditSinks(ctx context.Context, c *Conn) {
+	if r.ReadOnly || r.AuditSinks == nil {
+		return
+	}
+	_, err := c.Agent.SetAuditSink(ctx, &nagiv1.SetAuditSinkRequest{Sinks: r.AuditSinks(ctx)})
+	if err != nil && status.Code(err) != codes.Unimplemented {
+		r.log.Warn("下发日志外送配置失败", "node", c.NodeID, "err", err)
+	}
+}
+
+// PushAuditSinks 把日志外送目标下发给所有在线节点，外送设置修改后调用。
+func (r *Registry) PushAuditSinks() {
+	for _, c := range r.Conns() {
+		go func(c *Conn) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			r.pushAuditSinks(ctx, c)
+		}(c)
 	}
 }
 
@@ -228,18 +253,22 @@ func (r *Registry) recordAlert(ctx context.Context, node, nodeID string, a *nagi
 	if a.GetStatus() == "resolved" {
 		action = "resolved"
 	}
-	err := r.q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(),
-		Kind:      "alert",
-		Actor:     clipText(node, 64),
-		Action:    action,
-		ProjectID: projectID,
-		Target:    target,
-		Detail:    clipText(a.GetTitle(), 120),
-	})
-	if err != nil {
-		r.log.Warn("写入活动记录失败", "err", err)
+	params, _ := json.Marshal(map[string]string{"title": clipText(a.GetTitle(), 120), "key": clipText(a.GetKey(), 200)})
+	e := audit.Event{
+		Category: audit.Alert, Action: action, ActorType: audit.ActorNode, ActorID: nodeID, ActorName: clipText(node, 64),
+		Via: audit.ViaNode, ProjectID: projectID, TargetName: target, Params: string(params),
 	}
+	if target != "" && projectID != "" {
+		e.TargetType, e.TargetID = "container", target
+	}
+	if nodeID == "" {
+		// 面板自己发出的告警（节点离线等）：操作者是面板，对象是告警里的节点。
+		e.ActorType, e.ActorName, e.Via = audit.ActorPanel, "", audit.ViaSystem
+		if e.TargetType == "" && node != "" {
+			e.TargetType, e.TargetName = "node", clipText(node, 64)
+		}
+	}
+	r.Audit.Record(ctx, e)
 }
 
 func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertRequest) (*nagiv1.RelayAlertResponse, error) {
@@ -247,6 +276,7 @@ func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertReq
 		return nil, status.Error(codes.PermissionDenied, "节点尚未批准")
 	}
 	if !p.r.allowRelay(p.conn.NodeID) {
+		p.r.PanelViolation(ctx, p.conn, "relay_alert_limit", "")
 		return nil, status.Error(codes.ResourceExhausted, "代发的告警过多，请稍后重试")
 	}
 	a := req.GetAlert()
@@ -435,4 +465,15 @@ func (r *Registry) MigrateAlertRules(ctx context.Context, setProjects func(*nagi
 	cfg.Rules = nil
 	r.log.Info("已把全局告警规则搬到各个节点和项目上")
 	return r.SetAlertConfig(ctx, cfg)
+}
+
+// PanelAlert 发一条面板自己的告警（安全事件等）：记进审计日志，发往告警渠道。
+func (r *Registry) PanelAlert(ctx context.Context, a *nagiv1.Alert) {
+	if a.GetTime() == nil {
+		a.Time = timestamppb.Now()
+	}
+	if a.GetStatus() == "" {
+		a.Status = "firing"
+	}
+	r.sendLogged(ctx, a)
 }

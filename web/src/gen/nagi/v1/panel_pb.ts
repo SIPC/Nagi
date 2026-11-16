@@ -4,6 +4,8 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Alert, ContainerStatus, DomainCert, FailoverStatus, MeshPeer, NodeInfo, NodeUsage } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/panel.proto.
  */
 export const file_nagi_v1_panel: GenFile = /*@__PURE__*/
-  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMInQKCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkSJAoHZGlyZWN0cxgEIAMoCzITLm5hZ2kudjEuTWVzaERpcmVjdBINCgVyZWxheRgFIAEoCCIwCgpNZXNoRGlyZWN0EhIKCnB1YmxpY19rZXkYASABKAwSDgoGcnR0X21zGAIgASgBIkEKCk1lc2hDb25maWcSEQoJcGFuZWxfa2V5GAEgASgMEiAKBXBlZXJzGAIgAygLMhEubmFnaS52MS5NZXNoUGVlciJHChFSZWxheUFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQSEwoLY2hhbm5lbF9pZHMYAiADKAkiFAoSUmVsYXlBbGVydFJlc3BvbnNlIjMKElJlcG9ydEFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQiFQoTUmVwb3J0QWxlcnRSZXNwb25zZSImChdSZW5ld0NlcnRpZmljYXRlUmVxdWVzdBILCgNjc3IYASABKAwiLwoYUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEhMKC2NlcnRpZmljYXRlGAEgASgMIroCCg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEh8KBG1lc2gYAiABKAsyES5uYWdpLnYxLk1lc2hJbmZvEiwKCmNvbnRhaW5lcnMYAyADKAsyGC5uYWdpLnYxLkNvbnRhaW5lclN0YXR1cxIqCglmYWlsb3ZlcnMYBCADKAsyFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEiEKBXVzYWdlGAUgASgLMhIubmFnaS52MS5Ob2RlVXNhZ2USDAoEdGVybRgGIAEoBBIPCgdwcmltYXJ5GAcgASgJEhcKD3ByaW1hcnlfYWRkcmVzcxgIIAEoCRIOCgZwYW5lbHMYCSADKAkSIgoFY2VydHMYCiADKAsyEy5uYWdpLnYxLkRvbWFpbkNlcnQiWwoOUmVwb3J0UmVzcG9uc2USIQoEbWVzaBgBIAEoCzITLm5hZ2kudjEuTWVzaENvbmZpZxImCgdjbHVzdGVyGAIgASgLMhUubmFnaS52MS5QYW5lbENsdXN0ZXIiZQoMUGFuZWxDbHVzdGVyEgwKBHRlcm0YASABKAQSDwoHcHJpbWFyeRgCIAEoCRIlCgZwYW5lbHMYAyADKAsyFS5uYWdpLnYxLkNsdXN0ZXJQYW5lbBIPCgdyZW1vdmVkGAQgAygJIjQKDENsdXN0ZXJQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJMu4CCgxQYW5lbFNlcnZpY2USOQoGUmVwb3J0EhYubmFnaS52MS5SZXBvcnRSZXF1ZXN0GhcubmFnaS52MS5SZXBvcnRSZXNwb25zZRJXChBSZW5ld0NlcnRpZmljYXRlEiAubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBohLm5hZ2kudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEkUKClJlbGF5QWxlcnQSGi5uYWdpLnYxLlJlbGF5QWxlcnRSZXF1ZXN0GhsubmFnaS52MS5SZWxheUFsZXJ0UmVzcG9uc2USSAoLUmVwb3J0QWxlcnQSGy5uYWdpLnYxLlJlcG9ydEFsZXJ0UmVxdWVzdBocLm5hZ2kudjEuUmVwb3J0QWxlcnRSZXNwb25zZRI5CglNZXNoUmVsYXkSEy5uYWdpLnYxLk1lc2hQYWNrZXQaEy5uYWdpLnYxLk1lc2hQYWNrZXQoATABQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_nagi_v1_common]);
+  fileDesc("ChNuYWdpL3YxL3BhbmVsLnByb3RvEgduYWdpLnYxIjcKCk1lc2hQYWNrZXQSCwoDc3JjGAEgASgMEgsKA2RzdBgCIAEoDBIPCgdwYXlsb2FkGAMgASgMInQKCE1lc2hJbmZvEhIKCnB1YmxpY19rZXkYASABKAwSDAoEcG9ydBgCIAEoDRIRCgllbmRwb2ludHMYAyADKAkSJAoHZGlyZWN0cxgEIAMoCzITLm5hZ2kudjEuTWVzaERpcmVjdBINCgVyZWxheRgFIAEoCCIwCgpNZXNoRGlyZWN0EhIKCnB1YmxpY19rZXkYASABKAwSDgoGcnR0X21zGAIgASgBIlMKCk1lc2hDb25maWcSEQoJcGFuZWxfa2V5GAEgASgMEiAKBXBlZXJzGAIgAygLMhEubmFnaS52MS5NZXNoUGVlchIQCghpc29sYXRlZBgDIAMoDCJHChFSZWxheUFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQSEwoLY2hhbm5lbF9pZHMYAiADKAkiFAoSUmVsYXlBbGVydFJlc3BvbnNlIjMKElJlcG9ydEFsZXJ0UmVxdWVzdBIdCgVhbGVydBgBIAEoCzIOLm5hZ2kudjEuQWxlcnQiFQoTUmVwb3J0QWxlcnRSZXNwb25zZSImChdSZW5ld0NlcnRpZmljYXRlUmVxdWVzdBILCgNjc3IYASABKAwiLwoYUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEhMKC2NlcnRpZmljYXRlGAEgASgMIroCCg1SZXBvcnRSZXF1ZXN0Eh8KBG5vZGUYASABKAsyES5uYWdpLnYxLk5vZGVJbmZvEh8KBG1lc2gYAiABKAsyES5uYWdpLnYxLk1lc2hJbmZvEiwKCmNvbnRhaW5lcnMYAyADKAsyGC5uYWdpLnYxLkNvbnRhaW5lclN0YXR1cxIqCglmYWlsb3ZlcnMYBCADKAsyFy5uYWdpLnYxLkZhaWxvdmVyU3RhdHVzEiEKBXVzYWdlGAUgASgLMhIubmFnaS52MS5Ob2RlVXNhZ2USDAoEdGVybRgGIAEoBBIPCgdwcmltYXJ5GAcgASgJEhcKD3ByaW1hcnlfYWRkcmVzcxgIIAEoCRIOCgZwYW5lbHMYCSADKAkSIgoFY2VydHMYCiADKAsyEy5uYWdpLnYxLkRvbWFpbkNlcnQiWwoOUmVwb3J0UmVzcG9uc2USIQoEbWVzaBgBIAEoCzITLm5hZ2kudjEuTWVzaENvbmZpZxImCgdjbHVzdGVyGAIgASgLMhUubmFnaS52MS5QYW5lbENsdXN0ZXIiZQoMUGFuZWxDbHVzdGVyEgwKBHRlcm0YASABKAQSDwoHcHJpbWFyeRgCIAEoCRIlCgZwYW5lbHMYAyADKAsyFS5uYWdpLnYxLkNsdXN0ZXJQYW5lbBIPCgdyZW1vdmVkGAQgAygJIjQKDENsdXN0ZXJQYW5lbBIPCgdhZGRyZXNzGAEgASgJEhMKC2ZpbmdlcnByaW50GAIgASgJIpoBCglWaW9sYXRpb24SDgoGY2FsbGVyGAEgASgMEg4KBm1ldGhvZBgCIAEoCRISCgpwcm9qZWN0X2lkGAMgASgJEhEKCWNvbnRhaW5lchgEIAEoCRIMCgRwb3J0GAUgASgNEg4KBmRldGFpbBgGIAEoCRIoCgR0aW1lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJSChdSZXBvcnRWaW9sYXRpb25zUmVxdWVzdBImCgp2aW9sYXRpb25zGAEgAygLMhIubmFnaS52MS5WaW9sYXRpb24SDwoHZHJvcHBlZBgCIAEoDSIaChhSZXBvcnRWaW9sYXRpb25zUmVzcG9uc2UyxwMKDFBhbmVsU2VydmljZRI5CgZSZXBvcnQSFi5uYWdpLnYxLlJlcG9ydFJlcXVlc3QaFy5uYWdpLnYxLlJlcG9ydFJlc3BvbnNlElcKEFJlbmV3Q2VydGlmaWNhdGUSIC5uYWdpLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiEubmFnaS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USRQoKUmVsYXlBbGVydBIaLm5hZ2kudjEuUmVsYXlBbGVydFJlcXVlc3QaGy5uYWdpLnYxLlJlbGF5QWxlcnRSZXNwb25zZRJICgtSZXBvcnRBbGVydBIbLm5hZ2kudjEuUmVwb3J0QWxlcnRSZXF1ZXN0GhwubmFnaS52MS5SZXBvcnRBbGVydFJlc3BvbnNlEjkKCU1lc2hSZWxheRITLm5hZ2kudjEuTWVzaFBhY2tldBoTLm5hZ2kudjEuTWVzaFBhY2tldCgBMAESVwoQUmVwb3J0VmlvbGF0aW9ucxIgLm5hZ2kudjEuUmVwb3J0VmlvbGF0aW9uc1JlcXVlc3QaIS5uYWdpLnYxLlJlcG9ydFZpb2xhdGlvbnNSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.MeshPacket
@@ -123,6 +125,13 @@ export type MeshConfig = Message<"nagi.v1.MeshConfig"> & {
    * @generated from field: repeated nagi.v1.MeshPeer peers = 2;
    */
   peers: MeshPeer[];
+
+  /**
+   * 被隔离的节点的 mesh 公钥：立即从成员里去掉，不走保留期（见 docs/mesh.md#隔离）。
+   *
+   * @generated from field: repeated bytes isolated = 3;
+   */
+  isolated: Uint8Array[];
 };
 
 /**
@@ -393,6 +402,96 @@ export const ClusterPanelSchema: GenMessage<ClusterPanel> = /*@__PURE__*/
   messageDesc(file_nagi_v1_panel, 13);
 
 /**
+ * Violation 是一次被拒绝的越权请求。
+ *
+ * @generated from message nagi.v1.Violation
+ */
+export type Violation = Message<"nagi.v1.Violation"> & {
+  /**
+   * 调用方的 mesh 公钥（WireGuard 认证过，伪造不了）。
+   *
+   * @generated from field: bytes caller = 1;
+   */
+  caller: Uint8Array;
+
+  /**
+   * 被拒绝的操作，例如 meshservice:ReadVolumeFile、intranet:connect、replica:sync、lease:vote。
+   *
+   * @generated from field: string method = 2;
+   */
+  method: string;
+
+  /**
+   * @generated from field: string project_id = 3;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 4;
+   */
+  container: string;
+
+  /**
+   * @generated from field: uint32 port = 5;
+   */
+  port: number;
+
+  /**
+   * @generated from field: string detail = 6;
+   */
+  detail: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp time = 7;
+   */
+  time?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message nagi.v1.Violation.
+ * Use `create(ViolationSchema)` to create a new message.
+ */
+export const ViolationSchema: GenMessage<Violation> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 14);
+
+/**
+ * @generated from message nagi.v1.ReportViolationsRequest
+ */
+export type ReportViolationsRequest = Message<"nagi.v1.ReportViolationsRequest"> & {
+  /**
+   * @generated from field: repeated nagi.v1.Violation violations = 1;
+   */
+  violations: Violation[];
+
+  /**
+   * 超出上限、没有逐条上报的条数。
+   *
+   * @generated from field: uint32 dropped = 2;
+   */
+  dropped: number;
+};
+
+/**
+ * Describes the message nagi.v1.ReportViolationsRequest.
+ * Use `create(ReportViolationsRequestSchema)` to create a new message.
+ */
+export const ReportViolationsRequestSchema: GenMessage<ReportViolationsRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 15);
+
+/**
+ * @generated from message nagi.v1.ReportViolationsResponse
+ */
+export type ReportViolationsResponse = Message<"nagi.v1.ReportViolationsResponse"> & {
+};
+
+/**
+ * Describes the message nagi.v1.ReportViolationsResponse.
+ * Use `create(ReportViolationsResponseSchema)` to create a new message.
+ */
+export const ReportViolationsResponseSchema: GenMessage<ReportViolationsResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_panel, 16);
+
+/**
  * PanelService：节点调用面板，走控制连接。
  *
  * @generated from service nagi.v1.PanelService
@@ -447,6 +546,16 @@ export const PanelService: GenService<{
     methodKind: "bidi_streaming";
     input: typeof MeshPacketSchema;
     output: typeof MeshPacketSchema;
+  },
+  /**
+   * 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+   *
+   * @generated from rpc nagi.v1.PanelService.ReportViolations
+   */
+  reportViolations: {
+    methodKind: "unary";
+    input: typeof ReportViolationsRequestSchema;
+    output: typeof ReportViolationsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_panel, 0);

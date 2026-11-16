@@ -67,7 +67,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   // bar：手机标题栏上的字。项目里是项目名（灰字），其他是当前页。
   let bar: string | undefined;
   if (parts[0] === "overview") title = t.app.nav.overview;
-  else if (parts[0] === "activity") title = t.app.nav.activity;
+  else if (parts[0] === "audit") title = t.app.nav.audit;
   else if (parts[0] === "projects" && parts[1] === "new") title = t.app.search.newProject;
   else if (projectId) {
     const name = project.data?.project?.name ?? t.app.nav.projects;
@@ -157,7 +157,7 @@ const navItems = [
   { to: "/projects", label: t.app.nav.projects, icon: Box },
   { to: "/nodes", label: t.app.nav.nodes, icon: Server },
   // 活动只给管理员。
-  { to: "/activity", label: t.app.nav.activity, icon: ScrollText, adminOnly: true },
+  { to: "/audit", label: t.app.nav.audit, icon: ScrollText },
   { to: "/settings", label: t.app.nav.settings, icon: SlidersHorizontal },
 ] as const;
 
@@ -185,7 +185,7 @@ export function AppLayout() {
   // 换了页面（例如用户菜单里的「安全」）就收起导航。
   useEffect(() => setNavOpen(false), [href]);
   // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
-  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && !pathname.startsWith("/activity") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
+  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && !pathname.startsWith("/audit") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
   const navBox = useActiveBox();

@@ -26,5 +26,7 @@ export default {
     code: "Verification code",
     submit: "Sign in",
     verifySubmit: "Verify and sign in",
+    or: "or",
+    passkey: "Sign in with a passkey",
   },
 } satisfies typeof zh;

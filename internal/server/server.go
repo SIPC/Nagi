@@ -20,11 +20,13 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/api"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/mcp"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -74,16 +76,70 @@ type Server struct {
 	publicAddress string
 	listener      net.Listener
 
-	auth     *auth.Service
-	nodes    *nodes.Registry
-	projects *projects.Service
-	sealer   *sealer.Sealer
-	domainCh chan string
+	auth  *auth.Service
+	audit *audit.Log
+	// auditReplica 是备用面板从主面板同步来的审计库（界面上看的是它），主面板上为 nil。
+	auditReplica *audit.Log
+	recordings   *audit.Recordings
+	nodes        *nodes.Registry
+	projects     *projects.Service
+	sealer       *sealer.Sealer
+	domainCh     chan string
 
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
 	primary *standby.Primary
 	standby *standby.Client
 	role    role
+}
+
+// openAudit 打开审计日志（见 docs/audit.md#存储与保留）。审计记录在单独的 audit.db 里：备用面板同步主库时不用带上它。
+//   - 主面板：audit.db 既写也读。备用面板刚提升上来时，把它做备用面板时自己的记录（audit-standby.db）并进来。
+//   - 备用面板：audit.db 是从主面板增量同步来的（auditReplica，界面上看的是它），自己的记录（登录等）写进
+//     audit-standby.db。原来是主面板、刚降为备用的，audit.db 里有新主面板没有的记录，归档为 audit-term<任期>.db。
+func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
+	dir := s.cfg.DataDir
+	alog := s.log.With("component", "audit")
+	main := filepath.Join(dir, "audit.db")
+	l, err := audit.Open(ctx, main, alog)
+	if err != nil {
+		return fmt.Errorf("打开审计库: %w", err)
+	}
+	if !isStandby {
+		_ = l.SetMeta(ctx, "role", "primary")
+		if n, err := l.MigrateActivity(ctx, s.db); err != nil {
+			s.log.Warn("迁移活动记录失败", "err", err)
+		} else if n > 0 {
+			s.log.Info("活动记录已迁移到审计库", "count", n)
+		}
+		local := filepath.Join(dir, "audit-standby.db")
+		if _, err := os.Stat(local); err == nil {
+			if n, err := l.ImportFrom(ctx, local); err == nil {
+				_ = os.Rename(local, filepath.Join(dir, fmt.Sprintf("audit-standby-%d.imported.db", time.Now().Unix())))
+				s.log.Info("已并入做备用面板时的审计记录", "count", n)
+			}
+		}
+		s.audit = l
+		return nil
+	}
+	if l.Meta(ctx, "role") == "primary" {
+		term, _ := s.q.GetSetting(ctx, standby.SettingSeenTerm)
+		l.Close()
+		archive := filepath.Join(dir, fmt.Sprintf("audit-term%s-%d.db", term, time.Now().Unix()))
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			_ = os.Rename(main+suffix, archive+suffix)
+		}
+		s.log.Warn("本面板已降为备用面板，原来的审计库已归档", "path", archive)
+		if l, err = audit.Open(ctx, main, alog); err != nil {
+			return fmt.Errorf("打开审计库: %w", err)
+		}
+	}
+	// 迁移活动记录只在主面板上做，备用面板的记录全部从主面板同步。
+	_ = l.SetMeta(ctx, "activity_migrated", "done")
+	s.auditReplica = l
+	if s.audit, err = audit.Open(ctx, filepath.Join(dir, "audit-standby.db"), alog); err != nil {
+		return fmt.Errorf("打开审计库: %w", err)
+	}
+	return nil
 }
 
 // IsStandby 判断本面板是不是备用面板。
@@ -187,13 +243,27 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)
 	}
+	if err := s.openAudit(ctx, info != nil); err != nil {
+		d.Close()
+		return nil, err
+	}
+	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
 	s.auth = auth.New(s.q, s.sealer)
+	s.auth.SetAudit(s.audit)
 	if info != nil {
 		s.standby = &standby.Client{Info: info, DataDir: cfg.DataDir, DB: d, Log: log.With("component", "standby")}
 	} else {
 		s.primary = &standby.Primary{Q: s.q, DataDir: cfg.DataDir, CA: s.ca, Log: log.With("component", "standby")}
 	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
+	s.nodes.Audit = s.audit
+	s.nodes.OnIsolate = func(context.Context) { s.projects.RefreshLinks() }
+	// 会话被盗用这类安全告警由面板发出（备用面板不发告警）。
+	if s.standby == nil {
+		s.auth.Alert = func(ctx context.Context, key, title, message string) {
+			s.nodes.PanelAlert(ctx, &nagiv1.Alert{Key: key, Title: title, Message: message})
+		}
+	}
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log, Fingerprint: s.Fingerprint,
 		ReservedDomain: func(d string) bool {
@@ -316,6 +386,7 @@ func (s *Server) Run(ctx context.Context) error {
 	defer cancel()
 	if s.standby != nil {
 		go s.standby.Run(ctx)
+		go s.standby.RunAudit(ctx, s.auditReplica, s.recordings)
 		go s.watchPrimary(ctx)
 	} else if err := s.printSetupLink(ctx); err != nil {
 		return err
@@ -324,7 +395,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	oauthServer := oauth.New(s.q, s.log)
-	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, OAuth: oauthServer, Panel: &api.PanelInfo{
+	a := &api.API{Q: s.q, Audit: s.audit, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, OAuth: oauthServer, Panel: &api.PanelInfo{
 		Q:           s.q,
 		DataDir:     s.cfg.DataDir,
 		Port:        s.port,
@@ -344,10 +415,44 @@ func (s *Server) Run(ctx context.Context) error {
 		Standby: s.standby,
 		Promote: s.Promote,
 	}}
+	// 终端和命令的录制（见 docs/audit.md#终端与命令录制）：用主密钥加密，保留 90 天、总量不超过 10 GB。
+	s.recordings.Enabled = a.RecordingEnabled
+	a.Recordings = s.recordings
+	a.AuditView = s.auditReplica
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if err := a.Recordings.Prune(90*24*time.Hour, 10<<30, time.Now()); err != nil {
+				s.log.Warn("清理终端录制失败", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	go s.audit.PruneLoop(ctx, a.Retention)
+	// 日志外送（见 docs/audit.md#外送）：只有主面板外送，备用面板只同步。
+	if s.standby == nil {
+		a.Shipper = &audit.Shipper{Log: s.audit, Recordings: a.Recordings,
+			OnFailure: func(ctx context.Context, sk audit.SinkConfig, failing bool, msg string) {
+				status := "resolved"
+				if failing {
+					status = "firing"
+				}
+				s.nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "audit-sink:" + sk.ID, Status: status,
+					Title: i18n.Errorf("日志外送到 %s 失败超过 10 分钟", sk.Name).Error(), Message: msg})
+			}}
+		a.Shipper.Configure(ctx, a.Sinks(ctx))
+	}
+	// 节点外送自己的本地审计，用和面板相同的目标（见 docs/audit.md#节点本地审计）。
+	s.nodes.AuditSinks = func(ctx context.Context) []*nagiv1.NodeAuditSink { return api.NodeAuditSinks(a.Sinks(ctx)) }
 	a.Mount(mux)
 	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
 	mcp.Mount(mux, mcp.Options{
-		Handler: mux, Auth: s.auth, OAuth: oauthServer, Exec: a.RunCommand, NodeExec: a.RunNodeCommand, Record: a.RecordMCPDenied,
+		Handler: mux, Auth: s.auth, OAuth: oauthServer, Exec: a.RunCommand, NodeExec: a.RunNodeCommand, Record: a.RecordMCPDenied, Audit: a.RecordMCPCall,
 		Files:   mcp.FileAccess{Read: a.ReadVolumeFile, Write: a.WriteVolumeFile},
 		Version: s.cfg.Version, Standby: s.standby != nil, Log: s.log,
 	})
@@ -362,7 +467,14 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler:           securityHeaders(s.auth.EntranceMiddleware(mux), false),
+		Handler: securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false),
+		// TLS 指纹（见 docs/panel.md#会话）：握手时按底层连接记下，这里放进请求的 ctx。
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			if tc, ok := c.(*tls.Conn); ok {
+				return auth.WithFingerprint(ctx, auth.TakeFingerprint(tc.NetConn()))
+			}
+			return ctx
+		},
 		TLSConfig:         s.tlsConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -465,18 +577,19 @@ func (s *Server) tlsConfig() *tls.Config {
 	}
 	// 备用面板的同步连接：同样要出示本面板 CA 签发的客户端证书（见 docs/standby.md）。
 	standbyCfg := agent.Clone()
-	standbyCfg.NextProtos = []string{standby.ALPN}
+	standbyCfg.NextProtos = []string{standby.ALPN, standby.AuditALPN}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{s.cert},
 		NextProtos:   []string{"h2", "http/1.1"},
 		// 按客户端声明的 ALPN 选择配置：只向节点和备用面板索要客户端证书，浏览器不会弹出证书选择框。
 		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+			auth.RecordFingerprint(hello)
 			for _, p := range hello.SupportedProtos {
 				if p == tunnel.ALPN {
 					return agent, nil
 				}
-				if p == standby.ALPN {
+				if p == standby.ALPN || p == standby.AuditALPN {
 					return standbyCfg, nil
 				}
 			}
@@ -519,6 +632,14 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 			case standby.ALPN:
 				if s.primary != nil {
 					s.primary.Serve(ctx, conn)
+				} else {
+					conn.Close()
+				}
+				return
+			case standby.AuditALPN:
+				// 审计日志的增量同步（见 docs/audit.md#备用面板）。
+				if s.primary != nil {
+					s.primary.ServeAudit(ctx, conn, s.audit, s.recordings)
 				} else {
 					conn.Close()
 				}
@@ -572,7 +693,8 @@ func (l *chanListener) Close() error {
 func (l *chanListener) Addr() net.Addr { return l.addr }
 
 // contentSecurityPolicy 只允许加载面板自己的脚本和资源。样式允许内联：终端（xterm）会插入 <style>。
-const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+// script-src 的 'wasm-unsafe-eval' 只允许编译 WebAssembly（回放终端录制的 asciinema-player 用它解析终端输出），不允许 eval。
+const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
 	"form-action 'self'; frame-ancestors 'none'"
 

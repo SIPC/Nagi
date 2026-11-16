@@ -5,37 +5,40 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 )
 
-// 活动记录：把会改变状态的接口调用记下来。只取固定的几个字段（项目、容器、节点、名称），
-// 请求里的密码、令牌、环境变量等都不会写进记录。
+// 审计记录（见 docs/audit.md）：会改变状态的接口调用、敏感查询都记进 audit.db。参数按 audit.Params 脱敏。
 
-// activityKeep 是活动记录保留的条数。
-const activityKeep = 5000
-
-// activitySkipped 是不记录的接口：查询以外的、不改变状态或太频繁的调用。
-var activitySkipped = map[string]bool{
+// auditSkipped 是不记录的接口：不改变状态或太频繁的调用。
+var auditSkipped = map[string]bool{
 	nagiv1connect.AuthServiceMeProcedure:             true,
-	nagiv1connect.AuthServiceLogoutProcedure:         true,
 	nagiv1connect.AuthServiceSetLanguageProcedure:    true,
 	nagiv1connect.SetupServiceGetSetupStateProcedure: true,
 	nagiv1connect.EnrollServiceEnrollProcedure:       true,
+	// 退出在处理函数里单独记（这时会话还在，查得到是谁）；登录在 auth 里记（成功时才知道是哪个成员）。
+	nagiv1connect.AuthServiceLogoutProcedure: true,
+	nagiv1connect.AuthServiceLoginProcedure:  true,
+	// 通行密钥登录同样在 auth 里记；取挑战不改变状态。
+	nagiv1connect.AuthServiceBeginPasskeyLoginProcedure:            true,
+	nagiv1connect.AuthServicePasskeyLoginProcedure:                 true,
+	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
 }
 
 // unauthenticatedNoise：不用登录就能调的接口里，不值得记、又能被拿来刷掉记录的失败：初始化以后的 Setup 一律失败；
-// 登录被限速拒绝（猜密码的人每次都会碰到）。登录失败本身照常记录，次数受限速约束。
+// 登录被限速拒绝（猜密码的人每次都会碰到）。登录失败在 auth 里按 IP 每小时汇总（见 auth.Service.recordLoginFailure）。
 func unauthenticatedNoise(procedure string, err error) bool {
 	if err == nil {
 		return false
@@ -44,23 +47,43 @@ func unauthenticatedNoise(procedure string, err error) bool {
 	case nagiv1connect.SetupServiceSetupProcedure:
 		return true
 	case nagiv1connect.AuthServiceLoginProcedure:
-		return connect.CodeOf(err) == connect.CodeResourceExhausted
+		return true
 	}
 	return false
 }
 
+func methodOf(procedure string) string { return procedure[strings.LastIndexByte(procedure, '/')+1:] }
+
+// activityRecorded 判断接口调用要不要记：修改类的都记，查询只记登记在 store.SensitiveReads 里的。
 func activityRecorded(procedure string) bool {
-	if activitySkipped[procedure] {
+	if auditSkipped[procedure] {
 		return false
 	}
-	i := strings.LastIndexByte(procedure, '/')
-	method := procedure[i+1:]
+	method := methodOf(procedure)
+	if store.SensitiveReads[method] {
+		return true
+	}
 	for _, p := range readOnlyPrefixes {
 		if strings.HasPrefix(method, p) {
 			return false
 		}
 	}
 	return true
+}
+
+// categoryOf 是接口方法对应的类别。
+func categoryOf(method string) string {
+	switch {
+	case method == "Login" || method == "Logout" || method == "Setup":
+		return audit.Login
+	case store.SessionActions[method]:
+		return audit.Session
+	case store.SensitiveReads[method]:
+		return audit.Read
+	case strings.HasPrefix(method, "mcp:") || method == "MCPToolDenied":
+		return audit.MCP
+	}
+	return audit.Operation
 }
 
 // activityField 读请求里的一个字符串字段，没有时返回空。
@@ -71,7 +94,7 @@ func activityField(m proto.Message, names ...string) string {
 	r := m.ProtoReflect()
 	for _, name := range names {
 		f := r.Descriptor().Fields().ByName(protoreflect.Name(name))
-		if f == nil || f.IsList() || f.IsMap() {
+		if f == nil || f.IsList() || f.IsMap() || audit.Redacted(f) {
 			continue
 		}
 		switch f.Kind() {
@@ -88,59 +111,122 @@ func activityField(m proto.Message, names ...string) string {
 	return ""
 }
 
-func (a *API) recordOperation(ctx context.Context, procedure string, req proto.Message, failure string) {
-	method := procedure[strings.LastIndexByte(procedure, '/')+1:]
-	actor := auth.Username(ctx)
-	if actor == "" {
-		actor = activityField(req, "username")
-	}
-	target := activityField(req, "container", "name", "username", "node_id", "id")
-	if id := activityField(req, "node_id"); id != "" && target == id {
-		target = a.nodeName(context.WithoutCancel(ctx), id)
-	}
-	// 部署的目标是一个列表。
+// target 从请求里找出操作的对象。
+func (a *API) target(ctx context.Context, method string, req proto.Message) (typ, id, name string) {
 	if d, ok := req.(*nagiv1.DeployRequest); ok {
+		// 部署的目标是一个列表。
 		names := make([]string, 0, len(d.GetTargets()))
 		for _, c := range d.GetTargets() {
 			names = append(names, c.GetContainer())
 		}
-		target = strings.Join(names, ", ")
+		v := strings.Join(names, ", ")
+		return "container", v, v
 	}
-	// 文件操作记下动的是哪个文件，失败的也记，这样能看出有人试过什么路径。
-	detail := failure
-	// 分组和标签改成了什么（它们决定成员的访问范围）。重命名为空表示删除。
-	if failure == "" {
-		switch m := req.(type) {
-		case *nagiv1.SetProjectGroupRequest:
-			detail = m.GetGroup()
-		case *nagiv1.SetNodeTagsRequest:
-			detail = strings.Join(m.GetTags(), ", ")
-		case *nagiv1.RenameLabelRequest:
-			detail = "→ " + m.GetNewName()
+	if v := activityField(req, "node_id"); v != "" {
+		return "node", v, a.nodeName(ctx, v)
+	}
+	if v := activityField(req, "container"); v != "" {
+		return "container", v, v
+	}
+	if v := activityField(req, "username"); v != "" {
+		return "member", v, v
+	}
+	if v := activityField(req, "user_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			if u, err := a.Q.GetUserByID(ctx, id); err == nil {
+				return "member", v, u.Username
+			}
+		}
+		return "member", v, v
+	}
+	if v := activityField(req, "name"); v != "" {
+		return "", v, v
+	}
+	if v := activityField(req, "id"); v != "" {
+		return "", v, v
+	}
+	return "", "", ""
+}
+
+// auditActor 按 ctx 里的用户和请求来源填写记录的操作者和来源。
+func auditActor(ctx context.Context, e *audit.Event) {
+	u := auth.CurrentUser(ctx)
+	m := auth.RequestMeta(ctx)
+	if u.ID != 0 {
+		e.ActorType, e.ActorID, e.ActorName = audit.ActorUser, strconv.FormatInt(u.ID, 10), u.Name
+	}
+	e.Via = audit.ViaWeb
+	if u.TokenID != 0 {
+		e.Via, e.TokenID = audit.ViaMCP, u.TokenID
+	}
+	e.Session = audit.SessionTag(u.SessionID)
+	e.IP, e.UserAgent, e.Client = m.IP, m.UserAgent, m.Client
+	if e.ParentID == 0 {
+		e.ParentID = audit.Parent(ctx)
+	}
+}
+
+// Record 写一条审计记录：操作者、来源和上级记录从 ctx 里取。
+func (a *API) Record(ctx context.Context, e audit.Event) int64 {
+	ctx = context.WithoutCancel(ctx)
+	auditActor(ctx, &e)
+	if e.Category == "" {
+		e.Category = categoryOf(e.Action)
+	}
+	return a.Audit.Record(ctx, e)
+}
+
+// recordOperation 记一次接口调用（不走 Connect 的入口也用它）。failure 为空表示成功。
+func (a *API) recordOperation(ctx context.Context, procedure string, req proto.Message, failure string) {
+	result := audit.ResultOK
+	if failure != "" {
+		result = audit.ResultFailed
+	}
+	a.recordCall(ctx, procedure, req, result, failure, 0)
+}
+
+func (a *API) recordCall(ctx context.Context, procedure string, req proto.Message, result, failure string, d time.Duration) {
+	ctx = context.WithoutCancel(ctx)
+	method := methodOf(procedure)
+	e := audit.Event{
+		Category:   categoryOf(method),
+		Action:     method,
+		ProjectID:  activityField(req, "project_id"),
+		Params:     audit.Params(req),
+		Result:     result,
+		Error:      failure,
+		DurationMS: d.Milliseconds(),
+	}
+	e.TargetType, e.TargetID, e.TargetName = a.target(ctx, method, req)
+	// 文件操作的对象是文件：路径放进对象名，失败的也记，这样能看出有人试过什么路径。
+	if path := activityField(req, "path"); path != "" && e.TargetType != "node" {
+		e.TargetType, e.TargetID = "file", path
+		if c := activityField(req, "container"); c != "" {
+			e.TargetName = c + ":" + path
+		} else {
+			e.TargetName = path
 		}
 	}
-	if path := activityField(req, "path"); path != "" {
-		detail = path
-		if failure != "" {
-			detail = path + ": " + failure
+	auditActor(ctx, &e)
+	if e.ActorName == "" {
+		e.ActorName = activityField(req, "username") // 登录、初始化时还没有会话
+		if e.ActorName != "" {
+			e.ActorType = audit.ActorUser
 		}
 	}
-	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(),
-		Kind:      "operation",
-		Actor:     clipActivity(actor, 64),
-		Action:    method,
-		ProjectID: activityField(req, "project_id"),
-		Target:    clipActivity(target, 200),
-		Detail:    clipActivity(detail, 500),
-		Failed:    boolInt(failure != ""),
-		Via:       clipActivity(auth.CurrentUser(ctx).Via, 80),
-	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-		return
+	a.Audit.Record(ctx, e)
+	if result == audit.ResultOK {
+		a.notifyChanges(ctx, method, req)
 	}
-	_ = a.Q.PruneActivityKeepSensitive(context.WithoutCancel(ctx), activityKeep)
+}
+
+// errorResult 把错误分成被拒绝（没登录、没权限）和失败。
+func errorResult(err error) string {
+	switch connect.CodeOf(err) {
+	case connect.CodePermissionDenied, connect.CodeUnauthenticated:
+		return audit.ResultDenied
+	}
+	return audit.ResultFailed
 }
 
 // activityFailure 取错误本身的说明，去掉 RPC 错误码的前缀。
@@ -171,20 +257,67 @@ func boolInt(b bool) int64 {
 	return 0
 }
 
+// readDedup 让轮询的敏感查询（GetProject 每 5 秒一次，带着环境变量的值）每个会话、每个项目每小时只记一条。
+type readDedup struct {
+	mu   sync.Mutex
+	seen map[string]time.Time
+}
+
+const readDedupWindow = time.Hour
+
+// pollingReads 是界面会轮询的敏感查询。
+var pollingReads = map[string]bool{"GetProject": true, "ListProjects": true}
+
+func (d *readDedup) first(key string, now time.Time) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.seen == nil {
+		d.seen = map[string]time.Time{}
+	}
+	if t, ok := d.seen[key]; ok && now.Sub(t) < readDedupWindow {
+		return false
+	}
+	if len(d.seen) > 10000 {
+		for k, t := range d.seen {
+			if now.Sub(t) >= readDedupWindow {
+				delete(d.seen, k)
+			}
+		}
+	}
+	d.seen[key] = now
+	return true
+}
+
 // activityLog 是记录操作的拦截器，放在登录检查之后。
 type activityLog struct{ a *API }
 
+func (l activityLog) skip(ctx context.Context, procedure string, req proto.Message, err error) bool {
+	method := methodOf(procedure)
+	if !pollingReads[method] || err != nil {
+		return false
+	}
+	u := auth.CurrentUser(ctx)
+	key := method + "\x00" + u.SessionID + "\x00" + strconv.FormatInt(u.TokenID, 10) + "\x00" + activityField(req, "project_id", "id")
+	return !l.a.reads.first(key, time.Now())
+}
+
 func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		start := time.Now()
 		res, err := next(ctx, req)
-		if procedure := req.Spec().Procedure; activityRecorded(procedure) && !unauthenticatedNoise(procedure, err) {
-			msg, _ := req.Any().(proto.Message)
-			failure := ""
-			if err != nil {
-				failure = activityFailure(err)
-			}
-			l.a.recordOperation(ctx, procedure, msg, failure)
+		procedure := req.Spec().Procedure
+		if !activityRecorded(procedure) || unauthenticatedNoise(procedure, err) {
+			return res, err
 		}
+		msg, _ := req.Any().(proto.Message)
+		if l.skip(ctx, procedure, msg, err) {
+			return res, err
+		}
+		result, failure := audit.ResultOK, ""
+		if err != nil {
+			result, failure = errorResult(err), activityFailure(err)
+		}
+		l.a.recordCall(ctx, procedure, msg, result, failure, time.Since(start))
 		return res, err
 	}
 }
@@ -198,13 +331,17 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 		if !activityRecorded(conn.Spec().Procedure) {
 			return next(ctx, conn)
 		}
+		start := time.Now()
 		w := &activityConn{StreamingHandlerConn: conn}
 		err := next(ctx, w)
-		failure := w.failure
-		if err != nil {
-			failure = activityFailure(err)
+		result, failure := audit.ResultOK, w.failure
+		if failure != "" {
+			result = audit.ResultFailed
 		}
-		l.a.recordOperation(ctx, conn.Spec().Procedure, w.req, failure)
+		if err != nil {
+			result, failure = errorResult(err), activityFailure(err)
+		}
+		l.a.recordCall(ctx, conn.Spec().Procedure, w.req, result, failure, time.Since(start))
 		return err
 	}
 }
@@ -231,74 +368,4 @@ func (c *activityConn) Send(m any) error {
 		}
 	}
 	return c.StreamingHandlerConn.Send(m)
-}
-
-// activityEntry 把一条记录转成接口返回的格式。
-func activityEntry(r store.Activity) *nagiv1.ActivityEntry {
-	return &nagiv1.ActivityEntry{
-		Id: r.ID, Time: timestamppb.New(time.Unix(r.CreatedAt, 0)), Kind: r.Kind, Actor: r.Actor, Action: r.Action,
-		ProjectId: r.ProjectID, Target: r.Target, Detail: r.Detail, Failed: r.Failed != 0, Via: r.Via,
-	}
-}
-
-// containerEventsLimit 是容器事件一次返回的条数。
-const containerEventsLimit = 20
-
-func (s *projectService) ListContainerEvents(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListActivityResponse], error) {
-	rows, err := s.Q.ListContainerActivity(ctx, store.ListContainerActivityParams{
-		ProjectID: req.Msg.GetProjectId(), Target: req.Msg.GetContainer(), Limit: containerEventsLimit,
-	})
-	if err != nil {
-		return nil, err
-	}
-	viewer := auth.CurrentUser(ctx).Role == auth.RoleViewer
-	out := &nagiv1.ListActivityResponse{}
-	for _, r := range rows {
-		e := activityEntry(r)
-		// 操作失败的详情可能带着配置里的内容（compose 报错等），只读角色只看结果。
-		if viewer && e.Kind == "operation" {
-			e.Detail = ""
-		}
-		out.Entries = append(out.Entries, e)
-	}
-	return connect.NewResponse(out), nil
-}
-
-// ListProjectEvents 是项目的活动记录。按项目核对访问范围（请求里有 project_id）；只读角色和容器事件一样看不到失败的详情。
-func (s *projectService) ListProjectEvents(ctx context.Context, req *connect.Request[nagiv1.ListProjectEventsRequest]) (*connect.Response[nagiv1.ListActivityResponse], error) {
-	m := req.Msg
-	limit := int64(m.GetLimit())
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	rows, err := s.Q.ListProjectActivity(ctx, m.GetProjectId(), m.GetContainer(), m.GetBefore(), m.GetFailedOnly(), limit)
-	if err != nil {
-		return nil, err
-	}
-	viewer := auth.CurrentUser(ctx).Role == auth.RoleViewer
-	out := &nagiv1.ListActivityResponse{}
-	for _, r := range rows {
-		e := activityEntry(r)
-		if viewer && e.Kind == "operation" {
-			e.Detail = ""
-		}
-		out.Entries = append(out.Entries, e)
-	}
-	return connect.NewResponse(out), nil
-}
-
-func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request[nagiv1.ListActivityRequest]) (*connect.Response[nagiv1.ListActivityResponse], error) {
-	limit := int64(req.Msg.GetLimit())
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	rows, err := s.Q.ListActivity(ctx, store.ListActivityParams{Kind: req.Msg.GetKind(), Before: req.Msg.GetBefore(), Limit: limit})
-	if err != nil {
-		return nil, err
-	}
-	out := &nagiv1.ListActivityResponse{}
-	for _, r := range rows {
-		out.Entries = append(out.Entries, activityEntry(r))
-	}
-	return connect.NewResponse(out), nil
 }
