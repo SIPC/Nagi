@@ -42,6 +42,8 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 		name := a.userName(ctx, m.GetId())
 		if m.GetPassword() != "" {
 			a.notify(ctx, "reset-password", i18n.Errorf("成员 %s 的密码被重置", name).Error(), "")
+		} else if m.GetClearPasskeys() {
+			a.notify(ctx, "passkey", i18n.Errorf("成员 %s 的通行密钥被清除", name).Error(), "")
 		}
 		if m.GetRole() == auth.RoleAdmin {
 			a.notify(ctx, "admin", i18n.Errorf("成员 %s 的角色设为管理员", name).Error(), "")

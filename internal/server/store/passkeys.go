@@ -71,6 +71,15 @@ func (q *Queries) UsePasskey(ctx context.Context, id, signCount, now int64) (boo
 	return n > 0, err
 }
 
+// DeleteUserPasskeys 删除成员的所有通行密钥，返回删掉的个数。
+func (q *Queries) DeleteUserPasskeys(ctx context.Context, userID int64) (int64, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM passkeys WHERE user_id = ?`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // DeletePasskey 删除成员自己的通行密钥，返回删掉的名称（没有时为空）。
 func (q *Queries) DeletePasskey(ctx context.Context, userID, id int64) (string, error) {
 	var name string

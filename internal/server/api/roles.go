@@ -111,6 +111,7 @@ func (s *settingsService) ListUsers(ctx context.Context, _ *connect.Request[nagi
 			Id: r.ID, Username: r.Username, Role: r.Role, TotpEnabled: r.TotpSecret != "",
 			CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0)), IsSelf: r.ID == auth.CurrentUser(ctx).ID, Scope: scope,
 			DisplayName: r.DisplayName, Avatar: r.Avatar, AvatarType: avatarType(r.Avatar),
+			Passkeys: s.passkeys(ctx, r.ID, s.Auth.PasskeyDomain(ctx)),
 		})
 	}
 	return connect.NewResponse(out), nil
@@ -313,6 +314,13 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	}
 	if m.GetClearTotp() {
 		if err := s.Q.ClearUserTOTP(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
+	// 通行密钥登录不要密码和验证码：别人重置密码、清除两步验证（通常是怀疑账号被盗）时一起删掉，
+	// 否则攻击者事先加的通行密钥照样能登录。
+	if m.GetPassword() != "" || m.GetClearTotp() || m.GetClearPasskeys() {
+		if _, err := s.Q.DeleteUserPasskeys(ctx, u.ID); err != nil {
 			return nil, err
 		}
 	}

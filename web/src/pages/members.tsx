@@ -49,6 +49,7 @@ function memberSummary(u: PanelUser) {
     parts.push(s.allProjects ? t.members.scope.allProjects : t.common.list([...s.projectGroups.map(t.members.scope.groupName), ...(s.projectIds.length > 0 || s.projectGroups.length === 0 ? [t.members.scope.projectCount(s.projectIds.length)] : [])]));
     parts.push(s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
   }
+  if (u.passkeys.length > 0) parts.push(t.members.passkeyCount(u.passkeys.length));
   return parts.filter(Boolean).join(" · ");
 }
 
@@ -296,7 +297,7 @@ function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: ()
   const reset = useMutation({
     mutationFn: () => settingsClient.updateUser({ id: user.id, password }),
     onSuccess: () => {
-      toast.success(t.members.passwordReset(user.username));
+      toast.success(user.passkeys.length > 0 ? t.members.passwordResetPasskeys(user.username) : t.members.passwordReset(user.username));
       onDone();
     },
   });
@@ -311,6 +312,7 @@ function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: ()
       <Field label={t.members.newPassword} htmlFor="member-new-password" hint={t.members.passwordHint}>
         <Input id="member-new-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
+      {user.passkeys.length > 0 && <p className="text-muted-foreground">{t.members.resetClearsPasskeys}</p>}
       {reset.error && <Alert>{errorMessage(reset.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>
@@ -389,8 +391,21 @@ export function MembersCard() {
                           {
                             label: t.members.clearTotp,
                             onSelect: async () => {
-                              if (await confirmAction(t.members.clearTotpConfirm(u.username), { action: t.members.clearTotp, danger: true }))
+                              const msg = u.passkeys.length > 0 ? t.members.clearTotpPasskeysConfirm(u.username) : t.members.clearTotpConfirm(u.username);
+                              if (await confirmAction(msg, { action: t.members.clearTotp, danger: true }))
                                 call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }));
+                            },
+                          },
+                        ]
+                      : []),
+                    ...(u.passkeys.length > 0 && !u.isSelf
+                      ? [
+                          {
+                            label: t.members.clearPasskeys,
+                            onSelect: async () => {
+                              const keys = t.common.list(u.passkeys.map((p) => p.name));
+                              if (await confirmAction(t.members.clearPasskeysConfirm(u.username, keys), { action: t.members.clearPasskeys, danger: true }))
+                                call(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true }));
                             },
                           },
                         ]

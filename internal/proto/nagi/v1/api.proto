@@ -431,7 +431,8 @@ service SettingsService {
   // 成员（只有管理员能用）。
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc CreateUser(CreateUserRequest) returns (PanelUser);
-  // 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+  // 修改角色、重置密码、清除两步验证、清除通行密钥。重置密码后这个用户已有的登录全部失效；
+  // 重置密码和清除两步验证时一并删除通行密钥（见 docs/panel.md#通行密钥）。
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
   // 当前用户自己的登录会话。
@@ -947,6 +948,8 @@ message PanelUser {
   string display_name = 8;
   bytes avatar = 9;
   string avatar_type = 10;
+  // 成员的通行密钥（见 docs/panel.md#通行密钥）。管理员能看到、能清除：重置密码以后，通行密钥照样能登录。
+  repeated Passkey passkeys = 11;
 }
 
 // UserScope 是成员能访问的项目和节点（见 docs/panel.md#访问范围）。管理员不受限制。
@@ -984,6 +987,8 @@ message UpdateUserRequest {
   bool clear_totp = 4;
   // 为空表示不改。
   UserScope scope = 5;
+  // 删除这个成员的所有通行密钥。重置密码、清除两步验证时也会删除。
+  bool clear_passkeys = 6;
 }
 
 message UpdateUserResponse {}

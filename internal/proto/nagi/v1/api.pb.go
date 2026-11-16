@@ -6171,9 +6171,11 @@ type PanelUser struct {
 	IsSelf bool       `protobuf:"varint,6,opt,name=is_self,json=isSelf,proto3" json:"is_self,omitempty"`
 	Scope  *UserScope `protobuf:"bytes,7,opt,name=scope,proto3" json:"scope,omitempty"`
 	// 显示名称和头像（见 MeResponse），没有设置时为空。
-	DisplayName   string `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Avatar        []byte `protobuf:"bytes,9,opt,name=avatar,proto3" json:"avatar,omitempty"`
-	AvatarType    string `protobuf:"bytes,10,opt,name=avatar_type,json=avatarType,proto3" json:"avatar_type,omitempty"`
+	DisplayName string `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Avatar      []byte `protobuf:"bytes,9,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	AvatarType  string `protobuf:"bytes,10,opt,name=avatar_type,json=avatarType,proto3" json:"avatar_type,omitempty"`
+	// 成员的通行密钥（见 docs/panel.md#通行密钥）。管理员能看到、能清除：重置密码以后，通行密钥照样能登录。
+	Passkeys      []*Passkey `protobuf:"bytes,11,rep,name=passkeys,proto3" json:"passkeys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6276,6 +6278,13 @@ func (x *PanelUser) GetAvatarType() string {
 		return x.AvatarType
 	}
 	return ""
+}
+
+func (x *PanelUser) GetPasskeys() []*Passkey {
+	if x != nil {
+		return x.Passkeys
+	}
+	return nil
 }
 
 // UserScope 是成员能访问的项目和节点（见 docs/panel.md#访问范围）。管理员不受限制。
@@ -6523,7 +6532,9 @@ type UpdateUserRequest struct {
 	Password  string `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
 	ClearTotp bool   `protobuf:"varint,4,opt,name=clear_totp,json=clearTotp,proto3" json:"clear_totp,omitempty"`
 	// 为空表示不改。
-	Scope         *UserScope `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	Scope *UserScope `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	// 删除这个成员的所有通行密钥。重置密码、清除两步验证时也会删除。
+	ClearPasskeys bool `protobuf:"varint,6,opt,name=clear_passkeys,json=clearPasskeys,proto3" json:"clear_passkeys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6591,6 +6602,13 @@ func (x *UpdateUserRequest) GetScope() *UserScope {
 		return x.Scope
 	}
 	return nil
+}
+
+func (x *UpdateUserRequest) GetClearPasskeys() bool {
+	if x != nil {
+		return x.ClearPasskeys
+	}
+	return false
 }
 
 type UpdateUserResponse struct {
@@ -12966,7 +12984,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1c\n" +
 	"\tconnected\x18\x05 \x01(\bR\tconnected\x127\n" +
-	"\tlast_sync\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\"\xc8\x02\n" +
+	"\tlast_sync\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\"\xf6\x02\n" +
 	"\tPanelUser\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x12\n" +
@@ -12980,7 +12998,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x06avatar\x18\t \x01(\fR\x06avatar\x12\x1f\n" +
 	"\vavatar_type\x18\n" +
 	" \x01(\tR\n" +
-	"avatarType\"\xcb\x01\n" +
+	"avatarType\x12,\n" +
+	"\bpasskeys\x18\v \x03(\v2\x10.nagi.v1.PasskeyR\bpasskeys\"\xcb\x01\n" +
 	"\tUserScope\x12!\n" +
 	"\fall_projects\x18\x01 \x01(\bR\vallProjects\x12\x1b\n" +
 	"\tall_nodes\x18\x02 \x01(\bR\ballNodes\x12\x1f\n" +
@@ -12996,14 +13015,15 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1f\n" +
 	"\bpassword\x18\x02 \x01(\tB\x03\x80\x01\x01R\bpassword\x12\x12\n" +
 	"\x04role\x18\x03 \x01(\tR\x04role\x12(\n" +
-	"\x05scope\x18\x04 \x01(\v2\x12.nagi.v1.UserScopeR\x05scope\"\xa1\x01\n" +
+	"\x05scope\x18\x04 \x01(\v2\x12.nagi.v1.UserScopeR\x05scope\"\xc8\x01\n" +
 	"\x11UpdateUserRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1f\n" +
 	"\bpassword\x18\x03 \x01(\tB\x03\x80\x01\x01R\bpassword\x12\x1d\n" +
 	"\n" +
 	"clear_totp\x18\x04 \x01(\bR\tclearTotp\x12(\n" +
-	"\x05scope\x18\x05 \x01(\v2\x12.nagi.v1.UserScopeR\x05scope\"\x14\n" +
+	"\x05scope\x18\x05 \x01(\v2\x12.nagi.v1.UserScopeR\x05scope\x12%\n" +
+	"\x0eclear_passkeys\x18\x06 \x01(\bR\rclearPasskeys\"\x14\n" +
 	"\x12UpdateUserResponse\"#\n" +
 	"\x11DeleteUserRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
@@ -13969,377 +13989,378 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	225, // 42: nagi.v1.StandbyPanel.last_sync:type_name -> google.protobuf.Timestamp
 	225, // 43: nagi.v1.PanelUser.created_at:type_name -> google.protobuf.Timestamp
 	119, // 44: nagi.v1.PanelUser.scope:type_name -> nagi.v1.UserScope
-	118, // 45: nagi.v1.ListUsersResponse.users:type_name -> nagi.v1.PanelUser
-	119, // 46: nagi.v1.CreateUserRequest.scope:type_name -> nagi.v1.UserScope
-	119, // 47: nagi.v1.UpdateUserRequest.scope:type_name -> nagi.v1.UserScope
-	225, // 48: nagi.v1.LoginSession.created_at:type_name -> google.protobuf.Timestamp
-	225, // 49: nagi.v1.LoginSession.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 50: nagi.v1.LoginSession.last_seen:type_name -> google.protobuf.Timestamp
-	127, // 51: nagi.v1.ListSessionsResponse.sessions:type_name -> nagi.v1.LoginSession
-	225, // 52: nagi.v1.ActivityEntry.time:type_name -> google.protobuf.Timestamp
-	133, // 53: nagi.v1.ListActivityResponse.entries:type_name -> nagi.v1.ActivityEntry
-	225, // 54: nagi.v1.CheckPanelUpdateResponse.checked_at:type_name -> google.protobuf.Timestamp
-	143, // 55: nagi.v1.GetPanelReleaseNotesResponse.releases:type_name -> nagi.v1.ReleaseNotes
-	225, // 56: nagi.v1.UpdateState.started_at:type_name -> google.protobuf.Timestamp
-	147, // 57: nagi.v1.GetUpdateStatusResponse.panel:type_name -> nagi.v1.UpdateState
-	224, // 58: nagi.v1.GetUpdateStatusResponse.nodes:type_name -> nagi.v1.GetUpdateStatusResponse.NodesEntry
-	235, // 59: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
-	236, // 60: nagi.v1.CreateProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
-	237, // 61: nagi.v1.CreateProjectRequest.container:type_name -> nagi.v1.ContainerConfig
-	236, // 62: nagi.v1.UpdateProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
-	238, // 63: nagi.v1.SaveSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
-	239, // 64: nagi.v1.SaveSharedEnvResponse.project:type_name -> nagi.v1.Project
-	237, // 65: nagi.v1.AddContainerRequest.config:type_name -> nagi.v1.ContainerConfig
-	237, // 66: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ContainerConfig
-	167, // 67: nagi.v1.DeployRequest.targets:type_name -> nagi.v1.DeployTarget
-	240, // 68: nagi.v1.ListVersionsResponse.versions:type_name -> nagi.v1.Version
-	241, // 69: nagi.v1.ListDeploymentsResponse.deployments:type_name -> nagi.v1.Deployment
-	242, // 70: nagi.v1.SaveRouteRequest.route:type_name -> nagi.v1.Exposure
-	242, // 71: nagi.v1.CheckDomainsRequest.routes:type_name -> nagi.v1.Exposure
-	180, // 72: nagi.v1.CheckDomainsResponse.domains:type_name -> nagi.v1.DomainCheck
-	181, // 73: nagi.v1.DomainCheck.entries:type_name -> nagi.v1.DomainEntryCheck
-	225, // 74: nagi.v1.DomainEntryCheck.cert_not_after:type_name -> google.protobuf.Timestamp
-	225, // 75: nagi.v1.AuditEvent.time:type_name -> google.protobuf.Timestamp
-	225, // 76: nagi.v1.AuditFilter.from:type_name -> google.protobuf.Timestamp
-	225, // 77: nagi.v1.AuditFilter.to:type_name -> google.protobuf.Timestamp
-	188, // 78: nagi.v1.ListAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
-	187, // 79: nagi.v1.ListAuditEventsResponse.events:type_name -> nagi.v1.AuditEvent
-	187, // 80: nagi.v1.GetAuditEventResponse.event:type_name -> nagi.v1.AuditEvent
-	187, // 81: nagi.v1.GetAuditEventResponse.parent:type_name -> nagi.v1.AuditEvent
-	187, // 82: nagi.v1.GetAuditEventResponse.children:type_name -> nagi.v1.AuditEvent
-	188, // 83: nagi.v1.ExportAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
-	207, // 84: nagi.v1.AuditSettings.sinks:type_name -> nagi.v1.AuditSink
-	211, // 85: nagi.v1.AuditSettings.chain:type_name -> nagi.v1.AuditChainStatus
-	208, // 86: nagi.v1.AuditSink.headers:type_name -> nagi.v1.AuditSinkHeader
-	225, // 87: nagi.v1.AuditSink.last_success:type_name -> google.protobuf.Timestamp
-	225, // 88: nagi.v1.AuditChainStatus.verified_at:type_name -> google.protobuf.Timestamp
-	225, // 89: nagi.v1.AuditChainStatus.anchor_at:type_name -> google.protobuf.Timestamp
-	225, // 90: nagi.v1.Passkey.created_at:type_name -> google.protobuf.Timestamp
-	225, // 91: nagi.v1.Passkey.last_used_at:type_name -> google.protobuf.Timestamp
-	147, // 92: nagi.v1.GetUpdateStatusResponse.NodesEntry.value:type_name -> nagi.v1.UpdateState
-	0,   // 93: nagi.v1.SetupService.GetSetupState:input_type -> nagi.v1.GetSetupStateRequest
-	2,   // 94: nagi.v1.SetupService.Setup:input_type -> nagi.v1.SetupRequest
-	8,   // 95: nagi.v1.AuthService.Login:input_type -> nagi.v1.LoginRequest
-	12,  // 96: nagi.v1.AuthService.Logout:input_type -> nagi.v1.LogoutRequest
-	14,  // 97: nagi.v1.AuthService.Me:input_type -> nagi.v1.MeRequest
-	16,  // 98: nagi.v1.AuthService.Elevate:input_type -> nagi.v1.ElevateRequest
-	9,   // 99: nagi.v1.AuthService.ChangePassword:input_type -> nagi.v1.ChangePasswordRequest
-	20,  // 100: nagi.v1.AuthService.SetLanguage:input_type -> nagi.v1.SetLanguageRequest
-	18,  // 101: nagi.v1.AuthService.UpdateProfile:input_type -> nagi.v1.UpdateProfileRequest
-	4,   // 102: nagi.v1.AuthService.GetOAuthRequest:input_type -> nagi.v1.OAuthRequest
-	6,   // 103: nagi.v1.AuthService.ApproveOAuth:input_type -> nagi.v1.ApproveOAuthRequest
-	195, // 104: nagi.v1.AuthService.RegisterSessionKey:input_type -> nagi.v1.RegisterSessionKeyRequest
-	197, // 105: nagi.v1.AuthService.RotateSession:input_type -> nagi.v1.RotateSessionRequest
-	199, // 106: nagi.v1.AuthService.Reverify:input_type -> nagi.v1.ReverifyRequest
-	215, // 107: nagi.v1.AuthService.BeginPasskeyLogin:input_type -> nagi.v1.BeginPasskeyLoginRequest
-	217, // 108: nagi.v1.AuthService.PasskeyLogin:input_type -> nagi.v1.PasskeyLoginRequest
-	102, // 109: nagi.v1.NodeService.ListNodes:input_type -> nagi.v1.ListNodesRequest
-	243, // 110: nagi.v1.NodeService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
-	243, // 111: nagi.v1.NodeService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
-	244, // 112: nagi.v1.NodeService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
-	245, // 113: nagi.v1.NodeService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
-	243, // 114: nagi.v1.NodeService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
-	243, // 115: nagi.v1.NodeService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
-	246, // 116: nagi.v1.NodeService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
-	46,  // 117: nagi.v1.NodeService.ListNodePanels:input_type -> nagi.v1.ListNodePanelsRequest
-	52,  // 118: nagi.v1.NodeService.HandoverNodes:input_type -> nagi.v1.HandoverNodesRequest
-	55,  // 119: nagi.v1.NodeService.RemoveNodePanel:input_type -> nagi.v1.RemoveNodePanelRequest
-	26,  // 120: nagi.v1.NodeService.ListNodeReplicas:input_type -> nagi.v1.NodeRef
-	50,  // 121: nagi.v1.NodeService.DeleteNodeReplica:input_type -> nagi.v1.DeleteNodeReplicaRequest
-	36,  // 122: nagi.v1.NodeService.GetNodeMesh:input_type -> nagi.v1.GetNodeMeshRequest
-	37,  // 123: nagi.v1.NodeService.PingNodeMesh:input_type -> nagi.v1.PingNodeMeshRequest
-	37,  // 124: nagi.v1.NodeService.TestNodeMeshSpeed:input_type -> nagi.v1.PingNodeMeshRequest
-	38,  // 125: nagi.v1.NodeService.SetNodeMeshOptions:input_type -> nagi.v1.SetNodeMeshOptionsRequest
-	39,  // 126: nagi.v1.NodeService.GetPanelMesh:input_type -> nagi.v1.GetPanelMeshRequest
-	40,  // 127: nagi.v1.NodeService.UpgradeNode:input_type -> nagi.v1.UpgradeNodeRequest
-	41,  // 128: nagi.v1.NodeService.UpgradeAllNodes:input_type -> nagi.v1.UpgradeAllNodesRequest
-	42,  // 129: nagi.v1.NodeService.CancelNodeUpgrade:input_type -> nagi.v1.CancelNodeUpgradeRequest
-	26,  // 130: nagi.v1.NodeService.GetNodeMirrors:input_type -> nagi.v1.NodeRef
-	45,  // 131: nagi.v1.NodeService.SetNodeMirrors:input_type -> nagi.v1.SetNodeMirrorsRequest
-	26,  // 132: nagi.v1.NodeService.ReclaimNodeSnapshots:input_type -> nagi.v1.NodeRef
-	27,  // 133: nagi.v1.NodeService.SetNodeProjectsRoot:input_type -> nagi.v1.SetNodeProjectsRootRequest
-	35,  // 134: nagi.v1.NodeService.CreateEnrollCommand:input_type -> nagi.v1.CreateEnrollCommandRequest
-	32,  // 135: nagi.v1.NodeService.QueryNodeMetrics:input_type -> nagi.v1.QueryNodeMetricsRequest
-	26,  // 136: nagi.v1.NodeService.GetNodeStorage:input_type -> nagi.v1.NodeRef
-	33,  // 137: nagi.v1.NodeService.RemoveNode:input_type -> nagi.v1.RemoveNodeRequest
-	28,  // 138: nagi.v1.NodeService.ApproveNode:input_type -> nagi.v1.ApproveNodeRequest
-	30,  // 139: nagi.v1.NodeService.RenameNode:input_type -> nagi.v1.RenameNodeRequest
-	100, // 140: nagi.v1.NodeService.AdoptNodeContainer:input_type -> nagi.v1.AdoptNodeContainerRequest
-	95,  // 141: nagi.v1.NodeService.AdoptStaleProject:input_type -> nagi.v1.AdoptStaleProjectRequest
-	97,  // 142: nagi.v1.NodeService.ConfirmPendingHA:input_type -> nagi.v1.ConfirmPendingHARequest
-	92,  // 143: nagi.v1.NodeService.SetNodeAlertRules:input_type -> nagi.v1.SetNodeAlertRulesRequest
-	243, // 144: nagi.v1.NodeService.InspectComposeDir:input_type -> nagi.v1.NodeFileRef
-	22,  // 145: nagi.v1.NodeService.SetNodeTags:input_type -> nagi.v1.SetNodeTagsRequest
-	24,  // 146: nagi.v1.NodeService.RenameNodeTag:input_type -> nagi.v1.RenameLabelRequest
-	212, // 147: nagi.v1.NodeService.IsolateNode:input_type -> nagi.v1.IsolateNodeRequest
-	212, // 148: nagi.v1.NodeService.UnisolateNode:input_type -> nagi.v1.IsolateNodeRequest
-	86,  // 149: nagi.v1.SettingsService.GetSettings:input_type -> nagi.v1.GetSettingsRequest
-	89,  // 150: nagi.v1.SettingsService.UpdateSettings:input_type -> nagi.v1.UpdateSettingsRequest
-	87,  // 151: nagi.v1.SettingsService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainApiRequest
-	79,  // 152: nagi.v1.SettingsService.GetAlertConfig:input_type -> nagi.v1.GetAlertConfigRequest
-	81,  // 153: nagi.v1.SettingsService.UpdateAlertConfig:input_type -> nagi.v1.UpdateAlertConfigRequest
-	83,  // 154: nagi.v1.SettingsService.TestAlertChannel:input_type -> nagi.v1.TestAlertChannelRequest
-	72,  // 155: nagi.v1.SettingsService.CreateInvite:input_type -> nagi.v1.CreateInviteRequest
-	74,  // 156: nagi.v1.SettingsService.ListInvites:input_type -> nagi.v1.ListInvitesRequest
-	77,  // 157: nagi.v1.SettingsService.RevokeInvite:input_type -> nagi.v1.RevokeInviteRequest
-	113, // 158: nagi.v1.SettingsService.CreateStandbyCode:input_type -> nagi.v1.CreateStandbyCodeRequest
-	115, // 159: nagi.v1.SettingsService.GetStandbys:input_type -> nagi.v1.GetStandbysRequest
-	135, // 160: nagi.v1.SettingsService.RemoveStandby:input_type -> nagi.v1.RemoveStandbyRequest
-	137, // 161: nagi.v1.SettingsService.PromoteStandby:input_type -> nagi.v1.PromoteStandbyRequest
-	139, // 162: nagi.v1.SettingsService.CheckPanelUpdate:input_type -> nagi.v1.CheckPanelUpdateRequest
-	144, // 163: nagi.v1.SettingsService.UpdatePanel:input_type -> nagi.v1.UpdatePanelRequest
-	141, // 164: nagi.v1.SettingsService.GetPanelReleaseNotes:input_type -> nagi.v1.GetPanelReleaseNotesRequest
-	146, // 165: nagi.v1.SettingsService.GetUpdateStatus:input_type -> nagi.v1.GetUpdateStatusRequest
-	65,  // 166: nagi.v1.SettingsService.GetSecurity:input_type -> nagi.v1.GetSecurityRequest
-	67,  // 167: nagi.v1.SettingsService.BeginTOTP:input_type -> nagi.v1.BeginTOTPRequest
-	69,  // 168: nagi.v1.SettingsService.EnableTOTP:input_type -> nagi.v1.EnableTOTPRequest
-	70,  // 169: nagi.v1.SettingsService.DisableTOTP:input_type -> nagi.v1.DisableTOTPRequest
-	71,  // 170: nagi.v1.SettingsService.SetEntrance:input_type -> nagi.v1.SetEntranceRequest
-	132, // 171: nagi.v1.SettingsService.ListActivity:input_type -> nagi.v1.ListActivityRequest
-	120, // 172: nagi.v1.SettingsService.ListUsers:input_type -> nagi.v1.ListUsersRequest
-	122, // 173: nagi.v1.SettingsService.CreateUser:input_type -> nagi.v1.CreateUserRequest
-	123, // 174: nagi.v1.SettingsService.UpdateUser:input_type -> nagi.v1.UpdateUserRequest
-	125, // 175: nagi.v1.SettingsService.DeleteUser:input_type -> nagi.v1.DeleteUserRequest
-	128, // 176: nagi.v1.SettingsService.ListSessions:input_type -> nagi.v1.ListSessionsRequest
-	130, // 177: nagi.v1.SettingsService.RevokeSession:input_type -> nagi.v1.RevokeSessionRequest
-	59,  // 178: nagi.v1.SettingsService.ListAccessTokens:input_type -> nagi.v1.ListAccessTokensRequest
-	61,  // 179: nagi.v1.SettingsService.CreateAccessToken:input_type -> nagi.v1.CreateAccessTokenRequest
-	63,  // 180: nagi.v1.SettingsService.RevokeAccessToken:input_type -> nagi.v1.RevokeAccessTokenRequest
-	189, // 181: nagi.v1.SettingsService.ListAuditEvents:input_type -> nagi.v1.ListAuditEventsRequest
-	191, // 182: nagi.v1.SettingsService.GetAuditEvent:input_type -> nagi.v1.GetAuditEventRequest
-	193, // 183: nagi.v1.SettingsService.ExportAuditEvents:input_type -> nagi.v1.ExportAuditEventsRequest
-	201, // 184: nagi.v1.SettingsService.GetSessionPolicy:input_type -> nagi.v1.GetSessionPolicyRequest
-	202, // 185: nagi.v1.SettingsService.SetSessionPolicy:input_type -> nagi.v1.SessionPolicy
-	203, // 186: nagi.v1.SettingsService.GetRecording:input_type -> nagi.v1.GetRecordingRequest
-	205, // 187: nagi.v1.SettingsService.GetAuditSettings:input_type -> nagi.v1.GetAuditSettingsRequest
-	206, // 188: nagi.v1.SettingsService.SetAuditSettings:input_type -> nagi.v1.AuditSettings
-	207, // 189: nagi.v1.SettingsService.TestAuditSink:input_type -> nagi.v1.AuditSink
-	210, // 190: nagi.v1.SettingsService.VerifyAudit:input_type -> nagi.v1.VerifyAuditRequest
-	218, // 191: nagi.v1.SettingsService.BeginPasskeyRegistration:input_type -> nagi.v1.BeginPasskeyRegistrationRequest
-	220, // 192: nagi.v1.SettingsService.AddPasskey:input_type -> nagi.v1.AddPasskeyRequest
-	221, // 193: nagi.v1.SettingsService.DeletePasskey:input_type -> nagi.v1.DeletePasskeyRequest
-	222, // 194: nagi.v1.SettingsService.GetAdminNetworks:input_type -> nagi.v1.GetAdminNetworksRequest
-	223, // 195: nagi.v1.SettingsService.SetAdminNetworks:input_type -> nagi.v1.AdminNetworks
-	153, // 196: nagi.v1.ProjectService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
-	155, // 197: nagi.v1.ProjectService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
-	150, // 198: nagi.v1.ProjectService.GetProject:input_type -> nagi.v1.ProjectRef
-	156, // 199: nagi.v1.ProjectService.UpdateProjectSettings:input_type -> nagi.v1.UpdateProjectSettingsRequest
-	157, // 200: nagi.v1.ProjectService.SetProjectGroup:input_type -> nagi.v1.SetProjectGroupRequest
-	24,  // 201: nagi.v1.ProjectService.RenameProjectGroup:input_type -> nagi.v1.RenameLabelRequest
-	158, // 202: nagi.v1.ProjectService.SaveSharedEnv:input_type -> nagi.v1.SaveSharedEnvRequest
-	151, // 203: nagi.v1.ProjectService.DiscardSharedEnv:input_type -> nagi.v1.ProjectRevisionRef
-	160, // 204: nagi.v1.ProjectService.DeleteProject:input_type -> nagi.v1.DeleteProjectRequest
-	164, // 205: nagi.v1.ProjectService.AddContainer:input_type -> nagi.v1.AddContainerRequest
-	163, // 206: nagi.v1.ProjectService.ImportComposeDir:input_type -> nagi.v1.ImportComposeDirRequest
-	165, // 207: nagi.v1.ProjectService.DeleteContainer:input_type -> nagi.v1.DeleteContainerApiRequest
-	247, // 208: nagi.v1.ProjectService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
-	166, // 209: nagi.v1.ProjectService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
-	152, // 210: nagi.v1.ProjectService.DiscardDraft:input_type -> nagi.v1.ContainerRevisionRef
-	168, // 211: nagi.v1.ProjectService.Deploy:input_type -> nagi.v1.DeployRequest
-	248, // 212: nagi.v1.ProjectService.ListVersions:input_type -> nagi.v1.ContainerRef
-	248, // 213: nagi.v1.ProjectService.ListContainerEvents:input_type -> nagi.v1.ContainerRef
-	186, // 214: nagi.v1.ProjectService.ListProjectEvents:input_type -> nagi.v1.ListProjectEventsRequest
-	170, // 215: nagi.v1.ProjectService.Rollback:input_type -> nagi.v1.RollbackRequest
-	150, // 216: nagi.v1.ProjectService.ListDeployments:input_type -> nagi.v1.ProjectRef
-	172, // 217: nagi.v1.ProjectService.RestoreDeployment:input_type -> nagi.v1.RestoreDeploymentRequest
-	173, // 218: nagi.v1.ProjectService.StreamLogs:input_type -> nagi.v1.StreamLogsApiRequest
-	174, // 219: nagi.v1.ProjectService.SaveRoute:input_type -> nagi.v1.SaveRouteRequest
-	175, // 220: nagi.v1.ProjectService.DeleteRoute:input_type -> nagi.v1.DeleteRouteRequest
-	178, // 221: nagi.v1.ProjectService.CheckDomains:input_type -> nagi.v1.CheckDomainsRequest
-	176, // 222: nagi.v1.ProjectService.RetryDomainCert:input_type -> nagi.v1.RetryDomainCertRequest
-	104, // 223: nagi.v1.ProjectService.SetBackupNodes:input_type -> nagi.v1.SetBackupNodesRequest
-	108, // 224: nagi.v1.ProjectService.SetContainerDisplayName:input_type -> nagi.v1.SetContainerDisplayNameRequest
-	106, // 225: nagi.v1.ProjectService.SetContainerAlertRules:input_type -> nagi.v1.SetContainerAlertRulesRequest
-	107, // 226: nagi.v1.ProjectService.SetContainerSnapshotSchedule:input_type -> nagi.v1.SetContainerSnapshotScheduleRequest
-	105, // 227: nagi.v1.ProjectService.SyncBackup:input_type -> nagi.v1.BackupNodeRef
-	105, // 228: nagi.v1.ProjectService.ListBackupSnapshots:input_type -> nagi.v1.BackupNodeRef
-	111, // 229: nagi.v1.ProjectService.RestoreFromBackup:input_type -> nagi.v1.RestoreFromBackupRequest
-	112, // 230: nagi.v1.ProjectService.MigrateContainer:input_type -> nagi.v1.MoveContainerRequest
-	112, // 231: nagi.v1.ProjectService.RedeployElsewhere:input_type -> nagi.v1.MoveContainerRequest
-	109, // 232: nagi.v1.ProjectService.SetFailover:input_type -> nagi.v1.SetFailoverApiRequest
-	248, // 233: nagi.v1.ProjectService.ClearFailover:input_type -> nagi.v1.ContainerRef
-	110, // 234: nagi.v1.ProjectService.ChangeWitness:input_type -> nagi.v1.ChangeWitnessRequest
-	248, // 235: nagi.v1.ProjectService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
-	149, // 236: nagi.v1.ProjectService.ConnectProject:input_type -> nagi.v1.ConnectProjectRequest
-	149, // 237: nagi.v1.ProjectService.DisconnectProject:input_type -> nagi.v1.ConnectProjectRequest
-	248, // 238: nagi.v1.ProjectService.ListVolumes:input_type -> nagi.v1.ContainerRef
-	249, // 239: nagi.v1.ProjectService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
-	249, // 240: nagi.v1.ProjectService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	249, // 241: nagi.v1.ProjectService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
-	249, // 242: nagi.v1.ProjectService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	248, // 243: nagi.v1.ProjectService.ListSnapshots:input_type -> nagi.v1.ContainerRef
-	248, // 244: nagi.v1.ProjectService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
-	250, // 245: nagi.v1.ProjectService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	250, // 246: nagi.v1.ProjectService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	248, // 247: nagi.v1.ProjectService.GetBackupKey:input_type -> nagi.v1.ContainerRef
-	150, // 248: nagi.v1.ProjectService.ListRegistries:input_type -> nagi.v1.ProjectRef
-	184, // 249: nagi.v1.ProjectService.LoginRegistry:input_type -> nagi.v1.LoginRegistryApiRequest
-	185, // 250: nagi.v1.ProjectService.LogoutRegistry:input_type -> nagi.v1.LogoutRegistryRequest
-	150, // 251: nagi.v1.ProjectService.CheckImages:input_type -> nagi.v1.ProjectRef
-	1,   // 252: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
-	3,   // 253: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
-	11,  // 254: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
-	13,  // 255: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
-	15,  // 256: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
-	17,  // 257: nagi.v1.AuthService.Elevate:output_type -> nagi.v1.ElevateResponse
-	10,  // 258: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
-	21,  // 259: nagi.v1.AuthService.SetLanguage:output_type -> nagi.v1.SetLanguageResponse
-	19,  // 260: nagi.v1.AuthService.UpdateProfile:output_type -> nagi.v1.UpdateProfileResponse
-	5,   // 261: nagi.v1.AuthService.GetOAuthRequest:output_type -> nagi.v1.GetOAuthRequestResponse
-	7,   // 262: nagi.v1.AuthService.ApproveOAuth:output_type -> nagi.v1.ApproveOAuthResponse
-	196, // 263: nagi.v1.AuthService.RegisterSessionKey:output_type -> nagi.v1.RegisterSessionKeyResponse
-	198, // 264: nagi.v1.AuthService.RotateSession:output_type -> nagi.v1.RotateSessionResponse
-	200, // 265: nagi.v1.AuthService.Reverify:output_type -> nagi.v1.ReverifyResponse
-	216, // 266: nagi.v1.AuthService.BeginPasskeyLogin:output_type -> nagi.v1.PasskeyChallenge
-	11,  // 267: nagi.v1.AuthService.PasskeyLogin:output_type -> nagi.v1.LoginResponse
-	103, // 268: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
-	251, // 269: nagi.v1.NodeService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
-	252, // 270: nagi.v1.NodeService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
-	253, // 271: nagi.v1.NodeService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
-	254, // 272: nagi.v1.NodeService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
-	254, // 273: nagi.v1.NodeService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
-	255, // 274: nagi.v1.NodeService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
-	253, // 275: nagi.v1.NodeService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
-	47,  // 276: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
-	53,  // 277: nagi.v1.NodeService.HandoverNodes:output_type -> nagi.v1.HandoverNodesResponse
-	56,  // 278: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
-	48,  // 279: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListNodeReplicasResponse
-	51,  // 280: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteNodeReplicaResponse
-	256, // 281: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
-	257, // 282: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
-	258, // 283: nagi.v1.NodeService.TestNodeMeshSpeed:output_type -> nagi.v1.MeshSpeedResponse
-	226, // 284: nagi.v1.NodeService.SetNodeMeshOptions:output_type -> nagi.v1.MeshOptions
-	256, // 285: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
-	259, // 286: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
-	44,  // 287: nagi.v1.NodeService.UpgradeAllNodes:output_type -> nagi.v1.UpgradeAllNodesResponse
-	43,  // 288: nagi.v1.NodeService.CancelNodeUpgrade:output_type -> nagi.v1.CancelNodeUpgradeResponse
-	260, // 289: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
-	260, // 290: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
-	261, // 291: nagi.v1.NodeService.ReclaimNodeSnapshots:output_type -> nagi.v1.DeployEvent
-	262, // 292: nagi.v1.NodeService.SetNodeProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
-	57,  // 293: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
-	263, // 294: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	264, // 295: nagi.v1.NodeService.GetNodeStorage:output_type -> nagi.v1.NodeStorage
-	34,  // 296: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
-	29,  // 297: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
-	31,  // 298: nagi.v1.NodeService.RenameNode:output_type -> nagi.v1.RenameNodeResponse
-	101, // 299: nagi.v1.NodeService.AdoptNodeContainer:output_type -> nagi.v1.AdoptNodeContainerResponse
-	96,  // 300: nagi.v1.NodeService.AdoptStaleProject:output_type -> nagi.v1.AdoptStaleProjectResponse
-	98,  // 301: nagi.v1.NodeService.ConfirmPendingHA:output_type -> nagi.v1.ConfirmPendingHAResponse
-	93,  // 302: nagi.v1.NodeService.SetNodeAlertRules:output_type -> nagi.v1.SetNodeAlertRulesResponse
-	162, // 303: nagi.v1.NodeService.InspectComposeDir:output_type -> nagi.v1.ComposeDirPreview
-	23,  // 304: nagi.v1.NodeService.SetNodeTags:output_type -> nagi.v1.SetNodeTagsResponse
-	25,  // 305: nagi.v1.NodeService.RenameNodeTag:output_type -> nagi.v1.RenameLabelResponse
-	213, // 306: nagi.v1.NodeService.IsolateNode:output_type -> nagi.v1.IsolateNodeResponse
-	213, // 307: nagi.v1.NodeService.UnisolateNode:output_type -> nagi.v1.IsolateNodeResponse
-	88,  // 308: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
-	90,  // 309: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
-	90,  // 310: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
-	80,  // 311: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
-	82,  // 312: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
-	84,  // 313: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
-	73,  // 314: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
-	76,  // 315: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
-	78,  // 316: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
-	114, // 317: nagi.v1.SettingsService.CreateStandbyCode:output_type -> nagi.v1.CreateStandbyCodeResponse
-	116, // 318: nagi.v1.SettingsService.GetStandbys:output_type -> nagi.v1.GetStandbysResponse
-	136, // 319: nagi.v1.SettingsService.RemoveStandby:output_type -> nagi.v1.RemoveStandbyResponse
-	138, // 320: nagi.v1.SettingsService.PromoteStandby:output_type -> nagi.v1.PromoteStandbyResponse
-	140, // 321: nagi.v1.SettingsService.CheckPanelUpdate:output_type -> nagi.v1.CheckPanelUpdateResponse
-	145, // 322: nagi.v1.SettingsService.UpdatePanel:output_type -> nagi.v1.UpdatePanelResponse
-	142, // 323: nagi.v1.SettingsService.GetPanelReleaseNotes:output_type -> nagi.v1.GetPanelReleaseNotesResponse
-	148, // 324: nagi.v1.SettingsService.GetUpdateStatus:output_type -> nagi.v1.GetUpdateStatusResponse
-	66,  // 325: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
-	68,  // 326: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
-	66,  // 327: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
-	66,  // 328: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
-	66,  // 329: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
-	134, // 330: nagi.v1.SettingsService.ListActivity:output_type -> nagi.v1.ListActivityResponse
-	121, // 331: nagi.v1.SettingsService.ListUsers:output_type -> nagi.v1.ListUsersResponse
-	118, // 332: nagi.v1.SettingsService.CreateUser:output_type -> nagi.v1.PanelUser
-	124, // 333: nagi.v1.SettingsService.UpdateUser:output_type -> nagi.v1.UpdateUserResponse
-	126, // 334: nagi.v1.SettingsService.DeleteUser:output_type -> nagi.v1.DeleteUserResponse
-	129, // 335: nagi.v1.SettingsService.ListSessions:output_type -> nagi.v1.ListSessionsResponse
-	131, // 336: nagi.v1.SettingsService.RevokeSession:output_type -> nagi.v1.RevokeSessionResponse
-	60,  // 337: nagi.v1.SettingsService.ListAccessTokens:output_type -> nagi.v1.ListAccessTokensResponse
-	62,  // 338: nagi.v1.SettingsService.CreateAccessToken:output_type -> nagi.v1.CreateAccessTokenResponse
-	64,  // 339: nagi.v1.SettingsService.RevokeAccessToken:output_type -> nagi.v1.RevokeAccessTokenResponse
-	190, // 340: nagi.v1.SettingsService.ListAuditEvents:output_type -> nagi.v1.ListAuditEventsResponse
-	192, // 341: nagi.v1.SettingsService.GetAuditEvent:output_type -> nagi.v1.GetAuditEventResponse
-	194, // 342: nagi.v1.SettingsService.ExportAuditEvents:output_type -> nagi.v1.ExportAuditEventsChunk
-	202, // 343: nagi.v1.SettingsService.GetSessionPolicy:output_type -> nagi.v1.SessionPolicy
-	202, // 344: nagi.v1.SettingsService.SetSessionPolicy:output_type -> nagi.v1.SessionPolicy
-	204, // 345: nagi.v1.SettingsService.GetRecording:output_type -> nagi.v1.RecordingChunk
-	206, // 346: nagi.v1.SettingsService.GetAuditSettings:output_type -> nagi.v1.AuditSettings
-	206, // 347: nagi.v1.SettingsService.SetAuditSettings:output_type -> nagi.v1.AuditSettings
-	209, // 348: nagi.v1.SettingsService.TestAuditSink:output_type -> nagi.v1.TestAuditSinkResponse
-	211, // 349: nagi.v1.SettingsService.VerifyAudit:output_type -> nagi.v1.AuditChainStatus
-	219, // 350: nagi.v1.SettingsService.BeginPasskeyRegistration:output_type -> nagi.v1.BeginPasskeyRegistrationResponse
-	66,  // 351: nagi.v1.SettingsService.AddPasskey:output_type -> nagi.v1.Security
-	66,  // 352: nagi.v1.SettingsService.DeletePasskey:output_type -> nagi.v1.Security
-	223, // 353: nagi.v1.SettingsService.GetAdminNetworks:output_type -> nagi.v1.AdminNetworks
-	223, // 354: nagi.v1.SettingsService.SetAdminNetworks:output_type -> nagi.v1.AdminNetworks
-	154, // 355: nagi.v1.ProjectService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
-	239, // 356: nagi.v1.ProjectService.CreateProject:output_type -> nagi.v1.Project
-	235, // 357: nagi.v1.ProjectService.GetProject:output_type -> nagi.v1.ProjectSummary
-	239, // 358: nagi.v1.ProjectService.UpdateProjectSettings:output_type -> nagi.v1.Project
-	239, // 359: nagi.v1.ProjectService.SetProjectGroup:output_type -> nagi.v1.Project
-	25,  // 360: nagi.v1.ProjectService.RenameProjectGroup:output_type -> nagi.v1.RenameLabelResponse
-	159, // 361: nagi.v1.ProjectService.SaveSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
-	239, // 362: nagi.v1.ProjectService.DiscardSharedEnv:output_type -> nagi.v1.Project
-	161, // 363: nagi.v1.ProjectService.DeleteProject:output_type -> nagi.v1.DeleteProjectResponse
-	239, // 364: nagi.v1.ProjectService.AddContainer:output_type -> nagi.v1.Project
-	239, // 365: nagi.v1.ProjectService.ImportComposeDir:output_type -> nagi.v1.Project
-	239, // 366: nagi.v1.ProjectService.DeleteContainer:output_type -> nagi.v1.Project
-	261, // 367: nagi.v1.ProjectService.ControlContainer:output_type -> nagi.v1.DeployEvent
-	239, // 368: nagi.v1.ProjectService.SaveDraft:output_type -> nagi.v1.Project
-	239, // 369: nagi.v1.ProjectService.DiscardDraft:output_type -> nagi.v1.Project
-	261, // 370: nagi.v1.ProjectService.Deploy:output_type -> nagi.v1.DeployEvent
-	169, // 371: nagi.v1.ProjectService.ListVersions:output_type -> nagi.v1.ListVersionsResponse
-	134, // 372: nagi.v1.ProjectService.ListContainerEvents:output_type -> nagi.v1.ListActivityResponse
-	134, // 373: nagi.v1.ProjectService.ListProjectEvents:output_type -> nagi.v1.ListActivityResponse
-	261, // 374: nagi.v1.ProjectService.Rollback:output_type -> nagi.v1.DeployEvent
-	171, // 375: nagi.v1.ProjectService.ListDeployments:output_type -> nagi.v1.ListDeploymentsResponse
-	261, // 376: nagi.v1.ProjectService.RestoreDeployment:output_type -> nagi.v1.DeployEvent
-	265, // 377: nagi.v1.ProjectService.StreamLogs:output_type -> nagi.v1.LogLine
-	239, // 378: nagi.v1.ProjectService.SaveRoute:output_type -> nagi.v1.Project
-	239, // 379: nagi.v1.ProjectService.DeleteRoute:output_type -> nagi.v1.Project
-	179, // 380: nagi.v1.ProjectService.CheckDomains:output_type -> nagi.v1.CheckDomainsResponse
-	177, // 381: nagi.v1.ProjectService.RetryDomainCert:output_type -> nagi.v1.RetryDomainCertResponse
-	239, // 382: nagi.v1.ProjectService.SetBackupNodes:output_type -> nagi.v1.Project
-	239, // 383: nagi.v1.ProjectService.SetContainerDisplayName:output_type -> nagi.v1.Project
-	239, // 384: nagi.v1.ProjectService.SetContainerAlertRules:output_type -> nagi.v1.Project
-	239, // 385: nagi.v1.ProjectService.SetContainerSnapshotSchedule:output_type -> nagi.v1.Project
-	239, // 386: nagi.v1.ProjectService.SyncBackup:output_type -> nagi.v1.Project
-	266, // 387: nagi.v1.ProjectService.ListBackupSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	261, // 388: nagi.v1.ProjectService.RestoreFromBackup:output_type -> nagi.v1.DeployEvent
-	261, // 389: nagi.v1.ProjectService.MigrateContainer:output_type -> nagi.v1.DeployEvent
-	261, // 390: nagi.v1.ProjectService.RedeployElsewhere:output_type -> nagi.v1.DeployEvent
-	239, // 391: nagi.v1.ProjectService.SetFailover:output_type -> nagi.v1.Project
-	239, // 392: nagi.v1.ProjectService.ClearFailover:output_type -> nagi.v1.Project
-	239, // 393: nagi.v1.ProjectService.ChangeWitness:output_type -> nagi.v1.Project
-	239, // 394: nagi.v1.ProjectService.ConfirmTakeover:output_type -> nagi.v1.Project
-	239, // 395: nagi.v1.ProjectService.ConnectProject:output_type -> nagi.v1.Project
-	239, // 396: nagi.v1.ProjectService.DisconnectProject:output_type -> nagi.v1.Project
-	267, // 397: nagi.v1.ProjectService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
-	268, // 398: nagi.v1.ProjectService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
-	269, // 399: nagi.v1.ProjectService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	269, // 400: nagi.v1.ProjectService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
-	269, // 401: nagi.v1.ProjectService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	266, // 402: nagi.v1.ProjectService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	261, // 403: nagi.v1.ProjectService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
-	261, // 404: nagi.v1.ProjectService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
-	266, // 405: nagi.v1.ProjectService.DeleteSnapshot:output_type -> nagi.v1.ListSnapshotsResponse
-	182, // 406: nagi.v1.ProjectService.GetBackupKey:output_type -> nagi.v1.GetBackupKeyResponse
-	183, // 407: nagi.v1.ProjectService.ListRegistries:output_type -> nagi.v1.RegistriesResponse
-	183, // 408: nagi.v1.ProjectService.LoginRegistry:output_type -> nagi.v1.RegistriesResponse
-	183, // 409: nagi.v1.ProjectService.LogoutRegistry:output_type -> nagi.v1.RegistriesResponse
-	270, // 410: nagi.v1.ProjectService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
-	252, // [252:411] is the sub-list for method output_type
-	93,  // [93:252] is the sub-list for method input_type
-	93,  // [93:93] is the sub-list for extension type_name
-	93,  // [93:93] is the sub-list for extension extendee
-	0,   // [0:93] is the sub-list for field type_name
+	214, // 45: nagi.v1.PanelUser.passkeys:type_name -> nagi.v1.Passkey
+	118, // 46: nagi.v1.ListUsersResponse.users:type_name -> nagi.v1.PanelUser
+	119, // 47: nagi.v1.CreateUserRequest.scope:type_name -> nagi.v1.UserScope
+	119, // 48: nagi.v1.UpdateUserRequest.scope:type_name -> nagi.v1.UserScope
+	225, // 49: nagi.v1.LoginSession.created_at:type_name -> google.protobuf.Timestamp
+	225, // 50: nagi.v1.LoginSession.expires_at:type_name -> google.protobuf.Timestamp
+	225, // 51: nagi.v1.LoginSession.last_seen:type_name -> google.protobuf.Timestamp
+	127, // 52: nagi.v1.ListSessionsResponse.sessions:type_name -> nagi.v1.LoginSession
+	225, // 53: nagi.v1.ActivityEntry.time:type_name -> google.protobuf.Timestamp
+	133, // 54: nagi.v1.ListActivityResponse.entries:type_name -> nagi.v1.ActivityEntry
+	225, // 55: nagi.v1.CheckPanelUpdateResponse.checked_at:type_name -> google.protobuf.Timestamp
+	143, // 56: nagi.v1.GetPanelReleaseNotesResponse.releases:type_name -> nagi.v1.ReleaseNotes
+	225, // 57: nagi.v1.UpdateState.started_at:type_name -> google.protobuf.Timestamp
+	147, // 58: nagi.v1.GetUpdateStatusResponse.panel:type_name -> nagi.v1.UpdateState
+	224, // 59: nagi.v1.GetUpdateStatusResponse.nodes:type_name -> nagi.v1.GetUpdateStatusResponse.NodesEntry
+	235, // 60: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
+	236, // 61: nagi.v1.CreateProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
+	237, // 62: nagi.v1.CreateProjectRequest.container:type_name -> nagi.v1.ContainerConfig
+	236, // 63: nagi.v1.UpdateProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
+	238, // 64: nagi.v1.SaveSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
+	239, // 65: nagi.v1.SaveSharedEnvResponse.project:type_name -> nagi.v1.Project
+	237, // 66: nagi.v1.AddContainerRequest.config:type_name -> nagi.v1.ContainerConfig
+	237, // 67: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ContainerConfig
+	167, // 68: nagi.v1.DeployRequest.targets:type_name -> nagi.v1.DeployTarget
+	240, // 69: nagi.v1.ListVersionsResponse.versions:type_name -> nagi.v1.Version
+	241, // 70: nagi.v1.ListDeploymentsResponse.deployments:type_name -> nagi.v1.Deployment
+	242, // 71: nagi.v1.SaveRouteRequest.route:type_name -> nagi.v1.Exposure
+	242, // 72: nagi.v1.CheckDomainsRequest.routes:type_name -> nagi.v1.Exposure
+	180, // 73: nagi.v1.CheckDomainsResponse.domains:type_name -> nagi.v1.DomainCheck
+	181, // 74: nagi.v1.DomainCheck.entries:type_name -> nagi.v1.DomainEntryCheck
+	225, // 75: nagi.v1.DomainEntryCheck.cert_not_after:type_name -> google.protobuf.Timestamp
+	225, // 76: nagi.v1.AuditEvent.time:type_name -> google.protobuf.Timestamp
+	225, // 77: nagi.v1.AuditFilter.from:type_name -> google.protobuf.Timestamp
+	225, // 78: nagi.v1.AuditFilter.to:type_name -> google.protobuf.Timestamp
+	188, // 79: nagi.v1.ListAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
+	187, // 80: nagi.v1.ListAuditEventsResponse.events:type_name -> nagi.v1.AuditEvent
+	187, // 81: nagi.v1.GetAuditEventResponse.event:type_name -> nagi.v1.AuditEvent
+	187, // 82: nagi.v1.GetAuditEventResponse.parent:type_name -> nagi.v1.AuditEvent
+	187, // 83: nagi.v1.GetAuditEventResponse.children:type_name -> nagi.v1.AuditEvent
+	188, // 84: nagi.v1.ExportAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
+	207, // 85: nagi.v1.AuditSettings.sinks:type_name -> nagi.v1.AuditSink
+	211, // 86: nagi.v1.AuditSettings.chain:type_name -> nagi.v1.AuditChainStatus
+	208, // 87: nagi.v1.AuditSink.headers:type_name -> nagi.v1.AuditSinkHeader
+	225, // 88: nagi.v1.AuditSink.last_success:type_name -> google.protobuf.Timestamp
+	225, // 89: nagi.v1.AuditChainStatus.verified_at:type_name -> google.protobuf.Timestamp
+	225, // 90: nagi.v1.AuditChainStatus.anchor_at:type_name -> google.protobuf.Timestamp
+	225, // 91: nagi.v1.Passkey.created_at:type_name -> google.protobuf.Timestamp
+	225, // 92: nagi.v1.Passkey.last_used_at:type_name -> google.protobuf.Timestamp
+	147, // 93: nagi.v1.GetUpdateStatusResponse.NodesEntry.value:type_name -> nagi.v1.UpdateState
+	0,   // 94: nagi.v1.SetupService.GetSetupState:input_type -> nagi.v1.GetSetupStateRequest
+	2,   // 95: nagi.v1.SetupService.Setup:input_type -> nagi.v1.SetupRequest
+	8,   // 96: nagi.v1.AuthService.Login:input_type -> nagi.v1.LoginRequest
+	12,  // 97: nagi.v1.AuthService.Logout:input_type -> nagi.v1.LogoutRequest
+	14,  // 98: nagi.v1.AuthService.Me:input_type -> nagi.v1.MeRequest
+	16,  // 99: nagi.v1.AuthService.Elevate:input_type -> nagi.v1.ElevateRequest
+	9,   // 100: nagi.v1.AuthService.ChangePassword:input_type -> nagi.v1.ChangePasswordRequest
+	20,  // 101: nagi.v1.AuthService.SetLanguage:input_type -> nagi.v1.SetLanguageRequest
+	18,  // 102: nagi.v1.AuthService.UpdateProfile:input_type -> nagi.v1.UpdateProfileRequest
+	4,   // 103: nagi.v1.AuthService.GetOAuthRequest:input_type -> nagi.v1.OAuthRequest
+	6,   // 104: nagi.v1.AuthService.ApproveOAuth:input_type -> nagi.v1.ApproveOAuthRequest
+	195, // 105: nagi.v1.AuthService.RegisterSessionKey:input_type -> nagi.v1.RegisterSessionKeyRequest
+	197, // 106: nagi.v1.AuthService.RotateSession:input_type -> nagi.v1.RotateSessionRequest
+	199, // 107: nagi.v1.AuthService.Reverify:input_type -> nagi.v1.ReverifyRequest
+	215, // 108: nagi.v1.AuthService.BeginPasskeyLogin:input_type -> nagi.v1.BeginPasskeyLoginRequest
+	217, // 109: nagi.v1.AuthService.PasskeyLogin:input_type -> nagi.v1.PasskeyLoginRequest
+	102, // 110: nagi.v1.NodeService.ListNodes:input_type -> nagi.v1.ListNodesRequest
+	243, // 111: nagi.v1.NodeService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
+	243, // 112: nagi.v1.NodeService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
+	244, // 113: nagi.v1.NodeService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
+	245, // 114: nagi.v1.NodeService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
+	243, // 115: nagi.v1.NodeService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
+	243, // 116: nagi.v1.NodeService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
+	246, // 117: nagi.v1.NodeService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
+	46,  // 118: nagi.v1.NodeService.ListNodePanels:input_type -> nagi.v1.ListNodePanelsRequest
+	52,  // 119: nagi.v1.NodeService.HandoverNodes:input_type -> nagi.v1.HandoverNodesRequest
+	55,  // 120: nagi.v1.NodeService.RemoveNodePanel:input_type -> nagi.v1.RemoveNodePanelRequest
+	26,  // 121: nagi.v1.NodeService.ListNodeReplicas:input_type -> nagi.v1.NodeRef
+	50,  // 122: nagi.v1.NodeService.DeleteNodeReplica:input_type -> nagi.v1.DeleteNodeReplicaRequest
+	36,  // 123: nagi.v1.NodeService.GetNodeMesh:input_type -> nagi.v1.GetNodeMeshRequest
+	37,  // 124: nagi.v1.NodeService.PingNodeMesh:input_type -> nagi.v1.PingNodeMeshRequest
+	37,  // 125: nagi.v1.NodeService.TestNodeMeshSpeed:input_type -> nagi.v1.PingNodeMeshRequest
+	38,  // 126: nagi.v1.NodeService.SetNodeMeshOptions:input_type -> nagi.v1.SetNodeMeshOptionsRequest
+	39,  // 127: nagi.v1.NodeService.GetPanelMesh:input_type -> nagi.v1.GetPanelMeshRequest
+	40,  // 128: nagi.v1.NodeService.UpgradeNode:input_type -> nagi.v1.UpgradeNodeRequest
+	41,  // 129: nagi.v1.NodeService.UpgradeAllNodes:input_type -> nagi.v1.UpgradeAllNodesRequest
+	42,  // 130: nagi.v1.NodeService.CancelNodeUpgrade:input_type -> nagi.v1.CancelNodeUpgradeRequest
+	26,  // 131: nagi.v1.NodeService.GetNodeMirrors:input_type -> nagi.v1.NodeRef
+	45,  // 132: nagi.v1.NodeService.SetNodeMirrors:input_type -> nagi.v1.SetNodeMirrorsRequest
+	26,  // 133: nagi.v1.NodeService.ReclaimNodeSnapshots:input_type -> nagi.v1.NodeRef
+	27,  // 134: nagi.v1.NodeService.SetNodeProjectsRoot:input_type -> nagi.v1.SetNodeProjectsRootRequest
+	35,  // 135: nagi.v1.NodeService.CreateEnrollCommand:input_type -> nagi.v1.CreateEnrollCommandRequest
+	32,  // 136: nagi.v1.NodeService.QueryNodeMetrics:input_type -> nagi.v1.QueryNodeMetricsRequest
+	26,  // 137: nagi.v1.NodeService.GetNodeStorage:input_type -> nagi.v1.NodeRef
+	33,  // 138: nagi.v1.NodeService.RemoveNode:input_type -> nagi.v1.RemoveNodeRequest
+	28,  // 139: nagi.v1.NodeService.ApproveNode:input_type -> nagi.v1.ApproveNodeRequest
+	30,  // 140: nagi.v1.NodeService.RenameNode:input_type -> nagi.v1.RenameNodeRequest
+	100, // 141: nagi.v1.NodeService.AdoptNodeContainer:input_type -> nagi.v1.AdoptNodeContainerRequest
+	95,  // 142: nagi.v1.NodeService.AdoptStaleProject:input_type -> nagi.v1.AdoptStaleProjectRequest
+	97,  // 143: nagi.v1.NodeService.ConfirmPendingHA:input_type -> nagi.v1.ConfirmPendingHARequest
+	92,  // 144: nagi.v1.NodeService.SetNodeAlertRules:input_type -> nagi.v1.SetNodeAlertRulesRequest
+	243, // 145: nagi.v1.NodeService.InspectComposeDir:input_type -> nagi.v1.NodeFileRef
+	22,  // 146: nagi.v1.NodeService.SetNodeTags:input_type -> nagi.v1.SetNodeTagsRequest
+	24,  // 147: nagi.v1.NodeService.RenameNodeTag:input_type -> nagi.v1.RenameLabelRequest
+	212, // 148: nagi.v1.NodeService.IsolateNode:input_type -> nagi.v1.IsolateNodeRequest
+	212, // 149: nagi.v1.NodeService.UnisolateNode:input_type -> nagi.v1.IsolateNodeRequest
+	86,  // 150: nagi.v1.SettingsService.GetSettings:input_type -> nagi.v1.GetSettingsRequest
+	89,  // 151: nagi.v1.SettingsService.UpdateSettings:input_type -> nagi.v1.UpdateSettingsRequest
+	87,  // 152: nagi.v1.SettingsService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainApiRequest
+	79,  // 153: nagi.v1.SettingsService.GetAlertConfig:input_type -> nagi.v1.GetAlertConfigRequest
+	81,  // 154: nagi.v1.SettingsService.UpdateAlertConfig:input_type -> nagi.v1.UpdateAlertConfigRequest
+	83,  // 155: nagi.v1.SettingsService.TestAlertChannel:input_type -> nagi.v1.TestAlertChannelRequest
+	72,  // 156: nagi.v1.SettingsService.CreateInvite:input_type -> nagi.v1.CreateInviteRequest
+	74,  // 157: nagi.v1.SettingsService.ListInvites:input_type -> nagi.v1.ListInvitesRequest
+	77,  // 158: nagi.v1.SettingsService.RevokeInvite:input_type -> nagi.v1.RevokeInviteRequest
+	113, // 159: nagi.v1.SettingsService.CreateStandbyCode:input_type -> nagi.v1.CreateStandbyCodeRequest
+	115, // 160: nagi.v1.SettingsService.GetStandbys:input_type -> nagi.v1.GetStandbysRequest
+	135, // 161: nagi.v1.SettingsService.RemoveStandby:input_type -> nagi.v1.RemoveStandbyRequest
+	137, // 162: nagi.v1.SettingsService.PromoteStandby:input_type -> nagi.v1.PromoteStandbyRequest
+	139, // 163: nagi.v1.SettingsService.CheckPanelUpdate:input_type -> nagi.v1.CheckPanelUpdateRequest
+	144, // 164: nagi.v1.SettingsService.UpdatePanel:input_type -> nagi.v1.UpdatePanelRequest
+	141, // 165: nagi.v1.SettingsService.GetPanelReleaseNotes:input_type -> nagi.v1.GetPanelReleaseNotesRequest
+	146, // 166: nagi.v1.SettingsService.GetUpdateStatus:input_type -> nagi.v1.GetUpdateStatusRequest
+	65,  // 167: nagi.v1.SettingsService.GetSecurity:input_type -> nagi.v1.GetSecurityRequest
+	67,  // 168: nagi.v1.SettingsService.BeginTOTP:input_type -> nagi.v1.BeginTOTPRequest
+	69,  // 169: nagi.v1.SettingsService.EnableTOTP:input_type -> nagi.v1.EnableTOTPRequest
+	70,  // 170: nagi.v1.SettingsService.DisableTOTP:input_type -> nagi.v1.DisableTOTPRequest
+	71,  // 171: nagi.v1.SettingsService.SetEntrance:input_type -> nagi.v1.SetEntranceRequest
+	132, // 172: nagi.v1.SettingsService.ListActivity:input_type -> nagi.v1.ListActivityRequest
+	120, // 173: nagi.v1.SettingsService.ListUsers:input_type -> nagi.v1.ListUsersRequest
+	122, // 174: nagi.v1.SettingsService.CreateUser:input_type -> nagi.v1.CreateUserRequest
+	123, // 175: nagi.v1.SettingsService.UpdateUser:input_type -> nagi.v1.UpdateUserRequest
+	125, // 176: nagi.v1.SettingsService.DeleteUser:input_type -> nagi.v1.DeleteUserRequest
+	128, // 177: nagi.v1.SettingsService.ListSessions:input_type -> nagi.v1.ListSessionsRequest
+	130, // 178: nagi.v1.SettingsService.RevokeSession:input_type -> nagi.v1.RevokeSessionRequest
+	59,  // 179: nagi.v1.SettingsService.ListAccessTokens:input_type -> nagi.v1.ListAccessTokensRequest
+	61,  // 180: nagi.v1.SettingsService.CreateAccessToken:input_type -> nagi.v1.CreateAccessTokenRequest
+	63,  // 181: nagi.v1.SettingsService.RevokeAccessToken:input_type -> nagi.v1.RevokeAccessTokenRequest
+	189, // 182: nagi.v1.SettingsService.ListAuditEvents:input_type -> nagi.v1.ListAuditEventsRequest
+	191, // 183: nagi.v1.SettingsService.GetAuditEvent:input_type -> nagi.v1.GetAuditEventRequest
+	193, // 184: nagi.v1.SettingsService.ExportAuditEvents:input_type -> nagi.v1.ExportAuditEventsRequest
+	201, // 185: nagi.v1.SettingsService.GetSessionPolicy:input_type -> nagi.v1.GetSessionPolicyRequest
+	202, // 186: nagi.v1.SettingsService.SetSessionPolicy:input_type -> nagi.v1.SessionPolicy
+	203, // 187: nagi.v1.SettingsService.GetRecording:input_type -> nagi.v1.GetRecordingRequest
+	205, // 188: nagi.v1.SettingsService.GetAuditSettings:input_type -> nagi.v1.GetAuditSettingsRequest
+	206, // 189: nagi.v1.SettingsService.SetAuditSettings:input_type -> nagi.v1.AuditSettings
+	207, // 190: nagi.v1.SettingsService.TestAuditSink:input_type -> nagi.v1.AuditSink
+	210, // 191: nagi.v1.SettingsService.VerifyAudit:input_type -> nagi.v1.VerifyAuditRequest
+	218, // 192: nagi.v1.SettingsService.BeginPasskeyRegistration:input_type -> nagi.v1.BeginPasskeyRegistrationRequest
+	220, // 193: nagi.v1.SettingsService.AddPasskey:input_type -> nagi.v1.AddPasskeyRequest
+	221, // 194: nagi.v1.SettingsService.DeletePasskey:input_type -> nagi.v1.DeletePasskeyRequest
+	222, // 195: nagi.v1.SettingsService.GetAdminNetworks:input_type -> nagi.v1.GetAdminNetworksRequest
+	223, // 196: nagi.v1.SettingsService.SetAdminNetworks:input_type -> nagi.v1.AdminNetworks
+	153, // 197: nagi.v1.ProjectService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
+	155, // 198: nagi.v1.ProjectService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
+	150, // 199: nagi.v1.ProjectService.GetProject:input_type -> nagi.v1.ProjectRef
+	156, // 200: nagi.v1.ProjectService.UpdateProjectSettings:input_type -> nagi.v1.UpdateProjectSettingsRequest
+	157, // 201: nagi.v1.ProjectService.SetProjectGroup:input_type -> nagi.v1.SetProjectGroupRequest
+	24,  // 202: nagi.v1.ProjectService.RenameProjectGroup:input_type -> nagi.v1.RenameLabelRequest
+	158, // 203: nagi.v1.ProjectService.SaveSharedEnv:input_type -> nagi.v1.SaveSharedEnvRequest
+	151, // 204: nagi.v1.ProjectService.DiscardSharedEnv:input_type -> nagi.v1.ProjectRevisionRef
+	160, // 205: nagi.v1.ProjectService.DeleteProject:input_type -> nagi.v1.DeleteProjectRequest
+	164, // 206: nagi.v1.ProjectService.AddContainer:input_type -> nagi.v1.AddContainerRequest
+	163, // 207: nagi.v1.ProjectService.ImportComposeDir:input_type -> nagi.v1.ImportComposeDirRequest
+	165, // 208: nagi.v1.ProjectService.DeleteContainer:input_type -> nagi.v1.DeleteContainerApiRequest
+	247, // 209: nagi.v1.ProjectService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
+	166, // 210: nagi.v1.ProjectService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
+	152, // 211: nagi.v1.ProjectService.DiscardDraft:input_type -> nagi.v1.ContainerRevisionRef
+	168, // 212: nagi.v1.ProjectService.Deploy:input_type -> nagi.v1.DeployRequest
+	248, // 213: nagi.v1.ProjectService.ListVersions:input_type -> nagi.v1.ContainerRef
+	248, // 214: nagi.v1.ProjectService.ListContainerEvents:input_type -> nagi.v1.ContainerRef
+	186, // 215: nagi.v1.ProjectService.ListProjectEvents:input_type -> nagi.v1.ListProjectEventsRequest
+	170, // 216: nagi.v1.ProjectService.Rollback:input_type -> nagi.v1.RollbackRequest
+	150, // 217: nagi.v1.ProjectService.ListDeployments:input_type -> nagi.v1.ProjectRef
+	172, // 218: nagi.v1.ProjectService.RestoreDeployment:input_type -> nagi.v1.RestoreDeploymentRequest
+	173, // 219: nagi.v1.ProjectService.StreamLogs:input_type -> nagi.v1.StreamLogsApiRequest
+	174, // 220: nagi.v1.ProjectService.SaveRoute:input_type -> nagi.v1.SaveRouteRequest
+	175, // 221: nagi.v1.ProjectService.DeleteRoute:input_type -> nagi.v1.DeleteRouteRequest
+	178, // 222: nagi.v1.ProjectService.CheckDomains:input_type -> nagi.v1.CheckDomainsRequest
+	176, // 223: nagi.v1.ProjectService.RetryDomainCert:input_type -> nagi.v1.RetryDomainCertRequest
+	104, // 224: nagi.v1.ProjectService.SetBackupNodes:input_type -> nagi.v1.SetBackupNodesRequest
+	108, // 225: nagi.v1.ProjectService.SetContainerDisplayName:input_type -> nagi.v1.SetContainerDisplayNameRequest
+	106, // 226: nagi.v1.ProjectService.SetContainerAlertRules:input_type -> nagi.v1.SetContainerAlertRulesRequest
+	107, // 227: nagi.v1.ProjectService.SetContainerSnapshotSchedule:input_type -> nagi.v1.SetContainerSnapshotScheduleRequest
+	105, // 228: nagi.v1.ProjectService.SyncBackup:input_type -> nagi.v1.BackupNodeRef
+	105, // 229: nagi.v1.ProjectService.ListBackupSnapshots:input_type -> nagi.v1.BackupNodeRef
+	111, // 230: nagi.v1.ProjectService.RestoreFromBackup:input_type -> nagi.v1.RestoreFromBackupRequest
+	112, // 231: nagi.v1.ProjectService.MigrateContainer:input_type -> nagi.v1.MoveContainerRequest
+	112, // 232: nagi.v1.ProjectService.RedeployElsewhere:input_type -> nagi.v1.MoveContainerRequest
+	109, // 233: nagi.v1.ProjectService.SetFailover:input_type -> nagi.v1.SetFailoverApiRequest
+	248, // 234: nagi.v1.ProjectService.ClearFailover:input_type -> nagi.v1.ContainerRef
+	110, // 235: nagi.v1.ProjectService.ChangeWitness:input_type -> nagi.v1.ChangeWitnessRequest
+	248, // 236: nagi.v1.ProjectService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
+	149, // 237: nagi.v1.ProjectService.ConnectProject:input_type -> nagi.v1.ConnectProjectRequest
+	149, // 238: nagi.v1.ProjectService.DisconnectProject:input_type -> nagi.v1.ConnectProjectRequest
+	248, // 239: nagi.v1.ProjectService.ListVolumes:input_type -> nagi.v1.ContainerRef
+	249, // 240: nagi.v1.ProjectService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
+	249, // 241: nagi.v1.ProjectService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	249, // 242: nagi.v1.ProjectService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
+	249, // 243: nagi.v1.ProjectService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	248, // 244: nagi.v1.ProjectService.ListSnapshots:input_type -> nagi.v1.ContainerRef
+	248, // 245: nagi.v1.ProjectService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
+	250, // 246: nagi.v1.ProjectService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	250, // 247: nagi.v1.ProjectService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	248, // 248: nagi.v1.ProjectService.GetBackupKey:input_type -> nagi.v1.ContainerRef
+	150, // 249: nagi.v1.ProjectService.ListRegistries:input_type -> nagi.v1.ProjectRef
+	184, // 250: nagi.v1.ProjectService.LoginRegistry:input_type -> nagi.v1.LoginRegistryApiRequest
+	185, // 251: nagi.v1.ProjectService.LogoutRegistry:input_type -> nagi.v1.LogoutRegistryRequest
+	150, // 252: nagi.v1.ProjectService.CheckImages:input_type -> nagi.v1.ProjectRef
+	1,   // 253: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
+	3,   // 254: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
+	11,  // 255: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
+	13,  // 256: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
+	15,  // 257: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
+	17,  // 258: nagi.v1.AuthService.Elevate:output_type -> nagi.v1.ElevateResponse
+	10,  // 259: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
+	21,  // 260: nagi.v1.AuthService.SetLanguage:output_type -> nagi.v1.SetLanguageResponse
+	19,  // 261: nagi.v1.AuthService.UpdateProfile:output_type -> nagi.v1.UpdateProfileResponse
+	5,   // 262: nagi.v1.AuthService.GetOAuthRequest:output_type -> nagi.v1.GetOAuthRequestResponse
+	7,   // 263: nagi.v1.AuthService.ApproveOAuth:output_type -> nagi.v1.ApproveOAuthResponse
+	196, // 264: nagi.v1.AuthService.RegisterSessionKey:output_type -> nagi.v1.RegisterSessionKeyResponse
+	198, // 265: nagi.v1.AuthService.RotateSession:output_type -> nagi.v1.RotateSessionResponse
+	200, // 266: nagi.v1.AuthService.Reverify:output_type -> nagi.v1.ReverifyResponse
+	216, // 267: nagi.v1.AuthService.BeginPasskeyLogin:output_type -> nagi.v1.PasskeyChallenge
+	11,  // 268: nagi.v1.AuthService.PasskeyLogin:output_type -> nagi.v1.LoginResponse
+	103, // 269: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
+	251, // 270: nagi.v1.NodeService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
+	252, // 271: nagi.v1.NodeService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
+	253, // 272: nagi.v1.NodeService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
+	254, // 273: nagi.v1.NodeService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
+	254, // 274: nagi.v1.NodeService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
+	255, // 275: nagi.v1.NodeService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
+	253, // 276: nagi.v1.NodeService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
+	47,  // 277: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
+	53,  // 278: nagi.v1.NodeService.HandoverNodes:output_type -> nagi.v1.HandoverNodesResponse
+	56,  // 279: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
+	48,  // 280: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListNodeReplicasResponse
+	51,  // 281: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteNodeReplicaResponse
+	256, // 282: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
+	257, // 283: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
+	258, // 284: nagi.v1.NodeService.TestNodeMeshSpeed:output_type -> nagi.v1.MeshSpeedResponse
+	226, // 285: nagi.v1.NodeService.SetNodeMeshOptions:output_type -> nagi.v1.MeshOptions
+	256, // 286: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
+	259, // 287: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
+	44,  // 288: nagi.v1.NodeService.UpgradeAllNodes:output_type -> nagi.v1.UpgradeAllNodesResponse
+	43,  // 289: nagi.v1.NodeService.CancelNodeUpgrade:output_type -> nagi.v1.CancelNodeUpgradeResponse
+	260, // 290: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
+	260, // 291: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
+	261, // 292: nagi.v1.NodeService.ReclaimNodeSnapshots:output_type -> nagi.v1.DeployEvent
+	262, // 293: nagi.v1.NodeService.SetNodeProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
+	57,  // 294: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
+	263, // 295: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	264, // 296: nagi.v1.NodeService.GetNodeStorage:output_type -> nagi.v1.NodeStorage
+	34,  // 297: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
+	29,  // 298: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
+	31,  // 299: nagi.v1.NodeService.RenameNode:output_type -> nagi.v1.RenameNodeResponse
+	101, // 300: nagi.v1.NodeService.AdoptNodeContainer:output_type -> nagi.v1.AdoptNodeContainerResponse
+	96,  // 301: nagi.v1.NodeService.AdoptStaleProject:output_type -> nagi.v1.AdoptStaleProjectResponse
+	98,  // 302: nagi.v1.NodeService.ConfirmPendingHA:output_type -> nagi.v1.ConfirmPendingHAResponse
+	93,  // 303: nagi.v1.NodeService.SetNodeAlertRules:output_type -> nagi.v1.SetNodeAlertRulesResponse
+	162, // 304: nagi.v1.NodeService.InspectComposeDir:output_type -> nagi.v1.ComposeDirPreview
+	23,  // 305: nagi.v1.NodeService.SetNodeTags:output_type -> nagi.v1.SetNodeTagsResponse
+	25,  // 306: nagi.v1.NodeService.RenameNodeTag:output_type -> nagi.v1.RenameLabelResponse
+	213, // 307: nagi.v1.NodeService.IsolateNode:output_type -> nagi.v1.IsolateNodeResponse
+	213, // 308: nagi.v1.NodeService.UnisolateNode:output_type -> nagi.v1.IsolateNodeResponse
+	88,  // 309: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
+	90,  // 310: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
+	90,  // 311: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
+	80,  // 312: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
+	82,  // 313: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
+	84,  // 314: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
+	73,  // 315: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
+	76,  // 316: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
+	78,  // 317: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
+	114, // 318: nagi.v1.SettingsService.CreateStandbyCode:output_type -> nagi.v1.CreateStandbyCodeResponse
+	116, // 319: nagi.v1.SettingsService.GetStandbys:output_type -> nagi.v1.GetStandbysResponse
+	136, // 320: nagi.v1.SettingsService.RemoveStandby:output_type -> nagi.v1.RemoveStandbyResponse
+	138, // 321: nagi.v1.SettingsService.PromoteStandby:output_type -> nagi.v1.PromoteStandbyResponse
+	140, // 322: nagi.v1.SettingsService.CheckPanelUpdate:output_type -> nagi.v1.CheckPanelUpdateResponse
+	145, // 323: nagi.v1.SettingsService.UpdatePanel:output_type -> nagi.v1.UpdatePanelResponse
+	142, // 324: nagi.v1.SettingsService.GetPanelReleaseNotes:output_type -> nagi.v1.GetPanelReleaseNotesResponse
+	148, // 325: nagi.v1.SettingsService.GetUpdateStatus:output_type -> nagi.v1.GetUpdateStatusResponse
+	66,  // 326: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
+	68,  // 327: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
+	66,  // 328: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
+	66,  // 329: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
+	66,  // 330: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
+	134, // 331: nagi.v1.SettingsService.ListActivity:output_type -> nagi.v1.ListActivityResponse
+	121, // 332: nagi.v1.SettingsService.ListUsers:output_type -> nagi.v1.ListUsersResponse
+	118, // 333: nagi.v1.SettingsService.CreateUser:output_type -> nagi.v1.PanelUser
+	124, // 334: nagi.v1.SettingsService.UpdateUser:output_type -> nagi.v1.UpdateUserResponse
+	126, // 335: nagi.v1.SettingsService.DeleteUser:output_type -> nagi.v1.DeleteUserResponse
+	129, // 336: nagi.v1.SettingsService.ListSessions:output_type -> nagi.v1.ListSessionsResponse
+	131, // 337: nagi.v1.SettingsService.RevokeSession:output_type -> nagi.v1.RevokeSessionResponse
+	60,  // 338: nagi.v1.SettingsService.ListAccessTokens:output_type -> nagi.v1.ListAccessTokensResponse
+	62,  // 339: nagi.v1.SettingsService.CreateAccessToken:output_type -> nagi.v1.CreateAccessTokenResponse
+	64,  // 340: nagi.v1.SettingsService.RevokeAccessToken:output_type -> nagi.v1.RevokeAccessTokenResponse
+	190, // 341: nagi.v1.SettingsService.ListAuditEvents:output_type -> nagi.v1.ListAuditEventsResponse
+	192, // 342: nagi.v1.SettingsService.GetAuditEvent:output_type -> nagi.v1.GetAuditEventResponse
+	194, // 343: nagi.v1.SettingsService.ExportAuditEvents:output_type -> nagi.v1.ExportAuditEventsChunk
+	202, // 344: nagi.v1.SettingsService.GetSessionPolicy:output_type -> nagi.v1.SessionPolicy
+	202, // 345: nagi.v1.SettingsService.SetSessionPolicy:output_type -> nagi.v1.SessionPolicy
+	204, // 346: nagi.v1.SettingsService.GetRecording:output_type -> nagi.v1.RecordingChunk
+	206, // 347: nagi.v1.SettingsService.GetAuditSettings:output_type -> nagi.v1.AuditSettings
+	206, // 348: nagi.v1.SettingsService.SetAuditSettings:output_type -> nagi.v1.AuditSettings
+	209, // 349: nagi.v1.SettingsService.TestAuditSink:output_type -> nagi.v1.TestAuditSinkResponse
+	211, // 350: nagi.v1.SettingsService.VerifyAudit:output_type -> nagi.v1.AuditChainStatus
+	219, // 351: nagi.v1.SettingsService.BeginPasskeyRegistration:output_type -> nagi.v1.BeginPasskeyRegistrationResponse
+	66,  // 352: nagi.v1.SettingsService.AddPasskey:output_type -> nagi.v1.Security
+	66,  // 353: nagi.v1.SettingsService.DeletePasskey:output_type -> nagi.v1.Security
+	223, // 354: nagi.v1.SettingsService.GetAdminNetworks:output_type -> nagi.v1.AdminNetworks
+	223, // 355: nagi.v1.SettingsService.SetAdminNetworks:output_type -> nagi.v1.AdminNetworks
+	154, // 356: nagi.v1.ProjectService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
+	239, // 357: nagi.v1.ProjectService.CreateProject:output_type -> nagi.v1.Project
+	235, // 358: nagi.v1.ProjectService.GetProject:output_type -> nagi.v1.ProjectSummary
+	239, // 359: nagi.v1.ProjectService.UpdateProjectSettings:output_type -> nagi.v1.Project
+	239, // 360: nagi.v1.ProjectService.SetProjectGroup:output_type -> nagi.v1.Project
+	25,  // 361: nagi.v1.ProjectService.RenameProjectGroup:output_type -> nagi.v1.RenameLabelResponse
+	159, // 362: nagi.v1.ProjectService.SaveSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
+	239, // 363: nagi.v1.ProjectService.DiscardSharedEnv:output_type -> nagi.v1.Project
+	161, // 364: nagi.v1.ProjectService.DeleteProject:output_type -> nagi.v1.DeleteProjectResponse
+	239, // 365: nagi.v1.ProjectService.AddContainer:output_type -> nagi.v1.Project
+	239, // 366: nagi.v1.ProjectService.ImportComposeDir:output_type -> nagi.v1.Project
+	239, // 367: nagi.v1.ProjectService.DeleteContainer:output_type -> nagi.v1.Project
+	261, // 368: nagi.v1.ProjectService.ControlContainer:output_type -> nagi.v1.DeployEvent
+	239, // 369: nagi.v1.ProjectService.SaveDraft:output_type -> nagi.v1.Project
+	239, // 370: nagi.v1.ProjectService.DiscardDraft:output_type -> nagi.v1.Project
+	261, // 371: nagi.v1.ProjectService.Deploy:output_type -> nagi.v1.DeployEvent
+	169, // 372: nagi.v1.ProjectService.ListVersions:output_type -> nagi.v1.ListVersionsResponse
+	134, // 373: nagi.v1.ProjectService.ListContainerEvents:output_type -> nagi.v1.ListActivityResponse
+	134, // 374: nagi.v1.ProjectService.ListProjectEvents:output_type -> nagi.v1.ListActivityResponse
+	261, // 375: nagi.v1.ProjectService.Rollback:output_type -> nagi.v1.DeployEvent
+	171, // 376: nagi.v1.ProjectService.ListDeployments:output_type -> nagi.v1.ListDeploymentsResponse
+	261, // 377: nagi.v1.ProjectService.RestoreDeployment:output_type -> nagi.v1.DeployEvent
+	265, // 378: nagi.v1.ProjectService.StreamLogs:output_type -> nagi.v1.LogLine
+	239, // 379: nagi.v1.ProjectService.SaveRoute:output_type -> nagi.v1.Project
+	239, // 380: nagi.v1.ProjectService.DeleteRoute:output_type -> nagi.v1.Project
+	179, // 381: nagi.v1.ProjectService.CheckDomains:output_type -> nagi.v1.CheckDomainsResponse
+	177, // 382: nagi.v1.ProjectService.RetryDomainCert:output_type -> nagi.v1.RetryDomainCertResponse
+	239, // 383: nagi.v1.ProjectService.SetBackupNodes:output_type -> nagi.v1.Project
+	239, // 384: nagi.v1.ProjectService.SetContainerDisplayName:output_type -> nagi.v1.Project
+	239, // 385: nagi.v1.ProjectService.SetContainerAlertRules:output_type -> nagi.v1.Project
+	239, // 386: nagi.v1.ProjectService.SetContainerSnapshotSchedule:output_type -> nagi.v1.Project
+	239, // 387: nagi.v1.ProjectService.SyncBackup:output_type -> nagi.v1.Project
+	266, // 388: nagi.v1.ProjectService.ListBackupSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	261, // 389: nagi.v1.ProjectService.RestoreFromBackup:output_type -> nagi.v1.DeployEvent
+	261, // 390: nagi.v1.ProjectService.MigrateContainer:output_type -> nagi.v1.DeployEvent
+	261, // 391: nagi.v1.ProjectService.RedeployElsewhere:output_type -> nagi.v1.DeployEvent
+	239, // 392: nagi.v1.ProjectService.SetFailover:output_type -> nagi.v1.Project
+	239, // 393: nagi.v1.ProjectService.ClearFailover:output_type -> nagi.v1.Project
+	239, // 394: nagi.v1.ProjectService.ChangeWitness:output_type -> nagi.v1.Project
+	239, // 395: nagi.v1.ProjectService.ConfirmTakeover:output_type -> nagi.v1.Project
+	239, // 396: nagi.v1.ProjectService.ConnectProject:output_type -> nagi.v1.Project
+	239, // 397: nagi.v1.ProjectService.DisconnectProject:output_type -> nagi.v1.Project
+	267, // 398: nagi.v1.ProjectService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
+	268, // 399: nagi.v1.ProjectService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
+	269, // 400: nagi.v1.ProjectService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	269, // 401: nagi.v1.ProjectService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
+	269, // 402: nagi.v1.ProjectService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	266, // 403: nagi.v1.ProjectService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	261, // 404: nagi.v1.ProjectService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
+	261, // 405: nagi.v1.ProjectService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
+	266, // 406: nagi.v1.ProjectService.DeleteSnapshot:output_type -> nagi.v1.ListSnapshotsResponse
+	182, // 407: nagi.v1.ProjectService.GetBackupKey:output_type -> nagi.v1.GetBackupKeyResponse
+	183, // 408: nagi.v1.ProjectService.ListRegistries:output_type -> nagi.v1.RegistriesResponse
+	183, // 409: nagi.v1.ProjectService.LoginRegistry:output_type -> nagi.v1.RegistriesResponse
+	183, // 410: nagi.v1.ProjectService.LogoutRegistry:output_type -> nagi.v1.RegistriesResponse
+	270, // 411: nagi.v1.ProjectService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
+	253, // [253:412] is the sub-list for method output_type
+	94,  // [94:253] is the sub-list for method input_type
+	94,  // [94:94] is the sub-list for extension type_name
+	94,  // [94:94] is the sub-list for extension extendee
+	0,   // [0:94] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_api_proto_init() }

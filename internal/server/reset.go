@@ -59,6 +59,10 @@ func ResetPassword(ctx context.Context, dataDir, username string) (string, strin
 	if err := q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: user.ID}); err != nil {
 		return "", "", err
 	}
+	// 通行密钥不要密码就能登录，重置密码时一起删掉（见 docs/panel.md#通行密钥）。
+	if _, err := q.DeleteUserPasskeys(ctx, user.ID); err != nil {
+		return "", "", err
+	}
 	return user.Username, password, q.DeleteUserSessions(ctx, user.ID)
 }
 

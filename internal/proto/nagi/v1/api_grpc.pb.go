@@ -2524,7 +2524,8 @@ type SettingsServiceClient interface {
 	// 成员（只有管理员能用）。
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*PanelUser, error)
-	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	// 修改角色、重置密码、清除两步验证、清除通行密钥。重置密码后这个用户已有的登录全部失效；
+	// 重置密码和清除两步验证时一并删除通行密钥（见 docs/panel.md#通行密钥）。
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
 	// 当前用户自己的登录会话。
@@ -3104,7 +3105,8 @@ type SettingsServiceServer interface {
 	// 成员（只有管理员能用）。
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	CreateUser(context.Context, *CreateUserRequest) (*PanelUser, error)
-	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	// 修改角色、重置密码、清除两步验证、清除通行密钥。重置密码后这个用户已有的登录全部失效；
+	// 重置密码和清除两步验证时一并删除通行密钥（见 docs/panel.md#通行密钥）。
 	UpdateUser(context.Context, *UpdateUserRequest) (*UpdateUserResponse, error)
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
 	// 当前用户自己的登录会话。

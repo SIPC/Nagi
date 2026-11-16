@@ -734,4 +734,5 @@ var en = map[string]string{
 	"分组和标签不能包含控制字符":                                "Groups and tags can't contain control characters",
 	"最多 %d 个标签":                                    "Up to %d tags",
 	"分组或标签不存在":                                     "The group or tag doesn't exist",
+	"成员 %s 的通行密钥被清除": "Passkeys of %s were cleared",
 }

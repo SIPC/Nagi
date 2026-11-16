@@ -2220,7 +2220,8 @@ type SettingsServiceClient interface {
 	// 成员（只有管理员能用）。
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error)
-	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	// 修改角色、重置密码、清除两步验证、清除通行密钥。重置密码后这个用户已有的登录全部失效；
+	// 重置密码和清除两步验证时一并删除通行密钥（见 docs/panel.md#通行密钥）。
 	UpdateUser(context.Context, *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error)
 	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
 	// 当前用户自己的登录会话。
@@ -2884,7 +2885,8 @@ type SettingsServiceHandler interface {
 	// 成员（只有管理员能用）。
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.PanelUser], error)
-	// 修改角色、重置密码、清除两步验证。重置密码后这个用户已有的登录全部失效。
+	// 修改角色、重置密码、清除两步验证、清除通行密钥。重置密码后这个用户已有的登录全部失效；
+	// 重置密码和清除两步验证时一并删除通行密钥（见 docs/panel.md#通行密钥）。
 	UpdateUser(context.Context, *connect.Request[v1.UpdateUserRequest]) (*connect.Response[v1.UpdateUserResponse], error)
 	DeleteUser(context.Context, *connect.Request[v1.DeleteUserRequest]) (*connect.Response[v1.DeleteUserResponse], error)
 	// 当前用户自己的登录会话。
