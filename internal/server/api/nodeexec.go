@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +11,8 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -98,20 +99,15 @@ func nodeExecError(err error) error {
 // recordNodeExec 记一条节点命令的活动：详情是命令，失败时后面接原因。
 func (a *API) recordNodeExec(ctx context.Context, nodeID, command, failure string) {
 	ctx = context.WithoutCancel(ctx)
-	detail := command
+	result := audit.ResultOK
 	if failure != "" {
-		detail += ": " + failure
+		result = audit.ResultFailed
 	}
-	err := a.Q.InsertActivity(ctx, store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(), Kind: "operation", Actor: clipActivity(auth.Username(ctx), 64), Action: "NodeExec",
-		Target: clipActivity(a.nodeName(ctx, nodeID), 200), Detail: clipActivity(detail, 500),
-		Failed: boolInt(failure != ""), Via: clipActivity(auth.CurrentUser(ctx).Via, 80),
+	params, _ := json.Marshal(map[string]string{"command": command})
+	a.Record(ctx, audit.Event{
+		Category: audit.Session, Action: "NodeExec", TargetType: "node", TargetID: nodeID, TargetName: a.nodeName(ctx, nodeID),
+		Params: string(params), Result: result, Error: failure,
 	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-		return
-	}
-	_ = a.Q.PruneActivityKeepSensitive(ctx, activityKeep)
 }
 
 // alertNodeExec 在节点上执行命令时发一条通知，和打开节点终端一样，令牌被盗用时用户能马上知道。命令本身不发出去（可能带密钥）。

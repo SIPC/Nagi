@@ -21,6 +21,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/oauth"
@@ -57,8 +58,11 @@ type API struct {
 	Log      *slog.Logger
 	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
 	OAuth *oauth.Server
+	// Audit 是审计日志（见 docs/audit.md）。
+	Audit *audit.Log
 
 	updates panelUpdates
+	reads   readDedup
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -163,7 +167,11 @@ func (s *authService) Login(ctx context.Context, req *connect.Request[nagiv1.Log
 }
 
 func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.LogoutRequest]) (*connect.Response[nagiv1.LogoutResponse], error) {
-	cookie := s.Auth.Logout(ctx, auth.SessionToken(req.Header()))
+	token := auth.SessionToken(req.Header())
+	if u, err := s.Auth.SessionUser(ctx, token); err == nil {
+		s.Record(auth.WithUser(ctx, u), audit.Event{Category: audit.Login, Action: "Logout"})
+	}
+	cookie := s.Auth.Logout(ctx, token)
 	resp := connect.NewResponse(&nagiv1.LogoutResponse{})
 	resp.Header().Set("Set-Cookie", cookie.String())
 	return resp, nil

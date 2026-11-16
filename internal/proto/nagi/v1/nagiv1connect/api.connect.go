@@ -265,6 +265,15 @@ const (
 	// SettingsServiceRevokeAccessTokenProcedure is the fully-qualified name of the SettingsService's
 	// RevokeAccessToken RPC.
 	SettingsServiceRevokeAccessTokenProcedure = "/nagi.v1.SettingsService/RevokeAccessToken"
+	// SettingsServiceListAuditEventsProcedure is the fully-qualified name of the SettingsService's
+	// ListAuditEvents RPC.
+	SettingsServiceListAuditEventsProcedure = "/nagi.v1.SettingsService/ListAuditEvents"
+	// SettingsServiceGetAuditEventProcedure is the fully-qualified name of the SettingsService's
+	// GetAuditEvent RPC.
+	SettingsServiceGetAuditEventProcedure = "/nagi.v1.SettingsService/GetAuditEvent"
+	// SettingsServiceExportAuditEventsProcedure is the fully-qualified name of the SettingsService's
+	// ExportAuditEvents RPC.
+	SettingsServiceExportAuditEventsProcedure = "/nagi.v1.SettingsService/ExportAuditEvents"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -1908,6 +1917,12 @@ type SettingsServiceClient interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
 	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest]) (*connect.ServerStreamForClient[v1.ExportAuditEventsChunk], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2113,6 +2128,24 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
 			connect.WithClientOptions(opts...),
 		),
+		listAuditEvents: connect.NewClient[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse](
+			httpClient,
+			baseURL+SettingsServiceListAuditEventsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListAuditEvents")),
+			connect.WithClientOptions(opts...),
+		),
+		getAuditEvent: connect.NewClient[v1.GetAuditEventRequest, v1.GetAuditEventResponse](
+			httpClient,
+			baseURL+SettingsServiceGetAuditEventProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAuditEvent")),
+			connect.WithClientOptions(opts...),
+		),
+		exportAuditEvents: connect.NewClient[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk](
+			httpClient,
+			baseURL+SettingsServiceExportAuditEventsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -2150,6 +2183,9 @@ type settingsServiceClient struct {
 	listAccessTokens     *connect.Client[v1.ListAccessTokensRequest, v1.ListAccessTokensResponse]
 	createAccessToken    *connect.Client[v1.CreateAccessTokenRequest, v1.CreateAccessTokenResponse]
 	revokeAccessToken    *connect.Client[v1.RevokeAccessTokenRequest, v1.RevokeAccessTokenResponse]
+	listAuditEvents      *connect.Client[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse]
+	getAuditEvent        *connect.Client[v1.GetAuditEventRequest, v1.GetAuditEventResponse]
+	exportAuditEvents    *connect.Client[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2312,6 +2348,21 @@ func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, req *conn
 	return c.revokeAccessToken.CallUnary(ctx, req)
 }
 
+// ListAuditEvents calls nagi.v1.SettingsService.ListAuditEvents.
+func (c *settingsServiceClient) ListAuditEvents(ctx context.Context, req *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
+	return c.listAuditEvents.CallUnary(ctx, req)
+}
+
+// GetAuditEvent calls nagi.v1.SettingsService.GetAuditEvent.
+func (c *settingsServiceClient) GetAuditEvent(ctx context.Context, req *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error) {
+	return c.getAuditEvent.CallUnary(ctx, req)
+}
+
+// ExportAuditEvents calls nagi.v1.SettingsService.ExportAuditEvents.
+func (c *settingsServiceClient) ExportAuditEvents(ctx context.Context, req *connect.Request[v1.ExportAuditEventsRequest]) (*connect.ServerStreamForClient[v1.ExportAuditEventsChunk], error) {
+	return c.exportAuditEvents.CallServerStream(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2367,6 +2418,12 @@ type SettingsServiceHandler interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *connect.Request[v1.CreateAccessTokenRequest]) (*connect.Response[v1.CreateAccessTokenResponse], error)
 	RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2568,6 +2625,24 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("RevokeAccessToken")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListAuditEventsHandler := connect.NewUnaryHandler(
+		SettingsServiceListAuditEventsProcedure,
+		svc.ListAuditEvents,
+		connect.WithSchema(settingsServiceMethods.ByName("ListAuditEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetAuditEventHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAuditEventProcedure,
+		svc.GetAuditEvent,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAuditEvent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceExportAuditEventsHandler := connect.NewServerStreamHandler(
+		SettingsServiceExportAuditEventsProcedure,
+		svc.ExportAuditEvents,
+		connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2634,6 +2709,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceCreateAccessTokenHandler.ServeHTTP(w, r)
 		case SettingsServiceRevokeAccessTokenProcedure:
 			settingsServiceRevokeAccessTokenHandler.ServeHTTP(w, r)
+		case SettingsServiceListAuditEventsProcedure:
+			settingsServiceListAuditEventsHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAuditEventProcedure:
+			settingsServiceGetAuditEventHandler.ServeHTTP(w, r)
+		case SettingsServiceExportAuditEventsProcedure:
+			settingsServiceExportAuditEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2769,6 +2850,18 @@ func (UnimplementedSettingsServiceHandler) CreateAccessToken(context.Context, *c
 
 func (UnimplementedSettingsServiceHandler) RevokeAccessToken(context.Context, *connect.Request[v1.RevokeAccessTokenRequest]) (*connect.Response[v1.RevokeAccessTokenResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.RevokeAccessToken is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListAuditEvents(context.Context, *connect.Request[v1.ListAuditEventsRequest]) (*connect.Response[v1.ListAuditEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListAuditEvents is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAuditEvent is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ExportAuditEvents is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

@@ -6,6 +6,7 @@ import settings from "./settings";
 import access from "./access";
 import account from "./account";
 import activity from "./activity";
+import audit from "./audit";
 import members from "./members";
 import alerts from "./alerts";
 import invite from "./invite";
@@ -37,6 +38,7 @@ export default {
   access,
   account,
   activity,
+  audit,
   members,
   alerts,
   invite,

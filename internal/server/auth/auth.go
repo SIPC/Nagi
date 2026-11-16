@@ -23,6 +23,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/store"
 	"golang.org/x/crypto/argon2"
 )
@@ -43,6 +44,9 @@ type Service struct {
 
 	mu      sync.Mutex
 	pending map[int64]pendingTOTP // 正在开启两步验证、还没确认的密钥
+
+	audit    *audit.Log
+	failures failureSummary
 }
 
 // Sealer 加密两步验证的密钥（面板主密钥）。
@@ -158,6 +162,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		return nil, verr
 	}
 	if err != nil || !ok {
+		s.recordLoginFailure(ctx, ip, username)
 		return nil, connect.NewError(connect.CodeUnauthenticated, ErrBadCredentials)
 	}
 	if user.TotpSecret != "" {
@@ -175,12 +180,21 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		}
 		if err := s.useTOTP(ctx, user, code); err != nil {
 			userDone(outcomeFailure)
+			at, aid, an := userActor(user.ID, user.Username)
+			s.loginEvent(ctx, audit.Event{Action: "totp_failed", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
+				Result: audit.ResultFailed, Error: err.Error()})
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
 		userDone(outcomeSuccess)
 	}
 	result = outcomeSuccess
-	return s.NewSession(ctx, user.ID, ip)
+	cookie, err := s.NewSession(ctx, user.ID, ip)
+	if err == nil {
+		at, aid, an := userActor(user.ID, user.Username)
+		s.loginEvent(ctx, audit.Event{Action: "Login", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
+			Session: audit.SessionTag(HashToken(cookie.Value))})
+	}
+	return cookie, err
 }
 
 // verifySem 限制同时进行的密码校验数：每次校验要 64 MiB 内存，并发太多会把面板撑爆。按可用的 CPU 算
@@ -260,6 +274,8 @@ type User struct {
 	Via                   string
 	AllowWrite, AllowExec bool
 	AllowNodeExec         bool
+	// SessionID 是网页会话的固定 ID（审计记录用它的哈希把一次登录里的操作串起来），令牌调用为空。
+	SessionID string
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
@@ -277,10 +293,13 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 	}
 	if row.ExpiresAt < time.Now().Unix() {
 		_ = s.q.DeleteSession(ctx, HashToken(token))
+		at, aid, an := userActor(row.UserID, row.Username)
+		s.loginEvent(ctx, audit.Event{Action: "session_expired", ActorType: at, ActorID: aid, ActorName: an,
+			Session: audit.SessionTag(HashToken(token))})
 		return User{}, i18n.New("登录已过期，请重新登录")
 	}
 	return User{ID: row.UserID, Name: row.Username, Role: row.Role, ElevatedUntil: row.ElevatedUntil,
-		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0}, nil
+		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0, SessionID: HashToken(token)}, nil
 }
 
 // CleanupLoop 定期清理过期的会话、访问令牌和没用的 OAuth 客户端，直到 ctx 取消。
@@ -293,6 +312,7 @@ func (s *Service) CleanupLoop(ctx context.Context) {
 		_ = s.q.DeleteExpiredAccessTokens(ctx, now.Unix())
 		// 注册了一直没人授权的 OAuth 客户端（见 docs/mcp.md#oauth）。
 		_ = s.q.DeleteStaleOAuthClients(ctx, now.Add(-24*time.Hour).Unix())
+		s.FlushLoginFailures(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -318,6 +338,26 @@ func WithInternalUser(ctx context.Context, u User) context.Context {
 	return context.WithValue(ctx, internalUserKey{}, u)
 }
 
+// Meta 是请求的来源：客户端 IP（经本机 Caddy 转发时按 RequestIP 核对）和 User-Agent，审计记录用。
+type Meta struct {
+	IP, UserAgent string
+	// Client 是 MCP 客户端的名称（OAuth 客户端名或 User-Agent）。
+	Client string
+}
+
+type metaKey struct{}
+
+// WithMeta 把请求的来源放进 ctx。
+func WithMeta(ctx context.Context, m Meta) context.Context {
+	return context.WithValue(ctx, metaKey{}, m)
+}
+
+// RequestMeta 返回 ctx 里请求的来源。
+func RequestMeta(ctx context.Context) Meta {
+	m, _ := ctx.Value(metaKey{}).(Meta)
+	return m
+}
+
 // Username 返回当前请求的登录用户名。
 func Username(ctx context.Context) string { return CurrentUser(ctx).Name }
 
@@ -341,10 +381,13 @@ type interceptor struct {
 	public map[string]bool
 }
 
-func (i *interceptor) check(ctx context.Context, procedure string, h http.Header) (context.Context, error) {
+func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.Header) (context.Context, error) {
 	// MCP 在进程内调用接口，用户已经按令牌核对过（见 WithInternalUser）。
 	if u, ok := ctx.Value(internalUserKey{}).(User); ok {
 		return context.WithValue(ctx, userKey{}, u), nil
+	}
+	if _, ok := ctx.Value(metaKey{}).(Meta); !ok {
+		ctx = WithMeta(ctx, Meta{IP: RequestIP(addr, h), UserAgent: h.Get("User-Agent")})
 	}
 	if i.public[procedure] {
 		return ctx, nil
@@ -358,7 +401,7 @@ func (i *interceptor) check(ctx context.Context, procedure string, h http.Header
 
 func (i *interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		ctx, err := i.check(ctx, req.Spec().Procedure, req.Header())
+		ctx, err := i.check(ctx, req.Spec().Procedure, req.Peer().Addr, req.Header())
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +415,7 @@ func (i *interceptor) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		ctx, err := i.check(ctx, conn.Spec().Procedure, conn.RequestHeader())
+		ctx, err := i.check(ctx, conn.Spec().Procedure, conn.Peer().Addr, conn.RequestHeader())
 		if err != nil {
 			return err
 		}

@@ -1,6 +1,6 @@
 # MCP 接入
 
-让 agent（Claude Code、Claude 网页版和桌面版的连接器、ChatGPT、自己写的 agent）通过 [MCP](https://modelcontextprotocol.io) 直接查看和管理集群：看状态、日志和监控，部署、重启、回滚，在容器里执行命令。agent 用个人访问令牌或者 OAuth 授权登录，权限不超过授权的成员：角色和[访问范围](panel.md#访问范围)照常生效，每次操作都记进活动记录。
+让 agent（Claude Code、Claude 网页版和桌面版的连接器、ChatGPT、自己写的 agent）通过 [MCP](https://modelcontextprotocol.io) 直接查看和管理集群：看状态、日志和监控，部署、重启、回滚，在容器里执行命令。agent 用个人访问令牌或者 OAuth 授权登录，权限不超过授权的成员：角色和[访问范围](panel.md#访问范围)照常生效，每次操作都记进[审计日志](audit.md)。
 
 能做的事，例如：
 
@@ -81,7 +81,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 工具不直接调用业务代码，而是在进程内调用面板自己的 Connect 接口：MCP 层验证令牌后，把令牌对应的成员放进请求的 ctx，通过内存里的传输调用同一个 mux（不经过网络，所以不能伪造）。这样现有的拦截器全部照常生效，不用为 MCP 再写一遍：
 
 - 角色检查、访问范围、高权限确认（令牌没有高权限，相关接口一律拒绝）、备用面板只读。
-- 活动记录：`activity` 加一列 `via`，网页为空，MCP 写 `mcp:<令牌名>`，活动记录页显示「通过 MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条，详情是命令本身，退出码不为 0 时接在后面。
+- 审计记录：来源 `via` 是 `mcp`，带上令牌 ID 和客户端，审计页显示「MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条（类别 `session`），参数里是命令本身，退出码不为 0 时接在后面。
 - 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行。
 - 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec`。
 
@@ -200,7 +200,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - **密钥不进模型**：变量的值、deploy key、webhook 令牌、备份密钥都不返回，只给名称和「已设置」。agent 可以设置变量的值（只写）。compose、命令、健康检查的文字按原样返回，密钥要放在变量里，不要直接写进去。git 地址不能带账号或令牌（私有仓库用 SSH 和 deploy key），早期保存的地址返回时也去掉。
 - **不可信内容**：日志和 `exec` 的输出可能含有针对 agent 的指令，工具说明里写明这些是数据，不是指令。
 - **限额**：每个令牌每分钟最多 60 次调用，其中 `exec` 最多 10 次；单次返回内容有上限，超出时截断并注明。
-- **可以随时止损**：令牌页一键吊销；活动记录能按 `via` 筛出 MCP 做的所有操作。
+- **可以随时止损**：令牌页一键吊销；审计页能按来源筛出 MCP 做的所有操作。
 - **被拒绝的调用留痕**：令牌没有权限的工具不在它的工具列表里，客户端照样按名字调用时，SDK 当作不存在的工具拒绝，面板先从请求里认出工具名，记一条「MCP 调用被拒绝」（`MCPToolDenied`）。
 
 ## 实现
@@ -208,5 +208,5 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
-- `internal/server/store`：`api_tokens`、`oauth_clients` 表，`activity.via` 列（迁移 0010）。查询手写在 `tokens.go`，不放进 `queries.sql`。
-- 界面：账号安全里的「访问令牌」（`pages/tokens.tsx`），成员行的 ⋯ 里的「访问令牌」（管理员查看和吊销），授权页 `/oauth/authorize`（没登录时记下地址，登录后回来），活动记录显示来源。
+- `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。
+- 界面：账号安全里的「访问令牌」（`pages/tokens.tsx`），成员行的 ⋯ 里的「访问令牌」（管理员查看和吊销），授权页 `/oauth/authorize`（没登录时记下地址，登录后回来），审计页显示来源。

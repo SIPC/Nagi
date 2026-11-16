@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -228,18 +230,22 @@ func (r *Registry) recordAlert(ctx context.Context, node, nodeID string, a *nagi
 	if a.GetStatus() == "resolved" {
 		action = "resolved"
 	}
-	err := r.q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(),
-		Kind:      "alert",
-		Actor:     clipText(node, 64),
-		Action:    action,
-		ProjectID: projectID,
-		Target:    target,
-		Detail:    clipText(a.GetTitle(), 120),
-	})
-	if err != nil {
-		r.log.Warn("写入活动记录失败", "err", err)
+	params, _ := json.Marshal(map[string]string{"title": clipText(a.GetTitle(), 120), "key": clipText(a.GetKey(), 200)})
+	e := audit.Event{
+		Category: audit.Alert, Action: action, ActorType: audit.ActorNode, ActorID: nodeID, ActorName: clipText(node, 64),
+		Via: audit.ViaNode, ProjectID: projectID, TargetName: target, Params: string(params),
 	}
+	if target != "" && projectID != "" {
+		e.TargetType, e.TargetID = "container", target
+	}
+	if nodeID == "" {
+		// 面板自己发出的告警（节点离线等）：操作者是面板，对象是告警里的节点。
+		e.ActorType, e.ActorName, e.Via = audit.ActorPanel, "", audit.ViaSystem
+		if e.TargetType == "" && node != "" {
+			e.TargetType, e.TargetName = "node", clipText(node, 64)
+		}
+	}
+	r.Audit.Record(ctx, e)
 }
 
 func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertRequest) (*nagiv1.RelayAlertResponse, error) {

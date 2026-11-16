@@ -119,6 +119,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// 个人访问令牌可以不过期。
 		AllowMissingExpiration: true,
 	})
+	// 审计记录的来源（见 docs/audit.md#mcp-调用）：工具在进程内调用接口时 ctx 一路带着它。
+	r = r.WithContext(auth.WithMeta(r.Context(), auth.Meta{
+		IP: auth.RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Client: r.Header.Get("User-Agent"),
+	}))
 	rec := &statusRecorder{ResponseWriter: w}
 	mw(h.watchDenied(h.http)).ServeHTTP(rec, r)
 	// 被拒绝的请求记一条，排查客户端连不上时看面板日志就知道原因。没带令牌的 401 是 OAuth 发现流程的第一步，不记。

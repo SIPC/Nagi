@@ -612,4 +612,7 @@ var en = map[string]string{
 	"面板重启打断了更新，请重试":          "A panel restart interrupted the update. Try again",
 	"项目 ID 无效":               "The project ID isn't valid",
 	"项目根目录必须是绝对路径，且不能是 /":    "The projects root must be an absolute path other than /",
+	"记录不存在":                  "The record doesn't exist",
+	"只有管理员能导出审计记录":           "Only administrators can export audit records",
+	"缺少项目":                   "Specify a project",
 }

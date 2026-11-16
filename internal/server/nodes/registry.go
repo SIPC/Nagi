@@ -20,6 +20,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
@@ -63,6 +64,8 @@ type Registry struct {
 	log    *slog.Logger
 	sealer *sealer.Sealer
 	ca     *tlsutil.CA
+	// Audit 是审计日志（见 docs/audit.md），节点和面板发出的告警记在这里。
+	Audit *audit.Log
 
 	mu       sync.RWMutex
 	conns    map[string]*Conn

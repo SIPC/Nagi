@@ -1,19 +1,24 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 func TestActivityRecorded(t *testing.T) {
 	for procedure, want := range map[string]bool{
 		nagiv1connect.ProjectServiceDeployProcedure:           true,
 		nagiv1connect.ProjectServiceControlContainerProcedure: true,
-		nagiv1connect.AuthServiceLoginProcedure:               true,
-		nagiv1connect.ProjectServiceListProjectsProcedure:     false,
-		nagiv1connect.ProjectServiceGetProjectProcedure:       false,
+		nagiv1connect.AuthServiceLoginProcedure:               false, // 在 auth 里记
+		nagiv1connect.ProjectServiceListVersionsProcedure:     false,
+		nagiv1connect.ProjectServiceGetProjectProcedure:       true, // 带着变量值，按会话每小时记一条
+		nagiv1connect.ProjectServiceGetBackupKeyProcedure:     true,
 		nagiv1connect.AuthServiceMeProcedure:                  false,
 		nagiv1connect.SettingsServiceListActivityProcedure:    false,
 	} {
@@ -42,4 +47,85 @@ func TestActivityFieldFirstMatch(t *testing.T) {
 	if got := activityField(req, "container", "name"); got != "web" {
 		t.Errorf("目标 = %q", got)
 	}
+}
+
+// notSensitiveOutputs 是回复里有名字像密钥的字段、但不用记成敏感查询的接口，写明原因。
+var notSensitiveOutputs = map[string]string{
+	"GetNodeMesh":       "WireGuard 公钥",
+	"GetPanelMesh":      "WireGuard 公钥",
+	"InspectComposeDir": "secret_variables 只是变量名",
+	"GetSettings":       "master_key_path 是文件路径",
+	"ListAuditEvents":   "token_name 是令牌的名称",
+	"GetAuditEvent":     "token_name 是令牌的名称",
+}
+
+// 返回密钥、变量值或文件内容的查询都要登记在 store.SensitiveReads（见 docs/audit.md#记录范围）。
+// 修改类的接口本来就会记，不用登记。
+func TestSensitiveReadsRegistered(t *testing.T) {
+	fd, err := protoregistry.GlobalFiles.FindFileByPath("nagi/v1/api.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := []string{"password", "token", "secret", "key", "value", "content", "data"}
+	for i := range fd.Services().Len() {
+		svc := fd.Services().Get(i)
+		for j := range svc.Methods().Len() {
+			m := svc.Methods().Get(j)
+			procedure := "/" + string(svc.FullName()) + "/" + string(m.Name())
+			if !activityRecordedAsRead(procedure) {
+				continue
+			}
+			var hits []string
+			seen := map[protoreflect.FullName]bool{}
+			var walk func(md protoreflect.MessageDescriptor)
+			walk = func(md protoreflect.MessageDescriptor) {
+				if seen[md.FullName()] {
+					return
+				}
+				seen[md.FullName()] = true
+				for k := range md.Fields().Len() {
+					f := md.Fields().Get(k)
+					kind := f.Kind()
+					if f.IsMap() {
+						kind = f.MapValue().Kind()
+					}
+					if kind == protoreflect.StringKind || kind == protoreflect.BytesKind {
+						for _, w := range words {
+							if strings.Contains(string(f.Name()), w) {
+								hits = append(hits, string(f.FullName()))
+								break
+							}
+						}
+					}
+					if f.IsMap() {
+						if mm := f.MapValue().Message(); mm != nil {
+							walk(mm)
+						}
+					} else if mm := f.Message(); mm != nil {
+						walk(mm)
+					}
+				}
+			}
+			walk(m.Output())
+			name := string(m.Name())
+			if len(hits) == 0 || store.SensitiveReads[name] {
+				continue
+			}
+			if _, ok := notSensitiveOutputs[name]; ok {
+				continue
+			}
+			t.Errorf("%s 的回复里有 %v：登记到 store.SensitiveReads，或在 notSensitiveOutputs 里写明为什么不用记", name, hits)
+		}
+	}
+}
+
+// activityRecordedAsRead 判断接口是不记录的查询。
+func activityRecordedAsRead(procedure string) bool {
+	method := methodOf(procedure)
+	for _, p := range readOnlyPrefixes {
+		if strings.HasPrefix(method, p) {
+			return true
+		}
+	}
+	return false
 }

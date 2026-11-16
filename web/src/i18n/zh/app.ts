@@ -4,7 +4,7 @@ export default {
     overview: "概览",
     projects: "项目",
     nodes: "节点",
-    activity: "活动",
+    audit: "审计",
     settings: "设置",
     open: "打开导航",
     close: "关闭导航",

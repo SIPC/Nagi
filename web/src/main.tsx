@@ -21,7 +21,7 @@ import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages
 import { AddContainerPage, ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
 import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
-import { ActivityPage } from "@/pages/activity";
+import { AuditPage, auditCategories, auditRanges, auditVias, type AuditSearch } from "@/pages/audit";
 import { adoptAccountLocale } from "@/i18n";
 import "./index.css";
 import { ConfirmHost } from "@/components/confirm";
@@ -252,26 +252,50 @@ const settingsRoute = createRoute({
     activity: search.tab === "activity" ? (search.kind === "operation" || search.kind === "alert" ? search.kind : "") : search.activity === "" || search.activity === "operation" || search.activity === "alert" ? search.activity : undefined,
   }),
   beforeLoad: ({ search }) => {
-    if (search.activity !== undefined) throw redirect({ to: "/activity", search: { kind: search.activity || undefined }, replace: true });
+    if (search.activity !== undefined) throw redirect({ to: "/audit", search: { cat: search.activity || undefined }, replace: true });
   },
   // 当前子页由 SettingsPage 自己从地址读。
   component: SettingsPage,
 });
 
+// 审计（见 docs/audit.md#界面）：筛选条件都写进地址，可以分享。
+const num = (v: unknown) => {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : undefined;
+};
+const str = (v: unknown) => (typeof v === "string" && v !== "" ? v : typeof v === "number" ? String(v) : undefined);
+const auditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/audit",
+  validateSearch: (search: Record<string, unknown>): AuditSearch => ({
+    range: auditRanges.includes(search.range as never) ? (search.range as AuditSearch["range"]) : undefined,
+    member: num(search.member),
+    via: auditVias.includes(search.via as never) ? (search.via as string) : undefined,
+    cat: auditCategories.includes(search.cat as never) ? (search.cat as string) : undefined,
+    project: str(search.project),
+    node: str(search.node),
+    failed: search.failed === true || search.failed === "true" ? true : undefined,
+    q: str(search.q),
+    id: num(search.id),
+  }),
+  component: AuditPage,
+});
+
+// 「活动」改名为「审计」以前的地址。
 const activityRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/activity",
-  validateSearch: (search: Record<string, unknown>): { kind?: "operation" | "alert" } => ({
-    kind: search.kind === "operation" || search.kind === "alert" ? search.kind : undefined,
-  }),
-  component: ActivityPage,
+  beforeLoad: ({ search }) => {
+    const kind = (search as Record<string, unknown>).kind;
+    throw redirect({ to: "/audit", search: { cat: kind === "operation" || kind === "alert" ? kind : undefined }, replace: true });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   oauthRoute,
-  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, activityRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, auditRoute, activityRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent", defaultNotFoundComponent: NotFound });

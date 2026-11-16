@@ -2105,6 +2105,9 @@ const (
 	SettingsService_ListAccessTokens_FullMethodName     = "/nagi.v1.SettingsService/ListAccessTokens"
 	SettingsService_CreateAccessToken_FullMethodName    = "/nagi.v1.SettingsService/CreateAccessToken"
 	SettingsService_RevokeAccessToken_FullMethodName    = "/nagi.v1.SettingsService/RevokeAccessToken"
+	SettingsService_ListAuditEvents_FullMethodName      = "/nagi.v1.SettingsService/ListAuditEvents"
+	SettingsService_GetAuditEvent_FullMethodName        = "/nagi.v1.SettingsService/GetAuditEvent"
+	SettingsService_ExportAuditEvents_FullMethodName    = "/nagi.v1.SettingsService/ExportAuditEvents"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2164,6 +2167,12 @@ type SettingsServiceClient interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(ctx context.Context, in *CreateAccessTokenRequest, opts ...grpc.CallOption) (*CreateAccessTokenResponse, error)
 	RevokeAccessToken(ctx context.Context, in *RevokeAccessTokenRequest, opts ...grpc.CallOption) (*RevokeAccessTokenResponse, error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(ctx context.Context, in *GetAuditEventRequest, opts ...grpc.CallOption) (*GetAuditEventResponse, error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(ctx context.Context, in *ExportAuditEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportAuditEventsChunk], error)
 }
 
 type settingsServiceClient struct {
@@ -2494,6 +2503,45 @@ func (c *settingsServiceClient) RevokeAccessToken(ctx context.Context, in *Revok
 	return out, nil
 }
 
+func (c *settingsServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditEventsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListAuditEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) GetAuditEvent(ctx context.Context, in *GetAuditEventRequest, opts ...grpc.CallOption) (*GetAuditEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAuditEventResponse)
+	err := c.cc.Invoke(ctx, SettingsService_GetAuditEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) ExportAuditEvents(ctx context.Context, in *ExportAuditEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExportAuditEventsChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SettingsService_ServiceDesc.Streams[0], SettingsService_ExportAuditEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ExportAuditEventsRequest, ExportAuditEventsChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_ExportAuditEventsClient = grpc.ServerStreamingClient[ExportAuditEventsChunk]
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2551,6 +2599,12 @@ type SettingsServiceServer interface {
 	// 生成个人访问令牌，只能给自己生成，要先做高权限确认。
 	CreateAccessToken(context.Context, *CreateAccessTokenRequest) (*CreateAccessTokenResponse, error)
 	RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error)
+	// 审计日志（见 docs/audit.md）。管理员看全部；操作员和只读成员只看访问范围内项目的记录，不含 IP 和浏览器。
+	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	// 一条记录的详情，带上级和下级记录。
+	GetAuditEvent(context.Context, *GetAuditEventRequest) (*GetAuditEventResponse, error)
+	// 按筛选条件导出 JSON Lines，只有管理员能用。
+	ExportAuditEvents(*ExportAuditEventsRequest, grpc.ServerStreamingServer[ExportAuditEventsChunk]) error
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -2656,6 +2710,15 @@ func (UnimplementedSettingsServiceServer) CreateAccessToken(context.Context, *Cr
 }
 func (UnimplementedSettingsServiceServer) RevokeAccessToken(context.Context, *RevokeAccessTokenRequest) (*RevokeAccessTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeAccessToken not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAuditEvent(context.Context, *GetAuditEventRequest) (*GetAuditEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuditEvent not implemented")
+}
+func (UnimplementedSettingsServiceServer) ExportAuditEvents(*ExportAuditEventsRequest, grpc.ServerStreamingServer[ExportAuditEventsChunk]) error {
+	return status.Error(codes.Unimplemented, "method ExportAuditEvents not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3254,6 +3317,53 @@ func _SettingsService_RevokeAccessToken_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListAuditEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListAuditEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_GetAuditEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuditEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAuditEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAuditEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAuditEvent(ctx, req.(*GetAuditEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_ExportAuditEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ExportAuditEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SettingsServiceServer).ExportAuditEvents(m, &grpc.GenericServerStream[ExportAuditEventsRequest, ExportAuditEventsChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_ExportAuditEventsServer = grpc.ServerStreamingServer[ExportAuditEventsChunk]
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3389,8 +3499,22 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RevokeAccessToken",
 			Handler:    _SettingsService_RevokeAccessToken_Handler,
 		},
+		{
+			MethodName: "ListAuditEvents",
+			Handler:    _SettingsService_ListAuditEvents_Handler,
+		},
+		{
+			MethodName: "GetAuditEvent",
+			Handler:    _SettingsService_GetAuditEvent_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ExportAuditEvents",
+			Handler:       _SettingsService_ExportAuditEvents_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/api.proto",
 }
 

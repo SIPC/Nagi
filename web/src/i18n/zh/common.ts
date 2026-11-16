@@ -50,7 +50,7 @@ export default {
     done: "已完成",
     // 接口没有返回原因时的兜底。
     failed: "面板未返回原因，可在「活动」中查看",
-    viewActivity: "查看活动",
+    viewActivity: "查看审计",
     // 操作输出里需要注意的几行合并成一条提示。
     notes: (n: number) => `需要注意 ${n} 项`,
     showNotes: "查看",

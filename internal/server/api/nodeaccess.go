@@ -15,8 +15,8 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/coder/websocket"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -199,20 +199,14 @@ func (a *API) nodeName(ctx context.Context, nodeID string) string {
 // recordNodeAccess 记下一次节点访问。不走 Connect 的入口（终端、上传下载）用它。
 func (a *API) recordNodeAccess(ctx context.Context, action, nodeID, detail string, failed bool) {
 	ctx = context.WithoutCancel(ctx)
-	err := a.Q.InsertActivity(ctx, store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(),
-		Kind:      "operation",
-		Actor:     clipActivity(auth.Username(ctx), 64),
-		Action:    action,
-		Target:    clipActivity(a.nodeName(ctx, nodeID), 200),
-		Detail:    clipActivity(detail, 500),
-		Failed:    boolInt(failed),
-	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-		return
+	e := audit.Event{Action: action, TargetType: "node", TargetID: nodeID, TargetName: a.nodeName(ctx, nodeID)}
+	if failed {
+		e.Result, e.Error = audit.ResultFailed, detail
+	} else if detail != "" {
+		b, _ := json.Marshal(map[string]string{"detail": detail})
+		e.Params = string(b)
 	}
-	_ = a.Q.PruneActivityKeepSensitive(ctx, activityKeep)
+	a.Record(ctx, e)
 }
 
 // ---- 节点终端 ----

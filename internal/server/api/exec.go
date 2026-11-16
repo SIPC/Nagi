@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strconv"
@@ -11,8 +12,8 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"github.com/SIPC/nagi/internal/server/store"
 )
 
 // ExecResult 是在容器里执行一条命令的结果。
@@ -106,29 +107,24 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 
 // RecordMCPDenied 记一条被拒绝的 MCP 工具调用（见 docs/mcp.md#安全）：令牌没有这个工具的权限。
 func (a *API) RecordMCPDenied(ctx context.Context, u auth.User, tool, reason string) {
-	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(), Kind: "operation", Actor: clipActivity(u.Name, 64), Action: "MCPToolDenied",
-		Target: clipActivity(tool, 200), Detail: clipActivity(reason, 500), Failed: 1, Via: clipActivity(u.Via, 80),
+	a.Record(auth.WithUser(ctx, u), audit.Event{
+		Category: audit.MCP, Action: "mcp:" + tool, TargetType: "tool", TargetID: tool, TargetName: tool,
+		Result: audit.ResultDenied, Error: reason,
 	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-	}
 }
 
 // recordExec 记一条执行命令的活动：详情是命令，失败时后面接原因。
 func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure string) {
-	detail := command
+	result := audit.ResultOK
 	if failure != "" {
-		detail += ": " + failure
+		result = audit.ResultFailed
 	}
-	err := a.Q.InsertActivity(context.WithoutCancel(ctx), store.InsertActivityParams{
-		CreatedAt: time.Now().Unix(), Kind: "operation", Actor: clipActivity(auth.Username(ctx), 64), Action: "ExecCommand",
-		ProjectID: start.GetProjectId(), Target: clipActivity(start.GetContainer(), 200), Detail: clipActivity(detail, 500),
-		Failed: boolInt(failure != ""), Via: clipActivity(auth.CurrentUser(ctx).Via, 80),
+	params, _ := json.Marshal(map[string]any{"service": start.GetService(), "command": command})
+	a.Record(ctx, audit.Event{
+		Category: audit.Session, Action: "ExecCommand", ProjectID: start.GetProjectId(),
+		TargetType: "container", TargetID: start.GetContainer(), TargetName: start.GetContainer(),
+		Params: string(params), Result: result, Error: failure,
 	})
-	if err != nil {
-		a.Log.Warn("写入活动记录失败", "err", err)
-	}
 }
 
 // headTail 只留输出的开头和结尾，中间的丢掉。终端的输出里换行是 \r\n，去掉 \r。

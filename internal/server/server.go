@@ -25,6 +25,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/api"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/mcp"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -75,6 +76,7 @@ type Server struct {
 	listener      net.Listener
 
 	auth     *auth.Service
+	audit    *audit.Log
 	nodes    *nodes.Registry
 	projects *projects.Service
 	sealer   *sealer.Sealer
@@ -136,6 +138,16 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// 旧版本给 v0.1.0 的节点升级时缓存的 nagi（release/<版本>/），v0.28.0 起不再提供，删掉。
 	_ = os.RemoveAll(filepath.Join(cfg.DataDir, "release"))
 	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d), domainCh: make(chan string, 1), role: role{ch: make(chan struct{})}}
+	// 审计日志在单独的库里（见 docs/audit.md#存储保留与同步）：备用面板同步主库时不用带上它。
+	if s.audit, err = audit.Open(ctx, filepath.Join(cfg.DataDir, "audit.db"), log.With("component", "audit")); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("打开审计库: %w", err)
+	}
+	if n, err := s.audit.MigrateActivity(ctx, d); err != nil {
+		log.Warn("迁移活动记录失败", "err", err)
+	} else if n > 0 {
+		log.Info("活动记录已迁移到审计库", "count", n)
+	}
 
 	s.publicAddress, err = s.setting(ctx, api.SettingPublicAddress, detectAddress)
 	if err != nil {
@@ -188,12 +200,14 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("读取面板主密钥: %w", err)
 	}
 	s.auth = auth.New(s.q, s.sealer)
+	s.auth.SetAudit(s.audit)
 	if info != nil {
 		s.standby = &standby.Client{Info: info, DataDir: cfg.DataDir, DB: d, Log: log.With("component", "standby")}
 	} else {
 		s.primary = &standby.Primary{Q: s.q, DataDir: cfg.DataDir, CA: s.ca, Log: log.With("component", "standby")}
 	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
+	s.nodes.Audit = s.audit
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log, Fingerprint: s.Fingerprint,
 		ReservedDomain: func(d string) bool {
@@ -321,10 +335,11 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	go s.auth.CleanupLoop(ctx)
+	go s.audit.PruneLoop(ctx, func(context.Context) audit.Retention { return audit.DefaultRetention })
 
 	mux := http.NewServeMux()
 	oauthServer := oauth.New(s.q, s.log)
-	a := &api.API{Q: s.q, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, OAuth: oauthServer, Panel: &api.PanelInfo{
+	a := &api.API{Q: s.q, Audit: s.audit, Auth: s.auth, Nodes: s.nodes, Projects: s.projects, CA: s.ca, Sealer: s.sealer, Log: s.log, OAuth: oauthServer, Panel: &api.PanelInfo{
 		Q:           s.q,
 		DataDir:     s.cfg.DataDir,
 		Port:        s.port,

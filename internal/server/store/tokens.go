@@ -10,16 +10,16 @@ import (
 
 // AccessToken 是一个访问令牌：个人访问令牌，或者一次 OAuth 授权。
 type AccessToken struct {
-	ID               int64
-	UserID           int64
-	Name             string
-	Source           string
-	ClientID         string
-	TokenHash        string
-	RefreshHash      string
-	PrevRefreshHash  string
-	AllowWrite       bool
-	AllowExec        bool
+	ID              int64
+	UserID          int64
+	Name            string
+	Source          string
+	ClientID        string
+	TokenHash       string
+	RefreshHash     string
+	PrevRefreshHash string
+	AllowWrite      bool
+	AllowExec       bool
 	// AllowNodeExec：可以在节点上执行命令（只给管理员的个人访问令牌）。
 	AllowNodeExec    bool
 	CreatedAt        int64
@@ -217,6 +217,25 @@ func (q *Queries) ListProjectActivity(ctx context.Context, projectID, container 
 			return nil, err
 		}
 		out = append(out, i)
+	}
+	return out, rows.Err()
+}
+
+// AccessTokenNames 返回所有访问令牌（包括已过期的）的名称，审计记录显示令牌名用。
+func (q *Queries) AccessTokenNames(ctx context.Context) (map[int64]string, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT id, name FROM api_tokens`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		out[id] = name
 	}
 	return out, rows.Err()
 }
