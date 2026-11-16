@@ -50,6 +50,9 @@ type egressState struct {
 	// 或者 IPv6 链路本地地址收发，按源地址匹配的项目规则管不到它们（见 docs/agent.md#出站限制）。
 	strict []string
 	known  []netip.Addr
+	// public 是节点对外开放的端口（Caddy 的 80、443 和 TCP/UDP 转发）。发往节点本机这些端口的连接放行：
+	// 它们本来就对公网开放，容器访问自己或别的项目的域名时会连到节点自己的地址。
+	public []spec.PortKey
 }
 
 // projectKey 是规则里用的项目短名：项目 ID 本来就是十六进制。
@@ -171,6 +174,19 @@ func buildRuleset(st egressState) string {
 					dst = fmt.Sprintf("%s daddr @local%s", ipk, fam)
 				}
 				fmt.Fprintf(&b, "\t\tiifname { %s } %s saddr != @known%s %s meta l4proto { tcp, udp } drop\n", strings.Join(ifaces, ", "), ipk, fam, dst)
+			}
+		}
+		if local {
+			for _, proto := range []string{spec.ProtoTCP, spec.ProtoUDP} {
+				var ports []string
+				for _, p := range st.public {
+					if p.Proto == proto {
+						ports = append(ports, strconv.FormatUint(uint64(p.Port), 10))
+					}
+				}
+				if len(ports) > 0 {
+					fmt.Fprintf(&b, "\t\tmeta l4proto %s th dport { %s } accept\n", proto, strings.Join(ports, ", "))
+				}
 			}
 		}
 		for _, id := range ids {

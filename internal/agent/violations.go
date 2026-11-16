@@ -22,13 +22,25 @@ const (
 	violationLimit  = 200
 	// revokeGrace：放行刚撤销的这段时间里，已有连接的重连不算越权（断开项目连接、移除节点、成员列表的保留期）。
 	revokeGrace = 2 * time.Minute
+	// violationHold：记下的越权先等这么久再上报，到时按现在的配置再查一次，已经允许了就不报。
+	// 面板改了放行（新连接了项目、容器换了节点、副本换了源节点）时，各节点拿到新配置有先有后，
+	// 先拿到的一方发起的请求会被还没拿到的一方拒绝，这不是越权。
+	violationHold = 30 * time.Second
 )
+
+// pendingViolation 是一条等着上报的越权。still 为空表示不用再查；不为空时上报前调用，返回 false 说明现在已经允许了。
+type pendingViolation struct {
+	v     *nagiv1.Violation
+	ev    auditlog.Event
+	at    time.Time
+	still func() bool
+}
 
 type violations struct {
 	a *agent
 
 	mu          sync.Mutex
-	pending     []*nagiv1.Violation
+	pending     []pendingViolation
 	dropped     uint32
 	windowStart time.Time
 	inWindow    int
@@ -52,6 +64,11 @@ func (v *violations) revoke(k mesh.Key) {
 
 // add 记下一次被拒绝的越权请求。
 func (v *violations) add(caller mesh.Key, method, projectID, container string, port uint16, detail string) {
+	v.addCheck(caller, method, projectID, container, port, detail, nil)
+}
+
+// addCheck 和 add 一样，still 在上报前按当时的配置再查一次（见 violationHold）。
+func (v *violations) addCheck(caller mesh.Key, method, projectID, container string, port uint16, detail string, still func() bool) {
 	if v == nil {
 		return
 	}
@@ -72,10 +89,39 @@ func (v *violations) add(caller mesh.Key, method, projectID, container string, p
 		return
 	}
 	v.inWindow++
-	v.a.audit.Record(auditlog.Event{Actor: "mesh:" + caller.String(), Action: "violation", Target: strings.Trim(projectID+"/"+container, "/"),
-		Detail: method + " " + detail, Result: "denied"})
-	v.pending = append(v.pending, &nagiv1.Violation{Caller: caller[:], Method: method, ProjectId: projectID, Container: container,
-		Port: uint32(port), Detail: detail, Time: timestamppb.New(now)})
+	v.pending = append(v.pending, pendingViolation{
+		v: &nagiv1.Violation{Caller: caller[:], Method: method, ProjectId: projectID, Container: container,
+			Port: uint32(port), Detail: detail, Time: timestamppb.New(now)},
+		ev: auditlog.Event{Actor: "mesh:" + caller.String(), Action: "violation", Target: strings.Trim(projectID+"/"+container, "/"),
+			Detail: method + " " + detail, Result: "denied"},
+		at: now, still: still,
+	})
+}
+
+// ready 取出已经等够 violationHold 的越权，按现在的配置再查一次，仍然不允许的记进本地审计并返回。
+func (v *violations) ready(now time.Time) []*nagiv1.Violation {
+	v.mu.Lock()
+	var due, keep []pendingViolation
+	for _, p := range v.pending {
+		if now.Sub(p.at) >= violationHold {
+			due = append(due, p)
+		} else {
+			keep = append(keep, p)
+		}
+	}
+	v.pending = keep
+	v.mu.Unlock()
+	var out []*nagiv1.Violation
+	for _, p := range due {
+		if p.still != nil && !p.still() {
+			continue
+		}
+		if v.a.audit != nil {
+			v.a.audit.Record(p.ev)
+		}
+		out = append(out, p.v)
+	}
+	return out
 }
 
 // run 每 10 秒把攒下的一批告诉所有连着的面板（面板据此告警；备用面板也收，只记录）。
@@ -88,9 +134,10 @@ func (v *violations) run(ctx context.Context) {
 			return
 		case <-t.C:
 		}
+		batch := v.ready(time.Now())
 		v.mu.Lock()
-		batch, dropped := v.pending, v.dropped
-		v.pending, v.dropped = nil, 0
+		dropped := v.dropped
+		v.dropped = 0
 		v.mu.Unlock()
 		if len(batch) == 0 && dropped == 0 {
 			continue

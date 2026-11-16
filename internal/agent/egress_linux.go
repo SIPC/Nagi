@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -86,6 +87,12 @@ func (e *egress) sync(ctx context.Context) {
 	st, err := egressStateOf(ctx, e.a.docker, e.a.intranet.current())
 	if err != nil {
 		return
+	}
+	if e.a.proxy != nil {
+		st.public = e.a.proxy.PublicPorts()
+		sort.Slice(st.public, func(i, j int) bool {
+			return st.public[i].Proto < st.public[j].Proto || st.public[i].Proto == st.public[j].Proto && st.public[i].Port < st.public[j].Port
+		})
 	}
 	rules := buildRuleset(st)
 	byIP := map[string]egressContainer{}

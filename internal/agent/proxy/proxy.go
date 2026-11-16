@@ -68,6 +68,8 @@ type Proxy struct {
 	mu    sync.Mutex
 	last  []byte
 	ports []spec.PortKey // 加载成功的配置里监听的 80 和 443
+	// public 是加载成功的配置对外开放的所有端口：80、443（包括 HTTP/3 的 UDP 443）和 TCP/UDP 转发的端口。
+	public []spec.PortKey
 }
 
 // New 创建代理。storage 是证书等数据的存放目录。
@@ -91,6 +93,7 @@ func (p *Proxy) Apply(routes []Route) error {
 	}
 	p.last = cfg
 	p.ports = domainPorts(routes)
+	p.public = publicPorts(routes)
 	p.log.Info("已更新对外访问规则", "routes", len(routes))
 	return nil
 }
@@ -122,6 +125,29 @@ func (p *Proxy) DomainPorts() []spec.PortKey {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.Clone(p.ports)
+}
+
+// PublicPorts 返回现在对外开放的所有端口。容器出站限制放行发往节点本机这些端口的连接：
+// 它们本来就对公网开放，容器访问自己或别的项目的域名时会连到节点自己的地址。
+func (p *Proxy) PublicPorts() []spec.PortKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.public)
+}
+
+func publicPorts(routes []Route) []spec.PortKey {
+	out := domainPorts(routes)
+	if slices.Contains(out, spec.PortKey{Proto: spec.ProtoTCP, Port: 443}) {
+		out = append(out, spec.PortKey{Proto: spec.ProtoUDP, Port: 443})
+	}
+	for _, r := range routes {
+		if (r.Protocol == spec.ProtoTCP || r.Protocol == spec.ProtoUDP) && r.Published > 0 {
+			if k := (spec.PortKey{Proto: r.Protocol, Port: r.Published}); !slices.Contains(out, k) {
+				out = append(out, k)
+			}
+		}
+	}
+	return out
 }
 
 // domainPorts 返回这些规则要监听的 80 和 443，和 build 里的一致。

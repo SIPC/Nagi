@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -92,5 +93,31 @@ func TestBuildRulesetUnknownSource(t *testing.T) {
 	st.strict, st.known = nil, nil
 	if r := buildRuleset(st); strings.Contains(r, "iifname") {
 		t.Errorf("没有拦截模式的网桥时不应有 iifname 规则：\n%s", r)
+	}
+}
+
+// 容器连节点自己的公网地址上对外开放的端口（访问自己或别的项目的域名）放行，只在 input 链、在项目规则之前；
+// 本机的其他端口照样拦截。
+func TestBuildRulesetPublicPorts(t *testing.T) {
+	st := egressState{
+		containers: []egressContainer{{project: "aaaa", name: "web", addrs: []netip.Addr{netip.MustParseAddr("172.20.0.2")}}},
+		projects:   map[string]*nagiv1.Egress{"aaaa": {Mode: "block"}},
+		public: []spec.PortKey{
+			{Proto: spec.ProtoTCP, Port: 80}, {Proto: spec.ProtoTCP, Port: 443}, {Proto: spec.ProtoTCP, Port: 2222}, {Proto: spec.ProtoUDP, Port: 443},
+		},
+	}
+	r := buildRuleset(st)
+	input := r[strings.Index(r, "chain input"):]
+	for _, want := range []string{"meta l4proto tcp th dport { 80, 443, 2222 } accept", "meta l4proto udp th dport { 443 } accept"} {
+		if !strings.Contains(input, want) {
+			t.Errorf("input 链缺少 %q：\n%s", want, input)
+		}
+	}
+	if strings.Index(input, "th dport { 80, 443, 2222 } accept") > strings.Index(input, "@paaaa_4 ip daddr @local4 drop") {
+		t.Error("公网端口的放行应在项目规则之前")
+	}
+	forward := r[strings.Index(r, "chain forward"):strings.Index(r, "chain input")]
+	if strings.Contains(forward, "dport { 80, 443") {
+		t.Error("forward 链不应放行：私有网段里的其他机器不是本机")
 	}
 }

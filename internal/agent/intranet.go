@@ -552,7 +552,10 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	}
 	ok, _ = n.allowed(projectID, caller)
 	if !ok && !n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller) {
-		n.a.violations.add(caller, "intranet:connect", projectID, name, port, "no access to the project")
+		n.a.violations.addCheck(caller, "intranet:connect", projectID, name, port, "no access to the project", func() bool {
+			ok, _ := n.allowed(projectID, caller)
+			return !ok && !n.entryAllowed(projectID, name, port, spec.ProtoTCP, caller)
+		})
 		reply("ERR 无权访问这个项目")
 		return
 	}
@@ -564,7 +567,7 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 	// 只转发开放的端口（容器声明的和项目设置里补的内部端口，以及入口节点的映射指向的端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
 	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoTCP, caller, e.Ports) }
 	if !still() {
-		n.a.violations.add(caller, "intranet:connect", projectID, name, port, "port not open")
+		n.a.violations.addCheck(caller, "intranet:connect", projectID, name, port, "port not open", func() bool { return !still() })
 		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
 	}
