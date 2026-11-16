@@ -1288,6 +1288,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const [envMode, setEnvMode] = useState<EnvMode>("rows");
 
   const save = () =>
+    (!isForm || imageForm.validate()) &&
     call("save", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? t.projectContainers.config.savedDraft : t.projectContainers.config.noChanges);
@@ -1296,7 +1297,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   // 保存为草稿后立即部署。已部署的容器会被重建，先确认。
   const saveAndDeploy = async () => {
     const form = formRef.current;
-    if (form && !form.reportValidity()) return;
+    if ((isForm && !imageForm.validate()) || (form && !form.reportValidity())) return;
     if (container.deployedVersion > 0n && !(await confirmAction(t.projectContainers.detail.deployDraftConfirm(container.name), { action: t.projectContainers.config.saveAndDeploy }))) return;
     await call("deploy", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
@@ -1665,9 +1666,10 @@ function AddContainer({ project }: { project: Project }) {
         ) : (
           <form
             className="grid gap-4"
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              add();
+              if (form.validate()) add();
             }}
           >
             {form.body}

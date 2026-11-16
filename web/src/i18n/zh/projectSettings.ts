@@ -79,6 +79,7 @@ export default {
     },
     failed: "失败",
     restore: "恢复",
+    restoreAction: "恢复部署",
     restoreConfirm: (id: bigint) => `将项目恢复到部署 #${id} 时的状态？版本不同的容器将被回滚。`,
   },
   delete: {

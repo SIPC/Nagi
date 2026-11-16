@@ -10,6 +10,8 @@ export default {
   envHide: "Hide value",
   image: "Image",
   imagePlaceholder: "nginx:alpine",
+  imageRequired: "Enter an image",
+  composeRequired: "Enter the compose content",
   command: "Command",
   commandHint: "Leave blank for the image default",
   compose: "Compose",

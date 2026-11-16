@@ -9,6 +9,8 @@ export default {
   envHide: "隐藏值",
   image: "镜像",
   imagePlaceholder: "nginx:alpine",
+  imageRequired: "填写镜像",
+  composeRequired: "填写 compose 内容",
   command: "启动命令",
   commandHint: "留空使用镜像默认命令",
   compose: "Compose",

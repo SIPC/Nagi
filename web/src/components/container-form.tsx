@@ -67,6 +67,13 @@ export function MoreSettings({
 export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, moreTop?: ReactNode, hasDeps = false) {
   const editing = !!initial;
   const [image, setImage] = useState(initial?.image ?? "");
+  // 提交过一次以后才显示必填的错误（不靠浏览器的气泡）。validate 在提交时调用，返回能不能提交。
+  const [checked, setChecked] = useState(false);
+  const imageError = checked && !image.trim() ? t.containerForm.imageRequired : undefined;
+  const validate = () => {
+    setChecked(true);
+    return !!image.trim();
+  };
   const [command, setCommand] = useState(initial?.command ?? "");
   const [ports, setPorts] = useState(portsToText(initial?.ports));
   const [volumes, setVolumes] = useState((initial?.volumes ?? []).join("\n"));
@@ -82,8 +89,8 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
     </Field>
   );
   const imageField = (
-    <Field label={t.containerForm.image} htmlFor={prefix + "image"}>
-      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required placeholder={t.containerForm.imagePlaceholder} className={monoInput} autoComplete="off" spellCheck={false} />
+    <Field label={t.containerForm.image} htmlFor={prefix + "image"} error={imageError}>
+      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} placeholder={t.containerForm.imagePlaceholder} className={monoInput} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const commandField = (
@@ -164,7 +171,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
     </>
   );
   const parts = { image: imageField, command: commandField, volumes: volumesField, workdir: workdirField, limits };
-  return { fields, build, parts, env, setEnv };
+  return { fields, build, parts, env, setEnv, validate };
 }
 
 // composeInputClass：compose 编辑框的样式（添加容器组和配置页共用）。
@@ -193,7 +200,7 @@ export function useContainerForm(
   top?: (mode: "compose" | "image") => ReactNode,
   moreTop?: ReactNode,
   dir = false,
-): { switcher: ReactNode; body: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" | "dir"; image: () => string } {
+): { switcher: ReactNode; body: ReactNode; build: () => ContainerConfigInit; validate: () => boolean; mode: "compose" | "image" | "dir"; image: () => string } {
   const [mode, setMode] = useState<"compose" | "image" | "dir">("image");
   const [compose, setCompose] = useState(exampleCompose);
   const [dependsOn, setDependsOn] = useState("");
@@ -213,6 +220,15 @@ export function useContainerForm(
     !first,
   );
 
+  const [composeChecked, setComposeChecked] = useState(false);
+  const composeError = composeChecked && !compose.trim() ? t.containerForm.composeRequired : undefined;
+  const validate = () => {
+    if (mode === "compose") {
+      setComposeChecked(true);
+      return !!compose.trim();
+    }
+    return mode === "dir" || imageForm.validate();
+  };
   const build = (): ContainerConfigInit => {
     const list = dependsOn.split(/[\s,]+/).filter(Boolean);
     if (mode === "compose") return { compose, dependsOn: list };
@@ -236,8 +252,8 @@ export function useContainerForm(
     mode === "dir" ? null : mode === "compose" ? (
       <>
         {top?.("compose")}
-        <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp}>
-          <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} required />
+        <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp} error={composeError}>
+          <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
         </Field>
         <MoreSettings label={t.containerForm.moreCompose(!first)} labelOpen={t.containerForm.more}>
           <FormRow>
@@ -249,5 +265,5 @@ export function useContainerForm(
     ) : (
       imageForm.fields
     );
-  return { switcher, body, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
+  return { switcher, body, build, validate, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
 }

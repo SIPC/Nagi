@@ -19,6 +19,7 @@ import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
 import { GroupSelect, groupsOf } from "@/components/labels";
 import { EgressSection } from "@/pages/project-egress";
+import { containerLabel } from "@/pages/project-containers";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
@@ -399,6 +400,8 @@ function SharedEnv({ project }: { project: Project }) {
       }
       help={help}
     >
+      {/* 操作输出和部署记录一样放在区块顶部。 */}
+      {output}
       <FormBody>
         <EnvEditor key={editorKey} id="shared-env" value={sharedEnv} onChange={setSharedEnv} />
         {project.hasSharedEnvDraft && project.containers.length > 0 && (
@@ -406,14 +409,13 @@ function SharedEnv({ project }: { project: Project }) {
             <div role="group" aria-label={m.scope} className="flex flex-wrap gap-x-6 gap-y-2">
               {project.containers.map((c) => (
                 <Check key={c.name} checked={!!affected[c.name]} onChange={(v) => setAffected({ ...affected, [c.name]: v })}>
-                  {c.name}
+                  {containerLabel(c)}
                 </Check>
               ))}
             </div>
           </Field>
         )}
         {error && <Alert>{error}</Alert>}
-        {output}
         <FormActions>
           {project.hasSharedEnvDraft && (
             <Button onClick={deploy} disabled={running}>
@@ -530,7 +532,7 @@ function Deployments({ project }: { project: Project }) {
                         size="row"
                         variant="ghost"
                         disabled={busy}
-                        onClick={async () => (await confirmAction(m.restoreConfirm(d.id), { action: m.restore })) && run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))}
+                        onClick={async () => (await confirmAction(m.restoreConfirm(d.id), { action: m.restoreAction })) && run(() => projectClient.restoreDeployment({ projectId: project.id, deploymentId: d.id }))}
                       >
                         {m.restore}
                       </Button>
@@ -581,14 +583,15 @@ function DeleteProject({ project }: { project: Project }) {
 
   return (
     <Section title={m.title} tone="danger" help={m.help}>
-      <p className="text-muted-foreground">{m.description}</p>
       {error && <Alert>{error}</Alert>}
-      <div>
-        <Button variant="destructive-outline" disabled={busy} onClick={remove}>
-          {busy && <Spinner />}
-          {m.submit}
-        </Button>
-      </div>
+      <SettingRows>
+        <SettingRow label={m.submit} description={m.description}>
+          <Button variant="destructive-outline" disabled={busy} onClick={remove}>
+            {busy && <Spinner />}
+            {m.submit}
+          </Button>
+        </SettingRow>
+      </SettingRows>
     </Section>
   );
 }

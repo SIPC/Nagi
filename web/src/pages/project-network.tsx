@@ -7,7 +7,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
+import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
@@ -273,8 +273,16 @@ function RoutesOverview({ project }: { project: Project }) {
   const domains = useDomainChecks(project.id, project.routes.filter((r) => r.domains.length > 0), 15_000);
   return (
     <Section title={m.title} help={m.overviewDescription}>
-      {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-      {domains.error && <QueryError error={domains.error} onRetry={() => domains.refetch()} />}
+      {/* 两个查询都失败时只显示一条，重试两个都重新取。 */}
+      {(nodes.isError || domains.error) && (
+        <QueryError
+          error={nodes.error ?? domains.error}
+          onRetry={() => {
+            if (nodes.isError) nodes.refetch();
+            if (domains.error) domains.refetch();
+          }}
+        />
+      )}
       {project.routes.length === 0 ? (
         // 添加在容器的「网络」标签，链到第一个容器，在那里可以换到别的容器。
         <EmptyRow
@@ -432,7 +440,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
   };
 
   const remove = async (name: string) => {
-    if (!(await confirmAction(m.deleteConfirm(name), { action: t.common.actions.delete, danger: true }))) return;
+    if (!(await confirmAction(m.deleteConfirm(name), { action: m.deleteAction, danger: true }))) return;
     setListError("");
     try {
       await projectClient.deleteRoute({ projectId: project.id, name });
@@ -475,8 +483,15 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       }
     >
       {listError && <Alert>{listError}</Alert>}
-      {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-      {savedDomains.error && <QueryError error={savedDomains.error} onRetry={() => savedDomains.refetch()} />}
+      {(nodes.isError || savedDomains.error) && (
+        <QueryError
+          error={nodes.error ?? savedDomains.error}
+          onRetry={() => {
+            if (nodes.isError) nodes.refetch();
+            if (savedDomains.error) savedDomains.refetch();
+          }}
+        />
+      )}
       {routes.length === 0 ? (
         <EmptyRow
           action={
@@ -613,7 +628,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               </div>
             )}
             {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-            {hasDomains && multipleEntries && !form.httpOnly && <p className="leading-5 text-warning-text">{m.entryDomainWarningShort}</p>}
+            {hasDomains && multipleEntries && !form.httpOnly && <Notice tone="warning">{m.entryDomainWarningShort}</Notice>}
           </Field>
           <Collapse open={hasDomains} gap={4}>
             <Check className="justify-self-start" checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>

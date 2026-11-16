@@ -13,6 +13,7 @@ export default {
     overviewDescription: "Port mappings of all containers. Add and edit them on the container's Network tab.",
     edit: (name) => `Edit mapping ${name}`,
     empty: "No port mappings",
+    deleteAction: "Delete port mapping",
     deleteConfirm: (name) => `Delete port mapping ${name}? Its ports and domains will stop serving traffic immediately.`,
     httpOnlyBadge: "HTTP only",
     groupService: "Container in group",

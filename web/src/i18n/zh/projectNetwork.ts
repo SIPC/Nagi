@@ -12,6 +12,7 @@ export default {
     overviewDescription: "全部容器的端口映射。添加和编辑在容器的「网络」标签。",
     edit: (name: string) => `编辑映射 ${name}`,
     empty: "暂无端口映射",
+    deleteAction: "删除映射",
     deleteConfirm: (name: string) => `删除端口映射 ${name}？对应的端口和域名将立即停止对外提供访问。`,
     httpOnlyBadge: "仅 HTTP",
     groupService: "组内容器",

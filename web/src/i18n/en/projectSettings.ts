@@ -79,6 +79,7 @@ export default {
     },
     failed: "Failed",
     restore: "Restore",
+    restoreAction: "Restore deployment",
     restoreConfirm: (id) => `Restore the project to deployment #${id}? Containers on a different version will be rolled back.`,
   },
   delete: {
