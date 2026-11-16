@@ -17,6 +17,7 @@
 | [snapshot.md](snapshot.md) | 快照：内容、一致性、频率、保留 |
 | [failover.md](failover.md) | 高可用：面板故障、重新部署到其他节点、顶替节点、手动迁移 |
 | [monitoring.md](monitoring.md) | 监控与告警、全局概览的数据来源 |
+| [security.md](security.md) | 主动安全检测与审计日志（设计方案，未开始） |
 | [ui.md](ui.md) | 界面规范：间距、圆角、字号、组件、页面布局、文案 |
 | [writing.md](writing.md) | 文档写法：语气、教程结构、格式、英文 |
 | [decisions.md](decisions.md) | 技术决策汇总、待定问题 |
