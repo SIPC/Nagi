@@ -16,6 +16,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/api"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/oauth"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
@@ -37,6 +38,8 @@ type Options struct {
 	Files FileAccess
 	// Record 把被拒绝的工具调用记进活动记录（api.API.RecordMCPDenied）。
 	Record func(ctx context.Context, u auth.User, tool, reason string)
+	// Audit 记一次工具调用和它触发的接口调用（api.API.RecordMCPCall）。project 是参数里的项目（名称或 ID）。
+	Audit func(ctx context.Context, u auth.User, e audit.Event, project string, children *audit.Collector)
 	// Standby 表示这是备用面板：只给查看类的工具。
 	Standby bool
 	Log     *slog.Logger

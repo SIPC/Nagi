@@ -69,7 +69,8 @@ function title(e: AuditEvent) {
       // 参数不是 JSON 时用动作名。
     }
   }
-  const target = [e.projectName || (e.projectId && e.projectId), e.targetName].filter(Boolean).join(" / ");
+  // MCP 调用的对象是工具本身，动作里已经写了工具名。
+  const target = [e.projectName || (e.projectId && e.projectId), e.targetType !== "tool" && e.targetName].filter(Boolean).join(" / ");
   return target ? `${name} ${target}` : name;
 }
 

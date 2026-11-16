@@ -46,6 +46,14 @@
 - compose、节点文件内容这类内容字段只记 SHA-256 和长度，内容本来就在版本记录里。所有 `bytes` 字段同样只记 SHA-256 和长度。
 - 超过 4 KB 的参数截断，包成 `{"truncated": true, "head": …}`。
 
+## MCP 调用
+
+- 每次 `tools/call` 写一条 `mcp` 记录（`mcp/tools.go` 的 `def`）：动作是 `mcp:<工具名>`，参数（按下面的规则脱敏）、结果、返回的字节数、耗时、令牌、客户端（`User-Agent`）。工具把失败写在结果里的（部署这类返回 `success: false`）也记为失败。
+- 工具在进程内调用的接口照常由拦截器记录。工具执行期间 ctx 里带一个收集器（`audit.WithCollector`），这些记录先收集起来，工具结束后先写工具调用的记录，再写它们，`parent_id` 指向工具调用。界面上把它们收在工具调用下面，可以展开。面板在工具执行中途崩溃时，这次调用和它触发的记录都会丢失。
+- 工具的参数是 JSON，按字段名脱敏（`audit.JSONParams`）：`password`、`token`、`confirm`、`code` 这类字段替换为 `"[已隐藏]"`；`env`、`set`、`variables`、`service_env` 只记变量名；`compose`、`content`、`files` 只记 SHA-256 和长度。`node_exec` 的预览和确认是两次调用，都记录，确认码不记。
+- 被拒绝的工具调用（令牌没有权限、备用面板上的修改、调用过于频繁）记为 `denied`；令牌看不到的工具被客户端按名字调用时，同样记一条。
+- Nagi 看不到 agent 和用户的对话，只能看到工具调用和参数。
+
 ## 存储与保留
 
 - 审计记录存在面板数据目录下的 `audit.db`（SQLite，WAL），不放进主库，只追加。备用面板每次同步都传整份主库（见 [standby.md](standby.md#同步)），审计数据变多以后会拖慢同步。

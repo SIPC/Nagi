@@ -226,3 +226,18 @@ func TestEnvChanges(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestJSONParams(t *testing.T) {
+	got := JSONParams([]byte(`{"project":"shop","set":{"DB_PASSWORD":"hunter2"},"env":["A=secret1"],"service_env":{"web":{"K":"secret2"}},
+		"compose":"services: {}","password":"secret3","confirm":"123456","command":"ls"}`))
+	for _, s := range []string{"hunter2", "secret1", "secret2", "secret3", "123456", "services:"} {
+		if strings.Contains(got, s) {
+			t.Fatalf("出现了 %s：%s", s, got)
+		}
+	}
+	for _, s := range []string{"DB_PASSWORD", `"A"`, `"K"`, "shop", "sha256", `"ls"`} {
+		if !strings.Contains(got, s) {
+			t.Fatalf("缺少 %s：%s", s, got)
+		}
+	}
+}

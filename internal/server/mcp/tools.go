@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/oauth"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
@@ -83,21 +85,39 @@ func def[In any](t tool, fn func(c *call, in In) (any, error)) tool {
 			case (t.write || t.exec) && h.o.Standby:
 				denied = "this is a standby panel; only read tools are available"
 			}
+			// 每次调用都记一条 mcp 记录（见 docs/audit.md#mcp-调用）：工具名、脱敏后的参数、结果、返回的字节数、耗时。
+			// 工具在进程内调用的接口记录先收集起来，挂在这一条下面。
+			args, _ := json.Marshal(in)
 			if denied != "" {
-				h.recordDenied(ctx, u, t.name, denied)
+				h.record(ctx, u, t.name, args, audit.ResultDenied, denied, 0, 0, nil)
 				return nil, nil, errors.New(denied)
 			}
 			if !h.allow(u, t.exec) {
+				h.record(ctx, u, t.name, args, audit.ResultDenied, "too many calls", 0, 0, nil)
 				return nil, nil, errors.New("too many calls, try again in a minute")
 			}
-			v, err := fn(&call{ctx: callCtx(ctx, u, req), u: u, h: h, req: req}, in)
+			start := time.Now()
+			cctx, col := audit.WithCollector(callCtx(ctx, u, req))
+			v, err := fn(&call{ctx: cctx, u: u, h: h, req: req}, in)
 			if err != nil {
-				return nil, nil, toolError(err)
+				err = toolError(err)
+				h.record(ctx, u, t.name, args, audit.ResultFailed, err.Error(), 0, time.Since(start), col)
+				return nil, nil, err
 			}
 			b, err := json.MarshalIndent(v, "", "  ")
 			if err != nil {
 				return nil, nil, err
 			}
+			// 部署这类工具把失败写在结果里（success: false），记录也按失败记。
+			result, msg := audit.ResultOK, ""
+			var r struct {
+				Success *bool  `json:"success"`
+				Error   string `json:"error"`
+			}
+			if json.Unmarshal(b, &r) == nil && r.Success != nil && !*r.Success {
+				result, msg = audit.ResultFailed, r.Error
+			}
+			h.record(ctx, u, t.name, args, result, msg, len(b), time.Since(start), col)
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}, nil, nil
 		})
 	}

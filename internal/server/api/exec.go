@@ -113,6 +113,24 @@ func (a *API) RecordMCPDenied(ctx context.Context, u auth.User, tool, reason str
 	})
 }
 
+// RecordMCPCall 记一次 MCP 工具调用，再把它触发的接口调用挂在下面（见 docs/audit.md#mcp-调用）。
+// project 是工具参数里的项目，可能是名称也可能是 ID。
+func (a *API) RecordMCPCall(ctx context.Context, u auth.User, e audit.Event, project string, children *audit.Collector) {
+	ctx = auth.WithUser(context.WithoutCancel(ctx), u)
+	if project != "" {
+		if rows, err := a.Q.ListProjects(ctx); err == nil {
+			for _, p := range rows {
+				if p.ID == project || p.Name == project {
+					e.ProjectID = p.ID
+					break
+				}
+			}
+		}
+	}
+	auditActor(ctx, &e)
+	a.Audit.RecordWithChildren(ctx, e, children)
+}
+
 // recordExec 记一条执行命令的活动：详情是命令，失败时后面接原因。
 func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure string) {
 	result := audit.ResultOK

@@ -158,6 +158,11 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 	if e.Time.IsZero() {
 		e.Time = time.Now()
 	}
+	// MCP 工具执行期间的记录先收集起来，工具结束后挂在它下面写入（见 collect.go）。
+	if c, _ := ctx.Value(collectorKey{}).(*Collector); c != nil {
+		c.add(e)
+		return 0
+	}
 	normalize(&e)
 	id, err := l.insert(context.WithoutCancel(ctx), &e)
 	if err != nil {
