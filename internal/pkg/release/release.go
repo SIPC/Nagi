@@ -4,6 +4,7 @@ package release
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,38 @@ var versionRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)
 
 // IsVersion 判断是不是正式发布的版本号（例如 v0.1.0）。本地编译的版本是 dev，没有对应的发布文件。
 func IsVersion(v string) bool { return versionRe.MatchString(v) }
+
+// Before 判断正式版本 v 是不是早于 min（只比较主、次、修订号）。v 不是正式版本（例如本地编译的 dev）时返回 false。
+func Before(v, min string) bool {
+	a, ok1 := parts(v)
+	b, ok2 := parts(min)
+	if !ok1 || !ok2 {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+func parts(v string) ([3]int, bool) {
+	var out [3]int
+	if !IsVersion(v) {
+		return out, false
+	}
+	core, _, _ := strings.Cut(strings.TrimPrefix(v, "v"), "-")
+	core, _, _ = strings.Cut(core, "+")
+	for i, p := range strings.SplitN(core, ".", 3) {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return out, false
+		}
+		out[i] = n
+	}
+	return out, true
+}
 
 // DownloadBase 返回某个版本的发布文件所在的地址，其下有 nagi-linux-<架构> 和 SHA256SUMS。
 // 不是正式版本时用最新发布的版本。

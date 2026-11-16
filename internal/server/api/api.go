@@ -18,6 +18,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/release"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
@@ -290,9 +291,24 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 				n.Info = info
 			}
 		}
+		n.Info = egressSupport(n.Info)
 		out.Nodes = append(out.Nodes, n)
 	}
 	return connect.NewResponse(out), nil
+}
+
+// egressMinVersion 是支持容器出站限制的最低节点版本（见 docs/agent.md#出站限制）。
+const egressMinVersion = "v0.29.0"
+
+// egressSupport：更早的节点不认代理计划里的出站限制，也不报 egress_error，节点页不会提示。面板按版本补上原因，
+// 节点页照常显示「无法限制容器出站」，提示升级节点。
+func egressSupport(info *nagiv1.NodeInfo) *nagiv1.NodeInfo {
+	if info == nil || info.GetEgressError() != "" || !release.Before(info.GetVersion(), egressMinVersion) {
+		return info
+	}
+	out := proto.Clone(info).(*nagiv1.NodeInfo)
+	out.EgressError = i18n.Errorf("节点版本 %s 不支持出站限制，这台节点上的项目不受限制。升级到 %s 或更新版本后生效。", info.GetVersion(), egressMinVersion).Error()
+	return out
 }
 
 // ApproveNode 批准用接入码加入的节点。
