@@ -538,3 +538,47 @@ func TestSessionNewFamilyNeedsReverify(t *testing.T) {
 		t.Fatalf("没有绑定网络的成员不受影响：%v", err)
 	}
 }
+
+// L7：两个标签页同时轮换，之前两边都成功、先发的令牌被后一个删掉，浏览器拿着它就被要求重新登录。
+// 现在同一个挑战只能换一次令牌，发出去的令牌都能用。
+func TestSessionConcurrentRotate(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := context.Background()
+	token := h.login("admin", home)
+	key := newBrowserKey()
+	if err := h.s.RegisterSessionKey(ctx, token, key.spki()); err != nil {
+		t.Fatal(err)
+	}
+	for round := range 30 {
+		h.age(token, RotateInterval)
+		res, err := h.check(token, home)
+		if err != nil || res.challenge == "" {
+			t.Fatalf("第 %d 轮没有挑战：%v", round, err)
+		}
+		sig := key.sign(res.challenge)
+		var wg sync.WaitGroup
+		issued := make([]string, 2)
+		for i := range 2 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				issued[i], _ = h.s.RotateSession(ctx, token, sig, home)
+			}()
+		}
+		wg.Wait()
+		n := 0
+		for _, next := range issued {
+			if next == "" {
+				continue
+			}
+			n++
+			if _, err := h.check(next, home); err != nil {
+				t.Fatalf("第 %d 轮发出去的令牌不能用：%v", round, err)
+			}
+			token = next
+		}
+		if n != 1 {
+			t.Fatalf("第 %d 轮同一个挑战换出了 %d 个令牌，应该只有 1 个", round, n)
+		}
+	}
+}

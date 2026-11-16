@@ -478,12 +478,13 @@ func (s *Service) RotateSession(ctx context.Context, token string, signature []b
 	if err != nil {
 		return "", err
 	}
-	now := time.Now().Unix()
-	if err := s.q.AddPendingToken(ctx, st.ID, HashToken(next), now); err != nil {
+	ok, err := s.q.RotateToken(ctx, st.ID, st.Challenge, HashToken(next), time.Now().Unix())
+	if err != nil {
 		return "", err
 	}
-	if err := s.q.UpdateSession(ctx, st.ID, map[string]any{"challenge": "", "challenge_at": int64(0), "rotated_at": now}); err != nil {
-		return "", err
+	if !ok {
+		// 别的标签页同时轮换、先用掉了挑战：这次不发新令牌，浏览器接着用现在的。
+		return "", connect.NewError(connect.CodeFailedPrecondition, i18n.New("现在不需要更换会话令牌"))
 	}
 	return next, nil
 }

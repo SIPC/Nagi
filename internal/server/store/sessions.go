@@ -102,13 +102,30 @@ func (q *Queries) UpdateSession(ctx context.Context, id string, set map[string]a
 	return err
 }
 
-// AddPendingToken 记下发给浏览器、还没用过的新令牌。同一个会话只留一个。
-func (q *Queries) AddPendingToken(ctx context.Context, sessionID, hash string, now int64) error {
-	if _, err := q.db.ExecContext(ctx, `DELETE FROM session_tokens WHERE session_id = ? AND state = 'pending'`, sessionID); err != nil {
-		return err
-	}
-	_, err := q.db.ExecContext(ctx, `INSERT INTO session_tokens (token_hash, session_id, state, created_at) VALUES (?, ?, 'pending', ?)`, hash, sessionID, now)
-	return err
+// RotateToken 用挑战换一个新令牌：只在会话的挑战还是 challenge 时清掉挑战、记下新令牌（同一个会话只留一个待用的），
+// 返回 false 表示挑战已经被别的请求用掉了。比较、清除和换令牌在一个事务里：两个标签页同时轮换时只有一个成功，
+// 不会出现先发出去的令牌被后一个删掉、浏览器拿着它被要求重新登录（见 docs/panel.md#会话）。
+func (q *Queries) RotateToken(ctx context.Context, sessionID, challenge, hash string, now int64) (bool, error) {
+	ok := false
+	err := q.inTx(ctx, func(q *Queries) error {
+		res, err := q.db.ExecContext(ctx, `UPDATE sessions SET challenge = '', challenge_at = 0, rotated_at = ? WHERE id = ? AND challenge = ? AND challenge != ''`,
+			now, sessionID, challenge)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return nil
+		}
+		if _, err := q.db.ExecContext(ctx, `DELETE FROM session_tokens WHERE session_id = ? AND state = 'pending'`, sessionID); err != nil {
+			return err
+		}
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO session_tokens (token_hash, session_id, state, created_at) VALUES (?, ?, 'pending', ?)`, hash, sessionID, now); err != nil {
+			return err
+		}
+		ok = true
+		return nil
+	})
+	return ok && err == nil, err
 }
 
 // ConfirmToken 让新令牌转正：旧令牌记为换下来的，新令牌成为当前令牌。只在会话的当前令牌还是 oldHash 时生效。
