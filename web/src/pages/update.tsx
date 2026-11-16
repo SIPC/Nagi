@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, Waves } from "@/components/ui";
+import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, textLink, Waves } from "@/components/ui";
 import { confirmAction } from "@/components/confirm";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
@@ -88,7 +88,7 @@ export function useUpdateStatus(enabled = true) {
 export function UpdateDot() {
   const q = usePanelUpdate();
   if (!q.data?.available) return null;
-  return <span role="img" aria-label={t.update.badge} title={t.update.badge} className="ml-auto size-1.5 shrink-0 rounded-full bg-primary" />;
+  return <span role="img" aria-label={t.update.badge} title={t.update.badge} className="ml-auto size-1.5 shrink-0 rounded-full bg-info" />;
 }
 
 // 关掉过的提示记在浏览器里，同一件事不再弹。隐私模式等情况下存不了，只是下次还会提示。
@@ -212,7 +212,7 @@ function inline(text: string) {
       );
     } else {
       out.push(
-        <a key={m.index} className="text-foreground underline underline-offset-4" href={m[3]} target="_blank" rel="noreferrer">
+        <a key={m.index} className={textLink} href={m[3]} target="_blank" rel="noreferrer">
           {m[2]}
         </a>,
       );
@@ -228,7 +228,7 @@ function NotesList({ items }: { items: string[] }) {
   return (
     <ul className="grid gap-1">
       {items.map((it, i) => (
-        <li key={i} className="flex gap-2.5">
+        <li key={i} className="flex gap-2">
           <span aria-hidden className="flex h-[1lh] shrink-0 items-center">
             <span className="size-1 rounded-full bg-muted-foreground/70" />
           </span>
@@ -258,7 +258,7 @@ function NotesBody({ body }: { body: string }) {
     if (!line) continue;
     if (line.startsWith("#")) {
       blocks.push(
-        <h4 key={blocks.length} className="pt-1 text-xs leading-5 text-muted-foreground">
+        <h4 key={blocks.length} className="pt-1 text-[13px] leading-5 text-muted-foreground">
           {line.replace(/^#+\s*/, "")}
         </h4>,
       );
@@ -330,7 +330,8 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const update = async (version: string) => {
-    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel }))) return;
+    // 更新会重启面板：默认焦点给取消，免得回车直接开始更新。
+    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel, focusCancel: true }))) return;
     setStarting(true);
     setError("");
     try {
@@ -405,18 +406,18 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
     <div ref={notesRef} className="scroll-mt-20 text-muted-foreground">
       <AutoHeight>
         {expanded ? (
-          <div className="grid gap-5">
+          <div className="grid gap-4">
             {releases.map((r) => (
               <section key={r.version} className="grid gap-1">
                 {/* 版本号用等宽字体。 */}
-                <h3 className="font-mono text-xs leading-5 text-foreground">{r.version}</h3>
+                <h3 className="font-mono text-[13px] leading-5 text-foreground">{r.version}</h3>
                 <NotesBody body={r.body} />
               </section>
             ))}
           </div>
         ) : (
           <div className="grid gap-1">
-            <p className="text-xs leading-5">
+            <p className="text-[13px] leading-5">
               <span className="font-mono text-foreground">{latest.version}</span>
               {preview.group && ` · ${preview.group}`}
             </p>
@@ -446,7 +447,8 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
               <span className="font-mono text-foreground">{d?.current || status.data?.version || "—"}</span>
             </span>
             {d?.unsupported && <span>{d.unsupported}</span>}
-            {!d && q.error && <span>{errorMessage(q.error)}</span>}
+            {/* 检查失败：红字写原因，下面的「检查更新」兼作重试。 */}
+            {!d && q.error && <span className="text-destructive">{errorMessage(q.error)}</span>}
             {state && <span>{state}</span>}
             {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
             {canUpdate && scopeHint && (

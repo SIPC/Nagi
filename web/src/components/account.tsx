@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Languages, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, Button, Dialog, DialogActions, Field, FormActions, Input, QueryError, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, Field, FormActions, FormBody, Input, QueryError, RowsSkeleton, Section, Spinner } from "@/components/ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { nextLocale, switchLanguage } from "@/components/language";
@@ -101,13 +101,13 @@ function ProfileForm({ me, onClose, onSaved }: { me: MeResponse; onClose?: () =>
   );
   return (
     <form
-      className="grid max-w-[672px] gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         setError("");
         save.mutate();
       }}
     >
+      <FormBody>
       <div className="flex flex-wrap items-center gap-2">
         <UserAvatar username={me.username} src={avatarSrc(avatar.bytes, avatar.type)} className="mr-2 size-12" />
         <input
@@ -144,6 +144,7 @@ function ProfileForm({ me, onClose, onSaved }: { me: MeResponse; onClose?: () =>
       ) : (
         <FormActions>{submit}</FormActions>
       )}
+      </FormBody>
     </form>
   );
 }
@@ -213,7 +214,7 @@ export function UserMenu({
             {!compact && (
               <>
                 <span className="min-w-0 flex-1 truncate">{name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{role}</span>
+                <span className="shrink-0 text-[13px] text-muted-foreground">{role}</span>
               </>
             )}
           </button>

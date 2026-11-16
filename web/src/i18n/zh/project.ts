@@ -6,6 +6,7 @@ export default {
     settings: "设置",
   },
   breadcrumb: "项目",
+  notFound: "项目不存在，可能已被删除",
   // n：节点数，英文按单复数用。
   nodes: (_n: number, names: string) => `节点 ${names}`,
   noContainers: "暂无容器",

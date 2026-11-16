@@ -66,8 +66,9 @@ export function PanelDown() {
   return createPortal(
     <div ref={ref} tabIndex={-1} role="alertdialog" aria-modal aria-labelledby="panel-down-title" aria-describedby="panel-down-text" className="fixed inset-0 z-[100] flex animate-fade-in items-center justify-center overflow-y-auto bg-background px-4 py-6 outline-none">
       <div className="w-full max-w-[480px]">
-        <Waves className="h-4 w-7 text-wave" />
-        <h1 id="panel-down-title" className="mt-4 text-2xl leading-8 font-semibold tracking-tight">
+        {/* logo 和间距同登录页的整页外框；内容有备用面板列表，宽一些。 */}
+        <Waves className="h-6 w-[42px] text-wave" />
+        <h1 id="panel-down-title" className="mt-3 text-2xl leading-8 font-semibold tracking-tight">
           {k.title}
         </h1>
         <p id="panel-down-text" className="mt-1 text-muted-foreground">

@@ -6,7 +6,7 @@ export default {
     profile: { label: "个人资料" },
     access: { label: "面板访问", description: "节点和浏览器访问本面板所用的地址。" },
     security: { label: "账号安全" },
-    panelSecurity: { label: "安全" },
+    panelSecurity: { label: "安全策略" },
     members: { label: "成员" },
     alerts: { label: "告警" },
     standby: { label: "备用面板" },

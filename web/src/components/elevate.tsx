@@ -4,7 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner, textLink } from "@/components/ui";
 import { t } from "@/i18n";
 import { authClient, errorMessage, toDate } from "@/lib/api";
 
@@ -69,7 +69,26 @@ export function ElevateHost() {
   };
 
   return (
-    <Dialog open={!!req} onClose={() => finish(false)} title={m.title} description={req?.description ?? m.description}>
+    <Dialog
+      open={!!req}
+      onClose={() => finish(false)}
+      title={m.title}
+      description={
+        <>
+          {req?.description ?? m.description}
+          {/* 没开两步验证时的建议放在说明里，字段下面只写格式。 */}
+          {!req?.totp && req?.suggestTotp && (
+            <>
+              {" "}
+              {m.enableTotp}{" "}
+              <Link to="/settings" search={{ tab: "security" }} className={textLink} onClick={() => finish(false)}>
+                {m.securityLink}
+              </Link>
+            </>
+          )}
+        </>
+      }
+    >
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -82,17 +101,7 @@ export function ElevateHost() {
             <Input id="elevate-value" name="totp" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" pattern="[0-9]*" maxLength={6} autoComplete="one-time-code" autoFocus required />
           </Field>
         ) : (
-          <Field label={m.password} htmlFor="elevate-value" hint={
-              req?.suggestTotp ? (
-                <>
-                  {m.enableTotp}{" "}
-                  <Link to="/settings" search={{ tab: "security" }} className="text-foreground underline underline-offset-4" onClick={() => finish(false)}>
-                    {m.securityLink}
-                  </Link>
-                </>
-              ) : undefined
-            }
-          >
+          <Field label={m.password} htmlFor="elevate-value">
             <Input id="elevate-value" type="password" value={value} onChange={(e) => setValue(e.target.value)} autoComplete="current-password" autoFocus required />
           </Field>
         )}

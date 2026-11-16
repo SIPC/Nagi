@@ -3,7 +3,7 @@ import { create } from "@bufbuild/protobuf";
 import { AlertRulesSchema, type AlertRules } from "@/gen/nagi/v1/common_pb";
 import { errorMessage } from "@/lib/api";
 import { t } from "@/i18n";
-import { Alert, Button, Check, Field, FormActions, FormBody, FormRow, Input, Spinner } from "@/components/ui";
+import { Alert, Button, Check, Collapse, DialogActions, Field, FormActions, FormBody, FormRow, Input, Spinner } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
 
 // 告警规则（见 docs/monitoring.md#告警）：节点的规则在节点设置里，容器的规则在项目设置里、容器可以单独设置。
@@ -68,15 +68,17 @@ export function rulesSummary(defs: RuleDef[], rules: AlertRules | undefined): st
 export function AlertRulesFields({ id, defs, value, onChange, inherited, disabled }: { id: string; defs: RuleDef[]; value: AlertRules; onChange: (v: AlertRules) => void; inherited?: AlertRules; disabled?: boolean }) {
   const set = (patch: Partial<AlertRules>) => onChange(create(AlertRulesSchema, { ...value, ...patch }));
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       {defs.map((d) => {
         const on = ruleOn(value, d.key);
+        // 关掉的规则收起阈值，不占位置。
         return (
-          <div key={d.key} className="grid gap-3">
-            <Check checked={on} disabled={disabled} onChange={(v) => set({ enabled: { ...value.enabled, [d.key]: v } })}>
+          <div key={d.key} className="grid gap-2">
+            <Check className="justify-self-start" checked={on} disabled={disabled} onChange={(v) => set({ enabled: { ...value.enabled, [d.key]: v } })}>
               {d.title}
             </Check>
             {d.fields.length > 0 && (
+              <Collapse open={on} gap={2}>
               <FormRow>
                 {d.fields.map((f) => (
                   <Field key={f.key} label={f.label} htmlFor={`${id}-${f.key}`} help={f.help}>
@@ -85,7 +87,7 @@ export function AlertRulesFields({ id, defs, value, onChange, inherited, disable
                       type="number"
                       min={0}
                       inputMode="numeric"
-                      disabled={disabled || !on}
+                      disabled={disabled}
                       placeholder={t.alerts.defaultValue(Number(inherited?.[f.key] || 0) || f.fallback)}
                       value={Number(value[f.key] ?? 0) || ""}
                       onChange={(e) => set({ [f.key]: Number(e.target.value) || 0 })}
@@ -93,6 +95,7 @@ export function AlertRulesFields({ id, defs, value, onChange, inherited, disable
                   </Field>
                 ))}
               </FormRow>
+              </Collapse>
             )}
           </div>
         );
@@ -125,22 +128,29 @@ export function AlertRulesForm({ id, defs, initial, inherited, onSave, onCancel,
         save();
       }}
     >
-      <FormBody className="gap-6">
+      <FormBody>
         <AlertRulesFields id={id} defs={defs} value={value} onChange={setValue} inherited={inherited} disabled={disabled} />
         {error && <Alert>{error}</Alert>}
-        {!disabled && (
-          <FormActions>
-            {onCancel && (
+        {/* 有 onCancel 时在对话框里：按钮靠右（DialogActions），保存是主按钮；在区块里靠左。 */}
+        {!disabled &&
+          (onCancel ? (
+            <DialogActions>
               <Button variant="outline" readOnlyOk onClick={onCancel}>
                 {t.common.actions.cancel}
               </Button>
-            )}
-            <Button type="submit" disabled={busy || (!dirty && !onCancel)}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        )}
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </DialogActions>
+          ) : (
+            <FormActions>
+              <Button type="submit" variant="outline" disabled={busy || !dirty}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </FormActions>
+          ))}
       </FormBody>
     </form>
   );

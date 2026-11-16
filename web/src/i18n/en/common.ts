@@ -5,6 +5,7 @@ const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? o
 export default {
   // 字段和标题旁问号按钮的读屏名称。
   help: "More info",
+  switch: { on: "On", off: "Off", turnOn: "Turn on", turnOff: "Turn off" },
   status: {
     running: "Running",
     stopped: "Stopped",
@@ -43,6 +44,7 @@ export default {
     retry: "Retry",
     more: "More actions",
     back: "Back",
+    done: "Done",
   },
   feedback: {
     loading: "Loading",
@@ -50,7 +52,7 @@ export default {
     copied: "Copied",
     copyFailed: "Couldn't copy. Select the text and copy it manually",
     done: "Done",
-    failed: "The panel returned no reason. Check Activity for details",
+    failed: "The panel returned no reason. Check Audit for details",
     viewActivity: "View audit log",
     notes: (n) => `${n} items need attention`,
     showNotes: "Show",

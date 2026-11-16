@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { ChevronRight } from "lucide-react";
-import { Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
+import { Collapse, Field, FormRow, Input, oneLineTextarea, Segmented, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
@@ -21,18 +21,40 @@ const exampleCompose = `services:
 export type ContainerConfigInit = MessageInitShape<typeof ContainerConfigSchema>;
 export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
 
-// MoreSettings：折叠的「更多设置」，没有框。有值时默认展开。
-function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: { label: string; labelOpen: string; labelPhone?: string; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(!!defaultOpen);
+// MoreSettings：折叠的「更多设置」，没有框。有值时默认展开。高度用 Collapse 过渡，内容从上方滑入，箭头旋转 240ms。
+// 按钮和内容包在一层里：收起时不在父级的网格里多留一道间距。
+// open、onOpenChange：由外面控制展开（例如提交时里面的字段有错，自动展开）。
+export function MoreSettings({
+  label,
+  labelOpen,
+  labelPhone,
+  defaultOpen,
+  open: controlled,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  labelOpen: string;
+  labelPhone?: string;
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const [own, setOwn] = useState(!!defaultOpen);
+  const open = controlled ?? own;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOwn(v));
   return (
-    <>
+    <div className="grid">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring">
-        <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform", open && "rotate-90")} />
+        <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform duration-240", open && "rotate-90")} />
         {open ? labelOpen : <span className={cn(labelPhone && "max-md:hidden")}>{label}</span>}
         {!open && labelPhone && <span className="md:hidden">{labelPhone}</span>}
       </button>
-      {open && <div className="grid animate-slide-from-above gap-4">{children}</div>}
-    </>
+      <Collapse open={open}>
+        <div className="grid gap-4 pt-4 motion-safe:animate-slide-from-above">{children}</div>
+      </Collapse>
+    </div>
   );
 }
 
@@ -45,6 +67,13 @@ function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: {
 export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, moreTop?: ReactNode, hasDeps = false) {
   const editing = !!initial;
   const [image, setImage] = useState(initial?.image ?? "");
+  // 提交过一次以后才显示必填的错误（不靠浏览器的气泡）。validate 在提交时调用，返回能不能提交。
+  const [checked, setChecked] = useState(false);
+  const imageError = checked && !image.trim() ? t.containerForm.imageRequired : undefined;
+  const validate = () => {
+    setChecked(true);
+    return !!image.trim();
+  };
   const [command, setCommand] = useState(initial?.command ?? "");
   const [ports, setPorts] = useState(portsToText(initial?.ports));
   const [volumes, setVolumes] = useState((initial?.volumes ?? []).join("\n"));
@@ -56,12 +85,12 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
   const [healthInterval, setHealthInterval] = useState(initial?.healthIntervalSeconds ? String(initial.healthIntervalSeconds) : "");
   const volumesField = (
     <Field label={t.containerForm.volumes} htmlFor={prefix + "volumes"} help={`${t.containerForm.volumesHint}${t.common.sentenceEnd}${t.containerForm.volumesHelp}`}>
-      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn("min-h-8 resize-none py-[5px] max-md:py-[9px]", monoInput)} placeholder="/data" spellCheck={false} />
+      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn(oneLineTextarea, monoInput)} placeholder="/data" spellCheck={false} />
     </Field>
   );
   const imageField = (
-    <Field label={t.containerForm.image} htmlFor={prefix + "image"}>
-      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} required placeholder={t.containerForm.imagePlaceholder} className={monoInput} autoComplete="off" spellCheck={false} />
+    <Field label={t.containerForm.image} htmlFor={prefix + "image"} error={imageError}>
+      <Input id={prefix + "image"} value={image} onChange={(e) => setImage(e.target.value)} placeholder={t.containerForm.imagePlaceholder} className={monoInput} autoComplete="off" spellCheck={false} />
     </Field>
   );
   const commandField = (
@@ -109,9 +138,9 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
     <>
       {imageField}
       {top}
-      <FormRow className="gap-y-6 max-md:gap-y-4">
+      <FormRow>
         {!editing && (
-          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} hint={t.containerForm.portsHint} help={t.containerForm.portsHelp}>
+          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} help={`${t.containerForm.portsHint}${t.common.sentenceEnd}${t.containerForm.portsHelp}`}>
             <Input
               id={prefix + "ports"}
               value={ports}
@@ -132,7 +161,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
         <EnvEditor id={prefix + "env"} value={env} onChange={setEnv} />
       </Field>
       <MoreSettings label={t.containerForm.moreImage(hasDeps)} labelOpen={t.containerForm.more} labelPhone={t.containerForm.more} defaultOpen={hasMore}>
-        <FormRow className="gap-y-6 max-md:gap-y-4">
+        <FormRow>
           {commandField}
           {workdirField}
           {moreTop}
@@ -142,7 +171,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
     </>
   );
   const parts = { image: imageField, command: commandField, volumes: volumesField, workdir: workdirField, limits };
-  return { fields, build, parts, env, setEnv };
+  return { fields, build, parts, env, setEnv, validate };
 }
 
 // composeInputClass：compose 编辑框的样式（添加容器组和配置页共用）。
@@ -171,7 +200,7 @@ export function useContainerForm(
   top?: (mode: "compose" | "image") => ReactNode,
   moreTop?: ReactNode,
   dir = false,
-): { switcher: ReactNode; body: ReactNode; build: () => ContainerConfigInit; mode: "compose" | "image" | "dir"; image: () => string } {
+): { switcher: ReactNode; body: ReactNode; build: () => ContainerConfigInit; validate: () => boolean; mode: "compose" | "image" | "dir"; image: () => string } {
   const [mode, setMode] = useState<"compose" | "image" | "dir">("image");
   const [compose, setCompose] = useState(exampleCompose);
   const [dependsOn, setDependsOn] = useState("");
@@ -191,6 +220,15 @@ export function useContainerForm(
     !first,
   );
 
+  const [composeChecked, setComposeChecked] = useState(false);
+  const composeError = composeChecked && !compose.trim() ? t.containerForm.composeRequired : undefined;
+  const validate = () => {
+    if (mode === "compose") {
+      setComposeChecked(true);
+      return !!compose.trim();
+    }
+    return mode === "dir" || imageForm.validate();
+  };
   const build = (): ContainerConfigInit => {
     const list = dependsOn.split(/[\s,]+/).filter(Boolean);
     if (mode === "compose") return { compose, dependsOn: list };
@@ -214,8 +252,8 @@ export function useContainerForm(
     mode === "dir" ? null : mode === "compose" ? (
       <>
         {top?.("compose")}
-        <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp}>
-          <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} required />
+        <Field label={t.containerForm.compose} htmlFor="compose" help={t.containerForm.composeHelp} error={composeError}>
+          <Textarea id="compose" value={compose} onChange={(e) => setCompose(e.target.value)} spellCheck={false} className={composeInputClass} />
         </Field>
         <MoreSettings label={t.containerForm.moreCompose(!first)} labelOpen={t.containerForm.more}>
           <FormRow>
@@ -227,5 +265,5 @@ export function useContainerForm(
     ) : (
       imageForm.fields
     );
-  return { switcher, body, build, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
+  return { switcher, body, build, validate, mode, image: () => (mode === "image" ? imageForm.build().image ?? "" : "") };
 }

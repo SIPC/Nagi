@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, Dialog, DialogActions, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Skeleton, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 
 // 设置行里的复制按钮：有框，写「复制」，各设置页统一用它。复制不改东西，备用面板上也能用。
@@ -39,6 +39,7 @@ export function PanelAccessCard() {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [unbinding, setUnbinding] = useState(false);
 
   const heading = t.settings.tabs.access.label;
   const help = t.settings.tabs.access.description;
@@ -55,7 +56,12 @@ export function PanelAccessCard() {
       </Section>
     );
   const s = q.data.settings;
-  if (!s) return null;
+  if (!s)
+    return (
+      <Section title={heading} help={help}>
+        <QueryError error={t.common.feedback.failed} onRetry={() => q.refetch()} />
+      </Section>
+    );
 
   const open = (what: Editing) => {
     setEditing(what);
@@ -112,8 +118,9 @@ export function PanelAccessCard() {
           {t.common.actions.cancel}
         </Button>
       </div>
+      {/* 和 Field 的错误同一种写法：14 号红字，在输入框下面。 */}
       {error && (
-        <p role="alert" className="text-[13px] leading-5 text-destructive">
+        <p role="alert" className="leading-5 text-destructive">
           {error}
         </p>
       )}
@@ -144,8 +151,17 @@ export function PanelAccessCard() {
                 <Button variant="outline" onClick={() => open("domain")} disabled={busy}>
                   {t.common.actions.edit}
                 </Button>
-                <Button variant="outline" onClick={() => save("domain", "")} disabled={busy}>
-                  {busy && <Spinner />}
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    // 转圈只跟着「解除绑定」，「编辑」只置灰。
+                    setUnbinding(true);
+                    await save("domain", "");
+                    setUnbinding(false);
+                  }}
+                  disabled={busy}
+                >
+                  {unbinding && <Spinner />}
                   {t.access.domain.unbind}
                 </Button>
               </span>
@@ -159,7 +175,77 @@ export function PanelAccessCard() {
         <SettingRow label={t.access.fingerprint.label} help={t.access.fingerprint.help} description={<span className="break-all">{s.fingerprint}</span>}>
           <CopyTextButton text={s.fingerprint} />
         </SettingRow>
+        {/* 主密钥和公钥指纹放在一起：都是面板的身份，换机器恢复时要用到。 */}
+        {s.masterKeyPath && (
+          <SettingRow label={t.security.masterKey.label} help={t.security.masterKey.help} description={<span className="break-all">{`${s.masterKeyPath} · ${t.security.masterKey.backup}`}</span>}>
+            <CopyTextButton text={s.masterKeyPath} />
+          </SettingRow>
+        )}
+        <SecureEntryRow />
       </SettingRows>
     </Section>
+  );
+}
+
+// SecureEntryRow：安全入口（见 docs/panel.md）。开启后只有带入口路径的地址能打开登录页：开启后马上显示地址，提示保存；关闭前确认。
+function SecureEntryRow() {
+  const sec = useQuery({ queryKey: ["security"], queryFn: () => settingsClient.getSecurity({}) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [shown, setShown] = useState(false);
+  const m = t.security.entrance;
+  const s = sec.data;
+  const url = s?.entrance ? `${window.location.origin}/${s.entrance}` : "";
+  const set = async (enabled: boolean) => {
+    if (!enabled && !(await confirmAction(m.disableConfirm, { action: m.disable, danger: true }))) return;
+    setBusy(true);
+    setError("");
+    try {
+      await settingsClient.setEntrance({ enabled });
+      await sec.refetch();
+      if (enabled) setShown(true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const description = sec.isPending ? (
+    <Skeleton className="my-1 h-3 w-40" />
+  ) : !s ? (
+    <span className="text-destructive">{errorMessage(sec.error)}</span>
+  ) : error ? (
+    <span className="text-destructive">{error}</span>
+  ) : (
+    <span className="break-all">{s.entrance ? `${url} · ${m.onStatus}` : m.offStatus}</span>
+  );
+  return (
+    <>
+      <SettingRow label={m.label} help={m.help} description={description}>
+        {!s ? (
+          !sec.isPending && (
+            <Button variant="outline" readOnlyOk onClick={() => sec.refetch()}>
+              {t.common.actions.retry}
+            </Button>
+          )
+        ) : (
+          <span className="flex items-center gap-2">
+            {s.entrance && <CopyTextButton text={url} />}
+            <Button variant="outline" onClick={() => set(!s.entrance)} disabled={busy}>
+              {busy && <Spinner />}
+              {s.entrance ? m.actionOff : m.actionOn}
+            </Button>
+          </span>
+        )}
+      </SettingRow>
+      {shown && url && (
+        <Dialog open dismissible={false} onClose={() => setShown(false)} title={m.enabledTitle} description={m.enabledText}>
+          <CodeBlock copy>{url}</CodeBlock>
+          <DialogActions>
+            <Button onClick={() => setShown(false)}>{t.common.actions.done}</Button>
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
   );
 }

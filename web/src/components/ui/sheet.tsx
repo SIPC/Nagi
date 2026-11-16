@@ -21,7 +21,7 @@ export function SheetContent({ className, children, closeLabel, ...props }: Reac
         {children}
         <SheetPrimitive.Close
           aria-label={closeLabel}
-          className="absolute top-5 right-5 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:top-3 max-md:right-3"
+          className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors border border-transparent outline-none hover:bg-accent hover:text-foreground focus-ring max-md:top-3 max-md:right-3"
         >
           <XIcon className="size-4" />
         </SheetPrimitive.Close>

@@ -36,7 +36,7 @@ export default {
     RevokeSession: "退出其他设备",
     Login: "登录",
     Logout: "退出登录",
-    ChangePassword: "修改密码",
+    ChangePassword: "更改密码",
     AddPasskey: "添加通行密钥",
     DeletePasskey: "删除通行密钥",
     UpdateProfile: "编辑个人资料",

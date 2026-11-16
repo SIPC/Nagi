@@ -24,7 +24,6 @@ import {
   Field,
   HelpTip,
   Input,
-  Menu,
   Notice,
   QueryError,
   Roll,
@@ -32,6 +31,7 @@ import {
   Skeleton,
   Spinner,
   dotColor,
+  textLink,
 } from "@/components/ui";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
@@ -103,7 +103,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
       short: m.totp,
       title: t.projects.reminders.totpTitle,
       text: t.projects.reminders.totpText(
-        <Link to="/settings" search={{ tab: "security" }} className="mx-1 text-foreground underline underline-offset-2">
+        <Link to="/settings" search={{ tab: "security" }} className={cn("mx-1", textLink)}>
           {t.projects.reminders.totpLink}
         </Link>,
       ),
@@ -121,23 +121,35 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
     });
   }
   if (items.length === 0) return null;
+  // 只有一条时直接显示，不用再点「查看」。
+  if (items.length === 1)
+    return (
+      <Notice tone="warning" title={items[0].title} actions={items[0].action}>
+        {items[0].text}
+      </Notice>
+    );
   return (
-    <div className="grid gap-2">
-      <div role="status" className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <span>
-          <span className="mr-2 mb-0.5 inline-block size-1.5 rounded-full bg-warning align-middle" />
-          <span className="font-medium">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
-        </span>
-        <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? m.collapse : m.view}
-        </Button>
-      </div>
-      {open &&
-        items.map((it) => (
-          <Notice key={it.key} tone="warning" title={it.title} actions={it.action}>
-            {it.text}
-          </Notice>
-        ))}
+    <div>
+      <Notice
+        tone="warning"
+        title={m.title(items.length)}
+        actions={
+          <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? m.collapse : m.view}
+          </Button>
+        }
+      >
+        <span className="max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
+      </Notice>
+      <Collapse open={open}>
+        <div className="grid gap-2 pt-2">
+          {items.map((it) => (
+            <Notice key={it.key} tone="warning" title={it.title} actions={it.action}>
+              {it.text}
+            </Notice>
+          ))}
+        </div>
+      </Collapse>
     </div>
   );
 }
@@ -163,7 +175,7 @@ function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; n
         {/* 没有容器时不写状态，下面的内容区已经写了「暂无容器」。 */}
         {p.containers.length > 0 && <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}
       </div>
-      <div className="-mt-2 truncate font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</div>
+      <div className="-mt-2 truncate text-[13px] leading-5 text-muted-foreground">{p.networkName}</div>
       <div className="grid gap-1 max-md:hidden">
         {p.containers.length === 0 ? (
           <div className="text-[13px] text-muted-foreground">{t.projects.card.noContainers}</div>
@@ -189,14 +201,14 @@ function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; n
                   )}
                 </span>
                 {c.failover ? <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? t.projects.card.tookOver : t.projects.card.failover}</Badge> : c.stateful && <Badge>{t.projects.card.stateful}</Badge>}
-                <span className="max-w-[40%] min-w-6 shrink-0 truncate text-right font-mono text-xs leading-5 text-muted-foreground">{nodeName(c.nodeId)}</span>
+                <span className="max-w-[40%] min-w-6 shrink-0 truncate text-right text-[13px] leading-5 text-muted-foreground">{nodeName(c.nodeId)}</span>
               </div>
             );
           })
         )}
         {shown.length < p.containers.length && <div className="text-[13px] text-muted-foreground">{t.projects.card.moreContainers(p.containers.length - shown.length)}</div>}
       </div>
-      <div className="mt-auto flex justify-between gap-3 text-xs leading-4 text-muted-foreground">
+      <div className="mt-auto flex justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
         <Roll value={p.routes.length > 0 ? `${t.projects.card.containers(p.containers.length)} · ${t.projects.card.portMappings(p.routes.length)}` : t.projects.card.containers(p.containers.length)} />
         <span
           className="shrink-0 tabular-nums"
@@ -302,12 +314,12 @@ function GroupHeader({
       aria-expanded={open}
       aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
       className={cn(
-        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
+        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
         sortable && "cursor-grab touch-manipulation active:cursor-grabbing",
       )}
       onClick={onToggle}
     >
-      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-240", open && "rotate-90")} />
       <span className="truncate font-medium">{name}</span>
       <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{count}</span>
     </button>
@@ -392,7 +404,12 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
         actions={
           <>
             {newButton}
-            {isAdmin && groups.length > 0 && <Menu items={[{ label: t.labels.manageGroups, onSelect: () => setManaging(true) }]} />}
+            {/* 只有一项操作，不放进 ⋯ 菜单。 */}
+            {isAdmin && groups.length > 0 && (
+              <Button variant="outline" onClick={() => setManaging(true)}>
+                {t.labels.manageGroups}
+              </Button>
+            )}
           </>
         }
       />
@@ -400,7 +417,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
       <Dialog open={managing} onClose={() => setManaging(false)} title={t.labels.manageGroups}>
         <ManageLabels kind="group" labels={groups} />
       </Dialog>
-      <div className="grid grid-cols-1 gap-8 max-md:gap-6">
+      <div className="grid grid-cols-1 gap-6 max-md:gap-4">
         <Attention offlineNodes={offlineNodes} offlineStandbys={offlineStandbys} />
         {projects.isPending ? (
           <CardsSkeleton />
@@ -448,7 +465,21 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
               </div>
             </div>
             {shownProjects.length === 0 ? (
-              <EmptyRow>{t.projects.filter.empty}</EmptyRow>
+              <EmptyRow
+                action={
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("");
+                      navigateList({ to: "/projects", search: (s) => ({ ...s, q: undefined, group: undefined, ungrouped: undefined }), replace: true });
+                    }}
+                  >
+                    {t.audit.clearFilters}
+                  </Button>
+                }
+              >
+                {t.projects.filter.empty}
+              </EmptyRow>
             ) : sections ? (
               // 分组之间比组内（标题到卡片 8）宽，看得出哪些卡片属于同一组。
               <div className="grid gap-6">
@@ -521,11 +552,12 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
         label={t.projects.nodeChoice.node}
         htmlFor="container-node"
         help={t.projects.nodeChoice.nodeHelp}
-        hint={
+        // 没有在线节点时提交不了：红字写原因并给去处，不写在格式说明的位置。
+        error={
           nodes.data && onlineNodes.length === 0 && (
             <>
               {t.projects.nodeChoice.noOnlineNodesHint}{" "}
-              <Link to="/nodes" className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
+              <Link to="/nodes" className={textLink}>
                 {t.projects.nodeChoice.viewNodes}
               </Link>
             </>
@@ -557,7 +589,8 @@ export function NewProjectPage() {
   return <ProjectsPage creating />;
 }
 
-// NewProjectDialog：新建项目只填名称，网络名由名称生成，要改时点「修改」。创建后进入项目概览，第一个容器也要点添加。
+// NewProjectDialog：新建项目只填名称，网络名由名称生成，要改时点「编辑」。
+// 字段错误提交后才显示（不靠浏览器的必填气泡，也不边输入边报错）。创建后进入项目概览，第一个容器也要点添加。
 function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialGroup?: string }) {
   const navigate = useNavigate();
   const { isAdmin } = useRole();
@@ -566,7 +599,10 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
   const [group, setGroup] = useState(initialGroup ?? "");
   const [network, setNetwork] = useState("");
   const [editNetwork, setEditNetwork] = useState(false);
+  const [checked, setChecked] = useState(false);
   const generated = slugName(name, "");
+  const nameError = checked && !name.trim() ? t.projectSettings.general.nameRequired : "";
+  const networkError = checked ? checkName(network) : "";
   const create = useMutation({
     mutationFn: async () => {
       const p = await projectClient.createProject({ name, networkName: network.trim() || generated });
@@ -580,23 +616,23 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
     <Dialog open onClose={close} title={t.projects.newProject}>
       <form
         className="grid gap-4"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          setChecked(true);
+          if (!name.trim() || checkName(network)) return;
           create.mutate();
         }}
       >
-        <Field label={t.projects.create.name} htmlFor="name">
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} required maxLength={64} autoFocus />
+        <Field label={t.projects.create.name} htmlFor="name" error={nameError}>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} maxLength={64} autoFocus />
         </Field>
         {editNetwork ? (
-          <Field label={t.projects.create.networkName} htmlFor="network" hint={t.projects.create.slugHint} help={t.projects.create.networkHelp} error={checkName(network)}>
+          <Field label={t.projects.create.networkName} htmlFor="network" hint={t.projects.create.slugHint} help={t.projects.create.networkHelp} error={networkError}>
             <Input
               id="network"
               value={network}
-              onChange={(e) => {
-                setNetwork(e.target.value);
-                e.target.setCustomValidity(checkName(e.target.value));
-              }}
+              onChange={(e) => setNetwork(e.target.value)}
               placeholder={slugName(name, "shop")}
               autoComplete="off"
               spellCheck={false}
@@ -607,7 +643,7 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
             <span className="text-muted-foreground">{t.projects.create.networkName}</span>
             <span className="min-w-0 truncate">{generated || "—"}</span>
             <HelpTip className="-ml-1">{`${t.projects.create.slugHint}${t.common.sentenceEnd}${t.projects.create.networkHelp}`}</HelpTip>
-            <button type="button" className="cursor-pointer underline underline-offset-4 decoration-border hover:decoration-foreground" onClick={() => setEditNetwork(true)}>
+            <button type="button" className={textLink} onClick={() => setEditNetwork(true)}>
               {t.projects.create.editNetwork}
             </button>
           </div>

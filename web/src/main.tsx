@@ -112,13 +112,16 @@ const indexRoute = createRoute({
   },
 });
 
+// rangeSearch：地址里的监控时间范围，默认的 1h 不写。
+const rangeSearch = (v: unknown) => (metricRanges.some((r) => r.value === v && r.value !== "1h") ? (v as MetricRange) : undefined);
+
 // 全局概览。桑基图的视图和趋势的时间范围写进地址。
 const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/overview",
   validateSearch: (search: Record<string, unknown>): { flow?: "ext" | "mesh"; range?: MetricRange } => ({
     flow: search.flow === "ext" || search.flow === "mesh" ? search.flow : undefined,
-    range: metricRanges.some((r) => r.value === search.range && r.value !== "1h") ? (search.range as MetricRange) : undefined,
+    range: rangeSearch(search.range),
   }),
   component: OverviewPage,
 });
@@ -213,7 +216,8 @@ const nodesRoute = createRoute({
   path: "/nodes",
   // add：打开添加节点的对话框（概览空状态的「添加节点」）。
   // tags：按标签筛选（带任一标签的节点）。
-  validateSearch: (search: Record<string, unknown>): { view?: NodesView; add?: boolean; tags?: string[] } => ({
+  validateSearch: (search: Record<string, unknown>): { view?: NodesView; add?: boolean; tags?: string[]; range?: MetricRange } => ({
+    range: rangeSearch(search.range),
     view: search.view === "network" || search.view === "ha" ? search.view : undefined,
     add: search.add === true || search.add === "true" ? true : undefined,
     tags: Array.isArray(search.tags) && search.tags.length > 0 ? search.tags.filter((x): x is string => typeof x === "string") : undefined,
@@ -237,7 +241,8 @@ const nodesRoute = createRoute({
 const nodeRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes/$nodeId",
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab; path?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab; path?: string; range?: MetricRange } => ({
+    range: rangeSearch(search.range),
     tab: nodeTabs.some((t) => t.value === search.tab) ? (search.tab as NodeTab) : undefined,
     path: typeof search.path === "string" && search.path.startsWith("/") ? search.path : undefined,
   }),

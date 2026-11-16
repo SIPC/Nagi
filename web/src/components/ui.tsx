@@ -124,6 +124,9 @@ export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return <input className={cn(control, "h-8 max-md:h-10", className)} {...props} />;
 }
 
+// oneLineTextarea：默认一行、按内容加行的文本框（卷、保留路径）：一行时和 Input 一样高。
+export const oneLineTextarea = "min-h-8 resize-none py-[5px] max-md:py-[9px]";
+
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return <textarea className={cn(control, "min-h-8 py-1.5 leading-5", className)} {...props} />;
 }
@@ -222,8 +225,8 @@ export function Field({
   help?: React.ReactNode;
   htmlFor?: string;
   className?: string;
-  // error：填写有误时的说明，显示在格式说明的位置。
-  error?: string;
+  // error：填写有误或做不了时的说明，显示在格式说明的位置，可以带链接。
+  error?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const errorId = error && htmlFor ? `${htmlFor}-error` : undefined;
@@ -267,6 +270,9 @@ export function Check({
     </span>
   );
 }
+
+// checkListClass：表单里可勾选的一列（成员的访问范围、移交的项目和节点）：细边框、最高 224，多了在框里滚动。
+export const checkListClass = "grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2";
 
 // FormBody：区块里的表单，最宽 672，靠左，字段之间 16。
 export function FormBody({ className, ...props }: React.ComponentProps<"div">) {
@@ -450,7 +456,10 @@ export function AutoHeight({ className, children, slot }: { className?: string; 
 
 // Collapse：切换选项后多出、少掉的一块（例如选「指定」后出现的勾选列表）。高度和透明度一起过渡，
 // 收起时内容留到过渡结束才移除，不会先消失再收拢。带 data-auto-height：外层的 AutoHeight 当它是自己在过渡的子组件，不重复过渡。
-export function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+// 完全收起后不显示（display: none），在网格里不占一道间距。
+// gap：放在有间距的网格里（不是第一项）时传父级的间距：展开、收起的过程中外层抵掉父级的间距，内容上面补回同样的留白，间距跟着高度一起过渡。
+const collapseGap = { 2: ["-mt-2", "pt-2"], 4: ["-mt-4", "pt-4"] } as const;
+export function Collapse({ open, gap, children }: { open: boolean; gap?: keyof typeof collapseGap; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const kept = useRef(children);
@@ -483,9 +492,9 @@ export function Collapse({ open, children }: { open: boolean; children: React.Re
     };
   }, [open]);
   return (
-    <div ref={ref} data-auto-height="" className="min-w-0">
-      {/* last 还没更新时是刚收起的这一帧：内容先留着，副作用里才量得到收起前的高度。 */}
-      {(open || closing || last.current) && kept.current}
+    // last 还没更新时是刚收起的这一帧：内容先留着，副作用里才量得到收起前的高度。
+    <div ref={ref} data-auto-height="" className={cn("min-w-0", gap && collapseGap[gap][0], !(open || closing || last.current) && "hidden")}>
+      {(open || closing || last.current) && (gap ? <div className={cn("grid", collapseGap[gap][1])}>{kept.current}</div> : kept.current)}
     </div>
   );
 }
@@ -654,6 +663,47 @@ export function SettingRow({ label, description, help, children }: { label: Reac
       sub={description}
       actions={children ?? null}
     />
+  );
+}
+
+// SettingSwitch：开关也写成设置行（见 docs/ui.md 设置页）：说明前写当前状态，右边是「开启」或「关闭」。
+// unavailable：做不了时写原因，替换说明，按钮置灰。
+export function SettingSwitch({
+  label,
+  description,
+  help,
+  on,
+  busy,
+  unavailable,
+  onChange,
+}: {
+  label: React.ReactNode;
+  description?: React.ReactNode;
+  help?: React.ReactNode;
+  on: boolean;
+  busy?: boolean;
+  unavailable?: string;
+  onChange: (on: boolean) => void;
+}) {
+  const s = t.common.switch;
+  return (
+    <SettingRow
+      label={label}
+      help={help}
+      description={
+        unavailable ?? (
+          <>
+            {on ? s.on : s.off}
+            {description && <> · {description}</>}
+          </>
+        )
+      }
+    >
+      <Button variant="outline" disabled={busy || !!unavailable} onClick={() => onChange(!on)}>
+        {busy && <Spinner />}
+        {on ? s.turnOff : s.turnOn}
+      </Button>
+    </SettingRow>
   );
 }
 
@@ -904,9 +954,13 @@ export function CodeBlock({ children, copy, nowrap, className }: { children: str
   );
 }
 
-// LogBox：日志和命令输出的深色区域。
+// textLink：句子里的文字链接（含当按钮用的文字）。主文字色、浅色下划线，悬停下划线变深，有焦点样式。
+export const textLink = "cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none transition-colors hover:decoration-foreground focus-ring";
+
+// LogBox：日志和命令输出的深色区域。里面要放块级元素（每行一个 div）时用 logBoxClass 写在 div 上。
+export const logBoxClass = "overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground";
 export function LogBox({ className, ...props }: React.ComponentProps<"pre">) {
-  return <pre className={cn("overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground", className)} {...props} />;
+  return <pre className={cn(logBoxClass, className)} {...props} />;
 }
 
 // ---- 标签页 ----
@@ -1136,7 +1190,7 @@ export function Tabs<T extends string>({
 }
 
 // SegmentedControl：两三个选项之间切换（例如"容器 / 容器组"）。
-export function Segmented<T extends string>({ value, onChange, items, label }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[]; label?: string }) {
+export function Segmented<T extends string>({ value, onChange, items, label, disabled }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[]; label?: string; disabled?: boolean }) {
   const listRef = useRef<HTMLDivElement>(null);
   const box = useTabIndicator(value, listRef);
   return (
@@ -1147,7 +1201,8 @@ export function Segmented<T extends string>({ value, onChange, items, label }: {
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-ring data-[state=active]:text-foreground"
+            disabled={disabled}
+            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=active]:text-foreground"
           >
             {it.label}
           </TabsTrigger>

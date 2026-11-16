@@ -9,7 +9,7 @@ import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { fmtBytes } from "@/components/metrics";
 import { TerminalSession } from "@/components/terminal";
-import { Alert, Button, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
+import { Alert, Button, Collapse, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
 import { MobileBar, mobileBarText } from "@/pages/layout";
 import { Crumbs } from "@/pages/volume-files";
@@ -53,7 +53,7 @@ export function NodeTerminal({ node, cwd }: { node: Node; cwd?: string }) {
   return (
     <div className="grid gap-4">
       <ContainerHint n={node} />
-      {connected && cwd && cwd !== opened && <p className="text-[13px] leading-5 text-muted-foreground">{m.otherCwd(cwd)}</p>}
+      {connected && cwd && cwd !== opened && <p className="leading-5 text-muted-foreground">{m.otherCwd(cwd)}</p>}
       <TerminalSession
         url={() => `/ws/node-shell?${new URLSearchParams({ node: node.id, cwd: cwdRef.current ?? "" })}`}
         beforeConnect={requireElevation}
@@ -165,12 +165,12 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const readonly = q.data?.access === "readonly";
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
 
-  const run = async (key: string, fn: () => Promise<unknown>, done?: string) => {
+  // 上传、删除、新建的结果在列表里看得到，不再弹成功提示（ui.md：页面上已能看到变化的不加）。
+  const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
     setError("");
     try {
       await fn();
-      if (done) toast.success(done);
       refresh();
       return true;
     } catch (err) {
@@ -227,7 +227,6 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           if (!res.ok) throw await failure(res);
         });
       },
-      m.uploaded(list.length),
     );
   };
 
@@ -239,7 +238,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       ...(typed ? { checkDefault: true, typeToConfirm: { label: m.deleteType(e.name), value: e.name } } : {}),
     });
     if (!answer) return;
-    await run(`del:${e.name}`, () => nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: typed ? e.name : "" }), m.deleted);
+    await run(`del:${e.name}`, () => nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: typed ? e.name : "" }));
   };
 
   const edit = async (e: NodeFileEntry) => {
@@ -288,7 +287,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           <Crumbs parts={crumbs.map((c) => ({ label: c.label, onClick: () => onPath(c.path) }))} current={current?.label ?? m.root} />
           <HelpTip>{m.rules}</HelpTip>
         </div>
-        <div className="flex flex-wrap items-center gap-3 max-md:w-full">
+        <div className="flex flex-wrap items-center gap-2 max-md:w-full">
           {!readonly && q.data && (
             <>
               <Button variant="outline" className="max-md:flex-1" disabled={busy === "upload"} onClick={() => inputRef.current?.click()}>
@@ -318,6 +317,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       <ContainerHint n={node} />
       {readonly && <Notice title={m.readonlyDir}>{m.readonlyText}</Notice>}
 
+      <Collapse open={goto !== null} gap={4}>
       {goto !== null && (
         <form
           className="flex items-center gap-2"
@@ -337,7 +337,9 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           </Button>
         </form>
       )}
+      </Collapse>
 
+      <Collapse open={!!creating} gap={4}>
       {creating && (
         <form
           className="flex items-center gap-2"
@@ -349,7 +351,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
               creating === "dir"
                 ? () => nodeClient.createNodeDir({ nodeId: node.id, path: join(real, n) })
                 : () => nodeClient.writeNodeFile({ nodeId: node.id, path: join(real, n), create: true, confirmed: q.data?.access === "confirm" });
-            run("create", op, m.created).then((ok) => {
+            run("create", op).then((ok) => {
               if (!ok) return;
               setName("");
               setCreating(null);
@@ -373,6 +375,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           </Button>
         </form>
       )}
+      </Collapse>
 
       {error && <Alert>{error}</Alert>}
 
@@ -520,8 +523,8 @@ function EditNodeFile({ node, file, initial, onClose, onPath, onExpired, onSaved
       />
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:hidden">
         <Crumbs parts={[{ label: m.root, path: "/" }, ...segments].map((c) => ({ label: c.label, onClick: () => guard(() => onPath(c.path)) }))} current={name} />
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[13px] text-muted-foreground">{[file.owner, file.mode].filter(Boolean).join(" · ")}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground">{[file.owner, file.mode].filter(Boolean).join(" · ")}</span>
           {!readonly && <Menu items={[{ label: m.history, onSelect: () => setHistory(true) }]} />}
           <Button variant="outline" readOnlyOk onClick={() => guard(onClose)}>
             {readonly ? t.common.actions.close : t.common.actions.cancel}

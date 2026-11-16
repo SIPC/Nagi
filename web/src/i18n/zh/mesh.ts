@@ -19,7 +19,7 @@ export default {
   ping: "Ping",
   pingTimeout: "超时",
   pingFailed: "失败",
-  rxTx: "接收 / 发送",
+  rxTx: "入站 / 出站",
   noPeers: "暂无连接",
   fec: (m: number) => `纠错 ${m}/10`,
   quic: "QUIC",

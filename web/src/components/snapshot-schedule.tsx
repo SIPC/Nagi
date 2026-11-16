@@ -1,7 +1,7 @@
 // 定时快照的计划（见 docs/snapshot.md#定时快照）：开关，按间隔或每天定时。项目设置和容器的「存储」标签共用。
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { ProjectSettings, SnapshotSchedule, SnapshotScheduleSchema } from "@/gen/nagi/v1/common_pb";
-import { Check, Field, FormRow, Input, Select } from "@/components/ui";
+import { Check, Collapse, Field, FormRow, Input, Segmented } from "@/components/ui";
 import { defaultSnapshotIntervalMinutes } from "@/lib/config";
 import { t } from "@/i18n";
 
@@ -101,21 +101,29 @@ export function ScheduleFields({
   note?: React.ReactNode;
 }) {
   const m = t.projectData.schedule;
+  // 开关切换时字段和说明各自用 Collapse 过渡，不直接换掉整行。间距放在里面，收起后不留空。
   return (
-    <>
-      <Check checked={value.enabled} disabled={disabled} onChange={(enabled) => onChange({ ...value, enabled })}>
+    <div className="grid">
+      <Check className="justify-self-start" checked={value.enabled} disabled={disabled} onChange={(enabled) => onChange({ ...value, enabled })}>
         {m.enabled}
       </Check>
-      {value.enabled ? (
-        <FormRow>
-          <Field label={m.mode} htmlFor={`${id}-mode`}>
-            <Select id={`${id}-mode`} value={value.mode} disabled={disabled} onChange={(e) => onChange({ ...value, mode: e.target.value as ScheduleForm["mode"] })}>
-              <option value="interval">{m.interval}</option>
-              <option value="daily">{m.daily}</option>
-            </Select>
+      <Collapse open={value.enabled}>
+        <FormRow className="pt-4">
+          {/* 两种方式之间切换用切换控件（ui.md：2 到 3 项）。 */}
+          <Field label={m.mode}>
+            <Segmented
+              label={m.mode}
+              value={value.mode}
+              disabled={disabled}
+              onChange={(mode) => onChange({ ...value, mode })}
+              items={[
+                { value: "interval", label: m.interval },
+                { value: "daily", label: m.daily },
+              ]}
+            />
           </Field>
           {value.mode === "interval" ? (
-            <Field label={m.intervalMinutes} htmlFor={`${id}-interval`} hint={m.intervalHint} error={errors.interval}>
+            <Field label={m.intervalMinutes} htmlFor={`${id}-interval`} error={errors.interval}>
               <Input
                 id={`${id}-interval`}
                 value={value.interval}
@@ -127,7 +135,7 @@ export function ScheduleFields({
               />
             </Field>
           ) : (
-            <Field label={m.times} htmlFor={`${id}-times`} hint={m.timesHint(timeZone ?? browserTimeZone())} error={errors.times}>
+            <Field label={m.times} htmlFor={`${id}-times`} hint={m.timesHint} help={m.timesZone(timeZone ?? browserTimeZone())} error={errors.times}>
               <Input
                 id={`${id}-times`}
                 value={value.times}
@@ -140,9 +148,12 @@ export function ScheduleFields({
             </Field>
           )}
         </FormRow>
-      ) : (
-        note && <p className="leading-5 text-muted-foreground">{note}</p>
+      </Collapse>
+      {note && (
+        <Collapse open={!value.enabled}>
+          <p className="pt-4 leading-5 text-muted-foreground">{note}</p>
+        </Collapse>
       )}
-    </>
+    </div>
   );
 }

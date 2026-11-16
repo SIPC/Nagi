@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { MoreSettings } from "@/components/container-form";
 import { toast } from "sonner";
 import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
@@ -32,6 +33,8 @@ import {
   SettingRow,
   Spinner,
   Status,
+  Menu,
+  textLink,
 } from "@/components/ui";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
@@ -117,7 +120,7 @@ export function ContainerStorage({
   // 只读角色没有文件管理的入口，直接打开链接也回到列表。
   const browsing = volume && !isViewer ? volume : undefined;
   return (
-    <div className="grid grid-cols-1 gap-8">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {browsing ? (
         <BrowseVolume key={`${container.name}/${browsing}`} project={project} container={container} volume={browsing} onClose={() => openVolume()} />
@@ -146,7 +149,7 @@ export function ContainerHA({
   // 设置了顶替时由顶替处理，不能从备份节点恢复（先取消顶替）。
   const restorable = !container.failover && container.backupNodeIds.length > 0 && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
   return (
-    <div className="grid grid-cols-1 gap-8">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {container.pendingHa && <PendingHANotice project={project} container={container} nodes={nodes} />}
       {container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
@@ -261,6 +264,14 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
   const deployedTargets = new Set((volumes.data?.volumes ?? []).flatMap((v) => v.mounts.map((x) => x.target)));
   const pendingAdd = targets.filter((x) => !deployedTargets.has(x));
   const disk = volumes.data;
+  // 没有卷时只在空状态里放「添加目录」，标题栏不重复。
+  const noVolumes = !!volumes.data && volumes.data.volumes.filter(shownVolume).length === 0 && pendingAdd.length === 0;
+  const addButton = (
+    <Button variant="outline" onClick={() => setAdding(true)}>
+      <Plus />
+      {m.addDir}
+    </Button>
+  );
   const closeAdd = () => {
     setAdding(false);
     setPath("");
@@ -302,18 +313,13 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
           {container.kind === "group" && (
             <span>
               {m.composeHint} ·{" "}
-              <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "config" }} className="hover:underline">
+              <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "config" }} className={textLink}>
                 {m.composeLink}
               </Link>
             </span>
           )}
           {disk && disk.diskTotalBytes > 0n && <Roll value={m.diskFree(fmtBytes(Number(disk.diskFreeBytes)), fmtBytes(Number(disk.diskTotalBytes)))} n={Number(disk.diskFreeBytes)} />}
-          {form && !isViewer && (
-            <Button variant="outline" onClick={() => setAdding(true)}>
-              <Plus />
-              {m.addDir}
-            </Button>
-          )}
+          {form && !isViewer && !noVolumes && addButton}
         </>
       }
     >
@@ -354,7 +360,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
               {pathError}
             </p>
           ) : (
-            <p id="add-dir-hint" className="text-[13px] leading-5 text-muted-foreground">
+            <p id="add-dir-hint" className="leading-5 text-muted-foreground">
               {m.addHint}
             </p>
           )}
@@ -373,8 +379,8 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
         <RowsSkeleton />
       ) : volumes.error ? (
         <QueryError error={errorMessage(volumes.error)} onRetry={() => volumes.refetch()} />
-      ) : volumes.data.volumes.filter(shownVolume).length === 0 && pendingAdd.length === 0 ? (
-        <EmptyRow>{m.empty}</EmptyRow>
+      ) : noVolumes ? (
+        <EmptyRow action={form && !isViewer && !adding ? addButton : undefined}>{m.empty}</EmptyRow>
       ) : (
         <List>
           {volumes.data.volumes.filter(shownVolume).map((v) => (
@@ -400,7 +406,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
             <Row
               key={target}
               title={<span className="truncate">{target}</span>}
-              sub={<span className="text-warning-text">{m.pendingAdd}</span>}
+              sub={m.pendingAdd}
               cols={[{ content: "", num: true }, { content: "" }]}
               actionsWidth="w-28"
               actions={
@@ -419,7 +425,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
 }
 
 // NotDeployed：未部署时卷和快照的空状态，给出部署按钮（进入概览开始部署）。
-function NotDeployed({ project, container }: { project: Project; container: Container }) {
+export function NotDeployed({ project, container }: { project: Project; container: Container }) {
   return (
     <EmptyRow
       action={
@@ -449,6 +455,7 @@ function Snapshots({
   const deployed = container.deployedVersion > 0n;
   const online = nodes.online(container.nodeId);
   const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
   return (
     <Section
       title={s.title}
@@ -458,7 +465,7 @@ function Snapshots({
           <span>
             {scheduleSummary(container.snapshotSchedule ?? projectSchedule(project.settings))}
             {s.limitShort(project.settings?.snapshotLimit || defaultSnapshotLimit)} ·{" "}
-            <button type="button" className="cursor-pointer rounded-sm outline-none hover:underline focus-ring" onClick={() => setEditing(true)}>
+            <button type="button" className={textLink} onClick={() => setEditing(true)}>
               {s.scheduleLink}
             </button>
           </span>
@@ -469,16 +476,22 @@ function Snapshots({
             <Button
               variant="outline"
               disabled={run.busy}
-              onClick={() =>
-                run.run(() =>
-                  projectClient.createSnapshot({
-                    projectId: project.id,
-                    container: container.name,
-                  }),
-                )
-              }
+              onClick={async () => {
+                // 转圈只跟着这个按钮：恢复快照也用同一个 run，那时这里只置灰。
+                setCreating(true);
+                try {
+                  await run.run(() =>
+                    projectClient.createSnapshot({
+                      projectId: project.id,
+                      container: container.name,
+                    }),
+                  );
+                } finally {
+                  setCreating(false);
+                }
+              }}
             >
-              {run.busy && <Spinner />}
+              {creating && <Spinner />}
               {s.create}
             </Button>
           )}
@@ -561,7 +574,7 @@ function ContainerSchedule({ project, container, onDone }: { project: Project; c
       />
       {!own && (
         <p className="leading-5 text-muted-foreground">
-          <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className="text-foreground underline underline-offset-4">
+          <Link to="/projects/$projectId" params={{ projectId: project.id }} search={{ tab: "settings" }} className={textLink}>
             {m.projectLink}
           </Link>
         </p>
@@ -673,7 +686,9 @@ function SnapshotList({
     (await confirmAction(s.restoreConfirm(container, t.common.list(c.config?.backupPaths ?? [])), { action: s.restore, danger: true })) &&
     run(() => projectClient.restoreSnapshot({ projectId: project.id, container, snapshotId: id }));
   const remove = async (id: string) => {
-    if (!(await confirmAction(s.deleteConfirm, { action: t.common.actions.delete, danger: true }))) return;
+    // 确认框写明是哪一份（时间），列表里可能有好几份看起来差不多的。
+    const snap = snapshots.data.snapshots.find((x) => x.id === id);
+    if (!(await confirmAction(s.deleteConfirm(snapshotTime(snap?.time ? toDate(snap.time) : undefined)), { action: s.deleteAction, danger: true }))) return;
     setDeleting(true);
     setError("");
     try {
@@ -859,7 +874,7 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
               title={
                 <>
                   <span className="truncate">{nodes.name(id)}</span>
-                  {!nodes.online(id) && <span className="shrink-0 text-[13px] text-muted-foreground">{t.common.status.offline}</span>}
+                  {!nodes.online(id) && <span className="shrink-0 text-muted-foreground">{t.common.status.offline}</span>}
                 </>
               }
               sub={
@@ -1083,7 +1098,7 @@ function PlacementRow({ project, container, nodes, run }: { project: Project; co
         description={[online ? name : p.offline(name), container.dir, note].filter(Boolean).join(" · ")}
       >
         {restorable ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button variant="outline" disabled={run.busy} onClick={() => setRestoring(true)}>
               {t.projectData.backup.restoreFromBackup}
             </Button>
@@ -1268,29 +1283,17 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
             </Check>
           )}
         </div>
-        {/* 高级设置：和添加容器的「更多设置」一样，展开时内容从上方滑入，箭头旋转。 */}
-        <button
-          type="button"
-          aria-expanded={advanced}
-          aria-controls="fo-advanced"
-          onClick={() => setAdvanced(!advanced)}
-          className="inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring"
-        >
-          <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90 transition-transform" : "size-4 transition-transform"} />
-          {advanced ? f.advanced : f.advancedHint}
-        </button>
-        {advanced && (
-          <div id="fo-advanced" className="animate-slide-from-above">
-            <FormRow>
-              <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
-                <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} autoComplete="off" spellCheck={false} />
-              </Field>
-              <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp} error={leaseError}>
-                <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
-              </Field>
-            </FormRow>
-          </div>
-        )}
+        {/* 高级设置：和添加容器的「更多设置」同一个组件。租约时长填错时自动展开。 */}
+        <MoreSettings label={f.advancedHint} labelOpen={f.advanced} open={advanced} onOpenChange={setAdvanced}>
+          <FormRow>
+            <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
+              <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp} error={leaseError}>
+              <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
+            </Field>
+          </FormRow>
+        </MoreSettings>
         {error && <Alert>{error}</Alert>}
         <DialogActions>
           <Button variant="outline" readOnlyOk onClick={onClose}>
@@ -1335,16 +1338,7 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
         actions={
           isAdmin && (
             <>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={async () =>
-                  (await confirmAction(f.restoredDiscardPrompt, { action: f.restoredDiscard, danger: true })) &&
-                  call(() => elevated(() => nodeClient.confirmPendingHA({ ...ref, discard: true })))
-                }
-              >
-                {f.restoredDiscard}
-              </Button>
+              {/* 提示右边只放一个按钮：确认恢复；放弃放进更多菜单。 */}
               <Button
                 disabled={busy}
                 onClick={async () => {
@@ -1366,6 +1360,18 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
                 {busy && <Spinner />}
                 {f.restoredConfirm}
               </Button>
+              <Menu
+                items={[
+                  {
+                    label: f.restoredDiscard,
+                    danger: true,
+                    disabled: busy,
+                    onSelect: async () =>
+                      (await confirmAction(f.restoredDiscardPrompt, { action: f.restoredDiscard, danger: true })) &&
+                      call(() => elevated(() => nodeClient.confirmPendingHA({ ...ref, discard: true }))),
+                  },
+                ]}
+              />
             </>
           )
         }

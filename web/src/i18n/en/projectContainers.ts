@@ -1,12 +1,12 @@
 import type zh from "../zh/projectContainers";
 
 export default {
-  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View activity", empty: "No events" },
+  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View audit log", empty: "No events" },
   terminal: { connected: "Connected" },
   imageTip: {
     label: "Image update available",
     title: "New image version",
-    body: "has an update. Updating pulls the new image and recreates the container. The service is briefly interrupted.",
+    body: "Updating pulls the new image and recreates the container. The service is briefly interrupted.",
     later: "Later",
     update: "Update container",
   },
@@ -80,7 +80,7 @@ export default {
       return `Delete ${kind} ${name}? ${group ? "Its containers" : "The container"} will be stopped and removed. The ${kind} directory is kept by default.`;
     },
     deleteDirCheck: (group) => `Also delete the ${group ? "container group" : "container"} directory (data and snapshots can't be recovered)`,
-    deleteTypeName: (group, name) => `Enter the ${group ? "container group" : "container"} name ${name} to confirm`,
+    deleteTypeName: (_group, name) => `Type ${name} to confirm`,
     deleteKind: (group) => (group ? "Delete container group" : "Delete container"),
     sharedEnvOutdated: "Shared variables changed and take effect on the next deployment.",
     uploadDeploy: "Upload and deploy",
@@ -152,7 +152,7 @@ export default {
     empty: "No logs",
   },
   config: {
-    notice: "Changes are saved as a draft and take effect after deployment.",
+    notice: "Changes are saved as a draft and take effect after deployment",
     portsLink: "Configure port mappings on the Network tab",
     composeHelp:
       "ports are imported as port mappings only when they first appear. Edit existing port mappings and domains on the Network tab; editing ports here has no effect.",

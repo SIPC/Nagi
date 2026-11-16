@@ -4,10 +4,10 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtBytes, fmtCount, fmtCpuShort, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
+import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
-import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status } from "@/components/ui";
+import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status, Table, Td, Th } from "@/components/ui";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -406,7 +406,8 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
       {hover && hovered && (
         <div
           aria-hidden
-          className="pointer-events-none absolute z-10 grid gap-0.5 rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap text-popover-foreground shadow-md"
+          // 和图表提示同一种表面（chart.tsx）：popover 底色、浮层阴影、rounded-lg，不加边框。
+          className="pointer-events-none absolute z-10 grid gap-1.5 rounded-lg bg-popover px-2.5 py-1.5 text-xs leading-4 whitespace-nowrap text-popover-foreground shadow-popover"
           style={{
             // 放在指针右上方；靠右边时放到左边，免得超出图。
             left: hover.x > width - 200 ? undefined : hover.x + 12,
@@ -448,10 +449,14 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
 // ---- 表格和数字 ----
 
 // Stat：一个关键数字。能点的（节点、容器、项目）悬停时名称变成主文字色并加下划线，看得出是链接。
-function Stat({ label, value, n, unit, to, title }: { label: string; value: string | number; n?: number; unit?: string; to?: "/nodes" | "/projects"; title?: string }) {
+// help：数字的说明放在名称旁的问号里（触屏也能点开），不用原生 title。
+function Stat({ label, value, n, unit, to, help }: { label: string; value: string | number; n?: number; unit?: string; to?: "/nodes" | "/projects"; help?: string }) {
   const inner = (
     <>
-      <span className={cn("text-muted-foreground", to && "underline-offset-4 transition-colors group-hover:text-foreground group-hover:underline")}>{label}</span>
+      <span className="flex items-center gap-1">
+        <span className={cn("text-muted-foreground", to && "underline-offset-4 transition-colors group-hover:text-foreground group-hover:underline")}>{label}</span>
+        {help && <HelpTip>{help}</HelpTip>}
+      </span>
       <span className="text-2xl leading-8 font-medium tracking-tight whitespace-nowrap">
         <Roll value={String(value)} n={n} />
         {unit && (
@@ -467,19 +472,16 @@ function Stat({ label, value, n, unit, to, title }: { label: string; value: stri
   );
   const box = "grid min-w-0 gap-1";
   return to ? (
-    <Link to={to} className={cn(box, "group rounded-sm outline-none focus-ring")} title={title}>
+    <Link to={to} className={cn(box, "group rounded-sm outline-none focus-ring")}>
       {inner}
     </Link>
   ) : (
-    <div className={box} title={title}>
-      {inner}
-    </div>
+    <div className={box}>{inner}</div>
   );
 }
 
-const thClass =
-  "h-9 bg-[linear-gradient(var(--border),var(--border))] [background-position:bottom] [background-size:100%_1px] bg-no-repeat px-2 text-left text-[13px] font-normal whitespace-nowrap text-muted-foreground first:[background-position:right_bottom] first:[background-size:calc(100%-8px)_1px] last:[background-position:left_bottom] last:[background-size:calc(100%-8px)_1px]";
-const tdClass = "h-9 truncate px-2 py-1 align-middle whitespace-nowrap text-muted-foreground transition-colors group-hover:bg-accent first:rounded-l-md last:rounded-r-md";
+// 单元格：一行放不下时截断，第一列以外是灰色（ui.md 表格）。
+const cell = "truncate whitespace-nowrap text-muted-foreground";
 
 // 列宽跟内容走（width 是除最后一列外的宽度，写在表头上），靠左排，多出来的宽度都留给最后一列。
 // 窄屏收起次要列（hide 是对应的类名，表头和单元格一起用），不横向滚动整页；第一列和最后一列一直显示。
@@ -487,20 +489,18 @@ type Col = { label: string; width?: number; hide?: string };
 
 function OverviewTable({ cols, children }: { cols: Col[]; children: ReactNode }) {
   return (
-    <div className="-mx-2 overflow-x-auto">
-      <table className="w-full border-separate border-spacing-0 md:table-fixed">
-        <thead>
-          <tr>
-            {cols.map((c) => (
-              <th key={c.label} className={cn(thClass, c.hide)} style={{ width: c.width }}>
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <Table className="md:table-fixed">
+      <thead>
+        <tr>
+          {cols.map((c) => (
+            <Th key={c.label} className={c.hide} style={{ width: c.width }}>
+              {c.label}
+            </Th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </Table>
   );
 }
 
@@ -511,7 +511,7 @@ const hideNet = "max-xl:hidden";
 const nodeCols: Col[] = [
   { label: o.nodes.name, width: 176 },
   { label: o.nodes.status, width: 80 },
-  { label: o.nodes.cpu, width: 72, hide: hideCpu },
+  { label: o.nodes.cpu, width: 120, hide: hideCpu },
   { label: o.nodes.memory, width: 136, hide: hideUsage },
   { label: o.nodes.disk, width: 136, hide: hideUsage },
   { label: o.nodes.inbound, width: 104, hide: hideNet },
@@ -824,7 +824,7 @@ export function OverviewPage() {
     ) : abnormal > 0 ? (
       <Status tone="danger">{o.health.containersAbnormal(abnormal)}</Status>
     ) : offlineNames.length > 0 ? (
-      <Status tone="warning">{t.common.status.nodesOffline(offlineNames)}</Status>
+      <Status>{t.common.status.nodesOffline(offlineNames)}</Status>
     ) : (
       <Status tone="success">{o.health.ok}</Status>
     );
@@ -846,20 +846,21 @@ export function OverviewPage() {
         title={o.title}
         description={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {nodes.isSuccess && <span className="flex [&>span]:text-[13px] [&>span]:leading-5">{health}</span>}
+            {nodes.isSuccess && <span className="flex [&>span]:leading-5">{health}</span>}
             <span>{o.updates}</span>
           </span>
         }
       />
       {nodesFailed && <QueryError className="mb-6" error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />}
       {projects.error && !projects.data && <QueryError className="mb-6" error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-4 md:flex md:flex-wrap md:gap-x-8">
+      {/* 列数固定，不留单独掉行的一个：宽屏 6 列，窄一些时 3 列。 */}
+      <div className="grid grid-cols-3 gap-4 lg:grid-cols-6 lg:gap-x-8 max-md:grid-cols-2">
         <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
         <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
-        <Stat label={o.stats.extIn} title={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />
-        <Stat label={o.stats.extOut} title={o.stats.estimated} value={ready ? outValue : dash} n={extOut} unit={ready ? outUnit : undefined} />
-        <Stat label={o.stats.mesh} title={o.stats.meshTitle} value={sample ? meshValue : dash} n={meshTotal} unit={sample ? meshUnit : undefined} />
+        <Stat label={o.stats.extIn} help={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />
+        <Stat label={o.stats.extOut} help={o.stats.estimated} value={ready ? outValue : dash} n={extOut} unit={ready ? outUnit : undefined} />
+        <Stat label={o.stats.mesh} help={o.stats.meshTitle} value={sample ? meshValue : dash} n={meshTotal} unit={sample ? meshUnit : undefined} />
       </div>
 
       {noNodes ? (
@@ -961,13 +962,14 @@ export function OverviewPage() {
                   const diskUsed = disks.length > 0 ? disks.reduce((sum, d) => sum + Number(d.usedBytes), 0) : ((u?.disk ?? 0) / 100) * diskTotal;
                   const net = n.online ? live.data?.get(n.id) : undefined;
                   return (
-                    <tr key={n.id} className="group">
-                      <td className={cn(tdClass, "text-foreground")} title={n.name}>
+                    // 整行可点：点哪里都进节点页；名称仍是链接，可以 Ctrl+点击在新标签打开。
+                    <tr key={n.id} className="group cursor-pointer" onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate({ to: "/nodes/$nodeId", params: { nodeId: n.id } })}>
+                      <Td className={cn(cell, "text-foreground")} title={n.name}>
                         <Link to="/nodes/$nodeId" params={{ nodeId: n.id }}>
                           {n.name}
                         </Link>
-                      </td>
-                      <td className={tdClass}>
+                      </Td>
+                      <Td className={cell}>
                         {n.pending ? (
                           <span className="text-warning-text">
                             <Status tone="warning">{t.common.status.pendingApproval}</Status>
@@ -975,17 +977,15 @@ export function OverviewPage() {
                         ) : n.online ? (
                           <Status tone="success">{t.common.status.online}</Status>
                         ) : (
-                          <span className="text-destructive">
-                            <Status tone="danger">{t.common.status.offline}</Status>
-                          </span>
+                          <Status>{t.common.status.offline}</Status>
                         )}
-                      </td>
-                      <td className={cn(tdClass, hideCpu)}><Roll value={u ? fmtCpuShort(u.cpu) : dash} /></td>
-                      <td className={cn(tdClass, hideUsage)}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></td>
-                      <td className={cn(tdClass, hideUsage)}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></td>
-                      <td className={cn(tdClass, hideNet)}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></td>
-                      <td className={cn(tdClass, hideNet)}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></td>
-                      <td className={tdClass}><Roll value={String(n.containers)} /></td>
+                      </Td>
+                      <Td className={cn(cell, hideCpu)}><Roll value={u ? (n.info?.cpus ? `${fmtCpuShort(u.cpu)} / ${n.info.cpus * 100}%` : fmtCpuShort(u.cpu)) : dash} n={u?.cpu} /></Td>
+                      <Td className={cn(cell, hideUsage)}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></Td>
+                      <Td className={cn(cell, hideUsage)}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></Td>
+                      <Td className={cn(cell, hideNet)}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></Td>
+                      <Td className={cn(cell, hideNet)}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></Td>
+                      <Td className={cell}><Roll value={String(n.containers)} /></Td>
                     </tr>
                   );
                 })}
@@ -1006,18 +1006,19 @@ export function OverviewPage() {
               ) : (
                 <OverviewTable cols={routeCols}>
                   {routeRows.map((x) => (
-                    <tr key={`${x.project.id}/${x.route.name}`} className="group">
-                      <td className={cn(tdClass, "font-mono text-[13px] text-foreground")}>{x.route.name}</td>
-                      <td className={cn(tdClass, "text-foreground")}>
+                    <tr key={`${x.project.id}/${x.route.name}`} className="group cursor-pointer" onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate({ to: "/projects/$projectId", params: { projectId: x.project.id }, search: { tab: "network" } })}>
+                      {/* 有域名时第一列写访问地址（域名），没有时写映射名。 */}
+                      <Td className={cn(cell, "font-mono text-[13px] text-foreground")} title={x.route.name}>{x.route.domains[0] || x.route.name}</Td>
+                      <Td className={cell}>
                         <Link to="/projects/$projectId" params={{ projectId: x.project.id }}>
                           {x.project.name}
                         </Link>
-                      </td>
-                      <td className={cn(tdClass, hideContainer)}>{x.route.container}</td>
-                      <td className={cn(tdClass, hideReq)}><Roll value={fmtCount(x.req)} n={x.req} /></td>
-                      <td className={cn(tdClass, hideRate)}><Roll value={x.req > 0 ? `${((100 * x.err) / x.req).toFixed(1)}%` : dash} /></td>
-                      <td className={cn(tdClass, hideRate)}><Roll value={fmtTotal(x.in)} n={x.in} /></td>
-                      <td className={tdClass}><Roll value={fmtTotal(x.out)} n={x.out} /></td>
+                      </Td>
+                      <Td className={cn(cell, hideContainer)}>{x.route.container}</Td>
+                      <Td className={cn(cell, hideReq)}><Roll value={fmtCount(x.req)} n={x.req} /></Td>
+                      <Td className={cn(cell, hideRate)}><Roll value={fmtErrorRate(x.err, x.req)} /></Td>
+                      <Td className={cn(cell, hideRate)}><Roll value={fmtTotal(x.in)} n={x.in} /></Td>
+                      <Td className={cell}><Roll value={fmtTotal(x.out)} n={x.out} /></Td>
                     </tr>
                   ))}
                 </OverviewTable>

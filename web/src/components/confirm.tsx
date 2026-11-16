@@ -9,6 +9,8 @@ type Options = {
   // 主按钮的文字，例如「重启」；不写时是「确认」。
   action?: string;
   danger?: boolean;
+  // 默认焦点放在「取消」上，但主按钮不变红：会中断服务、不丢数据的操作（例如更新面板）。
+  focusCancel?: boolean;
   // 附加的复选框，例如「同时删除容器目录」，默认不勾选。
   check?: string;
   // 复选框默认勾选，例如「先做一份快照」。
@@ -121,13 +123,13 @@ export function ConfirmHost() {
           ) : (
             <>
               <AlertDialogCancel asChild>
-                <Button ref={req?.danger ? safeButton : undefined} readOnlyOk size="sm" variant="outline">
+                <Button ref={req?.danger || req?.focusCancel ? safeButton : undefined} readOnlyOk size="sm" variant="outline">
                   {t.common.actions.cancel}
                 </Button>
               </AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button
-                  ref={req?.danger ? undefined : safeButton}
+                  ref={req?.danger || req?.focusCancel ? undefined : safeButton}
                   readOnlyOk
                   size="sm"
                   variant={req?.danger || (req?.checkDanger && checked) ? "destructive" : "default"}

@@ -43,7 +43,8 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
     );
   }
   const p = project.data.project;
-  if (!p) return null;
+  // 面板没有返回项目（例如刚被删除）：写明原因，不留空白。
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   return <ProjectBody p={p} services={project.data.status?.services ?? []} imageUpdates={project.data.status?.imageUpdates ?? []} tab={tab} onTab={onTab} />;
 }
 
@@ -145,7 +146,7 @@ export function ProjectSplit({
 
 // navState：项目导航里容器的状态点。节点离线时容器的状态是未知。
 function navState(m: Container, node: Node | undefined, services: NonNullable<ProjectData["status"]>["services"]) {
-  if (node?.online === false) return { tone: "warning" as const, label: t.common.status.nodesOffline([node.name]) };
+  if (node?.online === false) return { tone: "neutral" as const, label: t.common.status.nodesOffline([node.name]) };
   return stateOf(
     services.filter((s) => s.container === m.name),
     m.deployedVersion > 0n,
@@ -160,7 +161,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
   if (project.isPending) return <Loading />;
   if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
-  if (!p) return null;
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   const parts = location.pathname.split("/").filter(Boolean);
   const search = location.search as { tab?: ProjectTab; view?: DetailView };
   const container = parts[2] === "c" ? decodeURIComponent(parts[3] ?? "") : "";
@@ -190,7 +191,13 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
             <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-            <span aria-hidden className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+            {/* 和项目栏一样：镜像可更新时名称后面一个蓝色向上箭头。 */}
+            {(project.data.status?.imageUpdates ?? []).some((x) => x.container === m.name) && (
+              <span title={t.projects.card.imageUpdate} className="inline-flex shrink-0">
+                <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
+              </span>
+            )}
+            <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
           </Link>
         );
       })}
@@ -223,7 +230,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
   if (project.isPending) return <Loading />;
   if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
-  if (!p) return null;
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   const services = project.data.status?.services ?? [];
   const imageUpdates = project.data.status?.imageUpdates ?? [];
   const section = (t: ProjectTab) => !container && !adding && tab === t;
@@ -241,7 +248,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
           <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
           </span>
-          <span className="font-mono text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
+          <span className="text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
         </div>
       </div>
       <nav ref={ref} className="relative grid gap-1" aria-label={p.name}>
@@ -274,27 +281,26 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
             >
               <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
-                <span className={cn("truncate", active && "font-medium")}>{containerLabel(m)}</span>
+                <span className="truncate">{containerLabel(m)}</span>
                 <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
-                {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
+                {m.kind === "group" && <span className="shrink-0 text-[13px] text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
                 {imageUpdates.some((x) => x.container === m.name) && (
                   <span title={t.projects.card.imageUpdate} className="inline-flex shrink-0">
                     <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
                   </span>
                 )}
-                <span aria-hidden className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
+                <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
               </span>
               {node?.online === false ? (
-                <span className="pl-3.5 text-xs text-warning-text">{t.common.status.nodesOffline([node.name])}</span>
+                <span className="pl-3.5 text-[13px] leading-5 text-muted-foreground">{t.common.status.nodesOffline([node.name])}</span>
               ) : (
                 <UsageRings usage={u} memFallback={memFallback} className="pl-3.5" />
               )}
             </Link>
           );
         })}
-        <div className="h-1" />
-        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, !section("network") && idle)}>
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, "mt-2", !section("network") && idle)}>
           {t.project.sections.network}
           {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
         </Link>

@@ -25,6 +25,7 @@ export default {
     actionOff: "Disable",
     help: "If you lose your authenticator, run nagi reset 2fa on the panel machine.",
     enable: "Enable 2FA",
+    enableTitle: "Turn on two-factor authentication",
     elevate: "Verify your identity to enable 2FA. You won't be asked again for 15 minutes.",
     qrCode: "Two-factor authentication QR code",
     scanHint: "Scan the QR code with an authenticator app such as Google Authenticator or 1Password, or enter the secret manually.",
@@ -35,6 +36,7 @@ export default {
       "Verify your identity before disabling 2FA: enter the current 6-digit code from your authenticator app, or your sign-in password if the authenticator is lost.",
     disablePlaceholder: "000000 or password",
     disable: "Disable 2FA",
+    disableTitle: "Turn off two-factor authentication",
   },
   passkeys: {
     label: "Passkeys",
@@ -65,5 +67,7 @@ export default {
     disableConfirm: "Disable secure entry? Anyone will be able to open the sign-in page.",
     help: "If you forget the entry URL, run nagi reset entrance on the panel machine.",
     disable: "Disable secure entry",
+    enabledTitle: "Secure entry is on",
+    enabledText: "From now on, only this URL opens the sign-in page. Keep it somewhere safe. If you forget it, run nagi reset entrance on the panel machine.",
   },
 } satisfies typeof zh;

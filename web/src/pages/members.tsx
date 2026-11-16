@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { avatarSrc, UserAvatar } from "@/components/account";
-import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
+import { Alert, Button, Check, checkListClass, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { AccessTokenList } from "@/pages/tokens";
@@ -49,7 +49,7 @@ function memberSummary(u: PanelUser) {
     parts.push(s.allProjects ? t.members.scope.allProjects : t.common.list([...s.projectGroups.map(t.members.scope.groupName), ...(s.projectIds.length > 0 || s.projectGroups.length === 0 ? [t.members.scope.projectCount(s.projectIds.length)] : [])]));
     parts.push(s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
   }
-  if (u.passkeys.length > 0) parts.push(t.members.passkeyCount(u.passkeys.length));
+  // 一行只放身份（ui.md 成员列表），通行密钥的个数不写在这里。
   return parts.filter(Boolean).join(" · ");
 }
 
@@ -91,9 +91,9 @@ function ScopePick({
   const covered = (o: { labels: string[] }) => o.labels.some((l) => pickedLabels.includes(l));
   // 访问范围里还有、但已经没有项目（节点）用着的分组（标签），也列出来，才能取消。
   const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
-  const heading = "pt-1 text-xs text-muted-foreground first:pt-0";
+  const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} help={hint}>
       <div className="grid">
         <div>
           <Segmented
@@ -117,7 +117,7 @@ function ScopePick({
               <p className="text-muted-foreground">{empty}</p>
             ) : (
               // 字段名没有对应的单个输入框：分段控件自带名称，勾选列表用 group 关联。
-              <div role="group" aria-label={label} className="grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
+              <div role="group" aria-label={label} className={checkListClass}>
                 {allLabels.length > 0 && (
                   <>
                     <div className={heading}>{labelTitle}</div>
@@ -221,12 +221,14 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   return (
     <form
       className="grid gap-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
+        // 把自己从管理员改成别的角色：保存后马上失去管理员权限（面板只拦最后一个管理员），先确认。
+        if (user.isSelf && user.role === "admin" && role !== "admin" && !(await confirmAction(t.members.demoteSelfConfirm(t.members.roles[role as (typeof roles)[number]] ?? role), { action: t.members.demoteSelf, danger: true }))) return;
         save.mutate();
       }}
     >
-      <Field label={t.members.role} htmlFor="member-edit-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
+      <Field label={t.members.role} htmlFor="member-edit-role" help={t.members.roleHelp}>
         <Select id="member-edit-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {roleOptions}
         </Select>
@@ -272,7 +274,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       <Field label={t.members.password} htmlFor="member-password" hint={t.members.passwordHint}>
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
-      <Field label={t.members.role} htmlFor="member-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
+      <Field label={t.members.role} htmlFor="member-role" help={t.members.roleHelp}>
         <Select id="member-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {roleOptions}
         </Select>
@@ -371,17 +373,17 @@ export function MembersCard() {
               center
               title={
                 <>
-                  <span className="truncate font-medium">{u.displayName || u.username}</span>
-                  {u.isSelf && <span className="shrink-0 text-[13px] text-muted-foreground">{t.members.you}</span>}
+                  <span className="truncate">{u.displayName || u.username}</span>
+                  {u.isSelf && <span className="shrink-0 text-muted-foreground">{t.members.you}</span>}
                 </>
               }
               sub={<span className="block truncate">{memberSummary(u)}</span>}
               // 只写开了两步验证的，每行都写「未开」是重复的噪音。
               cols={[{ content: u.totpEnabled ? <Status tone="success">{t.members.totpOn}</Status> : null, width: "w-28" }]}
-              actionsWidth="w-9"
+              actionsWidth="w-11"
               actions={
                 <RowMenu
-                  className="size-9 last:mr-0 [&_svg]:size-5"
+                  className="size-9 last:mr-2 [&_svg]:size-5"
                   items={[
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
                     { label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true },
@@ -521,10 +523,10 @@ export function SessionList() {
           />
         ))}
       </List>
-      {!all && list.length > sessionsShown && (
+      {list.length > sessionsShown && (
         <div>
-          <Button readOnlyOk variant="ghost" className="-ml-3" onClick={() => setAll(true)}>
-            {t.members.showAllSessions(list.length)}
+          <Button readOnlyOk variant="ghost" className="-ml-3" aria-expanded={all} onClick={() => setAll(!all)}>
+            {all ? t.common.feedback.hideNotes : t.members.showAllSessions(list.length)}
           </Button>
         </div>
       )}

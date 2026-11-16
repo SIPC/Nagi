@@ -1,4 +1,5 @@
-import { useContext, useEffect, useState } from "react";
+import { Children, useContext, useEffect, useState } from "react";
+import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -8,7 +9,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, type MetricRange } from "@/components/metrics";
+import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
@@ -30,6 +31,7 @@ import {
   List,
   Menu,
   Notice,
+  Collapse,
   QueryError,
   Row,
   RowsSkeleton,
@@ -55,7 +57,6 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation } from "@/components/elevate";
-import { toast } from "sonner";
 import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
@@ -104,6 +105,34 @@ function nodeSpecTitle(info?: NodeInfo, usage?: NodeUsage) {
   return disk ? `${t.nodes.disk} ${sizeLabel(disk)}` : undefined;
 }
 
+// NodeNotices：节点页顶部的提示。只有一条时直接显示；多条时合并成一行「需要处理 N 项」，展开看每一条。
+// 升级进行中时一直展开：进度要一眼看到。
+function NodeNotices({ children, open: forceOpen }: { children: React.ReactNode; open?: boolean }) {
+  const items = Children.toArray(children).filter(Boolean);
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  if (items.length === 1) return <div className="mb-6">{items}</div>;
+  const shown = open || !!forceOpen;
+  return (
+    <div className="mb-6">
+      <Notice
+        tone="warning"
+        title={t.projects.attention.title(items.length)}
+        actions={
+          !forceOpen && (
+            <Button variant="outline" readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
+              {open ? t.common.feedback.hideNotes : t.common.feedback.showNotes}
+            </Button>
+          )
+        }
+      />
+      <Collapse open={shown}>
+        <div className="grid gap-2 pt-2 pl-3.5">{items}</div>
+      </Collapse>
+    </div>
+  );
+}
+
 // lastSeenText：离线节点最后在线的时间，从未连上过时写「从未在线」。
 const lastSeenText = (n: Node) => (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : t.nodes.neverSeen);
 
@@ -113,7 +142,7 @@ const fmtPercent = fmtCpuShort;
 // NodeResources：节点页的监控，4 个数值块：CPU、内存、磁盘、流量，每块一个数字加一条小折线；时间范围在区块标题右侧。
 // 内存和磁盘写成「已用 / 总量」；流量是入站、出站两条线，数字写成「↑ 出站 ↓ 入站」，和节点网络的测速一致。
 function NodeResources({ n }: { n: Node }) {
-  const [range, setRange] = useState<MetricRange>("1h");
+  const [range, setRange] = useRangeSearch();
   const r = metricRanges.find((x) => x.value === range)!;
   const q = useQuery({
     queryKey: ["node-metrics", n.id, range],
@@ -205,11 +234,8 @@ function NodeStatus({ n }: { n: Node }) {
       </span>
     );
   if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
-  return (
-    <span className="text-destructive">
-      <Status tone="danger">{t.common.status.offline}</Status>
-    </span>
-  );
+  // 离线和列表、组网图一样是灰色（ui.md：离线、未连接、状态未知都是灰色）。
+  return <Status>{t.common.status.offline}</Status>;
 }
 
 // NodeContainers：运行在这个节点上的容器。节点离线时状态未知，但列表来自面板，仍然可以看。
@@ -226,7 +252,7 @@ function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean })
   return (
     <List>
       {rows.map(({ project, container, services }) => {
-        const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "warning" as const, label: t.common.status.unknown };
+        const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "neutral" as const, label: t.common.status.unknown };
         return (
           <Row
             key={project.id + container.name}
@@ -343,6 +369,7 @@ export function NodesPage({
               // 窄屏上拓扑图太小，只用卡片。
               <div className="hidden sm:block">
                 <Segmented
+                  label={t.nodes.views.label}
                   value={view}
                   onChange={onView}
                   items={[
@@ -353,7 +380,8 @@ export function NodesPage({
                 />
               </div>
             )}
-            {isAdmin && (running > 0 || behind > 0) && (
+            {/* 升级进行中、可以取消时只留「取消升级」，进度写在节点列表里。 */}
+            {isAdmin && (running > 0 || behind > 0) && !(running > 0 && canCancel) && (
               <Button variant="outline" onClick={upgradeAll} disabled={starting || running > 0}>
                 {(starting || running > 0) && <Spinner />}
                 {running > 0 ? t.nodes.upgrade.allRunning(running) : t.nodes.upgrade.allCount(behind)}
@@ -622,8 +650,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       <Dialog open={editingTags} onClose={() => setEditingTags(false)} title={t.labels.editTags} description={t.labels.editTagsDescription}>
         <EditNodeTags node={n} allTags={tagsOf(nodes.data.nodes).map((x) => x.name)} onDone={() => setEditingTags(false)} />
       </Dialog>
-      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending || n.info?.egressError || n.isolated) && (
-        <div className="mb-6 grid gap-2">
+      {/* 同一处只放一条提示：多于一条时合并成「需要处理 N 项」，点开看（ui.md 提示）。 */}
+      <NodeNotices open={!!upgradeState}>
+
           {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
           {n.staleProjects.length > 0 && <StaleProjects nodeId={n.id} list={n.staleProjects} onDone={() => nodes.refetch()} />}
           {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
@@ -655,8 +684,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               {t.nodes.pendingNotice}
             </Notice>
           )}
-        </div>
-      )}
+              </NodeNotices>
       {!n.pending && (
         <>
           <Tabs value={tab} onChange={onTab} items={tabs} className={cn("mb-6", browsing && "max-md:hidden")} />
@@ -888,7 +916,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
       {command && (
         <>
           <CodeBlock copy nowrap>{command}</CodeBlock>
-          <p className="flex items-center gap-1 text-[13px] leading-5 text-muted-foreground">
+          <p className="flex items-center gap-1 leading-5 text-muted-foreground">
             {t.nodes.add.commandHint}
             <HelpTip>{t.nodes.add.commandHelp}</HelpTip>
           </p>
@@ -939,10 +967,13 @@ function NodeSettings({ n }: { n: Node }) {
   return (
     <>
       <SettingRows>
+        {/* 非管理员：有值的行只显示值、不放按钮；没有值可显示的行写原因（只有管理员能操作）。各行一致。 */}
         <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
-          <Button variant="outline" onClick={() => setEditing("root")}>
-            {t.common.actions.edit}
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setEditing("root")}>
+              {t.common.actions.edit}
+            </Button>
+          )}
         </SettingRow>
         <SettingRow
           label={t.nodes.mirrors.title}
@@ -1271,15 +1302,15 @@ async function toggleIsolation(n: Node, done: () => void) {
     action: on ? m.isolate : m.unisolate,
     danger: on,
     checkDefault: true,
-    typeToConfirm: { label: m.typeName, value: n.name },
+    typeToConfirm: { label: m.typeName(n.name), value: n.name },
   });
   if (!ok) return;
   try {
     if (on) await nodeClient.isolateNode({ nodeId: n.id, confirmName: n.name });
     else await nodeClient.unisolateNode({ nodeId: n.id, confirmName: n.name });
-    toast.success(on ? m.done : m.undone);
+    // 结果在页面上看得到（隔离的提示），不再弹成功提示；失败用确认框写清原因，不会一闪而过。
     done();
   } catch (err) {
-    toast.error(errorMessage(err));
+    await notify(errorMessage(err));
   }
 }

@@ -5,10 +5,10 @@ import { Plus } from "lucide-react";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
-import { Alert, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner } from "@/components/ui";
+import { Alert, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, Input, List, oneLineTextarea, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner, Textarea } from "@/components/ui";
 import type { AccessToken, CreateAccessTokenResponse } from "@/gen/nagi/v1/api_pb";
 import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
-import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { AuthShell, returnToKey } from "@/pages/auth";
 import { CopyTextButton } from "@/pages/access";
@@ -139,7 +139,8 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         </Select>
       </Field>
       {!isViewer && (
-        <div className="grid gap-2">
+        <Field label={t.tokens.permissions}>
+          <div role="group" aria-label={t.tokens.permissions} className="grid gap-2">
           <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
             {t.tokens.allowWrite}
           </Check>
@@ -166,10 +167,12 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
               {t.tokens.allowNodeExec}
             </Check>
           )}
-        </div>
+          </div>
+        </Field>
       )}
       <Field label={t.tokens.networks} htmlFor="token-networks" hint={t.tokens.networksHint} help={t.tokens.networksHelp}>
-        <Input id="token-networks" value={networks} onChange={(e) => setNetworks(e.target.value)} placeholder="203.0.113.0/24" autoComplete="off" spellCheck={false} />
+        {/* 和管理员登录地址一样一行一个（逗号分隔也认）。 */}
+        <Textarea id="token-networks" rows={Math.max(1, networks.split("\n").length)} value={networks} onChange={(e) => setNetworks(e.target.value)} placeholder="203.0.113.0/24" spellCheck={false} className={cn(oneLineTextarea, "font-mono text-[13px] max-md:text-base")} />
       </Field>
       {create.error && <Alert>{errorMessage(create.error)}</Alert>}
       <DialogActions>
@@ -192,9 +195,9 @@ function CreatedToken({ secret, url, onDone }: { secret: string; url: string; on
       <CodeBlock copy>{secret}</CodeBlock>
       {url && (
         <div className="grid gap-2">
-          <span className="text-[13px] text-muted-foreground">{t.tokens.setupClaudeCode}</span>
+          <span className="text-sm font-medium">{t.tokens.setupClaudeCode}</span>
           <CodeBlock copy>{`claude mcp add --transport http nagi ${url} --header "Authorization: Bearer ${secret}"`}</CodeBlock>
-          <span className="text-[13px] text-muted-foreground">{t.tokens.setupOther}</span>
+          <span className="text-sm font-medium">{t.tokens.setupOther}</span>
           <CodeBlock copy>{url}</CodeBlock>
           <CodeBlock copy>{`Authorization: Bearer ${secret}`}</CodeBlock>
         </div>
@@ -212,15 +215,20 @@ export function AccessTokenSection() {
   const mcp = useMcpUrl();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreateAccessTokenResponse | null>(null);
+  // 和下面的列表同一个查询：没有令牌时只留空状态里的「生成令牌」，标题栏不再重复一个。
+  const tokens = useQuery({ queryKey: ["access-tokens", "0"], queryFn: () => settingsClient.listAccessTokens({ userId: 0n }) });
+  const hasTokens = (tokens.data?.tokens.length ?? 0) > 0;
   return (
     <Section
       title={t.tokens.title}
       help={t.tokens.help}
       actions={
-        <Button variant="outline" onClick={() => setCreating(true)}>
-          <Plus />
-          {t.tokens.create}
-        </Button>
+        hasTokens && (
+          <Button variant="outline" onClick={() => setCreating(true)}>
+            <Plus />
+            {t.tokens.create}
+          </Button>
+        )
       }
     >
       <List>
@@ -352,7 +360,8 @@ export function OAuthAuthorizePage() {
           </Select>
         </Field>
         {!viewer && (
-          <div className="grid gap-2">
+          <Field label={t.tokens.permissions}>
+            <div role="group" aria-label={t.tokens.permissions} className="grid gap-2">
             <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
               {t.tokens.allowWrite}
             </Check>
@@ -378,7 +387,8 @@ export function OAuthAuthorizePage() {
                 {t.tokens.allowNodeExec}
               </Check>
             )}
-          </div>
+            </div>
+          </Field>
         )}
         {approve.error && <Alert>{errorMessage(approve.error)}</Alert>}
         <div className="grid grid-cols-2 gap-2">

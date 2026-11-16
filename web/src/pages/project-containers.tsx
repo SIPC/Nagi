@@ -18,7 +18,7 @@ import { TerminalView } from "@/components/terminal";
 import { composeInputClass, formToCompose, useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
 import { Breadcrumb, MobileBar, PageHeader } from "@/pages/layout";
-import { ContainerHA, ContainerStorage } from "@/pages/project-data";
+import { ContainerHA, ContainerStorage, NotDeployed } from "@/pages/project-data";
 import { ContainerNetwork } from "@/pages/project-network";
 import {
   Alert,
@@ -27,12 +27,15 @@ import {
   Button,
   Check,
   CopyButton,
+  Collapse,
   Dialog,
   DialogActions,
   ButtonLink,
   EmptyRow,
   Field,
   FormActions,
+  FormBody,
+  logBoxClass,
   FormRow,
   HelpTip,
   Input,
@@ -54,6 +57,8 @@ import {
   Status,
   Tabs,
   Textarea,
+  oneLineTextarea,
+  textLink,
 } from "@/components/ui";
 import { create } from "@bufbuild/protobuf";
 import { AlertRulesSchema, type AlertRules, type Container, type Project, type ServiceStatus } from "@/gen/nagi/v1/common_pb";
@@ -175,7 +180,7 @@ export function ContainersTab({
 
   return (
     <div>
-      {hasOutput && <div className="mb-8">{output}</div>}
+      {hasOutput && <div className="mb-6">{output}</div>}
       <ContainerList project={project} services={services} deploy={deploy} busy={busy} />
       <Section className="xl:mt-0 xl:border-t-0 xl:pt-0" title={t.projectContainers.monitoring} actions={picker}>
         <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, knownNodes(nodes.data))} httpRoutes={project.routes.filter((r) => r.protocol === "http").map((r) => r.name)} />
@@ -210,7 +215,7 @@ function ContainerNotes({ notes }: { notes: { key: string; title: string; body: 
       </Notice>
     );
   return (
-    <div className="mb-6 grid gap-2">
+    <div className="mb-6">
       <Notice
         tone="warning"
         title={f.notes(notes.length)}
@@ -222,12 +227,15 @@ function ContainerNotes({ notes }: { notes: { key: string; title: string; body: 
       >
         {t.common.list(notes.map((n) => n.title))}
       </Notice>
-      {open &&
-        notes.map((n) => (
-          <Notice key={n.key} tone="warning" title={n.title} className="pl-4">
-            {n.body}
-          </Notice>
-        ))}
+      <Collapse open={open}>
+        <div className="grid gap-2 pt-2">
+          {notes.map((n) => (
+            <Notice key={n.key} tone="warning" title={n.title} className="pl-4">
+              {n.body}
+            </Notice>
+          ))}
+        </div>
+      </Collapse>
     </div>
   );
 }
@@ -262,7 +270,8 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
       actions={
         project.containers.length > 1 &&
         targets.length > 0 && (
-          <Button disabled={busy} onClick={() => deploy(targets)}>
+          // 窄屏上页头已有主按钮，这里用次要按钮，同一区域不出现两个主按钮。
+          <Button variant="outline" disabled={busy} onClick={() => deploy(targets)}>
             {busy && <Spinner />}
             {pc.table.deploySelected(targets.length)}
           </Button>
@@ -278,7 +287,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
           const address = m.kind !== "group" ? m.name : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ");
           const notes: React.ReactNode[] = [
             !offline && (node?.name ?? m.nodeId),
-            offline ? <span className="text-warning-text">{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
+            offline ? <span>{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
             offline && t.common.status.unknown,
             !offline && version,
             m.kind === "group" && pc.kind.group,
@@ -435,8 +444,10 @@ function ImageTip({ images, disabled, onClose, onUpdate }: { images: string; dis
           <X />
         </Button>
       </div>
+      {/* 标题已经说了有新版本：下面一行写是哪个镜像，再一行写后果，不再重复「有更新」。 */}
       <p className="text-muted-foreground">
-        <span className="font-mono text-[13px]">{images}</span> {tip.body}
+        <span className="block font-mono text-[13px] text-foreground">{images}</span>
+        {tip.body}
       </p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={close}>
@@ -599,9 +610,9 @@ function ContainerDetail({
         title={
           <>
             {containerLabel(container)}
-            {container.displayName && <span className="font-mono text-sm font-normal text-muted-foreground">{container.name}</span>}
+            {container.displayName && <span className="font-mono text-[13px] font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
-            {node && !nodeOnline ? <Status tone="warning">{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
+            {node && !nodeOnline ? <Status>{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {hasImageUpdate &&
@@ -779,8 +790,9 @@ function ContainerAlerts({ project, container }: { project: Project; container: 
     await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
   };
   const toggle = async (v: boolean) => {
+    // 改回用项目的规则时立即保存（没有别的要填），单独设置的规则会被清掉，先确认。
+    if (!v && container.alertRules && !(await confirmAction(t.alerts.useProjectConfirm(containerLabel(container)), { action: t.alerts.useProject, danger: true }))) return;
     setOwn(v);
-    // 改回用项目的规则时立即保存：没有别的要填。
     if (!v && container.alertRules) {
       try {
         await save(undefined);
@@ -837,7 +849,7 @@ function RenameContainer({ project, container, onDone }: { project: Project; con
         save();
       }}
     >
-      <Field label={r.label} htmlFor="container-display-name" hint={r.hint(container.name)}>
+      <Field label={r.label} htmlFor="container-display-name">
         <Input id="container-display-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} placeholder={container.name} autoFocus />
       </Field>
       {error && <Alert>{error}</Alert>}
@@ -902,7 +914,7 @@ function Overview({ project, container, services }: { project: Project; containe
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
           {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
           {!isGroup && <KvItem mono k={pc.columns.image} v={<span title={image}>{displayImage(image)}</span>} />}
-          <KvItem mono k={pc.columns.node} v={node?.name ?? container.nodeId} />
+          <KvItem k={pc.columns.node} v={node?.name ?? container.nodeId} />
           <KvItem mono k={o.currentVersion} v={version} />
           <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
           {isGroup && (
@@ -936,7 +948,8 @@ function Overview({ project, container, services }: { project: Project; containe
       {showServices && (
         <Section title={o.servicesTitle}>
           {services.length === 0 ? (
-            <EmptyRow>{t.common.status.notDeployed}</EmptyRow>
+            // 和存储页一样：还没部署时给「部署」按钮。
+            container.deployedVersion === 0n ? <NotDeployed project={project} container={container} /> : <EmptyRow>{t.common.status.notDeployed}</EmptyRow>
           ) : (
             <List>
               {services.map((s) => (
@@ -944,7 +957,7 @@ function Overview({ project, container, services }: { project: Project; containe
                   key={s.name + s.containerId}
                   title={s.name}
                   sub={<span title={s.image}>{[shortImage(s.image), serviceDetail(s.status)].filter(Boolean).join(" · ")}</span>}
-                  cols={[{ phone: true, content: offline ? <Status tone="warning">{t.common.status.unknown}</Status> : <ServiceState service={s} /> }]}
+                  cols={[{ phone: true, content: offline ? <Status>{t.common.status.unknown}</Status> : <ServiceState service={s} /> }]}
                 />
               ))}
             </List>
@@ -1168,7 +1181,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         </div>
         <div className="flex items-center gap-2">
           {/* 复选框，开关状态一眼看得出。 */}
-          <Check checked={showTime} onChange={setShowTime} className="mr-2">
+          <Check checked={showTime} onChange={setShowTime}>
             {l_.showTime}
           </Check>
           <Button variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
@@ -1188,7 +1201,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         }}
         // 日志框在浅色主题下也是深色底。底色取页面主题的 --log，和其他日志框一致；
         // 里面的每一行加 dark，灰字、红字、蓝字取深色主题的值，才对得上深底。
-        className="h-[560px] overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground max-md:h-[calc(100dvh-20rem)]"
+        className={cn(logBoxClass, "h-[560px] max-md:h-[calc(100dvh-20rem)]")}
       >
         {visible.length === 0 ? (
           <span className="opacity-50">{lines.length > 0 ? l_.noMatch : connecting && !error ? t.app.terminal.connecting : l_.empty}</span>
@@ -1281,6 +1294,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const [envMode, setEnvMode] = useState<EnvMode>("rows");
 
   const save = () =>
+    (!isForm || imageForm.validate()) &&
     call("save", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? t.projectContainers.config.savedDraft : t.projectContainers.config.noChanges);
@@ -1289,7 +1303,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   // 保存为草稿后立即部署。已部署的容器会被重建，先确认。
   const saveAndDeploy = async () => {
     const form = formRef.current;
-    if (form && !form.reportValidity()) return;
+    if ((isForm && !imageForm.validate()) || (form && !form.reportValidity())) return;
     if (container.deployedVersion > 0n && !(await confirmAction(t.projectContainers.detail.deployDraftConfirm(container.name), { action: t.projectContainers.config.saveAndDeploy }))) return;
     await call("deploy", async () => {
       const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
@@ -1308,7 +1322,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const textField = "font-mono text-[13px] max-md:text-base";
   const portsLink = (
     <p className="text-muted-foreground">
-      <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
+      <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className={textLink}>
         {c.portsLink}
       </Link>
     </p>
@@ -1378,9 +1392,16 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         title={isForm ? t.containerForm.env : c.groupEnv}
         help={isForm ? undefined : c.groupEnvHelp}
         actions={
-          <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
-            {envMode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
-          </Button>
+          // 两种编辑方式之间切换，和同页「表单 / Compose」一样用切换控件，不用会变文字的按钮。
+          <Segmented
+            label={t.containerForm.env}
+            value={envMode}
+            onChange={setEnvMode}
+            items={[
+              { value: "rows", label: t.containerForm.envRows },
+              { value: "text", label: t.containerForm.envText },
+            ]}
+          />
         }
       >
         {isForm ? <EnvEditor id="edit-env" mode={envMode} value={imageForm.env} onChange={imageForm.setEnv} /> : <EnvEditor id="edit-env" mode={envMode} value={env} onChange={setEnv} />}
@@ -1419,7 +1440,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
             <Field label={c.preserve} htmlFor="edit-preserve" help={`${c.preserveHint}${t.common.sentenceEnd}${c.preserveHelp}`}>
-              <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, "min-h-8 resize-none py-[5px] max-md:py-[9px]")} />
+              <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, oneLineTextarea)} />
             </Field>
             <Field label={c.dependsOn} htmlFor="edit-deps" help={`${c.dependsOnHint}${t.common.sentenceEnd}${c.dependsOnHelp}`}>
               <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
@@ -1539,12 +1560,12 @@ function Versions({
                 title={
                   <>
                     <span>{`v${x.version}`}</span>
-                    {!x.deployedAt && <span className="text-destructive">{v_.deployFailed}</span>}
+                    {!x.deployedAt && <span className="text-muted-foreground">{v_.deployFailed}</span>}
                     {notes.length > 0 && <span className="truncate text-muted-foreground">{notes.join(" · ")}</span>}
                   </>
                 }
                 cols={[
-                  { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={t.common.list(Object.values(x.images))}>{imageDigest(x.images)}</span> },
+                  { width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={t.common.list(Object.values(x.images))}>{imageDigest(x.images)}</span> },
                   { content: x.deployedAt ? capitalize(timeAgo(toDate(x.deployedAt))) : "" },
                 ]}
                 actions={
@@ -1650,7 +1671,7 @@ function AddContainer({ project }: { project: Project }) {
 
   // 类型切换在外面，下面三种内容（镜像表单、compose、现有目录）放进同一个 Slide，切换时横移。
   return (
-    <div className="grid max-w-[672px] gap-4">
+    <FormBody>
       {form.switcher}
       <Slide id={form.mode} index={["image", "compose", "dir"].indexOf(form.mode)} inner="grid gap-4">
         {form.mode === "dir" ? (
@@ -1658,9 +1679,10 @@ function AddContainer({ project }: { project: Project }) {
         ) : (
           <form
             className="grid gap-4"
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              add();
+              if (form.validate()) add();
             }}
           >
             {form.body}
@@ -1681,6 +1703,6 @@ function AddContainer({ project }: { project: Project }) {
           </form>
         )}
       </Slide>
-    </div>
+    </FormBody>
   );
 }

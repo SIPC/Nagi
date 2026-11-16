@@ -11,7 +11,7 @@ export default {
     elevateUndo: "解除隔离前需验证身份。",
     confirm: (name: string) => `隔离节点 ${name}？其他节点会立即断开和它的节点网络，它上面设置了顶替的容器由顶替节点接替。`,
     confirmUndo: (name: string) => `解除节点 ${name} 的隔离？它会重新加入节点网络，恢复项目放行。`,
-    typeName: "输入节点名称确认",
+    typeName: (name: string) => `输入 ${name} 以确认`,
     done: "已隔离",
     undone: "已解除隔离",
   },
@@ -30,6 +30,7 @@ export default {
   title: "节点",
   columns: { node: "节点", containers: "容器" },
   views: {
+    label: "视图",
     cards: "列表",
     network: "网络",
     ha: "高可用",
@@ -108,7 +109,7 @@ export default {
   },
   pendingNotice: "该节点通过接入码加入，接入码泄露时他人也可加入。确认为自有机器后再批准，批准前无法查看和操作。",
   offlineTitle: "节点离线",
-  noContainers: "节点上没有容器",
+  noContainers: "暂无容器",
   offlineNotice: "节点离线时只能查看容器列表。",
   upgrade: {
     badge: "可升级",
@@ -186,7 +187,7 @@ export default {
     adoptConfirm: (project: string) =>
       `以节点为准重建项目 ${project}？面板上该项目的草稿、版本历史、部署记录、路由和成员范围将被删除，按本节点缓存的配置重建。`,
     title: "项目记录可能已过期",
-    text: "节点报告以下项目由其他面板修改过。属实时以节点为准重建，否则请检查节点是否安全。确认前不向该节点推送这些项目的配置。",
+    text: "节点报告以下项目由其他面板改动过。属实时以节点为准重建，否则请检查节点是否安全。确认前不向该节点推送这些项目的配置。",
     adopt: "以节点为准",
   },
   unknown: {

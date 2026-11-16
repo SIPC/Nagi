@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Box, ChevronLeft, ChevronRight, Menu as MenuIcon, ScrollText, Server, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu as MenuIcon, X } from "lucide-react";
+import { navIcons } from "@/components/nav-icons";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { authClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
@@ -143,22 +144,13 @@ function MobileNav({ open, onClose, title, children }: { open: boolean; onClose:
   );
 }
 
-function OverviewIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M1.5 8h3l2-5 3 10 2-5h3" />
-    </svg>
-  );
-}
-
 // 左侧导航（参照 OpenAI 平台后台）：上面是产品名和四个入口，下面是用户卡片。手机上收进 ☰ 打开的全屏导航。
 const navItems = [
-  { to: "/overview", label: t.app.nav.overview, icon: OverviewIcon },
-  { to: "/projects", label: t.app.nav.projects, icon: Box },
-  { to: "/nodes", label: t.app.nav.nodes, icon: Server },
-  // 活动只给管理员。
-  { to: "/audit", label: t.app.nav.audit, icon: ScrollText },
-  { to: "/settings", label: t.app.nav.settings, icon: SlidersHorizontal },
+  { to: "/overview", label: t.app.nav.overview, icon: navIcons.overview },
+  { to: "/projects", label: t.app.nav.projects, icon: navIcons.projects },
+  { to: "/nodes", label: t.app.nav.nodes, icon: navIcons.nodes },
+  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit },
+  { to: "/settings", label: t.app.nav.settings, icon: navIcons.settings },
 ] as const;
 
 const navLink =
@@ -234,7 +226,7 @@ export function AppLayout() {
       </a>
       <CommandPalette canCreateProject={!(standby?.isStandby ?? false) && !isViewer} />
       {me.data?.role === "admin" && <UpdateTips nodes={nodes.data?.nodes ?? []} isStandby={standby?.isStandby ?? false} />}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-sidebar px-3 pt-4 pb-3 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-background px-3 pt-4 pb-3 md:flex">
         {brand}
         <div className="mt-4">
           <SearchButton />
@@ -288,7 +280,8 @@ export function AppLayout() {
                   </span>
                 )}
               </span>
-              <PromoteButton onError={setPromoteError} />
+              {/* 和设置页「备用面板」里同一种按钮：危险操作用红字的次要按钮。 */}
+              <PromoteButton variant="destructive-outline" onError={setPromoteError} />
               {promoteError && <Alert className="w-full">{promoteError}</Alert>}
             </div>
           </div>
@@ -323,12 +316,15 @@ export function AppLayout() {
 export function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <main className="w-full max-w-[360px]">
-        <div className="grid justify-items-center gap-2 text-center">
+      {/* 和登录页同一种整页外框：宽 320、靠左，logo 42 × 24，logo 到标题 12。 */}
+      <main className="w-full max-w-[320px]">
+        <div className="grid justify-items-start gap-3">
           <Waves className="h-6 w-[42px] text-wave" />
-          <h1 className="mt-2 text-2xl leading-8 font-semibold">{t.app.notFound.title}</h1>
-          <p className="text-muted-foreground">{t.app.notFound.body}</p>
-          <ButtonLink to="/overview" className="mt-4" readOnlyOk>
+          <div className="grid gap-1">
+            <h1 className="text-2xl leading-8 font-semibold tracking-tight">{t.app.notFound.title}</h1>
+            <p className="text-muted-foreground">{t.app.notFound.body}</p>
+          </div>
+          <ButtonLink to="/overview" className="mt-3" readOnlyOk>
             {t.app.notFound.back}
           </ButtonLink>
         </div>

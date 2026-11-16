@@ -12,6 +12,9 @@ export default {
   passwordHint: "At least 8 characters",
   role: "Role",
   roles: { admin: "Administrator", operator: "Operator", viewer: "Viewer" },
+  demoteSelfConfirm: (role) => `Change your own role to ${role}? You lose administrator access as soon as you save, and only another administrator can change it back.`,
+  demoteSelf: "Change role",
+  roleHelp: "Administrator: full access, including members and panel settings. Operator: can work with projects and containers, but can't manage nodes or the panel. Viewer: can only view, can't see configuration or secrets, and can't open terminals.",
   roleHints: {
     admin: "Full access, including members and panel settings",
     operator: "Can operate projects and containers, but can't manage nodes or the panel",

@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Activity, Box, Boxes, Plus, ScrollText, Search, Server, Settings } from "lucide-react";
+import { Container, Plus, Search } from "lucide-react";
+import { navIcons } from "@/components/nav-icons";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DialogContent } from "@/components/ui/dialog";
@@ -73,9 +74,18 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
             <CommandList>
               <CommandEmpty>{t.app.search.empty}</CommandEmpty>
               <CommandGroup heading={t.app.search.pages}>
+                {/* 和左侧导航同样的入口和图标。 */}
                 <CommandItem value="overview" keywords={[t.app.nav.overview]} onSelect={() => go(() => navigate({ to: "/overview" }))}>
-                  <Activity />
+                  <navIcons.overview />
                   {t.app.nav.overview}
+                </CommandItem>
+                <CommandItem value="projects" keywords={[t.app.nav.projects]} onSelect={() => go(() => navigate({ to: "/projects" }))}>
+                  <navIcons.projects />
+                  {t.app.nav.projects}
+                </CommandItem>
+                <CommandItem value="nodes" keywords={[t.app.nav.nodes]} onSelect={() => go(() => navigate({ to: "/nodes" }))}>
+                  <navIcons.nodes />
+                  {t.app.nav.nodes}
                 </CommandItem>
                 {canCreateProject && (
                   <CommandItem value="new project" keywords={[t.app.search.newProject]} onSelect={() => go(() => navigate({ to: "/projects/new" }))}>
@@ -84,7 +94,7 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                   </CommandItem>
                 )}
                 <CommandItem value="audit" keywords={[t.app.nav.audit]} onSelect={() => go(() => navigate({ to: "/audit" }))}>
-                  <ScrollText />
+                  <navIcons.audit />
                   {t.app.nav.audit}
                 </CommandItem>
               </CommandGroup>
@@ -97,9 +107,9 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                       keywords={[s.project!.name, s.project!.networkName]}
                       onSelect={() => go(() => navigate({ to: "/projects/$projectId", params: { projectId: s.project!.id } }))}
                     >
-                      <Boxes />
+                      <navIcons.projects />
                       {s.project!.name}
-                      <span className="ml-auto font-mono text-xs text-muted-foreground">{s.project!.networkName}</span>
+                      <span className="ml-auto text-[13px] text-muted-foreground">{s.project!.networkName}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -114,9 +124,9 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                         keywords={[c.displayName, c.name, s.project!.name].filter(Boolean)}
                         onSelect={() => go(() => navigate({ to: "/projects/$projectId/c/$container", params: { projectId: s.project!.id, container: c.name } }))}
                       >
-                        <Box />
+                        <Container />
                         {c.displayName || c.name}
-                        <span className="ml-auto text-xs text-muted-foreground">{s.project!.name}</span>
+                        <span className="ml-auto text-[13px] text-muted-foreground">{s.project!.name}</span>
                       </CommandItem>
                     )),
                   )}
@@ -126,9 +136,9 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                 <CommandGroup heading={t.app.nav.nodes}>
                   {nodes.data!.nodes.map((n) => (
                     <CommandItem key={n.id} value={`node ${n.id}`} keywords={[n.name, n.address]} onSelect={() => go(() => navigate({ to: "/nodes/$nodeId", params: { nodeId: n.id } }))}>
-                      <Server />
+                      <navIcons.nodes />
                       {n.name}
-                      <span className="ml-auto font-mono text-xs text-muted-foreground">{n.address}</span>
+                      <span className="ml-auto font-mono text-[13px] text-muted-foreground">{n.address}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -136,7 +146,7 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
               <CommandGroup heading={t.app.nav.settings}>
                 {settingsTabsFor(isAdmin).map((tab) => (
                   <CommandItem key={tab.value} value={`settings ${tab.value}`} keywords={[tab.label, t.app.nav.settings]} onSelect={() => go(() => navigate({ to: "/settings", search: { tab: tab.value } }))}>
-                    <Settings />
+                    <navIcons.settings />
                     {tab.label}
                   </CommandItem>
                 ))}

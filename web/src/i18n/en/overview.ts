@@ -34,7 +34,7 @@ export default {
     other: "Other",
     noSend: "Nothing sent",
     noReceive: "Nothing received",
-    outdated: (names) => `${names} must be upgraded to report traffic between nodes. Until then, their external traffic includes it`,
+    outdated: (names) => `Node ${names} is out of date. Upgrade it to report traffic between nodes. Until then, its external traffic includes traffic between nodes`,
     empty: "No traffic",
     aria: (from, to, rate) => `Traffic Sankey diagram: senders on the left, receivers on the right. The largest flow is ${from} to ${to} at ${rate}.`,
     caption: "Current traffic per path",

@@ -7,12 +7,10 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, ButtonLink, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
+import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor, textLink } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { toast } from "sonner";
-import { useUnsaved } from "@/components/unsaved";
 import { HelpParts } from "@/components/help-parts";
 
 // 「网络」标签页：对外访问（端口映射与域名）、项目内网、项目连接（见 docs/agent.md#项目连接）。
@@ -232,7 +230,7 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
               {part.cert && onReason && (
                 <>
                   {" · "}
-                  <button type="button" className="cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none focus-ring" onClick={onReason}>
+                  <button type="button" className={textLink} onClick={onReason}>
                     {m.check.certErrorDetail}
                   </button>
                 </>
@@ -275,8 +273,16 @@ function RoutesOverview({ project }: { project: Project }) {
   const domains = useDomainChecks(project.id, project.routes.filter((r) => r.domains.length > 0), 15_000);
   return (
     <Section title={m.title} help={m.overviewDescription}>
-      {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-      {domains.error && <QueryError error={domains.error} onRetry={() => domains.refetch()} />}
+      {/* 两个查询都失败时只显示一条，重试两个都重新取。 */}
+      {(nodes.isError || domains.error) && (
+        <QueryError
+          error={nodes.error ?? domains.error}
+          onRetry={() => {
+            if (nodes.isError) nodes.refetch();
+            if (domains.error) domains.refetch();
+          }}
+        />
+      )}
       {project.routes.length === 0 ? (
         // 添加在容器的「网络」标签，链到第一个容器，在那里可以换到别的容器。
         <EmptyRow
@@ -434,7 +440,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
   };
 
   const remove = async (name: string) => {
-    if (!(await confirmAction(m.deleteConfirm(name), { action: t.common.actions.delete, danger: true }))) return;
+    if (!(await confirmAction(m.deleteConfirm(name), { action: m.deleteAction, danger: true }))) return;
     setListError("");
     try {
       await projectClient.deleteRoute({ projectId: project.id, name });
@@ -477,8 +483,15 @@ function RoutesSection({ project, services, container }: { project: Project; ser
       }
     >
       {listError && <Alert>{listError}</Alert>}
-      {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-      {savedDomains.error && <QueryError error={savedDomains.error} onRetry={() => savedDomains.refetch()} />}
+      {(nodes.isError || savedDomains.error) && (
+        <QueryError
+          error={nodes.error ?? savedDomains.error}
+          onRetry={() => {
+            if (nodes.isError) nodes.refetch();
+            if (savedDomains.error) savedDomains.refetch();
+          }}
+        />
+      )}
       {routes.length === 0 ? (
         <EmptyRow
           action={
@@ -581,21 +594,22 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               </Select>
             </Field>
           </FormRow>
-          {isHTTP && (
-            <Field
-              label={m.domains}
-              htmlFor="route-domains"
-              help={m.domainsHelp}
-              hint={hasDomains ? <DraftDns checks={draftDomains.checks} error={draftDomains.error} /> : undefined}
-            >
+          <Collapse open={isHTTP} gap={4}>
+            <Field label={m.domains} htmlFor="route-domains" help={m.domainsHelp}>
               <Input id="route-domains" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="app.example.com" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
             </Field>
-          )}
-          {!hasDomains && (
+            {/* 各入口节点的解析结果：字段下面单独一行，不占格式说明的位置。 */}
+            {hasDomains && (
+              <div className="pt-2 leading-5 text-muted-foreground">
+                <DraftDns checks={draftDomains.checks} error={draftDomains.error} />
+              </div>
+            )}
+          </Collapse>
+          <Collapse open={!hasDomains} gap={4}>
             <Field label={m.nodePort} htmlFor="route-published" help={m.nodePortHelp} error={publishedError}>
               <Input id="route-published" inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="8080" value={form.published} onChange={(e) => setForm({ ...form, published: e.target.value })} />
             </Field>
-          )}
+          </Collapse>
           <Field label={m.entryNodes} help={m.entryNodesHelp}>
             {nodes.isPending ? (
               <Skeleton className="h-5 w-64 max-w-full" />
@@ -614,18 +628,18 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               </div>
             )}
             {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
-            {hasDomains && multipleEntries && !form.httpOnly && <p className="leading-5 text-warning-text">{m.entryDomainWarningShort}</p>}
+            {hasDomains && multipleEntries && !form.httpOnly && <Notice tone="warning">{m.entryDomainWarningShort}</Notice>}
           </Field>
-          {hasDomains && (
-            <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
+          <Collapse open={hasDomains} gap={4}>
+            <Check className="justify-self-start" checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
               {m.httpOnly}
             </Check>
-          )}
-          {!isHTTP && (
-            <Check checked={form.proxyProtocol} onChange={(v) => setForm({ ...form, proxyProtocol: v })} help={m.proxyProtocolHelp}>
+          </Collapse>
+          <Collapse open={!isHTTP} gap={4}>
+            <Check className="justify-self-start" checked={form.proxyProtocol} onChange={(v) => setForm({ ...form, proxyProtocol: v })} help={m.proxyProtocolHelp}>
               {m.proxyProtocol}
             </Check>
-          )}
+          </Collapse>
           {formError && <Alert>{formError}</Alert>}
           <DialogActions>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -675,22 +689,18 @@ function intranetAddresses(project: Project, services: ServiceStatus[]) {
 
 const splitPorts = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
-// Intranet 显示项目内网里的名字和它们的内部端口（只改这一项，其余设置照原样提交）。
+// Intranet 显示项目内网里的名字和它们的内部端口。一行一个名字：节点、补充的内部端口，「编辑」打开对话框，只改这一行。
 // 接口存的是"名字:端口"的列表，界面上按名字分行；对不上任何一行的（容器已删除、容器组还没运行）放在「其他」，原样保留。
 function Intranet({ project, services }: { project: Project; services: ServiceStatus[] }) {
   const m = t.projectNetwork.intranet;
   const queryClient = useQueryClient();
-  const readOnly = useContext(ReadOnlyContext);
   const nodes = useQuery({
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
   const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
-  // 只记改过的行，没改的取项目里的值，服务列表后到时也分得对。
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [othersEdit, setOthersEdit] = useState<string>();
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  // editing：正在编辑的一行，名字；「其他」用空字符串。
+  const [editing, setEditing] = useState<string | null>(null);
   const addresses = intranetAddresses(project, services);
   const known = new Set(addresses.filter((a) => !a.placeholder).map((a) => a.name));
   const saved: Record<string, string[]> = {};
@@ -701,58 +711,38 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
     if (known.has(name)) (saved[name] ??= []).push(p.slice(i + 1));
     else savedOthers.push(p);
   }
-  const valueOf = (name: string) => edits[name] ?? (saved[name] ?? []).join(" ");
-  const others = othersEdit ?? savedOthers.join(" ");
-  const showOthers = savedOthers.length > 0 || others !== "" || addresses.some((a) => a.placeholder);
-  // 改过的行和已保存的不同才算未保存；保存后 edits 清空。
-  const dirty = Object.keys(edits).some((name) => edits[name].trim() !== (saved[name] ?? []).join(" ")) || (othersEdit !== undefined && othersEdit.trim() !== savedOthers.join(" "));
-  useUnsaved(dirty, !readOnly);
+  const showOthers = savedOthers.length > 0 || addresses.some((a) => a.placeholder);
 
-  const save = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      await projectClient.updateProjectSettings({
-        projectId: project.id,
-        baseRevision: project.revision,
-        name: project.name,
-        networkName: project.networkName,
-        // 接口每次提交完整的设置：其余各项照原样带上，只换内部端口（共享变量由面板保留）。
-        settings: {
-          snapshotIntervalMinutes: project.settings?.snapshotIntervalMinutes ?? 0,
-          snapshotLimit: project.settings?.snapshotLimit ?? 0,
-          internalPorts: [...[...known].flatMap((name) => splitPorts(valueOf(name)).map((p) => `${name}:${p}`)), ...splitPorts(others)],
-        },
-      });
-      toast.success(t.common.feedback.saved);
-      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-      setEdits({});
-      setOthersEdit(undefined);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+  // save：换掉一行的端口，其余行照原样。接口每次提交完整的设置：其余各项照原样带上（共享变量由面板保留）。
+  const save = async (row: string, ports: string[]) => {
+    const rows = { ...saved, [row]: ports };
+    await projectClient.updateProjectSettings({
+      projectId: project.id,
+      baseRevision: project.revision,
+      name: project.name,
+      networkName: project.networkName,
+      settings: {
+        snapshotIntervalMinutes: project.settings?.snapshotIntervalMinutes ?? 0,
+        snapshotLimit: project.settings?.snapshotLimit ?? 0,
+        internalPorts: [...[...known].flatMap((name) => (rows[name] ?? []).map((p) => `${name}:${p}`)), ...(row === "" ? ports : savedOthers)],
+      },
+    });
+    await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
   };
 
+  const portsCol = (ports: string[]) => ({ content: ports.length > 0 ? <span title={ports.join(" ")}>{ports.join(" ")}</span> : m.noPorts, width: "w-40" });
+  const editButton = (row: string) => (
+    <Button size="row" variant="ghost" onClick={() => setEditing(row)}>
+      {t.common.actions.edit}
+    </Button>
+  );
   const hasRows = addresses.length > 0 || showOthers;
   return (
     <Section
       title={m.title}
       help={<HelpParts parts={[m.description, m.help, m.portsRowHelp, m.internalPortsHelp]} />}
-      actions={
-        <>
-          <span>{`${t.projectNetwork.links.networkName} ${project.networkName}`}</span>
-          {hasRows && (
-            <Button variant="outline" onClick={save} disabled={busy}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          )}
-        </>
-      }
+      actions={<span>{`${t.projectNetwork.links.networkName} ${project.networkName}`}</span>}
     >
-      {error && <Alert>{error}</Alert>}
       {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
       {!hasRows ? (
         <EmptyRow
@@ -766,41 +756,73 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
         </EmptyRow>
       ) : (
         <List>
-          {addresses.map((a, i) => (
+          {addresses.map((a) => (
             <Row
               key={a.name}
-              center
               title={<span className="min-w-0 wrap-anywhere">{a.name}</span>}
-              sub={i === 0 && !a.placeholder ? m.portsRowSub(a.name) : undefined}
-              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}>{nodeName(a.node)}</span>, width: "w-32", phone: true }]}
-              actions={
-                a.placeholder ? null : (
-                  <Input
-                    aria-label={`${m.internalPorts} ${a.name}`}
-                    className="w-[120px] shrink-0"
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="80 9100"
-                    disabled={readOnly}
-                    value={valueOf(a.name)}
-                    onChange={(e) => setEdits({ ...edits, [a.name]: e.target.value })}
-                  />
-                )
-              }
+              cols={[{ content: nodes.isPending ? <Skeleton className="h-3 w-12" /> : <span title={nodeName(a.node)}>{nodeName(a.node)}</span>, width: "w-32" }, portsCol(saved[a.name] ?? [])]}
+              actions={a.placeholder ? null : editButton(a.name)}
             />
           ))}
-          {showOthers && (
-            <Row
-              center
-              actionsWidth="w-64"
-              title={<span className="flex items-center gap-1">{m.others}</span>}
-              sub={m.othersHint}
-              actions={<Input aria-label={m.others} className="w-64 max-md:w-40" autoComplete="off" spellCheck={false} placeholder="pg.web:5432" disabled={readOnly} value={others} onChange={(e) => setOthersEdit(e.target.value)} />}
-            />
-          )}
+          {showOthers && <Row title={m.others} sub={m.othersHint} cols={[{ content: null, width: "w-32" }, portsCol(savedOthers)]} actions={editButton("")} />}
         </List>
       )}
+      {editing !== null && (
+        <PortsDialog
+          title={editing === "" ? m.others : editing}
+          initial={(editing === "" ? savedOthers : (saved[editing] ?? [])).join(" ")}
+          others={editing === ""}
+          onSave={(ports) => save(editing, ports)}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </Section>
+  );
+}
+
+// PortsDialog：编辑一行的内部端口，空格分隔。
+function PortsDialog({ title, initial, others, onSave, onClose }: { title: string; initial: string; others: boolean; onSave: (ports: string[]) => Promise<void>; onClose: () => void }) {
+  const m = t.projectNetwork.intranet;
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (value.trim() === initial.trim()) return onClose();
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(splitPorts(value));
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} title={m.editPorts(title)}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <Field label={m.internalPorts} htmlFor="intranet-ports" hint={others ? m.othersFormat : m.portsFormat} help={m.portsRowHelp}>
+          <Input id="intranet-ports" value={value} onChange={(e) => setValue(e.target.value)} placeholder={others ? "pg.web:5432" : "80 9100"} autoComplete="off" spellCheck={false} />
+        </Field>
+        {error && <Alert>{error}</Alert>}
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={busy}>
+            {busy && <Spinner />}
+            {t.common.actions.save}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -874,53 +896,59 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       title={m.title}
       help={<HelpParts parts={[m.intro(project.networkName), m.help, ...(addresses.length > 0 ? [`${m.addressesIntro} ${t.common.list(addresses.map((a) => `${a.name}.${project.networkName}`))}`] : [])]} />}
       actions={
-        !open && (
-          <Button variant="outline" onClick={() => setOpen(true)}>
-            <Plus />
-            {m.add}
-          </Button>
-        )
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <Plus />
+          {m.add}
+        </Button>
       }
     >
-      {open &&
-        (projects.isPending ? (
-          <Skeleton className="h-8 w-full" />
+      {/* 连接项目用对话框（ui.md：表单放进对话框），标题栏的按钮一直在。 */}
+      <Dialog open={open} onClose={cancel} title={m.add}>
+        {projects.isPending ? (
+          <RowsSkeleton count={1} />
         ) : projects.isError ? (
           <QueryError error={projects.error} onRetry={() => projects.refetch()} />
         ) : candidates.length === 0 ? (
-          <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <>
             <p className="text-muted-foreground">{m.noCandidates}</p>
-            <Button variant="ghost" onClick={cancel}>
-              {t.common.actions.cancel}
-            </Button>
-          </div>
+            <DialogActions>
+              <Button variant="outline" onClick={cancel}>
+                {t.common.actions.cancel}
+              </Button>
+              <ButtonLink to="/projects/new">{t.projects.newProject}</ButtonLink>
+            </DialogActions>
+          </>
         ) : (
           <form
-            className="flex flex-wrap items-center gap-2"
+            className="grid gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               connect();
             }}
           >
-            <div className="min-w-48 flex-1">
-              <Select aria-label={m.project} className="w-full" value={selected} onChange={(e) => setOther(e.target.value)}>
+            <Field label={m.project} htmlFor="link-project">
+              <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)}>
                 {candidates.map((p) => (
                   <option key={p.id} value={p.id}>
                     {m.option(p.name, p.networkName)}
                   </option>
                 ))}
               </Select>
-            </div>
-            <Button type="submit" disabled={busy || !selected}>
-              {busy && <Spinner />}
-              {m.connect}
-            </Button>
-            <Button variant="ghost" onClick={cancel}>
-              {t.common.actions.cancel}
-            </Button>
+            </Field>
+            {error && <Alert>{error}</Alert>}
+            <DialogActions>
+              <Button variant="outline" onClick={cancel}>
+                {t.common.actions.cancel}
+              </Button>
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner />}
+                {m.connect}
+              </Button>
+            </DialogActions>
           </form>
-        ))}
-      {error && <Alert>{error}</Alert>}
+        )}
+      </Dialog>
+      {!open && error && <Alert>{error}</Alert>}
       {project.links.length === 0 ? (
         <EmptyRow>{m.empty}</EmptyRow>
       ) : (

@@ -39,7 +39,7 @@ export default {
   logout: "退出登录",
   standby: {
     title: "备用面板",
-    readOnly: "只能查看，修改请到主面板",
+    readOnly: "只能查看，编辑请到主面板",
     synced: "已同步",
     syncedAgo: (ago: string) => `已同步（${ago}）`,
     disconnected: "未连接主面板",

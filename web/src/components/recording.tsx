@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as AsciinemaPlayer from "asciinema-player";
 import "asciinema-player/dist/bundle/asciinema-player.css";
-import { Dialog, Input, List, QueryError, RowsSkeleton } from "@/components/ui";
+import { Dialog, EmptyRow, Input, List, QueryError, RowsSkeleton } from "@/components/ui";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { requireElevation } from "@/components/elevate";
 import { t } from "@/i18n";
@@ -45,6 +45,8 @@ function clock(s: number) {
 export function RecordingDialog({ id, open, onClose }: { id: string; open: boolean; onClose: () => void }) {
   const [cast, setCast] = useState<string>();
   const [error, setError] = useState<unknown>();
+  // attempt：点「重试」时加一，重新下载录制。
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
   // 验证身份通过后才打开对话框：不让两个对话框叠在一起。
   const [allowed, setAllowed] = useState(false);
@@ -77,7 +79,7 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, id]);
+  }, [open, id, attempt]);
 
   useEffect(() => {
     if (!cast || !box.current) return;
@@ -95,7 +97,7 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
     <Dialog open={open && allowed} onClose={onClose} title={m.title} description={m.description} className="max-w-[960px]">
       <div className="grid gap-4">
         {error ? (
-          <QueryError error={errorMessage(error)} />
+          <QueryError error={errorMessage(error)} onRetry={() => setAttempt((n) => n + 1)} />
         ) : !cast ? (
           <RowsSkeleton count={4} />
         ) : (
@@ -104,14 +106,15 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
             {query.trim() !== "" && (
               <div className="max-h-40 overflow-y-auto">
                 {hits.length === 0 ? (
-                  <p className="text-muted-foreground">{m.noMatch}</p>
+                  <EmptyRow>{m.noMatch}</EmptyRow>
                 ) : (
                   <List>
                     {hits.map((h, i) => (
                       <button
                         key={i}
                         type="button"
-                        className="flex min-h-8 items-center gap-3 rounded-md px-2 text-left hover:bg-accent"
+                        // 和列表行同样的尺寸：高 36、左右 8、列之间 16；整行是按钮，点了跳到那一刻。
+                        className="flex min-h-9 cursor-pointer items-center gap-4 rounded-md border border-transparent px-2 text-left outline-none transition-colors hover:bg-accent focus-ring"
                         onClick={() => player.current?.seek(Math.max(0, h.time - 0.5)).then(() => player.current?.play())}
                       >
                         <span className="w-12 shrink-0 font-mono text-[13px] text-muted-foreground tabular-nums">{clock(h.time)}</span>

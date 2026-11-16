@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner, textLink } from "@/components/ui";
 import { formatDateTime, timeUntil } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -59,17 +59,18 @@ export function InviteCard() {
       title={t.settings.tabs.invite.label}
       help={t.invite.help}
       description={t.invite.description(
-        <Link to="/nodes" className="text-foreground underline-offset-4 hover:underline">
+        <Link to="/nodes" className={textLink}>
           {t.invite.addNode}
         </Link>,
       )}
-      actions={generateButton}
+      // 没有接入码时只留空状态里的按钮。
+      actions={invites.data && invites.data.invites.length === 0 ? undefined : generateButton}
     >
       {error && <Alert>{error}</Alert>}
       {code && (
         <div className="grid gap-2">
           <CodeBlock copy nowrap>{code}</CodeBlock>
-          <p className="text-[13px] leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
+          <p className="leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
         </div>
       )}
       {invites.isPending ? (

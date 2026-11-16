@@ -11,7 +11,7 @@ export default {
     elevateUndo: "Verify your identity before ending isolation.",
     confirm: (name) => `Isolate node ${name}? Other nodes disconnect from it on the node network right away, and containers on it with failover are taken over by their failover nodes.`,
     confirmUndo: (name) => `End isolation of node ${name}? It rejoins the node network and regains project access.`,
-    typeName: "Enter the node name to confirm",
+    typeName: (name) => `Type ${name} to confirm`,
     done: "Isolated",
     undone: "Isolation ended",
   },
@@ -30,6 +30,7 @@ export default {
   title: "Nodes",
   columns: { node: "Node", containers: "Containers" },
   views: {
+    label: "View",
     cards: "List",
     network: "Network",
     ha: "High availability",
@@ -107,7 +108,7 @@ export default {
   },
   pendingNotice: "This node joined with an invite code, which anyone could use if it leaked. Approve it once you've confirmed it's your machine; until then it can't be viewed or managed.",
   offlineTitle: "Node offline",
-  noContainers: "No containers on this node",
+  noContainers: "No containers",
   offlineNotice: "Only the container list is available while the node is offline.",
   upgrade: {
     badge: "Upgrade available",

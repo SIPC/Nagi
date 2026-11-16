@@ -50,7 +50,7 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
     onChange(serialize(next));
   };
   const add = (
-    <Button size="sm" variant="ghost" className={cn("max-md:text-sm", !controlled && "-ml-2 px-2")} onClick={() => setRows([...rows, { id: nextId++, key: "", value: "" }])}>
+    <Button size="sm" variant="ghost" className={cn(!controlled && "-ml-3")} onClick={() => setRows([...rows, { id: nextId++, key: "", value: "" }])}>
       <Plus />
       {t.containerForm.envAdd}
     </Button>
@@ -152,7 +152,7 @@ export function EnvEditor({ id, value, onChange, mode: modeProp }: { id?: string
           <Button
             size="sm"
             variant="ghost"
-            className={cn("px-2 max-md:text-sm", mode === "text" && "-ml-2")}
+            className={cn(mode === "text" && "-ml-3")}
             onClick={() => {
               if (mode === "text") setRows(parse(value));
               setModeState(mode === "rows" ? "text" : "rows");
