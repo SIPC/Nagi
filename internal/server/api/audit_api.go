@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -34,13 +35,18 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	if v.admin || !u.LimitProjects {
 		return v, nil
 	}
-	ids, err := a.Q.ListUserProjects(ctx, u.ID)
+	// 和其他页面用同一个访问范围：直接给的项目，加上范围里的分组中的项目（见 scope.go）。
+	x, err := a.loadAccess(ctx, u)
 	if err != nil {
 		return v, err
 	}
-	if ids == nil {
-		ids = []string{}
+	ids := []string{}
+	if x != nil {
+		for id := range x.projects {
+			ids = append(ids, id)
+		}
 	}
+	slices.Sort(ids)
 	v.projects = ids
 	return v, nil
 }

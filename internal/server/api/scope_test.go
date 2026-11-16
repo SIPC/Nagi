@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -322,5 +323,31 @@ func TestScopeBackupNodes(t *testing.T) {
 		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
 			t.Errorf("%s：得到 %v，想要 %v", c.name, err, c.want)
 		}
+	}
+}
+
+// L16：靠分组授权的成员，之前在审计页看不到分组里的项目的记录（审计页只读直接给的项目）。
+// 现在审计页和其他页面用同一个访问范围。
+func TestAuditViewerIncludesGroups(t *testing.T) {
+	a, q := scopeTestAPI(t,
+		`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p3', 'three', 'three', 1, 0, x'')`,
+	)
+	ctx := context.Background()
+	if err := q.SetProjectGroup(ctx, "p3", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetUserProjectGroups(ctx, 2, []string{"web"}); err != nil {
+		t.Fatal(err)
+	}
+	u := auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true}
+	v, err := a.auditViewer(auth.WithUser(ctx, u))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(v.projects, "p3") || !slices.Contains(v.projects, "p1") {
+		t.Fatalf("审计页的访问范围应包括分组里的项目：%v", v.projects)
+	}
+	if slices.Contains(v.projects, "p2") {
+		t.Fatalf("范围外的项目不应出现：%v", v.projects)
 	}
 }
