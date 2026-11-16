@@ -288,7 +288,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           <Crumbs parts={crumbs.map((c) => ({ label: c.label, onClick: () => onPath(c.path) }))} current={current?.label ?? m.root} />
           <HelpTip>{m.rules}</HelpTip>
         </div>
-        <div className="flex flex-wrap items-center gap-3 max-md:w-full">
+        <div className="flex flex-wrap items-center gap-2 max-md:w-full">
           {!readonly && q.data && (
             <>
               <Button variant="outline" className="max-md:flex-1" disabled={busy === "upload"} onClick={() => inputRef.current?.click()}>
@@ -524,7 +524,7 @@ function EditNodeFile({ node, file, initial, onClose, onPath, onExpired, onSaved
       />
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:hidden">
         <Crumbs parts={[{ label: m.root, path: "/" }, ...segments].map((c) => ({ label: c.label, onClick: () => guard(() => onPath(c.path)) }))} current={name} />
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground">{[file.owner, file.mode].filter(Boolean).join(" · ")}</span>
           {!readonly && <Menu items={[{ label: m.history, onSelect: () => setHistory(true) }]} />}
           <Button variant="outline" readOnlyOk onClick={() => guard(onClose)}>

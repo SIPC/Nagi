@@ -228,7 +228,7 @@ function NotesList({ items }: { items: string[] }) {
   return (
     <ul className="grid gap-1">
       {items.map((it, i) => (
-        <li key={i} className="flex gap-2.5">
+        <li key={i} className="flex gap-2">
           <span aria-hidden className="flex h-[1lh] shrink-0 items-center">
             <span className="size-1 rounded-full bg-muted-foreground/70" />
           </span>
@@ -405,7 +405,7 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
     <div ref={notesRef} className="scroll-mt-20 text-muted-foreground">
       <AutoHeight>
         {expanded ? (
-          <div className="grid gap-5">
+          <div className="grid gap-4">
             {releases.map((r) => (
               <section key={r.version} className="grid gap-1">
                 {/* 版本号用等宽字体。 */}

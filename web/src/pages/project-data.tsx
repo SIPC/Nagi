@@ -117,7 +117,7 @@ export function ContainerStorage({
   // 只读角色没有文件管理的入口，直接打开链接也回到列表。
   const browsing = volume && !isViewer ? volume : undefined;
   return (
-    <div className="grid grid-cols-1 gap-8">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {browsing ? (
         <BrowseVolume key={`${container.name}/${browsing}`} project={project} container={container} volume={browsing} onClose={() => openVolume()} />
@@ -146,7 +146,7 @@ export function ContainerHA({
   // 设置了顶替时由顶替处理，不能从备份节点恢复（先取消顶替）。
   const restorable = !container.failover && container.backupNodeIds.length > 0 && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
   return (
-    <div className="grid grid-cols-1 gap-8">
+    <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {container.pendingHa && <PendingHANotice project={project} container={container} nodes={nodes} />}
       {container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
@@ -1083,7 +1083,7 @@ function PlacementRow({ project, container, nodes, run }: { project: Project; co
         description={[online ? name : p.offline(name), container.dir, note].filter(Boolean).join(" · ")}
       >
         {restorable ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button variant="outline" disabled={run.busy} onClick={() => setRestoring(true)}>
               {t.projectData.backup.restoreFromBackup}
             </Button>

@@ -305,7 +305,7 @@ function GroupHeader({
       aria-expanded={open}
       aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
       className={cn(
-        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
+        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
         sortable && "cursor-grab touch-manipulation active:cursor-grabbing",
       )}
       onClick={onToggle}
@@ -403,7 +403,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
       <Dialog open={managing} onClose={() => setManaging(false)} title={t.labels.manageGroups}>
         <ManageLabels kind="group" labels={groups} />
       </Dialog>
-      <div className="grid grid-cols-1 gap-8 max-md:gap-6">
+      <div className="grid grid-cols-1 gap-6 max-md:gap-4">
         <Attention offlineNodes={offlineNodes} offlineStandbys={offlineStandbys} />
         {projects.isPending ? (
           <CardsSkeleton />

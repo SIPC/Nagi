@@ -277,7 +277,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
           <Crumbs parts={crumbs} current={current?.label ?? label} />
           {help}
         </div>
-        <div className="flex flex-wrap items-center gap-3 max-md:w-full max-md:flex-nowrap max-md:gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-md:w-full max-md:flex-nowrap">
           <Select
             aria-label={m.source}
             className="h-8 w-auto max-md:h-10 max-md:min-w-0 max-md:flex-1"
@@ -501,7 +501,7 @@ function EditFile({
       <p className="leading-5 text-muted-foreground md:hidden">{m.editHint}</p>
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:hidden">
         <Crumbs parts={trail(guard, segments)} current={name} />
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground max-md:hidden">{m.editHint}</span>
           <Button variant="outline" onClick={() => guard(onCancel)}>
             {t.common.actions.cancel}

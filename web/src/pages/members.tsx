@@ -117,7 +117,7 @@ function ScopePick({
               <p className="text-muted-foreground">{empty}</p>
             ) : (
               // 字段名没有对应的单个输入框：分段控件自带名称，勾选列表用 group 关联。
-              <div role="group" aria-label={label} className="grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
+              <div role="group" aria-label={label} className="grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2">
                 {allLabels.length > 0 && (
                   <>
                     <div className={heading}>{labelTitle}</div>
@@ -378,10 +378,10 @@ export function MembersCard() {
               sub={<span className="block truncate">{memberSummary(u)}</span>}
               // 只写开了两步验证的，每行都写「未开」是重复的噪音。
               cols={[{ content: u.totpEnabled ? <Status tone="success">{t.members.totpOn}</Status> : null, width: "w-28" }]}
-              actionsWidth="w-9"
+              actionsWidth="w-11"
               actions={
                 <RowMenu
-                  className="size-9 last:mr-0 [&_svg]:size-5"
+                  className="size-9 last:mr-2 [&_svg]:size-5"
                   items={[
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
                     { label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true },

@@ -112,7 +112,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
     <>
       {imageField}
       {top}
-      <FormRow className="gap-y-6 max-md:gap-y-4">
+      <FormRow>
         {!editing && (
           <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} hint={t.containerForm.portsHint} help={t.containerForm.portsHelp}>
             <Input
@@ -135,7 +135,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
         <EnvEditor id={prefix + "env"} value={env} onChange={setEnv} />
       </Field>
       <MoreSettings label={t.containerForm.moreImage(hasDeps)} labelOpen={t.containerForm.more} labelPhone={t.containerForm.more} defaultOpen={hasMore}>
-        <FormRow className="gap-y-6 max-md:gap-y-4">
+        <FormRow>
           {commandField}
           {workdirField}
           {moreTop}

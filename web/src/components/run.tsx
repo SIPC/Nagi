@@ -120,9 +120,9 @@ function RunOutput({ boxRef, lines, result }: { boxRef: RefObject<HTMLDivElement
           >
             {notes.length === 0 ? f.done : notes.length === 1 ? notes[0] : f.notes(notes.length)}
           </Notice>
-          {/* 展开的几行缩进到提示文字的起点（点 6 加间距 8，取 16）。间距放在里面，收起后不留空。 */}
+          {/* 展开的几行缩进到提示文字的起点（点 6 加间距 8，共 14），和状态的第二行同一种对齐。间距放在里面，收起后不留空。 */}
           <Collapse open={showNotes && notes.length > 1}>
-            <ul className="grid gap-1 pt-2 pl-4 text-muted-foreground">
+            <ul className="grid gap-1 pt-2 pl-3.5 text-muted-foreground">
               {notes.map((l, i) => (
                 <li key={i}>{l}</li>
               ))}
