@@ -130,8 +130,11 @@ service AgentService {
   // 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
   // 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
   rpc CancelUpgrade(CancelUpgradeRequest) returns (CancelUpgradeResponse);
-  // 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+  // 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
+  // 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
   rpc SetAuditSink(SetAuditSinkRequest) returns (SetAuditSinkResponse);
+  // 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
+  rpc ReadAuditLog(ReadAuditLogRequest) returns (ReadAuditLogResponse);
 }
 
 message SetLinksResponse {}
@@ -724,3 +727,20 @@ message SetAuditSinkRequest {
 }
 
 message SetAuditSinkResponse {}
+
+message ReadAuditLogRequest {
+  // 返回序号大于 after 的记录。小于 0 时不返回记录，只返回 start。
+  int64 after = 1;
+  // 最多返回的条数，节点另外限制总大小。
+  int32 limit = 2;
+}
+
+message ReadAuditLogResponse {
+  // 原样的 JSON 行，按序号排列。
+  repeated bytes lines = 1;
+  // 第一条和最后一条的序号，没有记录时为 0。
+  int64 first = 2;
+  int64 last = 3;
+  // 面板第一次读时从哪里开始：升级前节点自己外送到的位置，没有时是最新的序号。
+  int64 start = 4;
+}

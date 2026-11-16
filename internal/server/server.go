@@ -149,6 +149,27 @@ func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
 // IsStandby 判断本面板是不是备用面板。
 func (s *Server) IsStandby() bool { return s.standby != nil }
 
+// auditNodes 返回可以代发本地审计的节点（见 docs/audit.md#节点本地审计）：在线、已批准、认本面板是主面板。
+// 被隔离的节点也代发：它的记录正是要留证的。
+func (s *Server) auditNodes() []audit.NodeSource {
+	var out []audit.NodeSource
+	for _, c := range s.nodes.Conns() {
+		if c.Agent == nil || !c.Trusted() {
+			continue
+		}
+		agent := c.Agent
+		out = append(out, audit.NodeSource{ID: c.NodeID, Name: c.Name(),
+			Read: func(ctx context.Context, after int64, limit int) ([][]byte, int64, int64, int64, error) {
+				r, err := agent.ReadAuditLog(ctx, &nagiv1.ReadAuditLogRequest{After: after, Limit: int32(limit)})
+				if err != nil {
+					return nil, 0, 0, 0, err
+				}
+				return r.GetLines(), r.GetFirst(), r.GetLast(), r.GetStart(), nil
+			}})
+	}
+	return out
+}
+
 // checkMasterKey 在主密钥文件不见了、数据库里却有用它加密的数据时拒绝启动：悄悄生成新密钥，
 // 这些数据就再也解不开了，而用户多半只是忘了把备份的密钥放回来。
 // 用户确认密钥确实丢了（NewMasterKey）时清掉解不开的数据，接着生成新密钥。
@@ -444,7 +465,7 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.audit.PruneLoop(ctx, a.Retention)
 	// 日志外送（见 docs/audit.md#外送）：只有主面板外送，备用面板只同步。
 	if s.standby == nil {
-		a.Shipper = &audit.Shipper{Log: s.audit, Recordings: a.Recordings,
+		a.Shipper = &audit.Shipper{Log: s.audit, Recordings: a.Recordings, Nodes: s.auditNodes,
 			OnFailure: func(ctx context.Context, sk audit.SinkConfig, failing bool, msg string) {
 				status := "resolved"
 				if failing {
@@ -455,8 +476,6 @@ func (s *Server) Run(ctx context.Context) error {
 			}}
 		a.Shipper.Configure(ctx, a.Sinks(ctx))
 	}
-	// 节点外送自己的本地审计，用和面板相同的目标（见 docs/audit.md#节点本地审计）。
-	s.nodes.AuditSinks = func(ctx context.Context) []*nagiv1.NodeAuditSink { return api.NodeAuditSinks(a.Sinks(ctx)) }
 	a.Mount(mux)
 	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
 	mcp.Mount(mux, mcp.Options{

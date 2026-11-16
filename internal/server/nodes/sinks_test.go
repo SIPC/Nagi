@@ -43,8 +43,8 @@ func (a *sinkAgent) got() ([][]*nagiv1.NodeAuditSink, int) {
 	return append([][]*nagiv1.NodeAuditSink(nil), a.sinks...), a.alerts
 }
 
-// H1：拿泄露的接入码加入、还在等批准的节点，管理员改外送设置或告警配置时不能收到凭据；
-// 被隔离的节点收到空列表；批准并认了本面板的节点照常收到。
+// H1：拿泄露的接入码加入、还在等批准的节点，管理员改告警配置时收不到渠道地址。
+// H2：节点的本地审计由面板代发，任何节点都收不到外送凭据：批准并认了本面板的节点只收到空列表（让旧版本的节点删掉以前保存的）。
 func TestAuditSinksOnlyForTrustedNodes(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -56,9 +56,6 @@ func TestAuditSinksOnlyForTrustedNodes(t *testing.T) {
 	key, _ := sealer.Load(filepath.Join(dir, "master.key"))
 	q := store.New(d)
 	r := NewRegistry(q, slog.New(slog.DiscardHandler), key, nil)
-	r.AuditSinks = func(context.Context) []*nagiv1.NodeAuditSink {
-		return []*nagiv1.NodeAuditSink{{Id: "s3", Type: "s3", AccessKey: "ak", SecretKey: "sk"}}
-	}
 	k := func(b byte) []byte { m := make([]byte, 32); m[0] = b; return m }
 	for _, n := range []store.CreateNodeParams{
 		{ID: "pending", Name: "pending", MeshKey: k(1), Pending: 1},
@@ -89,7 +86,6 @@ func TestAuditSinksOnlyForTrustedNodes(t *testing.T) {
 	}
 	r.mu.Unlock()
 
-	r.PushAuditSinks()
 	if err := r.SetAlertConfig(ctx, &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Url: "https://hook/secret"}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,31 +98,15 @@ func TestAuditSinksOnlyForTrustedNodes(t *testing.T) {
 			if len(sinks) != 0 || alerts != 0 {
 				t.Errorf("%s 收到了 %d 次外送目标、%d 次告警配置，应该一次都没有", id, len(sinks), alerts)
 			}
-		case "iso":
+		case "iso", "ok":
+			if len(sinks) == 0 || alerts == 0 {
+				t.Errorf("%s 应该收到告警配置和空的外送目标列表，实际 %v、%d", id, sinks, alerts)
+			}
 			for _, s := range sinks {
 				if len(s) != 0 {
-					t.Errorf("被隔离的节点收到了外送目标 %v", s)
+					t.Errorf("%s 收到了外送目标 %v", id, s)
 				}
 			}
-		case "ok":
-			if len(sinks) == 0 || len(sinks[len(sinks)-1]) != 1 || alerts == 0 {
-				t.Errorf("正常节点应该收到外送目标和告警配置，实际 %v、%d", sinks, alerts)
-			}
 		}
-	}
-
-	// 解除隔离后重新下发；隔离后下发空列表。
-	if err := r.SetIsolated(ctx, "iso", false); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.SetIsolated(ctx, "ok", true); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(300 * time.Millisecond)
-	if s, _ := agents["iso"].got(); len(s) == 0 || len(s[len(s)-1]) != 1 {
-		t.Errorf("解除隔离后应该重新收到外送目标，实际 %v", s)
-	}
-	if s, _ := agents["ok"].got(); len(s) == 0 || len(s[len(s)-1]) != 0 {
-		t.Errorf("隔离后应该收到空列表，实际 %v", s)
 	}
 }

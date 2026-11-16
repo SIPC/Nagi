@@ -1,18 +1,11 @@
 package auditlog
 
 import (
-	"bufio"
-	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
-
-	"github.com/SIPC/nagi/internal/pkg/auditsink"
 )
 
 func TestRecordRotateResume(t *testing.T) {
@@ -54,107 +47,71 @@ func TestRecordRotateResume(t *testing.T) {
 	}
 }
 
-func TestShip(t *testing.T) {
-	var mu sync.Mutex
-	var got []map[string]any
-	fail := false
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		if fail {
-			http.Error(w, "down", 502)
-			return
-		}
-		sc := bufio.NewScanner(r.Body)
-		for sc.Scan() {
-			var m map[string]any
-			_ = json.Unmarshal(sc.Bytes(), &m)
-			got = append(got, m)
-		}
-	}))
-	defer srv.Close()
+// H2：升级前节点保存了面板的外送凭据。升级后第一次打开时删掉，面板第一次读从以前外送到的位置开始。
+func TestMigrateShipping(t *testing.T) {
 	dir := t.TempDir()
 	l, _ := Open(filepath.Join(dir, "audit"))
 	defer l.Close()
-	l.Record(Event{Action: "before"})
-	s := &Shipper{Log: l, Node: func() string { return "node-a" }, ConfigPath: filepath.Join(dir, "auditsinks.json")}
-	s.Load()
-	sk := auditsink.Config{ID: "s1", Name: "recv", Type: "http", URL: srv.URL}
-	// 两个面板配了同一个目标：只发一份。
-	_ = s.SetSinks("p1", []auditsink.Config{sk})
-	_ = s.SetSinks("p2", []auditsink.Config{sk})
-	l.Record(Event{Action: "a"})
-	l.Record(Event{Action: "b"})
-	ctx := context.Background()
-	s.ShipOnce(ctx)
-	mu.Lock()
-	if len(got) != 2 || got[0]["action"] != "a" || got[0]["source"] != "node" || got[0]["node"] != "node-a" {
-		t.Fatalf("新目标只发设置以后的记录，并带上节点：%v", got)
+	for range 5 {
+		l.Record(Event{Action: "a"})
 	}
-	fail = true
-	mu.Unlock()
-	l.Record(Event{Action: "c"})
-	s.ShipOnce(ctx)
-	if len(s.Status()) != 1 {
-		t.Fatal("失败时要记下原因")
+	cfg := filepath.Join(dir, "auditsinks.json")
+	_ = os.WriteFile(cfg, []byte(`{"sha256//p":[{"id":"s1","type":"s3","access_key":"ak","secret_key":"sk"}]}`), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "audit", "cursors.json"), []byte(`{"s1@abc":3,"s2@def":4}`), 0o600)
+	if err := l.MigrateShipping(cfg); err != nil {
+		t.Fatal(err)
 	}
-	mu.Lock()
-	fail = false
-	mu.Unlock()
-	// 重新加载（节点重启）以后从游标处补发。
-	s2 := &Shipper{Log: l, ConfigPath: s.ConfigPath}
-	s2.Load()
-	s2.ShipOnce(ctx)
-	mu.Lock()
-	defer mu.Unlock()
-	if len(got) != 3 || got[2]["action"] != "c" {
-		t.Fatalf("恢复后应该补发：%v", got)
+	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Fatal("升级后要删掉带凭据的外送配置")
 	}
-	if st, _ := os.Stat(s.ConfigPath); st.Mode().Perm()&0o077 != 0 && os.PathSeparator == '/' {
-		t.Fatal("外送配置里有密钥，文件权限应该是 0600")
+	if got := l.Start(); got != 3 {
+		t.Fatalf("面板第一次读应该从以前外送到的位置（3）开始，实际 %d", got)
+	}
+	// 没有旧配置的节点：从最新的记录开始。
+	l2, _ := Open(filepath.Join(dir, "audit2"))
+	defer l2.Close()
+	l2.Record(Event{Action: "a"})
+	if err := l2.MigrateShipping(filepath.Join(dir, "none.json")); err != nil || l2.Start() != 1 {
+		t.Fatalf("没有旧配置时从最新的记录开始：%d %v", l2.Start(), err)
 	}
 }
 
-// M10：攻击者拿下面板 P 后配了一个外送目标，管理员把 P 移出信任列表以后，节点不能再往那里发。
-// P 也不能借和正常面板相同的目标 ID 顶替正常面板的目标。
-func TestShipOnlyTrustedPanels(t *testing.T) {
-	var mu sync.Mutex
-	got := map[string]int{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		sc := bufio.NewScanner(r.Body)
-		for sc.Scan() {
-			got[r.URL.Path]++
-		}
-	}))
-	defer srv.Close()
-	dir := t.TempDir()
-	l, _ := Open(filepath.Join(dir, "audit"))
+func TestRead(t *testing.T) {
+	l, _ := Open(t.TempDir())
 	defer l.Close()
-	trusted := map[string]bool{"good": true, "evil": true}
-	s := &Shipper{Log: l, ConfigPath: filepath.Join(dir, "auditsinks.json"), Trusted: func(fp string) bool { return trusted[fp] }}
-	s.Load()
-	legit := auditsink.Config{ID: "s1", Type: "http", URL: srv.URL + "/legit"}
-	// 攻击者用同样的 ID 配到自己的地址；面板指纹按字母排在前面。
-	evil := auditsink.Config{ID: "s1", Type: "http", URL: srv.URL + "/evil"}
-	_ = s.SetSinks("good", []auditsink.Config{legit})
-	_ = s.SetSinks("evil", []auditsink.Config{evil})
-	l.Record(Event{Action: "a"})
-	ctx := context.Background()
-	s.ShipOnce(ctx)
-	mu.Lock()
-	if got["/legit"] != 1 {
-		t.Fatalf("同 ID 的目标不能顶替正常面板的目标：%v", got)
+	for i := range 700 {
+		l.Record(Event{Action: "a", Detail: strings.Repeat("x", i%3)})
 	}
-	mu.Unlock()
-	// 移出信任列表：之后的记录不再发给它。
-	delete(trusted, "evil")
-	l.Record(Event{Action: "node_exec", Detail: "cat /etc/secret"})
-	s.ShipOnce(ctx)
-	mu.Lock()
-	defer mu.Unlock()
-	if got["/evil"] != 1 || got["/legit"] != 2 {
-		t.Fatalf("移出信任列表的面板的目标不应再收到记录：%v", got)
+	lines, first, last := l.Read(0, 0)
+	if len(lines) != ReadLimit || first != 1 || last != ReadLimit {
+		t.Fatalf("每次最多 %d 条：%d 行 %d-%d", ReadLimit, len(lines), first, last)
+	}
+	lines, first, last = l.Read(last, 1000)
+	if len(lines) != 200 || first != 501 || last != 700 {
+		t.Fatalf("接着读：%d 行 %d-%d", len(lines), first, last)
+	}
+	if lines, first, last = l.Read(700, 10); len(lines) != 0 || first != 0 || last != 0 {
+		t.Fatalf("没有新记录：%d 行 %d-%d", len(lines), first, last)
+	}
+	// 面板的游标比节点的序号还大（本地审计被清空过）：从头读。
+	if lines, first, _ = l.Read(9999, 10); len(lines) != 10 || first != 1 {
+		t.Fatalf("游标超过最新序号时从头读：%d 行，从 %d 开始", len(lines), first)
+	}
+	// 总大小有上限。
+	old := readMaxBytes
+	readMaxBytes = 50 << 10
+	defer func() { readMaxBytes = old }()
+	big, _ := Open(t.TempDir())
+	defer big.Close()
+	for range 300 {
+		big.Record(Event{Action: "a", Detail: strings.Repeat("长", maxField/3)})
+	}
+	lines, _, last = big.Read(0, 0)
+	size := 0
+	for _, b := range lines {
+		size += len(b)
+	}
+	if size > readMaxBytes || len(lines) >= 300 || last != int64(len(lines)) {
+		t.Fatalf("超过大小上限：%d 字节，%d 行到 %d", size, len(lines), last)
 	}
 }

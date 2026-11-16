@@ -213,9 +213,6 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 		if s.Shipper != nil {
 			s.Shipper.Configure(ctx, sinks)
 		}
-		if s.Nodes != nil {
-			s.Nodes.PushAuditSinks()
-		}
 		s.securityAlert(ctx, "audit-sinks", "日志外送已修改")
 	}
 	onOff := func(b bool) string {
@@ -270,16 +267,4 @@ func (s *settingsService) VerifyAudit(ctx context.Context, _ *connect.Request[na
 		return nil, err
 	}
 	return connect.NewResponse(s.chainStatus(ctx)), nil
-}
-
-// NodeAuditSinks 把外送目标转成下发给节点的格式（见 docs/audit.md#节点本地审计）。
-func NodeAuditSinks(sinks []audit.SinkConfig) []*nagiv1.NodeAuditSink {
-	out := make([]*nagiv1.NodeAuditSink, 0, len(sinks))
-	for _, sk := range sinks {
-		out = append(out, &nagiv1.NodeAuditSink{
-			Id: sk.ID, Name: sk.Name, Type: sk.Type, Address: sk.Address, Ca: sk.CA, Url: sk.URL, Headers: sk.Headers,
-			Endpoint: sk.Endpoint, Region: sk.Region, Bucket: sk.Bucket, Prefix: sk.Prefix, AccessKey: sk.AccessKey, SecretKey: sk.SecretKey,
-		})
-	}
-	return out
 }

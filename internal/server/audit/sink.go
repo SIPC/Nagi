@@ -46,12 +46,26 @@ const (
 	sinkBatch      = 500
 	// sinkAlertAfter：连续失败这么久告警。
 	sinkAlertAfter = 10 * time.Minute
+	// nodeInterval 是代发节点本地审计的间隔（S3 同面板，每小时一次），nodeBatch 是每次读的条数。
+	nodeInterval = 5 * time.Second
+	nodeBatch    = 500
+	// nodeRounds 是每个节点每轮最多读几次，积压很多时分几轮发完，不卡住别的节点。
+	nodeRounds = 20
 )
+
+// NodeSource 是一个可以读本地审计的节点（见 docs/audit.md#节点本地审计）。ID 和 Name 由面板填，写进外送的每一行。
+type NodeSource struct {
+	ID, Name string
+	// Read 读序号大于 after 的记录；after 小于 0 时只返回 start（第一次读的起点）。
+	Read func(ctx context.Context, after int64, limit int) (lines [][]byte, first, last, start int64, err error)
+}
 
 // Shipper 把审计记录外送到配置的目标。
 type Shipper struct {
 	Log        *Log
 	Recordings *Recordings
+	// Nodes 返回可以代发本地审计的节点（已批准、认本面板是主面板、在线）。为 nil 时不代发。
+	Nodes func() []NodeSource
 	// OnFailure 在某个目标连续失败超过 10 分钟时调用（failing=true），恢复时再调用一次。
 	OnFailure func(ctx context.Context, sink SinkConfig, failing bool, err string)
 
@@ -166,10 +180,14 @@ func (s *Shipper) run(ctx context.Context, sk SinkConfig) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	// 启动时先发一次锚点，之后每小时、每 1000 条一次。
-	var lastAnchor time.Time
+	var lastAnchor, lastRelay time.Time
 	sinceAnchor := 0
 	for {
 		n, err := s.sendBatch(ctx, sk, &lastAnchor, &sinceAnchor)
+		if err == nil && time.Since(lastRelay) >= nodeInterval {
+			lastRelay = time.Now()
+			err = s.relayNodes(ctx, sk)
+		}
 		s.mark(ctx, sk, err)
 		if err == nil && n == sinkBatch {
 			continue // 还有积压，接着发
@@ -275,6 +293,75 @@ func (s *Shipper) sendBatch(ctx context.Context, sk SinkConfig, lastAnchor *time
 		_ = s.Log.SetMeta(ctx, "last_anchor", string(b))
 	}
 	return len(events), nil
+}
+
+// relayNodes 代发各节点的本地审计（见 docs/audit.md#节点本地审计）。节点不持有外送凭据：面板按游标读走记录，
+// 写到 <前缀>/node/<节点 ID>/ 下，每行的 source、node_id、node 由面板填，节点冒充不了面板和别的节点。
+// 节点连不上或是旧版本时跳过，记录留在节点上，下次接着读；只有发往目标失败才算这个目标失败。
+func (s *Shipper) relayNodes(ctx context.Context, sk SinkConfig) error {
+	if s.Nodes == nil {
+		return nil
+	}
+	for _, n := range s.Nodes() {
+		if err := s.relayNode(ctx, sk, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func nodeCursorKey(sinkID, nodeID string) string {
+	return "sink:" + sinkID + ":node:" + nodeID + ":cursor"
+}
+
+func (s *Shipper) relayNode(ctx context.Context, sk SinkConfig, n NodeSource) error {
+	key := nodeCursorKey(sk.ID, n.ID)
+	cursor, err := strconv.ParseInt(s.Log.Meta(ctx, key), 10, 64)
+	if err != nil {
+		// 第一次：从节点给的起点开始（升级前节点自己外送到的位置，或者最新的记录）。
+		rctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		_, _, _, start, err := n.Read(rctx, -1, 0)
+		cancel()
+		if err != nil {
+			return nil
+		}
+		cursor = start
+		_ = s.Log.SetMeta(ctx, key, strconv.FormatInt(cursor, 10))
+	}
+	for range nodeRounds {
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		lines, first, last, _, err := n.Read(rctx, cursor, nodeBatch)
+		cancel()
+		if err != nil || len(lines) == 0 {
+			return nil
+		}
+		if out := nodeLines(lines, n); len(out) > 0 {
+			if err := auditsink.Send(ctx, s.client, sk, auditsink.NodeScope(n.ID), first, out); err != nil {
+				return err
+			}
+		}
+		cursor = last
+		_ = s.Log.SetMeta(ctx, key, strconv.FormatInt(cursor, 10))
+		if len(lines) < nodeBatch {
+			return nil
+		}
+	}
+	return nil
+}
+
+// nodeLines 给节点的每一行填上来源：source 是 node，node_id 和 node 是面板登记的，覆盖节点自己写的。
+func nodeLines(lines [][]byte, n NodeSource) [][]byte {
+	out := make([][]byte, 0, len(lines))
+	for _, l := range lines {
+		var m map[string]any
+		if json.Unmarshal(l, &m) != nil || m == nil {
+			continue
+		}
+		m["source"], m["node_id"], m["node"] = "node", n.ID, n.Name
+		b, _ := json.Marshal(m)
+		out = append(out, b)
+	}
+	return out
 }
 
 // LastAnchor 返回最近一次发出的锚点。

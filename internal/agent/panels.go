@@ -77,10 +77,6 @@ func (s *agentService) RemovePanel(_ context.Context, req *nagiv1.RemovePanelReq
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 	a.log.Info("已从信任列表移除面板", "panel", removed.Address, "by", s.panel)
-	// 被移除的面板下发的外送目标一起删掉（外送时也只用仍在信任列表里的面板的目标）。
-	if a.auditShip != nil {
-		_ = a.auditShip.SetSinks(removed.Fingerprint, nil)
-	}
 	if req.GetFingerprint() != s.panel && a.alerts != nil {
 		// 一个面板移除了另一个面板：被移除的面板之后就连不上这个节点了，发一条告警让管理员知道。
 		by := s.panel

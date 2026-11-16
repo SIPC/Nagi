@@ -198,6 +198,9 @@ const (
 	// AgentServiceSetAuditSinkProcedure is the fully-qualified name of the AgentService's SetAuditSink
 	// RPC.
 	AgentServiceSetAuditSinkProcedure = "/nagi.v1.AgentService/SetAuditSink"
+	// AgentServiceReadAuditLogProcedure is the fully-qualified name of the AgentService's ReadAuditLog
+	// RPC.
+	AgentServiceReadAuditLogProcedure = "/nagi.v1.AgentService/ReadAuditLog"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -315,8 +318,11 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
-	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
+	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
+	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
+	ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -696,6 +702,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetAuditSink")),
 			connect.WithClientOptions(opts...),
 		),
+		readAuditLog: connect.NewClient[v1.ReadAuditLogRequest, v1.ReadAuditLogResponse](
+			httpClient,
+			baseURL+AgentServiceReadAuditLogProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ReadAuditLog")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -762,6 +774,7 @@ type agentServiceClient struct {
 	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
 	setAuditSink          *connect.Client[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse]
+	readAuditLog          *connect.Client[v1.ReadAuditLogRequest, v1.ReadAuditLogResponse]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -1069,6 +1082,11 @@ func (c *agentServiceClient) SetAuditSink(ctx context.Context, req *connect.Requ
 	return c.setAuditSink.CallUnary(ctx, req)
 }
 
+// ReadAuditLog calls nagi.v1.AgentService.ReadAuditLog.
+func (c *agentServiceClient) ReadAuditLog(ctx context.Context, req *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error) {
+	return c.readAuditLog.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	// ---- 容器 ----
@@ -1184,8 +1202,11 @@ type AgentServiceHandler interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
-	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
+	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
+	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
+	ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1561,6 +1582,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetAuditSink")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceReadAuditLogHandler := connect.NewUnaryHandler(
+		AgentServiceReadAuditLogProcedure,
+		svc.ReadAuditLog,
+		connect.WithSchema(agentServiceMethods.ByName("ReadAuditLog")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServicePutContainerProcedure:
@@ -1685,6 +1712,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCancelUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceSetAuditSinkProcedure:
 			agentServiceSetAuditSinkHandler.ServeHTTP(w, r)
+		case AgentServiceReadAuditLogProcedure:
+			agentServiceReadAuditLogHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1936,4 +1965,8 @@ func (UnimplementedAgentServiceHandler) CancelUpgrade(context.Context, *connect.
 
 func (UnimplementedAgentServiceHandler) SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetAuditSink is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ReadAuditLog is not implemented"))
 }

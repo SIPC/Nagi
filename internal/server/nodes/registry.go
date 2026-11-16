@@ -90,8 +90,6 @@ type Registry struct {
 	Self string
 	// ReadOnly：本面板是备用面板，不给节点下发任何东西（告警配置、面板域名），只查询。
 	ReadOnly bool
-	// AuditSinks 返回日志外送目标，随告警配置一起下发给节点，节点外送自己的本地审计（见 docs/audit.md#节点本地审计）。
-	AuditSinks func(ctx context.Context) []*nagiv1.NodeAuditSink
 	// Behind 检查节点上报里的任期：返回 true 表示本面板已经落后（有了新的主面板），不再处理这次上报。
 	Behind func(ctx context.Context, req *nagiv1.ReportRequest) bool
 }
@@ -136,13 +134,16 @@ func (c *Conn) Pending() bool {
 	return c.pending
 }
 
-// trusted 判断能不能给这个节点下发告警配置和外送目标：已经批准，并且认本面板是主面板。
-// 待批准的节点可能是拿泄露的接入码加入的，这些配置里有渠道地址和外送凭据（见 docs/control-plane.md）。
+// trusted 判断能不能给这个节点下发告警配置、代发它的本地审计：已经批准，并且认本面板是主面板。
+// 待批准的节点可能是拿泄露的接入码加入的，告警配置里有渠道地址（见 docs/control-plane.md）。
 func (c *Conn) trusted() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return !c.pending && c.accepted
 }
+
+// Trusted 判断节点是否已经批准、并且认本面板是主面板。
+func (c *Conn) Trusted() bool { return c.trusted() }
 
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
 func (c *Conn) LastReport() *nagiv1.ReportRequest {

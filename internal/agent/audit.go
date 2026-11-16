@@ -2,11 +2,11 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/auditlog"
-	"github.com/SIPC/nagi/internal/pkg/auditsink"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -18,7 +18,7 @@ import (
 // 节点本地审计（见 docs/audit.md#节点本地审计）：面板下发的修改类指令由拦截器统一记录，节点终端、node_exec
 // 和被拒绝的越权请求在各自的处理函数里记（带上成员和来源地址）。
 
-// openAudit 打开本地审计和外送。打不开时只记日志，节点照常工作。
+// openAudit 打开本地审计。打不开时只记日志，节点照常工作。外送由面板代为进行（ReadAuditLog）。
 func (a *agent) openAudit(ctx context.Context) {
 	l, err := auditlog.Open(filepath.Join(a.cfg.DataDir, "audit"))
 	if err != nil {
@@ -26,17 +26,10 @@ func (a *agent) openAudit(ctx context.Context) {
 		return
 	}
 	a.audit = l
-	a.auditShip = &auditlog.Shipper{
-		Log: l, NodeID: a.nodeIDForAudit, ConfigPath: filepath.Join(a.cfg.DataDir, "identity", "auditsinks.json"),
-		Logger: a.log.With("component", "audit"),
-		Node:   func() string { return a.hostname },
-		Trusted: func(fp string) bool {
-			_, ok := a.id.panel(fp)
-			return ok
-		},
+	// 升级前节点自己外送，保存过面板的外送凭据：删掉。
+	if err := l.MigrateShipping(a.auditSinksPath()); err != nil {
+		a.log.Warn("无法删除旧的外送配置", "err", err)
 	}
-	a.auditShip.Load()
-	go a.auditShip.Run(ctx)
 	go func() {
 		<-ctx.Done()
 		l.Close()
@@ -47,7 +40,7 @@ func (a *agent) openAudit(ctx context.Context) {
 var auditSkip = map[string]bool{
 	"StreamLogs": true, "Exec": false, "NodeShell": true, "NodeExec": true, "MeshPing": true, "MeshSpeedTest": true,
 	"QueryMetrics": true, "CheckContainer": true, "CheckPorts": true, "CheckImages": true, "InspectComposeDir": true,
-	"ReadNodeFile": true, "SetAuditSink": false,
+	"ReadNodeFile": true, "SetAuditSink": false, "ReadAuditLog": true,
 }
 
 var auditReadPrefixes = []string{"Get", "List", "Query", "Read", "Check", "Stream"}
@@ -148,31 +141,28 @@ func (s *auditStream) RecvMsg(m any) error {
 	return err
 }
 
-// SetAuditSink 保存面板下发的外送目标（见 docs/audit.md#节点本地审计）。
-func (s *agentService) SetAuditSink(_ context.Context, req *nagiv1.SetAuditSinkRequest) (*nagiv1.SetAuditSinkResponse, error) {
-	if s.node.auditShip == nil {
-		return nil, status.Error(codes.Unavailable, "节点本地审计没有打开")
-	}
-	var sinks []auditsink.Config
-	for _, k := range req.GetSinks() {
-		sinks = append(sinks, auditsink.Config{
-			ID: k.GetId(), Name: k.GetName(), Type: k.GetType(), Address: k.GetAddress(), CA: k.GetCa(), URL: k.GetUrl(),
-			Headers: k.GetHeaders(), Endpoint: k.GetEndpoint(), Region: k.GetRegion(), Bucket: k.GetBucket(), Prefix: k.GetPrefix(),
-			AccessKey: k.GetAccessKey(), SecretKey: k.GetSecretKey(),
-		})
-	}
-	if err := s.node.auditShip.SetSinks(s.panel, sinks); err != nil {
-		return nil, status.Errorf(codes.Internal, "无法保存外送配置：%v", err)
+func (a *agent) auditSinksPath() string {
+	return filepath.Join(a.cfg.DataDir, "identity", "auditsinks.json")
+}
+
+// SetAuditSink 是旧版本面板下发外送目标（带凭据）的接口。节点不再保存凭据（见 docs/audit.md#节点本地审计）：
+// 收到什么都只删掉以前保存的，返回成功，旧面板照常工作。
+func (s *agentService) SetAuditSink(context.Context, *nagiv1.SetAuditSinkRequest) (*nagiv1.SetAuditSinkResponse, error) {
+	if err := os.Remove(s.node.auditSinksPath()); err != nil && !os.IsNotExist(err) {
+		return nil, status.Errorf(codes.Internal, "无法删除旧的外送配置：%v", err)
 	}
 	return &nagiv1.SetAuditSinkResponse{}, nil
 }
 
-// nodeIDForAudit 是外送时写的节点 ID：信任列表里第一个面板分配的（各面板分配的通常相同）。
-func (a *agent) nodeIDForAudit() string {
-	for _, p := range a.id.Panels() {
-		if p.NodeID != "" {
-			return p.NodeID
-		}
+// ReadAuditLog 返回本地审计，面板代为外送（见 docs/audit.md#节点本地审计）。信任列表里的面板都能读。
+func (s *agentService) ReadAuditLog(_ context.Context, req *nagiv1.ReadAuditLogRequest) (*nagiv1.ReadAuditLogResponse, error) {
+	l := s.node.audit
+	if l == nil {
+		return nil, status.Error(codes.Unavailable, "节点本地审计没有打开")
 	}
-	return ""
+	if req.GetAfter() < 0 {
+		return &nagiv1.ReadAuditLogResponse{Start: l.Start()}, nil
+	}
+	lines, first, last := l.Read(req.GetAfter(), int(req.GetLimit()))
+	return &nagiv1.ReadAuditLogResponse{Lines: lines, First: first, Last: last}, nil
 }

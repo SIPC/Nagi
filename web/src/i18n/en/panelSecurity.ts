@@ -24,7 +24,7 @@ export default {
   sinks: {
     title: "Log forwarding",
     description: "Send audit records outside Nagi in real time, so a copy survives if the panel is compromised or the machine is wiped.",
-    help: "Failed sends resume from where they stopped, and an alert is sent after 10 minutes of failures. Every hour and every 1,000 records, the latest hash (an anchor) is sent so you can check whether the records on the panel were rewritten. Before forwarding settings change, the change itself is sent to the existing destinations.",
+    help: "Node audit logs are read by the panel and sent along with its own; nodes don't store forwarding credentials. Failed sends resume from where they stopped, and an alert is sent after 10 minutes of failures. Every hour and every 1,000 records, the latest hash (an anchor) is sent so you can check whether the records on the panel were rewritten. Before forwarding settings change, the change itself is sent to the existing destinations.",
     add: "Add destination",
     edit: "Edit destination",
     empty: "No destinations",

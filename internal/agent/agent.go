@@ -290,9 +290,8 @@ type agent struct {
 	egress *egress
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
 	violations *violations
-	// audit 是节点本地审计，auditShip 按面板下发的配置外送它（见 audit.go）。
+	// audit 是节点本地审计，面板用 ReadAuditLog 读走后代为外送（见 audit.go）。
 	audit     *auditlog.Log
-	auditShip *auditlog.Shipper
 	replicas  *replicas
 	backups   *backupStates
 	failovers *failovers

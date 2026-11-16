@@ -80,6 +80,7 @@ const (
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
 	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
+	AgentService_ReadAuditLog_FullMethodName          = "/nagi.v1.AgentService/ReadAuditLog"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -202,8 +203,11 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(ctx context.Context, in *CancelUpgradeRequest, opts ...grpc.CallOption) (*CancelUpgradeResponse, error)
-	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
+	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error)
+	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
+	ReadAuditLog(ctx context.Context, in *ReadAuditLogRequest, opts ...grpc.CallOption) (*ReadAuditLogResponse, error)
 }
 
 type agentServiceClient struct {
@@ -920,6 +924,16 @@ func (c *agentServiceClient) SetAuditSink(ctx context.Context, in *SetAuditSinkR
 	return out, nil
 }
 
+func (c *agentServiceClient) ReadAuditLog(ctx context.Context, in *ReadAuditLogRequest, opts ...grpc.CallOption) (*ReadAuditLogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadAuditLogResponse)
+	err := c.cc.Invoke(ctx, AgentService_ReadAuditLog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -1040,8 +1054,11 @@ type AgentServiceServer interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error)
-	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
+	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error)
+	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
+	ReadAuditLog(context.Context, *ReadAuditLogRequest) (*ReadAuditLogResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -1234,6 +1251,9 @@ func (UnimplementedAgentServiceServer) CancelUpgrade(context.Context, *CancelUpg
 }
 func (UnimplementedAgentServiceServer) SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAuditSink not implemented")
+}
+func (UnimplementedAgentServiceServer) ReadAuditLog(context.Context, *ReadAuditLogRequest) (*ReadAuditLogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadAuditLog not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -2262,6 +2282,24 @@ func _AgentService_SetAuditSink_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ReadAuditLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadAuditLogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReadAuditLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReadAuditLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReadAuditLog(ctx, req.(*ReadAuditLogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2464,6 +2502,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetAuditSink",
 			Handler:    _AgentService_SetAuditSink_Handler,
+		},
+		{
+			MethodName: "ReadAuditLog",
+			Handler:    _AgentService_ReadAuditLog_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
