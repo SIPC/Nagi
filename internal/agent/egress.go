@@ -50,6 +50,10 @@ type egressState struct {
 	// 或者 IPv6 链路本地地址收发，按源地址匹配的项目规则管不到它们（见 docs/agent.md#出站限制）。
 	strict []string
 	known  []netip.Addr
+	// bridges 是 Nagi 管理的容器接着的所有 Docker 网桥（docker0、br-<网络 ID> 或网络自定的名字）。发往这些网桥的
+	// 流量（容器之间、项目内网）在 forward 链放行。只列 Docker 网络的网桥，不用 br-* 通配：宿主机的局域网网桥恰好
+	// 叫 br-lan（OpenWrt）、br-ex（OpenStack）时，发往局域网的流量会被整体放行。
+	bridges []string
 	// public 是节点对外开放的端口（Caddy 实际监听的 80、443 和有上游的 TCP/UDP 转发）。发往节点本机公网地址
 	// （local 里不是私有、共享、链路本地、回环的地址）这些端口的连接放行：它们本来就对公网开放，容器访问自己或别的项目的
 	// 域名时会连到节点自己的公网地址。发往局域网 IP、mesh IP、Docker 网关的照样拦截：Caddy 转给后端时 X-Forwarded-For
@@ -185,9 +189,13 @@ func buildRuleset(st egressState) string {
 		fmt.Fprintf(&b, "\tchain %s {\n\t\ttype filter hook %s priority -1; policy accept;\n", name, hook)
 		// 已建立的连接（包括节点主动连到容器的回包）不管。
 		b.WriteString("\t\tct state established,related accept\n")
-		if !local {
+		if !local && len(st.bridges) > 0 {
 			// 容器之间经 Docker 网桥的流量（项目内网）不管，网络之间的隔离由 Docker 负责。
-			b.WriteString("\t\toifname { \"docker0\", \"br-*\" } accept\n")
+			var names []string
+			for _, n := range st.bridges {
+				names = append(names, strconv.Quote(n))
+			}
+			fmt.Fprintf(&b, "\t\toifname { %s } accept\n", strings.Join(names, ", "))
 		}
 		// 源地址不是任何容器的地址：伪造的，直接丢弃。只管 TCP、UDP，不影响 ARP、NDP 和 ICMP。
 		if len(ifaces) > 0 {
@@ -315,6 +323,13 @@ func egressStateOf(ctx context.Context, dc *docker.Client, plan *nagiv1.LinkPlan
 			st.containers = append(st.containers, c)
 		}
 	}
+	for _, n := range bridges {
+		if n.Iface != "" {
+			st.bridges = append(st.bridges, n.Iface)
+		}
+	}
+	sort.Strings(st.bridges)
+	st.bridges = slices.Compact(st.bridges)
 	for name := range strict {
 		n := bridges[name]
 		st.strict = append(st.strict, n.Iface)

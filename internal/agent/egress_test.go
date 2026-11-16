@@ -21,11 +21,12 @@ func TestBuildRuleset(t *testing.T) {
 			// bbbb 没有设置：升级前的项目，按仅记录。
 			"cccc": {Mode: "off"},
 		},
+		bridges: []string{"br-0123456789ab", "docker0"},
 	}
 	r := buildRuleset(st)
 	for _, want := range []string{
 		"table inet nagi {", "elements = { 172.20.0.2 }", "ip saddr @paaaa_4 ip daddr 192.168.1.20/32 meta l4proto { tcp, udp } th dport 5432 accept",
-		"ip saddr @paaaa_4 ip daddr @private4 drop", "ip saddr @paaaa_4 ip daddr @local4 drop", `oifname { "docker0", "br-*" } accept`,
+		"ip saddr @paaaa_4 ip daddr @private4 drop", "ip saddr @paaaa_4 ip daddr @local4 drop", `oifname { "br-0123456789ab", "docker0" } accept`,
 		"update @hits4 { ip saddr . ip daddr . th dport }", "ct state established,related accept",
 	} {
 		if !strings.Contains(r, want) {
@@ -144,5 +145,26 @@ func TestBuildRulesetPublicPorts(t *testing.T) {
 	st.local = st.local[:6]
 	if r := buildRuleset(st); strings.Contains(r, "dport { 80") {
 		t.Errorf("没有公网地址时不应有放行规则：\n%s", r)
+	}
+}
+
+// L13：forward 链之前放行所有 br-* 出接口。宿主机的局域网网桥恰好叫 br-lan（OpenWrt）、br-ex（OpenStack）时，
+// 发往局域网的流量全部放行，出站限制整体失效。现在只放行 Docker 网络的网桥。
+func TestBuildRulesetBridgesOnly(t *testing.T) {
+	st := egressState{
+		containers: []egressContainer{{project: "aaaa", name: "web", addrs: []netip.Addr{netip.MustParseAddr("172.20.0.2")}}},
+		projects:   map[string]*nagiv1.Egress{"aaaa": {Mode: "block"}},
+		bridges:    []string{"br-0123456789ab"},
+	}
+	r := buildRuleset(st)
+	if strings.Contains(r, `"br-*"`) || strings.Contains(r, "docker0") {
+		t.Errorf("不应按 br-* 通配放行：\n%s", r)
+	}
+	if !strings.Contains(r, `oifname { "br-0123456789ab" } accept`) {
+		t.Errorf("应放行容器所在的 Docker 网桥：\n%s", r)
+	}
+	st.bridges = nil
+	if r := buildRuleset(st); strings.Contains(r, "oifname") {
+		t.Errorf("没有网桥时不应有放行规则：\n%s", r)
 	}
 }
