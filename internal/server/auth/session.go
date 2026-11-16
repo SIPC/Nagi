@@ -211,7 +211,7 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 		case st.TLSFP == "" || info.UserAgent != st.UserAgent:
 			// 第一次看到指纹，或者浏览器更新了（版本号和指纹一起变）。
 			set["tls_fp"] = fp
-		case st.TLSFP != fp && reverify == "":
+		case !sameClient(st.TLSFP, fp) && reverify == "":
 			reverify = ReasonTLSChanged
 			s.securityEvent(ctx, st, info, "session_tls_changed", "", nil)
 		}

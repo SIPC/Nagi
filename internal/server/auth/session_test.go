@@ -294,15 +294,34 @@ func TestSessionToolFingerprint(t *testing.T) {
 			t.Fatalf("没有告警：%v", h.alerts)
 		}
 	}
-	// 标识没变、指纹变了：重新验证，不告警。
+	// 标识没变、密码套件变了（换了一个客户端）：重新验证，不告警。
 	h := newSessionHarness(t)
 	token := h.login("admin", home)
 	var rv *ErrReverify
-	if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: "t13d1517h2_8daaf6152771_99999999999a"}); !errors.As(err, &rv) || rv.Reason != ReasonTLSChanged {
+	if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: "t13d1516h2_99999999999a_02713d6af862"}); !errors.As(err, &rv) || rv.Reason != ReasonTLSChanged {
 		t.Fatalf("应要求重新验证：%v", err)
 	}
 	if len(h.alerts) != 0 {
 		t.Fatalf("不应告警：%v", h.alerts)
+	}
+}
+
+// 同一个浏览器的握手只是扩展不同（会话恢复多出 pre_shared_key、有的握手带 padding）、或者走了 HTTP/3：
+// 不要求重新验证。手机网络下重连频繁，以前按完整指纹比较会反复弹出验证。
+func TestSessionTLSResumption(t *testing.T) {
+	h := newSessionHarness(t)
+	token := h.login("admin", home)
+	for _, fp := range []string{
+		"t13d1517h2_8daaf6152771_cb7bf5808d99", // 会话恢复：多一个扩展，扩展哈希不同
+		"t13d1518h2_8daaf6152771_1234567890ab", // 恢复并带 early_data
+		chromeFP,
+	} {
+		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: fp}); err != nil {
+			t.Fatalf("%s：不应要求重新验证：%v", fp, err)
+		}
+	}
+	if looksLikeTool("t13d1516h3_8daaf6152771_02713d6af862") {
+		t.Fatal("HTTP/3 的握手不是脚本工具")
 	}
 }
 
