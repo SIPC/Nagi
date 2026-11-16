@@ -519,3 +519,22 @@ func TestSessionCDNHeaderStillChecksFingerprint(t *testing.T) {
 		}
 	}
 }
+
+// L6：管理员平时只用 IPv4，偷到 cookie 的人从任意 IPv6 网段来。之前第一次出现的 IPv6 网段直接记为已验证；
+// 现在会话已经验证过 IPv4 时，IPv6 第一次出现也要重新验证。没有绑定网络的成员不受影响。
+func TestSessionNewFamilyNeedsReverify(t *testing.T) {
+	h := newSessionHarness(t)
+	token := h.login("admin", home)
+	if _, err := h.check(token, home); err != nil {
+		t.Fatal(err)
+	}
+	v6 := RequestInfo{IP: "2001:db8:dead::1", UserAgent: chromeUA, Fingerprint: chromeFP}
+	var rv *ErrReverify
+	if _, err := h.check(token, v6); !errors.As(err, &rv) || rv.Reason != ReasonNetworkChanged {
+		t.Fatalf("已验证过 IPv4 的管理员会话，IPv6 第一次出现应要求重新验证：%v", err)
+	}
+	op := h.login("op", home)
+	if _, err := h.check(op, v6); err != nil {
+		t.Fatalf("没有绑定网络的成员不受影响：%v", err)
+	}
+}

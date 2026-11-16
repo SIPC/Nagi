@@ -299,8 +299,21 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 			want = info.IP
 		}
 		if bind != "off" {
+			other := "6"
+			if fam == "6" {
+				other = "4"
+			}
 			if known := n.known(fam); len(known) == 0 {
-				n.remember(fam, want)
+				// 这种地址第一次出现。会话已经验证过另一种地址时也要验证一次：否则偷到 cookie 的人换一种地址来
+				// （平时只用 IPv4，从 IPv6 来）就绕过了网络绑定。验证后两种都记住，之后来回切换不受影响。
+				if prev := n.known(other); len(prev) > 0 {
+					if reverify == "" {
+						reverify = ReasonNetworkChanged
+						s.securityEvent(ctx, st, info, "session_network_changed", "", map[string]string{"from": prev[0], "to": want})
+					}
+				} else {
+					n.remember(fam, want)
+				}
 			} else if !slices.Contains(known, want) && reverify == "" {
 				reverify = ReasonNetworkChanged
 				s.securityEvent(ctx, st, info, "session_network_changed", "", map[string]string{"from": known[0], "to": want})

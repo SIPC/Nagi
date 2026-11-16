@@ -82,7 +82,7 @@ export default {
     maxAgeDescription: "从登录起最长保持的时间",
     bind: "管理员网络绑定",
     bindDescription: "管理员的网络变化后要求重新验证身份",
-    bindHelp: "网段按 IPv4 /24、IPv6 /48 计算。IPv4 和 IPv6 之间的切换不算变化。",
+    bindHelp: "网段按 IPv4 /24、IPv6 /48 计算。第一次从另一种地址（IPv4 或 IPv6）访问时也要验证，之后两者之间的切换不算变化。",
     bindSubnet: "网段变化时",
     bindIP: "IP 变化时",
     bindOff: "关闭",

@@ -83,7 +83,7 @@ export default {
     maxAgeDescription: "The longest a sign-in lasts",
     bind: "Administrator network binding",
     bindDescription: "Require administrators to verify their identity again when their network changes",
-    bindHelp: "Networks are IPv4 /24 and IPv6 /48 ranges. Switching between IPv4 and IPv6 doesn't count as a change.",
+    bindHelp: "Networks are compared as IPv4 /24 and IPv6 /48. The first visit from the other address type (IPv4 or IPv6) also needs verification. After that, switching between them doesn't count as a change.",
     bindSubnet: "Network changes",
     bindIP: "IP changes",
     bindOff: "Off",
