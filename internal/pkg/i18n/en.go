@@ -734,5 +734,8 @@ var en = map[string]string{
 	"分组和标签不能包含控制字符":                                "Groups and tags can't contain control characters",
 	"最多 %d 个标签":                                    "Up to %d tags",
 	"分组或标签不存在":                                     "The group or tag doesn't exist",
-	"成员 %s 的通行密钥被清除": "Passkeys of %s were cleared",
+	"成员 %s 的通行密钥被清除":                               "Passkeys of %s were cleared",
+	"节点 %s 报告 %s 越权":                               "Node %s reported a violation by %s",
+	"节点 %s 报告 %d 个未登记的 mesh 地址越权":                  "Node %s reported violations by %d unregistered mesh addresses",
+	"另有 %d 条未逐条记录":                                 "%d more weren't recorded individually",
 }

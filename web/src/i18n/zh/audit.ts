@@ -140,7 +140,7 @@ export default {
     UnisolateNode: "解除节点隔离",
     Enroll: "节点加入",
     audit_sinks_changed: "编辑日志外送",
-    violation: "节点越权请求",
+    violation: "上报节点越权",
     totp_failures: "两步验证码连续错误",
     admin_new_network: "管理员从新网段登录",
     mcp: (tool: string) => `MCP 调用 ${tool}`,
