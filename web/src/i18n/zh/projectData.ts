@@ -77,6 +77,7 @@ export default {
   },
   schedule: {
     title: "定时快照",
+    plan: "计划",
     enabled: "定时快照",
     mode: "方式",
     interval: "按间隔",

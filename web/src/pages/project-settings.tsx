@@ -1,14 +1,15 @@
 import { useState } from "react";
+import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
-import { projectSchedule, sameForm, scheduleErrors, ScheduleFields, scheduleForm, toSchedule } from "@/components/snapshot-schedule";
+import { projectSchedule, sameForm, scheduleErrors, ScheduleFields, scheduleForm, scheduleSummary, toSchedule } from "@/components/snapshot-schedule";
 import { useRun } from "@/components/run";
 import { useRole } from "@/components/role";
-import { Alert, Badge, Button, Check, EmptyRow, Field, FormActions, FormBody, FormRow, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { Alert, Badge, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormActions, FormBody, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, Status } from "@/components/ui";
 import { HelpParts } from "@/components/help-parts";
 import type { Project } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction } from "@/components/confirm";
@@ -35,169 +36,282 @@ export function SettingsTab({ project }: { project: Project }) {
   );
 }
 
-// GeneralSettings 修改名称、网络名和快照份数上限；内部端口、快照间隔照原样提交（接口每次提交完整的设置，没带的定时快照计划面板保留）。
-function GeneralSettings({ project }: { project: Project }) {
-  const m = t.projectSettings.general;
+// 接口每次提交完整的设置：没改的照原样带上（没带的定时快照计划、告警规则面板保留）。
+type SettingsPatch = { name?: string; networkName?: string; snapshotLimit?: number; snapshotSchedule?: ReturnType<typeof toSchedule> };
+function useUpdateSettings(project: Project) {
   const queryClient = useQueryClient();
-  const { isAdmin } = useRole();
-  // 分组决定成员的访问范围，只有管理员能改（见 docs/panel.md#分组和标签）。
-  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: isAdmin });
-  const groups = groupsOf(projects.data?.projects).map((g) => g.name);
-  const [group, setGroup] = useState(project.group);
-  const s = project.settings;
-  const [name, setName] = useState(project.name);
-  const [network, setNetwork] = useState(project.networkName);
-  const [limit, setLimit] = useState(s?.snapshotLimit ? String(s.snapshotLimit) : "");
+  return async (patch: SettingsPatch) => {
+    const s = project.settings;
+    await projectClient.updateProjectSettings({
+      projectId: project.id,
+      baseRevision: project.revision,
+      name: patch.name ?? project.name,
+      networkName: patch.networkName ?? project.networkName,
+      settings: {
+        internalPorts: s?.internalPorts,
+        snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
+        snapshotLimit: patch.snapshotLimit ?? s?.snapshotLimit ?? 0,
+        ...(patch.snapshotSchedule ? { snapshotSchedule: patch.snapshotSchedule } : {}),
+      },
+    });
+    await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  };
+}
+
+// SettingDialog：设置行的「编辑」对话框：字段、错误、取消和保存。保存出错时错误显示在按钮上方。
+function SettingDialog({ title, busy, error, onSubmit, onClose, children }: { title: string; busy: boolean; error: string; onSubmit: () => void; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <Dialog open onClose={onClose} title={title}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        {children}
+        {error && <Alert>{error}</Alert>}
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={busy}>
+            {busy && <Spinner />}
+            {t.common.actions.save}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+// useSave：对话框的保存。save 返回 false 表示没有提交（确认框里取消了），对话框留着。
+function useSave(onClose: () => void) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // 提交过一次以后才显示字段错误，免得刚开始输入就报错。
-  const [checked, setChecked] = useState(false);
-  // 留空用默认值，否则须为正整数。
-  const numberError = (v: string) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? m.positiveInteger : "");
-  const nameError = checked && !name.trim() ? m.nameRequired : "";
-  const networkError = checked && !network.trim() ? m.networkNameRequired : "";
-  const limitError = checked ? numberError(limit) : "";
-  // 和已保存的设置比较（不是和第一次渲染比）：保存后项目重新加载，就不再算未保存。
-  const settingsChanged = name !== project.name || network !== project.networkName || limit !== (s?.snapshotLimit ? String(s.snapshotLimit) : "");
-  const groupChanged = group.trim() !== project.group;
-  useUnsaved(settingsChanged || groupChanged);
-
-  const save = async () => {
-    setChecked(true);
-    if (!name.trim() || !network.trim() || numberError(limit)) return;
-    // 改网络名后，已连接项目里写的地址会失效，先确认。
-    const renamed = network.trim() !== project.networkName;
-    if (renamed && project.links.length > 0 && !(await confirmAction(m.renameConfirm(network.trim()), { action: m.rename }))) return;
+  const submit = async (save: () => Promise<boolean | void>) => {
     setBusy(true);
     setError("");
     try {
-      if (settingsChanged) {
-        await projectClient.updateProjectSettings({
-          projectId: project.id,
-          baseRevision: project.revision,
-          name,
-          networkName: network,
-          settings: {
-            internalPorts: s?.internalPorts,
-            snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
-            snapshotLimit: Number(limit.trim() || 0),
-          },
-        });
-      }
-      if (isAdmin && groupChanged) await projectClient.setProjectGroup({ projectId: project.id, group: group.trim() });
-      toast.success(t.common.feedback.saved);
-      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if ((await save()) !== false) onClose();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+  return { error, busy, submit };
+}
 
+// TextSettingDialog：一个文字字段的设置。validate 返回字段下方的错误，提交过一次以后才显示。
+function TextSettingDialog({
+  title,
+  label,
+  initial,
+  hint,
+  help,
+  placeholder,
+  numeric,
+  validate,
+  onSave,
+  onClose,
+}: {
+  title: string;
+  label: string;
+  initial: string;
+  hint?: string;
+  help?: React.ReactNode;
+  placeholder?: string;
+  numeric?: boolean;
+  validate: (v: string) => string;
+  onSave: (v: string) => Promise<boolean | void>;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const [checked, setChecked] = useState(false);
+  const { error, busy, submit } = useSave(onClose);
+  const fieldError = checked ? validate(value) : "";
+  return (
+    <SettingDialog
+      title={title}
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={() => {
+        setChecked(true);
+        if (validate(value)) return;
+        if (value.trim() === initial.trim()) return onClose();
+        submit(() => onSave(value.trim()));
+      }}
+    >
+      <Field label={label} htmlFor="setting-edit" hint={hint} help={help} error={fieldError}>
+        <Input id="setting-edit" value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} inputMode={numeric ? "numeric" : undefined} autoComplete="off" autoCapitalize="none" spellCheck={false} />
+      </Field>
+    </SettingDialog>
+  );
+}
+
+// GeneralSettings：名称、网络名、分组，一项一行，「编辑」打开对话框。
+function GeneralSettings({ project }: { project: Project }) {
+  const m = t.projectSettings.general;
+  const { isAdmin } = useRole();
+  const update = useUpdateSettings(project);
+  const [editing, setEditing] = useState<"name" | "network" | "group" | null>(null);
+  const close = () => setEditing(null);
+  const edit = (what: typeof editing) => (
+    <Button variant="outline" onClick={() => setEditing(what)}>
+      {t.common.actions.edit}
+    </Button>
+  );
+  const networkHelp = <HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />;
   return (
     <Section title={m.title}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <FormBody>
-          <FormRow>
-            <Field label={m.name} htmlFor="p-name" error={nameError}>
-              <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </Field>
-            <Field label={m.networkName} htmlFor="p-network" hint={m.networkNameFormat} help={<HelpParts parts={[m.networkNameHint, m.networkNameHelp]} />} error={networkError}>
-              <Input id="p-network" value={network} onChange={(e) => setNetwork(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
-            </Field>
-            <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint} error={limitError}>
-              <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotLimit)} />
-            </Field>
-            {isAdmin && (
-              <Field label={t.labels.group} htmlFor="p-group" help={t.labels.groupHint}>
-                <GroupSelect key={project.group} id="p-group" value={group} groups={groups} onChange={setGroup} />
-              </Field>
-            )}
-          </FormRow>
-          {error && <Alert>{error}</Alert>}
-          <FormActions>
-            <Button type="submit" variant="outline" disabled={busy}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        </FormBody>
-      </form>
+      <SettingRows>
+        <SettingRow label={m.name} description={project.name}>
+          {edit("name")}
+        </SettingRow>
+        <SettingRow label={m.networkName} help={networkHelp} description={project.networkName}>
+          {edit("network")}
+        </SettingRow>
+        {/* 分组决定成员的访问范围，只有管理员能编辑（见 docs/panel.md#分组和标签）。 */}
+        {isAdmin && (
+          <SettingRow label={t.labels.group} help={t.labels.groupHint} description={project.group || t.labels.noGroup}>
+            {edit("group")}
+          </SettingRow>
+        )}
+      </SettingRows>
+      {editing === "name" && (
+        <TextSettingDialog
+          title={m.editName}
+          label={m.name}
+          initial={project.name}
+          validate={(v) => (v.trim() ? "" : m.nameRequired)}
+          onSave={(name) => update({ name })}
+          onClose={close}
+        />
+      )}
+      {editing === "network" && (
+        <TextSettingDialog
+          title={m.editNetworkName}
+          label={m.networkName}
+          initial={project.networkName}
+          hint={m.networkNameFormat}
+          help={networkHelp}
+          validate={(v) => (v.trim() ? "" : m.networkNameRequired)}
+          onSave={async (networkName) => {
+            // 改网络名后，已连接项目里写的地址会失效，先确认。
+            if (project.links.length > 0 && !(await confirmAction(m.renameConfirm(networkName), { action: m.rename }))) return false;
+            await update({ networkName });
+          }}
+          onClose={close}
+        />
+      )}
+      {editing === "group" && <GroupDialog project={project} onClose={close} />}
     </Section>
+  );
+}
+
+// GroupDialog：编辑项目的分组，可以新建一个分组。
+function GroupDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  const groups = groupsOf(projects.data?.projects).map((g) => g.name);
+  const [group, setGroup] = useState(project.group);
+  const { error, busy, submit } = useSave(onClose);
+  return (
+    <SettingDialog
+      title={t.projectSettings.general.editGroup}
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={() => {
+        if (group.trim() === project.group) return onClose();
+        submit(async () => {
+          await projectClient.setProjectGroup({ projectId: project.id, group: group.trim() });
+          await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+          queryClient.invalidateQueries({ queryKey: ["projects"] });
+        });
+      }}
+    >
+      <Field label={t.labels.group} htmlFor="p-group">
+        <GroupSelect id="p-group" value={group} groups={groups} onChange={setGroup} />
+      </Field>
+    </SettingDialog>
   );
 }
 
 // ---- 定时快照 ----
 
-// SnapshotScheduleSection：项目里容器的定时快照计划，容器可以在「存储」标签里单独设置。其余设置照原样提交。
+// SnapshotScheduleSection：项目里容器的定时快照计划和份数上限。容器可以在「存储」标签里单独设置计划。
 function SnapshotScheduleSection({ project }: { project: Project }) {
   const m = t.projectData.schedule;
-  const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const g = t.projectSettings.general;
+  const update = useUpdateSettings(project);
+  const [editing, setEditing] = useState<"schedule" | "limit" | null>(null);
+  const close = () => setEditing(null);
+  const limit = project.settings?.snapshotLimit ?? 0;
+  return (
+    <Section title={m.title}>
+      <SettingRows>
+        <SettingRow label={m.plan} description={scheduleSummary(projectSchedule(project.settings))}>
+          <Button variant="outline" onClick={() => setEditing("schedule")}>
+            {t.common.actions.edit}
+          </Button>
+        </SettingRow>
+        <SettingRow label={g.snapshotLimit} help={g.snapshotLimitHelp} description={limit > 0 ? g.limitValue(limit) : g.limitDefault(defaultSnapshotLimit)}>
+          <Button variant="outline" onClick={() => setEditing("limit")}>
+            {t.common.actions.edit}
+          </Button>
+        </SettingRow>
+      </SettingRows>
+      {editing === "schedule" && <ScheduleDialog project={project} onClose={close} />}
+      {editing === "limit" && (
+        <TextSettingDialog
+          title={g.editSnapshotLimit}
+          label={g.snapshotLimit}
+          initial={limit > 0 ? String(limit) : ""}
+          help={g.snapshotLimitHelp}
+          placeholder={String(defaultSnapshotLimit)}
+          numeric
+          // 留空用默认值，否则须为正整数。
+          validate={(v) => (v.trim() && !/^[1-9]\d*$/.test(v.trim()) ? g.positiveInteger : "")}
+          onSave={(v) => update({ snapshotLimit: Number(v || 0) })}
+          onClose={close}
+        />
+      )}
+    </Section>
+  );
+}
+
+// ScheduleDialog：编辑项目的定时快照计划。保存后节点按新计划执行，所以提示「已保存并下发到节点」。
+function ScheduleDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+  const m = t.projectData.schedule;
+  const update = useUpdateSettings(project);
   const s = project.settings;
   const saved = scheduleForm(projectSchedule(s));
   const [form, setForm] = useState(saved);
   const [checked, setChecked] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { error, busy, submit } = useSave(onClose);
   const errors = checked ? scheduleErrors(form) : {};
-  useUnsaved(!sameForm(form, saved), !isViewer);
-
-  const save = async () => {
-    setChecked(true);
-    if (Object.keys(scheduleErrors(form)).length > 0) return;
-    setBusy(true);
-    setError("");
-    try {
-      await projectClient.updateProjectSettings({
-        projectId: project.id,
-        baseRevision: project.revision,
-        name: project.name,
-        networkName: project.networkName,
-        settings: {
-          internalPorts: s?.internalPorts,
-          snapshotLimit: s?.snapshotLimit ?? 0,
-          snapshotSchedule: toSchedule(form, s?.snapshotSchedule),
-        },
-      });
-      toast.success(m.saved);
-      setChecked(false);
-      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <Section title={m.title}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <FormBody>
-          <ScheduleFields id="p-schedule" value={form} onChange={setForm} errors={errors} disabled={isViewer} note={m.disabledNote} />
-          {error && <Alert>{error}</Alert>}
-          {!isViewer && (
-            <FormActions>
-              <Button type="submit" variant="outline" disabled={busy}>
-                {busy && <Spinner />}
-                {t.common.actions.save}
-              </Button>
-            </FormActions>
-          )}
-        </FormBody>
-      </form>
-    </Section>
+    <SettingDialog
+      title={m.title}
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={() => {
+        setChecked(true);
+        if (Object.keys(scheduleErrors(form)).length > 0) return;
+        if (sameForm(form, saved)) return onClose();
+        submit(async () => {
+          await update({ snapshotSchedule: toSchedule(form, s?.snapshotSchedule) });
+          toast.success(m.saved);
+        });
+      }}
+    >
+      <ScheduleFields id="p-schedule" value={form} onChange={setForm} errors={errors} note={m.disabledNote} />
+    </SettingDialog>
   );
 }
 

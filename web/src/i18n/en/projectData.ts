@@ -78,6 +78,7 @@ export default {
   },
   schedule: {
     title: "Scheduled snapshots",
+    plan: "Schedule",
     enabled: "Scheduled snapshots",
     mode: "Schedule",
     interval: "Interval",
