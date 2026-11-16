@@ -50,3 +50,28 @@ func TestIssuerMatchesMetadata(t *testing.T) {
 		t.Fatalf("开了安全入口：元数据 %q，iss %q", meta, iss)
 	}
 }
+
+// 开了安全入口后，没登录的访问者只能访问 webhook、节点安装脚本和备用面板配对这几个地址，其余一律 404。
+func TestEntranceHidesPanel(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := New(store.New(d), nil)
+	if _, err := s.SetEntrance(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	h := s.EntranceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "panel") }))
+	for path, open := range map[string]bool{
+		"/hooks/abc": true, "/install.sh": true, "/api/standby/status": true,
+		"/": false, "/login": false, "/download/nagi-linux-amd64": false, "/nagi.v1.AuthService/Me": false,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://panel.example.com"+path, nil))
+		if got := w.Code != http.StatusNotFound; got != open {
+			t.Errorf("%s：状态 %d，应该%s", path, w.Code, map[bool]string{true: "放行", false: "返回 404"}[open])
+		}
+	}
+}
