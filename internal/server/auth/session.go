@@ -13,6 +13,7 @@ import (
 	"errors"
 	"math/big"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -131,9 +132,41 @@ type sessionResult struct {
 
 // nets 是会话记下的网段。
 type nets struct {
-	Fam      map[string]*famNets `json:"f,omitempty"`
-	Verified map[string]string   `json:"v,omitempty"` // 每种地址验证过的网段（或 IP，绑定 IP 时）
+	Fam map[string]*famNets `json:"f,omitempty"`
+	// Verified 是旧版本记的：每种地址只有一个验证过的网段。读到时并进 Known。
+	Verified map[string]string `json:"v,omitempty"`
+	// Known 是每种地址最近验证过的网段（或 IP，绑定 IP 时），新的在前，最多 knownNets 个：
+	// 手机在家里的 Wi-Fi 和移动数据之间切换时，切回验证过的网段不用再验证。
+	Known map[string][]string `json:"k,omitempty"`
 }
+
+// knownNets 是每种地址记住几个验证过的网段。
+const knownNets = 5
+
+// known 返回 fam 验证过的网段，旧格式的记录一起算上。
+func (n *nets) known(fam string) []string {
+	if v := n.Verified[fam]; v != "" && !slices.Contains(n.Known[fam], v) {
+		return append(slices.Clone(n.Known[fam]), v)
+	}
+	return n.Known[fam]
+}
+
+// remember 记下 fam 验证过的网段，放在最前面，超过 knownNets 个时去掉最早的。
+func (n *nets) remember(fam, network string) {
+	list := slices.DeleteFunc(slices.Clone(n.known(fam)), func(x string) bool { return x == network })
+	list = append([]string{network}, list...)
+	if len(list) > knownNets {
+		list = list[:knownNets]
+	}
+	if n.Known == nil {
+		n.Known = map[string][]string{}
+	}
+	n.Known[fam] = list
+	delete(n.Verified, fam)
+}
+
+// reissuedPrefix 标记再发了一次的挑战（见 authenticate 的令牌轮换）。挑战本身是 base64url，不含「.」。
+const reissuedPrefix = "r."
 
 type famNets struct {
 	Cur  string `json:"c"`
@@ -196,9 +229,9 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 	set := map[string]any{}
 	reverify := st.Reverify
 
-	// 浏览器或操作系统变了：退出。
+	// 浏览器或操作系统变了：退出。手机浏览器切换「桌面版网站」时系统会在 Android 和 Linux、iOS 和 macOS 之间变，不算换了设备。
 	was, cur := ParseAgent(st.UserAgent), ParseAgent(info.UserAgent)
-	if st.UserAgent != "" && (was.Browser != cur.Browser || was.OS != cur.OS) {
+	if st.UserAgent != "" && !was.SameDevice(cur) {
 		s.endSession(ctx, st, info, "session_device_changed", i18n.Errorf("账号 %s 的登录在另一种浏览器或系统上使用（%s → %s），已退出", st.Username, was.String(), cur.String()).Error(), true)
 		return sessionResult{}, errLoggedOut
 	}
@@ -226,9 +259,6 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 	if n.Fam == nil {
 		n.Fam = map[string]*famNets{}
 	}
-	if n.Verified == nil {
-		n.Verified = map[string]string{}
-	}
 	if fam, network := Network(info.IP); fam != "" {
 		f := n.Fam[fam]
 		if f == nil {
@@ -237,9 +267,10 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 		}
 		if network != f.Cur {
 			// 只有同一种地址的网段之间来回切换才算：浏览器会在 IPv4 和 IPv6 之间自动切换。
-			if network == f.Prev && now.Sub(time.Unix(f.Left, 0)) < flipWindow && reverify == "" {
-				reverify = ReasonNetworkFlip
-				s.securityEvent(ctx, st, info, "session_network_flip", i18n.Errorf("账号 %s 的登录在 5 分钟内在两个网段之间来回切换（%s、%s）", st.Username, f.Cur, network).Error(), nil)
+			// 只记审计，不要求重新验证、不告警：手机在 Wi-Fi 和移动数据之间来回切换很常见；
+			// 两台设备同时用一个登录，由令牌轮换的重用检测发现。
+			if network == f.Prev && now.Sub(time.Unix(f.Left, 0)) < flipWindow {
+				s.securityEvent(ctx, st, info, "session_network_flip", "", map[string]string{"from": f.Cur, "to": network})
 			}
 			f.Prev, f.Left, f.Cur = f.Cur, now.Unix(), network
 		}
@@ -252,11 +283,11 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 			want = info.IP
 		}
 		if bind != "off" {
-			if v := n.Verified[fam]; v == "" {
-				n.Verified[fam] = want
-			} else if v != want && reverify == "" {
+			if known := n.known(fam); len(known) == 0 {
+				n.remember(fam, want)
+			} else if !slices.Contains(known, want) && reverify == "" {
 				reverify = ReasonNetworkChanged
-				s.securityEvent(ctx, st, info, "session_network_changed", "", map[string]string{"from": v, "to": want})
+				s.securityEvent(ctx, st, info, "session_network_changed", "", map[string]string{"from": known[0], "to": want})
 			}
 		}
 		if b, err := json.Marshal(n); err == nil && string(b) != st.Nets {
@@ -275,6 +306,11 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 			s.securityEvent(ctx, st, info, "session_key_missing", i18n.Errorf("账号 %s 的登录拿不出会话密钥的签名，已要求重新验证", st.Username).Error(), nil)
 		case st.Challenge == "":
 			challenge = randomChallenge()
+			set["challenge"], set["challenge_at"] = challenge, now.Unix()
+		case now.Sub(time.Unix(st.ChallengeAt, 0)) > challengeGrace && !strings.HasPrefix(st.Challenge, reissuedPrefix):
+			// 挑战过期了：手机常把标签页放到后台，页面来不及签名。再发一次，这次也签不出来才要求重新验证，
+			// 只偷到 cookie 的人最多多用一个挑战的时长。
+			challenge = reissuedPrefix + randomChallenge()
 			set["challenge"], set["challenge_at"] = challenge, now.Unix()
 		case now.Sub(time.Unix(st.ChallengeAt, 0)) > challengeGrace:
 			reverify = ReasonNoKey
@@ -505,14 +541,13 @@ func (s *Service) Reverify(ctx context.Context, token, password, code string, in
 	now := time.Now()
 	var n nets
 	_ = json.Unmarshal([]byte(st.Nets), &n)
-	n.Verified = map[string]string{}
 	n.Fam = map[string]*famNets{}
 	if fam, network := Network(info.IP); fam != "" {
 		n.Fam[fam] = &famNets{Cur: network}
 		if s.Policy(ctx).Bind == "ip" {
-			n.Verified[fam] = info.IP
+			n.remember(fam, info.IP)
 		} else {
-			n.Verified[fam] = network
+			n.remember(fam, network)
 		}
 	}
 	b, _ := json.Marshal(n)

@@ -19,11 +19,13 @@ import (
 func JA4(h *tls.ClientHelloInfo) string { return tlsutil.JA4(h) }
 
 // toolFingerprints 是脚本工具的已知指纹（JA4 的 a、b 两段）：Go、Python、curl、Node 等。
-// 浏览器的指纹都有 h2 和较多的扩展，单靠这份列表认不全工具，所以另有 looksLikeTool。
+// 浏览器的指纹都声明了 ALPN、扩展较多，单靠这份列表认不全工具，所以另有 looksLikeTool。
 var toolFingerprints = map[string]string{}
 
 // looksLikeTool 判断指纹是不是来自脚本工具而不是浏览器。浏览器（Chrome、Edge、Firefox、Safari）的 ClientHello
-// 都声明 h2，扩展在 14 个以上；Go、Python、curl、Node 的 HTTP 客户端扩展少得多，Python 不声明 h2。
+// 扩展在 14 个以上，并且声明 ALPN；Go、Python、curl、Node 的 HTTP 客户端扩展少得多，Python 不声明 ALPN。
+// 不按 ALPN 是不是 h2 判断：浏览器为 WebSocket（节点终端、容器终端）另开的连接只声明 http/1.1（h1），
+// 走 HTTP/3 时声明 h3，都是浏览器。
 func looksLikeTool(fp string) bool {
 	if fp == "" {
 		return false
@@ -38,14 +40,14 @@ func looksLikeTool(fp string) bool {
 	a := parts[0]
 	var exts int
 	fmt.Sscanf(a[6:8], "%d", &exts)
-	// HTTP/3（QUIC）的握手声明 h3，也是浏览器。
-	return (a[8:] != "h2" && a[8:] != "h3") || exts < 14
+	return a[8:] == "00" || exts < 14
 }
 
 // sameClient 判断两次握手是不是同一个客户端：只比较同一个浏览器每次连接都不变的部分，即 TLS 版本、SNI、
-// 密码套件个数、ALPN 和密码套件的哈希（JA4 的 a 段去掉扩展个数，加上 b 段）。扩展的个数和哈希（c 段）不比较：
-// 会话恢复时多出 pre_shared_key（有时还有 early_data），有的握手带 padding，同一个浏览器两次连接也会不同，
-// 手机网络下重连频繁，按完整指纹比较会反复要求重新验证。
+// 密码套件个数和密码套件的哈希（JA4 a 段的前 6 位，加上 b 段）。这些不比较：
+//   - 扩展的个数和哈希（c 段）：会话恢复时多出 pre_shared_key（有时还有 early_data），有的握手带 padding，
+//     同一个浏览器两次连接也会不同，手机网络下重连频繁，按完整指纹比较会反复要求重新验证；
+//   - ALPN：页面走 h2，WebSocket（终端）另开的连接是 h1，HTTP/3 是 h3。
 func sameClient(a, b string) bool { return clientKey(a) == clientKey(b) }
 
 func clientKey(fp string) string {
@@ -53,7 +55,7 @@ func clientKey(fp string) string {
 	if len(parts) != 3 || len(parts[0]) != 10 {
 		return fp
 	}
-	return parts[0][:6] + parts[0][8:] + "_" + parts[1]
+	return parts[0][:6] + "_" + parts[1]
 }
 
 // fingerprints 记着每个连接的指纹：握手时按底层连接记下（GetConfigForClient 里只有底层连接），握手结束后

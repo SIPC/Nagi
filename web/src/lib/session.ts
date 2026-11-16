@@ -29,14 +29,28 @@ async function loadKey(): Promise<CryptoKeyPair | undefined> {
   }
 }
 
-async function saveKey(k: CryptoKeyPair) {
+// saveKey 只在还没有密钥时存入（add，不覆盖）：几个标签页同时生成时，后到的不会换掉别人已经登记的那份。
+// 已经有了就返回 false，调用方改用存着的那份。
+async function saveKey(k: CryptoKeyPair): Promise<boolean> {
   const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<boolean>((resolve, reject) => {
     const tx = db.transaction(storeName, "readwrite");
-    tx.objectStore(storeName).put(k, keyName);
-    tx.oncomplete = () => resolve();
+    const req = tx.objectStore(storeName).add(k, keyName);
+    req.onerror = (e) => {
+      if (req.error?.name === "ConstraintError") {
+        e.preventDefault();
+        resolve(false);
+      }
+    };
+    tx.oncomplete = () => resolve(true);
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// withKeyLock：生成和读取密钥时各标签页排队（Web Locks），不支持的浏览器直接执行，靠 saveKey 不覆盖兜底。
+function withKeyLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (navigator.locks?.request) return navigator.locks.request("nagi-session-key", fn) as Promise<T>;
+  return fn();
 }
 
 // ensureSessionKey：登录、重新验证以后调用。没有密钥时生成一对（私钥不可导出），把公钥登记到当前会话。
@@ -44,11 +58,13 @@ async function saveKey(k: CryptoKeyPair) {
 export async function ensureSessionKey() {
   if (!window.crypto?.subtle || !window.indexedDB) return;
   try {
-    let k = await loadKey();
-    if (!k) {
-      k = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"])) as CryptoKeyPair;
-      await saveKey(k);
-    }
+    const k = await withKeyLock(async () => {
+      const stored = await loadKey();
+      if (stored) return stored;
+      const fresh = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"])) as CryptoKeyPair;
+      return (await saveKey(fresh)) ? fresh : await loadKey();
+    });
+    if (!k) return;
     const spki = new Uint8Array(await crypto.subtle.exportKey("spki", k.publicKey));
     await authClient.registerSessionKey({ publicKey: spki });
   } catch {

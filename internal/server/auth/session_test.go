@@ -240,9 +240,16 @@ func TestSessionStolenCookieWithoutKey(t *testing.T) {
 	if res, _ := h.check(token2, office); res.challenge == "" {
 		t.Fatal("应收到挑战")
 	}
+	// 第一次过期：可能是手机把标签页放到了后台，再发一次挑战。
+	h.age(token2, challengeGrace+time.Second)
+	res2, err := h.check(token2, office)
+	if err != nil || !strings.HasPrefix(res2.challenge, reissuedPrefix) {
+		t.Fatalf("第一次过期应再发一次挑战：%q %v", res2.challenge, err)
+	}
+	// 再发的也签不出来：要求重新验证。
 	h.age(token2, challengeGrace+time.Second)
 	if _, err := h.check(token2, office); !errors.As(err, &rv) {
-		t.Fatalf("挑战过期应要求重新验证：%v", err)
+		t.Fatalf("再发的挑战也过期应要求重新验证：%v", err)
 	}
 	// 盗用者过不了重新验证：连续 3 次失败退出会话。
 	for i := range reverifyLimit {
@@ -284,7 +291,7 @@ func TestSessionReverifyRestoresKey(t *testing.T) {
 
 // 标识是浏览器、TLS 握手却来自脚本工具（用 curl 带上 cookie）：直接退出并告警。
 func TestSessionToolFingerprint(t *testing.T) {
-	for _, fp := range []string{goFP, curlFP, "t13d1714h1_aaaaaaaaaaaa_bbbbbbbbbbbb"} {
+	for _, fp := range []string{goFP, curlFP, "t13d1712h1_aaaaaaaaaaaa_bbbbbbbbbbbb", "t13d181700_aaaaaaaaaaaa_bbbbbbbbbbbb"} {
 		h := newSessionHarness(t)
 		token := h.login("admin", home)
 		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: fp}); !errors.Is(err, errLoggedOut) {
@@ -314,14 +321,18 @@ func TestSessionTLSResumption(t *testing.T) {
 	for _, fp := range []string{
 		"t13d1517h2_8daaf6152771_cb7bf5808d99", // 会话恢复：多一个扩展，扩展哈希不同
 		"t13d1518h2_8daaf6152771_1234567890ab", // 恢复并带 early_data
+		"t13d1517h1_8daaf6152771_c4a234726a38", // WebSocket（终端）另开的连接只声明 http/1.1
+		"t13d1516h3_8daaf6152771_02713d6af862", // HTTP/3
 		chromeFP,
 	} {
 		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: fp}); err != nil {
 			t.Fatalf("%s：不应要求重新验证：%v", fp, err)
 		}
 	}
-	if looksLikeTool("t13d1516h3_8daaf6152771_02713d6af862") {
-		t.Fatal("HTTP/3 的握手不是脚本工具")
+	for _, fp := range []string{"t13d1516h3_8daaf6152771_02713d6af862", "t13d1517h1_8daaf6152771_c4a234726a38"} {
+		if looksLikeTool(fp) {
+			t.Fatalf("%s：浏览器的 HTTP/3、WebSocket 连接不是脚本工具", fp)
+		}
 	}
 }
 
@@ -341,7 +352,7 @@ func TestSessionDeviceChange(t *testing.T) {
 	}
 }
 
-// 手机在 Wi-Fi 和移动网络之间切换一次不退出；5 分钟内来回切换要重新验证。IPv4 和 IPv6 之间切换不算。
+// 手机在 Wi-Fi 和移动网络之间来回切换：只记审计，不要求重新验证、不告警。IPv4 和 IPv6 之间切换不算。
 func TestSessionNetworkFlip(t *testing.T) {
 	h := newSessionHarness(t)
 	wifi := RequestInfo{IP: "203.0.113.10", UserAgent: chromeUA}
@@ -357,12 +368,35 @@ func TestSessionNetworkFlip(t *testing.T) {
 	if _, err := h.check(token, cell); err != nil {
 		t.Fatalf("切换一次不应受影响：%v", err)
 	}
-	var rv *ErrReverify
-	if _, err := h.check(token, wifi); !errors.As(err, &rv) || rv.Reason != ReasonNetworkFlip {
-		t.Fatalf("来回切换应要求重新验证：%v", err)
+	if _, err := h.check(token, wifi); err != nil {
+		t.Fatalf("来回切换不应要求重新验证：%v", err)
 	}
-	if !h.alerted("来回切换") {
-		t.Fatalf("没有告警：%v", h.alerts)
+	if len(h.alerts) != 0 {
+		t.Fatalf("不应告警：%v", h.alerts)
+	}
+}
+
+// 手机浏览器切换「桌面版网站」：Android 报成 Linux、iPhone 报成 macOS，不算换了设备。
+func TestSessionDesktopMode(t *testing.T) {
+	android := "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+	desktop := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	iphone := "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+	mac := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+	for _, pair := range [][2]string{{android, desktop}, {iphone, mac}} {
+		h := newSessionHarness(t)
+		token := h.login("op", RequestInfo{IP: home.IP, UserAgent: pair[0]})
+		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: pair[1]}); err != nil {
+			t.Fatalf("切换桌面版网站不应退出：%v", err)
+		}
+		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: pair[0]}); err != nil {
+			t.Fatalf("切回手机版不应退出：%v", err)
+		}
+	}
+	// 换成 Windows 仍然算换了设备。
+	h := newSessionHarness(t)
+	token := h.login("op", RequestInfo{IP: home.IP, UserAgent: android})
+	if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA}); !errors.Is(err, errLoggedOut) {
+		t.Fatalf("换成另一种系统应退出：%v", err)
 	}
 }
 
@@ -393,6 +427,13 @@ func TestSessionAdminNetwork(t *testing.T) {
 	}
 	if _, err := h.check(token, office); err != nil {
 		t.Fatalf("重新验证以后：%v", err)
+	}
+	// 切回验证过的网段不用再验证（记住最近 5 个）。
+	if _, err := h.check(token, home); err != nil {
+		t.Fatalf("切回验证过的网段：%v", err)
+	}
+	if _, err := h.check(token, office); err != nil {
+		t.Fatalf("再切回去：%v", err)
 	}
 }
 

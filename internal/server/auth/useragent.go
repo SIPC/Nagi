@@ -8,6 +8,21 @@ type Agent struct {
 	OS      string // Windows、macOS、iOS、Android、Linux、ChromeOS
 }
 
+// SameDevice 判断两个标识是不是同一台设备上的同一种浏览器。手机浏览器切换「桌面版网站」时，Android 会报成 Linux，
+// iPhone、iPad 会报成 macOS，这两组各算同一种系统。
+func (a Agent) SameDevice(b Agent) bool {
+	family := func(os string) string {
+		switch os {
+		case "Android", "Linux":
+			return "android-linux"
+		case "iOS", "macOS":
+			return "apple"
+		}
+		return os
+	}
+	return a.Browser == b.Browser && family(a.OS) == family(b.OS)
+}
+
 // IsBrowser 判断标识说自己是浏览器。
 func (a Agent) IsBrowser() bool { return a.Browser != "" }
 
