@@ -443,6 +443,9 @@ service SettingsService {
   rpc BeginPasskeyRegistration(BeginPasskeyRegistrationRequest) returns (BeginPasskeyRegistrationResponse);
   rpc AddPasskey(AddPasskeyRequest) returns (Security);
   rpc DeletePasskey(DeletePasskeyRequest) returns (Security);
+  // 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+  rpc GetAdminNetworks(GetAdminNetworksRequest) returns (AdminNetworks);
+  rpc SetAdminNetworks(AdminNetworks) returns (AdminNetworks);
 }
 
 message AccessToken {
@@ -1596,4 +1599,15 @@ message AddPasskeyRequest {
 
 message DeletePasskeyRequest {
   int64 id = 1;
+}
+
+// ---- 管理员登录地址（见 docs/panel.md#管理员登录地址） ----
+
+message GetAdminNetworksRequest {}
+
+message AdminNetworks {
+  // IP 或 CIDR，一项一个。为空表示不限制。
+  repeated string networks = 1;
+  // 当前请求的地址（只在回复里），界面据此提示。
+  string current_ip = 2;
 }

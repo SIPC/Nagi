@@ -318,7 +318,7 @@ func resetCmd() *cobra.Command {
 	var dataDir string
 	cmd := &cobra.Command{
 		Use:   "reset",
-		Short: "在面板机器上重置登录：密码、两步验证、安全入口",
+		Short: "在面板机器上重置登录：密码、两步验证、安全入口、管理员登录地址",
 	}
 	cmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录（和 nagi server 的相同）")
 	panelDir := func() string { return filepath.Join(dataDir, "panel") }
@@ -368,7 +368,23 @@ func resetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(password, totp, entrance)
+	adminNetworks := &cobra.Command{
+		Use:   "admin-networks",
+		Short: "清除管理员登录地址",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			old, err := server.ResetAdminNetworks(cmd.Context(), panelDir())
+			if err != nil {
+				return err
+			}
+			if old == "" {
+				fmt.Println("管理员登录地址本来就没有限制。")
+			} else {
+				fmt.Println("已清除管理员登录地址（原来是 " + strings.ReplaceAll(old, "\n", "、") + "）。")
+			}
+			return nil
+		},
+	}
+	cmd.AddCommand(password, totp, entrance, adminNetworks)
 	return cmd
 }
 

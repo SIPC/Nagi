@@ -56,6 +56,8 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
 	// 添加通行密钥：和两步验证一样，拿到会话的人不能借它给自己留一个登录凭据。
 	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
+	// 管理员登录地址：拿到会话的人不能借它把账号主人锁在外面（见 docs/panel.md#管理员登录地址）。
+	nagiv1connect.SettingsServiceSetAdminNetworksProcedure: true,
 	// 恢复从节点缓存拼回的顶替和备份设置：会让别的节点接收并运行这个容器的配置（见 docs/panel.md#项目数据）。
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure: true,
 	// 回放终端录制：输出里可能有密钥（见 docs/audit.md#终端与命令录制）。

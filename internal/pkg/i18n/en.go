@@ -700,4 +700,12 @@ var en = map[string]string{
 	"这个通行密钥已经添加过":                                  "This passkey has already been added",
 	"通行密钥不存在":                                      "The passkey doesn't exist",
 	"请求已过期，请重试":                                    "The request expired. Try again",
+	"地址格式不正确：%s":                                   "Invalid address: %s",
+	"最多填写 %d 项":                                    "You can enter up to %d items",
+	"管理员只能从允许的地址登录":                                "Administrators can sign in only from allowed addresses",
+	"当前地址 %s 不在列表里，保存后将无法使用面板":                     "Your current address %s isn't in the list. You couldn't use the panel after saving",
+	"管理员 %s 从允许范围以外的地址登录，已拒绝":                      "Administrator %s signed in from an address that isn't allowed. The sign-in was refused",
+	"来源：%s。登录凭据可能已经泄露。":                            "Source: %s. The sign-in credentials may have leaked.",
+	"账号 %s 取消了管理员登录地址的限制":                          "Account %s removed the administrator sign-in address restriction",
+	"账号 %s 修改了管理员登录地址：%s":                          "Account %s changed the administrator sign-in addresses: %s",
 }

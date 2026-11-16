@@ -174,6 +174,10 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 		s.endSession(ctx, st, info, "session_expired", "", false)
 		return sessionResult{}, i18n.New("登录已过期，请重新登录")
 	}
+	// 管理员登录地址：离开允许的地址就不能用，回来以后照常（会话不退出）。
+	if st.Role == RoleAdmin && !s.adminAllowed(ctx, info.IP) {
+		return sessionResult{}, i18n.New("管理员只能从允许的地址登录")
+	}
 	switch state {
 	case store.TokenRetired:
 		if now.Sub(time.Unix(retiredAt, 0)) <= reuseGrace {

@@ -200,6 +200,11 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		userDone(outcomeSuccess)
 		s.totpOK(user.ID)
 	}
+	// 管理员登录地址：密码和验证码都对了才判断，并告警（凭据很可能泄露了）。
+	if user.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
+		s.adminNetworkDenied(ctx, user.ID, user.Username, ip, "password")
+		return nil, errAdminNetwork()
+	}
 	result = outcomeSuccess
 	cookie, err := s.NewSession(ctx, user.ID, ip)
 	if err == nil {

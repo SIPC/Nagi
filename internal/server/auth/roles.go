@@ -33,6 +33,8 @@ var adminReads = map[string]bool{
 	"GetNodeStorage": true,
 	// 终端录制和审计设置（见 docs/audit.md）。
 	"GetRecording": true, "GetAuditSettings": true,
+	// 管理员登录地址。
+	"GetAdminNetworks": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

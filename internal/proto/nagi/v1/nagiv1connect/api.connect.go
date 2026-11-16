@@ -323,6 +323,12 @@ const (
 	// SettingsServiceDeletePasskeyProcedure is the fully-qualified name of the SettingsService's
 	// DeletePasskey RPC.
 	SettingsServiceDeletePasskeyProcedure = "/nagi.v1.SettingsService/DeletePasskey"
+	// SettingsServiceGetAdminNetworksProcedure is the fully-qualified name of the SettingsService's
+	// GetAdminNetworks RPC.
+	SettingsServiceGetAdminNetworksProcedure = "/nagi.v1.SettingsService/GetAdminNetworks"
+	// SettingsServiceSetAdminNetworksProcedure is the fully-qualified name of the SettingsService's
+	// SetAdminNetworks RPC.
+	SettingsServiceSetAdminNetworksProcedure = "/nagi.v1.SettingsService/SetAdminNetworks"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -2180,6 +2186,9 @@ type SettingsServiceClient interface {
 	BeginPasskeyRegistration(context.Context, *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error)
 	AddPasskey(context.Context, *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error)
 	DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
+	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2463,6 +2472,18 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("DeletePasskey")),
 			connect.WithClientOptions(opts...),
 		),
+		getAdminNetworks: connect.NewClient[v1.GetAdminNetworksRequest, v1.AdminNetworks](
+			httpClient,
+			baseURL+SettingsServiceGetAdminNetworksProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAdminNetworks")),
+			connect.WithClientOptions(opts...),
+		),
+		setAdminNetworks: connect.NewClient[v1.AdminNetworks, v1.AdminNetworks](
+			httpClient,
+			baseURL+SettingsServiceSetAdminNetworksProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -2513,6 +2534,8 @@ type settingsServiceClient struct {
 	beginPasskeyRegistration *connect.Client[v1.BeginPasskeyRegistrationRequest, v1.BeginPasskeyRegistrationResponse]
 	addPasskey               *connect.Client[v1.AddPasskeyRequest, v1.Security]
 	deletePasskey            *connect.Client[v1.DeletePasskeyRequest, v1.Security]
+	getAdminNetworks         *connect.Client[v1.GetAdminNetworksRequest, v1.AdminNetworks]
+	setAdminNetworks         *connect.Client[v1.AdminNetworks, v1.AdminNetworks]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2740,6 +2763,16 @@ func (c *settingsServiceClient) DeletePasskey(ctx context.Context, req *connect.
 	return c.deletePasskey.CallUnary(ctx, req)
 }
 
+// GetAdminNetworks calls nagi.v1.SettingsService.GetAdminNetworks.
+func (c *settingsServiceClient) GetAdminNetworks(ctx context.Context, req *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error) {
+	return c.getAdminNetworks.CallUnary(ctx, req)
+}
+
+// SetAdminNetworks calls nagi.v1.SettingsService.SetAdminNetworks.
+func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, req *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error) {
+	return c.setAdminNetworks.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2817,6 +2850,9 @@ type SettingsServiceHandler interface {
 	BeginPasskeyRegistration(context.Context, *connect.Request[v1.BeginPasskeyRegistrationRequest]) (*connect.Response[v1.BeginPasskeyRegistrationResponse], error)
 	AddPasskey(context.Context, *connect.Request[v1.AddPasskeyRequest]) (*connect.Response[v1.Security], error)
 	DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
+	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -3096,6 +3132,18 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("DeletePasskey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetAdminNetworksHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAdminNetworksProcedure,
+		svc.GetAdminNetworks,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAdminNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetAdminNetworksHandler := connect.NewUnaryHandler(
+		SettingsServiceSetAdminNetworksProcedure,
+		svc.SetAdminNetworks,
+		connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -3188,6 +3236,10 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceAddPasskeyHandler.ServeHTTP(w, r)
 		case SettingsServiceDeletePasskeyProcedure:
 			settingsServiceDeletePasskeyHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAdminNetworksProcedure:
+			settingsServiceGetAdminNetworksHandler.ServeHTTP(w, r)
+		case SettingsServiceSetAdminNetworksProcedure:
+			settingsServiceSetAdminNetworksHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3375,6 +3427,14 @@ func (UnimplementedSettingsServiceHandler) AddPasskey(context.Context, *connect.
 
 func (UnimplementedSettingsServiceHandler) DeletePasskey(context.Context, *connect.Request[v1.DeletePasskeyRequest]) (*connect.Response[v1.Security], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.DeletePasskey is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAdminNetworks is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAdminNetworks is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

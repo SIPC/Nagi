@@ -2394,6 +2394,8 @@ const (
 	SettingsService_BeginPasskeyRegistration_FullMethodName = "/nagi.v1.SettingsService/BeginPasskeyRegistration"
 	SettingsService_AddPasskey_FullMethodName               = "/nagi.v1.SettingsService/AddPasskey"
 	SettingsService_DeletePasskey_FullMethodName            = "/nagi.v1.SettingsService/DeletePasskey"
+	SettingsService_GetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/GetAdminNetworks"
+	SettingsService_SetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/SetAdminNetworks"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2475,6 +2477,9 @@ type SettingsServiceClient interface {
 	BeginPasskeyRegistration(ctx context.Context, in *BeginPasskeyRegistrationRequest, opts ...grpc.CallOption) (*BeginPasskeyRegistrationResponse, error)
 	AddPasskey(ctx context.Context, in *AddPasskeyRequest, opts ...grpc.CallOption) (*Security, error)
 	DeletePasskey(ctx context.Context, in *DeletePasskeyRequest, opts ...grpc.CallOption) (*Security, error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(ctx context.Context, in *GetAdminNetworksRequest, opts ...grpc.CallOption) (*AdminNetworks, error)
+	SetAdminNetworks(ctx context.Context, in *AdminNetworks, opts ...grpc.CallOption) (*AdminNetworks, error)
 }
 
 type settingsServiceClient struct {
@@ -2953,6 +2958,26 @@ func (c *settingsServiceClient) DeletePasskey(ctx context.Context, in *DeletePas
 	return out, nil
 }
 
+func (c *settingsServiceClient) GetAdminNetworks(ctx context.Context, in *GetAdminNetworksRequest, opts ...grpc.CallOption) (*AdminNetworks, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminNetworks)
+	err := c.cc.Invoke(ctx, SettingsService_GetAdminNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, in *AdminNetworks, opts ...grpc.CallOption) (*AdminNetworks, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminNetworks)
+	err := c.cc.Invoke(ctx, SettingsService_SetAdminNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -3032,6 +3057,9 @@ type SettingsServiceServer interface {
 	BeginPasskeyRegistration(context.Context, *BeginPasskeyRegistrationRequest) (*BeginPasskeyRegistrationResponse, error)
 	AddPasskey(context.Context, *AddPasskeyRequest) (*Security, error)
 	DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error)
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
+	GetAdminNetworks(context.Context, *GetAdminNetworksRequest) (*AdminNetworks, error)
+	SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -3176,6 +3204,12 @@ func (UnimplementedSettingsServiceServer) AddPasskey(context.Context, *AddPasske
 }
 func (UnimplementedSettingsServiceServer) DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePasskey not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAdminNetworks(context.Context, *GetAdminNetworksRequest) (*AdminNetworks, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAdminNetworks not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAdminNetworks not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3994,6 +4028,42 @@ func _SettingsService_DeletePasskey_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_GetAdminNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAdminNetworksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAdminNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAdminNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAdminNetworks(ctx, req.(*GetAdminNetworksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetAdminNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminNetworks)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetAdminNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetAdminNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetAdminNetworks(ctx, req.(*AdminNetworks))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4172,6 +4242,14 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeletePasskey",
 			Handler:    _SettingsService_DeletePasskey_Handler,
+		},
+		{
+			MethodName: "GetAdminNetworks",
+			Handler:    _SettingsService_GetAdminNetworks_Handler,
+		},
+		{
+			MethodName: "SetAdminNetworks",
+			Handler:    _SettingsService_SetAdminNetworks_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

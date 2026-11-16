@@ -60,6 +60,12 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 			}
 			a.notify(ctx, "oauth", title, "")
 		}
+	case *nagiv1.AdminNetworks:
+		if len(m.GetNetworks()) == 0 {
+			a.notify(ctx, "admin-networks", i18n.Errorf("账号 %s 取消了管理员登录地址的限制", u.Name).Error(), "")
+		} else {
+			a.notify(ctx, "admin-networks", i18n.Errorf("账号 %s 修改了管理员登录地址：%s", u.Name, strings.Join(m.GetNetworks(), "、")).Error(), "")
+		}
 	case *nagiv1.SetEntranceRequest:
 		a.notify(ctx, "entrance", i18n.Errorf("账号 %s 修改了安全入口", u.Name).Error(), "")
 	case *nagiv1.ApproveNodeRequest:

@@ -8,7 +8,7 @@ import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody,
 import { create } from "@bufbuild/protobuf";
 import { AuditSinkHeaderSchema, AuditSinkSchema, type AuditSettings, type AuditSink, type SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { requireElevation } from "@/components/elevate";
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { confirmAction } from "@/components/confirm";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -394,7 +394,71 @@ function SessionSection() {
             <span className="sr-only">{m.bindAll}</span>
           </Check>
         </SettingRow>
+        <AdminNetworksRow />
       </SettingRows>
     </Section>
+  );
+}
+
+// AdminNetworksRow 是管理员登录地址（见 docs/panel.md#管理员登录地址）：一行概括，在对话框里修改。
+function AdminNetworksRow() {
+  const m = t.panelSecurity.session;
+  const nets = useQuery({ queryKey: ["admin-networks"], queryFn: () => settingsClient.getAdminNetworks({}) });
+  const [editing, setEditing] = useState(false);
+  const list = nets.data?.networks ?? [];
+  return (
+    <SettingRow label={m.adminNetworks} help={m.adminNetworksHelp} description={<span className="break-all">{list.length ? list.join("、") : m.adminNetworksOff}</span>}>
+      <Button variant="outline" disabled={!nets.data} onClick={() => setEditing(true)}>
+        {m.edit}
+      </Button>
+      {editing && nets.data && <AdminNetworksDialog networks={list} currentIp={nets.data.currentIp} onClose={() => setEditing(false)} />}
+    </SettingRow>
+  );
+}
+
+function AdminNetworksDialog({ networks, currentIp, onClose }: { networks: string[]; currentIp: string; onClose: () => void }) {
+  const m = t.panelSecurity.session;
+  const queryClient = useQueryClient();
+  const [text, setText] = useState(networks.join("\n"));
+  const save = useMutation({
+    mutationFn: async () => {
+      const req = { networks: text.split("\n").map((v) => v.trim()).filter(Boolean) };
+      try {
+        return await settingsClient.setAdminNetworks(req);
+      } catch (err) {
+        if (!isElevationRequired(err) || !(await requireElevation(m.elevate))) throw err;
+        return settingsClient.setAdminNetworks(req);
+      }
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData(["admin-networks"], res);
+      toast.success(m.saved);
+      onClose();
+    },
+  });
+  return (
+    <Dialog open onClose={onClose} title={m.dialogTitle} description={m.adminNetworksHelp}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <Field label={m.field} htmlFor="admin-networks" hint={m.fieldHint(currentIp)}>
+          <Textarea id="admin-networks" rows={4} className="font-mono text-[13px]" autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={currentIp} />
+        </Field>
+        {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+        <DialogActions>
+          <Button variant="outline" onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending && <Spinner />}
+            {t.common.actions.save}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }

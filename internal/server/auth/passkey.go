@@ -252,6 +252,10 @@ func (s *Service) PasskeyLogin(ctx context.Context, ip string, a PasskeyAssertio
 	} else if !ok {
 		return nil, fail(user.Username, "签名计数没有增加，通行密钥可能被复制")
 	}
+	if user.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
+		s.adminNetworkDenied(ctx, user.ID, user.Username, ip, "passkey")
+		return nil, errAdminNetwork()
+	}
 	result = outcomeSuccess
 	cookie, err := s.NewSession(ctx, user.ID, ip)
 	if err == nil {
