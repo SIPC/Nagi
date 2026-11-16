@@ -8,6 +8,26 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.28.0
+
+### New features
+
+- Downloads of volume files, files in snapshots and node files can resume, and work with multi-connection download tools.
+- Selecting several files uploads them at the same time.
+
+### Improvements
+
+- Syncing to a backup or standby node uses several parallel connections and larger transfer windows, which is faster on high-latency links.
+- Links on the HA view are now straight lines.
+
+### Behavior changes
+
+- The panel no longer provides the files v0.1.0 nodes need to upgrade. Run the install script again on such nodes to upgrade them.
+
+### Upgrade notes
+
+- Nodes must be upgraded to v0.28.0 for the transfer improvements to take effect.
+
 ## v0.27.1
 
 ### Improvements
