@@ -26,14 +26,19 @@ const settingDomain = "panel_domain"
 
 const (
 	passkeyChallengeTTL = 5 * time.Minute
-	// maxPasskeyChallenges：没登录的人也能要挑战，限制同时有效的个数。
+	// maxPasskeyChallenges：登录和添加各自同时有效的挑战个数。分开算：没登录的人占满登录的名额，已登录的成员照样能添加。
 	maxPasskeyChallenges = 1000
-	maxPasskeys          = 20
+	// maxLoginChallengesPerNet：同一个网段（IPv4 /24、IPv6 /48）同时有效的登录挑战个数，一个人占不满整个池子。
+	maxLoginChallengesPerNet = 20
+	// maxAddChallengesPerUser：一个成员同时有效的添加挑战个数。
+	maxAddChallengesPerUser = 5
+	maxPasskeys             = 20
 )
 
 type passkeyChallenge struct {
 	challenge []byte
 	userID    int64 // 添加时是成员，登录时为 0
+	network   string
 	rpID      string
 	expires   time.Time
 }
@@ -44,8 +49,8 @@ func (s *Service) PasskeyDomain(ctx context.Context) string {
 	return strings.ToLower(strings.TrimSpace(v))
 }
 
-// newPasskeyChallenge 生成一次性的挑战，返回编号和内容。
-func (s *Service) newPasskeyChallenge(userID int64, rpID string) (string, []byte, error) {
+// newPasskeyChallenge 生成一次性的挑战，返回编号和内容。network 是请求方的网段（登录时按它限制个数）。
+func (s *Service) newPasskeyChallenge(userID int64, rpID, network string) (string, []byte, error) {
 	b := make([]byte, 48)
 	if _, err := rand.Read(b); err != nil {
 		return "", nil, err
@@ -62,10 +67,24 @@ func (s *Service) newPasskeyChallenge(userID int64, rpID string) (string, []byte
 			delete(s.challenges, k)
 		}
 	}
-	if len(s.challenges) >= maxPasskeyChallenges {
+	pool, same := 0, 0
+	for _, c := range s.challenges {
+		if (c.userID == 0) != (userID == 0) {
+			continue
+		}
+		pool++
+		if userID == 0 && c.network == network || userID != 0 && c.userID == userID {
+			same++
+		}
+	}
+	limit := maxAddChallengesPerUser
+	if userID == 0 {
+		limit = maxLoginChallengesPerNet
+	}
+	if pool >= maxPasskeyChallenges || same >= limit {
 		return "", nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("请求过多，请稍后重试"))
 	}
-	s.challenges[id] = passkeyChallenge{challenge: challenge, userID: userID, rpID: rpID, expires: now.Add(passkeyChallengeTTL)}
+	s.challenges[id] = passkeyChallenge{challenge: challenge, userID: userID, network: network, rpID: rpID, expires: now.Add(passkeyChallengeTTL)}
 	return id, challenge, nil
 }
 
@@ -110,7 +129,7 @@ func (s *Service) BeginPasskeyRegistration(ctx context.Context, userID int64) (P
 	if len(existing) >= maxPasskeys {
 		return PasskeyRegistration{}, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("最多添加 %d 个通行密钥", maxPasskeys))
 	}
-	id, challenge, err := s.newPasskeyChallenge(userID, rpID)
+	id, challenge, err := s.newPasskeyChallenge(userID, rpID, "")
 	if err != nil {
 		return PasskeyRegistration{}, err
 	}
@@ -172,7 +191,8 @@ func (s *Service) BeginPasskeyLogin(ctx context.Context) (id string, challenge [
 	if rpID == "" {
 		return "", nil, "", errNoDomain()
 	}
-	id, challenge, err = s.newPasskeyChallenge(0, rpID)
+	_, network := Network(RequestMeta(ctx).IP)
+	id, challenge, err = s.newPasskeyChallenge(0, rpID, network)
 	return id, challenge, rpID, err
 }
 

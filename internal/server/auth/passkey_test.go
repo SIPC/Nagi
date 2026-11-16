@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/server/store"
@@ -184,5 +185,38 @@ func TestOriginAllowed(t *testing.T) {
 		if got := originAllowed(c.origin, c.rp); got != c.ok {
 			t.Errorf("%s / %s：%v", c.origin, c.rp, got)
 		}
+	}
+}
+
+// L8：没开安全入口时，未登录的人每 5 分钟发 1000 次 BeginPasskeyLogin，之前所有人的通行密钥登录和添加都失败。
+// 现在登录和添加分开计数，同一个网段的登录挑战最多 20 个。
+func TestPasskeyChallengePool(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := context.Background()
+	admin, _ := h.q.GetUserByUsername(ctx, "admin")
+	_ = h.q.SetSetting(ctx, store.SetSettingParams{Key: settingDomain, Value: "nagi.example.com"})
+	from := func(ip string) context.Context { return WithMeta(ctx, Meta{IP: ip}) }
+	// 攻击者在一个网段里刷。
+	n := 0
+	for range 2000 {
+		if _, _, _, err := h.s.BeginPasskeyLogin(from("198.51.100.7")); err == nil {
+			n++
+		}
+	}
+	if n != maxLoginChallengesPerNet {
+		t.Fatalf("同一个网段同时有效的登录挑战应该最多 %d 个，实际 %d 个", maxLoginChallengesPerNet, n)
+	}
+	// 本人从别的网段登录、已登录的成员添加，都不受影响。
+	if _, _, _, err := h.s.BeginPasskeyLogin(from("203.0.113.10")); err != nil {
+		t.Fatalf("别的网段的登录不应受影响：%v", err)
+	}
+	// 攻击者用很多网段占满登录的池子，添加照样可用。
+	for i := range 200 {
+		for range maxLoginChallengesPerNet {
+			_, _, _, _ = h.s.BeginPasskeyLogin(from(fmt.Sprintf("10.%d.%d.1", i/250, i%250)))
+		}
+	}
+	if _, err := h.s.BeginPasskeyRegistration(ctx, admin.ID); err != nil {
+		t.Fatalf("登录的挑战占满以后，添加不应受影响：%v", err)
 	}
 }
