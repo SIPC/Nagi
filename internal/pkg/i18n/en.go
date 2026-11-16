@@ -707,5 +707,9 @@ var en = map[string]string{
 	"管理员 %s 从允许范围以外的地址登录，已拒绝":                      "Administrator %s signed in from an address that isn't allowed. The sign-in was refused",
 	"来源：%s。登录凭据可能已经泄露。":                            "Source: %s. The sign-in credentials may have leaked.",
 	"账号 %s 取消了管理员登录地址的限制":                          "Account %s removed the administrator sign-in address restriction",
+	"访问令牌 %s 从允许范围以外的地址使用，已拒绝":                     "Access token %s was used from an address that isn't allowed. The request was refused",
+	"成员：%s；来源：%s。令牌可能已经泄露。":                        "Member: %s; source: %s. The token may have leaked.",
+	"访问令牌 %s 第一次从网段 %s 使用":                         "Access token %s was used from network %s for the first time",
+	"成员：%s；来源：%s；客户端：%s。这个令牌能执行命令。":                "Member: %s; source: %s; client: %s. This token can run commands.",
 	"账号 %s 修改了管理员登录地址：%s":                          "Account %s changed the administrator sign-in addresses: %s",
 }

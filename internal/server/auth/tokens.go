@@ -56,10 +56,20 @@ func (s *Service) TokenUser(ctx context.Context, token, ip string) (User, store.
 	if err != nil {
 		return User{}, t, ErrInvalidToken
 	}
-	if now.Unix()-t.LastUsedAt >= int64(tokenTouchInterval/time.Second) || t.LastIP != ip {
-		// 备用面板上写不进去也没关系：下一次同步会被主面板的数据覆盖。
-		_ = s.q.TouchAccessToken(ctx, t.ID, now.Unix(), ip)
+	// 网段限制（见 docs/mcp.md#网段）：不在范围内就当令牌无效，并告警（令牌很可能泄露了）。
+	if t.Networks != "" {
+		prefixes, err := ParseNetworks(strings.Split(t.Networks, "\n"))
+		if err == nil && len(prefixes) > 0 && !prefixesContain(prefixes, ip) {
+			s.tokenNetworkDenied(ctx, t, row.Username, ip)
+			return User{}, t, ErrInvalidToken
+		}
 	}
+	client := clipName(RequestMeta(ctx).Client)
+	if now.Unix()-t.LastUsedAt >= int64(tokenTouchInterval/time.Second) || t.LastIP != ip || t.LastClient != client {
+		// 备用面板上写不进去也没关系：下一次同步会被主面板的数据覆盖。
+		_ = s.q.TouchAccessToken(ctx, t.ID, now.Unix(), ip, client)
+	}
+	s.checkTokenNetwork(ctx, t, row.Username, ip, client)
 	u := User{
 		ID: row.ID, Name: row.Username, Role: row.Role,
 		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0,

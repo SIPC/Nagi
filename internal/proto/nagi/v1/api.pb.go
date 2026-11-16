@@ -2673,6 +2673,10 @@ type AccessToken struct {
 	LastIp     string                 `protobuf:"bytes,9,opt,name=last_ip,json=lastIp,proto3" json:"last_ip,omitempty"`
 	// 可以在节点上执行命令（MCP 的 node_exec），只有管理员的个人访问令牌能有。
 	AllowNodeExec bool `protobuf:"varint,10,opt,name=allow_node_exec,json=allowNodeExec,proto3" json:"allow_node_exec,omitempty"`
+	// 允许使用的 IP 或网段，为空表示不限制（见 docs/mcp.md#网段）。
+	Networks []string `protobuf:"bytes,11,rep,name=networks,proto3" json:"networks,omitempty"`
+	// 最近一次使用的客户端（User-Agent）。
+	LastClient    string `protobuf:"bytes,12,opt,name=last_client,json=lastClient,proto3" json:"last_client,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2777,6 +2781,20 @@ func (x *AccessToken) GetAllowNodeExec() bool {
 	return false
 }
 
+func (x *AccessToken) GetNetworks() []string {
+	if x != nil {
+		return x.Networks
+	}
+	return nil
+}
+
+func (x *AccessToken) GetLastClient() string {
+	if x != nil {
+		return x.LastClient
+	}
+	return ""
+}
+
 type ListAccessTokensRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2874,6 +2892,8 @@ type CreateAccessTokenRequest struct {
 	AllowExec  bool   `protobuf:"varint,4,opt,name=allow_exec,json=allowExec,proto3" json:"allow_exec,omitempty"`
 	// 可以在节点上执行命令（等于节点的 root）。只有管理员能勾选。
 	AllowNodeExec bool `protobuf:"varint,5,opt,name=allow_node_exec,json=allowNodeExec,proto3" json:"allow_node_exec,omitempty"`
+	// 允许使用的 IP 或网段，为空表示不限制。
+	Networks      []string `protobuf:"bytes,6,rep,name=networks,proto3" json:"networks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2941,6 +2961,13 @@ func (x *CreateAccessTokenRequest) GetAllowNodeExec() bool {
 		return x.AllowNodeExec
 	}
 	return false
+}
+
+func (x *CreateAccessTokenRequest) GetNetworks() []string {
+	if x != nil {
+		return x.Networks
+	}
+	return nil
 }
 
 type CreateAccessTokenResponse struct {
@@ -12367,7 +12394,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x1bCreateEnrollCommandResponse\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x129\n" +
 	"\n" +
-	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xfe\x02\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xbb\x03\n" +
 	"\vAccessToken\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -12384,11 +12411,14 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"lastUsedAt\x12\x17\n" +
 	"\alast_ip\x18\t \x01(\tR\x06lastIp\x12&\n" +
 	"\x0fallow_node_exec\x18\n" +
-	" \x01(\bR\rallowNodeExec\"2\n" +
+	" \x01(\bR\rallowNodeExec\x12\x1a\n" +
+	"\bnetworks\x18\v \x03(\tR\bnetworks\x12\x1f\n" +
+	"\vlast_client\x18\f \x01(\tR\n" +
+	"lastClient\"2\n" +
 	"\x17ListAccessTokensRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\"H\n" +
 	"\x18ListAccessTokensResponse\x12,\n" +
-	"\x06tokens\x18\x01 \x03(\v2\x14.nagi.v1.AccessTokenR\x06tokens\"\xaa\x01\n" +
+	"\x06tokens\x18\x01 \x03(\v2\x14.nagi.v1.AccessTokenR\x06tokens\"\xc6\x01\n" +
 	"\x18CreateAccessTokenRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04days\x18\x02 \x01(\rR\x04days\x12\x1f\n" +
@@ -12396,7 +12426,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"allowWrite\x12\x1d\n" +
 	"\n" +
 	"allow_exec\x18\x04 \x01(\bR\tallowExec\x12&\n" +
-	"\x0fallow_node_exec\x18\x05 \x01(\bR\rallowNodeExec\"_\n" +
+	"\x0fallow_node_exec\x18\x05 \x01(\bR\rallowNodeExec\x12\x1a\n" +
+	"\bnetworks\x18\x06 \x03(\tR\bnetworks\"_\n" +
 	"\x19CreateAccessTokenResponse\x12*\n" +
 	"\x05token\x18\x01 \x01(\v2\x14.nagi.v1.AccessTokenR\x05token\x12\x16\n" +
 	"\x06secret\x18\x02 \x01(\tR\x06secret\"*\n" +

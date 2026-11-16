@@ -38,6 +38,9 @@ export default {
   neverUsed: "未使用",
   lastUsed: (time: string) => `最后使用 ${time}`,
   forUser: (name: string) => `${name} 的访问令牌。管理员可以吊销，看不到令牌本身。`,
+  networks: "允许的地址",
+  networksHint: "可选。填写 IP 或网段，多个用逗号分隔。从其他地址使用时拒绝并告警。",
+  networksLimited: (list: string) => `限 ${list}`,
   oauth: {
     title: "授权访问",
     request: (client: string) => `${client} 请求访问 Nagi`,
