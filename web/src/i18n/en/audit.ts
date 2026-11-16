@@ -94,10 +94,12 @@ export default {
   replay: {
     button: "Replay",
     title: "Replay terminal recording",
-    description: "Recordings contain output only. Typed passwords aren't included.",
+    description: "Recordings contain output and input. Input that isn't echoed, such as passwords, is recorded only as a character count.",
     elevate: "Recordings may contain secrets. Verify your identity before replaying. Replays are recorded in the audit log.",
     search: "Find in output…",
     noMatch: "No matches",
+    inputs: "Input",
+    hidden: (n: number) => `${n} characters not echoed`,
   },
   events: {
     login_failed: "Sign-in failed",

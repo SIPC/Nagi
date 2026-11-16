@@ -225,6 +225,14 @@ func (a *API) recordNodeAccess(ctx context.Context, action, nodeID, detail strin
 	a.Record(ctx, e)
 }
 
+// recordNodeShellOpen 记一条打开节点终端的记录，带上录制 ID。
+func (a *API) recordNodeShellOpen(ctx context.Context, nodeID, ip, recordingID string) {
+	ctx = context.WithoutCancel(ctx)
+	b, _ := json.Marshal(map[string]string{"detail": "IP " + ip})
+	a.Record(ctx, audit.Event{Action: "OpenNodeShell", TargetType: "node", TargetID: nodeID, TargetName: a.nodeName(ctx, nodeID),
+		Params: string(b), RecordingID: recordingID})
+}
+
 // ---- 节点终端 ----
 
 // NodeShellHandler 处理 GET /ws/node-shell?node=&cols=&rows=&cwd=&lang=：浏览器打开节点的终端，面板桥接到节点的 AgentService.NodeShell。
@@ -286,9 +294,10 @@ func (a *API) NodeShellHandler() http.Handler {
 		}
 
 		began := time.Now()
-		a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "IP "+ip, false)
-		a.alertNodeShell(ctx, nodeID, u.Name, ip)
+		// 录制先开始，打开终端的记录带上它的 ID：终端还开着时也能回放已经录下的部分。
 		rec := a.Recordings.Start(ctx, cols, rows)
+		a.recordNodeShellOpen(ctx, nodeID, ip, rec.ID())
+		a.alertNodeShell(ctx, nodeID, u.Name, ip)
 		defer func() { a.recordSessionEnd(ctx, "CloseNodeShell", "node", nodeID, "", rec.Close()) }()
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。

@@ -22,7 +22,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// 终端与命令录制（见 docs/audit.md#终端与命令录制）：只录输出和窗口大小，不录输入。格式是 asciicast v2，
+// 终端与命令录制（见 docs/audit.md#终端与命令录制）：录输出、窗口大小和输入（没有回显的字符只记个数，见 recording_input.go）。格式是 asciicast v2，
 // 每 256 KB 或每 5 秒切一块，zstd 压缩后用主密钥加密（AES-256-GCM，附加数据是录制 ID 和序号），存为
 // <数据目录>/audit/recordings/<年月>/<录制 ID>/<序号>。单个会话保留开头 8 MB 和最后 56 MB，中间丢掉并标记已截断。
 
@@ -68,6 +68,9 @@ type Recorder struct {
 	err       error
 	stop      chan struct{}
 	done      chan struct{}
+	// typed 是等着回显的输入；lastT 是上一个事件的时间（秒），事件的时间不能倒退。
+	typed []typedRun
+	lastT float64
 }
 
 type chunkInfo struct {
@@ -123,14 +126,19 @@ func (rec *Recorder) loop() {
 			return
 		case <-t.C:
 			rec.mu.Lock()
+			rec.resolveStaleLocked(time.Now())
 			rec.flushLocked()
 			rec.mu.Unlock()
 		}
 	}
 }
 
-func (rec *Recorder) event(kind, data string) {
-	line, _ := json.Marshal([]any{float64(time.Since(rec.start).Microseconds()) / 1e6, kind, data})
+func (rec *Recorder) event(kind, data string) { rec.eventAt(time.Now(), kind, data) }
+
+func (rec *Recorder) eventAt(at time.Time, kind, data string) {
+	t := max(float64(at.Sub(rec.start).Microseconds())/1e6, rec.lastT)
+	rec.lastT = t
+	line, _ := json.Marshal([]any{t, kind, data})
 	rec.buf.Write(line)
 	rec.buf.WriteByte('\n')
 	if rec.buf.Len() >= chunkBytes {
@@ -160,7 +168,9 @@ func (rec *Recorder) Output(b []byte) {
 		}
 	}
 	rec.pending = append([]byte(nil), data[cut:]...)
-	rec.event("o", strings.ToValidUTF8(string(data[:cut]), "�"))
+	out := strings.ToValidUTF8(string(data[:cut]), "�")
+	rec.matchEchoLocked(out, time.Now())
+	rec.event("o", out)
 }
 
 // Resize 记下窗口大小的变化，回放时排版才正确。
@@ -171,9 +181,11 @@ func (rec *Recorder) Resize(cols, rows uint32) {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	if !rec.closed {
-		rec.event("r", fmt.Sprintf("%dx%d", cols, rows))
+		rec.event("r", formatSize(int(cols), int(rows)))
 	}
 }
+
+func formatSize(cols, rows int) string { return fmt.Sprintf("%dx%d", cols, rows) }
 
 // flushLocked 把缓冲写成一块。
 func (rec *Recorder) flushLocked() {
@@ -241,6 +253,7 @@ func (rec *Recorder) Close() Summary {
 		return rec.summary()
 	}
 	rec.closed = true
+	rec.hideAllLocked()
 	if len(rec.pending) > 0 {
 		rec.event("o", strings.ToValidUTF8(string(rec.pending), "�"))
 		rec.pending = nil

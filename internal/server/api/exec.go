@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -38,7 +39,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	// 命令本身记在详情里：活动记录要能看出 agent 在容器里做过什么。
 	detail := strings.Join(command, " ")
 	fail := func(err error) (ExecResult, error) {
-		a.recordExec(ctx, start, detail, activityFailure(err), "")
+		a.recordExec(ctx, start, detail, activityFailure(err), audit.Summary{})
 		return ExecResult{}, err
 	}
 	switch {
@@ -75,12 +76,16 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	}
 	var out headTail
 	res := ExecResult{ExitCode: -1}
+	// 录制的是完整的输出流（开头 8 MB、最后 56 MB），返回给 agent 的只有开头和结尾；开头先写上命令。
+	rec := a.Recordings.Start(ctx, 200, 50)
+	rec.Output([]byte(commandLine("", detail)))
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
 			if ctx.Err() != nil {
 				res.TimedOut = true
 			} else if !errors.Is(err, io.EOF) {
+				rec.Close()
 				return fail(err)
 			}
 			break
@@ -88,10 +93,12 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 		switch v := msg.Output.(type) {
 		case *nagiv1.ExecOutput_Stdout:
 			out.Write(v.Stdout)
+			rec.Output(crlf(v.Stdout))
 		case *nagiv1.ExecOutput_ExitCode:
 			res.ExitCode = v.ExitCode
 		}
 	}
+	rec.Output([]byte(exitLine(res.ExitCode, res.TimedOut)))
 	res.Output, res.Truncated = out.String()
 	failure := ""
 	if res.TimedOut {
@@ -101,8 +108,30 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	if !res.TimedOut && res.ExitCode != 0 {
 		detail += " → exit " + strconv.Itoa(int(res.ExitCode))
 	}
-	a.recordExec(ctx, start, detail, failure, res.Output)
+	a.recordExec(ctx, start, detail, failure, rec.Close())
 	return res, nil
+}
+
+// commandLine 是录制开头的命令行（灰色的提示符），cwd 不为空时先写一行目录。
+func commandLine(cwd, command string) string {
+	s := ""
+	if cwd != "" {
+		s = "\x1b[2m# " + cwd + "\x1b[0m\r\n"
+	}
+	return s + "\x1b[2m$\x1b[0m " + strings.ReplaceAll(command, "\n", "\r\n") + "\r\n"
+}
+
+// exitLine 是录制结尾的退出码。
+func exitLine(code int32, timedOut bool) string {
+	if timedOut {
+		return "\r\n\x1b[2m[超时，已停止]\x1b[0m\r\n"
+	}
+	return fmt.Sprintf("\r\n\x1b[2m[退出码 %d]\x1b[0m\r\n", code)
+}
+
+// crlf 把单独的换行换成回车换行：不在终端里执行的命令输出只有 \n，回放时才不会错位。
+func crlf(b []byte) []byte {
+	return bytes.ReplaceAll(bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
 }
 
 // RecordMCPDenied 记一条被拒绝的 MCP 工具调用（见 docs/mcp.md#安全）：令牌没有这个工具的权限。
@@ -148,19 +177,15 @@ func (a *API) recordSessionEnd(ctx context.Context, action, targetType, targetID
 }
 
 // recordExec 记一条执行命令的活动：详情是命令，失败时后面接原因。
-func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure, output string) {
+func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure string, rec audit.Summary) {
 	result := audit.ResultOK
 	if failure != "" {
 		result = audit.ResultFailed
 	}
 	p := map[string]any{"service": start.GetService(), "command": command}
-	// 输出写成一个录制（见 docs/audit.md#终端与命令录制），摘要进入哈希链。
-	var rec audit.Summary
-	if output != "" {
-		rec = a.Recordings.WriteOnce(ctx, output)
-		if rec.ID != "" {
-			p["recording"] = rec
-		}
+	// 录制（见 docs/audit.md#终端与命令录制）的摘要进入哈希链。
+	if rec.ID != "" {
+		p["recording"] = rec
 	}
 	params, _ := json.Marshal(p)
 	a.Record(ctx, audit.Event{

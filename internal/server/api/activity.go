@@ -185,6 +185,13 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 	a.recordCall(ctx, procedure, req, result, failure, 0)
 }
 
+// recordingKey 把录制 ID 带进 ctx：打开终端的记录带上它，终端还开着时也能回放已经录下的部分。
+type recordingKey struct{}
+
+func withRecording(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, recordingKey{}, id)
+}
+
 func (a *API) recordCall(ctx context.Context, procedure string, req proto.Message, result, failure string, d time.Duration) {
 	ctx = context.WithoutCancel(ctx)
 	method := methodOf(procedure)
@@ -196,6 +203,9 @@ func (a *API) recordCall(ctx context.Context, procedure string, req proto.Messag
 		Result:     result,
 		Error:      failure,
 		DurationMS: d.Milliseconds(),
+	}
+	if id, _ := ctx.Value(recordingKey{}).(string); id != "" && result == audit.ResultOK {
+		e.RecordingID = id
 	}
 	e.TargetType, e.TargetID, e.TargetName = a.target(ctx, method, req)
 	// 文件操作的对象是文件：路径放进对象名，失败的也记，这样能看出有人试过什么路径。

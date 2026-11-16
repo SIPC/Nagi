@@ -90,7 +90,9 @@ func (a *API) TerminalHandler() http.Handler {
 			fail(terminalError(lang, err))
 			return
 		}
-		a.recordOperation(ctx, "/OpenTerminal", start, "")
+		// 录制先开始，打开终端的记录带上它的 ID：终端还开着时也能回放已经录下的部分。
+		rec := a.Recordings.Start(ctx, cols, rows)
+		a.recordOperation(withRecording(ctx, rec.ID()), "/OpenTerminal", start, "")
 
 		// 定时重查：踢出登录、降权、移出项目范围之后要断开。管理员降为操作员时，特权容器的终端也要断开。
 		go a.watchSession(ctx, token, u, func(cur auth.User) error {
@@ -106,7 +108,6 @@ func (a *API) TerminalHandler() http.Handler {
 			cancel()
 		})
 
-		rec := a.Recordings.Start(ctx, cols, rows)
 		defer func() {
 			a.recordSessionEnd(ctx, "CloseTerminal", "container", start.Container, start.ProjectId, rec.Close())
 		}()
@@ -204,7 +205,7 @@ type terminalStream struct {
 	resize    func(cols, rows uint32) error
 	closeSend func() error
 	recv      func() (*nagiv1.ExecOutput, error)
-	// rec 录下输出和窗口大小（没开录制时为 nil）。输入不录：不回显的密码不会进入录制。
+	// rec 录下输出、窗口大小和输入（没开录制时为 nil）。没有回显的输入（密码）只记个数（见 audit/recording_input.go）。
 	rec *audit.Recorder
 }
 
@@ -235,6 +236,7 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 			}
 			active.touch()
 			if typ == websocket.MessageBinary {
+				st.rec.Input(data)
 				err = st.stdin(data)
 			} else {
 				var msg struct {

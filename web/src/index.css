@@ -300,3 +300,33 @@
     background: color-mix(in oklab, var(--info) 25%, transparent);
   }
 }
+
+/* 回放的播放按钮（asciinema-player）：换掉自带的大号白色图标，用和界面一致的圆形按钮，画面上加一层浅色遮罩。 */
+.nagi-player .ap-overlay-start {
+  background: rgb(0 0 0 / 0.35);
+}
+.nagi-player .ap-overlay-start .ap-play-button {
+  width: 56px;
+  height: 56px;
+  max-height: none;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.9);
+  transition: background-color 150ms;
+}
+.nagi-player .ap-overlay-start .ap-play-button > * {
+  display: none;
+}
+.nagi-player .ap-overlay-start .ap-play-button::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 20px;
+  transform: translate(-38%, -50%);
+  background: #0a0a0a;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.nagi-player .ap-overlay-start:hover .ap-play-button {
+  background: #fff;
+}

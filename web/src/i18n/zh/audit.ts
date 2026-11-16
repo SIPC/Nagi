@@ -93,10 +93,12 @@ export default {
   replay: {
     button: "回放",
     title: "回放终端录制",
-    description: "录制只含输出，不含输入的密码。",
+    description: "录制包含输出和输入，没有回显的输入（例如密码）只记字符数。",
     elevate: "录制里可能有密钥，回放前需要验证身份。回放本身会记入审计。",
     search: "在输出中查找…",
     noMatch: "没有找到",
+    inputs: "输入",
+    hidden: (n: number) => `未回显的 ${n} 个字符`,
   },
   // 不在 activity.actions 里的事件名。
   events: {
