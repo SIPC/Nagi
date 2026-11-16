@@ -20,7 +20,7 @@ export default {
   ping: "Ping",
   pingTimeout: "Timed out",
   pingFailed: "Failed",
-  rxTx: "Received / sent",
+  rxTx: "In / out",
   noPeers: "No connections",
   fec: (m) => `FEC ${m}/10`,
   quic: "QUIC",

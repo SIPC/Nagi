@@ -3,7 +3,7 @@ import { create } from "@bufbuild/protobuf";
 import { AlertRulesSchema, type AlertRules } from "@/gen/nagi/v1/common_pb";
 import { errorMessage } from "@/lib/api";
 import { t } from "@/i18n";
-import { Alert, Button, Check, Collapse, Field, FormActions, FormBody, FormRow, Input, Spinner } from "@/components/ui";
+import { Alert, Button, Check, Collapse, DialogActions, Field, FormActions, FormBody, FormRow, Input, Spinner } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
 
 // 告警规则（见 docs/monitoring.md#告警）：节点的规则在节点设置里，容器的规则在项目设置里、容器可以单独设置。
@@ -131,19 +131,26 @@ export function AlertRulesForm({ id, defs, initial, inherited, onSave, onCancel,
       <FormBody>
         <AlertRulesFields id={id} defs={defs} value={value} onChange={setValue} inherited={inherited} disabled={disabled} />
         {error && <Alert>{error}</Alert>}
-        {!disabled && (
-          <FormActions>
-            {onCancel && (
+        {/* 有 onCancel 时在对话框里：按钮靠右（DialogActions），保存是主按钮；在区块里靠左。 */}
+        {!disabled &&
+          (onCancel ? (
+            <DialogActions>
               <Button variant="outline" readOnlyOk onClick={onCancel}>
                 {t.common.actions.cancel}
               </Button>
-            )}
-            <Button type="submit" variant="outline" disabled={busy || (!dirty && !onCancel)}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        )}
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </DialogActions>
+          ) : (
+            <FormActions>
+              <Button type="submit" variant="outline" disabled={busy || !dirty}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </FormActions>
+          ))}
       </FormBody>
     </form>
   );

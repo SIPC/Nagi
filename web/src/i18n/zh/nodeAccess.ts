@@ -46,7 +46,7 @@ export default {
     uploaded: (n: number) => `已上传 ${n} 个文件`,
     tooLarge: (names: string) => `单个文件不能超过 8 GB：${names}`,
     overwrite: "覆盖",
-    overwriteConfirm: (names: string, large: boolean) => `覆盖 ${names}？${large ? "超过 1 MB 的文件不保留历史版本。" : ""}`,
+    overwriteConfirm: (names: string, large: boolean) => `覆盖 ${names}？节点上的同名文件将被替换${large ? "，超过 1 MB 的文件不保留历史版本，无法找回。" : "，旧内容保留在历史版本里。"}`,
     deleteConfirm: (name: string, dir: boolean) =>
       dir ? `删除目录 ${name}？目录中的所有内容将被删除，且无法恢复。` : `删除 ${name}？文件将被删除，且无法恢复。`,
     deleteType: (name: string) => `输入 ${name} 以确认`,

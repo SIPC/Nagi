@@ -47,7 +47,7 @@ export default {
     uploaded: (n) => `Uploaded ${n} ${n === 1 ? "file" : "files"}`,
     tooLarge: (names) => `Files can't exceed 8 GB: ${names}`,
     overwrite: "Overwrite",
-    overwriteConfirm: (names, large) => `Overwrite ${names}?${large ? " Files over 1 MB keep no history." : ""}`,
+    overwriteConfirm: (names, large) => `Overwrite ${names}? The files with the same name on the node will be replaced${large ? ". Files over 1 MB keep no history and can't be recovered." : ". The old content is kept in the version history."}`,
     deleteConfirm: (name, dir) =>
       dir ? `Delete directory ${name}? Everything in it will be deleted and can't be recovered.` : `Delete ${name}? The file will be deleted and can't be recovered.`,
     deleteType: (name) => `Type ${name} to confirm`,

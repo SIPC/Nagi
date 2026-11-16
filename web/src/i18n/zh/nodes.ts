@@ -30,6 +30,7 @@ export default {
   title: "节点",
   columns: { node: "节点", containers: "容器" },
   views: {
+    label: "视图",
     cards: "列表",
     network: "网络",
     ha: "高可用",
@@ -108,7 +109,7 @@ export default {
   },
   pendingNotice: "该节点通过接入码加入，接入码泄露时他人也可加入。确认为自有机器后再批准，批准前无法查看和操作。",
   offlineTitle: "节点离线",
-  noContainers: "节点上没有容器",
+  noContainers: "暂无容器",
   offlineNotice: "节点离线时只能查看容器列表。",
   upgrade: {
     badge: "可升级",

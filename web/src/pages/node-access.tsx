@@ -165,12 +165,12 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const readonly = q.data?.access === "readonly";
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
 
-  const run = async (key: string, fn: () => Promise<unknown>, done?: string) => {
+  // 上传、删除、新建的结果在列表里看得到，不再弹成功提示（ui.md：页面上已能看到变化的不加）。
+  const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
     setError("");
     try {
       await fn();
-      if (done) toast.success(done);
       refresh();
       return true;
     } catch (err) {
@@ -227,7 +227,6 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           if (!res.ok) throw await failure(res);
         });
       },
-      m.uploaded(list.length),
     );
   };
 
@@ -239,7 +238,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       ...(typed ? { checkDefault: true, typeToConfirm: { label: m.deleteType(e.name), value: e.name } } : {}),
     });
     if (!answer) return;
-    await run(`del:${e.name}`, () => nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: typed ? e.name : "" }), m.deleted);
+    await run(`del:${e.name}`, () => nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: typed ? e.name : "" }));
   };
 
   const edit = async (e: NodeFileEntry) => {
@@ -352,7 +351,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
               creating === "dir"
                 ? () => nodeClient.createNodeDir({ nodeId: node.id, path: join(real, n) })
                 : () => nodeClient.writeNodeFile({ nodeId: node.id, path: join(real, n), create: true, confirmed: q.data?.access === "confirm" });
-            run("create", op, m.created).then((ok) => {
+            run("create", op).then((ok) => {
               if (!ok) return;
               setName("");
               setCreating(null);

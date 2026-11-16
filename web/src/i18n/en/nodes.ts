@@ -30,6 +30,7 @@ export default {
   title: "Nodes",
   columns: { node: "Node", containers: "Containers" },
   views: {
+    label: "View",
     cards: "List",
     network: "Network",
     ha: "High availability",
@@ -107,7 +108,7 @@ export default {
   },
   pendingNotice: "This node joined with an invite code, which anyone could use if it leaked. Approve it once you've confirmed it's your machine; until then it can't be viewed or managed.",
   offlineTitle: "Node offline",
-  noContainers: "No containers on this node",
+  noContainers: "No containers",
   offlineNotice: "Only the container list is available while the node is offline.",
   upgrade: {
     badge: "Upgrade available",

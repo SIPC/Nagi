@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, nodeClient } from "@/lib/api";
@@ -21,6 +22,15 @@ export const metricRanges = [
   { value: "30d", label: m.ranges["30d"], seconds: 30 * 86400, step: 14400 },
 ] as const;
 export type MetricRange = (typeof metricRanges)[number]["value"];
+
+// useRangeSearch：时间范围写进地址的 range 参数（ui.md：状态写进地址），刷新和分享不丢。默认的 1h 不写。
+// 路由的 validateSearch 要认 range（见 main.tsx 的 rangeSearch）。
+export function useRangeSearch(): [MetricRange, (r: MetricRange) => void] {
+  const search = useSearch({ strict: false }) as { range?: MetricRange };
+  const navigate = useNavigate();
+  const set = (r: MetricRange) => navigate({ to: ".", search: ((s: Record<string, unknown>) => ({ ...s, range: r === "1h" ? undefined : r })) as never, replace: true });
+  return [search.range ?? "1h", set];
+}
 const rangeOf = (r: MetricRange) => metricRanges.find((x) => x.value === r)!;
 
 export function RangePicker({ value, onChange }: { value: MetricRange; onChange: (r: MetricRange) => void }) {
@@ -134,6 +144,9 @@ export const fmtMs = (v: number) => {
 };
 // 上万的次数用紧凑写法（1.9 万次、239.3K），统计格放得下。数字和单位分开交给文案拼，中文的单位和「次」连写。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
+// fmtErrorRate：错误率，没有请求时是「—」。
+export const fmtErrorRate = (errors: number, requests: number) => (requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—");
+
 export const fmtCount = (v: number) => {
   if (v < 10_000) return m.count(Math.round(v).toLocaleString(locale));
   const parts = compactCount.formatToParts(v);
@@ -296,8 +309,9 @@ export function UsageRings({ usage, memFallback, className }: { usage?: Usage; m
   );
   return (
     <span className={cn("flex items-center gap-3 text-xs text-muted-foreground", className)}>
-      {ring(cpu, usage ? `${usage.cpu.toFixed(1)}%` : "—", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
-      {ring(mem, usage ? fmtBytes(usage.mem) : "—", m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem)))}
+      {/* 占用圆环旁用短格式（ui.md：6.2MB、0.3%），对得齐。 */}
+      {ring(cpu, usage ? fmtCpuShort(usage.cpu) : "—", usage ? `CPU ${fmtPct(usage.cpu)} / ${fmtPct(cpuMax)}` : "CPU —")}
+      {ring(mem, usage ? fmtBytesShort(usage.mem) : "—", m.memTitle(!usage ? "—" : usage.memLimit ? `${fmtBytes(usage.mem)} / ${fmtBytes(usage.memLimit)}` : fmtBytes(usage.mem)))}
     </span>
   );
 }
@@ -497,7 +511,7 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
 
   const stats: { label: string; value: string; title?: string }[] = [
     { label: m.requests, value: fmtCount(requests), title: m.requestsAvgTitle((requests / r.seconds).toFixed(2)) },
-    { label: m.errorRate, value: requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—", title: `5xx ${fmtCount(errors)}` },
+    { label: m.errorRate, value: fmtErrorRate(errors, requests), title: `5xx ${fmtCount(errors)}` },
     { label: m.avgLatency, value: lat === undefined ? "—" : fmtMs(lat), title: m.avgLatencyTitle },
   ];
   if (data.has("p95")) stats.push({ label: m.p95Latency, value: p95 === undefined ? "—" : fmtMs(p95), title: m.p95Title });

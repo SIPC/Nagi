@@ -5,9 +5,9 @@ import { Server } from "lucide-react";
 import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
-import { HelpTip, QueryError, RowsSkeleton, Section, Status, Waves } from "@/components/ui";
+import { ButtonLink, HelpTip, List, QueryError, Row, RowsSkeleton, Section, Status, Waves } from "@/components/ui";
 import { Legend as ChartLegend, TimeChart, type Pt as ChartPt } from "@/components/chart";
-import { RangePicker, fmtMs, metricRanges, type MetricRange } from "@/components/metrics";
+import { RangePicker, fmtMs, metricRanges, useRangeSearch } from "@/components/metrics";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -226,6 +226,8 @@ const statusLine = (n: Node) =>
   n.pending ? t.common.status.pendingApproval : !n.online ? (n.lastSeen ? t.nodes.lastSeen(timeAgo(toDate(n.lastSeen))) : t.nodes.neverSeen) : "";
 
 const pct = (v: number) => `${Math.round(v)}%`;
+// wholeCpu：CPU 占整机的百分比。上报的是按每核 100% 累加的值（ui.md：只有容器和节点列表按累加写），外圈也按整机比例画。
+const wholeCpu = (n: Node) => (n.usage?.cpu ?? 0) / Math.max(1, n.info?.cpus ?? 1);
 
 // NodeGlyph：一个节点。外圈是 CPU、内存、磁盘里占用最高的一项（超过 75% 变黄、90% 变红，同占用条），右下角是状态点。
 // 有 onSelect 时是按钮（高可用图层点选节点），否则是到节点详情页的链接。failed：高可用图层里模拟故障的节点。
@@ -264,7 +266,7 @@ function NodeGlyph({
   const anchor = !side ? "middle" : at.x > 0 ? "start" : "end";
   const nameY = side ? (sub ? -3 : 4) : above ? (sub ? -50 : -34) : 46;
   const subY = side ? 13 : above ? -34 : 62;
-  const detail = [n.name, status, u && `CPU ${pct(u.cpu)} · ${t.nodes.memory} ${pct(u.memory)} · ${t.nodes.disk} ${pct(u.disk)}`, t.nodes.containers(n.containers)]
+  const detail = [n.name, status, u && `CPU ${pct(wholeCpu(n))} · ${t.nodes.memory} ${pct(u.memory)} · ${t.nodes.disk} ${pct(u.disk)}`, t.nodes.containers(n.containers)]
     .filter(Boolean)
     .join("\n");
   // 放不下时截短：名字和说明各自截，警告的那段跟在说明后面一起算宽度。
@@ -468,7 +470,7 @@ function relayReason(e: MeshEdge, statuses: Map<string, MeshStatus>, nameOf: (id
 }
 
 const meshLabel = (e: MeshEdge) => {
-  if (e.kind === "direct") return e.rtt > 0 ? `${e.rtt.toFixed(1)} ms` : e.path ? (pathLabel[e.path] ?? e.path) : "";
+  if (e.kind === "direct") return e.rtt > 0 ? fmtMs(e.rtt) : e.path ? (pathLabel[e.path] ?? e.path) : "";
   return edgePathLabel(e);
 };
 
@@ -538,7 +540,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
             n={n}
             at={pos.get(n.id)!}
             dim={dim(n.id)}
-            sub={statusLine(n) || (n.usage ? `CPU ${pct(n.usage.cpu)} · ${t.nodes.memory} ${pct(n.usage.memory)}` : "")}
+            sub={statusLine(n) || (n.usage ? `CPU ${pct(wholeCpu(n))} · ${t.nodes.memory} ${pct(n.usage.memory)}` : "")}
             maxWidth={labelWidth(pos.get(n.id)!, box, spacing)}
             onActive={(on) => setActive(on ? n.id : null)}
           />
@@ -562,27 +564,26 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
       {issues.length > 0 && (
         <Section title={t.nodes.map.issues} className={belowMap}>
           {/* 悬停或聚焦一行时在图上突出这条连接，键盘也能用。 */}
-          <ul className="grid">
+          {/* 和其他列表一样用列表行：名称、灰色的原因，状态在右边。 */}
+          <List>
             {issues.map((e) => (
-              <li
+              <div
                 key={e.a + "|" + e.b}
                 tabIndex={0}
-                className="-mx-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 outline-none transition-colors hover:bg-accent focus-ring"
+                className="rounded-md border border-transparent outline-none focus-ring"
                 onMouseEnter={() => setActive(e.a === PANEL ? e.b : e.a)}
                 onMouseLeave={() => setActive(null)}
                 onFocus={() => setActive(e.a === PANEL ? e.b : e.a)}
                 onBlur={() => setActive(null)}
               >
-                <span>
-                  {nameOf(e.a)} ↔ {nameOf(e.b)}
-                </span>
-                <span className={cn("text-[13px]", e.kind === "none" ? "text-destructive" : "text-warning-text")}>
-                  <Status tone={e.kind === "none" ? "danger" : "warning"}>{edgePathLabel(e)}</Status>
-                </span>
-                {relayReason(e, statuses, nameOf) && <span className="w-full pb-1 text-[13px] text-muted-foreground">{relayReason(e, statuses, nameOf)}</span>}
-              </li>
+                <Row
+                  title={`${nameOf(e.a)} ↔ ${nameOf(e.b)}`}
+                  sub={relayReason(e, statuses, nameOf) || undefined}
+                  cols={[{ phone: true, width: "w-40", content: <Status tone={e.kind === "none" ? "danger" : "warning"}>{edgePathLabel(e)}</Status> }]}
+                />
+              </div>
             ))}
-          </ul>
+          </List>
         </Section>
       )}
 
@@ -693,7 +694,7 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
 // LatencyHistory：两个节点之间两个方向的延迟历史，各自从测量的那一端查。
 function LatencyHistory({ a, b, statuses }: { a: Node; b: Node; statuses: Map<string, MeshStatus> }) {
   const k = t.nodes.latency;
-  const [range, setRange] = useState<MetricRange>("1h");
+  const [range, setRange] = useRangeSearch();
   const r = metricRanges.find((x) => x.value === range)!;
   const keyA = statuses.get(a.id)?.publicKey;
   const keyB = statuses.get(b.id)?.publicKey;
@@ -911,17 +912,16 @@ function HaMap({ nodes }: { nodes: Node[] }) {
         <HelpTip>{t.nodes.ha.help}</HelpTip>
       </Legend>
 
-      <div className="mx-auto w-full max-w-xl">
-        {projects.error && !projects.data ? (
-          <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />
-        ) : projects.isPending ? (
-          <RowsSkeleton count={2} />
-        ) : failedNode ? (
-          <FailureReport node={failedNode} nodes={nodes} items={items} />
-        ) : (
-          <p className="text-center text-muted-foreground">{t.nodes.ha.hint}</p>
-        )}
-      </div>
+      {/* 图下的内容和网络视图一样靠左，铺满内容区；故障报告是图下的区块，和「未直连的连接」同一种写法。 */}
+      {projects.error && !projects.data ? (
+        <QueryError error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />
+      ) : projects.isPending ? (
+        <RowsSkeleton count={2} />
+      ) : failedNode ? (
+        <FailureReport node={failedNode} nodes={nodes} items={items} />
+      ) : (
+        <p className="text-muted-foreground">{t.nodes.ha.hint}</p>
+      )}
     </div>
   );
 }
@@ -944,14 +944,16 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
   const list = [...groups.values()].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="grid gap-3 border-t pt-4">
-      <div className="flex items-center justify-between gap-3">
-        {/* 页面标题之下的第一级，用 h2；字号是分组标题的 14 / 500。 */}
-        <h2 className="text-sm font-medium">{t.nodes.ha.title(node.name)}</h2>
-        <Link to="/nodes/$nodeId" params={{ nodeId: node.id }} className="text-[13px] text-muted-foreground hover:text-foreground">
-          {t.nodes.ha.open} →
-        </Link>
-      </div>
+    // 和网络视图图下的「未直连的连接」一样是一个区块：标题加右边的按钮，区块之间的细线由 Section 画。
+    <Section
+      title={t.nodes.ha.title(node.name)}
+      className={belowMap}
+      actions={
+        <ButtonLink to="/nodes/$nodeId" params={{ nodeId: node.id }} variant="outline" readOnlyOk>
+          {t.nodes.ha.open}
+        </ButtonLink>
+      }
+    >
       {list.length === 0 ? (
         <p className="text-muted-foreground">{t.nodes.ha.empty}</p>
       ) : (
@@ -977,6 +979,6 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
           ))}
         </ul>
       )}
-    </div>
+    </Section>
   );
 }

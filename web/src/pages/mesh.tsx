@@ -4,7 +4,7 @@ import { confirmAction, notify } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
-import { fmtBytes, fmtRate } from "@/components/metrics";
+import { fmtBytes, fmtMs, fmtRate } from "@/components/metrics";
 import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
@@ -86,7 +86,7 @@ function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
   const handshake = toDate(p.lastHandshake);
   const fecDetail = p.fec && t.mesh.fecDetail(p.fecRecovered.toLocaleString(locale));
   const loss = lossText(p);
-  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, p.address, p.endpoint || p.via, p.localPort > 0 && t.mesh.localPort(p.localPort), p.quic && t.mesh.quicHint, fecDetail, loss && t.mesh.lossHint]
+  const where = [pathLabel[p.path] ?? p.path, p.path === "direct" && fmtMs(p.rttMs), p.address, p.endpoint || p.via, p.localPort > 0 && t.mesh.localPort(p.localPort), p.quic && t.mesh.quicHint, fecDetail, loss && t.mesh.lossHint]
     .filter(Boolean)
     .join(" · ");
   const path = [pathShort[p.path] ?? p.path, p.quic && t.mesh.quic, p.fec && p.fecParity > 0 && t.mesh.fec(p.fecParity), loss].filter(Boolean).join(" · ");
@@ -177,7 +177,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
               sub={<PeerSub peer={p} ping={result} />}
               cols={[
                 { content: <span title={t.mesh.rxTx}>{`↓ ${fmtBytes(Number(p.rxBytes))}`}</span>, num: true },
-                { content: <span title={t.mesh.rxTx}>{`↑ ${fmtBytes(Number(p.txBytes))}`}</span> },
+                { content: <span title={t.mesh.rxTx}>{`↑ ${fmtBytes(Number(p.txBytes))}`}</span>, num: true },
                 ...(nodeId && pinged ? [{ content: result && <span className={cn(result.failed && "text-destructive")}>{result.text}</span>, num: true, phone: true }] : []),
                 ...(canSpeed && tested ? [{ content: speed[key] && <SpeedSummary run={speed[key]} />, num: true, phone: true, width: "w-40" }] : []),
               ]}
@@ -207,7 +207,7 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
                           setPing((x) => ({ ...x, [key]: { text: "…" } }));
                           try {
                             const r = await nodeClient.pingNodeMesh({ nodeId, publicKey: p.publicKey });
-                            setPing((x) => ({ ...x, [key]: { text: `${r.rttMs.toFixed(1)} ms` } }));
+                            setPing((x) => ({ ...x, [key]: { text: fmtMs(r.rttMs) } }));
                           } catch (err) {
                             setPing((x) => ({ ...x, [key]: pingFailure(err) }));
                           }
@@ -262,7 +262,7 @@ function SpeedDialog({ nodeId, port, peer: p, run, onRetry, onClose }: { nodeId:
   const busy = speedRunning(run);
   useSeconds(busy);
   const tip = busy ? undefined : speedTip(p, run, port);
-  const facts = [pathLabel[p.path] ?? p.path, p.path === "direct" && `${p.rttMs.toFixed(1)} ms`, lossText(p)].filter(Boolean).join(" · ");
+  const facts = [pathLabel[p.path] ?? p.path, p.path === "direct" && fmtMs(p.rttMs), lossText(p)].filter(Boolean).join(" · ");
   const label = (s: SpeedStep) => (s.via === "wireguard" ? t.mesh.viaWireGuardCompare : `${s.quic ? t.mesh.viaQuic : t.mesh.viaWireGuardShort}${t.mesh.speedCurrent}`);
   const status = (s: SpeedStep) => {
     switch (s.state) {
