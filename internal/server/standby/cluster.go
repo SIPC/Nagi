@@ -2,6 +2,7 @@ package standby
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -196,9 +197,19 @@ type PanelStatus struct {
 	IsPrimary bool   `json:"is_primary"`
 }
 
-// FetchStatus 向 address 上的面板要它的状态，钉住 fingerprint：回复确实来自那个面板。
-func FetchStatus(ctx context.Context, address, fingerprint string) (PanelStatus, error) {
-	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: tlsutil.PinnedConfig(fingerprint)}}
+// StatusALPN 是询问面板状态时声明的 ALPN：面板据此索要客户端证书，只回答出示了同一组面板 CA 签发的证书的调用方
+// （见 docs/standby.md#发现新的主面板）。同时声明 http/1.1，旧版本的面板照常回答。
+const StatusALPN = "nagi-status/1"
+
+// FetchStatus 向 address 上的面板要它的状态，钉住 fingerprint：回复确实来自那个面板。cert 是本面板的证书，
+// 对方据此认出是同一组的面板。
+func FetchStatus(ctx context.Context, address, fingerprint string, cert *tls.Certificate) (PanelStatus, error) {
+	cfg := tlsutil.PinnedConfig(fingerprint)
+	cfg.NextProtos = []string{StatusALPN, "http/1.1"}
+	if cert != nil {
+		cfg.Certificates = []tls.Certificate{*cert}
+	}
+	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: cfg}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+address+"/api/standby/status", nil)
 	if err != nil {
 		return PanelStatus{}, err

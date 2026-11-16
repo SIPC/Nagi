@@ -1,10 +1,16 @@
 package server
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"crypto"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SIPC/nagi/internal/pkg/tlsutil"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -113,7 +119,7 @@ func (s *Server) verifyAndFollow(addrs []string, fingerprint string, own uint64)
 	var address string
 	var err error
 	for _, address = range addrs {
-		if st, err = standby.FetchStatus(ctx, address, fingerprint); err == nil {
+		if st, err = standby.FetchStatus(ctx, address, fingerprint, s.groupClientCert()); err == nil {
 			break
 		}
 	}
@@ -147,20 +153,68 @@ func (s *Server) verifyAndFollow(addrs []string, fingerprint string, own uint64)
 	s.changeRole()
 }
 
-// handleStatus 提供 GET /api/standby/status：本面板的任期、主面板和是不是主面板。别的面板据此核实谁是主面板。
-// 只有同一组主备面板会来问：从没配过备用面板的面板（不是备用面板、没有提升过所以任期还是 1、没有登记的备用面板）返回 404，
-// 开了安全入口时扫描的人从这里认不出面板。
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	term, primary := standby.Term(r.Context(), s.q)
-	if s.standby == nil && term <= 1 {
-		if list, err := s.q.ListStandbyPanels(r.Context()); err == nil && len(list) == 0 {
-			http.NotFound(w, r)
-			return
-		}
+// groupClientCert 用本面板的服务端密钥签一张短期的客户端证书（和备用面板同步时一样，见 standby.clientCert）：
+// 询问同一组的面板状态时出示，对方据此认出是同一组的面板。签不出来时返回 nil，对方没开安全入口时照常回答。
+func (s *Server) groupClientCert() *tls.Certificate {
+	key, ok := s.cert.PrivateKey.(crypto.Signer)
+	if !ok || s.ca == nil || s.ca.Key == nil {
+		return nil
 	}
-	st := standby.PanelStatus{Term: term, Primary: primary, IsPrimary: s.standby == nil && primary == s.fingerprint}
+	csr, err := tlsutil.CreateCSR(key, "panel")
+	if err != nil {
+		return nil
+	}
+	cert, err := s.ca.SignCSR(csr, "panel", time.Hour)
+	if err != nil {
+		return nil
+	}
+	return &tls.Certificate{Certificate: [][]byte{cert.Raw}, PrivateKey: s.cert.PrivateKey}
+}
+
+// handleStatus 提供 GET /api/standby/status：本面板的任期、主面板和是不是主面板。别的面板据此核实谁是主面板。
+// 只有同一组主备面板会来问：从没配过备用面板的面板（不是备用面板、没有提升过所以任期还是 1、没有登记的备用面板）返回 404。
+// 开了安全入口时这里返回 404：同一组的面板改走 ALPN standby.StatusALPN（见 serveGroupStatus），扫描的人从这里认不出面板。
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.panelStatus(r.Context())
+	if !ok || s.auth.Entrance(r.Context()) != "" {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(st)
+}
+
+// panelStatus 返回本面板的状态；从没配过备用面板的面板（不是备用面板、任期还是 1、没有登记的备用面板）返回 false。
+func (s *Server) panelStatus(ctx context.Context) (standby.PanelStatus, bool) {
+	term, primary := standby.Term(ctx, s.q)
+	if s.standby == nil && term <= 1 {
+		if list, err := s.q.ListStandbyPanels(ctx); err == nil && len(list) == 0 {
+			return standby.PanelStatus{}, false
+		}
+	}
+	return standby.PanelStatus{Term: term, Primary: primary, IsPrimary: s.standby == nil && primary == s.fingerprint}, true
+}
+
+// serveGroupStatus 回答同一组的面板询问状态（ALPN standby.StatusALPN）：握手时已经核对过对方出示的证书是本组 CA 签发的，
+// 开没开安全入口都回答。只处理一个 HTTP/1.1 请求。
+func (s *Server) serveGroupStatus(ctx context.Context, conn *tls.Conn) {
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	req, err := http.ReadRequest(bufio.NewReader(io.LimitReader(conn, 8<<10)))
+	if err != nil {
+		return
+	}
+	res := &http.Response{StatusCode: http.StatusNotFound, ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{}, Close: true, Request: req}
+	body := []byte("404 page not found\n")
+	if st, ok := s.panelStatus(ctx); ok && req.Method == http.MethodGet && req.URL.Path == "/api/standby/status" {
+		body, _ = json.Marshal(st)
+		res.StatusCode = http.StatusOK
+		res.Header.Set("Content-Type", "application/json")
+	}
+	res.Status = http.StatusText(res.StatusCode)
+	res.ContentLength = int64(len(body))
+	res.Body = io.NopCloser(bytes.NewReader(body))
+	_ = res.Write(conn)
 }
 
 // Promote 把备用面板提升为主面板：停止同步，任期加一（至少比节点上报里见过的大），然后按主面板重新启动。

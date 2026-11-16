@@ -605,6 +605,9 @@ func (s *Server) tlsConfig() *tls.Config {
 	// 备用面板的同步连接：同样要出示本面板 CA 签发的客户端证书（见 docs/standby.md）。
 	standbyCfg := agent.Clone()
 	standbyCfg.NextProtos = []string{standby.ALPN, standby.AuditALPN}
+	// 别的面板询问状态（/api/standby/status）：同样要出示本组 CA 签发的证书，之后按 HTTP/1.1 处理。
+	statusCfg := agent.Clone()
+	statusCfg.NextProtos = []string{standby.StatusALPN}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{s.cert},
@@ -618,6 +621,9 @@ func (s *Server) tlsConfig() *tls.Config {
 				}
 				if p == standby.ALPN || p == standby.AuditALPN {
 					return standbyCfg, nil
+				}
+				if p == standby.StatusALPN {
+					return statusCfg, nil
 				}
 			}
 			return browser, nil
@@ -658,6 +664,10 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 				} else {
 					conn.Close()
 				}
+				return
+			case standby.StatusALPN:
+				// 同一组的面板询问状态（见 role.go）。
+				s.serveGroupStatus(ctx, conn)
 				return
 			case standby.AuditALPN:
 				// 审计日志的增量同步（见 docs/audit.md#备用面板）。
