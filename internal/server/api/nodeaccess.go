@@ -56,6 +56,8 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
 	// 恢复从节点缓存拼回的顶替和备份设置：会让别的节点接收并运行这个容器的配置（见 docs/panel.md#项目数据）。
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure: true,
+	// 回放终端录制：输出里可能有密钥（见 docs/audit.md#终端与命令录制）。
+	nagiv1connect.SettingsServiceGetRecordingProcedure: true,
 }
 
 func elevationError() error {
@@ -81,7 +83,12 @@ func (elevationCheck) WrapStreamingClient(next connect.StreamingClientFunc) conn
 }
 
 func (elevationCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+			return elevationError()
+		}
+		return next(ctx, conn)
+	}
 }
 
 func (s *authService) Elevate(ctx context.Context, req *connect.Request[nagiv1.ElevateRequest]) (*connect.Response[nagiv1.ElevateResponse], error) {
@@ -224,7 +231,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		}
 		q := r.URL.Query()
 		nodeID := q.Get("node")
-		ctx, cancel := context.WithCancel(auth.WithUser(r.Context(), u))
+		ctx, cancel := context.WithCancel(auth.WithRequest(auth.WithUser(r.Context(), u), r))
 		defer cancel()
 		ip := auth.RequestIP(r.RemoteAddr, r.Header)
 		if u.Role != auth.RoleAdmin {
@@ -272,9 +279,8 @@ func (a *API) NodeShellHandler() http.Handler {
 		began := time.Now()
 		a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "IP "+ip, false)
 		a.alertNodeShell(ctx, nodeID, u.Name, ip)
-		defer func() {
-			a.recordNodeAccess(ctx, "CloseNodeShell", nodeID, fmt.Sprintf("%s，%s", time.Since(began).Round(time.Second), ip), false)
-		}()
+		rec := a.Recordings.Start(ctx, cols, rows)
+		defer func() { a.recordSessionEnd(ctx, "CloseNodeShell", "node", nodeID, "", rec.Close()) }()
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。
 		lastActive := newActivityClock()
@@ -294,6 +300,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		})
 
 		bridgeTerminal(ctx, cancel, ws, lang, lastActive, terminalStream{
+			rec: rec,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Stdin{Stdin: b}})
 			},
@@ -349,7 +356,7 @@ func (a *API) NodeFileHandler() http.Handler {
 		}
 		q := r.URL.Query()
 		nodeID, path := q.Get("node"), q.Get("path")
-		ctx := auth.WithUser(r.Context(), u)
+		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		action := "DownloadNodeFile"
 		if r.Method != http.MethodGet {
 			action = "UploadNodeFile"

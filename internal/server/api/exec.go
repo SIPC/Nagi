@@ -38,7 +38,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	// 命令本身记在详情里：活动记录要能看出 agent 在容器里做过什么。
 	detail := strings.Join(command, " ")
 	fail := func(err error) (ExecResult, error) {
-		a.recordExec(ctx, start, detail, activityFailure(err))
+		a.recordExec(ctx, start, detail, activityFailure(err), "")
 		return ExecResult{}, err
 	}
 	switch {
@@ -101,7 +101,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	if !res.TimedOut && res.ExitCode != 0 {
 		detail += " → exit " + strconv.Itoa(int(res.ExitCode))
 	}
-	a.recordExec(ctx, start, detail, failure)
+	a.recordExec(ctx, start, detail, failure, res.Output)
 	return res, nil
 }
 
@@ -131,17 +131,42 @@ func (a *API) RecordMCPCall(ctx context.Context, u auth.User, e audit.Event, pro
 	a.Audit.RecordWithChildren(ctx, e, children)
 }
 
+// recordSessionEnd 记下终端会话的结束：时长、录制和各块的哈希（见 docs/audit.md#终端与命令录制）。
+func (a *API) recordSessionEnd(ctx context.Context, action, targetType, targetID, projectID string, rec audit.Summary) {
+	ctx = context.WithoutCancel(ctx)
+	e := audit.Event{Category: audit.Session, Action: action, ProjectID: projectID, TargetType: targetType, TargetID: targetID,
+		TargetName: targetID, RecordingID: rec.ID}
+	if targetType == "node" {
+		e.TargetName = a.nodeName(ctx, targetID)
+	}
+	if rec.ID != "" {
+		b, _ := json.Marshal(map[string]any{"recording": rec})
+		e.Params = string(b)
+		e.DurationMS = rec.Seconds * 1000
+	}
+	a.Record(ctx, e)
+}
+
 // recordExec 记一条执行命令的活动：详情是命令，失败时后面接原因。
-func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure string) {
+func (a *API) recordExec(ctx context.Context, start *nagiv1.ExecStart, command, failure, output string) {
 	result := audit.ResultOK
 	if failure != "" {
 		result = audit.ResultFailed
 	}
-	params, _ := json.Marshal(map[string]any{"service": start.GetService(), "command": command})
+	p := map[string]any{"service": start.GetService(), "command": command}
+	// 输出写成一个录制（见 docs/audit.md#终端与命令录制），摘要进入哈希链。
+	var rec audit.Summary
+	if output != "" {
+		rec = a.Recordings.WriteOnce(ctx, output)
+		if rec.ID != "" {
+			p["recording"] = rec
+		}
+	}
+	params, _ := json.Marshal(p)
 	a.Record(ctx, audit.Event{
 		Category: audit.Session, Action: "ExecCommand", ProjectID: start.GetProjectId(),
 		TargetType: "container", TargetID: start.GetContainer(), TargetName: start.GetContainer(),
-		Params: string(params), Result: result, Error: failure,
+		Params: string(params), Result: result, Error: failure, RecordingID: rec.ID,
 	})
 }
 

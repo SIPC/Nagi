@@ -4,9 +4,10 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { ChevronDown, ChevronRight, Download, ListFilter, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
 import { Badge, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { RecordingDialog } from "@/components/recording";
 import { PageHeader } from "@/pages/layout";
 import { useRole } from "@/components/role";
 import type { ActivityEntry, AuditEvent, AuditFilter, Node, PanelUser } from "@/gen/nagi/v1/api_pb";
@@ -348,6 +349,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
     return rows;
   }, [e]);
   const params = prettyParams(e?.params ?? "");
+  const [replaying, setReplaying] = useState(false);
 
   return (
     <Sheet open={!!id} onOpenChange={(v) => !v && onOpen(undefined)}>
@@ -365,6 +367,15 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
             e && (
               <>
                 <KeyValue items={items} />
+                {e.recordingId && (
+                  <div>
+                    <Button readOnlyOk variant="outline" onClick={() => setReplaying(true)}>
+                      <Play />
+                      {t.audit.replay.button}
+                    </Button>
+                    <RecordingDialog id={e.recordingId} open={replaying} onClose={() => setReplaying(false)} />
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <h3 className="text-sm font-medium">{t.audit.detail.params}</h3>
                   {params ? <CodeBlock className="max-h-80 overflow-auto [&_code]:whitespace-pre-wrap">{params}</CodeBlock> : <p className="text-muted-foreground">{t.audit.detail.noParams}</p>}

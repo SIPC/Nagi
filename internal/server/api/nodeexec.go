@@ -24,7 +24,7 @@ import (
 func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, timeout time.Duration) (ExecResult, error) {
 	u := auth.CurrentUser(ctx)
 	fail := func(err error) (ExecResult, error) {
-		a.recordNodeExec(ctx, nodeID, command, activityFailure(err))
+		a.recordNodeExec(ctx, nodeID, command, activityFailure(err), "")
 		return ExecResult{}, err
 	}
 	switch {
@@ -84,7 +84,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	case res.ExitCode != 0:
 		detail += " → exit " + strconv.Itoa(int(res.ExitCode))
 	}
-	a.recordNodeExec(ctx, nodeID, detail, failure)
+	a.recordNodeExec(ctx, nodeID, detail, failure, res.Output)
 	return res, nil
 }
 
@@ -97,16 +97,24 @@ func nodeExecError(err error) error {
 }
 
 // recordNodeExec 记一条节点命令的活动：详情是命令，失败时后面接原因。
-func (a *API) recordNodeExec(ctx context.Context, nodeID, command, failure string) {
+func (a *API) recordNodeExec(ctx context.Context, nodeID, command, failure, output string) {
 	ctx = context.WithoutCancel(ctx)
 	result := audit.ResultOK
 	if failure != "" {
 		result = audit.ResultFailed
 	}
-	params, _ := json.Marshal(map[string]string{"command": command})
+	p := map[string]any{"command": command}
+	var rec audit.Summary
+	if output != "" {
+		rec = a.Recordings.WriteOnce(ctx, output)
+		if rec.ID != "" {
+			p["recording"] = rec
+		}
+	}
+	params, _ := json.Marshal(p)
 	a.Record(ctx, audit.Event{
 		Category: audit.Session, Action: "NodeExec", TargetType: "node", TargetID: nodeID, TargetName: a.nodeName(ctx, nodeID),
-		Params: string(params), Result: result, Error: failure,
+		Params: string(params), Result: result, Error: failure, RecordingID: rec.ID,
 	})
 }
 

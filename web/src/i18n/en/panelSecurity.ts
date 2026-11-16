@@ -1,6 +1,13 @@
 import type zh from "../zh/panelSecurity";
 
 export default {
+  recording: {
+    title: "Terminal recording",
+    description: "Record the output of node terminals, container terminals, and commands. Administrators can replay recordings from the audit log.",
+    help: "Only output is recorded, not input, so passwords that aren't echoed never appear. Recordings are encrypted with the panel master key and kept for 90 days. Turning recording off requires verifying your identity and sends an alert.",
+    label: "Record terminal and command output",
+    elevate: "Verify your identity before turning off terminal recording.",
+  },
   session: {
     title: "Sessions",
     description: "How long sign-ins last, and whether network changes require verifying again.",

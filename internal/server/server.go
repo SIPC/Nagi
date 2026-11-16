@@ -365,6 +365,22 @@ func (s *Server) Run(ctx context.Context) error {
 		Standby: s.standby,
 		Promote: s.Promote,
 	}}
+	// 终端和命令的录制（见 docs/audit.md#终端与命令录制）：用主密钥加密，保留 90 天、总量不超过 10 GB。
+	a.Recordings = &audit.Recordings{Dir: filepath.Join(s.cfg.DataDir, "audit", "recordings"), Sealer: s.sealer, Enabled: a.RecordingEnabled}
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if err := a.Recordings.Prune(90*24*time.Hour, 10<<30, time.Now()); err != nil {
+				s.log.Warn("清理终端录制失败", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 	a.Mount(mux)
 	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
 	mcp.Mount(mux, mcp.Options{
@@ -601,7 +617,8 @@ func (l *chanListener) Close() error {
 func (l *chanListener) Addr() net.Addr { return l.addr }
 
 // contentSecurityPolicy 只允许加载面板自己的脚本和资源。样式允许内联：终端（xterm）会插入 <style>。
-const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+// script-src 的 'wasm-unsafe-eval' 只允许编译 WebAssembly（回放终端录制的 asciinema-player 用它解析终端输出），不允许 eval。
+const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
 	"form-action 'self'; frame-ancestors 'none'"
 

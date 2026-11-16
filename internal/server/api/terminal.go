@@ -12,6 +12,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/coder/websocket"
 	"google.golang.org/grpc/codes"
@@ -53,7 +54,7 @@ func (a *API) TerminalHandler() http.Handler {
 			return
 		}
 		defer ws.CloseNow()
-		ctx, cancel := context.WithCancel(auth.WithUser(r.Context(), u))
+		ctx, cancel := context.WithCancel(auth.WithRequest(auth.WithUser(r.Context(), u), r))
 		defer cancel()
 		fail := wsFail(ctx, ws)
 
@@ -105,7 +106,12 @@ func (a *API) TerminalHandler() http.Handler {
 			cancel()
 		})
 
+		rec := a.Recordings.Start(ctx, cols, rows)
+		defer func() {
+			a.recordSessionEnd(ctx, "CloseTerminal", "container", start.Container, start.ProjectId, rec.Close())
+		}()
 		bridgeTerminal(ctx, cancel, ws, lang, newActivityClock(), terminalStream{
+			rec: rec,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Stdin{Stdin: b}})
 			},
@@ -198,6 +204,8 @@ type terminalStream struct {
 	resize    func(cols, rows uint32) error
 	closeSend func() error
 	recv      func() (*nagiv1.ExecOutput, error)
+	// rec 录下输出和窗口大小（没开录制时为 nil）。输入不录：不回显的密码不会进入录制。
+	rec *audit.Recorder
 }
 
 // activityClock 记下终端最后一次有输入输出的时间。
@@ -237,6 +245,7 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 				if json.Unmarshal(data, &msg) != nil || msg.Type != "resize" {
 					continue
 				}
+				st.rec.Resize(msg.Cols, msg.Rows)
 				err = st.resize(msg.Cols, msg.Rows)
 			}
 			if err != nil {
@@ -259,6 +268,7 @@ func bridgeTerminal(ctx context.Context, cancel context.CancelFunc, ws *websocke
 		active.touch()
 		switch v := out.Output.(type) {
 		case *nagiv1.ExecOutput_Stdout:
+			st.rec.Output(v.Stdout)
 			if err := ws.Write(ctx, websocket.MessageBinary, v.Stdout); err != nil {
 				return
 			}

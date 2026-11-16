@@ -724,3 +724,8 @@ func (l *limiter) begin(keys ...string) (done func(outcome), wait time.Duration)
 		}
 	}, 0
 }
+
+// WithRequest 把不走 Connect 的请求（终端、上传下载）的来源放进 ctx，审计记录用。
+func WithRequest(ctx context.Context, r *http.Request) context.Context {
+	return WithMeta(ctx, Meta{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header)})
+}

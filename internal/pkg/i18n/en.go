@@ -632,4 +632,9 @@ var en = map[string]string{
 	"账号 %s 的登录被脚本工具使用，已退出":                "The sign-in for %s was used by a script tool and was signed out",
 	"这个会话已经登记过会话密钥":                       "This session already has a session key",
 	"验证失败次数过多，已退出登录":                      "Too many failed attempts. You've been signed out",
+	"录制不存在":       "The recording doesn't exist",
+	"录制不存在或无法读取":  "The recording doesn't exist or can't be read",
+	"成员：%s；来源：%s": "Member: %s; source: %s",
+	"终端录制已开启":     "Terminal recording turned on",
+	"终端录制已关闭":     "Terminal recording turned off",
 }

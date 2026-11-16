@@ -63,7 +63,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 		ref := &nagiv1.VolumeFileRef{
 			ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot"),
 		}
-		ctx := auth.WithUser(r.Context(), u)
+		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		m := a.Nodes.Mesh()
 		if m == nil {
 			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))

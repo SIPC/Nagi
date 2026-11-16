@@ -12,6 +12,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -352,4 +353,68 @@ func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request
 		out.Entries = append(out.Entries, activityEntry(r, names))
 	}
 	return connect.NewResponse(out), nil
+}
+
+// ---- 录制和审计设置 ----
+
+// SettingRecording 是终端录制的开关，"0" 表示关闭，默认开启。
+const SettingRecording = "audit_recording"
+
+// RecordingEnabled 判断终端录制有没有开。
+func (a *API) RecordingEnabled(ctx context.Context) bool {
+	v, err := a.Q.GetSetting(ctx, SettingRecording)
+	return err != nil || v != "0"
+}
+
+// GetRecording 回放终端录制。角色检查只放行管理员，高权限确认由 elevationCheck 检查；回放本身作为敏感查询记一条。
+func (s *settingsService) GetRecording(ctx context.Context, req *connect.Request[nagiv1.GetRecordingRequest], stream *connect.ServerStream[nagiv1.RecordingChunk]) error {
+	if s.Recordings == nil {
+		return connect.NewError(connect.CodeNotFound, i18n.New("录制不存在"))
+	}
+	err := s.Recordings.Read(req.Msg.GetId(), func(b []byte) error {
+		return stream.Send(&nagiv1.RecordingChunk{Data: b})
+	})
+	if err != nil {
+		return connect.NewError(connect.CodeNotFound, i18n.New("录制不存在或无法读取"))
+	}
+	return nil
+}
+
+func (s *settingsService) GetAuditSettings(ctx context.Context, _ *connect.Request[nagiv1.GetAuditSettingsRequest]) (*connect.Response[nagiv1.AuditSettings], error) {
+	return connect.NewResponse(&nagiv1.AuditSettings{Recording: s.RecordingEnabled(ctx)}), nil
+}
+
+// SetAuditSettings 保存审计设置。关闭录制要先做高权限确认，并发一条告警（见 docs/security.md#账号与凭据）。
+func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Request[nagiv1.AuditSettings]) (*connect.Response[nagiv1.AuditSettings], error) {
+	was := s.RecordingEnabled(ctx)
+	on := req.Msg.GetRecording()
+	if was && !on {
+		if !auth.CurrentUser(ctx).Elevated() {
+			return nil, elevationError()
+		}
+	}
+	v := "1"
+	if !on {
+		v = "0"
+	}
+	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingRecording, Value: v}); err != nil {
+		return nil, err
+	}
+	if was != on {
+		title := "终端录制已开启"
+		if !on {
+			title = "终端录制已关闭"
+		}
+		s.securityAlert(ctx, "recording", title)
+	}
+	return connect.NewResponse(&nagiv1.AuditSettings{Recording: on}), nil
+}
+
+// securityAlert 发一条面板的安全通知（操作人和来源写在消息里），发送在后台进行。
+func (a *API) securityAlert(ctx context.Context, key, title string) {
+	u := auth.CurrentUser(ctx)
+	m := auth.RequestMeta(ctx)
+	msg := i18n.Errorf("成员：%s；来源：%s", u.Name, m.IP).Error()
+	ctx = context.WithoutCancel(ctx)
+	go a.Nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "security:" + key, Title: i18n.New(title).Error(), Message: msg})
 }

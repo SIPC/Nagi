@@ -4,13 +4,47 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Check, QueryError, RowsSkeleton, Section, Select, SettingRow, SettingRows } from "@/components/ui";
 import type { SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient } from "@/lib/api";
+import { requireElevation } from "@/components/elevate";
 import { t } from "@/i18n";
 
 const idleOptions = [30, 60, 240, 480, 1440];
 const maxOptions = [24, 72, 168];
 
 export function PanelSecurityCard() {
-  return <SessionSection />;
+  return (
+    <>
+      <RecordingSection />
+      <SessionSection />
+    </>
+  );
+}
+
+function RecordingSection() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: ["audit-settings"], queryFn: () => settingsClient.getAuditSettings({}) });
+  const save = useMutation({
+    mutationFn: async (on: boolean) => {
+      // 关闭录制要先验证身份（见 docs/audit.md#终端与命令录制）。
+      if (!on && !(await requireElevation(t.panelSecurity.recording.elevate, { suggestTotp: false }))) return settings.data!;
+      return settingsClient.setAuditSettings({ ...settings.data, recording: on });
+    },
+    onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
+  });
+  const m = t.panelSecurity.recording;
+  if (settings.isPending) return <RowsSkeleton count={1} />;
+  if (!settings.data) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
+  return (
+    <Section title={m.title} description={m.description} help={m.help}>
+      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+      <SettingRows>
+        <SettingRow label={m.label}>
+          <Check checked={settings.data.recording} disabled={save.isPending} onChange={(v) => save.mutate(v)}>
+            <span className="sr-only">{m.label}</span>
+          </Check>
+        </SettingRow>
+      </SettingRows>
+    </Section>
+  );
 }
 
 function SessionSection() {

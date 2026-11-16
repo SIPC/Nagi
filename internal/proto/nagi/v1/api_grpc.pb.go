@@ -2228,6 +2228,9 @@ const (
 	SettingsService_ExportAuditEvents_FullMethodName    = "/nagi.v1.SettingsService/ExportAuditEvents"
 	SettingsService_GetSessionPolicy_FullMethodName     = "/nagi.v1.SettingsService/GetSessionPolicy"
 	SettingsService_SetSessionPolicy_FullMethodName     = "/nagi.v1.SettingsService/SetSessionPolicy"
+	SettingsService_GetRecording_FullMethodName         = "/nagi.v1.SettingsService/GetRecording"
+	SettingsService_GetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/GetAuditSettings"
+	SettingsService_SetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/SetAuditSettings"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2296,6 +2299,11 @@ type SettingsServiceClient interface {
 	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
 	GetSessionPolicy(ctx context.Context, in *GetSessionPolicyRequest, opts ...grpc.CallOption) (*SessionPolicy, error)
 	SetSessionPolicy(ctx context.Context, in *SessionPolicy, opts ...grpc.CallOption) (*SessionPolicy, error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(ctx context.Context, in *GetRecordingRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecordingChunk], error)
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(ctx context.Context, in *GetAuditSettingsRequest, opts ...grpc.CallOption) (*AuditSettings, error)
+	SetAuditSettings(ctx context.Context, in *AuditSettings, opts ...grpc.CallOption) (*AuditSettings, error)
 }
 
 type settingsServiceClient struct {
@@ -2685,6 +2693,45 @@ func (c *settingsServiceClient) SetSessionPolicy(ctx context.Context, in *Sessio
 	return out, nil
 }
 
+func (c *settingsServiceClient) GetRecording(ctx context.Context, in *GetRecordingRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecordingChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SettingsService_ServiceDesc.Streams[1], SettingsService_GetRecording_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetRecordingRequest, RecordingChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_GetRecordingClient = grpc.ServerStreamingClient[RecordingChunk]
+
+func (c *settingsServiceClient) GetAuditSettings(ctx context.Context, in *GetAuditSettingsRequest, opts ...grpc.CallOption) (*AuditSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditSettings)
+	err := c.cc.Invoke(ctx, SettingsService_GetAuditSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, in *AuditSettings, opts ...grpc.CallOption) (*AuditSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditSettings)
+	err := c.cc.Invoke(ctx, SettingsService_SetAuditSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2751,6 +2798,11 @@ type SettingsServiceServer interface {
 	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
 	GetSessionPolicy(context.Context, *GetSessionPolicyRequest) (*SessionPolicy, error)
 	SetSessionPolicy(context.Context, *SessionPolicy) (*SessionPolicy, error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(*GetRecordingRequest, grpc.ServerStreamingServer[RecordingChunk]) error
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *GetAuditSettingsRequest) (*AuditSettings, error)
+	SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -2871,6 +2923,15 @@ func (UnimplementedSettingsServiceServer) GetSessionPolicy(context.Context, *Get
 }
 func (UnimplementedSettingsServiceServer) SetSessionPolicy(context.Context, *SessionPolicy) (*SessionPolicy, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetSessionPolicy not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetRecording(*GetRecordingRequest, grpc.ServerStreamingServer[RecordingChunk]) error {
+	return status.Error(codes.Unimplemented, "method GetRecording not implemented")
+}
+func (UnimplementedSettingsServiceServer) GetAuditSettings(context.Context, *GetAuditSettingsRequest) (*AuditSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuditSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAuditSettings not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3552,6 +3613,53 @@ func _SettingsService_SetSessionPolicy_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_GetRecording_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetRecordingRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SettingsServiceServer).GetRecording(m, &grpc.GenericServerStream[GetRecordingRequest, RecordingChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SettingsService_GetRecordingServer = grpc.ServerStreamingServer[RecordingChunk]
+
+func _SettingsService_GetAuditSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuditSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).GetAuditSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_GetAuditSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).GetAuditSettings(ctx, req.(*GetAuditSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetAuditSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuditSettings)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetAuditSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetAuditSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetAuditSettings(ctx, req.(*AuditSettings))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3703,11 +3811,24 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "SetSessionPolicy",
 			Handler:    _SettingsService_SetSessionPolicy_Handler,
 		},
+		{
+			MethodName: "GetAuditSettings",
+			Handler:    _SettingsService_GetAuditSettings_Handler,
+		},
+		{
+			MethodName: "SetAuditSettings",
+			Handler:    _SettingsService_SetAuditSettings_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "ExportAuditEvents",
 			Handler:       _SettingsService_ExportAuditEvents_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetRecording",
+			Handler:       _SettingsService_GetRecording_Handler,
 			ServerStreams: true,
 		},
 	},

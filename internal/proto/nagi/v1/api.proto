@@ -421,6 +421,11 @@ service SettingsService {
   // 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
   rpc GetSessionPolicy(GetSessionPolicyRequest) returns (SessionPolicy);
   rpc SetSessionPolicy(SessionPolicy) returns (SessionPolicy);
+  // 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+  rpc GetRecording(GetRecordingRequest) returns (stream RecordingChunk);
+  // 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+  rpc GetAuditSettings(GetAuditSettingsRequest) returns (AuditSettings);
+  rpc SetAuditSettings(AuditSettings) returns (AuditSettings);
 }
 
 message AccessToken {
@@ -1430,4 +1435,20 @@ message SessionPolicy {
   string bind = 3;
   // 把网络绑定用到所有角色。
   bool bind_all = 4;
+}
+
+message GetRecordingRequest {
+  string id = 1;
+}
+
+message RecordingChunk {
+  // asciicast v2 的若干行。
+  bytes data = 1;
+}
+
+message GetAuditSettingsRequest {}
+
+message AuditSettings {
+  // 录制节点终端、容器终端、exec 和 node_exec 的输出。默认开启。
+  bool recording = 1;
 }

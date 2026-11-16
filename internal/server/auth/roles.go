@@ -29,6 +29,8 @@ var adminReads = map[string]bool{
 	"ListNodeDir": true, "ListNodeFileBackups": true,
 	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
 	"GetNodeStorage": true,
+	// 终端录制和审计设置（见 docs/audit.md）。
+	"GetRecording": true, "GetAuditSettings": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

@@ -288,6 +288,15 @@ const (
 	// SettingsServiceSetSessionPolicyProcedure is the fully-qualified name of the SettingsService's
 	// SetSessionPolicy RPC.
 	SettingsServiceSetSessionPolicyProcedure = "/nagi.v1.SettingsService/SetSessionPolicy"
+	// SettingsServiceGetRecordingProcedure is the fully-qualified name of the SettingsService's
+	// GetRecording RPC.
+	SettingsServiceGetRecordingProcedure = "/nagi.v1.SettingsService/GetRecording"
+	// SettingsServiceGetAuditSettingsProcedure is the fully-qualified name of the SettingsService's
+	// GetAuditSettings RPC.
+	SettingsServiceGetAuditSettingsProcedure = "/nagi.v1.SettingsService/GetAuditSettings"
+	// SettingsServiceSetAuditSettingsProcedure is the fully-qualified name of the SettingsService's
+	// SetAuditSettings RPC.
+	SettingsServiceSetAuditSettingsProcedure = "/nagi.v1.SettingsService/SetAuditSettings"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -2022,6 +2031,11 @@ type SettingsServiceClient interface {
 	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
 	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
 	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest]) (*connect.ServerStreamForClient[v1.RecordingChunk], error)
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
+	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2257,6 +2271,24 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
 			connect.WithClientOptions(opts...),
 		),
+		getRecording: connect.NewClient[v1.GetRecordingRequest, v1.RecordingChunk](
+			httpClient,
+			baseURL+SettingsServiceGetRecordingProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetRecording")),
+			connect.WithClientOptions(opts...),
+		),
+		getAuditSettings: connect.NewClient[v1.GetAuditSettingsRequest, v1.AuditSettings](
+			httpClient,
+			baseURL+SettingsServiceGetAuditSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetAuditSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		setAuditSettings: connect.NewClient[v1.AuditSettings, v1.AuditSettings](
+			httpClient,
+			baseURL+SettingsServiceSetAuditSettingsProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -2299,6 +2331,9 @@ type settingsServiceClient struct {
 	exportAuditEvents    *connect.Client[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk]
 	getSessionPolicy     *connect.Client[v1.GetSessionPolicyRequest, v1.SessionPolicy]
 	setSessionPolicy     *connect.Client[v1.SessionPolicy, v1.SessionPolicy]
+	getRecording         *connect.Client[v1.GetRecordingRequest, v1.RecordingChunk]
+	getAuditSettings     *connect.Client[v1.GetAuditSettingsRequest, v1.AuditSettings]
+	setAuditSettings     *connect.Client[v1.AuditSettings, v1.AuditSettings]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2486,6 +2521,21 @@ func (c *settingsServiceClient) SetSessionPolicy(ctx context.Context, req *conne
 	return c.setSessionPolicy.CallUnary(ctx, req)
 }
 
+// GetRecording calls nagi.v1.SettingsService.GetRecording.
+func (c *settingsServiceClient) GetRecording(ctx context.Context, req *connect.Request[v1.GetRecordingRequest]) (*connect.ServerStreamForClient[v1.RecordingChunk], error) {
+	return c.getRecording.CallServerStream(ctx, req)
+}
+
+// GetAuditSettings calls nagi.v1.SettingsService.GetAuditSettings.
+func (c *settingsServiceClient) GetAuditSettings(ctx context.Context, req *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error) {
+	return c.getAuditSettings.CallUnary(ctx, req)
+}
+
+// SetAuditSettings calls nagi.v1.SettingsService.SetAuditSettings.
+func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, req *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error) {
+	return c.setAuditSettings.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2550,6 +2600,11 @@ type SettingsServiceHandler interface {
 	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
 	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
 	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
+	// 回放终端录制（见 docs/audit.md#终端与命令录制）：按块返回 asciicast v2 的内容。只有管理员能用，要先做高权限确认。
+	GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest], *connect.ServerStream[v1.RecordingChunk]) error
+	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
+	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
+	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2781,6 +2836,24 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetRecordingHandler := connect.NewServerStreamHandler(
+		SettingsServiceGetRecordingProcedure,
+		svc.GetRecording,
+		connect.WithSchema(settingsServiceMethods.ByName("GetRecording")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceGetAuditSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceGetAuditSettingsProcedure,
+		svc.GetAuditSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("GetAuditSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetAuditSettingsHandler := connect.NewUnaryHandler(
+		SettingsServiceSetAuditSettingsProcedure,
+		svc.SetAuditSettings,
+		connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2857,6 +2930,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceGetSessionPolicyHandler.ServeHTTP(w, r)
 		case SettingsServiceSetSessionPolicyProcedure:
 			settingsServiceSetSessionPolicyHandler.ServeHTTP(w, r)
+		case SettingsServiceGetRecordingProcedure:
+			settingsServiceGetRecordingHandler.ServeHTTP(w, r)
+		case SettingsServiceGetAuditSettingsProcedure:
+			settingsServiceGetAuditSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceSetAuditSettingsProcedure:
+			settingsServiceSetAuditSettingsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3012,6 +3091,18 @@ func (UnimplementedSettingsServiceHandler) GetSessionPolicy(context.Context, *co
 
 func (UnimplementedSettingsServiceHandler) SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetSessionPolicy is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetRecording(context.Context, *connect.Request[v1.GetRecordingRequest], *connect.ServerStream[v1.RecordingChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetRecording is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetAuditSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAuditSettings is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

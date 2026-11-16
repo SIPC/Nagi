@@ -60,6 +60,8 @@ type API struct {
 	OAuth *oauth.Server
 	// Audit 是审计日志（见 docs/audit.md）。
 	Audit *audit.Log
+	// Recordings 是终端和命令的录制（见 docs/audit.md#终端与命令录制）。
+	Recordings *audit.Recordings
 
 	updates panelUpdates
 	reads   readDedup
