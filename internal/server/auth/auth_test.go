@@ -28,13 +28,13 @@ func TestLimiter(t *testing.T) {
 		}
 		return wait
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < ipFreeFailures; i++ {
 		if w := attempt(outcomeFailure); w > 0 {
 			t.Fatalf("第 %d 次就要等待", i+1)
 		}
 	}
 	if attempt(outcomeFailure) <= 0 {
-		t.Fatal("失败 5 次以后应该等待")
+		t.Fatalf("按 IP 失败 %d 次以后应该等待", ipFreeFailures)
 	}
 	// 同一来源同时只处理一个请求。
 	l2 := newLimiter()
@@ -83,7 +83,7 @@ func TestLimiterNoResetAbuse(t *testing.T) {
 		return wait
 	}
 	ip := "9.9.9.9"
-	for round := 0; round < 3; round++ {
+	for round := 0; round < ipFreeFailures/2; round++ {
 		for i := 0; i < 2; i++ {
 			try(outcomeFailure, ip)
 		}

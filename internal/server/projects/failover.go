@@ -429,8 +429,7 @@ func (s *Service) syncFailover(ctx context.Context, conn *nodes.Conn, st *nagiv1
 	}
 	cur := failoverOf(c)
 	if cur == nil {
-		// 项目刚从节点缓存拼回时，容器可能还没从持有者那里拼回顶替设置（例如先从热备拼回的）：先不删节点上的。
-		if p, perr := s.project(ctx, pid); perr == nil && recentlyRebuilt(p) {
+		if s.keepUnsetFailover(ctx, c) {
 			return nil
 		}
 		clear()

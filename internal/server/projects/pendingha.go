@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/proto"
@@ -41,6 +42,7 @@ func (s *Service) rebuiltHA(ctx context.Context, nodeID string, sp *nagiv1.Conta
 	if p.GetBackupNodeId() == "" && p.GetFailover() == nil {
 		return nil
 	}
+	p.Privileged, _ = spec.PrivilegeReasons(sp.GetConfig(), sp.GetName())
 	return p
 }
 
@@ -57,6 +59,17 @@ func (s *Service) failoverMatches(ctx context.Context, nodeID string, cfg *nagiv
 		}
 	}
 	return true
+}
+
+// keepUnsetFailover 判断面板上没有顶替设置的容器，节点上的顶替设置要不要先留着（不让节点删掉）：
+//   - 项目刚从节点缓存拼回时，容器可能还没从持有者那里拼回顶替设置（例如先从热备拼回的）；
+//   - 拼回的顶替设置在等管理员确认：节点上的那份要留到确认，确认后照常运行；放弃以后才删。
+func (s *Service) keepUnsetFailover(ctx context.Context, c store.Container) bool {
+	if pendingHAOf(c).GetFailover() != nil {
+		return true
+	}
+	p, err := s.project(ctx, c.ProjectID)
+	return err == nil && recentlyRebuilt(p)
 }
 
 // ConfirmPendingHA 管理员确认（或放弃）从节点缓存拼回的设置。确认时按当前的登记重新核对一遍。
@@ -87,6 +100,8 @@ func (s *Service) ConfirmPendingHA(ctx context.Context, projectID, name string, 
 			if err := s.Q.SetContainerFailover(ctx, store.SetContainerFailoverParams{Failover: raw, FailoverEpoch: int64(p.GetFailoverEpoch()), ProjectID: projectID, Name: name}); err != nil {
 				return err
 			}
+			// 见证人还是拼回之前的旧面板：换成本面板（在锁外进行；节点下次上报时也会触发）。
+			defer s.adoptWitness(c, f)
 		} else if id := p.GetBackupNodeId(); id != "" {
 			if id == c.NodeID {
 				return invalid("备份节点不能是容器所在的节点")

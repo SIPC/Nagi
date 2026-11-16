@@ -106,3 +106,34 @@ func TestPendingHADiscard(t *testing.T) {
 		t.Fatal("没有待确认的设置时应该报错")
 	}
 }
+
+// 拼回的顶替设置等确认期间（哪怕项目拼回已经超过 10 分钟），节点上的顶替设置要留着；放弃以后才让节点删掉。
+func TestKeepNodeFailoverWhilePending(t *testing.T) {
+	ctx := context.Background()
+	s := haTestService(t)
+	load := func() store.Container {
+		c, err := s.container(ctx, "aaaaaaaaaaaaaaaa", "web")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	if s.keepUnsetFailover(ctx, load()) {
+		t.Fatal("没有待确认的设置、项目也不是刚拼回的：应该让节点删掉")
+	}
+	p := &nagiv1.PendingHA{FailoverEpoch: 3, Failover: &nagiv1.FailoverConfig{
+		A: &nagiv1.FailoverParticipant{NodeId: "n1", Key: []byte{1}}, B: &nagiv1.FailoverParticipant{NodeId: "n2", Key: []byte{2}},
+	}}
+	if err := s.Q.SetContainerPendingHA(ctx, store.SetContainerPendingHAParams{PendingHa: marshalPending(t, p), ProjectID: "aaaaaaaaaaaaaaaa", Name: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.keepUnsetFailover(ctx, load()) {
+		t.Fatal("等确认期间应该留着节点上的顶替设置")
+	}
+	if err := s.ConfirmPendingHA(ctx, "aaaaaaaaaaaaaaaa", "web", true); err != nil {
+		t.Fatal(err)
+	}
+	if s.keepUnsetFailover(ctx, load()) {
+		t.Fatal("放弃以后应该让节点删掉")
+	}
+}

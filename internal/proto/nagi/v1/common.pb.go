@@ -744,6 +744,8 @@ type PendingHA struct {
 	Failover      *FailoverConfig        `protobuf:"bytes,1,opt,name=failover,proto3" json:"failover,omitempty"`
 	FailoverEpoch uint64                 `protobuf:"varint,2,opt,name=failover_epoch,json=failoverEpoch,proto3" json:"failover_epoch,omitempty"`
 	BackupNodeId  string                 `protobuf:"bytes,3,opt,name=backup_node_id,json=backupNodeId,proto3" json:"backup_node_id,omitempty"`
+	// 缓存里的配置有哪些特权内容（spec.PrivilegeReasons）。确认后别的节点会运行它，界面上要醒目提示。
+	Privileged    []string `protobuf:"bytes,4,rep,name=privileged,proto3" json:"privileged,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -797,6 +799,13 @@ func (x *PendingHA) GetBackupNodeId() string {
 		return x.BackupNodeId
 	}
 	return ""
+}
+
+func (x *PendingHA) GetPrivileged() []string {
+	if x != nil {
+		return x.Privileged
+	}
+	return nil
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -5423,11 +5432,14 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"alertRules\x12F\n" +
 	"\x11snapshot_schedule\x18\x1b \x01(\v2\x19.nagi.v1.SnapshotScheduleR\x10snapshotSchedule\x121\n" +
 	"\n" +
-	"pending_ha\x18\x1c \x01(\v2\x12.nagi.v1.PendingHAR\tpendingHa\"\x8d\x01\n" +
+	"pending_ha\x18\x1c \x01(\v2\x12.nagi.v1.PendingHAR\tpendingHa\"\xad\x01\n" +
 	"\tPendingHA\x123\n" +
 	"\bfailover\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\bfailover\x12%\n" +
 	"\x0efailover_epoch\x18\x02 \x01(\x04R\rfailoverEpoch\x12$\n" +
-	"\x0ebackup_node_id\x18\x03 \x01(\tR\fbackupNodeId\"\xf5\x03\n" +
+	"\x0ebackup_node_id\x18\x03 \x01(\tR\fbackupNodeId\x12\x1e\n" +
+	"\n" +
+	"privileged\x18\x04 \x03(\tR\n" +
+	"privileged\"\xf5\x03\n" +
 	"\x0fContainerConfig\x12\x18\n" +
 	"\acompose\x18\x01 \x01(\tR\acompose\x12!\n" +
 	"\x03env\x18\x02 \x03(\v2\x0f.nagi.v1.EnvVarR\x03env\x12I\n" +

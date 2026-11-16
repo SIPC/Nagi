@@ -148,8 +148,16 @@ func (s *Server) verifyAndFollow(addrs []string, fingerprint string, own uint64)
 }
 
 // handleStatus 提供 GET /api/standby/status：本面板的任期、主面板和是不是主面板。别的面板据此核实谁是主面板。
+// 只有同一组主备面板会来问：从没配过备用面板的面板（不是备用面板、没有提升过所以任期还是 1、没有登记的备用面板）返回 404，
+// 开了安全入口时扫描的人从这里认不出面板。
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	term, primary := standby.Term(r.Context(), s.q)
+	if s.standby == nil && term <= 1 {
+		if list, err := s.q.ListStandbyPanels(r.Context()); err == nil && len(list) == 0 {
+			http.NotFound(w, r)
+			return
+		}
+	}
 	st := standby.PanelStatus{Term: term, Primary: primary, IsPrimary: s.standby == nil && primary == s.fingerprint}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(st)

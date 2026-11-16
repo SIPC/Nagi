@@ -12,6 +12,9 @@ var SensitiveActions = []string{
 	"Elevate", "ChangePassword", "BeginTOTP", "EnableTOTP", "DisableTOTP",
 	"CreateUser", "UpdateUser", "DeleteUser", "CreateAccessToken", "RevokeAccessToken",
 	"CreateStandbyCode", "RemoveStandby", "PromoteStandby", "ConfirmPendingHA",
+	// 节点上的文件（等于节点的 root）、安全入口、节点加入和移交。
+	"DownloadNodeFile", "UploadNodeFile", "ReadNodeFile", "WriteNodeFile", "DeleteNodeFile", "CreateNodeDir", "RestoreNodeFileBackup",
+	"SetEntrance", "CreateEnrollCommand", "ApproveNode", "RemoveNode", "HandoverNodes",
 }
 
 func sensitiveList() string {

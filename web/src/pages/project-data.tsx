@@ -36,7 +36,7 @@ import {
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
 import { useDefaultDir } from "@/pages/projects";
-import { confirmAction } from "@/components/confirm";
+import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRole } from "@/components/role";
@@ -1239,7 +1239,24 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
               >
                 {f.restoredDiscard}
               </Button>
-              <Button disabled={busy} onClick={() => call(() => elevated(() => nodeClient.confirmPendingHA(ref)))}>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  // 配置有特权内容时（伪造的项目常常这样），要输入容器名确认。
+                  if (
+                    p.privileged.length > 0 &&
+                    !(await ask(f.restoredPrivilegedConfirm(container.name), {
+                      action: f.restoredConfirm,
+                      danger: true,
+                      check: f.restoredPrivilegedCheck,
+                      checkDefault: true,
+                      typeToConfirm: { label: f.restoredTypeName(container.name), value: container.name },
+                    }))
+                  )
+                    return;
+                  await call(() => elevated(() => nodeClient.confirmPendingHA(ref)));
+                }}
+              >
                 {busy && <Spinner />}
                 {f.restoredConfirm}
               </Button>
@@ -1248,6 +1265,7 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
         }
       >
         {f.restoredBody(t.common.list(items))}
+        {p.privileged.length > 0 && <span className="block text-destructive">{f.restoredPrivileged(t.common.list(p.privileged))}</span>}
         {!isAdmin && ` ${f.restoredAdminOnly}`}
       </Notice>
       {error && <Alert>{error}</Alert>}

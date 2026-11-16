@@ -135,6 +135,8 @@ message PendingHA {
   FailoverConfig failover = 1;
   uint64 failover_epoch = 2;
   string backup_node_id = 3;
+  // 缓存里的配置有哪些特权内容（spec.PrivilegeReasons）。确认后别的节点会运行它，界面上要醒目提示。
+  repeated string privileged = 4;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。

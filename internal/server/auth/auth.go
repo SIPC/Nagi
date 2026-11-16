@@ -166,9 +166,18 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 			result = outcomeNeutral
 			return nil, connect.NewError(connect.CodeFailedPrecondition, ErrTOTPRequired)
 		}
+		// 验证码另外按账号计数（和高权限确认共用）：知道密码的人换 IP 也不能一直猜。只有密码对了才走到这里，
+		// 不知道密码的人锁不住别人的账号。
+		userDone, err := s.beginVerify(userLimitKey(user.ID))
+		if err != nil {
+			result = outcomeNeutral
+			return nil, err
+		}
 		if err := s.useTOTP(ctx, user, code); err != nil {
+			userDone(outcomeFailure)
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
+		userDone(outcomeSuccess)
 	}
 	result = outcomeSuccess
 	return s.NewSession(ctx, user.ID, ip)
@@ -462,7 +471,7 @@ func HashToken(token string) string {
 
 // ---- 登录限速 ----
 
-// limiter：同一来源连续失败 5 次以后，每次失败等待时间翻倍，最长 15 分钟。
+// limiter：同一来源连续失败若干次以后（账号 5 次，IP 10 次：同一出口 IP 后面可能有好几个人），每次失败等待时间翻倍，最长 15 分钟。
 // 同一来源同时只处理一个请求：否则并发的请求都能在失败次数增加之前通过检查，限速就没用了。
 //
 // 来源有两种：按 IP（LimitKey）和按账号（userLimitKey）。成功只清零账号的计数：按 IP 的计数要是也清零，
@@ -484,6 +493,12 @@ type attempts struct {
 
 // failureMemory 是失败次数记多久：最后一次失败之后这么久没有再失败，计数清零。
 const failureMemory = time.Hour
+
+// 失败多少次以后开始等待：按账号 5 次；按 IP 10 次，同一出口 IP 后面的几个人合计输错几次不至于马上被锁。
+const (
+	userFreeFailures = 5
+	ipFreeFailures   = 10
+)
 
 // outcome 是一次尝试的结果。
 type outcome int
@@ -559,8 +574,12 @@ func (l *limiter) begin(keys ...string) (done func(outcome), wait time.Duration)
 			case outcomeFailure:
 				a.failures++
 				a.lastFail = now
-				if a.failures >= 5 {
-					a.until = now.Add(min(time.Second<<min(a.failures-5, 10), 15*time.Minute))
+				free := ipFreeFailures
+				if strings.HasPrefix(keys[i], "user:") {
+					free = userFreeFailures
+				}
+				if a.failures >= free {
+					a.until = now.Add(min(time.Second<<min(a.failures-free, 10), 15*time.Minute))
 				}
 			}
 		}
