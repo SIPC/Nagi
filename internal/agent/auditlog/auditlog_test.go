@@ -114,3 +114,47 @@ func TestShip(t *testing.T) {
 		t.Fatal("外送配置里有密钥，文件权限应该是 0600")
 	}
 }
+
+// M10：攻击者拿下面板 P 后配了一个外送目标，管理员把 P 移出信任列表以后，节点不能再往那里发。
+// P 也不能借和正常面板相同的目标 ID 顶替正常面板的目标。
+func TestShipOnlyTrustedPanels(t *testing.T) {
+	var mu sync.Mutex
+	got := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		sc := bufio.NewScanner(r.Body)
+		for sc.Scan() {
+			got[r.URL.Path]++
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	l, _ := Open(filepath.Join(dir, "audit"))
+	defer l.Close()
+	trusted := map[string]bool{"good": true, "evil": true}
+	s := &Shipper{Log: l, ConfigPath: filepath.Join(dir, "auditsinks.json"), Trusted: func(fp string) bool { return trusted[fp] }}
+	s.Load()
+	legit := auditsink.Config{ID: "s1", Type: "http", URL: srv.URL + "/legit"}
+	// 攻击者用同样的 ID 配到自己的地址；面板指纹按字母排在前面。
+	evil := auditsink.Config{ID: "s1", Type: "http", URL: srv.URL + "/evil"}
+	_ = s.SetSinks("good", []auditsink.Config{legit})
+	_ = s.SetSinks("evil", []auditsink.Config{evil})
+	l.Record(Event{Action: "a"})
+	ctx := context.Background()
+	s.ShipOnce(ctx)
+	mu.Lock()
+	if got["/legit"] != 1 {
+		t.Fatalf("同 ID 的目标不能顶替正常面板的目标：%v", got)
+	}
+	mu.Unlock()
+	// 移出信任列表：之后的记录不再发给它。
+	delete(trusted, "evil")
+	l.Record(Event{Action: "node_exec", Detail: "cat /etc/secret"})
+	s.ShipOnce(ctx)
+	mu.Lock()
+	defer mu.Unlock()
+	if got["/evil"] != 1 || got["/legit"] != 2 {
+		t.Fatalf("移出信任列表的面板的目标不应再收到记录：%v", got)
+	}
+}

@@ -30,6 +30,10 @@ func (a *agent) openAudit(ctx context.Context) {
 		Log: l, NodeID: a.nodeIDForAudit, ConfigPath: filepath.Join(a.cfg.DataDir, "identity", "auditsinks.json"),
 		Logger: a.log.With("component", "audit"),
 		Node:   func() string { return a.hostname },
+		Trusted: func(fp string) bool {
+			_, ok := a.id.panel(fp)
+			return ok
+		},
 	}
 	a.auditShip.Load()
 	go a.auditShip.Run(ctx)

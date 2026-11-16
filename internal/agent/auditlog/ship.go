@@ -2,6 +2,8 @@ package auditlog
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -33,7 +35,10 @@ type Shipper struct {
 	NodeID func() string
 	// ConfigPath 是保存外送目标的文件（identity/auditsinks.json）。
 	ConfigPath string
-	Logger     *slog.Logger
+	// Trusted 判断面板还在不在信任列表里。移出信任列表的面板下发的目标不再外送（见 docs/audit.md#节点本地审计）：
+	// 拿下面板的人配的目标，管理员把面板移除以后不能还一直收到节点的记录。为 nil 时不检查（测试）。
+	Trusted func(fingerprint string) bool
+	Logger  *slog.Logger
 
 	mu      sync.Mutex
 	byPanel map[string][]auditsink.Config
@@ -67,10 +72,15 @@ func (s *Shipper) SetSinks(panel string, sinks []auditsink.Config) error {
 	} else {
 		s.byPanel[panel] = sinks
 	}
-	// 新目标从现在开始发，不补发以前的记录（本地文件里有全部）。
+	// 新目标从现在开始发，不补发以前的记录（本地文件里有全部）。旧版本的游标按目标 ID 存，接着用。
 	for _, sk := range s.sinksLocked() {
-		if _, ok := s.cursors[sk.ID]; !ok {
-			s.cursors[sk.ID] = s.Log.Seq()
+		k := sinkKey(sk)
+		if _, ok := s.cursors[k]; !ok {
+			if old, ok := s.cursors[sk.ID]; ok {
+				s.cursors[k] = old
+			} else {
+				s.cursors[k] = s.Log.Seq()
+			}
 		}
 	}
 	b, err := json.Marshal(s.byPanel)
@@ -83,25 +93,35 @@ func (s *Shipper) SetSinks(panel string, sinks []auditsink.Config) error {
 	return s.saveCursorsLocked()
 }
 
-// sinksLocked 合并各面板的目标，同一个 ID 只留一个。
+// sinksLocked 合并仍在信任列表里的面板的目标。主面板和备用面板配的是同一份（ID 和内容都相同），只留一个；
+// ID 相同、内容不同的分开发：一个面板不能借同样的 ID 顶替别的面板的目标。
 func (s *Shipper) sinksLocked() []auditsink.Config {
 	seen := map[string]bool{}
 	var out []auditsink.Config
 	panels := make([]string, 0, len(s.byPanel))
 	for p := range s.byPanel {
-		panels = append(panels, p)
+		if s.Trusted == nil || s.Trusted(p) {
+			panels = append(panels, p)
+		}
 	}
 	sort.Strings(panels)
 	for _, p := range panels {
 		for _, sk := range s.byPanel[p] {
-			if sk.ID == "" || seen[sk.ID] {
+			if sk.ID == "" || seen[sinkKey(sk)] {
 				continue
 			}
-			seen[sk.ID] = true
+			seen[sinkKey(sk)] = true
 			out = append(out, sk)
 		}
 	}
 	return out
+}
+
+// sinkKey 是一个目标的游标和失败状态的键：ID 加上配置的摘要。
+func sinkKey(sk auditsink.Config) string {
+	b, _ := json.Marshal(sk)
+	sum := sha256.Sum256(b)
+	return sk.ID + "@" + hex.EncodeToString(sum[:6])
 }
 
 func (s *Shipper) saveCursorsLocked() error {
@@ -141,8 +161,9 @@ func (s *Shipper) ShipOnce(ctx context.Context) {
 	s.mu.Unlock()
 	for _, sk := range sinks {
 		for {
+			key := sinkKey(sk)
 			s.mu.Lock()
-			cursor := s.cursors[sk.ID]
+			cursor := s.cursors[key]
 			s.mu.Unlock()
 			lines, first, last := s.Log.After(cursor, shipBatch)
 			if len(lines) == 0 {
@@ -150,8 +171,8 @@ func (s *Shipper) ShipOnce(ctx context.Context) {
 			}
 			if err := auditsink.Send(ctx, s.client, sk, auditsink.NodeScope(s.nodeID()), first, s.decorate(lines)); err != nil {
 				s.mu.Lock()
-				was := s.failing[sk.ID]
-				s.failing[sk.ID] = err.Error()
+				was := s.failing[key]
+				s.failing[key] = err.Error()
 				s.mu.Unlock()
 				if was == "" && s.Logger != nil {
 					s.Logger.Warn("外送本地审计失败，稍后重试", "sink", sk.Name, "err", err)
@@ -159,11 +180,11 @@ func (s *Shipper) ShipOnce(ctx context.Context) {
 				break
 			}
 			s.mu.Lock()
-			if s.failing[sk.ID] != "" && s.Logger != nil {
+			if s.failing[key] != "" && s.Logger != nil {
 				s.Logger.Info("外送本地审计已恢复", "sink", sk.Name)
 			}
-			delete(s.failing, sk.ID)
-			s.cursors[sk.ID] = last
+			delete(s.failing, key)
+			s.cursors[key] = last
 			_ = s.saveCursorsLocked()
 			s.mu.Unlock()
 			if len(lines) < shipBatch {
@@ -211,8 +232,8 @@ func (s *Shipper) Status() map[string]string {
 }
 
 // Cursor 返回一个目标的游标，测试用。
-func (s *Shipper) Cursor(id string) string {
+func (s *Shipper) Cursor(sk auditsink.Config) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return strconv.FormatInt(s.cursors[id], 10)
+	return strconv.FormatInt(s.cursors[sinkKey(sk)], 10)
 }
