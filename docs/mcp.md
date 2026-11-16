@@ -100,7 +100,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_deployments` | 项目的部署记录：时间、来源、涉及的容器和版本、是否成功 | `ListDeployments` |
 | `check_images` | 立即检查项目里的镜像有没有新版本 | `CheckImages` |
 | `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
-| `list_backup_snapshots` | 备份节点上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
+| `list_backup_snapshots` | 一个备份节点（`backup_node`，默认第一个）上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
 | `list_nodes` | 节点、标签、在线、占用、容器数，可以只列带某个标签的 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
@@ -135,7 +135,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口） | `SaveRoute` |
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
-| `sync_backup` | 立即同步到备份节点，同步完才返回 | `SyncBackup` |
+| `sync_backup` | 立即依次同步到所有备份节点（或只同步 `backup_node`），同步完才返回各自的结果 | `SyncBackup` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用，操作员不能进入特权容器；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
 ### 不可逆或会中断服务的操作
@@ -147,8 +147,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_container` | 停止并删除容器，连同版本和端口映射。容器目录默认保留，`delete_dir` 时一起删除。预览列出相关的端口映射和依赖它的容器 | 容器名 | `DeleteContainer` |
 | `delete_project` | 删除项目和全部容器。容器目录默认保留，`delete_dirs` 时一起删除 | 项目名 | `DeleteProject` |
 | `restore_deployment` | 回到某次部署时的状态：版本不一样的容器回滚到那次的版本，一起部署，不恢复数据。预览列出每个容器的版本变化 | 部署记录 ID | `ListDeployments`、`RestoreDeployment` |
-| `set_backup_node` | 设置备份节点（立即生效，不用确认）；`node` 留空时取消，取消要先预览，`delete_replica` 时同时删除备份节点上的副本 | 容器名（取消时） | `SetBackupNode` |
-| `restore_from_backup` | 原节点离线时，在备份节点上用副本里的快照把容器恢复出来，之后写入的数据会丢。预览写明会用哪一份快照 | 容器名 | `ListBackupSnapshots`、`RestoreFromBackup` |
+| `set_backup_node` | 添加一个备份节点（立即生效，不用确认），或者带 `remove` 移除一个；移除要先预览，`delete_replica` 时同时删除那里的副本。容器可以有多个备份节点，也可以和顶替同时设置 | 容器名（移除时） | `SetBackupNodes` |
+| `restore_from_backup` | 原节点离线时，在一个备份节点上用副本里的快照把容器恢复出来，之后写入的数据会丢。`backup_node` 不填时用在线的、最近同步成功的那个。预览写明用哪个节点、哪一份快照 | 容器名 | `ListBackupSnapshots`、`RestoreFromBackup` |
 | `migrate_container` | 把容器迁移到另一个节点，不丢数据，最后一次同步时短暂停止。两个节点都要在线 | 目标节点名 | `MigrateContainer` |
 | `redeploy_elsewhere` | 原节点离线、又没有副本时的最后手段：在另一个节点上重新部署，数据为空、旧版本不能回滚 | 目标节点名 | `RedeployElsewhere` |
 | `set_failover` | 设置顶替节点和见证人。有状态的容器默认等 `confirm_takeover` | 顶替节点名 | `SetFailover` |

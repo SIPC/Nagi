@@ -110,9 +110,8 @@ message Container {
   string node_id = 17;
   // 容器在节点上的目录。
   string dir = 18;
-  // 备份节点（见 docs/snapshot.md#异地副本），为空表示没有设置。
+  // 第一个备份节点和它的同步状态，同 backup_node_ids[0]、backups[0]，没有设置时为空。
   string backup_node_id = 19;
-  // 同步到备份节点的状态（容器所在节点上报的）。
   BackupStatus backup = 20;
   // 顶替设置（见 docs/failover.md），为空表示没有设置。
   FailoverConfig failover = 21;
@@ -129,6 +128,10 @@ message Container {
   SnapshotSchedule snapshot_schedule = 27;
   // 从节点缓存拼回、等管理员确认的顶替设置和备份节点（见 docs/panel.md#项目数据）。确认之前不生效。
   PendingHA pending_ha = 28;
+  // 备份节点（见 docs/snapshot.md#异地副本），按添加的顺序。可以有多个，可以和顶替同时设置。
+  repeated string backup_node_ids = 29;
+  // 同步到各个备份节点的状态（容器所在节点上报的），按 backup_node_ids 的顺序。
+  repeated BackupStatus backups = 30;
 }
 
 // PendingHA 是从节点缓存拼回的顶替设置和备份节点。它们会让别的节点接收这个容器的副本、在顶替时运行它的配置，
@@ -136,9 +139,11 @@ message Container {
 message PendingHA {
   FailoverConfig failover = 1;
   uint64 failover_epoch = 2;
+  // 第一个备份节点，同 backup_node_ids[0]。
   string backup_node_id = 3;
   // 缓存里的配置有哪些特权内容（spec.PrivilegeReasons）。确认后别的节点会运行它，界面上要醒目提示。
   repeated string privileged = 4;
+  repeated string backup_node_ids = 5;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。
@@ -371,7 +376,7 @@ message ContainerSpec {
   uint32 snapshot_interval_minutes = 17;
   // 是否有状态（面板按配置判定）。
   bool stateful = 18;
-  // 备份节点：每次定时快照后把快照仓库同步过去。为空表示没有设置。
+  // 第一个备份节点，同 backups[0]。给只认一个备份节点的旧版本节点用。
   BackupTarget backup = 19;
   // 下发这份配置的面板（公钥指纹）。面板看到节点上的配置是别的面板写的，就知道自己的旧了，以节点的为准。
   string panel = 20;
@@ -387,6 +392,8 @@ message ContainerSpec {
   SnapshotSchedule snapshot_schedule = 25;
   // 项目设置里的定时快照计划（换面板时据此拼回项目设置；和 snapshot_schedule 不同说明容器单独设置过）。
   SnapshotSchedule project_snapshot_schedule = 26;
+  // 备份节点：每次定时快照后依次把快照仓库同步过去。为空表示没有设置。
+  repeated BackupTarget backups = 27;
 }
 
 // BackupTarget 是接收副本的节点。
@@ -410,10 +417,12 @@ message ContainerStatus {
   int64 project_revision = 7;
   // 读取或运行这个容器出错（例如磁盘满了、目录不见了）。
   string error = 8;
-  // 同步到备份节点的状态，没有设置备份节点时为空。
+  // 同步到第一个备份节点的状态，同 backups[0]。
   BackupStatus backup = 9;
   // 缓存的配置是哪个面板下发的（ContainerSpec.panel）。
   string panel = 10;
+  // 同步到各个备份节点的状态，按 ContainerSpec.backups 的顺序。
+  repeated BackupStatus backups = 11;
 }
 
 // NodeUsage 是节点当前的资源占用（百分比，0~100）。
@@ -463,6 +472,8 @@ message NodeInfo {
   bool in_container = 17;
   // 节点支持 PROXY protocol，作为入口节点时也能开同时开 TCP 和 UDP 的映射（旧版本的节点不报）。
   bool proxy_protocol = 18;
+  // 节点支持多个备份节点（ContainerSpec.backups）、副本接受多个源节点（AcceptReplicaRequest.extra_source_keys）。
+  bool multi_backup = 19;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。

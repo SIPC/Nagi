@@ -349,9 +349,9 @@ const (
 	// ProjectServiceRetryDomainCertProcedure is the fully-qualified name of the ProjectService's
 	// RetryDomainCert RPC.
 	ProjectServiceRetryDomainCertProcedure = "/nagi.v1.ProjectService/RetryDomainCert"
-	// ProjectServiceSetBackupNodeProcedure is the fully-qualified name of the ProjectService's
-	// SetBackupNode RPC.
-	ProjectServiceSetBackupNodeProcedure = "/nagi.v1.ProjectService/SetBackupNode"
+	// ProjectServiceSetBackupNodesProcedure is the fully-qualified name of the ProjectService's
+	// SetBackupNodes RPC.
+	ProjectServiceSetBackupNodesProcedure = "/nagi.v1.ProjectService/SetBackupNodes"
 	// ProjectServiceSetContainerDisplayNameProcedure is the fully-qualified name of the
 	// ProjectService's SetContainerDisplayName RPC.
 	ProjectServiceSetContainerDisplayNameProcedure = "/nagi.v1.ProjectService/SetContainerDisplayName"
@@ -2888,18 +2888,18 @@ type ProjectServiceClient interface {
 	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
 	RetryDomainCert(context.Context, *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
-	// 设置或取消备份节点（node_id 为空表示取消）。
-	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 设置容器的备份节点（整个列表，为空表示取消），见 docs/snapshot.md#异地副本。
+	SetBackupNodes(context.Context, *connect.Request[v1.SetBackupNodesRequest]) (*connect.Response[v1.Project], error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
 	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *connect.Request[v1.SetContainerSnapshotScheduleRequest]) (*connect.Response[v1.Project], error)
-	// 立即同步到备份节点，同步完才返回。
-	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
-	// 备份节点上副本里的快照。
-	ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
+	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
+	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -3113,10 +3113,10 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("RetryDomainCert")),
 			connect.WithClientOptions(opts...),
 		),
-		setBackupNode: connect.NewClient[v1.SetBackupNodeRequest, v1.Project](
+		setBackupNodes: connect.NewClient[v1.SetBackupNodesRequest, v1.Project](
 			httpClient,
-			baseURL+ProjectServiceSetBackupNodeProcedure,
-			connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
+			baseURL+ProjectServiceSetBackupNodesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetBackupNodes")),
 			connect.WithClientOptions(opts...),
 		),
 		setContainerDisplayName: connect.NewClient[v1.SetContainerDisplayNameRequest, v1.Project](
@@ -3137,13 +3137,13 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SetContainerSnapshotSchedule")),
 			connect.WithClientOptions(opts...),
 		),
-		syncBackup: connect.NewClient[v1.ContainerRef, v1.Project](
+		syncBackup: connect.NewClient[v1.BackupNodeRef, v1.Project](
 			httpClient,
 			baseURL+ProjectServiceSyncBackupProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("SyncBackup")),
 			connect.WithClientOptions(opts...),
 		),
-		listBackupSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
+		listBackupSnapshots: connect.NewClient[v1.BackupNodeRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+ProjectServiceListBackupSnapshotsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListBackupSnapshots")),
@@ -3319,12 +3319,12 @@ type projectServiceClient struct {
 	deleteRoute                  *connect.Client[v1.DeleteRouteRequest, v1.Project]
 	checkDomains                 *connect.Client[v1.CheckDomainsRequest, v1.CheckDomainsResponse]
 	retryDomainCert              *connect.Client[v1.RetryDomainCertRequest, v1.RetryDomainCertResponse]
-	setBackupNode                *connect.Client[v1.SetBackupNodeRequest, v1.Project]
+	setBackupNodes               *connect.Client[v1.SetBackupNodesRequest, v1.Project]
 	setContainerDisplayName      *connect.Client[v1.SetContainerDisplayNameRequest, v1.Project]
 	setContainerAlertRules       *connect.Client[v1.SetContainerAlertRulesRequest, v1.Project]
 	setContainerSnapshotSchedule *connect.Client[v1.SetContainerSnapshotScheduleRequest, v1.Project]
-	syncBackup                   *connect.Client[v1.ContainerRef, v1.Project]
-	listBackupSnapshots          *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
+	syncBackup                   *connect.Client[v1.BackupNodeRef, v1.Project]
+	listBackupSnapshots          *connect.Client[v1.BackupNodeRef, v1.ListSnapshotsResponse]
 	restoreFromBackup            *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
 	migrateContainer             *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
 	redeployElsewhere            *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
@@ -3485,9 +3485,9 @@ func (c *projectServiceClient) RetryDomainCert(ctx context.Context, req *connect
 	return c.retryDomainCert.CallUnary(ctx, req)
 }
 
-// SetBackupNode calls nagi.v1.ProjectService.SetBackupNode.
-func (c *projectServiceClient) SetBackupNode(ctx context.Context, req *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
-	return c.setBackupNode.CallUnary(ctx, req)
+// SetBackupNodes calls nagi.v1.ProjectService.SetBackupNodes.
+func (c *projectServiceClient) SetBackupNodes(ctx context.Context, req *connect.Request[v1.SetBackupNodesRequest]) (*connect.Response[v1.Project], error) {
+	return c.setBackupNodes.CallUnary(ctx, req)
 }
 
 // SetContainerDisplayName calls nagi.v1.ProjectService.SetContainerDisplayName.
@@ -3506,12 +3506,12 @@ func (c *projectServiceClient) SetContainerSnapshotSchedule(ctx context.Context,
 }
 
 // SyncBackup calls nagi.v1.ProjectService.SyncBackup.
-func (c *projectServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+func (c *projectServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
 	return c.syncBackup.CallUnary(ctx, req)
 }
 
 // ListBackupSnapshots calls nagi.v1.ProjectService.ListBackupSnapshots.
-func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, req *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return c.listBackupSnapshots.CallUnary(ctx, req)
 }
 
@@ -3680,18 +3680,18 @@ type ProjectServiceHandler interface {
 	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
 	RetryDomainCert(context.Context, *connect.Request[v1.RetryDomainCertRequest]) (*connect.Response[v1.RetryDomainCertResponse], error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
-	// 设置或取消备份节点（node_id 为空表示取消）。
-	SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error)
+	// 设置容器的备份节点（整个列表，为空表示取消），见 docs/snapshot.md#异地副本。
+	SetBackupNodes(context.Context, *connect.Request[v1.SetBackupNodesRequest]) (*connect.Response[v1.Project], error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
 	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *connect.Request[v1.SetContainerSnapshotScheduleRequest]) (*connect.Response[v1.Project], error)
-	// 立即同步到备份节点，同步完才返回。
-	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error)
-	// 备份节点上副本里的快照。
-	ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
+	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
+	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -3901,10 +3901,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("RetryDomainCert")),
 		connect.WithHandlerOptions(opts...),
 	)
-	projectServiceSetBackupNodeHandler := connect.NewUnaryHandler(
-		ProjectServiceSetBackupNodeProcedure,
-		svc.SetBackupNode,
-		connect.WithSchema(projectServiceMethods.ByName("SetBackupNode")),
+	projectServiceSetBackupNodesHandler := connect.NewUnaryHandler(
+		ProjectServiceSetBackupNodesProcedure,
+		svc.SetBackupNodes,
+		connect.WithSchema(projectServiceMethods.ByName("SetBackupNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSetContainerDisplayNameHandler := connect.NewUnaryHandler(
@@ -4131,8 +4131,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceCheckDomainsHandler.ServeHTTP(w, r)
 		case ProjectServiceRetryDomainCertProcedure:
 			projectServiceRetryDomainCertHandler.ServeHTTP(w, r)
-		case ProjectServiceSetBackupNodeProcedure:
-			projectServiceSetBackupNodeHandler.ServeHTTP(w, r)
+		case ProjectServiceSetBackupNodesProcedure:
+			projectServiceSetBackupNodesHandler.ServeHTTP(w, r)
 		case ProjectServiceSetContainerDisplayNameProcedure:
 			projectServiceSetContainerDisplayNameHandler.ServeHTTP(w, r)
 		case ProjectServiceSetContainerAlertRulesProcedure:
@@ -4306,8 +4306,8 @@ func (UnimplementedProjectServiceHandler) RetryDomainCert(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RetryDomainCert is not implemented"))
 }
 
-func (UnimplementedProjectServiceHandler) SetBackupNode(context.Context, *connect.Request[v1.SetBackupNodeRequest]) (*connect.Response[v1.Project], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetBackupNode is not implemented"))
+func (UnimplementedProjectServiceHandler) SetBackupNodes(context.Context, *connect.Request[v1.SetBackupNodesRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetBackupNodes is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SetContainerDisplayName(context.Context, *connect.Request[v1.SetContainerDisplayNameRequest]) (*connect.Response[v1.Project], error) {
@@ -4322,11 +4322,11 @@ func (UnimplementedProjectServiceHandler) SetContainerSnapshotSchedule(context.C
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetContainerSnapshotSchedule is not implemented"))
 }
 
-func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.Project], error) {
+func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncBackup is not implemented"))
 }
 
-func (UnimplementedProjectServiceHandler) ListBackupSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
+func (UnimplementedProjectServiceHandler) ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListBackupSnapshots is not implemented"))
 }
 

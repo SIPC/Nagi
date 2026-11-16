@@ -722,18 +722,18 @@ service ProjectService {
   rpc RetryDomainCert(RetryDomainCertRequest) returns (RetryDomainCertResponse);
 
   // 备份节点、迁移（按容器，见 docs/failover.md）。
-  // 设置或取消备份节点（node_id 为空表示取消）。
-  rpc SetBackupNode(SetBackupNodeRequest) returns (Project);
+  // 设置容器的备份节点（整个列表，为空表示取消），见 docs/snapshot.md#异地副本。
+  rpc SetBackupNodes(SetBackupNodesRequest) returns (Project);
   // 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
   rpc SetContainerDisplayName(SetContainerDisplayNameRequest) returns (Project);
   // 容器单独设置告警规则（rules 为空表示改回用项目的）。
   rpc SetContainerAlertRules(SetContainerAlertRulesRequest) returns (Project);
   // 容器单独设置定时快照计划，schedule 为空时改回用项目的。
   rpc SetContainerSnapshotSchedule(SetContainerSnapshotScheduleRequest) returns (Project);
-  // 立即同步到备份节点，同步完才返回。
-  rpc SyncBackup(ContainerRef) returns (Project);
-  // 备份节点上副本里的快照。
-  rpc ListBackupSnapshots(ContainerRef) returns (ListSnapshotsResponse);
+  // 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+  rpc SyncBackup(BackupNodeRef) returns (Project);
+  // 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
+  rpc ListBackupSnapshots(BackupNodeRef) returns (ListSnapshotsResponse);
   // 原节点离线时，在备份节点上把容器恢复出来。
   rpc RestoreFromBackup(RestoreFromBackupRequest) returns (stream DeployEvent);
   // 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -779,12 +779,19 @@ service ProjectService {
   rpc CheckImages(ProjectRef) returns (CheckImagesResponse);
 }
 
-message SetBackupNodeRequest {
+message SetBackupNodesRequest {
+  string project_id = 1;
+  string container = 2;
+  // 备份节点，按顺序。不叫 node_ids：访问范围不按一般规则核对它，成员范围外、原来就有的备份节点可以留着（见 scope.go）。
+  repeated string backup_node_ids = 3;
+  // 去掉的备份节点上的副本同时删除。
+  bool delete_replica = 4;
+}
+
+message BackupNodeRef {
   string project_id = 1;
   string container = 2;
   string node_id = 3;
-  // 取消时同时删除备份节点上的副本。
-  bool delete_replica = 4;
 }
 
 message SetContainerAlertRulesRequest {
@@ -833,6 +840,8 @@ message RestoreFromBackupRequest {
   string snapshot_id = 3;
   // 容器在备份节点上的目录，为空时按备份节点的项目根目录生成。
   string dir = 4;
+  // 在哪个备份节点上恢复，为空时选最近同步成功、在线的那个。
+  string node_id = 5;
 }
 
 message MoveContainerRequest {

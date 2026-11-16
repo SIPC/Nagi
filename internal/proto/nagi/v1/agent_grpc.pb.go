@@ -135,8 +135,9 @@ type AgentServiceClient interface {
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(ctx context.Context, in *LoginRegistryRequest, opts ...grpc.CallOption) (*LoginRegistryResponse, error)
 	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
-	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
-	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*BackupStatus, error)
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backups 里），同步完才返回，返回这个备份节点的状态。
+	// target_node_id 为空时同步到第一个（旧版本的节点只认第一个）。
+	SyncBackup(ctx context.Context, in *SyncBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error)
 	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
 	AcceptReplica(ctx context.Context, in *AcceptReplicaRequest, opts ...grpc.CallOption) (*AcceptReplicaResponse, error)
 	ListReplicas(ctx context.Context, in *ListReplicasRequest, opts ...grpc.CallOption) (*ListReplicasResponse, error)
@@ -556,7 +557,7 @@ func (c *agentServiceClient) LoginRegistry(ctx context.Context, in *LoginRegistr
 	return out, nil
 }
 
-func (c *agentServiceClient) SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*BackupStatus, error) {
+func (c *agentServiceClient) SyncBackup(ctx context.Context, in *SyncBackupRequest, opts ...grpc.CallOption) (*BackupStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BackupStatus)
 	err := c.cc.Invoke(ctx, AgentService_SyncBackup_FullMethodName, in, out, cOpts...)
@@ -948,8 +949,9 @@ type AgentServiceServer interface {
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error)
 	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
-	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
-	SyncBackup(context.Context, *ContainerRef) (*BackupStatus, error)
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backups 里），同步完才返回，返回这个备份节点的状态。
+	// target_node_id 为空时同步到第一个（旧版本的节点只认第一个）。
+	SyncBackup(context.Context, *SyncBackupRequest) (*BackupStatus, error)
 	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
 	AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error)
 	ListReplicas(context.Context, *ListReplicasRequest) (*ListReplicasResponse, error)
@@ -1104,7 +1106,7 @@ func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ContainerRe
 func (UnimplementedAgentServiceServer) LoginRegistry(context.Context, *LoginRegistryRequest) (*LoginRegistryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LoginRegistry not implemented")
 }
-func (UnimplementedAgentServiceServer) SyncBackup(context.Context, *ContainerRef) (*BackupStatus, error) {
+func (UnimplementedAgentServiceServer) SyncBackup(context.Context, *SyncBackupRequest) (*BackupStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
 }
 func (UnimplementedAgentServiceServer) AcceptReplica(context.Context, *AcceptReplicaRequest) (*AcceptReplicaResponse, error) {
@@ -1652,7 +1654,7 @@ func _AgentService_LoginRegistry_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _AgentService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ContainerRef)
+	in := new(SyncBackupRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1664,7 +1666,7 @@ func _AgentService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: AgentService_SyncBackup_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).SyncBackup(ctx, req.(*ContainerRef))
+		return srv.(AgentServiceServer).SyncBackup(ctx, req.(*SyncBackupRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -268,9 +268,9 @@ func (s *projectService) DeleteRoute(ctx context.Context, req *connect.Request[n
 	return connect.NewResponse(p), nil
 }
 
-func (s *projectService) SetBackupNode(ctx context.Context, req *connect.Request[nagiv1.SetBackupNodeRequest]) (*connect.Response[nagiv1.Project], error) {
+func (s *projectService) SetBackupNodes(ctx context.Context, req *connect.Request[nagiv1.SetBackupNodesRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
-	return reply(s.Projects.SetBackupNode(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDeleteReplica()))
+	return reply(s.Projects.SetBackupNodes(ctx, m.GetProjectId(), m.GetContainer(), m.GetBackupNodeIds(), m.GetDeleteReplica()))
 }
 
 func (s *projectService) SetContainerAlertRules(ctx context.Context, req *connect.Request[nagiv1.SetContainerAlertRulesRequest]) (*connect.Response[nagiv1.Project], error) {
@@ -288,37 +288,41 @@ func (s *projectService) SetContainerDisplayName(ctx context.Context, req *conne
 	return reply(s.Projects.SetDisplayName(ctx, m.GetProjectId(), m.GetContainer(), m.GetDisplayName()))
 }
 
-func (s *projectService) SyncBackup(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.Project], error) {
-	return reply(s.Projects.SyncBackup(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer()))
+func (s *projectService) SyncBackup(ctx context.Context, req *connect.Request[nagiv1.BackupNodeRef]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.SyncBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId()))
 }
 
-func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.Request[nagiv1.ContainerRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
-	list, err := s.Projects.BackupSnapshots(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer())
+func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.Request[nagiv1.BackupNodeRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
+	m := req.Msg
+	list, err := s.Projects.BackupSnapshots(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId())
 	return reply(&nagiv1.ListSnapshotsResponse{Snapshots: list}, err)
 }
 
 func (s *projectService) RestoreFromBackup(ctx context.Context, req *connect.Request[nagiv1.RestoreFromBackupRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
-	if err := s.checkOperatorDir(ctx, s.backupNode(ctx, m.GetProjectId(), m.GetContainer()), m.GetDir()); err != nil {
-		return err
+	// 操作员指定的目录按恢复到的节点核对。没有指定节点时由面板选，目录要在每个备份节点上都合规。
+	nodes := []string{m.GetNodeId()}
+	if m.GetNodeId() == "" {
+		nodes = s.backupNodes(ctx, m.GetProjectId(), m.GetContainer())
+	}
+	for _, id := range nodes {
+		if err := s.checkOperatorDir(ctx, id, m.GetDir()); err != nil {
+			return err
+		}
 	}
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
-		return 0, s.Projects.RestoreFromBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetSnapshotId(), m.GetDir(), o)
+		return 0, s.Projects.RestoreFromBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetSnapshotId(), m.GetDir(), o)
 	})
 }
 
-// backupNode 返回容器的备份节点，从备份恢复时容器放在那里。
-func (s *projectService) backupNode(ctx context.Context, projectID, container string) string {
-	summary, err := s.Projects.Get(ctx, projectID)
-	if err != nil {
-		return ""
+// backupNodes 返回容器的备份节点，从备份恢复时容器放在其中一个上。
+func (s *projectService) backupNodes(ctx context.Context, projectID, container string) []string {
+	c, err := s.findContainer(ctx, projectID, container)
+	if err != nil || c == nil {
+		return nil
 	}
-	for _, c := range summary.GetProject().GetContainers() {
-		if c.GetName() == container {
-			return c.GetBackupNodeId()
-		}
-	}
-	return ""
+	return c.GetBackupNodeIds()
 }
 
 func (s *projectService) MigrateContainer(ctx context.Context, req *connect.Request[nagiv1.MoveContainerRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {

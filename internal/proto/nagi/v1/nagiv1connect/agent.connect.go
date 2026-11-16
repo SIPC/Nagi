@@ -245,8 +245,9 @@ type AgentServiceClient interface {
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
 	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
-	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
-	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error)
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backups 里），同步完才返回，返回这个备份节点的状态。
+	// target_node_id 为空时同步到第一个（旧版本的节点只认第一个）。
+	SyncBackup(context.Context, *connect.Request[v1.SyncBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
 	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
 	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
@@ -488,7 +489,7 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("LoginRegistry")),
 			connect.WithClientOptions(opts...),
 		),
-		syncBackup: connect.NewClient[v1.ContainerRef, v1.BackupStatus](
+		syncBackup: connect.NewClient[v1.SyncBackupRequest, v1.BackupStatus](
 			httpClient,
 			baseURL+AgentServiceSyncBackupProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("SyncBackup")),
@@ -707,7 +708,7 @@ type agentServiceClient struct {
 	restoreNodeFileBackup *connect.Client[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse]
 	checkImages           *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
 	loginRegistry         *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
-	syncBackup            *connect.Client[v1.ContainerRef, v1.BackupStatus]
+	syncBackup            *connect.Client[v1.SyncBackupRequest, v1.BackupStatus]
 	acceptReplica         *connect.Client[v1.AcceptReplicaRequest, v1.AcceptReplicaResponse]
 	listReplicas          *connect.Client[v1.ListReplicasRequest, v1.ListReplicasResponse]
 	listReplicaSnapshots  *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
@@ -881,7 +882,7 @@ func (c *agentServiceClient) LoginRegistry(ctx context.Context, req *connect.Req
 }
 
 // SyncBackup calls nagi.v1.AgentService.SyncBackup.
-func (c *agentServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error) {
+func (c *agentServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.SyncBackupRequest]) (*connect.Response[v1.BackupStatus], error) {
 	return c.syncBackup.CallUnary(ctx, req)
 }
 
@@ -1085,8 +1086,9 @@ type AgentServiceHandler interface {
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
 	LoginRegistry(context.Context, *connect.Request[v1.LoginRegistryRequest]) (*connect.Response[v1.LoginRegistryResponse], error)
 	// ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
-	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
-	SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error)
+	// 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backups 里），同步完才返回，返回这个备份节点的状态。
+	// target_node_id 为空时同步到第一个（旧版本的节点只认第一个）。
+	SyncBackup(context.Context, *connect.Request[v1.SyncBackupRequest]) (*connect.Response[v1.BackupStatus], error)
 	// 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
 	AcceptReplica(context.Context, *connect.Request[v1.AcceptReplicaRequest]) (*connect.Response[v1.AcceptReplicaResponse], error)
 	ListReplicas(context.Context, *connect.Request[v1.ListReplicasRequest]) (*connect.Response[v1.ListReplicasResponse], error)
@@ -1751,7 +1753,7 @@ func (UnimplementedAgentServiceHandler) LoginRegistry(context.Context, *connect.
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.LoginRegistry is not implemented"))
 }
 
-func (UnimplementedAgentServiceHandler) SyncBackup(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.BackupStatus], error) {
+func (UnimplementedAgentServiceHandler) SyncBackup(context.Context, *connect.Request[v1.SyncBackupRequest]) (*connect.Response[v1.BackupStatus], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SyncBackup is not implemented"))
 }
 

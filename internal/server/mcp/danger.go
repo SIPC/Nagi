@@ -173,8 +173,9 @@ func toolRestoreDeployment(c *call, in RestoreDeploymentArgs) (any, error) {
 
 type BackupNodeArgs struct {
 	ContainerArg
-	Node          string `json:"node,omitempty" jsonschema:"backup node name or ID; empty removes the backup node"`
-	DeleteReplica bool   `json:"delete_replica,omitempty" jsonschema:"when removing: also delete the copy on the old backup node"`
+	Node          string `json:"node" jsonschema:"backup node name or ID"`
+	Remove        bool   `json:"remove,omitempty" jsonschema:"remove this backup node instead of adding it"`
+	DeleteReplica bool   `json:"delete_replica,omitempty" jsonschema:"when removing: also delete the copy on that node"`
 	Confirm       string `json:"confirm,omitempty" jsonschema:"only when removing: omit to get a preview, then repeat the container name here"`
 }
 
@@ -187,39 +188,53 @@ func toolSetBackupNode(c *call, in BackupNodeArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	req := &nagiv1.SetBackupNodeRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName()}
-	if in.Node != "" {
-		n, err := findNode(nodes, in.Node)
-		if err != nil {
-			return nil, err
+	n, err := findNode(nodes, in.Node)
+	if err != nil {
+		return nil, err
+	}
+	list := slices.Clone(m.GetBackupNodeIds())
+	req := &nagiv1.SetBackupNodesRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName()}
+	if in.Remove {
+		if !slices.Contains(list, n.GetId()) {
+			return map[string]string{"note": n.GetName() + " is not a backup node of this container"}, nil
 		}
-		req.NodeId = n.GetId()
-	} else {
-		if m.GetBackupNodeId() == "" {
-			return map[string]string{"note": "the container has no backup node"}, nil
-		}
+		list = slices.DeleteFunc(list, func(id string) bool { return id == n.GetId() })
 		if in.Confirm != m.GetName() {
-			text := fmt.Sprintf("container %s stops syncing to backup node %s; if its node fails, there is no copy to restore from.", m.GetName(), nodeName(nodes, m.GetBackupNodeId()))
+			text := fmt.Sprintf("container %s stops syncing to backup node %s.", m.GetName(), n.GetName())
+			if len(list) == 0 {
+				text += " It has no other backup node: if its node fails, there is no copy to restore from."
+			}
 			if in.DeleteReplica {
-				text += " The copy on the backup node is deleted."
+				text += " The copy on " + n.GetName() + " is deleted."
 			} else {
-				text += " The copy on the backup node stays until deleted."
+				text += " The copy on " + n.GetName() + " stays until deleted."
 			}
 			return preview("set_backup_node", m.GetName(), text, nil), nil
 		}
 		req.DeleteReplica = in.DeleteReplica
+	} else {
+		if slices.Contains(list, n.GetId()) {
+			return map[string]string{"note": n.GetName() + " is already a backup node of this container"}, nil
+		}
+		list = append(list, n.GetId())
 	}
-	if _, err := c.h.clients.projects.SetBackupNode(c.ctx, connect.NewRequest(req)); err != nil {
+	req.BackupNodeIds = list
+	if _, err := c.h.clients.projects.SetBackupNodes(c.ctx, connect.NewRequest(req)); err != nil {
 		return nil, err
 	}
-	if req.NodeId == "" {
-		return map[string]string{"note": "backup node removed"}, nil
+	names := []string{}
+	for _, id := range list {
+		names = append(names, nodeName(nodes, id))
 	}
-	return map[string]string{"note": "backup node set; snapshots sync after each scheduled snapshot, or now with sync_backup"}, nil
+	if in.Remove {
+		return map[string]any{"note": "backup node removed", "backup_nodes": names}, nil
+	}
+	return map[string]any{"note": "backup node added; the first sync starts now, later ones after each scheduled snapshot (or with sync_backup)", "backup_nodes": names}, nil
 }
 
 type RestoreFromBackupArgs struct {
 	ContainerArg
+	BackupNode string `json:"backup_node,omitempty" jsonschema:"backup node to restore on, by name or ID; default the online one synced most recently"`
 	SnapshotID string `json:"snapshot_id,omitempty" jsonschema:"snapshot in the backup copy (see list_backup_snapshots); default the newest scheduled or manual one"`
 	Dir        string `json:"dir,omitempty" jsonschema:"container directory on the backup node; default from its projects root"`
 	Confirm    string `json:"confirm,omitempty" jsonschema:"omit to get a preview; repeat the container name here to restore after the user agreed"`
@@ -230,16 +245,20 @@ func toolRestoreFromBackup(c *call, in RestoreFromBackupArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if m.GetBackupNodeId() == "" {
-		return nil, errors.New("the container has no backup node")
+	target, err := c.backupNodeID(m, in.BackupNode)
+	if err != nil {
+		return nil, err
 	}
 	if in.Confirm != m.GetName() {
 		nodes, err := c.nodes()
 		if err != nil {
 			return nil, err
 		}
-		// 原节点离线时它上报的同步状态也没了，直接看备份节点上的副本里有哪些快照。
-		res, err := c.h.clients.projects.ListBackupSnapshots(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}))
+		if target == "" {
+			target = latestBackup(m, nodes)
+		}
+		// 原节点离线时它上报的同步状态可能是旧的，直接看备份节点上的副本里有哪些快照。
+		res, err := c.h.clients.projects.ListBackupSnapshots(c.ctx, connect.NewRequest(&nagiv1.BackupNodeRef{ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target}))
 		if err != nil {
 			return nil, err
 		}
@@ -257,13 +276,35 @@ func toolRestoreFromBackup(c *call, in RestoreFromBackupArgs) (any, error) {
 			return nil, fmt.Errorf("snapshot %q is not in the backup copy (see list_backup_snapshots)", in.SnapshotID)
 		}
 		return preview("restore_from_backup", m.GetName(), fmt.Sprintf("only for when node %s is offline: container %s is started on backup node %s from %s in its copy. Data written after that is lost. The container then lives on %s; when %s comes back it stops its old copy and keeps the directory renamed.",
-			nodeName(nodes, m.GetNodeId()), m.GetName(), nodeName(nodes, m.GetBackupNodeId()), from, nodeName(nodes, m.GetBackupNodeId()), nodeName(nodes, m.GetNodeId())), nil), nil
+			nodeName(nodes, m.GetNodeId()), m.GetName(), nodeName(nodes, target), from, nodeName(nodes, target), nodeName(nodes, m.GetNodeId())), nil), nil
 	}
 	return c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 		return c.h.clients.projects.RestoreFromBackup(ctx, connect.NewRequest(&nagiv1.RestoreFromBackupRequest{
-			ProjectId: s.GetProject().GetId(), Container: m.GetName(), SnapshotId: in.SnapshotID, Dir: in.Dir,
+			ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target, SnapshotId: in.SnapshotID, Dir: in.Dir,
 		}))
 	})
+}
+
+// latestBackup 和面板一样选备份节点：在线的、最近同步成功的那个，都没同步过时第一个在线的，都不在线时第一个。
+func latestBackup(m *nagiv1.Container, nodes *nagiv1.ListNodesResponse) string {
+	online := map[string]bool{}
+	for _, n := range nodes.GetNodes() {
+		online[n.GetId()] = n.GetOnline()
+	}
+	synced := map[string]int64{}
+	for _, b := range m.GetBackups() {
+		synced[b.GetTargetNodeId()] = b.GetLastSync().GetSeconds()
+	}
+	best := ""
+	for _, id := range m.GetBackupNodeIds() {
+		if online[id] && (best == "" || synced[id] > synced[best]) {
+			best = id
+		}
+	}
+	if best == "" {
+		best = m.GetBackupNodeIds()[0]
+	}
+	return best
 }
 
 // ---- 迁移、换节点重新部署 ----
@@ -366,8 +407,8 @@ func toolSetFailover(c *call, in FailoverArgs) (any, error) {
 		} else if m.GetStateful() {
 			text += " The container is stateful and takes over automatically: data written after the last sync is lost."
 		}
-		if m.GetBackupNodeId() != "" {
-			text += " The container has a backup node, which must be removed first."
+		if slices.Contains(m.GetBackupNodeIds(), b.GetId()) {
+			text += " " + b.GetName() + " is a backup node of the container and must be removed from its backup nodes first."
 		}
 		return preview("set_failover", b.GetName(), text, nil), nil
 	}

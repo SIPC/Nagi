@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
@@ -104,12 +105,19 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 	if err := noFailover(c); err != nil {
 		return nil, invalid("容器 %s 已设置顶替，请先取消再重新设置", c.Name)
 	}
-	if c.BackupNodeID != "" {
-		return nil, invalid("容器 %s 已设置备份节点，请先取消备份节点再设置顶替（顶替节点本身保有实时更新的副本）", c.Name)
-	}
 	aID, bID, wID := c.NodeID, req.StandbyNodeID, req.WitnessNodeID
 	if bID == "" {
 		return nil, invalid("请选择顶替节点")
+	}
+	// 备份节点可以和顶替同时设置，但顶替节点不能同时是备份节点：两套同步会写同一个副本目录。
+	if backups := store.BackupNodes(c); len(backups) > 0 {
+		if slices.Contains(backups, bID) {
+			return nil, invalid("节点 %s 是这个容器的备份节点，请先从备份节点里去掉它再设为顶替节点", s.NodeName(ctx, bID))
+		}
+		cfg := &nagiv1.FailoverConfig{A: &nagiv1.FailoverParticipant{NodeId: aID}, B: &nagiv1.FailoverParticipant{NodeId: bID}}
+		if err := s.checkBackupNodes(ctx, c, cfg, backups); err != nil {
+			return nil, err
+		}
 	}
 	if bID == aID || wID == aID || (wID != "" && wID == bID) {
 		return nil, invalid("容器所在节点、顶替节点和见证人须是三个不同的节点（见证人也可以是面板）")
@@ -153,7 +161,7 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 		return nil, err
 	}
 	// B 登记副本（只接受 A 的同步），带上它恢复时用的配置。
-	if err := s.acceptReplica(ctx, b, sp, aNode); err != nil {
+	if err := s.acceptReplica(ctx, b, sp, aNode, nil); err != nil {
 		return nil, err
 	}
 	// 见证人 → B → A。
@@ -187,6 +195,8 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 			s.Log.Warn("设置顶替后的第一次快照失败", "project", p.ID, "container", c.Name, "err", err)
 		}
 	}()
+	// 备份节点也要接受顶替节点的同步：它持有租约时由它同步。
+	go s.registerBackups(context.WithoutCancel(ctx), p.ID, c.Name)
 	s.Log.Info("已设置顶替", "project", p.ID, "container", c.Name, "a", aID, "b", bNode.Name, "witness", cfg.GetWitness().GetName())
 	return s.reload(ctx, p.ID)
 }
@@ -242,6 +252,8 @@ func (s *Service) dropFailover(ctx context.Context, c store.Container, cfg *nagi
 	if err := s.Q.SetContainerFailover(ctx, store.SetContainerFailoverParams{Failover: nil, FailoverEpoch: 0, ProjectID: c.ProjectID, Name: c.Name}); err != nil {
 		return err
 	}
+	// 备份节点改为只接受容器所在节点的同步。
+	go s.registerBackups(context.WithoutCancel(ctx), c.ProjectID, c.Name)
 	s.refreshLinks()
 	return nil
 }
@@ -485,7 +497,7 @@ func (s *Service) refreshStandby(ctx context.Context, c store.Container, cfg *na
 	if err != nil {
 		return
 	}
-	if err := s.acceptReplica(ctx, standby, sp, holder); err != nil {
+	if err := s.acceptReplica(ctx, standby, sp, holder, nil); err != nil {
 		s.Log.Warn("把最新的配置推给热备失败", "project", c.ProjectID, "container", c.Name, "node", standby.NodeID, "err", err)
 	}
 }
@@ -523,8 +535,8 @@ func (s *Service) RelatedNodes(ctx context.Context, projectID string) (map[strin
 	out := map[string]bool{}
 	for _, c := range rows {
 		out[c.NodeID] = true
-		if c.BackupNodeID != "" {
-			out[c.BackupNodeID] = true
+		for _, id := range store.BackupNodes(c) {
+			out[id] = true
 		}
 		if cfg := failoverOf(c); cfg != nil {
 			for _, n := range []string{cfg.GetA().GetNodeId(), cfg.GetB().GetNodeId(), cfg.GetWitness().GetNodeId()} {
@@ -565,7 +577,7 @@ func (s *Service) ReplicaInUse(ctx context.Context, nodeID, projectID, name stri
 	if err != nil {
 		return false
 	}
-	if c.BackupNodeID == nodeID {
+	if slices.Contains(store.BackupNodes(c), nodeID) {
 		return true
 	}
 	cfg := failoverOf(c)

@@ -67,6 +67,7 @@ export default {
     RevokeAccessToken: "吊销访问令牌",
     ApproveOAuth: "OAuth 授权",
     SetBackupNode: "设置备份节点",
+    SetBackupNodes: "设置备份节点",
     ConfirmPendingHA: "确认恢复高可用设置",
     SyncBackup: "同步备份",
     RestoreFromBackup: "从备份恢复",

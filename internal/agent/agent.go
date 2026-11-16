@@ -161,7 +161,7 @@ func Run(ctx context.Context, cfg Config) error {
 	projects.ProjectsRoot = a.projectsRoot
 	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
-	projects.BackupStatus = a.backups.status
+	projects.BackupStatus = a.backups.statuses
 	a.failovers = newFailovers(cfg.DataDir)
 	a.votes = &voteBatcher{a: a}
 	projects.ManagedRestart = a.managed
@@ -465,6 +465,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 
 		CrossNodeEntry: true,
 		ProxyProtocol:  true,
+		MultiBackup:    true,
 		ProxyDisabled:  a.cfg.DisableProxy,
 		ReportsCerts:   true,
 
@@ -729,7 +730,7 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			if err == nil {
 				a.alerts.Resolve(ctx, key)
 				// 每次定时快照成功后同步到备份节点或热备（没有设置时什么都不做）。
-				go a.runBackupSync(ctx, projectID, container)
+				go a.runBackupSync(ctx, projectID, container, "")
 				go a.syncStandby(ctx, projectID+"-"+container)
 				return
 			}

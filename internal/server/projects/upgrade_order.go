@@ -21,8 +21,8 @@ func orderUpgrades(ids []string, rows []store.Container) []string {
 	hosts, spares := map[string]bool{}, map[string]bool{}
 	for _, c := range rows {
 		hosts[c.NodeID] = true
-		if c.BackupNodeID != "" {
-			spares[c.BackupNodeID] = true
+		for _, id := range store.BackupNodes(c) {
+			spares[id] = true
 		}
 		if cfg := failoverOf(c); cfg != nil {
 			spares[standbyOf(cfg, c.NodeID).GetNodeId()] = true

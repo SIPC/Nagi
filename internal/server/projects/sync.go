@@ -86,10 +86,13 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 	if s.Fingerprint != nil {
 		sp.Panel = s.Fingerprint()
 	}
-	if c.BackupNodeID != "" {
-		if n, err := s.Q.GetNode(ctx, c.BackupNodeID); err == nil && len(n.MeshKey) > 0 {
-			sp.Backup = backupTarget(n)
+	for _, id := range store.BackupNodes(c) {
+		if n, err := s.Q.GetNode(ctx, id); err == nil && len(n.MeshKey) > 0 {
+			sp.Backups = append(sp.Backups, backupTarget(n))
 		}
+	}
+	if len(sp.Backups) > 0 {
+		sp.Backup = sp.Backups[0]
 	}
 	return sp, nil
 }
@@ -140,6 +143,7 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	for _, cs := range req.GetContainers() {
 		have[cs.GetProjectId()+"/"+cs.GetName()] = cs
 	}
+	s.rememberBackups(c.NodeID, req.GetContainers())
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
 	stale := map[string]bool{}
 	if !c.Pending() {
@@ -167,6 +171,10 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	s.mu.Lock()
 	if s.synced == nil {
 		s.synced = map[*nodes.Conn]bool{}
+	}
+	// 这次连接第一次上报：更新它作为备份节点的副本登记（它离线期间源节点可能变了）。
+	if !s.synced[c] && !c.Pending() {
+		go s.registerBackupsOn(context.WithoutCancel(ctx), c)
 	}
 	s.synced[c] = true
 	live := map[*nodes.Conn]bool{}

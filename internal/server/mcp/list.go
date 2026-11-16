@@ -76,7 +76,7 @@ var allTools = []tool{
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceListRegistriesProcedure}},
 		toolListRegistries),
 	def(tool{name: "list_backup_snapshots", title: "List backup snapshots", idempotent: true,
-		description: "Snapshots in the copy of a container on its backup node, as of the last sync.",
+		description: "Snapshots in the copy of a container on a backup node (default the first), as of its last sync.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceListBackupSnapshotsProcedure}},
 		toolListBackupSnapshots),
 	def(tool{name: "get_logs", title: "Get logs", idempotent: true,
@@ -177,7 +177,7 @@ var allTools = []tool{
 			nagiv1connect.ProjectServiceListSnapshotsProcedure, nagiv1connect.ProjectServiceDeleteSnapshotProcedure}},
 		toolDeleteSnapshot),
 	def(tool{name: "sync_backup", title: "Sync to backup node", write: true,
-		description: "Sync a container's snapshots to its backup node now and wait until done.",
+		description: "Sync a container's snapshots to its backup nodes now, one after another (or only to backup_node), and wait until done.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSyncBackupProcedure}},
 		toolSyncBackup),
 	def(tool{name: "save_route", title: "Save port mapping", write: true,
@@ -202,12 +202,12 @@ var allTools = []tool{
 		description: "Delete a project and all its containers. The container directories stay on the nodes unless delete_dirs is set. Without confirm it only returns a preview; show it to the user, then call again with confirm set to the project name.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceDeleteProjectProcedure}},
 		toolDeleteProject),
-	def(tool{name: "set_backup_node", title: "Set backup node", write: true, destructive: true,
-		description: "Choose the node that receives a container's snapshots after each scheduled snapshot, or remove it (empty node). Removing previews first; then call again with confirm set to the container name. A container with failover cannot have a backup node.",
-		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.ProjectServiceSetBackupNodeProcedure}},
+	def(tool{name: "set_backup_node", title: "Add or remove backup node", write: true, destructive: true,
+		description: "Add a backup node to a container, or remove one with remove. A container can have several backup nodes; after each scheduled snapshot its snapshots sync to them one after another. Backup nodes can be combined with failover but cannot be the container's node or its standby. Removing previews first; then call again with confirm set to the container name.",
+		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.ProjectServiceSetBackupNodesProcedure}},
 		toolSetBackupNode),
 	def(tool{name: "restore_from_backup", title: "Restore from backup node", write: true, destructive: true,
-		description: "When a container's node is offline, start the container on its backup node from a snapshot in the copy; data after that snapshot is lost. Without confirm it only returns a preview; show it to the user, then call again with confirm set to the container name.",
+		description: "When a container's node is offline, start the container on one of its backup nodes from a snapshot in the copy; data after that snapshot is lost. Without backup_node the online one synced most recently is used. Without confirm it only returns a preview; show it to the user, then call again with confirm set to the container name.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.ProjectServiceListBackupSnapshotsProcedure, nagiv1connect.ProjectServiceRestoreFromBackupProcedure}},
 		toolRestoreFromBackup),
 	def(tool{name: "migrate_container", title: "Migrate container", write: true, destructive: true,
@@ -715,8 +715,7 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 	out := struct {
 		containerView
 		Dir         string        `json:"dir"`
-		BackupNode  string        `json:"backup_node,omitempty"`
-		Backup      *backupView   `json:"backup,omitempty"`
+		Backups     []backupView  `json:"backup_nodes,omitempty"`
 		Failover    string        `json:"failover,omitempty"`
 		FailoverOf  *failoverView `json:"failover_state,omitempty"`
 		Config      *configView   `json:"config"`
@@ -732,10 +731,12 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 	if m.GetHasDraft() {
 		out.Draft = configOf(m.GetDraft())
 	}
-	if m.GetBackupNodeId() != "" {
-		out.BackupNode = nodeName(nodes, m.GetBackupNodeId())
-		b := m.GetBackup()
-		out.Backup = &backupView{LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Syncing: b.GetSyncing()}
+	for i, id := range m.GetBackupNodeIds() {
+		var b *nagiv1.BackupStatus
+		if i < len(m.GetBackups()) {
+			b = m.GetBackups()[i]
+		}
+		out.Backups = append(out.Backups, backupView{Node: nodeName(nodes, id), LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Syncing: b.GetSyncing()})
 	}
 	if f := m.GetFailover(); f != nil {
 		out.Failover = "standby on " + nodeName(nodes, f.GetB().GetNodeId())
@@ -772,6 +773,7 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 }
 
 type backupView struct {
+	Node     string `json:"node"`
 	LastSync string `json:"last_sync,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Syncing  bool   `json:"syncing,omitempty"`

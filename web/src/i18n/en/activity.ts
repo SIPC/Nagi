@@ -67,6 +67,7 @@ export default {
     RevokeAccessToken: "Revoke access token",
     ApproveOAuth: "OAuth authorization",
     SetBackupNode: "Set backup node",
+    SetBackupNodes: "Set backup nodes",
     ConfirmPendingHA: "Confirm restored high availability settings",
     SyncBackup: "Sync backup",
     RestoreFromBackup: "Restore from backup",

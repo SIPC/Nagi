@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -53,48 +54,92 @@ func pushedOut(list []*nagiv1.Snapshot, sn *nagiv1.Snapshot, limit uint32) bool 
 
 // ---- 备份节点 ----
 
-func toolSyncBackup(c *call, in ContainerArg) (any, error) {
-	s, m, err := c.container(in)
+type BackupNodeArg struct {
+	ContainerArg
+	BackupNode string `json:"backup_node,omitempty" jsonschema:"one of the container's backup nodes, by name or ID; default all of them (sync_backup) or the first (list_backup_snapshots)"`
+}
+
+// backupNodeID 找出容器的一个备份节点，没有指定时返回空。
+func (c *call) backupNodeID(m *nagiv1.Container, ref string) (string, error) {
+	if len(m.GetBackupNodeIds()) == 0 {
+		return "", errors.New("the container has no backup node")
+	}
+	if ref == "" {
+		return "", nil
+	}
+	nodes, err := c.nodes()
+	if err != nil {
+		return "", err
+	}
+	for _, id := range m.GetBackupNodeIds() {
+		if id == ref || strings.EqualFold(nodeName(nodes, id), ref) {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not a backup node of container %s", ref, m.GetName())
+}
+
+func toolSyncBackup(c *call, in BackupNodeArg) (any, error) {
+	s, m, err := c.container(in.ContainerArg)
 	if err != nil {
 		return nil, err
 	}
-	if m.GetBackupNodeId() == "" {
-		return nil, errors.New("the container has no backup node")
-	}
-	start := time.Now().Add(-time.Second)
-	if _, err := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()})); err != nil {
+	target, err := c.backupNodeID(m, in.BackupNode)
+	if err != nil {
 		return nil, err
 	}
+	start := time.Now().Add(-time.Second)
+	_, syncErr := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.BackupNodeRef{ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target}))
 	// 同步状态由节点上报，同步完以后过一会儿才到面板上。
-	var b *nagiv1.BackupStatus
-	for i := 0; i < 10; i++ {
+	type result struct {
+		Node     string `json:"node"`
+		LastSync string `json:"last_sync,omitempty"`
+		Error    string `json:"error,omitempty"`
+	}
+	var out []result
+	reported := false
+	for i := 0; i < 10 && !reported; i++ {
 		p, err := c.getProject(s.GetProject().GetId())
 		if err != nil {
 			return nil, err
 		}
-		if after, err := findContainer(p.GetProject(), m.GetName()); err == nil {
-			b = after.GetBackup()
+		after, err := findContainer(p.GetProject(), m.GetName())
+		if err != nil {
+			return nil, err
 		}
-		if b.GetLastError() != "" || b.GetLastSync().AsTime().After(start) {
-			break
+		out, reported = nil, true
+		for _, b := range after.GetBackups() {
+			if target != "" && b.GetTargetNodeId() != target {
+				continue
+			}
+			out = append(out, result{Node: b.GetTargetName(), LastSync: ts(b.GetLastSync()), Error: b.GetLastError()})
+			if b.GetLastError() == "" && !b.GetLastSync().AsTime().After(start) {
+				reported = false
+			}
 		}
-		time.Sleep(time.Second)
+		if !reported {
+			time.Sleep(time.Second)
+		}
 	}
-	if b.GetLastError() == "" && !b.GetLastSync().AsTime().After(start) {
-		return map[string]any{"note": "sync finished; the node has not reported the new state yet, check get_container in a moment"}, nil
+	if syncErr != nil {
+		return map[string]any{"error": syncErr.Error(), "backup_nodes": out}, nil
 	}
-	return map[string]any{"backup_node": b.GetTargetName(), "last_sync": ts(b.GetLastSync()), "error": b.GetLastError()}, nil
+	if !reported {
+		return map[string]any{"note": "sync finished; the node has not reported the new state yet, check get_container in a moment", "backup_nodes": out}, nil
+	}
+	return map[string]any{"backup_nodes": out}, nil
 }
 
-func toolListBackupSnapshots(c *call, in ContainerArg) (any, error) {
-	s, m, err := c.container(in)
+func toolListBackupSnapshots(c *call, in BackupNodeArg) (any, error) {
+	s, m, err := c.container(in.ContainerArg)
 	if err != nil {
 		return nil, err
 	}
-	if m.GetBackupNodeId() == "" {
-		return nil, errors.New("the container has no backup node")
+	target, err := c.backupNodeID(m, in.BackupNode)
+	if err != nil {
+		return nil, err
 	}
-	res, err := c.h.clients.projects.ListBackupSnapshots(c.ctx, connect.NewRequest(&nagiv1.ContainerRef{ProjectId: s.GetProject().GetId(), Container: m.GetName()}))
+	res, err := c.h.clients.projects.ListBackupSnapshots(c.ctx, connect.NewRequest(&nagiv1.BackupNodeRef{ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target}))
 	if err != nil {
 		return nil, err
 	}

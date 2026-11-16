@@ -3502,7 +3502,7 @@ const (
 	ProjectService_DeleteRoute_FullMethodName                  = "/nagi.v1.ProjectService/DeleteRoute"
 	ProjectService_CheckDomains_FullMethodName                 = "/nagi.v1.ProjectService/CheckDomains"
 	ProjectService_RetryDomainCert_FullMethodName              = "/nagi.v1.ProjectService/RetryDomainCert"
-	ProjectService_SetBackupNode_FullMethodName                = "/nagi.v1.ProjectService/SetBackupNode"
+	ProjectService_SetBackupNodes_FullMethodName               = "/nagi.v1.ProjectService/SetBackupNodes"
 	ProjectService_SetContainerDisplayName_FullMethodName      = "/nagi.v1.ProjectService/SetContainerDisplayName"
 	ProjectService_SetContainerAlertRules_FullMethodName       = "/nagi.v1.ProjectService/SetContainerAlertRules"
 	ProjectService_SetContainerSnapshotSchedule_FullMethodName = "/nagi.v1.ProjectService/SetContainerSnapshotSchedule"
@@ -3585,18 +3585,18 @@ type ProjectServiceClient interface {
 	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
 	RetryDomainCert(ctx context.Context, in *RetryDomainCertRequest, opts ...grpc.CallOption) (*RetryDomainCertResponse, error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
-	// 设置或取消备份节点（node_id 为空表示取消）。
-	SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error)
+	// 设置容器的备份节点（整个列表，为空表示取消），见 docs/snapshot.md#异地副本。
+	SetBackupNodes(ctx context.Context, in *SetBackupNodesRequest, opts ...grpc.CallOption) (*Project, error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(ctx context.Context, in *SetContainerDisplayNameRequest, opts ...grpc.CallOption) (*Project, error)
 	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
 	SetContainerAlertRules(ctx context.Context, in *SetContainerAlertRulesRequest, opts ...grpc.CallOption) (*Project, error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(ctx context.Context, in *SetContainerSnapshotScheduleRequest, opts ...grpc.CallOption) (*Project, error)
-	// 立即同步到备份节点，同步完才返回。
-	SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error)
-	// 备份节点上副本里的快照。
-	ListBackupSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	SyncBackup(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error)
+	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
+	ListBackupSnapshots(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -3960,10 +3960,10 @@ func (c *projectServiceClient) RetryDomainCert(ctx context.Context, in *RetryDom
 	return out, nil
 }
 
-func (c *projectServiceClient) SetBackupNode(ctx context.Context, in *SetBackupNodeRequest, opts ...grpc.CallOption) (*Project, error) {
+func (c *projectServiceClient) SetBackupNodes(ctx context.Context, in *SetBackupNodesRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
-	err := c.cc.Invoke(ctx, ProjectService_SetBackupNode_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ProjectService_SetBackupNodes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4000,7 +4000,7 @@ func (c *projectServiceClient) SetContainerSnapshotSchedule(ctx context.Context,
 	return out, nil
 }
 
-func (c *projectServiceClient) SyncBackup(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*Project, error) {
+func (c *projectServiceClient) SyncBackup(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_SyncBackup_FullMethodName, in, out, cOpts...)
@@ -4010,7 +4010,7 @@ func (c *projectServiceClient) SyncBackup(ctx context.Context, in *ContainerRef,
 	return out, nil
 }
 
-func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
 	err := c.cc.Invoke(ctx, ProjectService_ListBackupSnapshots_FullMethodName, in, out, cOpts...)
@@ -4347,18 +4347,18 @@ type ProjectServiceServer interface {
 	// 让入口节点立刻重新申请证书，不用等 Caddy 的下一次自动重试。
 	RetryDomainCert(context.Context, *RetryDomainCertRequest) (*RetryDomainCertResponse, error)
 	// 备份节点、迁移（按容器，见 docs/failover.md）。
-	// 设置或取消备份节点（node_id 为空表示取消）。
-	SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error)
+	// 设置容器的备份节点（整个列表，为空表示取消），见 docs/snapshot.md#异地副本。
+	SetBackupNodes(context.Context, *SetBackupNodesRequest) (*Project, error)
 	// 修改容器的显示名称（为空表示改回显示容器名）。容器名本身不能改。
 	SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error)
 	// 容器单独设置告警规则（rules 为空表示改回用项目的）。
 	SetContainerAlertRules(context.Context, *SetContainerAlertRulesRequest) (*Project, error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *SetContainerSnapshotScheduleRequest) (*Project, error)
-	// 立即同步到备份节点，同步完才返回。
-	SyncBackup(context.Context, *ContainerRef) (*Project, error)
-	// 备份节点上副本里的快照。
-	ListBackupSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	SyncBackup(context.Context, *BackupNodeRef) (*Project, error)
+	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
+	ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -4488,8 +4488,8 @@ func (UnimplementedProjectServiceServer) CheckDomains(context.Context, *CheckDom
 func (UnimplementedProjectServiceServer) RetryDomainCert(context.Context, *RetryDomainCertRequest) (*RetryDomainCertResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryDomainCert not implemented")
 }
-func (UnimplementedProjectServiceServer) SetBackupNode(context.Context, *SetBackupNodeRequest) (*Project, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetBackupNode not implemented")
+func (UnimplementedProjectServiceServer) SetBackupNodes(context.Context, *SetBackupNodesRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBackupNodes not implemented")
 }
 func (UnimplementedProjectServiceServer) SetContainerDisplayName(context.Context, *SetContainerDisplayNameRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContainerDisplayName not implemented")
@@ -4500,10 +4500,10 @@ func (UnimplementedProjectServiceServer) SetContainerAlertRules(context.Context,
 func (UnimplementedProjectServiceServer) SetContainerSnapshotSchedule(context.Context, *SetContainerSnapshotScheduleRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContainerSnapshotSchedule not implemented")
 }
-func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *ContainerRef) (*Project, error) {
+func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *BackupNodeRef) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
 }
-func (UnimplementedProjectServiceServer) ListBackupSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
+func (UnimplementedProjectServiceServer) ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBackupSnapshots not implemented")
 }
 func (UnimplementedProjectServiceServer) RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error {
@@ -5047,20 +5047,20 @@ func _ProjectService_RetryDomainCert_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ProjectService_SetBackupNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetBackupNodeRequest)
+func _ProjectService_SetBackupNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBackupNodesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProjectServiceServer).SetBackupNode(ctx, in)
+		return srv.(ProjectServiceServer).SetBackupNodes(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ProjectService_SetBackupNode_FullMethodName,
+		FullMethod: ProjectService_SetBackupNodes_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SetBackupNode(ctx, req.(*SetBackupNodeRequest))
+		return srv.(ProjectServiceServer).SetBackupNodes(ctx, req.(*SetBackupNodesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5120,7 +5120,7 @@ func _ProjectService_SetContainerSnapshotSchedule_Handler(srv interface{}, ctx c
 }
 
 func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ContainerRef)
+	in := new(BackupNodeRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -5132,13 +5132,13 @@ func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: ProjectService_SyncBackup_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).SyncBackup(ctx, req.(*ContainerRef))
+		return srv.(ProjectServiceServer).SyncBackup(ctx, req.(*BackupNodeRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _ProjectService_ListBackupSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ContainerRef)
+	in := new(BackupNodeRef)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -5150,7 +5150,7 @@ func _ProjectService_ListBackupSnapshots_Handler(srv interface{}, ctx context.Co
 		FullMethod: ProjectService_ListBackupSnapshots_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).ListBackupSnapshots(ctx, req.(*ContainerRef))
+		return srv.(ProjectServiceServer).ListBackupSnapshots(ctx, req.(*BackupNodeRef))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5630,8 +5630,8 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_RetryDomainCert_Handler,
 		},
 		{
-			MethodName: "SetBackupNode",
-			Handler:    _ProjectService_SetBackupNode_Handler,
+			MethodName: "SetBackupNodes",
+			Handler:    _ProjectService_SetBackupNodes_Handler,
 		},
 		{
 			MethodName: "SetContainerDisplayName",

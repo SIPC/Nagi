@@ -143,7 +143,8 @@ export function ContainerHA({
   const nodes = useNodes();
   if (nodes.pending) return <RowsSkeleton />;
   if (nodes.loadError) return <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />;
-  const restorable = !!container.backupNodeId && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
+  // 设置了顶替时由顶替处理，不能从备份节点恢复（先取消顶替）。
+  const restorable = !container.failover && container.backupNodeIds.length > 0 && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
   return (
     <div className="grid grid-cols-1 gap-8">
       {run.output && <div className="empty:hidden">{run.output}</div>}
@@ -152,12 +153,12 @@ export function ContainerHA({
       {restorable && <RestoreNotice project={project} container={container} nodes={nodes} run={run} />}
       <div className="min-w-0">
         {container.failover && <FailoverDetail project={project} container={container} nodes={nodes} />}
-        {container.backupNodeId && <BackupDetail project={project} container={container} nodes={nodes} />}
+        {container.backupNodeIds.length > 0 && <BackupDetail project={project} container={container} nodes={nodes} />}
         {restorable && <RestorableSnapshots project={project} container={container} nodes={nodes} run={run} />}
         <Section>
           <List>
             {!container.failover && <FailoverRow project={project} container={container} nodes={nodes} />}
-            {!container.backupNodeId && <BackupRow project={project} container={container} nodes={nodes} />}
+            {container.backupNodeIds.length === 0 && <BackupRow project={project} container={container} nodes={nodes} />}
             <PlacementRow project={project} container={container} nodes={nodes} run={run} />
           </List>
         </Section>
@@ -512,7 +513,7 @@ function ContainerSchedule({ project, container, onDone }: { project: Project; c
   const [busy, setBusy] = useState(false);
   const errors = checked && own ? scheduleErrors(form) : {};
   // 关闭时的说明：设置了顶替仍每 15 分钟快照，设置了备份节点就不再同步。
-  const note = container.failover ? m.failoverNote : container.backupNodeId ? m.backupNote : undefined;
+  const note = container.failover ? m.failoverNote : container.backupNodeIds.length > 0 ? m.backupNote : undefined;
   const shown = own ? form : scheduleForm(fromProject);
   const unchanged = own === !!container.snapshotSchedule && (!own || sameForm(form, scheduleForm(container.snapshotSchedule)));
 
@@ -709,15 +710,36 @@ function SnapshotList({
 
 // ---- 备份节点 ----
 
+// backupCandidates：可以加为备份节点的在线节点：不是容器所在的节点、顶替的参与者，也不是已有的备份节点。
+function backupCandidates(container: Container, nodes: Nodes) {
+  const f = container.failover;
+  return nodes.usable.filter((n) => n.id !== container.nodeId && n.id !== f?.a?.nodeId && n.id !== f?.b?.nodeId && !container.backupNodeIds.includes(n.id));
+}
+
+// backupStatusOf：备份节点的同步状态（容器所在节点上报的），按 backup_node_ids 的顺序对应。
+function backupStatusOf(container: Container, id: string) {
+  return container.backups.find((s) => s.targetNodeId === id);
+}
+
+// defaultBackup：和面板一样选恢复用的备份节点：在线的、最近同步成功的那个，都没同步过时第一个在线的。
+function defaultBackup(container: Container, nodes: Nodes) {
+  let best = "";
+  const synced = (id: string) => Number(backupStatusOf(container, id)?.lastSync?.seconds ?? 0n);
+  for (const id of container.backupNodeIds) {
+    if (nodes.online(id) && (!best || synced(id) > synced(best))) best = id;
+  }
+  return best || container.backupNodeIds[0] || "";
+}
+
 // BackupRow：还没有备份节点时的一行。
 function BackupRow({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const b = t.projectData.backup;
   const [open, setOpen] = useState(false);
-  const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
-  const available = !container.failover && candidates.length > 0;
+  const candidates = backupCandidates(container, nodes);
+  const available = candidates.length > 0;
   return (
     <>
-      <SettingRow label={b.title} help={b.help} description={container.failover ? b.hasFailover : candidates.length === 0 ? b.noCandidates : b.unset}>
+      <SettingRow label={b.title} help={b.help} description={candidates.length === 0 ? b.noCandidates : container.failover ? b.withFailover : b.unset}>
         {available ? (
           <Button variant="outline" onClick={() => setOpen(true)}>
             {t.projectData.setUp}
@@ -729,19 +751,22 @@ function BackupRow({ project, container, nodes }: { project: Project; container:
   );
 }
 
+// BackupDialog：添加一个备份节点，加在已有的后面。
 function BackupDialog({ project, container, nodes, onClose }: { project: Project; container: Container; nodes: Nodes; onClose: () => void }) {
   const b = t.projectData.backup;
   const { busy, error, call } = useCall(project.id);
-  const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
+  const candidates = backupCandidates(container, nodes);
   const [nodeId, setNodeId] = useState("");
   const choice = nodeId || candidates[0]?.id || "";
+  const first = container.backupNodeIds.length === 0;
   return (
-    <Dialog open onClose={onClose} title={b.set} description={b.description}>
+    <Dialog open onClose={onClose} title={first ? b.set : b.add} description={first ? b.description : b.addDescription}>
       <form
         className="grid gap-4"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (await call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: choice, deleteReplica: false }))) onClose();
+          const ids = [...container.backupNodeIds, choice];
+          if (await call(() => projectClient.setBackupNodes({ projectId: project.id, container: container.name, backupNodeIds: ids, deleteReplica: false }))) onClose();
         }}
       >
         <Field label={b.node} htmlFor="backup-node">
@@ -760,7 +785,7 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
           </Button>
           <Button type="submit" disabled={busy || !choice}>
             {busy && <Spinner />}
-            {b.set}
+            {first ? b.set : b.add}
           </Button>
         </DialogActions>
       </form>
@@ -768,23 +793,37 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
   );
 }
 
-// BackupDetail：已设置备份节点：标签值列表，同步和取消在标题栏。
+// BackupDetail：已设置的备份节点，一个一行：状态、上次同步，行末同步或移除。添加和全部同步在标题栏。
+// 参考 Proxmox 的复制任务列表：每个目标一行，各自的状态和上次同步时间。
 function BackupDetail({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const b = t.projectData.backup;
   const { busy, pending, error, call } = useCall(project.id);
-  const backup = container.backup;
+  const [adding, setAdding] = useState(false);
   const sourceOnline = nodes.online(container.nodeId);
+  const ids = container.backupNodeIds;
+  const syncing = container.backups.some((s) => s.syncing);
+  const canAdd = backupCandidates(container, nodes).length > 0;
 
-  let state: React.ReactNode = <Status tone="neutral">{b.waitingFirstSync}</Status>;
-  if (!sourceOnline) state = <Status tone="neutral">{b.sourceOffline(nodes.name(container.nodeId))}</Status>;
-  else if (backup?.syncing)
-    state = (
-      <Status tone="info" pulse>
-        {t.common.status.syncing}
-      </Status>
-    );
-  else if (backup?.lastError) state = <Status tone="danger">{b.syncFailed}</Status>;
-  else if (backup?.lastSync) state = <Status tone="success">{b.healthy}</Status>;
+  const state = (id: string): React.ReactNode => {
+    const st = backupStatusOf(container, id);
+    // 所在节点离线时最上面已有提示，这里不再写状态。
+    if (!sourceOnline) return null;
+    if (st?.syncing)
+      return (
+        <Status tone="info" pulse>
+          {t.common.status.syncing}
+        </Status>
+      );
+    if (st?.lastError) return <Status tone="danger">{b.syncFailed}</Status>;
+    if (st?.lastSync) return <Status tone="success">{b.healthy}</Status>;
+    return <Status tone="neutral">{b.waitingFirstSync}</Status>;
+  };
+  const remove = async (id: string) => {
+    const rest = ids.filter((x) => x !== id);
+    const message = b.removeOneConfirm(nodes.name(id), container.name) + (rest.length === 0 ? b.removeLastNote : "");
+    if (!(await confirmAction(message, { action: b.removeOne, danger: true }))) return;
+    await call(() => projectClient.setBackupNodes({ projectId: project.id, container: container.name, backupNodeIds: rest, deleteReplica: true }), "remove:" + id);
+  };
 
   return (
     <Section
@@ -792,49 +831,66 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
       help={b.help}
       actions={
         <>
+          {canAdd && (
+            <Button variant="outline" disabled={busy} onClick={() => setAdding(true)}>
+              {b.add}
+            </Button>
+          )}
           <Button
             variant="outline"
-            disabled={busy || !sourceOnline || backup?.syncing}
+            disabled={busy || !sourceOnline || syncing}
             title={sourceOnline ? undefined : b.sourceOffline(nodes.name(container.nodeId))}
             onClick={() => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name }), "sync")}
           >
             {pending === "sync" && <Spinner />}
-            {b.syncNow}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={async () =>
-              (await confirmAction(b.removeConfirm(container.name), { action: b.remove, danger: true })) &&
-              call(() => projectClient.setBackupNode({ projectId: project.id, container: container.name, nodeId: "", deleteReplica: true }), "remove")
-            }
-          >
-            {pending === "remove" && <Spinner />}
-            {b.remove}
+            {ids.length > 1 ? b.syncAll : b.syncNow}
           </Button>
         </>
       }
     >
-      <KeyValue
-        items={[
-          [
-            b.node,
-            <span>
-              {nodes.name(container.backupNodeId)}
-              {!nodes.online(container.backupNodeId) && <span className="text-muted-foreground"> {t.common.status.offline}</span>}
-            </span>,
-          ],
-          // 所在节点离线时最上面已有提示，这里不再重复状态。
-          ...(sourceOnline || container.deployedVersion === 0n ? ([[t.projectData.state, state]] as [React.ReactNode, React.ReactNode][]) : []),
-          [t.projectData.lastSync, <span title={formatDateTime(toDate(backup?.lastSync))}>{backup?.lastSync ? capitalize(timeAgo(toDate(backup.lastSync))) : "—"}</span>],
-        ]}
-      />
-      {backup?.lastError && (
-        <Notice tone="danger" title={b.syncFailed}>
-          {backup.lastError}
-        </Notice>
-      )}
+      <List>
+        {ids.map((id) => {
+          const st = backupStatusOf(container, id);
+          // 所在节点离线、面板又没有它上报过的状态时（例如面板重启过），不知道同步过没有。
+          const last = st?.lastSync ? b.lastSyncAgo(timeAgo(toDate(st.lastSync))) : sourceOnline ? b.neverSynced : b.syncUnknown;
+          return (
+            <Row
+              key={id}
+              title={
+                <>
+                  <span className="truncate">{nodes.name(id)}</span>
+                  {!nodes.online(id) && <span className="shrink-0 text-[13px] text-muted-foreground">{t.common.status.offline}</span>}
+                </>
+              }
+              sub={
+                st?.lastError ? (
+                  <span className="text-destructive" title={st.lastError}>
+                    {st.lastError}
+                  </span>
+                ) : (
+                  <span title={formatDateTime(toDate(st?.lastSync))}>{last}</span>
+                )
+              }
+              cols={[{ content: state(id), phone: true }]}
+              actionsWidth="w-9"
+              actions={
+                pending === "remove:" + id || pending === "sync:" + id ? (
+                  <Spinner />
+                ) : (
+                  <RowMenu
+                    items={[
+                      { label: b.syncNow, disabled: busy || !sourceOnline || !!st?.syncing, onSelect: () => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) },
+                      { label: b.removeOne, danger: true, disabled: busy, onSelect: () => remove(id) },
+                    ]}
+                  />
+                )
+              }
+            />
+          );
+        })}
+      </List>
       {error && <Alert>{error}</Alert>}
+      {adding && <BackupDialog project={project} container={container} nodes={nodes} onClose={() => setAdding(false)} />}
     </Section>
   );
 }
@@ -843,7 +899,7 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
 // RestoreNotice：所在节点离线、有备份节点时最上面的提示。
 function RestoreNotice({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
   const [open, setOpen] = useState(false);
-  const backupName = nodes.name(container.backupNodeId);
+  const backupName = nodes.name(defaultBackup(container, nodes));
   return (
     <>
       <Notice
@@ -855,25 +911,43 @@ function RestoreNotice({ project, container, nodes, run }: { project: Project; c
           </Button>
         }
       >
-        {t.projectData.restore.hint(backupName)}
+        {container.backupNodeIds.length > 1 ? t.projectData.restore.hintLatest(backupName) : t.projectData.restore.hint(backupName)}
       </Notice>
       {open && <RestoreDialog project={project} container={container} nodes={nodes} run={run} snapshotId="" onClose={() => setOpen(false)} />}
     </>
   );
 }
 
+// RestorableSnapshots：一个备份节点上副本里的快照。有多个备份节点时可以切换，默认最近同步的那个。
 function RestorableSnapshots({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [picked, setPicked] = useState("");
+  const nodeId = picked || defaultBackup(container, nodes);
   const snapshots = useQuery({
-    queryKey: ["backup-snapshots", project.id, container.name],
+    queryKey: ["backup-snapshots", project.id, container.name, nodeId],
     queryFn: () =>
       projectClient.listBackupSnapshots({
         projectId: project.id,
         container: container.name,
+        nodeId,
       }),
   });
   return (
-    <Section title={t.projectData.restore.snapshots}>
+    <Section
+      title={t.projectData.restore.snapshots}
+      actions={
+        container.backupNodeIds.length > 1 && (
+          <Select value={nodeId} onChange={(e) => setPicked(e.target.value)} aria-label={t.projectData.restore.node} className="w-auto">
+            {container.backupNodeIds.map((id) => (
+              <option key={id} value={id}>
+                {nodes.name(id)}
+                {nodes.online(id) ? "" : t.projectData.restore.offlineSuffix}
+              </option>
+            ))}
+          </Select>
+        )
+      }
+    >
       {snapshots.isPending ? (
         <RowsSkeleton />
       ) : snapshots.error ? (
@@ -893,7 +967,7 @@ function RestorableSnapshots({ project, container, nodes, run }: { project: Proj
           }
         />
       )}
-      {restoring !== null && <RestoreDialog project={project} container={container} nodes={nodes} run={run} snapshotId={restoring} onClose={() => setRestoring(null)} />}
+      {restoring !== null && <RestoreDialog project={project} container={container} nodes={nodes} run={run} nodeId={nodeId} snapshotId={restoring} onClose={() => setRestoring(null)} />}
     </Section>
   );
 }
@@ -904,12 +978,32 @@ function splitConfirm(message: string): [string, string] {
   return i < 0 ? [message, ""] : [message.slice(0, i + 1), message.slice(i + 1).trim()];
 }
 
-// RestoreDialog：在备份节点上恢复的确认框，多一个恢复目录，所以不能用 confirmAction。snapshotId 为空表示最新快照。
-function RestoreDialog({ project, container, nodes, run, snapshotId, onClose }: { project: Project; container: Container; nodes: Nodes; run: Run; snapshotId: string; onClose: () => void }) {
+// RestoreDialog：在备份节点上恢复的确认框，多一个恢复目录（有多个备份节点、没指定快照时还能选节点），所以不能用 confirmAction。
+// snapshotId 为空表示最新快照；快照是某个备份节点上的，这时节点固定为 nodeId。
+function RestoreDialog({
+  project,
+  container,
+  nodes,
+  run,
+  nodeId: fixed,
+  snapshotId,
+  onClose,
+}: {
+  project: Project;
+  container: Container;
+  nodes: Nodes;
+  run: Run;
+  nodeId?: string;
+  snapshotId: string;
+  onClose: () => void;
+}) {
   const r = t.projectData.restore;
   const [dir, setDir] = useState("");
-  const def = useDefaultDir(container.backupNodeId, project.id, project.networkName, container.name);
-  const [title, body] = splitConfirm(r.confirm(nodes.name(container.backupNodeId), container.name));
+  const [picked, setPicked] = useState("");
+  const nodeId = fixed || picked || defaultBackup(container, nodes);
+  const choosable = !fixed && container.backupNodeIds.length > 1;
+  const def = useDefaultDir(nodeId, project.id, project.networkName, container.name);
+  const [title, body] = splitConfirm(r.confirm(nodes.name(nodeId), container.name));
   return (
     <AlertDialog open onOpenChange={(v) => !v && onClose()}>
       <AlertDialogContent>
@@ -926,12 +1020,28 @@ function RestoreDialog({ project, container, nodes, run, snapshotId, onClose }: 
               projectClient.restoreFromBackup({
                 projectId: project.id,
                 container: container.name,
+                nodeId,
                 snapshotId,
                 dir: dir.trim() || def,
               }),
             );
           }}
         >
+          {choosable && (
+            <Field label={r.node} htmlFor="restore-node">
+              <Select id="restore-node" value={nodeId} onChange={(e) => setPicked(e.target.value)}>
+                {container.backupNodeIds.map((id) => {
+                  const st = backupStatusOf(container, id);
+                  return (
+                    <option key={id} value={id} disabled={!nodes.online(id)}>
+                      {nodes.name(id)}
+                      {!nodes.online(id) ? r.offlineSuffix : st?.lastSync ? r.syncedSuffix(timeAgo(toDate(st.lastSync))) : ""}
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
+          )}
           <Field label={r.dir} htmlFor="restore-dir" help={t.projectData.dirHelp}>
             <Input id="restore-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={def} autoComplete="off" spellCheck={false} />
           </Field>
@@ -941,7 +1051,7 @@ function RestoreDialog({ project, container, nodes, run, snapshotId, onClose }: 
                 {t.common.actions.cancel}
               </Button>
             </AlertDialogCancel>
-            <Button type="submit" variant="destructive" disabled={run.busy}>
+            <Button type="submit" variant="destructive" disabled={run.busy || !nodes.online(nodeId)}>
               {snapshotId ? r.fromSnapshot : r.latest}
             </Button>
           </DialogActions>
@@ -962,7 +1072,7 @@ function PlacementRow({ project, container, nodes, run }: { project: Project; co
   const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
   const online = nodes.online(container.nodeId);
   const name = nodes.name(container.nodeId);
-  const restorable = !online && !!container.backupNodeId && container.deployedVersion > 0n;
+  const restorable = !container.failover && !online && container.backupNodeIds.length > 0 && container.deployedVersion > 0n;
   const note = container.failover ? p.hasFailover : restorable ? p.backupHint : candidates.length === 0 ? p.noCandidates : online ? "" : p.redeployHint;
   const available = !container.failover && candidates.length > 0;
   return (
@@ -996,13 +1106,8 @@ function PlacementDialog({ project, container, nodes, run, online, onClose }: { 
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
   const candidates = nodes.usable.filter((n) => n.id !== container.nodeId);
-  const choice =
-    nodeId ||
-    (container.backupNodeId &&
-    candidates.some((n) => n.id === container.backupNodeId)
-      ? container.backupNodeId
-      : candidates[0]?.id) ||
-    "";
+  // 默认迁移到一个备份节点（它已经有副本，同步得快）。
+  const choice = nodeId || candidates.find((n) => container.backupNodeIds.includes(n.id))?.id || candidates[0]?.id || "";
   const def = useDefaultDir(choice, project.id, project.networkName, container.name);
   const ref = { projectId: project.id, container: container.name, nodeId: choice, dir: dir.trim() || def };
 
@@ -1027,7 +1132,7 @@ function PlacementDialog({ project, container, nodes, run, online, onClose }: { 
               {candidates.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.name}
-                  {n.id === container.backupNodeId ? p.backupSuffix : ""}
+                  {container.backupNodeIds.includes(n.id) ? p.backupSuffix : ""}
                 </option>
               ))}
             </Select>
@@ -1065,11 +1170,11 @@ const standbyOf = (container: Container) => (container.failover?.a?.nodeId === c
 function FailoverRow({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const f = t.projectData.failover;
   const [open, setOpen] = useState(false);
-  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
-  const available = !container.backupNodeId && standbys.length > 0;
+  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId && !container.backupNodeIds.includes(n.id));
+  const available = standbys.length > 0;
   return (
     <>
-      <SettingRow label={f.title} help={f.setupHelp} description={container.backupNodeId ? f.hasBackup : standbys.length === 0 ? f.noCandidates : f.unset}>
+      <SettingRow label={f.title} help={f.setupHelp} description={standbys.length === 0 ? f.noCandidates : f.unset}>
         {available ? (
           <Button variant="outline" onClick={() => setOpen(true)}>
             {t.projectData.setUp}
@@ -1094,7 +1199,8 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
     autoStateful: false,
     autoFailback: true,
   });
-  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId);
+  // 顶替节点不能是备份节点：两套同步会写同一个副本目录。
+  const standbys = nodes.usable.filter((n) => n.id !== container.nodeId && !container.backupNodeIds.includes(n.id));
   const standbyId = form.standby || standbys[0]?.id || "";
   const witnesses = nodes.usable.filter((n) => n.id !== container.nodeId && n.id !== standbyId);
   // 目录收起时也要用默认值，所以在这里算，不放进折叠的内容里。
@@ -1219,7 +1325,7 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
   };
   const items = [
     p.failover ? f.restoredFailover(nodes.name(p.failover.a?.nodeId ?? "", p.failover.a?.name), nodes.name(p.failover.b?.nodeId ?? "", p.failover.b?.name)) : "",
-    p.backupNodeId ? f.restoredBackup(nodes.name(p.backupNodeId)) : "",
+    p.backupNodeIds.length > 0 || p.backupNodeId ? f.restoredBackup(t.common.list((p.backupNodeIds.length > 0 ? p.backupNodeIds : [p.backupNodeId]).map((id) => nodes.name(id)))) : "",
   ].filter(Boolean);
   return (
     <div className="grid gap-2">

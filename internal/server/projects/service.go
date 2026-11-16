@@ -79,6 +79,14 @@ type Service struct {
 	warned map[string]time.Time
 	// 第一次上报已经处理完的连接（之后才给它推代理计划）。
 	synced map[*nodes.Conn]bool
+	// backupReports：容器所在节点最近一次上报的、同步到各个备份节点的状态（"项目 ID/容器名" → 状态）。
+	// 节点离线以后还留着：从备份节点恢复时要知道哪个备份节点的数据最新。只在内存里，面板重启后等节点重新上报。
+	backupReports map[string]backupReport
+}
+
+type backupReport struct {
+	node   string // 上报的节点
+	states []*nagiv1.BackupStatus
 }
 
 // lock 返回项目的互斥锁：同一个项目的修改和部署串行执行。
@@ -336,7 +344,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		Name: c.Name, Revision: c.Revision, LatestVersion: v.Version, DeployedVersion: c.DeployedVersion,
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
-		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
+		NodeId: c.NodeID, Dir: c.Dir, BackupNodeIds: store.BackupNodes(c), DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
 		SnapshotSchedule: containerSnapshotSchedule(c), PendingHa: pendingHAOf(c),
 	}
 	if cfg := failoverOf(c); cfg != nil {
@@ -348,14 +356,20 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 			mem.FailoverWitnessSelf = string(cfg.GetWitness().GetKey()) == string(self[:])
 		}
 	}
-	if c.BackupNodeID != "" {
-		if conn, err := s.Nodes.Peek(c.NodeID); err == nil {
-			for _, cs := range conn.LastReport().GetContainers() {
-				if cs.GetProjectId() == c.ProjectID && cs.GetName() == c.Name {
-					mem.Backup = cs.GetBackup()
+	if len(mem.BackupNodeIds) > 0 {
+		mem.BackupNodeId = mem.BackupNodeIds[0]
+		// 按 backup_node_ids 的顺序对上源节点上报的状态，还没有上报的（刚添加的）给一个空的。
+		reported := s.reportedBackups(c)
+		for _, id := range mem.BackupNodeIds {
+			st := &nagiv1.BackupStatus{TargetNodeId: id}
+			for _, r := range reported {
+				if r.GetTargetNodeId() == id {
+					st = r
 				}
 			}
+			mem.Backups = append(mem.Backups, st)
 		}
+		mem.Backup = mem.Backups[0]
 	}
 	if cp, err := spec.Load(ctx, cfg, c.Name, settings.GetSharedEnv(), checkData(c), spec.ComposeProjectName(c.ProjectID, c.Name)); err == nil {
 		mem.Stateful = spec.IsStateful(cfg, cp, spec.PreservePaths(cfg, cp, checkData(c)))

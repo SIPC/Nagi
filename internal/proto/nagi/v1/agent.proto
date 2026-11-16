@@ -60,8 +60,9 @@ service AgentService {
   rpc LoginRegistry(LoginRegistryRequest) returns (LoginRegistryResponse);
 
   // ---- 备份节点、迁移（见 docs/snapshot.md#异地副本、docs/failover.md#手动迁移） ----
-  // 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backup 里），同步完才返回。
-  rpc SyncBackup(ContainerRef) returns (BackupStatus);
+  // 源节点：立即同步一次到备份节点（备份节点在 ContainerSpec.backups 里），同步完才返回，返回这个备份节点的状态。
+  // target_node_id 为空时同步到第一个（旧版本的节点只认第一个）。
+  rpc SyncBackup(SyncBackupRequest) returns (BackupStatus);
   // 目标节点：登记接收一个容器的副本，只接受 source_key 的同步。spec 是容器在本节点上恢复时用的配置（目录是本节点上的）。
   rpc AcceptReplica(AcceptReplicaRequest) returns (AcceptReplicaResponse);
   rpc ListReplicas(ListReplicasRequest) returns (ListReplicasResponse);
@@ -167,6 +168,14 @@ message AcceptReplicaRequest {
   bytes source_key = 2;
   string source_node_id = 3;
   string source_name = 4;
+  // 也接受这些节点的同步：设置了顶替时，持有租约、运行容器的节点可能是另一个参与者。
+  repeated bytes extra_source_keys = 5;
+}
+
+message SyncBackupRequest {
+  string project_id = 1;
+  string container = 2;
+  string target_node_id = 3;
 }
 
 message AcceptReplicaResponse {}

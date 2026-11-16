@@ -3,6 +3,7 @@ package projects
 import (
 	"bytes"
 	"context"
+	"slices"
 
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -27,19 +28,40 @@ func pendingHAOf(c store.Container) *nagiv1.PendingHA {
 	return p
 }
 
+// pendingBackups 返回待确认的备份节点（旧版本的面板只记了一个）。
+func pendingBackups(p *nagiv1.PendingHA) []string {
+	if len(p.GetBackupNodeIds()) > 0 {
+		return p.GetBackupNodeIds()
+	}
+	if id := p.GetBackupNodeId(); id != "" {
+		return []string{id}
+	}
+	return nil
+}
+
 // rebuiltHA 从节点缓存里取出可以待确认的设置：备份节点和顶替设置里的节点都要是面板上登记过的，
 // 顶替的一方必须是上报的节点，两方的公钥要和登记的一致。对不上的直接丢掉。都没有时返回 nil。
 func (s *Service) rebuiltHA(ctx context.Context, nodeID string, sp *nagiv1.ContainerSpec, fo *nagiv1.FailoverStatus) *nagiv1.PendingHA {
 	p := &nagiv1.PendingHA{}
-	if t := sp.GetBackup(); t != nil && t.GetNodeId() != nodeID {
-		if _, err := s.Q.GetNode(ctx, t.GetNodeId()); err == nil {
-			p.BackupNodeId = t.GetNodeId()
+	targets := sp.GetBackups()
+	if len(targets) == 0 && sp.GetBackup() != nil {
+		targets = []*nagiv1.BackupTarget{sp.GetBackup()}
+	}
+	for _, t := range targets {
+		if t.GetNodeId() == nodeID || slices.Contains(p.BackupNodeIds, t.GetNodeId()) {
+			continue
 		}
+		if _, err := s.Q.GetNode(ctx, t.GetNodeId()); err == nil {
+			p.BackupNodeIds = append(p.BackupNodeIds, t.GetNodeId())
+		}
+	}
+	if len(p.BackupNodeIds) > 0 {
+		p.BackupNodeId = p.BackupNodeIds[0]
 	}
 	if cfg := fo.GetConfig(); cfg != nil && s.failoverMatches(ctx, nodeID, cfg) {
 		p.Failover, p.FailoverEpoch = cfg, fo.GetEpoch()
 	}
-	if p.GetBackupNodeId() == "" && p.GetFailover() == nil {
+	if len(p.GetBackupNodeIds()) == 0 && p.GetFailover() == nil {
 		return nil
 	}
 	p.Privileged, _ = spec.PrivilegeReasons(sp.GetConfig(), sp.GetName())
@@ -102,16 +124,23 @@ func (s *Service) ConfirmPendingHA(ctx context.Context, projectID, name string, 
 			}
 			// 见证人还是拼回之前的旧面板：换成本面板（在锁外进行；节点下次上报时也会触发）。
 			defer s.adoptWitness(c, f)
-		} else if id := p.GetBackupNodeId(); id != "" {
-			if id == c.NodeID {
-				return invalid("备份节点不能是容器所在的节点")
+		}
+		// 备份节点可以和顶替一起恢复（不能是顶替的参与者）。
+		var backups []string
+		for _, id := range pendingBackups(p) {
+			if id == c.NodeID || p.GetFailover() != nil && isParticipant(p.GetFailover(), id) {
+				return invalid("备份节点不能是容器所在的节点或顶替节点")
 			}
 			if _, err := s.Q.GetNode(ctx, id); err != nil {
 				return invalid("备份节点已被移除，请放弃后重新设置")
 			}
-			if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: id, ProjectID: projectID, Name: name}); err != nil {
+			backups = append(backups, id)
+		}
+		if len(backups) > 0 {
+			if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: store.JoinBackupNodes(backups), ProjectID: projectID, Name: name}); err != nil {
 				return err
 			}
+			defer func() { go s.registerBackups(context.Background(), projectID, name) }()
 		}
 	}
 	if err := s.Q.SetContainerPendingHA(ctx, store.SetContainerPendingHAParams{ProjectID: projectID, Name: name}); err != nil {

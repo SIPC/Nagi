@@ -137,3 +137,23 @@ func TestKeepNodeFailoverWhilePending(t *testing.T) {
 		t.Fatal("放弃以后应该让节点删掉")
 	}
 }
+
+// 缓存里有多个备份节点时都拼回成待确认，去掉上报的节点自己和没登记的；旧版本只有 backup 一个时也认。
+func TestRebuiltHAMultipleBackups(t *testing.T) {
+	ctx := context.Background()
+	s := haTestService(t)
+	target := func(id string) *nagiv1.BackupTarget { return &nagiv1.BackupTarget{NodeId: id} }
+	sp := &nagiv1.ContainerSpec{ProjectId: "aaaaaaaaaaaaaaaa", Name: "web", Backup: target("n2"),
+		Backups: []*nagiv1.BackupTarget{target("n2"), target("n1"), target("nx"), target("n3"), target("n3")}}
+	p := s.rebuiltHA(ctx, "n1", sp, nil)
+	if got := p.GetBackupNodeIds(); len(got) != 2 || got[0] != "n2" || got[1] != "n3" || p.GetBackupNodeId() != "n2" {
+		t.Errorf("拼回的备份节点：%v", p)
+	}
+	sp.Backups = nil
+	if got := s.rebuiltHA(ctx, "n1", sp, nil).GetBackupNodeIds(); len(got) != 1 || got[0] != "n2" {
+		t.Errorf("只有 backup 时：%v", got)
+	}
+	if got := pendingBackups(&nagiv1.PendingHA{BackupNodeId: "n3"}); len(got) != 1 || got[0] != "n3" {
+		t.Errorf("旧版本面板记的待确认备份节点：%v", got)
+	}
+}

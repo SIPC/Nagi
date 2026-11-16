@@ -286,3 +286,41 @@ func TestGroupAdminOnly(t *testing.T) {
 		}
 	}
 }
+
+// 备份节点：新加的要在范围内，原来就有的（管理员设的）可以留着；从备份恢复时恢复到的节点要在范围内。
+func TestScopeBackupNodes(t *testing.T) {
+	a, _ := scopeTestAPI(t,
+		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n3', 'c', 0, x'03')`,
+		`INSERT INTO user_nodes (user_id, node_id) VALUES (2, 'n3')`,
+		`INSERT INTO containers (project_id, name, position, node_id, dir, revision, created_at, webhook_hash, secrets, deploy_key_pub, backup_node_id)
+		 VALUES ('p1', 'web', 1, 'n1', '/srv/web', 1, 0, 'h', x'', '', 'n2')`,
+	)
+	ctx := context.Background()
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true})
+	if err != nil || x == nil {
+		t.Fatal(x, err)
+	}
+	set := func(ids ...string) proto.Message {
+		return &nagiv1.SetBackupNodesRequest{ProjectId: "p1", Container: "web", BackupNodeIds: ids}
+	}
+	cases := []struct {
+		name      string
+		procedure string
+		msg       proto.Message
+		want      connect.Code
+	}{
+		{"加范围内的节点，原来的留着", "SetBackupNodes", set("n2", "n3"), 0},
+		{"去掉原来的", "SetBackupNodes", set("n3"), 0},
+		{"加范围外的节点", "SetBackupNodes", set("n2", "nx"), connect.CodeNotFound},
+		{"在范围外的备份节点上恢复", "RestoreFromBackup", &nagiv1.RestoreFromBackupRequest{ProjectId: "p1", Container: "web", NodeId: "n2"}, connect.CodeNotFound},
+		{"不指定节点：有备份节点在范围外", "RestoreFromBackup", &nagiv1.RestoreFromBackupRequest{ProjectId: "p1", Container: "web"}, connect.CodeNotFound},
+		{"同步到范围外的备份节点", "SyncBackup", &nagiv1.BackupNodeRef{ProjectId: "p1", Container: "web", NodeId: "n2"}, connect.CodeNotFound},
+		{"同步全部", "SyncBackup", &nagiv1.BackupNodeRef{ProjectId: "p1", Container: "web"}, 0},
+	}
+	for _, c := range cases {
+		err := a.checkRequest(ctx, x, "/nagi.v1.ProjectService/"+c.procedure, c.msg)
+		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
+			t.Errorf("%s：得到 %v，想要 %v", c.name, err, c.want)
+		}
+	}
+}

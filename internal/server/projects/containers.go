@@ -216,8 +216,8 @@ func (s *Service) deleteOnNode(ctx context.Context, c store.Container, deleteDir
 		return err
 	}
 	// 备份节点上的副本一起删掉：保留目录时，目录里的 backups/ 就是完整的快照仓库。
-	if c.BackupNodeID != "" {
-		if b, err := s.agent(ctx, c.BackupNodeID); err == nil {
+	for _, id := range store.BackupNodes(c) {
+		if b, err := s.agent(ctx, id); err == nil {
 			_, _ = b.DeleteReplica(ctx, &nagiv1.ContainerRef{ProjectId: c.ProjectID, Container: c.Name})
 		}
 	}

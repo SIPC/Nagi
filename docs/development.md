@@ -100,7 +100,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 不在快照范围内的 volume（`external` 或自定义 driver，接口里是容器的 `unmanaged_volumes`）和 `network_mode: host` 的服务（`host_network_services`）醒目提示（[agent.md](agent.md#部署方式)）
 - 首页提醒开启两步验证；提醒单独备份面板主密钥文件（设置里的 `master_key_path`，见 [panel.md](panel.md)）
 - 端口映射旁给出访问地址（节点列表里的 `address`，见 [exposure.md](exposure.md#端口映射)）；修改容器时对外端口在映射里改，不在容器配置里改
-- 顶替和备份节点二选一，设了一个时另一个直接说明原因；设了顶替时迁移先说明要取消顶替（[failover.md](failover.md)）
+- 顶替和备份节点可以同时设置；选不了的节点（容器所在的、顶替节点、已有的备份节点）不出现在选项里；设了顶替时迁移、从备份节点恢复先说明要取消顶替（[failover.md](failover.md)）
 - 版本文件已经不在了的版本标出不能回滚（[agent.md](agent.md#版本与回滚)）
 - 面板自己的设置（账号安全、告警、接入码、面板的 mesh）放在单独的设置页，不和节点列表混在一起
 

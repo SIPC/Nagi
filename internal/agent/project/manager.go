@@ -67,8 +67,8 @@ type Manager struct {
 	ManagedRestart func(projectID, container string) bool
 	// FastSnapshot 返回 true 的容器每 15 分钟做一次定时快照（设置了顶替的容器）。
 	FastSnapshot func(projectID, container string) bool
-	// BackupStatus 返回容器同步到备份节点的状态（上报给面板），没有设置备份节点时返回 nil。
-	BackupStatus func(s *nagiv1.ContainerSpec) *nagiv1.BackupStatus
+	// BackupStatus 返回容器同步到各个备份节点的状态（上报给面板），没有设置备份节点时返回 nil。
+	BackupStatus func(s *nagiv1.ContainerSpec) []*nagiv1.BackupStatus
 	// EntryPorts 返回本节点作为入口节点已经在用的端口（Caddy 正在监听）。
 	EntryPorts func() []spec.PortKey
 	// ProxyPorts 返回 Caddy 实际监听着的 80 和 443（配置加载成功才算：只看映射的话，分不清是它自己还是别的程序占着）。
@@ -522,7 +522,10 @@ func (m *Manager) Statuses(ctx context.Context) []*nagiv1.ContainerStatus {
 		}
 		m.imageStatus(s.GetProjectId(), s.GetName(), st)
 		if m.BackupStatus != nil {
-			st.Backup = m.BackupStatus(s)
+			st.Backups = m.BackupStatus(s)
+			if len(st.Backups) > 0 {
+				st.Backup = st.Backups[0]
+			}
 		}
 		out = append(out, st)
 	}

@@ -33,19 +33,21 @@ import (
 )
 
 // 备份节点和迁移（见 docs/snapshot.md#备份节点的实现、docs/failover.md#手动迁移），按容器进行。
-//   - 源节点：每次定时快照成功后，把容器的快照仓库经 mesh 增量同步到备份节点（备份节点在面板下发的 ContainerSpec.backup 里）；
+//   - 源节点：每次定时快照成功后，把容器的快照仓库经 mesh 增量依次同步到各个备份节点（在面板下发的 ContainerSpec.backups 里）；
 //   - 目标节点：副本放在 <节点目录>/replicas/<项目 ID>-<容器名>/files/repo，只接受登记过的源节点同步；
 //     恢复用的配置是面板登记副本时给的（spec.pb），不从源节点拿。
 
 var projectIDRe = regexp.MustCompile(`^[a-f0-9]{16}$`)
 
 type replicaMeta struct {
-	ProjectID    string `json:"project_id"`
-	Container    string `json:"container"`
-	SourceKey    []byte `json:"source_key"`
-	SourceNodeID string `json:"source_node_id"`
-	SourceName   string `json:"source_name"`
-	LastSync     int64  `json:"last_sync"`
+	ProjectID string `json:"project_id"`
+	Container string `json:"container"`
+	SourceKey []byte `json:"source_key"`
+	// ExtraSourceKeys：也接受这些节点的同步（设置了顶替时，运行容器的可能是另一个参与者）。
+	ExtraSourceKeys [][]byte `json:"extra_source_keys,omitempty"`
+	SourceNodeID    string   `json:"source_node_id"`
+	SourceName      string   `json:"source_name"`
+	LastSync        int64    `json:"last_sync"`
 }
 
 type replicas struct {
@@ -167,6 +169,17 @@ func (a *agent) replicaStateDir(projectID, container string) string {
 
 // ---- 源节点上的同步状态 ----
 
+// backupTargets 返回容器的备份节点。旧版本的面板只下发 backup 一个。
+func backupTargets(s *nagiv1.ContainerSpec) []*nagiv1.BackupTarget {
+	if len(s.GetBackups()) > 0 {
+		return s.GetBackups()
+	}
+	if t := s.GetBackup(); t != nil {
+		return []*nagiv1.BackupTarget{t}
+	}
+	return nil
+}
+
 type backupEntry struct {
 	Target    string `json:"target"` // 备份节点 ID
 	LastSync  int64  `json:"last_sync"`
@@ -174,11 +187,12 @@ type backupEntry struct {
 	syncing   bool
 }
 
-// backupStates 记录每个容器同步到备份节点的结果，保存在 <节点目录>/backup-status.json。
+// backupStates 记录每个容器同步到各个备份节点的结果，保存在 <节点目录>/backup-status.json。
+// 键是"项目 ID-容器名"，第一个备份节点只用这个键（和只有一个备份节点的旧版本一样），其余的再加"/节点 ID"。
 type backupStates struct {
 	file string
 	mu   sync.Mutex
-	m    map[string]*backupEntry // 项目 ID-容器名
+	m    map[string]*backupEntry
 }
 
 func newBackupStates(file string) *backupStates {
@@ -189,14 +203,35 @@ func newBackupStates(file string) *backupStates {
 	return b
 }
 
-// entry 返回容器的状态；备份节点换了就从头记。调用时持有 mu。
+// entry 返回容器同步到 target 的状态。调用时持有 mu。
 func (b *backupStates) entry(id, target string) *backupEntry {
-	e := b.m[id]
-	if e == nil || e.Target != target {
+	if e := b.m[id]; e != nil && e.Target == target {
+		return e
+	}
+	key := id + "/" + target
+	e := b.m[key]
+	if e == nil {
 		e = &backupEntry{Target: target}
-		b.m[id] = e
+		// 第一个键空着（或者那个备份节点已经去掉了）就用它，升级前后第一个备份节点的状态接得上。
+		if old := b.m[id]; old == nil || old.Target == "" {
+			key = id
+		}
+		b.m[key] = e
 	}
 	return e
+}
+
+// prune 去掉容器已经不用的备份节点的状态。调用时持有 mu。
+func (b *backupStates) prune(id string, targets []*nagiv1.BackupTarget) {
+	keep := map[string]bool{}
+	for _, t := range targets {
+		keep[t.GetNodeId()] = true
+	}
+	for k, e := range b.m {
+		if (k == id || strings.HasPrefix(k, id+"/")) && !keep[e.Target] {
+			delete(b.m, k)
+		}
+	}
 }
 
 func (b *backupStates) persist() {
@@ -204,18 +239,33 @@ func (b *backupStates) persist() {
 	_ = writeAtomic(b.file, raw)
 }
 
-// status 返回容器的同步状态，没有设置备份节点时返回 nil。
-func (b *backupStates) status(s *nagiv1.ContainerSpec) *nagiv1.BackupStatus {
-	t := s.GetBackup()
-	if t == nil {
+// statuses 返回容器同步到各个备份节点的状态，按备份节点的顺序；没有设置备份节点时返回 nil。
+func (b *backupStates) statuses(s *nagiv1.ContainerSpec) []*nagiv1.BackupStatus {
+	targets := backupTargets(s)
+	if len(targets) == 0 {
 		return nil
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	e := b.entry(s.GetProjectId()+"-"+s.GetName(), t.GetNodeId())
-	out := &nagiv1.BackupStatus{TargetNodeId: t.GetNodeId(), TargetName: t.GetName(), LastError: e.LastError, Syncing: e.syncing}
-	if e.LastSync > 0 {
-		out.LastSync = timestamppb.New(time.Unix(e.LastSync, 0))
+	out := make([]*nagiv1.BackupStatus, 0, len(targets))
+	for _, t := range targets {
+		e := b.entry(s.GetProjectId()+"-"+s.GetName(), t.GetNodeId())
+		st := &nagiv1.BackupStatus{TargetNodeId: t.GetNodeId(), TargetName: t.GetName(), LastError: e.LastError, Syncing: e.syncing}
+		if e.LastSync > 0 {
+			st.LastSync = timestamppb.New(time.Unix(e.LastSync, 0))
+		}
+		out = append(out, st)
+	}
+	return out
+}
+
+// failures 返回同步失败的备份节点和原因，用于告警。调用时持有 mu。
+func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []string {
+	var out []string
+	for _, t := range targets {
+		if e := b.entry(id, t.GetNodeId()); e.LastError != "" {
+			out = append(out, t.GetName()+"："+e.LastError)
+		}
 	}
 	return out
 }
@@ -232,7 +282,7 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 	if err != nil {
 		return "", err
 	}
-	if !slices.Equal(m.SourceKey, caller[:]) {
+	if !slices.Equal(m.SourceKey, caller[:]) && !slices.ContainsFunc(m.ExtraSourceKeys, func(k []byte) bool { return slices.Equal(k, caller[:]) }) {
 		return "", status.Error(codes.PermissionDenied, "该容器的副本不接受来自此节点的同步")
 	}
 	return filepath.Join(root, "files"), nil
@@ -417,17 +467,50 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 // errAlreadySyncing：这个容器已经有一次同步在进行（同一个容器同时只有一次同步）。
 var errAlreadySyncing = errors.New("已经在同步")
 
-// runBackupSync 把容器同步到它的备份节点一次并记录结果；同步失败时告警，下一次成功时恢复。
-// 没有设置备份节点时什么都不做；已经有一次同步在进行时返回 errAlreadySyncing。
-func (a *agent) runBackupSync(ctx context.Context, projectID, container string) error {
+// runBackupSync 依次把容器同步到它的各个备份节点并记录结果（targetID 不为空时只同步到这一个）。
+// 一个失败了接着同步下一个；有失败的就告警（一个容器一条，写明哪些节点），都成功了恢复。
+// 没有设置备份节点时什么都不做；要同步的那个已经有一次同步在进行时返回 errAlreadySyncing（同步全部时跳过它）。
+func (a *agent) runBackupSync(ctx context.Context, projectID, container, targetID string) error {
 	c, err := a.projects.Get(ctx, projectID, container)
 	if err != nil {
 		return err
 	}
-	t := c.Spec.GetBackup()
-	if t == nil {
-		return nil
+	targets := backupTargets(c.Spec)
+	id := projectID + "-" + container
+	b := a.backups
+	b.mu.Lock()
+	b.prune(id, targets)
+	b.mu.Unlock()
+	var firstErr error
+	for _, t := range targets {
+		if targetID != "" && t.GetNodeId() != targetID {
+			continue
+		}
+		err := a.syncBackupTo(ctx, projectID, container, t)
+		if errors.Is(err, errAlreadySyncing) && targetID == "" {
+			continue
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
+
+	b.mu.Lock()
+	failed := b.failures(id, targets)
+	b.mu.Unlock()
+	key := "backup:" + id
+	if len(failed) > 0 {
+		if a.alerts.ContainerEnabled(projectID, container, alert.RuleBackup) {
+			a.alerts.Fire(ctx, key, "容器 "+container+" 同步到备份节点失败", strings.Join(failed, "\n"), projectID)
+		}
+	} else {
+		a.alerts.Resolve(ctx, key)
+	}
+	return firstErr
+}
+
+// syncBackupTo 同步到一个备份节点并记录结果。
+func (a *agent) syncBackupTo(ctx context.Context, projectID, container string, t *nagiv1.BackupTarget) error {
 	id := projectID + "-" + container
 	b := a.backups
 	b.mu.Lock()
@@ -440,9 +523,9 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 	b.mu.Unlock()
 	a.changed()
 
-	_, err = a.syncTo(ctx, projectID, container, t)
+	_, err := a.syncTo(ctx, projectID, container, t)
 	if status.Code(err) == codes.NotFound {
-		err = fmt.Errorf("%s 上已经没有这个容器的副本登记（可能已经在那里恢复成了容器）。要继续备份，请重新选择一次备份节点（%w）", t.GetName(), err)
+		err = fmt.Errorf("%s 上已经没有这个容器的副本登记（可能已经在那里恢复成了容器）。要继续备份，请重新添加这个备份节点（%w）", t.GetName(), err)
 	}
 	b.mu.Lock()
 	e.syncing = false
@@ -454,17 +537,10 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 	b.persist()
 	b.mu.Unlock()
 	a.changed()
-
-	key := "backup:" + id
 	if err != nil {
-		a.log.Warn("同步到备份节点失败", "project", projectID, "container", container, "err", err)
-		if a.alerts.ContainerEnabled(projectID, container, alert.RuleBackup) {
-			a.alerts.Fire(ctx, key, "容器 "+container+" 同步到备份节点失败", err.Error(), projectID)
-		}
-		return err
+		a.log.Warn("同步到备份节点失败", "project", projectID, "container", container, "target", t.GetName(), "err", err)
 	}
-	a.alerts.Resolve(ctx, key)
-	return nil
+	return err
 }
 
 // syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用。
@@ -696,27 +772,36 @@ func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectI
 
 // ---- AgentService ----
 
-// SyncBackup 立即同步一次，同步完才返回。已经有一次同步在进行时（例如快照之后自动开始的），
-// 等它结束再做一次：那一次可能是在最新的快照之前开始的。
-func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.BackupStatus, error) {
+// SyncBackup 立即同步到一个备份节点（为空时第一个），同步完才返回这个备份节点的状态。已经有一次同步在进行时
+// （例如快照之后自动开始的），等它结束再做一次：那一次可能是在最新的快照之前开始的。
+func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.SyncBackupRequest) (*nagiv1.BackupStatus, error) {
 	c, err := s.projects.Get(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return nil, toStatus(err)
 	}
-	if c.Spec.GetBackup() == nil {
+	targets := backupTargets(c.Spec)
+	if len(targets) == 0 {
 		return nil, status.Error(codes.FailedPrecondition, "该容器没有设置备份节点")
 	}
-	err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer())
+	target := req.GetTargetNodeId()
+	if target == "" {
+		target = targets[0].GetNodeId()
+	}
+	i := slices.IndexFunc(targets, func(t *nagiv1.BackupTarget) bool { return t.GetNodeId() == target })
+	if i < 0 {
+		return nil, status.Error(codes.FailedPrecondition, "该节点不是这个容器的备份节点")
+	}
+	err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer(), target)
 	for errors.Is(err, errAlreadySyncing) {
 		select {
 		case <-ctx.Done():
 			return nil, toStatus(ctx.Err())
 		case <-time.After(500 * time.Millisecond):
 		}
-		err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer())
+		err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer(), target)
 	}
 	// 失败的原因记在状态里（last_error）。
-	return s.node.backups.status(c.Spec), nil
+	return s.node.backups.statuses(c.Spec)[i], nil
 }
 
 func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplicaRequest) (*nagiv1.AcceptReplicaResponse, error) {
@@ -732,7 +817,13 @@ func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplic
 		}
 		m = &replicaMeta{ProjectID: sp.GetProjectId(), Container: sp.GetName()}
 	}
+	for _, k := range req.GetExtraSourceKeys() {
+		if _, err := mesh.ParseKey(k); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
 	m.SourceKey, m.SourceNodeID, m.SourceName = req.GetSourceKey(), req.GetSourceNodeId(), req.GetSourceName()
+	m.ExtraSourceKeys = req.GetExtraSourceKeys()
 	defer r.lock(sp.GetProjectId(), sp.GetName())()
 	if err := r.save(m, sp); err != nil {
 		return nil, err

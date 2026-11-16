@@ -141,13 +141,21 @@ func (a *API) checkRequest(ctx context.Context, x *access, procedure string, msg
 	}
 	switch m := msg.(type) {
 	case *nagiv1.RestoreFromBackupRequest:
-		// 在备份节点上恢复：备份节点也要在范围内。
-		c, err := a.findContainer(ctx, m.GetProjectId(), m.GetContainer())
-		if err != nil {
-			return err
+		// 在备份节点上恢复：备份节点也要在范围内。指定了节点时上面已经核对过；没指定时由面板选，每个备份节点都要在范围内。
+		if m.GetNodeId() == "" {
+			for _, id := range a.backupNodesOf(ctx, m.GetProjectId(), m.GetContainer()) {
+				if !x.node(id) {
+					return nodeNotFound()
+				}
+			}
 		}
-		if c != nil && c.GetBackupNodeId() != "" && !x.node(c.GetBackupNodeId()) {
-			return nodeNotFound()
+	case *nagiv1.SetBackupNodesRequest:
+		// 新加的备份节点要在范围内；原来就有的（管理员设的）可以留着，改别的不受影响。
+		old := a.backupNodesOf(ctx, m.GetProjectId(), m.GetContainer())
+		for _, id := range m.GetBackupNodeIds() {
+			if !x.node(id) && !slices.Contains(old, id) {
+				return nodeNotFound()
+			}
 		}
 	case *nagiv1.PingNodeMeshRequest:
 		if owner := a.meshNodes(ctx)[hex.EncodeToString(m.GetPublicKey())]; owner != "" && !x.node(owner) {
@@ -189,6 +197,15 @@ func (a *API) checkEntryNodes(ctx context.Context, x *access, projectID string, 
 		}
 	}
 	return nil
+}
+
+// backupNodesOf 返回容器现在的备份节点，容器不存在时为空（由处理函数报错）。
+func (a *API) backupNodesOf(ctx context.Context, projectID, name string) []string {
+	c, err := a.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: projectID, Name: name})
+	if err != nil {
+		return nil
+	}
+	return store.BackupNodes(c)
 }
 
 func (a *API) findContainer(ctx context.Context, projectID, name string) (*nagiv1.Container, error) {
@@ -281,7 +298,9 @@ func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesRes
 		for _, c := range s.GetProject().GetContainers() {
 			count[c.GetNodeId()]++
 			used[c.GetNodeId()] = true
-			used[c.GetBackupNodeId()] = true
+			for _, id := range c.GetBackupNodeIds() {
+				used[id] = true
+			}
 			for _, p := range []*nagiv1.FailoverParticipant{c.GetFailover().GetA(), c.GetFailover().GetB(), c.GetFailover().GetWitness()} {
 				used[p.GetNodeId()] = true
 			}

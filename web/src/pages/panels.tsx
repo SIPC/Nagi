@@ -15,7 +15,7 @@ function relatedNodes(p: Project) {
   const out = new Set<string>();
   for (const c of p.containers) {
     out.add(c.nodeId);
-    if (c.backupNodeId) out.add(c.backupNodeId);
+    for (const id of c.backupNodeIds) out.add(id);
     for (const n of [c.failover?.a?.nodeId, c.failover?.b?.nodeId, c.failover?.witness?.nodeId]) if (n) out.add(n);
   }
   return [...out];

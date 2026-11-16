@@ -2,8 +2,8 @@ package projects
 
 import (
 	"context"
-	"errors"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,7 +72,7 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 		}
 	}
 	sp.Dir = dir
-	sp.Backup = nil
+	sp.Backup, sp.Backups = nil, nil
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if _, err := conn.Agent.CheckContainer(cctx, &nagiv1.PutContainerRequest{Spec: sp}); err != nil {
@@ -81,17 +81,16 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 	return sp, nil
 }
 
-// acceptReplica 让目标节点登记接收容器的副本，只接受源节点的同步。
-func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nagiv1.ContainerSpec, source store.Node) error {
+// acceptReplica 让目标节点登记接收容器的副本，只接受源节点（和 extra 里的节点）的同步。
+func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nagiv1.ContainerSpec, source store.Node, extra [][]byte) error {
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	_, err := target.Agent.AcceptReplica(cctx, &nagiv1.AcceptReplicaRequest{
-		Spec: sp, SourceKey: source.MeshKey, SourceNodeId: source.ID, SourceName: source.Name,
+		Spec: sp, SourceKey: source.MeshKey, SourceNodeId: source.ID, SourceName: source.Name, ExtraSourceKeys: extra,
 	})
 	return err
 }
 
-// SetBackupNode 设置或取消容器的备份节点（nodeID 为空表示取消）。
 // checkMovable 拒绝用现有目录的容器：数据在节点上的那个目录里，不在容器目录里，迁移、顶替、备份节点都带不走。
 func (s *Service) checkMovable(ctx context.Context, projectID, name string) error {
 	c, err := s.container(ctx, projectID, name)
@@ -108,128 +107,24 @@ func (s *Service) checkMovable(ctx context.Context, projectID, name string) erro
 	return nil
 }
 
-func (s *Service) SetBackupNode(ctx context.Context, projectID, name, nodeID string, deleteReplica bool) (*nagiv1.Project, error) {
-	ctx = context.WithoutCancel(ctx)
-	if nodeID != "" {
-		if err := s.checkMovable(ctx, projectID, name); err != nil {
-			return nil, err
-		}
-	}
-	l := s.lock(projectID)
-	l.Lock()
-	defer l.Unlock()
-	p, err := s.project(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-	c, err := s.container(ctx, projectID, name)
-	if err != nil {
-		return nil, err
-	}
-	if nodeID == c.BackupNodeID {
-		return s.reload(ctx, projectID)
-	}
-	if nodeID != "" {
-		if err := noFailover(c); err != nil {
-			return nil, invalid("容器 %s 已设置顶替，顶替节点本身保有实时更新的副本，无需备份节点", name)
-		}
-	}
-	old := c.BackupNodeID
-	if nodeID != "" {
-		if nodeID == c.NodeID {
-			return nil, invalid("备份节点不能是容器所在的节点")
-		}
-		target, _, err := s.targetNode(ctx, nodeID)
-		if err != nil {
-			return nil, err
-		}
-		source, err := s.Q.GetNode(ctx, c.NodeID)
-		if err != nil {
-			return nil, err
-		}
-		if len(source.MeshKey) == 0 {
-			return nil, invalid("节点 %s 还没有加入节点网络", source.Name)
-		}
-		sp, err := s.specFor(ctx, p, c, c.DeployedVersion)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.acceptReplica(ctx, target, sp, source); err != nil {
-			return nil, i18n.Errorf("备份节点未能登记副本：%w", s.nodeErr(ctx, nodeID, err))
-		}
-	}
-	if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: nodeID, ProjectID: projectID, Name: name}); err != nil {
-		return nil, err
-	}
-	// 源节点不在线时，上线后由 Sync 补推。
-	if err := s.push(ctx, projectID, name); err == nil && nodeID != "" {
-		go s.syncBackup(context.Background(), projectID, name)
-	}
-	if old != "" && deleteReplica {
-		if agent, err := s.agent(ctx, old); err == nil {
-			_, _ = agent.DeleteReplica(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
-		}
-	}
-	s.Log.Info("已设置备份节点", "project", projectID, "container", name, "node", nodeID)
-	return s.reload(ctx, projectID)
-}
-
-func (s *Service) syncBackup(ctx context.Context, projectID, name string) error {
+// moved 记下容器换到了节点 nodeID 的目录 dir 上，更新各节点的代理计划。keepBackups 时备份节点留着（去掉新的所在节点），
+// 更新它们的副本登记，改为接受新节点的同步；否则清掉（重新部署到其他节点时数据是空的，同步过去会冲掉备份节点上的副本）。
+func (s *Service) moved(ctx context.Context, projectID, name, nodeID, dir string, keepBackups bool) error {
 	c, err := s.container(ctx, projectID, name)
 	if err != nil {
 		return err
 	}
-	if c.BackupNodeID == "" {
-		return invalid("容器 %s 没有设置备份节点", name)
-	}
-	agent, err := s.agent(ctx, c.NodeID)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Hour)
-	defer cancel()
-	st, err := agent.SyncBackup(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
-	if err != nil {
-		return err
-	}
-	if st.GetLastError() != "" {
-		return errors.New(st.GetLastError())
-	}
-	return nil
-}
-
-// SyncBackup 立即同步到备份节点，同步完才返回。
-func (s *Service) SyncBackup(ctx context.Context, projectID, name string) (*nagiv1.Project, error) {
-	if err := s.syncBackup(ctx, projectID, name); err != nil {
-		return nil, err
-	}
-	return s.reload(ctx, projectID)
-}
-
-// BackupSnapshots 列出备份节点上副本里的快照。
-func (s *Service) BackupSnapshots(ctx context.Context, projectID, name string) ([]*nagiv1.Snapshot, error) {
-	c, err := s.container(ctx, projectID, name)
-	if err != nil {
-		return nil, err
-	}
-	if c.BackupNodeID == "" {
-		return nil, invalid("容器 %s 没有设置备份节点", name)
-	}
-	agent, err := s.agent(ctx, c.BackupNodeID)
-	if err != nil {
-		return nil, err
-	}
-	res, err := agent.ListReplicaSnapshots(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
-	if err != nil {
-		return nil, err
-	}
-	return res.GetSnapshots(), nil
-}
-
-// moved 记下容器换到了节点 nodeID 的目录 dir 上（备份节点设置清掉），更新各节点的代理计划。
-func (s *Service) moved(ctx context.Context, projectID, name, nodeID, dir string) error {
 	if err := s.Q.MoveContainer(ctx, store.MoveContainerParams{NodeID: nodeID, Dir: dir, ProjectID: projectID, Name: name}); err != nil {
 		return err
+	}
+	if keepBackups {
+		rest := slices.DeleteFunc(store.BackupNodes(c), func(id string) bool { return id == nodeID })
+		if len(rest) > 0 {
+			if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: store.JoinBackupNodes(rest), ProjectID: projectID, Name: name}); err != nil {
+				return err
+			}
+			go s.registerBackups(context.WithoutCancel(ctx), projectID, name)
+		}
 	}
 	s.refreshLinks()
 	return nil
@@ -237,7 +132,7 @@ func (s *Service) moved(ctx context.Context, projectID, name, nodeID, dir string
 
 // RestoreFromBackup 原节点离线时，在备份节点上把容器恢复出来：数据来自副本，配置来自面板，按部署过的版本启动。
 // 原节点之后回来时，由 Sync 让它停止并删除这个容器（目录改名保留）。
-func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapshotID, dir string, out Output) error {
+func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, nodeID, snapshotID, dir string, out Output) error {
 	ctx = context.WithoutCancel(ctx)
 	if err := s.checkMovable(ctx, projectID, name); err != nil {
 		return err
@@ -253,16 +148,16 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	if err != nil {
 		return err
 	}
-	if c.BackupNodeID == "" {
-		return invalid("容器 %s 没有设置备份节点", name)
-	}
 	if err := noFailover(c); err != nil {
 		return err
 	}
 	if _, err := s.Nodes.Get(c.NodeID); err == nil {
 		return invalid("容器所在的节点在线，请使用「迁移」将容器移到备份节点，数据不会丢失")
 	}
-	target, _, err := s.targetNode(ctx, c.BackupNodeID)
+	if nodeID, err = s.pickBackupNode(ctx, c, nodeID, true); err != nil {
+		return err
+	}
+	target, _, err := s.targetNode(ctx, nodeID)
 	if err != nil {
 		return err
 	}
@@ -280,7 +175,7 @@ func (s *Service) RestoreFromBackup(ctx context.Context, projectID, name, snapsh
 	}
 	res, err := recvResult(stream.Recv, out)
 	if res.GetPlaced() {
-		if merr := s.moved(ctx, projectID, name, target.NodeID, sp.GetDir()); merr != nil {
+		if merr := s.moved(ctx, projectID, name, target.NodeID, sp.GetDir(), true); merr != nil {
 			return merr
 		}
 		s.Log.Info("已在备份节点上恢复容器", "project", projectID, "container", name, "node", target.NodeID)
@@ -342,7 +237,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	}
 	if c.DeployedVersion == 0 {
 		// 还没部署过：没有数据要搬，直接换节点。
-		if err := s.moved(ctx, projectID, name, nodeID, dir); err != nil {
+		if err := s.moved(ctx, projectID, name, nodeID, dir, true); err != nil {
 			return err
 		}
 		if err := s.push(ctx, projectID, name); err != nil {
@@ -352,7 +247,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 		out(i18n.T(ctx, "容器还没有部署过，已移到 %s", targetNode.Name))
 		return nil
 	}
-	if err := s.acceptReplica(ctx, target, sp, sourceNode); err != nil {
+	if err := s.acceptReplica(ctx, target, sp, sourceNode, nil); err != nil {
 		return i18n.Errorf("目标节点未能登记副本：%w", err)
 	}
 	undo := func(cause error) error {
@@ -388,7 +283,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 	// 记下新位置；写不进数据库时（重试几次）撤销：不然面板还记着原节点，之后会把目标节点上的这份当成多余的停掉。
 	var merr error
 	for i := 0; i < 3; i++ {
-		if merr = s.moved(ctx, projectID, name, nodeID, sp.GetDir()); merr == nil {
+		if merr = s.moved(ctx, projectID, name, nodeID, sp.GetDir(), true); merr == nil {
 			break
 		}
 		time.Sleep(time.Second)
@@ -458,7 +353,7 @@ func (s *Service) redeployMove(ctx context.Context, projectID, name, nodeID, dir
 	if _, err := s.checkPlacement(ctx, target, p, c, dir); err != nil {
 		return false, opts, err
 	}
-	if err := s.moved(ctx, projectID, name, nodeID, dir); err != nil {
+	if err := s.moved(ctx, projectID, name, nodeID, dir, false); err != nil {
 		return false, opts, err
 	}
 	// 旧版本的文件留在原节点上，回滚时不能带文件。

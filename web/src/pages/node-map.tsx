@@ -750,23 +750,30 @@ function standbyOf(c: Container) {
 }
 
 // unprotected：有状态、但没有顶替也没有备份节点的容器，所在节点坏了数据就找不回来。
-const unprotected = (c: Container) => c.stateful && !c.failover && !c.backupNodeId;
+const unprotected = (c: Container) => c.stateful && !c.failover && c.backupNodeIds.length === 0;
 
 // fateOf：容器所在的节点故障时会怎样（按 docs/failover.md）。顶替要热备和见证人都在：A 坏了，B 加见证人才是多数。
+// 有多个备份节点时，在线的任一个都能用来恢复；顶替因热备或见证人离线做不了时，退而在备份节点上手动恢复。
 function fateOf(c: Container, online: (id: string) => boolean, name: (id: string) => string): Omit<Group, "items"> {
   const sb = standbyOf(c);
+  const backups = c.backupNodeIds.filter(online);
+  const backupFate = (): Omit<Group, "items"> => ({ key: "backup:" + backups.join(","), label: t.nodes.ha.backup(t.common.list(backups.map(name))), tone: "warning", order: 4 });
   if (c.failover && sb?.nodeId) {
     const target = name(sb.nodeId);
-    if (!online(sb.nodeId)) return { key: "blocked-sb:" + sb.nodeId, label: t.nodes.ha.standbyOffline(target), tone: "danger", order: 1 };
     const w = c.failover.witness?.nodeId;
+    const blocked = !online(sb.nodeId) || (!c.failover.witnessIsPanel && w && !online(w));
+    if (blocked && backups.length > 0) return backupFate();
+    if (!online(sb.nodeId)) return { key: "blocked-sb:" + sb.nodeId, label: t.nodes.ha.standbyOffline(target), tone: "danger", order: 1 };
     if (!c.failover.witnessIsPanel && w && !online(w)) return { key: "blocked-w:" + w, label: t.nodes.ha.witnessOffline(name(w)), tone: "danger", order: 1 };
     if (c.stateful && !c.failover.autoStateful) return { key: "confirm:" + sb.nodeId, label: t.nodes.ha.confirm(target), tone: "warning", order: 3 };
     return { key: "auto:" + sb.nodeId, label: t.nodes.ha.auto(target), tone: "success", order: 5 };
   }
-  if (c.backupNodeId) {
-    const target = name(c.backupNodeId);
-    if (!online(c.backupNodeId)) return { key: "backup-off:" + c.backupNodeId, label: t.nodes.ha.backupOffline(target), tone: "danger", order: 2 };
-    return { key: "backup:" + c.backupNodeId, label: t.nodes.ha.backup(target), tone: "warning", order: 4 };
+  if (c.backupNodeIds.length > 0) {
+    if (backups.length === 0) {
+      const all = c.backupNodeIds.join(",");
+      return { key: "backup-off:" + all, label: t.nodes.ha.backupOffline(t.common.list(c.backupNodeIds.map(name))), tone: "danger", order: 2 };
+    }
+    return backupFate();
   }
   if (c.stateful) return { key: "lost", label: t.nodes.ha.lost, tone: "danger", order: 0 };
   return { key: "redeploy", label: t.nodes.ha.redeploy, tone: "neutral", order: 6 };
@@ -792,7 +799,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
   const risky = new Map<string, number>();
   for (const { c } of items) {
     if (c.failover) addEdge(c.nodeId, standbyOf(c)?.nodeId, "failover");
-    else if (c.backupNodeId) addEdge(c.nodeId, c.backupNodeId, "backup");
+    for (const id of c.backupNodeIds) addEdge(c.nodeId, id, "backup");
     if (unprotected(c)) risky.set(c.nodeId, (risky.get(c.nodeId) ?? 0) + 1);
   }
   const edges = [...edgeMap.values()].filter((e) => nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to));
@@ -931,7 +938,7 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
   };
   for (const it of items) {
     if (it.c.nodeId === node.id) put(fateOf(it.c, online, name), it);
-    else if (standbyOf(it.c)?.nodeId === node.id || it.c.backupNodeId === node.id)
+    else if (standbyOf(it.c)?.nodeId === node.id || it.c.backupNodeIds.includes(node.id))
       put({ key: "collateral", label: t.nodes.ha.collateral, tone: "neutral", order: 7 }, it);
   }
   const list = [...groups.values()].sort((a, b) => a.order - b.order);
