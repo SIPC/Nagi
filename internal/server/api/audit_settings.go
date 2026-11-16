@@ -205,7 +205,7 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 		b, _ := json.Marshal(map[string]any{"sinks": names})
 		id := s.Record(ctx, audit.Event{Category: audit.Security, Action: "audit_sinks_changed", Params: string(b)})
 		if s.Shipper != nil && len(oldSinks) > 0 {
-			s.Shipper.Flush(id, 15*time.Second)
+			s.Shipper.FlushHealthy(id, 15*time.Second)
 		}
 		if err := s.saveSinks(ctx, sinks); err != nil {
 			return nil, err

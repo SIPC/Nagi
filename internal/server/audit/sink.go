@@ -118,14 +118,24 @@ func (s *Shipper) Status() map[string]SinkStatus {
 	return out
 }
 
-// Flush 等所有目标把 ID 不大于 id 的记录发出去，最多等 timeout。修改外送配置前用它把这条变更发往旧目标。
-func (s *Shipper) Flush(id int64, timeout time.Duration) bool {
+// Flush 等所有目标把 ID 不大于 id 的记录发出去，最多等 timeout。
+func (s *Shipper) Flush(id int64, timeout time.Duration) bool { return s.flush(id, timeout, false) }
+
+// FlushHealthy 同 Flush，但不等正在失败的目标：反正发不出去，等满 timeout 只会让操作卡住。
+// 修改外送配置前用它把这条变更发往旧目标。
+func (s *Shipper) FlushHealthy(id int64, timeout time.Duration) bool { return s.flush(id, timeout, true) }
+
+func (s *Shipper) flush(id int64, timeout time.Duration, skipFailing bool) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		done := true
 		s.mu.Lock()
 		for _, sk := range s.sinks {
-			if st := s.status[sk.ID]; st == nil || st.Cursor < id {
+			st := s.status[sk.ID]
+			if skipFailing && st != nil && st.LastError != "" {
+				continue
+			}
+			if st == nil || st.Cursor < id {
 				done = false
 			}
 		}
