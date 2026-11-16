@@ -48,6 +48,8 @@ type Service struct {
 
 	mu      sync.Mutex
 	pending map[int64]pendingTOTP // 正在开启两步验证、还没确认的密钥
+	// challenges 是通行密钥的一次性挑战（见 passkey.go）。
+	challenges map[string]passkeyChallenge
 
 	audit    *audit.Log
 	failures failureSummary

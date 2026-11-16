@@ -99,6 +99,7 @@ export default {
     login_failed: "Sign-in failed",
     login_failed_summary: "Sign-in failures",
     totp_failed: "Wrong 2FA code",
+    passkey_failed: "Passkey verification failed",
     session_expired: "Session expired",
     firing: "Alert",
     resolved: "Alert resolved",

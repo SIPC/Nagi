@@ -18,6 +18,8 @@ var readOnlyPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping
 // readOnlyAllowed 是另外放行的接口：登录、退出只改本面板自己的会话；提升为主面板；更新只换本面板自己的程序。
 var readOnlyAllowed = map[string]bool{
 	nagiv1connect.AuthServiceLoginProcedure:              true,
+	nagiv1connect.AuthServiceBeginPasskeyLoginProcedure:  true,
+	nagiv1connect.AuthServicePasskeyLoginProcedure:       true,
 	nagiv1connect.AuthServiceLogoutProcedure:             true,
 	nagiv1connect.AuthServiceMeProcedure:                 true,
 	nagiv1connect.SettingsServicePromoteStandbyProcedure: true,

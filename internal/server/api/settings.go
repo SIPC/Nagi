@@ -212,6 +212,8 @@ func (s *settingsService) security(ctx context.Context) *nagiv1.Security {
 	if u.Role == auth.RoleAdmin {
 		sec.Entrance = entrance
 	}
+	sec.PasskeyDomain = s.Auth.PasskeyDomain(ctx)
+	sec.Passkeys = s.passkeys(ctx, u.ID, sec.PasskeyDomain)
 	return sec
 }
 

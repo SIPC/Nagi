@@ -77,6 +77,8 @@ func (a *API) Mount(mux *http.ServeMux) {
 		nagiv1connect.SetupServiceGetSetupStateProcedure,
 		nagiv1connect.SetupServiceSetupProcedure,
 		nagiv1connect.AuthServiceLoginProcedure,
+		nagiv1connect.AuthServiceBeginPasskeyLoginProcedure,
+		nagiv1connect.AuthServicePasskeyLoginProcedure,
 		nagiv1connect.AuthServiceLogoutProcedure,
 		// 要求重新验证的会话，其他接口都被拒绝，只有这个能用（处理函数自己找会话）。
 		nagiv1connect.AuthServiceReverifyProcedure,
@@ -117,7 +119,7 @@ func (s *setupService) GetSetupState(ctx context.Context, _ *connect.Request[nag
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&nagiv1.GetSetupStateResponse{Initialized: ok}), nil
+	return connect.NewResponse(&nagiv1.GetSetupStateResponse{Initialized: ok, PasskeyDomain: s.Auth.PasskeyDomain(ctx)}), nil
 }
 
 func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.SetupRequest]) (*connect.Response[nagiv1.SetupResponse], error) {

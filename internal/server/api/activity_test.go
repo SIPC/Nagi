@@ -55,6 +55,8 @@ var notSensitiveOutputs = map[string]string{
 	"GetPanelMesh":      "WireGuard 公钥",
 	"InspectComposeDir": "secret_variables 只是变量名",
 	"GetSettings":       "master_key_path 是文件路径",
+	"GetSetupState":     "passkey_domain 是面板域名",
+	"GetSecurity":       "passkey_domain 是面板域名，passkeys 只有名称和时间",
 	"ListAuditEvents":   "token_name 是令牌的名称",
 	"GetAuditEvent":     "token_name 是令牌的名称",
 	"GetAuditSettings":  "外送目标的 Secret Key 和请求头的值返回时留空",

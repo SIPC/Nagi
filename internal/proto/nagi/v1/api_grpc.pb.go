@@ -171,6 +171,8 @@ const (
 	AuthService_RegisterSessionKey_FullMethodName = "/nagi.v1.AuthService/RegisterSessionKey"
 	AuthService_RotateSession_FullMethodName      = "/nagi.v1.AuthService/RotateSession"
 	AuthService_Reverify_FullMethodName           = "/nagi.v1.AuthService/Reverify"
+	AuthService_BeginPasskeyLogin_FullMethodName  = "/nagi.v1.AuthService/BeginPasskeyLogin"
+	AuthService_PasskeyLogin_FullMethodName       = "/nagi.v1.AuthService/PasskeyLogin"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -198,6 +200,9 @@ type AuthServiceClient interface {
 	RotateSession(ctx context.Context, in *RotateSessionRequest, opts ...grpc.CallOption) (*RotateSessionResponse, error)
 	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
 	Reverify(ctx context.Context, in *ReverifyRequest, opts ...grpc.CallOption) (*ReverifyResponse, error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(ctx context.Context, in *BeginPasskeyLoginRequest, opts ...grpc.CallOption) (*PasskeyChallenge, error)
+	PasskeyLogin(ctx context.Context, in *PasskeyLoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 }
 
 type authServiceClient struct {
@@ -328,6 +333,26 @@ func (c *authServiceClient) Reverify(ctx context.Context, in *ReverifyRequest, o
 	return out, nil
 }
 
+func (c *authServiceClient) BeginPasskeyLogin(ctx context.Context, in *BeginPasskeyLoginRequest, opts ...grpc.CallOption) (*PasskeyChallenge, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PasskeyChallenge)
+	err := c.cc.Invoke(ctx, AuthService_BeginPasskeyLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) PasskeyLogin(ctx context.Context, in *PasskeyLoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResponse)
+	err := c.cc.Invoke(ctx, AuthService_PasskeyLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -353,6 +378,9 @@ type AuthServiceServer interface {
 	RotateSession(context.Context, *RotateSessionRequest) (*RotateSessionResponse, error)
 	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
 	Reverify(context.Context, *ReverifyRequest) (*ReverifyResponse, error)
+	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+	BeginPasskeyLogin(context.Context, *BeginPasskeyLoginRequest) (*PasskeyChallenge, error)
+	PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -398,6 +426,12 @@ func (UnimplementedAuthServiceServer) RotateSession(context.Context, *RotateSess
 }
 func (UnimplementedAuthServiceServer) Reverify(context.Context, *ReverifyRequest) (*ReverifyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Reverify not implemented")
+}
+func (UnimplementedAuthServiceServer) BeginPasskeyLogin(context.Context, *BeginPasskeyLoginRequest) (*PasskeyChallenge, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPasskeyLogin not implemented")
+}
+func (UnimplementedAuthServiceServer) PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PasskeyLogin not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -636,6 +670,42 @@ func _AuthService_Reverify_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_BeginPasskeyLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPasskeyLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).BeginPasskeyLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_BeginPasskeyLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).BeginPasskeyLogin(ctx, req.(*BeginPasskeyLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_PasskeyLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PasskeyLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).PasskeyLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_PasskeyLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).PasskeyLogin(ctx, req.(*PasskeyLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -690,6 +760,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Reverify",
 			Handler:    _AuthService_Reverify_Handler,
+		},
+		{
+			MethodName: "BeginPasskeyLogin",
+			Handler:    _AuthService_BeginPasskeyLogin_Handler,
+		},
+		{
+			MethodName: "PasskeyLogin",
+			Handler:    _AuthService_PasskeyLogin_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -2271,48 +2349,51 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SettingsService_GetSettings_FullMethodName          = "/nagi.v1.SettingsService/GetSettings"
-	SettingsService_UpdateSettings_FullMethodName       = "/nagi.v1.SettingsService/UpdateSettings"
-	SettingsService_SetPanelDomain_FullMethodName       = "/nagi.v1.SettingsService/SetPanelDomain"
-	SettingsService_GetAlertConfig_FullMethodName       = "/nagi.v1.SettingsService/GetAlertConfig"
-	SettingsService_UpdateAlertConfig_FullMethodName    = "/nagi.v1.SettingsService/UpdateAlertConfig"
-	SettingsService_TestAlertChannel_FullMethodName     = "/nagi.v1.SettingsService/TestAlertChannel"
-	SettingsService_CreateInvite_FullMethodName         = "/nagi.v1.SettingsService/CreateInvite"
-	SettingsService_ListInvites_FullMethodName          = "/nagi.v1.SettingsService/ListInvites"
-	SettingsService_RevokeInvite_FullMethodName         = "/nagi.v1.SettingsService/RevokeInvite"
-	SettingsService_CreateStandbyCode_FullMethodName    = "/nagi.v1.SettingsService/CreateStandbyCode"
-	SettingsService_GetStandbys_FullMethodName          = "/nagi.v1.SettingsService/GetStandbys"
-	SettingsService_RemoveStandby_FullMethodName        = "/nagi.v1.SettingsService/RemoveStandby"
-	SettingsService_PromoteStandby_FullMethodName       = "/nagi.v1.SettingsService/PromoteStandby"
-	SettingsService_CheckPanelUpdate_FullMethodName     = "/nagi.v1.SettingsService/CheckPanelUpdate"
-	SettingsService_UpdatePanel_FullMethodName          = "/nagi.v1.SettingsService/UpdatePanel"
-	SettingsService_GetPanelReleaseNotes_FullMethodName = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
-	SettingsService_GetUpdateStatus_FullMethodName      = "/nagi.v1.SettingsService/GetUpdateStatus"
-	SettingsService_GetSecurity_FullMethodName          = "/nagi.v1.SettingsService/GetSecurity"
-	SettingsService_BeginTOTP_FullMethodName            = "/nagi.v1.SettingsService/BeginTOTP"
-	SettingsService_EnableTOTP_FullMethodName           = "/nagi.v1.SettingsService/EnableTOTP"
-	SettingsService_DisableTOTP_FullMethodName          = "/nagi.v1.SettingsService/DisableTOTP"
-	SettingsService_SetEntrance_FullMethodName          = "/nagi.v1.SettingsService/SetEntrance"
-	SettingsService_ListActivity_FullMethodName         = "/nagi.v1.SettingsService/ListActivity"
-	SettingsService_ListUsers_FullMethodName            = "/nagi.v1.SettingsService/ListUsers"
-	SettingsService_CreateUser_FullMethodName           = "/nagi.v1.SettingsService/CreateUser"
-	SettingsService_UpdateUser_FullMethodName           = "/nagi.v1.SettingsService/UpdateUser"
-	SettingsService_DeleteUser_FullMethodName           = "/nagi.v1.SettingsService/DeleteUser"
-	SettingsService_ListSessions_FullMethodName         = "/nagi.v1.SettingsService/ListSessions"
-	SettingsService_RevokeSession_FullMethodName        = "/nagi.v1.SettingsService/RevokeSession"
-	SettingsService_ListAccessTokens_FullMethodName     = "/nagi.v1.SettingsService/ListAccessTokens"
-	SettingsService_CreateAccessToken_FullMethodName    = "/nagi.v1.SettingsService/CreateAccessToken"
-	SettingsService_RevokeAccessToken_FullMethodName    = "/nagi.v1.SettingsService/RevokeAccessToken"
-	SettingsService_ListAuditEvents_FullMethodName      = "/nagi.v1.SettingsService/ListAuditEvents"
-	SettingsService_GetAuditEvent_FullMethodName        = "/nagi.v1.SettingsService/GetAuditEvent"
-	SettingsService_ExportAuditEvents_FullMethodName    = "/nagi.v1.SettingsService/ExportAuditEvents"
-	SettingsService_GetSessionPolicy_FullMethodName     = "/nagi.v1.SettingsService/GetSessionPolicy"
-	SettingsService_SetSessionPolicy_FullMethodName     = "/nagi.v1.SettingsService/SetSessionPolicy"
-	SettingsService_GetRecording_FullMethodName         = "/nagi.v1.SettingsService/GetRecording"
-	SettingsService_GetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/GetAuditSettings"
-	SettingsService_SetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/SetAuditSettings"
-	SettingsService_TestAuditSink_FullMethodName        = "/nagi.v1.SettingsService/TestAuditSink"
-	SettingsService_VerifyAudit_FullMethodName          = "/nagi.v1.SettingsService/VerifyAudit"
+	SettingsService_GetSettings_FullMethodName              = "/nagi.v1.SettingsService/GetSettings"
+	SettingsService_UpdateSettings_FullMethodName           = "/nagi.v1.SettingsService/UpdateSettings"
+	SettingsService_SetPanelDomain_FullMethodName           = "/nagi.v1.SettingsService/SetPanelDomain"
+	SettingsService_GetAlertConfig_FullMethodName           = "/nagi.v1.SettingsService/GetAlertConfig"
+	SettingsService_UpdateAlertConfig_FullMethodName        = "/nagi.v1.SettingsService/UpdateAlertConfig"
+	SettingsService_TestAlertChannel_FullMethodName         = "/nagi.v1.SettingsService/TestAlertChannel"
+	SettingsService_CreateInvite_FullMethodName             = "/nagi.v1.SettingsService/CreateInvite"
+	SettingsService_ListInvites_FullMethodName              = "/nagi.v1.SettingsService/ListInvites"
+	SettingsService_RevokeInvite_FullMethodName             = "/nagi.v1.SettingsService/RevokeInvite"
+	SettingsService_CreateStandbyCode_FullMethodName        = "/nagi.v1.SettingsService/CreateStandbyCode"
+	SettingsService_GetStandbys_FullMethodName              = "/nagi.v1.SettingsService/GetStandbys"
+	SettingsService_RemoveStandby_FullMethodName            = "/nagi.v1.SettingsService/RemoveStandby"
+	SettingsService_PromoteStandby_FullMethodName           = "/nagi.v1.SettingsService/PromoteStandby"
+	SettingsService_CheckPanelUpdate_FullMethodName         = "/nagi.v1.SettingsService/CheckPanelUpdate"
+	SettingsService_UpdatePanel_FullMethodName              = "/nagi.v1.SettingsService/UpdatePanel"
+	SettingsService_GetPanelReleaseNotes_FullMethodName     = "/nagi.v1.SettingsService/GetPanelReleaseNotes"
+	SettingsService_GetUpdateStatus_FullMethodName          = "/nagi.v1.SettingsService/GetUpdateStatus"
+	SettingsService_GetSecurity_FullMethodName              = "/nagi.v1.SettingsService/GetSecurity"
+	SettingsService_BeginTOTP_FullMethodName                = "/nagi.v1.SettingsService/BeginTOTP"
+	SettingsService_EnableTOTP_FullMethodName               = "/nagi.v1.SettingsService/EnableTOTP"
+	SettingsService_DisableTOTP_FullMethodName              = "/nagi.v1.SettingsService/DisableTOTP"
+	SettingsService_SetEntrance_FullMethodName              = "/nagi.v1.SettingsService/SetEntrance"
+	SettingsService_ListActivity_FullMethodName             = "/nagi.v1.SettingsService/ListActivity"
+	SettingsService_ListUsers_FullMethodName                = "/nagi.v1.SettingsService/ListUsers"
+	SettingsService_CreateUser_FullMethodName               = "/nagi.v1.SettingsService/CreateUser"
+	SettingsService_UpdateUser_FullMethodName               = "/nagi.v1.SettingsService/UpdateUser"
+	SettingsService_DeleteUser_FullMethodName               = "/nagi.v1.SettingsService/DeleteUser"
+	SettingsService_ListSessions_FullMethodName             = "/nagi.v1.SettingsService/ListSessions"
+	SettingsService_RevokeSession_FullMethodName            = "/nagi.v1.SettingsService/RevokeSession"
+	SettingsService_ListAccessTokens_FullMethodName         = "/nagi.v1.SettingsService/ListAccessTokens"
+	SettingsService_CreateAccessToken_FullMethodName        = "/nagi.v1.SettingsService/CreateAccessToken"
+	SettingsService_RevokeAccessToken_FullMethodName        = "/nagi.v1.SettingsService/RevokeAccessToken"
+	SettingsService_ListAuditEvents_FullMethodName          = "/nagi.v1.SettingsService/ListAuditEvents"
+	SettingsService_GetAuditEvent_FullMethodName            = "/nagi.v1.SettingsService/GetAuditEvent"
+	SettingsService_ExportAuditEvents_FullMethodName        = "/nagi.v1.SettingsService/ExportAuditEvents"
+	SettingsService_GetSessionPolicy_FullMethodName         = "/nagi.v1.SettingsService/GetSessionPolicy"
+	SettingsService_SetSessionPolicy_FullMethodName         = "/nagi.v1.SettingsService/SetSessionPolicy"
+	SettingsService_GetRecording_FullMethodName             = "/nagi.v1.SettingsService/GetRecording"
+	SettingsService_GetAuditSettings_FullMethodName         = "/nagi.v1.SettingsService/GetAuditSettings"
+	SettingsService_SetAuditSettings_FullMethodName         = "/nagi.v1.SettingsService/SetAuditSettings"
+	SettingsService_TestAuditSink_FullMethodName            = "/nagi.v1.SettingsService/TestAuditSink"
+	SettingsService_VerifyAudit_FullMethodName              = "/nagi.v1.SettingsService/VerifyAudit"
+	SettingsService_BeginPasskeyRegistration_FullMethodName = "/nagi.v1.SettingsService/BeginPasskeyRegistration"
+	SettingsService_AddPasskey_FullMethodName               = "/nagi.v1.SettingsService/AddPasskey"
+	SettingsService_DeletePasskey_FullMethodName            = "/nagi.v1.SettingsService/DeletePasskey"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2390,6 +2471,10 @@ type SettingsServiceClient interface {
 	TestAuditSink(ctx context.Context, in *AuditSink, opts ...grpc.CallOption) (*TestAuditSinkResponse, error)
 	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
 	VerifyAudit(ctx context.Context, in *VerifyAuditRequest, opts ...grpc.CallOption) (*AuditChainStatus, error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(ctx context.Context, in *BeginPasskeyRegistrationRequest, opts ...grpc.CallOption) (*BeginPasskeyRegistrationResponse, error)
+	AddPasskey(ctx context.Context, in *AddPasskeyRequest, opts ...grpc.CallOption) (*Security, error)
+	DeletePasskey(ctx context.Context, in *DeletePasskeyRequest, opts ...grpc.CallOption) (*Security, error)
 }
 
 type settingsServiceClient struct {
@@ -2838,6 +2923,36 @@ func (c *settingsServiceClient) VerifyAudit(ctx context.Context, in *VerifyAudit
 	return out, nil
 }
 
+func (c *settingsServiceClient) BeginPasskeyRegistration(ctx context.Context, in *BeginPasskeyRegistrationRequest, opts ...grpc.CallOption) (*BeginPasskeyRegistrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginPasskeyRegistrationResponse)
+	err := c.cc.Invoke(ctx, SettingsService_BeginPasskeyRegistration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) AddPasskey(ctx context.Context, in *AddPasskeyRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_AddPasskey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) DeletePasskey(ctx context.Context, in *DeletePasskeyRequest, opts ...grpc.CallOption) (*Security, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Security)
+	err := c.cc.Invoke(ctx, SettingsService_DeletePasskey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2913,6 +3028,10 @@ type SettingsServiceServer interface {
 	TestAuditSink(context.Context, *AuditSink) (*TestAuditSinkResponse, error)
 	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
 	VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error)
+	// 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+	BeginPasskeyRegistration(context.Context, *BeginPasskeyRegistrationRequest) (*BeginPasskeyRegistrationResponse, error)
+	AddPasskey(context.Context, *AddPasskeyRequest) (*Security, error)
+	DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -3048,6 +3167,15 @@ func (UnimplementedSettingsServiceServer) TestAuditSink(context.Context, *AuditS
 }
 func (UnimplementedSettingsServiceServer) VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyAudit not implemented")
+}
+func (UnimplementedSettingsServiceServer) BeginPasskeyRegistration(context.Context, *BeginPasskeyRegistrationRequest) (*BeginPasskeyRegistrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPasskeyRegistration not implemented")
+}
+func (UnimplementedSettingsServiceServer) AddPasskey(context.Context, *AddPasskeyRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddPasskey not implemented")
+}
+func (UnimplementedSettingsServiceServer) DeletePasskey(context.Context, *DeletePasskeyRequest) (*Security, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePasskey not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3812,6 +3940,60 @@ func _SettingsService_VerifyAudit_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_BeginPasskeyRegistration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPasskeyRegistrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).BeginPasskeyRegistration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_BeginPasskeyRegistration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).BeginPasskeyRegistration(ctx, req.(*BeginPasskeyRegistrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_AddPasskey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPasskeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).AddPasskey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_AddPasskey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).AddPasskey(ctx, req.(*AddPasskeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_DeletePasskey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePasskeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).DeletePasskey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_DeletePasskey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).DeletePasskey(ctx, req.(*DeletePasskeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3978,6 +4160,18 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyAudit",
 			Handler:    _SettingsService_VerifyAudit_Handler,
+		},
+		{
+			MethodName: "BeginPasskeyRegistration",
+			Handler:    _SettingsService_BeginPasskeyRegistration_Handler,
+		},
+		{
+			MethodName: "AddPasskey",
+			Handler:    _SettingsService_AddPasskey_Handler,
+		},
+		{
+			MethodName: "DeletePasskey",
+			Handler:    _SettingsService_DeletePasskey_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

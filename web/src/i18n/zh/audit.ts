@@ -99,6 +99,7 @@ export default {
     login_failed: "登录失败",
     login_failed_summary: "登录失败汇总",
     totp_failed: "两步验证码错误",
+    passkey_failed: "通行密钥验证失败",
     session_expired: "登录过期",
     firing: "告警",
     resolved: "告警恢复",

@@ -19,6 +19,8 @@ message GetSetupStateRequest {}
 
 message GetSetupStateResponse {
   bool initialized = 1;
+  // 能用通行密钥登录的域名（面板绑定的域名），没绑定时为空。登录页在这个域名下才显示通行密钥。
+  string passkey_domain = 2;
 }
 
 message SetupRequest {
@@ -52,6 +54,9 @@ service AuthService {
   rpc RotateSession(RotateSessionRequest) returns (RotateSessionResponse);
   // 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
   rpc Reverify(ReverifyRequest) returns (ReverifyResponse);
+  // 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
+  rpc BeginPasskeyLogin(BeginPasskeyLoginRequest) returns (PasskeyChallenge);
+  rpc PasskeyLogin(PasskeyLoginRequest) returns (LoginResponse);
 }
 
 // OAuthRequest 是客户端打开授权页时带的参数（/oauth/authorize 的查询参数）。
@@ -434,6 +439,10 @@ service SettingsService {
   rpc TestAuditSink(AuditSink) returns (TestAuditSinkResponse);
   // 校验审计日志的哈希链（和 nagi audit verify 一样）。
   rpc VerifyAudit(VerifyAuditRequest) returns (AuditChainStatus);
+  // 通行密钥（见 docs/panel.md#通行密钥）：开始添加要先做高权限确认，浏览器创建后用 AddPasskey 保存。
+  rpc BeginPasskeyRegistration(BeginPasskeyRegistrationRequest) returns (BeginPasskeyRegistrationResponse);
+  rpc AddPasskey(AddPasskeyRequest) returns (Security);
+  rpc DeletePasskey(DeletePasskeyRequest) returns (Security);
 }
 
 message AccessToken {
@@ -492,6 +501,10 @@ message Security {
   string entrance = 2;
   // 开没开安全入口。入口路径只给管理员，其他成员只知道开了：MCP 的地址要带着入口（见 docs/mcp.md#入口），要向管理员要。
   bool entrance_enabled = 3;
+  // 自己的通行密钥。
+  repeated Passkey passkeys = 4;
+  // 能添加通行密钥的域名，没绑定域名时为空。
+  string passkey_domain = 5;
 }
 
 message BeginTOTPRequest {}
@@ -1531,3 +1544,56 @@ message IsolateNodeRequest {
 }
 
 message IsolateNodeResponse {}
+
+// ---- 通行密钥（见 docs/panel.md#通行密钥） ----
+
+message Passkey {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+  // 没用过时为空。
+  google.protobuf.Timestamp last_used_at = 4;
+  // 添加时绑定的是别的域名，现在用不了。
+  bool other_domain = 5;
+}
+
+message BeginPasskeyLoginRequest {}
+
+message PasskeyChallenge {
+  string challenge_id = 1;
+  bytes challenge = 2;
+  string rp_id = 3;
+}
+
+message PasskeyLoginRequest {
+  string challenge_id = 1;
+  bytes credential_id = 2;
+  bytes client_data_json = 3 [debug_redact = true];
+  bytes authenticator_data = 4 [debug_redact = true];
+  bytes signature = 5 [debug_redact = true];
+  bytes user_handle = 6;
+}
+
+message BeginPasskeyRegistrationRequest {}
+
+message BeginPasskeyRegistrationResponse {
+  string challenge_id = 1;
+  bytes challenge = 2;
+  string rp_id = 3;
+  bytes user_id = 4;
+  string user_name = 5;
+  string display_name = 6;
+  // 已经添加过的，浏览器不会在同一个验证器上重复添加。
+  repeated bytes exclude_credentials = 7;
+}
+
+message AddPasskeyRequest {
+  string challenge_id = 1;
+  string name = 2;
+  bytes client_data_json = 3 [debug_redact = true];
+  bytes attestation_object = 4 [debug_redact = true];
+}
+
+message DeletePasskeyRequest {
+  int64 id = 1;
+}

@@ -2,7 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
+import { KeyRound } from "lucide-react";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
+import { cancelled, loginWithPasskey, passkeySupported } from "@/lib/passkey";
 import { ensureSessionKey } from "@/lib/session";
 import { Alert, Button, Field, Input, Notice, QueryError, Slide, Spinner, Waves } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -125,27 +127,31 @@ export function LoginPage() {
   const [needCode, setNeedCode] = useState(false);
   const setupState = useQuery({ queryKey: ["setup-state"], queryFn: () => setupClient.getSetupState({}) });
 
+  const signedIn = async () => {
+    await ensureSessionKey();
+    await queryClient.invalidateQueries();
+    // 从 OAuth 授权页过来的，登录后回去（见 pages/tokens.tsx）。
+    let back = "";
+    try {
+      back = sessionStorage.getItem(returnToKey) ?? "";
+      sessionStorage.removeItem(returnToKey);
+    } catch {
+      // 读不了就回首页。
+    }
+    if (back.startsWith("/oauth/authorize?")) window.location.assign(back);
+    else navigate({ to: "/" });
+  };
   const login = useMutation({
     mutationFn: () => authClient.login({ username, password, totpCode }),
     onError: (err) => {
       // 密码正确但开启了两步验证：显示验证码输入框。
       if (err instanceof ConnectError && err.code === Code.FailedPrecondition) setNeedCode(true);
     },
-    onSuccess: async () => {
-      await ensureSessionKey();
-      await queryClient.invalidateQueries();
-      // 从 OAuth 授权页过来的，登录后回去（见 pages/tokens.tsx）。
-      let back = "";
-      try {
-        back = sessionStorage.getItem(returnToKey) ?? "";
-        sessionStorage.removeItem(returnToKey);
-      } catch {
-        // 读不了就回首页。
-      }
-      if (back.startsWith("/oauth/authorize?")) window.location.assign(back);
-      else navigate({ to: "/" });
-    },
+    onSuccess: signedIn,
   });
+  // 通行密钥登录（见 docs/panel.md#通行密钥）：只在绑定的域名下显示。
+  const passkey = useMutation({ mutationFn: loginWithPasskey, onSuccess: signedIn });
+  const showPasskey = passkeySupported(setupState.data?.passkeyDomain);
 
   if (setupState.error && !setupState.data)
     return (
@@ -225,10 +231,24 @@ export function LoginPage() {
         <Field label={t.auth.password} htmlFor="password" error={error}>
           <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </Field>
-        <Button type="submit" className="w-full" disabled={login.isPending}>
+        <Button type="submit" className="w-full" disabled={login.isPending || passkey.isPending}>
           {login.isPending && <Spinner />}
           {t.auth.login.submit}
         </Button>
+        {showPasskey && (
+          <>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground" role="separator">
+              <span className="h-px flex-1 bg-border" />
+              {t.auth.login.or}
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            {passkey.error && !cancelled(passkey.error) && <Alert keepFocus>{errorMessage(passkey.error)}</Alert>}
+            <Button variant="outline" className="w-full" disabled={login.isPending || passkey.isPending} onClick={() => passkey.mutate()}>
+              {passkey.isPending ? <Spinner /> : <KeyRound />}
+              {t.auth.login.passkey}
+            </Button>
+          </>
+        )}
       </form>
     </AuthShell>
   );

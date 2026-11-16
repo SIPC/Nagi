@@ -54,6 +54,8 @@ var elevationRequired = map[string]bool{
 	// 开启两步验证：否则拿到会话的人能换上自己的密钥，再用它通过高权限确认，账号主人也登不上了。
 	// 已开启时确认要用当前的验证码，相当于换密钥前先验证旧的。EnableTOTP 只认这里发出的密钥，不用再拦。
 	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
+	// 添加通行密钥：和两步验证一样，拿到会话的人不能借它给自己留一个登录凭据。
+	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
 	// 恢复从节点缓存拼回的顶替和备份设置：会让别的节点接收并运行这个容器的配置（见 docs/panel.md#项目数据）。
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure: true,
 	// 回放终端录制：输出里可能有密钥（见 docs/audit.md#终端与命令录制）。

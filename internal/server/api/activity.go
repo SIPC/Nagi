@@ -31,6 +31,10 @@ var auditSkipped = map[string]bool{
 	// 退出在处理函数里单独记（这时会话还在，查得到是谁）；登录在 auth 里记（成功时才知道是哪个成员）。
 	nagiv1connect.AuthServiceLogoutProcedure: true,
 	nagiv1connect.AuthServiceLoginProcedure:  true,
+	// 通行密钥登录同样在 auth 里记；取挑战不改变状态。
+	nagiv1connect.AuthServiceBeginPasskeyLoginProcedure:            true,
+	nagiv1connect.AuthServicePasskeyLoginProcedure:                 true,
+	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
 }
 
 // unauthenticatedNoise：不用登录就能调的接口里，不值得记、又能被拿来刷掉记录的失败：初始化以后的 Setup 一律失败；

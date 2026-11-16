@@ -28,6 +28,10 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 	switch m := req.(type) {
 	case *nagiv1.DisableTOTPRequest:
 		a.notify(ctx, "2fa", i18n.Errorf("账号 %s 关闭了两步验证", u.Name).Error(), "")
+	case *nagiv1.AddPasskeyRequest:
+		a.notify(ctx, "passkey", i18n.Errorf("账号 %s 添加了通行密钥 %s", u.Name, m.GetName()).Error(), "")
+	case *nagiv1.DeletePasskeyRequest:
+		a.notify(ctx, "passkey", i18n.Errorf("账号 %s 删除了通行密钥", u.Name).Error(), "")
 	case *nagiv1.ChangePasswordRequest:
 		a.notify(ctx, "password", i18n.Errorf("账号 %s 修改了密码", u.Name).Error(), "")
 	case *nagiv1.CreateUserRequest:

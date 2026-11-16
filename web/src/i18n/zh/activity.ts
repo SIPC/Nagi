@@ -37,6 +37,8 @@ export default {
     Login: "登录",
     Logout: "退出登录",
     ChangePassword: "修改密码",
+    AddPasskey: "添加通行密钥",
+    DeletePasskey: "删除通行密钥",
     UpdateProfile: "修改个人资料",
     Setup: "初始化面板",
     CreateProject: "新建项目",
