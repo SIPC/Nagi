@@ -122,6 +122,8 @@ func (s *Service) Policy(ctx context.Context) SessionPolicy {
 // RequestInfo 是检查会话用的请求来源。
 type RequestInfo struct {
 	IP, UserAgent, Fingerprint string
+	// CDN：请求带着 CDN 的请求头，指纹是 CDN 回源时的，不判断是不是脚本工具（见 ja4.go）。
+	CDN bool
 }
 
 // sessionResult 是检查会话的结果。
@@ -244,7 +246,7 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 	// TLS 指纹：标识是浏览器、握手却来自脚本工具，退出；标识没变、指纹变了，重新验证。
 	if fp := info.Fingerprint; fp != "" {
 		switch {
-		case cur.IsBrowser() && looksLikeTool(fp):
+		case cur.IsBrowser() && looksLikeTool(fp) && !info.CDN:
 			s.endSession(ctx, st, info, "session_tls_tool", i18n.Errorf("账号 %s 的登录被脚本工具使用，已退出", st.Username).Error(), true)
 			return sessionResult{}, errLoggedOut
 		case st.TLSFP == "" || info.UserAgent != st.UserAgent:

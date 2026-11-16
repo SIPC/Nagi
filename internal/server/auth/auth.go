@@ -337,7 +337,7 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 
 // RequestUser 检查不走 Connect 的请求（终端、上传下载）的会话：和接口一样检查设备和网络，但不轮换令牌。
 func (s *Service) RequestUser(r *http.Request) (User, error) {
-	info := RequestInfo{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header)}
+	info := RequestInfo{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header), CDN: ViaCDN(r.Header)}
 	res, err := s.authenticate(r.Context(), SessionToken(r.Header), info)
 	if err != nil {
 		return User{}, err
@@ -394,8 +394,9 @@ type Meta struct {
 	IP, UserAgent string
 	// Client 是 MCP 客户端的名称（OAuth 客户端名或 User-Agent）。
 	Client string
-	// Fingerprint 是 TLS 指纹（见 ja4.go）。
+	// Fingerprint 是 TLS 指纹（见 ja4.go），CDN 表示请求带着 CDN 的请求头。
 	Fingerprint string
+	CDN         bool
 }
 
 type metaKey struct{}
@@ -447,14 +448,14 @@ func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.
 	}
 	m, ok := ctx.Value(metaKey{}).(Meta)
 	if !ok {
-		m = Meta{IP: RequestIP(addr, h), UserAgent: h.Get("User-Agent"), Fingerprint: RequestFingerprint(ctx, addr, h)}
+		m = Meta{IP: RequestIP(addr, h), UserAgent: h.Get("User-Agent"), Fingerprint: RequestFingerprint(ctx, addr, h), CDN: ViaCDN(h)}
 		ctx = WithMeta(ctx, m)
 	}
 	if i.public[procedure] {
 		return ctx, checked{}, nil
 	}
 	token := SessionToken(h)
-	res, err := i.s.authenticate(ctx, token, RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint})
+	res, err := i.s.authenticate(ctx, token, RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint, CDN: m.CDN})
 	var rv *ErrReverify
 	if errors.As(err, &rv) {
 		return nil, checked{}, i.s.reverifyError(ctx, rv.UserID, rv.Reason)
@@ -740,5 +741,5 @@ func (l *limiter) begin(keys ...string) (done func(outcome), wait time.Duration)
 
 // WithRequest 把不走 Connect 的请求（终端、上传下载）的来源放进 ctx，审计记录用。
 func WithRequest(ctx context.Context, r *http.Request) context.Context {
-	return WithMeta(ctx, Meta{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header)})
+	return WithMeta(ctx, Meta{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header), CDN: ViaCDN(r.Header)})
 }

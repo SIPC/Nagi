@@ -19,7 +19,7 @@ import (
 
 func requestInfo(ctx context.Context) auth.RequestInfo {
 	m := auth.RequestMeta(ctx)
-	return auth.RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint}
+	return auth.RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint, CDN: m.CDN}
 }
 
 func (s *authService) RegisterSessionKey(ctx context.Context, req *connect.Request[nagiv1.RegisterSessionKeyRequest]) (*connect.Response[nagiv1.RegisterSessionKeyResponse], error) {

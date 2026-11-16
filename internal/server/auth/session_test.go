@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -491,6 +492,30 @@ func TestParseAgent(t *testing.T) {
 	} {
 		if got := ParseAgent(ua).String(); got != want {
 			t.Errorf("%s → %q，应为 %q", ua, got, want)
+		}
+	}
+}
+
+// L5：偷到 cookie 的人用脚本工具调用，带上 Cf-Ray 这类 CDN 请求头。之前直接跳过指纹检查；现在只不判断「像脚本工具」，
+// 指纹和本人的不同照样要重新验证。真的经过 CDN 的本人：CDN 回源的指纹固定时照常可用。
+func TestSessionCDNHeaderStillChecksFingerprint(t *testing.T) {
+	h := newSessionHarness(t)
+	token := h.login("admin", home)
+	hdr := http.Header{"Cf-Ray": {"x"}, "User-Agent": {chromeUA}}
+	ctx := WithFingerprint(context.Background(), curlFP)
+	info := RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: RequestFingerprint(ctx, home.IP+":5000", hdr), CDN: ViaCDN(hdr)}
+	var rv *ErrReverify
+	if _, err := h.check(token, info); !errors.As(err, &rv) || rv.Reason != ReasonTLSChanged {
+		t.Fatalf("带 CDN 请求头的脚本工具应要求重新验证：%v", err)
+	}
+
+	// 本人经 CDN 访问：第一次记下 CDN 回源的指纹，之后照常可用，不会因为它像脚本工具被退出。
+	h2 := newSessionHarness(t)
+	viaCDN := RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: curlFP, CDN: true}
+	token2 := h2.login("admin", RequestInfo{IP: home.IP, UserAgent: chromeUA})
+	for range 3 {
+		if _, err := h2.check(token2, viaCDN); err != nil {
+			t.Fatalf("经 CDN 访问应照常可用：%v", err)
 		}
 	}
 }

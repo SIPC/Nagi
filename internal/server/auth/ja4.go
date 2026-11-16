@@ -104,17 +104,23 @@ func WithFingerprint(ctx context.Context, fp string) context.Context {
 // fingerprintHeader 是本机 Caddy 转发时带上的 TLS 指纹（由 Nagi 自己的 Caddy 模块算好，见 agent/proxy）。
 const fingerprintHeader = "X-Nagi-Ja4"
 
-// cdnHeaders 说明请求经过了 CDN：TLS 由 CDN 终结，看到的是 CDN 的指纹，不检查。
+// cdnHeaders 说明请求可能经过了 CDN：TLS 由 CDN 终结，看到的是 CDN 回源时的指纹，可能像脚本工具。
+// 这些请求头谁都能带，所以只跳过「标识是浏览器、握手像脚本工具」这一项，指纹变了照样要求重新验证（见 docs/panel.md#会话）。
 var cdnHeaders = []string{"Cf-Ray", "Cdn-Loop", "X-Amz-Cf-Id", "Fastly-Client-Ip", "Ali-Cdn-Real-Ip", "X-Tencent-Ua", "Eagleid"}
 
-// RequestFingerprint 返回请求的 TLS 指纹：经本机 Caddy 转发时采用它算好的（凭 X-Nagi-Proxy 核对），否则用面板自己
-// 握手时算的。经过 CDN 的、开发时本机代理转发的（来自本机、不是 Caddy）返回空，不做这项检查。
-func RequestFingerprint(ctx context.Context, addr string, h http.Header) string {
+// ViaCDN 判断请求是不是带着 CDN 的请求头。
+func ViaCDN(h http.Header) bool {
 	for _, k := range cdnHeaders {
 		if h.Get(k) != "" {
-			return ""
+			return true
 		}
 	}
+	return false
+}
+
+// RequestFingerprint 返回请求的 TLS 指纹：经本机 Caddy 转发时采用它算好的（凭 X-Nagi-Proxy 核对），否则用面板自己
+// 握手时算的。开发时本机代理转发的（来自本机、不是 Caddy）返回空，不做这项检查。
+func RequestFingerprint(ctx context.Context, addr string, h http.Header) string {
 	if fromLocalProxy(addr, h) {
 		return h.Get(fingerprintHeader)
 	}
