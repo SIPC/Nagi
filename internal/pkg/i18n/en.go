@@ -729,6 +729,8 @@ var en = map[string]string{
 	"%s 的证书无法验证，自签证书须填写 CA 证书":                     "The certificate of %s can't be verified. For a self-signed certificate, enter its CA certificate",
 	"存储地址格式不正确":                                    "The storage endpoint isn't valid",
 	"存储返回 HTTP %d，请检查存储桶、区域和密钥：%s":                 "The storage returned HTTP %d. Check the bucket, region, and keys: %s",
+	"新版本没能在节点上正常运行，节点已自动回到 %s，请在节点上查看日志":           "The new version couldn't run on the node, so it went back to %s. Check the node log",
+	"无法保留当前版本，已停止升级":                               "Couldn't keep the current version, so the upgrade was stopped",
 	"无法连接 %s，请检查地址和网络":                             "Can't reach %s. Check the address and network",
 	"分组和标签不能超过 %d 个字符":                             "Groups and tags must be at most %d characters",
 	"分组和标签不能包含控制字符":                                "Groups and tags can't contain control characters",

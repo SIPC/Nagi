@@ -51,6 +51,10 @@ func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) 
 		u.end()
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
+	if err := markUpgrade(a.id.dir, a.cfg.Version, want); err != nil {
+		// 没有记录时新版本不做自检：起不来就要到节点上处理。
+		a.log.Warn("无法记下升级，新版本起不来时不会自动换回", "err", err)
+	}
 	a.log.Info("已替换为新版本，重启", "from", a.cfg.Version, "to", want)
 	go func() {
 		time.Sleep(time.Second) // 先把响应发回去

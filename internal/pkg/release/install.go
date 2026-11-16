@@ -111,14 +111,61 @@ func Prepare(ctx context.Context, base, want string) (*Prepared, error) {
 	return p, nil
 }
 
-// Commit 用新版本替换当前的可执行文件，返回它的路径。
+// Commit 用新版本替换当前的可执行文件，返回它的路径。替换前把当前版本留成 <可执行文件>.old：
+// 新版本试运行通过、正式启动却起不来时，节点用它换回去（RestorePrevious，见 agent/upgrade_guard.go）。
 func (p *Prepared) Commit() (string, error) {
+	if err := keepPrevious(p.exe); err != nil {
+		p.Discard()
+		return "", i18n.Detail(i18n.New("无法保留当前版本，已停止升级"), err)
+	}
 	if err := os.Rename(p.tmp, p.exe); err != nil {
 		p.Discard()
 		return "", err
 	}
 	return p.exe, nil
 }
+
+// keepPrevious 把 exe 留成 exe.old：同一个文件系统上用硬链接（替换后旧文件还在），不行时复制一份。
+func keepPrevious(exe string) error {
+	old := exe + ".old"
+	_ = os.Remove(old)
+	if os.Link(exe, old) == nil {
+		return nil
+	}
+	src, err := os.Open(exe)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(old+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		os.Remove(old + ".tmp")
+		return err
+	}
+	if err := dst.Close(); err != nil {
+		os.Remove(old + ".tmp")
+		return err
+	}
+	return os.Rename(old+".tmp", old)
+}
+
+// RestorePrevious 换回 Commit 留下的上一个版本，返回可执行文件的路径，之后用 Reexec 重启。
+func RestorePrevious() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return "", err
+	}
+	return exe, restorePrevious(exe)
+}
+
+func restorePrevious(exe string) error { return os.Rename(exe+".old", exe) }
 
 // Discard 删掉下载的新版本。
 func (p *Prepared) Discard() { os.Remove(p.tmp) }

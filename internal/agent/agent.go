@@ -98,6 +98,12 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.SubnetPool = project.DefaultSubnetPool
 	}
 
+	// 刚升级时最先开始自检：后面任何一步出错、卡住，都能换回旧版本（见 upgrade_guard.go）。
+	confirmUpgrade := func() {}
+	if !cfg.Embedded {
+		confirmUpgrade = guardUpgrade(filepath.Join(cfg.DataDir, "identity"), cfg.Version, log)
+	}
+
 	id, err := loadIdentity(filepath.Join(cfg.DataDir, "identity"))
 	if err != nil {
 		return fmt.Errorf("读取节点身份: %w", err)
@@ -143,6 +149,8 @@ func Run(ctx context.Context, cfg Config) error {
 		hostname: hostname,
 		reload:   make(chan struct{}, 1),
 		ctx:      ctx,
+
+		confirmUpgrade: confirmUpgrade,
 	}
 	a.startedAt = time.Now()
 	a.files = a.newNodeFiles()
@@ -291,6 +299,8 @@ type agent struct {
 	votes     *voteBatcher
 	ctx       context.Context
 	startedAt time.Time
+	// confirmUpgrade 在连上面板后调用：刚升级时表示新版本能用（见 upgrade_guard.go）。
+	confirmUpgrade func()
 
 	mu       sync.Mutex
 	subs     []chan struct{}
@@ -473,6 +483,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		Os:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
 		Version:      a.cfg.Version,
+		StartedAt:    a.startedAt.Unix(),
 		Embedded:     a.cfg.Embedded,
 		ProjectsRoot: a.projectsRoot(),
 		Cpus:         int32(runtime.NumCPU()),
@@ -568,6 +579,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.confirmUpgrade()
 	a.setConnectError(p.Fingerprint, nil)
 	a.mu.Lock()
 	if a.panels == nil {

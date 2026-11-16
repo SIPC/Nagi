@@ -80,8 +80,9 @@ func (r *updateRecords) resume(version string, now time.Time) {
 	}
 }
 
-// reconcile 按现在的版本更新记录。nodeVersion 返回节点上报的版本，known 判断节点还在不在。
-func (r *updateRecords) reconcile(version string, nodeVersion func(string) string, known func(string) bool, now time.Time) {
+// reconcile 按现在的版本更新记录。nodeVersion 返回节点上报的版本，nodeStarted 返回节点进程启动的时间（旧版本不报，为 0），
+// known 判断节点还在不在。
+func (r *updateRecords) reconcile(version string, nodeVersion func(string) string, nodeStarted func(string) int64, known func(string) bool, now time.Time) {
 	if p := r.Panel; p != nil {
 		switch {
 		case !release.Older(version, p.Target):
@@ -96,6 +97,9 @@ func (r *updateRecords) reconcile(version string, nodeVersion func(string) strin
 			delete(r.Nodes, id)
 		case nodeVersion(id) != "" && !release.Older(nodeVersion(id), n.Target):
 			delete(r.Nodes, id)
+		case n.Phase == updateRestarting && nodeVersion(id) != "" && nodeStarted(id) >= n.Changed:
+			// 替换以后节点又起来了，版本却还是旧的：新版本没能运行，节点自动换回去了。
+			n.fail(i18n.Errorf("新版本没能在节点上正常运行，节点已自动回到 %s，请在节点上查看日志", nodeVersion(id)), now)
 		case n.Phase == updateRestarting && now.Unix()-n.Changed > int64(updateRestartTimeout/time.Second):
 			n.fail(i18n.Errorf("节点已替换为 %s，但 3 分钟内没有恢复，请在节点上查看日志", n.Target), now)
 		}
@@ -137,6 +141,14 @@ func (a *API) withUpdates(ctx context.Context, fn func(*updateRecords)) {
 	u.saved = string(raw)
 }
 
+func (a *API) nodeStarted(id string) int64 {
+	conn, err := a.Nodes.Peek(id)
+	if err != nil {
+		return 0
+	}
+	return conn.LastReport().GetNode().GetStartedAt()
+}
+
 func (a *API) nodeVersion(id string) string {
 	conn, err := a.Nodes.Peek(id)
 	if err != nil {
@@ -157,7 +169,7 @@ func (a *API) reconcileUpdates(ctx context.Context) {
 		known[row.ID] = true
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
-		r.reconcile(a.Panel.Version, a.nodeVersion, func(id string) bool { return known[id] }, time.Now())
+		r.reconcile(a.Panel.Version, a.nodeVersion, a.nodeStarted, func(id string) bool { return known[id] }, time.Now())
 	})
 }
 

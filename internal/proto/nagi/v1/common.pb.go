@@ -2819,7 +2819,10 @@ type NodeInfo struct {
 	// 节点支持多个备份节点（ContainerSpec.backups）、副本接受多个源节点（AcceptReplicaRequest.extra_source_keys）。
 	MultiBackup bool `protobuf:"varint,19,opt,name=multi_backup,json=multiBackup,proto3" json:"multi_backup,omitempty"`
 	// 不能限制容器出站时的原因（例如没有 nftables），为空表示可以（见 docs/agent.md#出站限制）。
-	EgressError   string `protobuf:"bytes,20,opt,name=egress_error,json=egressError,proto3" json:"egress_error,omitempty"`
+	EgressError string `protobuf:"bytes,20,opt,name=egress_error,json=egressError,proto3" json:"egress_error,omitempty"`
+	// 节点进程启动的时间（Unix 秒）。面板据此判断升级后节点是不是又起来过：用新版本回来是升级完成，
+	// 用旧版本回来是新版本没能运行、节点自动换回去了（见 docs/control-plane.md#接口设计）。旧版本的节点不报。
+	StartedAt     int64 `protobuf:"varint,21,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2992,6 +2995,13 @@ func (x *NodeInfo) GetEgressError() string {
 		return x.EgressError
 	}
 	return ""
+}
+
+func (x *NodeInfo) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -5834,7 +5844,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xa4\x05\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xc3\x05\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -5858,7 +5868,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fin_container\x18\x11 \x01(\bR\vinContainer\x12%\n" +
 	"\x0eproxy_protocol\x18\x12 \x01(\bR\rproxyProtocol\x12!\n" +
 	"\fmulti_backup\x18\x13 \x01(\bR\vmultiBackup\x12!\n" +
-	"\fegress_error\x18\x14 \x01(\tR\vegressError\"\x89\x01\n" +
+	"\fegress_error\x18\x14 \x01(\tR\vegressError\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x15 \x01(\x03R\tstartedAt\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +

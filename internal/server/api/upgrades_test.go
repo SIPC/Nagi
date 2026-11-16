@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -60,7 +61,7 @@ func TestUpdateRecordsReconcile(t *testing.T) {
 		},
 	}
 	versions := map[string]string{"back": "v0.9.0", "late": "v0.9.0", "queued": "v0.8.0"}
-	r.reconcile("v0.8.0", func(id string) string { return versions[id] }, func(id string) bool { return id != "removed" }, now)
+	r.reconcile("v0.8.0", func(id string) string { return versions[id] }, func(string) int64 { return 0 }, func(id string) bool { return id != "removed" }, now)
 	if r.Panel == nil || r.Panel.Phase != updateFailed {
 		t.Errorf("面板超时没恢复应该算失败：%+v", r.Panel)
 	}
@@ -79,9 +80,23 @@ func TestUpdateRecordsReconcile(t *testing.T) {
 		t.Errorf("排队的不受超时影响：%+v", n)
 	}
 
+	// 替换以后节点又起来了，版本还是旧的：新版本没能运行，节点自动换回去了，马上记为失败，不等 3 分钟。
+	r = updateRecords{Nodes: map[string]*updateState{
+		"rolledback": {Target: "v0.9.0", From: "v0.8.0", Phase: updateRestarting, Changed: recent},
+		"restarting": {Target: "v0.9.0", From: "v0.8.0", Phase: updateRestarting, Changed: recent},
+	}}
+	started := map[string]int64{"rolledback": recent + 5, "restarting": recent - 100}
+	r.reconcile("v0.9.0", func(string) string { return "v0.8.0" }, func(id string) int64 { return started[id] }, func(string) bool { return true }, now)
+	if n := r.Nodes["rolledback"]; n == nil || n.Phase != updateFailed || !strings.Contains(n.Error, "自动回到 v0.8.0") {
+		t.Errorf("节点换回了旧版本应该算失败：%+v", n)
+	}
+	if n := r.Nodes["restarting"]; n == nil || n.Phase != updateRestarting {
+		t.Errorf("还是替换前的进程（没重启过）应该接着等：%+v", n)
+	}
+
 	// 面板用新版本回来了。
 	r = updateRecords{Panel: &updateState{Target: "v0.9.0", Phase: updateInstalling}, Nodes: map[string]*updateState{}}
-	r.reconcile("v0.9.0", func(string) string { return "" }, func(string) bool { return true }, now)
+	r.reconcile("v0.9.0", func(string) string { return "" }, func(string) int64 { return 0 }, func(string) bool { return true }, now)
 	if r.Panel != nil {
 		t.Errorf("面板已经是目标版本，记录应该删掉：%+v", r.Panel)
 	}
