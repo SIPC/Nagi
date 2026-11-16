@@ -40,7 +40,8 @@ export default {
   lastUsed: (time) => `Last used ${time}`,
   forUser: (name) => `Access tokens of ${name}. Administrators can revoke them but can't see the tokens themselves.`,
   networks: "Allowed addresses",
-  networksHint: "Optional. Enter IP addresses or ranges, separated by commas. Use from any other address is refused and triggers an alert.",
+  networksHint: "Optional. IP addresses or ranges, separated by commas",
+  networksHelp: "Use of this token from any other address is refused and triggers an alert.",
   networksLimited: (list) => `Only ${list}`,
   oauth: {
     title: "Authorize access",

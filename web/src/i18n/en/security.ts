@@ -52,7 +52,9 @@ export default {
     neverUsed: "Never used",
     otherDomain: "Domain changed; can't be used",
     remove: "Delete",
-    removeConfirm: (name) => `Delete passkey "${name}"? You won't be able to sign in with it.`,
+    removeAction: "Delete passkey",
+    removeConfirm: (name) => `Delete passkey ${name}? You won't be able to sign in with it.`,
+    bindDomain: "Bind domain",
   },
   entrance: {
     label: "Secure entry",

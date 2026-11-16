@@ -344,7 +344,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
     if (e.userAgent) rows.push([d.userAgent, <span className="text-[13px] text-muted-foreground">{e.userAgent}</span>]);
     if (e.projectId) rows.push([d.project, e.projectName || e.projectId]);
     if (e.targetName || e.targetId) rows.push([d.target, e.targetName || e.targetId]);
-    if (e.durationMs > 0n) rows.push([d.duration, d.durationMs(e.durationMs.toLocaleString())]);
+    if (e.durationMs > 0n) rows.push([d.duration, formatDuration(Number(e.durationMs))]);
     rows.push([d.id, <span className="font-mono text-[13px]">{String(e.id)}</span>]);
     return rows;
   }, [e]);
@@ -521,4 +521,13 @@ function AuditFilterDialog({
       </form>
     </Dialog>
   );
+}
+
+// formatDuration：不到 1 秒写毫秒，不到 1 分钟写秒（一位小数），再长写分和秒。
+function formatDuration(ms: number): string {
+  const d = t.audit.detail;
+  if (ms < 1000) return d.durationMs(String(ms));
+  if (ms < 60_000) return d.durationS((Math.round(ms / 100) / 10).toLocaleString());
+  const s = Math.round(ms / 1000);
+  return d.durationMin(Math.floor(s / 60), s % 60);
 }

@@ -119,17 +119,17 @@ export function EgressSection({ project }: { project: Project }) {
               disabled={!isAdmin}
             />
           </Field>
+          {isAdmin && (
+            <FormActions>
+              <Button type="submit" variant="outline" disabled={busy || lines().join("\n") === allow.join("\n")}>
+                {busy && <Spinner />}
+                {t.common.actions.save}
+              </Button>
+            </FormActions>
+          )}
         </FormBody>
-        {isAdmin && (
-          <FormActions>
-            <Button type="submit" variant="outline" disabled={busy || lines().join("\n") === allow.join("\n")}>
-              {busy && <Spinner />}
-              {t.common.actions.save}
-            </Button>
-          </FormActions>
-        )}
       </form>
-      <div className="grid gap-2">
+      <div className="grid gap-4">
         <h3 className="text-sm font-medium">{m.recent}</h3>
         {targets.size === 0 ? (
           <EmptyRow>{m.noRecent}</EmptyRow>

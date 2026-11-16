@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
 // Config 是一个外送目标。
@@ -49,7 +51,7 @@ func PostHTTP(ctx context.Context, client *http.Client, sk Config, lines [][]byt
 	body := append(bytes.Join(lines, []byte("\n")), '\n')
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sk.URL, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return i18n.New("接收地址格式不正确")
 	}
 	req.Header.Set("Content-Type", "application/x-ndjson")
 	req.Header.Set("User-Agent", "nagi-audit")
@@ -58,12 +60,12 @@ func PostHTTP(ctx context.Context, client *http.Client, sk Config, lines [][]byt
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return err
+		return unreachable(req.URL.Host)
 	}
 	defer res.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<16))
 	if res.StatusCode/100 != 2 {
-		return fmt.Errorf("HTTP %d", res.StatusCode)
+		return i18n.Errorf("接收端返回 HTTP %d，请检查接收地址和请求头", res.StatusCode)
 	}
 	return nil
 }
@@ -77,14 +79,18 @@ func SendSyslog(ctx context.Context, sk Config, lines [][]byte) error {
 	if sk.CA != "" {
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM([]byte(sk.CA)) {
-			return errors.New("CA 证书格式不正确")
+			return i18n.New("CA 证书格式不正确，须为 PEM 格式")
 		}
 		cfg.RootCAs = pool
 	}
 	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}, Config: cfg}
 	conn, err := d.DialContext(ctx, "tcp", sk.Address)
 	if err != nil {
-		return err
+		var cert *tls.CertificateVerificationError
+		if errors.As(err, &cert) {
+			return i18n.Errorf("%s 的证书无法验证，自签证书须填写 CA 证书", sk.Address)
+		}
+		return unreachable(sk.Address)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
@@ -126,13 +132,13 @@ func S3Put(ctx context.Context, client *http.Client, sk Config, key string, body
 	}
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		return err
+		return i18n.New("存储地址格式不正确")
 	}
 	// 统一用路径风格（https://<endpoint>/<bucket>/<key>），兼容 MinIO、R2、各家的 S3 兼容存储。
 	u.Path = "/" + sk.Bucket + "/" + key
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), bytes.NewReader(body))
 	if err != nil {
-		return err
+		return i18n.New("存储地址格式不正确")
 	}
 	req.Header.Set("Content-Type", contentType)
 	region := sk.Region
@@ -142,12 +148,12 @@ func S3Put(ctx context.Context, client *http.Client, sk Config, key string, body
 	signV4(req, body, sk.AccessKey, sk.SecretKey, region, time.Now().UTC())
 	res, err := client.Do(req)
 	if err != nil {
-		return err
+		return unreachable(u.Host)
 	}
 	defer res.Body.Close()
 	msg, _ := io.ReadAll(io.LimitReader(res.Body, 512))
 	if res.StatusCode/100 != 2 {
-		return fmt.Errorf("S3 HTTP %d: %s", res.StatusCode, strings.TrimSpace(string(msg)))
+		return i18n.Errorf("存储返回 HTTP %d，请检查存储桶、区域和密钥：%s", res.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return nil
 }
@@ -191,4 +197,10 @@ func signV4(req *http.Request, body []byte, accessKey, secretKey, region string,
 	k = hmacSHA256(k, "aws4_request")
 	sig := hex.EncodeToString(hmacSHA256(k, toSign))
 	req.Header.Set("Authorization", fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s", accessKey, scope, signed, sig))
+}
+
+// unreachable 是连不上目标时的错误。只写主机和端口：Go 的错误里带着完整地址，地址里可能有令牌，
+// 不能显示在界面上，也不能写进日志。
+func unreachable(host string) error {
+	return i18n.Errorf("无法连接 %s，请检查地址和网络", host)
 }

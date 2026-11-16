@@ -9,7 +9,7 @@ import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
 import type { Passkey, Security } from "@/gen/nagi/v1/api_pb";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
@@ -198,7 +198,7 @@ function PasskeySection({ sec, onChange }: { sec: Security; onChange: (sec: Secu
   const domain = sec.passkeyDomain;
   const usable = passkeySupported(domain);
   const remove = async (k: Passkey) => {
-    if (!(await confirmAction(p.removeConfirm(k.name), { action: p.remove, danger: true }))) return;
+    if (!(await confirmAction(p.removeConfirm(k.name), { action: p.removeAction, danger: true }))) return;
     setError("");
     try {
       onChange(await settingsClient.deletePasskey({ id: k.id }));
@@ -206,16 +206,21 @@ function PasskeySection({ sec, onChange }: { sec: Security; onChange: (sec: Secu
       setError(errorMessage(err));
     }
   };
+  const { isAdmin } = useRole();
   const addButton = usable ? (
     <Button variant="outline" onClick={() => setAdding(true)}>
       <Plus />
       {p.add}
     </Button>
+  ) : !domain && isAdmin ? (
+    <ButtonLink variant="outline" to="/settings" search={{ tab: "access" }} readOnlyOk>
+      {p.bindDomain}
+    </ButtonLink>
   ) : undefined;
   // 没绑定域名，或者不是从绑定的域名打开的：说明在哪里才能添加。
   const unavailable = !domain ? p.noDomain : !usable ? p.otherHost(`https://${domain}`) : "";
   return (
-    <Section title={p.label} help={p.help} actions={sec.passkeys.length > 0 ? addButton : undefined}>
+    <Section title={p.label} help={p.help} actions={sec.passkeys.length > 0 && usable ? addButton : undefined}>
       {error && <Alert>{error}</Alert>}
       {sec.passkeys.length === 0 ? (
         <EmptyRow action={addButton}>{unavailable || p.empty}</EmptyRow>

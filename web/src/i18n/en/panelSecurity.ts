@@ -47,6 +47,7 @@ export default {
     test: "Send test message",
     tested: "Test message sent",
     remove: "Delete",
+    removeAction: "Delete destination",
     removeConfirm: (name) => `Delete destination ${name}? New audit records won't be sent there. Records already sent aren't affected.`,
     failing: "Failing",
     waiting: "Waiting",
@@ -89,7 +90,7 @@ export default {
     dialogTitle: "Administrator sign-in addresses",
     field: "Allowed addresses",
     fieldHint: (ip) => `One IP address or range per line, such as 203.0.113.0/24. Your current address: ${ip}`,
-    elevate: "Verify your identity to change administrator sign-in addresses.",
+    elevate: "Verify your identity to edit administrator sign-in addresses.",
     saved: "Saved",
   },
 } satisfies typeof zh;

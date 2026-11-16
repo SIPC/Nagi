@@ -131,7 +131,7 @@ func (s *Service) AddPasskey(ctx context.Context, userID int64, challengeID, nam
 		return errNoDomain()
 	}
 	if checkClientData(clientDataJSON, "webauthn.create", c.challenge, c.rpID) != nil {
-		return connect.NewError(connect.CodeInvalidArgument, i18n.New("通行密钥验证失败"))
+		return connect.NewError(connect.CodeInvalidArgument, i18n.New("通行密钥验证失败，请重新添加"))
 	}
 	a, err := parseAttestation(attestationObject, c.rpID)
 	if err != nil {
@@ -188,7 +188,7 @@ type PasskeyAssertion struct {
 
 // errPasskeyLogin 不区分原因：不告诉对方是凭据不存在还是签名不对。
 func errPasskeyLogin() error {
-	return connect.NewError(connect.CodeUnauthenticated, i18n.New("通行密钥验证失败"))
+	return connect.NewError(connect.CodeUnauthenticated, i18n.New("通行密钥验证失败，请重试或使用密码登录"))
 }
 
 // PasskeyLogin 校验签名并登录。通行密钥本身要求验证器验证了用户（指纹、面容、PIN），所以不再要密码和验证码。

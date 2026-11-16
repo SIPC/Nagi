@@ -101,7 +101,7 @@ function SinkSection({ settings, onSave }: { settings: AuditSettings; onSave: (s
   const m = t.panelSecurity.sinks;
   const [editing, setEditing] = useState<AuditSink | "new">();
   const remove = async (k: AuditSink) => {
-    if (!(await confirmAction(m.removeConfirm(k.name), { action: m.remove, danger: true }))) return;
+    if (!(await confirmAction(m.removeConfirm(k.name), { action: m.removeAction, danger: true }))) return;
     try {
       await onSave(settings.sinks.filter((x) => x.id !== k.id));
     } catch (err) {
@@ -116,35 +116,34 @@ function SinkSection({ settings, onSave }: { settings: AuditSettings; onSave: (s
       toast.error(errorMessage(err));
     }
   };
+  const addButton = (
+    <Button variant="outline" onClick={() => setEditing("new")}>
+      <Plus />
+      {m.add}
+    </Button>
+  );
   return (
-    <Section
-      title={m.title}
-      description={m.description}
-      help={m.help}
-      actions={
-        <Button variant="outline" onClick={() => setEditing("new")}>
-          <Plus />
-          {m.add}
-        </Button>
-      }
-    >
+    <Section title={m.title} description={m.description} help={m.help} actions={settings.sinks.length > 0 ? addButton : undefined}>
       {settings.sinks.length === 0 ? (
-        <EmptyRow>{m.empty}</EmptyRow>
+        <EmptyRow action={addButton}>{m.empty}</EmptyRow>
       ) : (
         <List>
           {settings.sinks.map((k) => (
             <Row
               key={k.id}
               title={<span className="truncate">{k.name}</span>}
-              sub={<span className="wrap-anywhere">{[m.types[k.type as keyof typeof m.types] ?? k.type, sinkSummary(k)].join(" · ")}</span>}
+              sub={
+                <>
+                  <span className="block wrap-anywhere">{[m.types[k.type as keyof typeof m.types] ?? k.type, sinkSummary(k)].join(" · ")}</span>
+                  {k.failing && k.lastError && <span className="block text-destructive wrap-anywhere">{k.lastError}</span>}
+                </>
+              }
               cols={[
                 {
                   phone: true,
                   width: "w-40",
                   content: k.failing ? (
-                    <span title={k.lastError}>
-                      <Status tone="danger">{m.failing}</Status>
-                    </span>
+                    <Status tone="danger">{m.failing}</Status>
                   ) : k.lastSuccess ? (
                     <span title={formatDateTime(toDate(k.lastSuccess))}>
                       <Status tone="success">{m.sentAgo(timeAgo(toDate(k.lastSuccess)))}</Status>
@@ -383,7 +382,7 @@ function SessionSection() {
           </Select>
         </SettingRow>
         <SettingRow label={m.bind} description={m.bindDescription} help={m.bindHelp}>
-          <Select aria-label={m.bind} className="w-40" value={p.bind} onChange={(e) => save.mutate({ bind: e.target.value })}>
+          <Select aria-label={m.bind} className="w-36" value={p.bind} onChange={(e) => save.mutate({ bind: e.target.value })}>
             <option value="subnet">{m.bindSubnet}</option>
             <option value="ip">{m.bindIP}</option>
             <option value="off">{m.bindOff}</option>
@@ -407,7 +406,7 @@ function AdminNetworksRow() {
   const [editing, setEditing] = useState(false);
   const list = nets.data?.networks ?? [];
   return (
-    <SettingRow label={m.adminNetworks} help={m.adminNetworksHelp} description={<span className="break-all">{list.length ? list.join("、") : m.adminNetworksOff}</span>}>
+    <SettingRow label={m.adminNetworks} help={m.adminNetworksHelp} description={<span className="break-all">{list.length ? t.common.list(list) : m.adminNetworksOff}</span>}>
       <Button variant="outline" disabled={!nets.data} onClick={() => setEditing(true)}>
         {m.edit}
       </Button>

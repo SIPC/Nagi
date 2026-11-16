@@ -32,7 +32,7 @@ function tokenSummary(tk: AccessToken) {
     tk.allowWrite ? k.write : k.readOnly,
     ...(tk.allowExec ? [k.exec] : []),
     ...(tk.allowNodeExec ? [k.nodeExec] : []),
-    ...(tk.networks.length ? [k.networksLimited(tk.networks.join("、"))] : []),
+    ...(tk.networks.length ? [k.networksLimited(t.common.list(tk.networks))] : []),
     !expires ? k.neverExpires : expires.getTime() < Date.now() ? k.expired : k.expiresOn(formatDate(expires) ?? ""),
   ];
   return parts.join(" · ");
@@ -106,7 +106,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         allowWrite: write,
         allowExec: exec,
         allowNodeExec: isAdmin && nodeExec,
-        networks: networks.split(/[\s,，、]+/).filter(Boolean),
+        networks: networks.split(/[\s,，、]+/).filter(Boolean), // i18n-ignore：输入时中英文的分隔符都认
       };
       try {
         return await settingsClient.createAccessToken(req);
@@ -168,7 +168,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
           )}
         </div>
       )}
-      <Field label={t.tokens.networks} htmlFor="token-networks" hint={t.tokens.networksHint}>
+      <Field label={t.tokens.networks} htmlFor="token-networks" hint={t.tokens.networksHint} help={t.tokens.networksHelp}>
         <Input id="token-networks" value={networks} onChange={(e) => setNetworks(e.target.value)} placeholder="203.0.113.0/24" autoComplete="off" spellCheck={false} />
       </Field>
       {create.error && <Alert>{errorMessage(create.error)}</Alert>}

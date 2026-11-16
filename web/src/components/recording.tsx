@@ -46,6 +46,8 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
   const [cast, setCast] = useState<string>();
   const [error, setError] = useState<unknown>();
   const [query, setQuery] = useState("");
+  // 验证身份通过后才打开对话框：不让两个对话框叠在一起。
+  const [allowed, setAllowed] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const player = useRef<AsciinemaPlayer.Player>(undefined);
   const m = t.audit.replay;
@@ -55,11 +57,13 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
     let cancelled = false;
     setCast(undefined);
     setError(undefined);
+    setAllowed(false);
     (async () => {
       if (!(await requireElevation(m.elevate, { suggestTotp: false }))) {
         onClose();
         return;
       }
+      if (!cancelled) setAllowed(true);
       try {
         const parts: string[] = [];
         const dec = new TextDecoder();
@@ -88,7 +92,7 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
   const hits = useMemo(() => (cast ? searchCast(cast, query) : []), [cast, query]);
 
   return (
-    <Dialog open={open} onClose={onClose} title={m.title} description={m.description} className="max-w-[960px]">
+    <Dialog open={open && allowed} onClose={onClose} title={m.title} description={m.description} className="max-w-[960px]">
       <div className="grid gap-4">
         {error ? (
           <QueryError error={errorMessage(error)} />
@@ -118,8 +122,8 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
                 )}
               </div>
             )}
-            {/* 高度固定，播放器按它缩放，进度条和倍速始终在视野里。 */}
-            <div ref={box} className="h-[60vh] max-h-[560px] overflow-hidden rounded-lg" />
+            {/* 高度固定，播放器按它缩放，进度条和倍速始终在视野里。底色和终端相同，播放器比框窄时两边也是同一块，和上面的查找框同宽。 */}
+            <div ref={box} className="h-[60vh] max-h-[560px] overflow-hidden rounded-lg bg-log [&_.ap-wrapper]:h-full [&_.ap-player]:[--term-color-background:var(--log)]!" />
           </>
         )}
       </div>

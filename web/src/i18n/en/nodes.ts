@@ -2,14 +2,14 @@ import type zh from "../zh/nodes";
 
 export default {
   isolation: {
-    isolate: "Isolate",
+    isolate: "Isolate node",
     unisolate: "End isolation",
     badge: "Isolated",
     notice: "Isolated",
     noticeHint: "Other nodes have disconnected from it on the node network, its project access is revoked, and the panel no longer relays for it. The control connection stays, and its containers keep running.",
     elevate: "Verify your identity before isolating a node.",
     elevateUndo: "Verify your identity before ending isolation.",
-    confirm: (name) => `Isolate node ${name}? Other nodes disconnect from it on the node network right away, and containers on it with failover are taken over by their hot standbys.`,
+    confirm: (name) => `Isolate node ${name}? Other nodes disconnect from it on the node network right away, and containers on it with failover are taken over by their failover nodes.`,
     confirmUndo: (name) => `End isolation of node ${name}? It rejoins the node network and regains project access.`,
     typeName: "Enter the node name to confirm",
     done: "Isolated",
