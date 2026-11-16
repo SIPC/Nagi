@@ -122,7 +122,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
   }
   if (items.length === 0) return null;
   return (
-    <div className="grid gap-2">
+    <div>
       <div role="status" className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span>
           <span className="mr-2 mb-0.5 inline-block size-1.5 rounded-full bg-warning align-middle" />
@@ -132,12 +132,15 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
           {open ? m.collapse : m.view}
         </Button>
       </div>
-      {open &&
-        items.map((it) => (
-          <Notice key={it.key} tone="warning" title={it.title} actions={it.action}>
-            {it.text}
-          </Notice>
-        ))}
+      <Collapse open={open}>
+        <div className="grid gap-2 pt-2">
+          {items.map((it) => (
+            <Notice key={it.key} tone="warning" title={it.title} actions={it.action}>
+              {it.text}
+            </Notice>
+          ))}
+        </div>
+      </Collapse>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import {
   Button,
   Check,
   CopyButton,
+  Collapse,
   Dialog,
   DialogActions,
   ButtonLink,
@@ -210,7 +211,7 @@ function ContainerNotes({ notes }: { notes: { key: string; title: string; body: 
       </Notice>
     );
   return (
-    <div className="mb-6 grid gap-2">
+    <div className="mb-6">
       <Notice
         tone="warning"
         title={f.notes(notes.length)}
@@ -222,12 +223,15 @@ function ContainerNotes({ notes }: { notes: { key: string; title: string; body: 
       >
         {t.common.list(notes.map((n) => n.title))}
       </Notice>
-      {open &&
-        notes.map((n) => (
-          <Notice key={n.key} tone="warning" title={n.title} className="pl-4">
-            {n.body}
-          </Notice>
-        ))}
+      <Collapse open={open}>
+        <div className="grid gap-2 pt-2">
+          {notes.map((n) => (
+            <Notice key={n.key} tone="warning" title={n.title} className="pl-4">
+              {n.body}
+            </Notice>
+          ))}
+        </div>
+      </Collapse>
     </div>
   );
 }

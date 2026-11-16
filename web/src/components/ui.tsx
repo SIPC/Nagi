@@ -450,7 +450,10 @@ export function AutoHeight({ className, children, slot }: { className?: string; 
 
 // Collapse：切换选项后多出、少掉的一块（例如选「指定」后出现的勾选列表）。高度和透明度一起过渡，
 // 收起时内容留到过渡结束才移除，不会先消失再收拢。带 data-auto-height：外层的 AutoHeight 当它是自己在过渡的子组件，不重复过渡。
-export function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+// 完全收起后不显示（display: none），在网格里不占一道间距。
+// gap：放在有间距的网格里（不是第一项）时传父级的间距：展开、收起的过程中外层抵掉父级的间距，内容上面补回同样的留白，间距跟着高度一起过渡。
+const collapseGap = { 2: ["-mt-2", "pt-2"], 4: ["-mt-4", "pt-4"] } as const;
+export function Collapse({ open, gap, children }: { open: boolean; gap?: keyof typeof collapseGap; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const kept = useRef(children);
@@ -483,9 +486,9 @@ export function Collapse({ open, children }: { open: boolean; children: React.Re
     };
   }, [open]);
   return (
-    <div ref={ref} data-auto-height="" className="min-w-0">
-      {/* last 还没更新时是刚收起的这一帧：内容先留着，副作用里才量得到收起前的高度。 */}
-      {(open || closing || last.current) && kept.current}
+    // last 还没更新时是刚收起的这一帧：内容先留着，副作用里才量得到收起前的高度。
+    <div ref={ref} data-auto-height="" className={cn("min-w-0", gap && collapseGap[gap][0], !(open || closing || last.current) && "hidden")}>
+      {(open || closing || last.current) && (gap ? <div className={cn("grid", collapseGap[gap][1])}>{kept.current}</div> : kept.current)}
     </div>
   );
 }

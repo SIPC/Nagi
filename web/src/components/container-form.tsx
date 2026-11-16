@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { ChevronRight } from "lucide-react";
-import { Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
+import { Collapse, Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
@@ -21,18 +21,21 @@ const exampleCompose = `services:
 export type ContainerConfigInit = MessageInitShape<typeof ContainerConfigSchema>;
 export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
 
-// MoreSettings：折叠的「更多设置」，没有框。有值时默认展开。
-function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: { label: string; labelOpen: string; labelPhone?: string; defaultOpen?: boolean; children: ReactNode }) {
+// MoreSettings：折叠的「更多设置」，没有框。有值时默认展开。高度用 Collapse 过渡，内容从上方滑入，箭头旋转 240ms。
+// 按钮和内容包在一层里：收起时不在父级的网格里多留一道间距。
+export function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: { label: string; labelOpen: string; labelPhone?: string; defaultOpen?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
-    <>
+    <div className="grid">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring">
-        <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform", open && "rotate-90")} />
+        <ChevronRight className={cn("mt-0.5 size-4 shrink-0 transition-transform duration-240", open && "rotate-90")} />
         {open ? labelOpen : <span className={cn(labelPhone && "max-md:hidden")}>{label}</span>}
         {!open && labelPhone && <span className="md:hidden">{labelPhone}</span>}
       </button>
-      {open && <div className="grid animate-slide-from-above gap-4">{children}</div>}
-    </>
+      <Collapse open={open}>
+        <div className="grid gap-4 pt-4 motion-safe:animate-slide-from-above">{children}</div>
+      </Collapse>
+    </div>
   );
 }
 

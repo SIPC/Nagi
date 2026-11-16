@@ -5,7 +5,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
-import { Badge, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
+import { AutoHeight, Badge, Button, Check, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RecordingDialog } from "@/components/recording";
 import { PageHeader } from "@/pages/layout";
@@ -297,16 +297,20 @@ function AuditRow({ e, onOpen, nested }: { e: AuditEvent; onOpen: (id: bigint) =
           </Button>
         </div>
       )}
-      {open &&
-        (children.isPending ? (
-          <div className="pl-6">
-            <RowsSkeleton count={Math.min(e.children, 3)} />
-          </div>
-        ) : children.error ? (
-          <QueryError className="pl-6" error={errorMessage(children.error)} onRetry={() => children.refetch()} />
-        ) : (
-          [...(children.data?.events ?? [])].reverse().map((c) => <AuditRow key={String(c.id)} e={c} onOpen={onOpen} nested />)
-        ))}
+      {/* 子记录展开、收起时高度过渡（Collapse）；加载完由里面的 AutoHeight 过渡到实际高度。 */}
+      <Collapse open={open}>
+        <AutoHeight>
+          {children.isPending ? (
+            <div className="pl-6">
+              <RowsSkeleton count={Math.min(e.children, 3)} />
+            </div>
+          ) : children.error ? (
+            <QueryError className="pl-6" error={errorMessage(children.error)} onRetry={() => children.refetch()} />
+          ) : (
+            [...(children.data?.events ?? [])].reverse().map((c) => <AuditRow key={String(c.id)} e={c} onOpen={onOpen} nested />)
+          )}
+        </AutoHeight>
+      </Collapse>
     </div>
   );
 }

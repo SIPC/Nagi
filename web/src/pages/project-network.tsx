@@ -7,7 +7,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, ButtonLink, Check, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
+import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
@@ -581,7 +581,7 @@ function RoutesSection({ project, services, container }: { project: Project; ser
               </Select>
             </Field>
           </FormRow>
-          {isHTTP && (
+          <Collapse open={isHTTP} gap={4}>
             <Field
               label={m.domains}
               htmlFor="route-domains"
@@ -590,12 +590,12 @@ function RoutesSection({ project, services, container }: { project: Project; ser
             >
               <Input id="route-domains" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="app.example.com" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
             </Field>
-          )}
-          {!hasDomains && (
+          </Collapse>
+          <Collapse open={!hasDomains} gap={4}>
             <Field label={m.nodePort} htmlFor="route-published" help={m.nodePortHelp} error={publishedError}>
               <Input id="route-published" inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="8080" value={form.published} onChange={(e) => setForm({ ...form, published: e.target.value })} />
             </Field>
-          )}
+          </Collapse>
           <Field label={m.entryNodes} help={m.entryNodesHelp}>
             {nodes.isPending ? (
               <Skeleton className="h-5 w-64 max-w-full" />
@@ -616,16 +616,16 @@ function RoutesSection({ project, services, container }: { project: Project; ser
             {nodes.isError && <QueryError error={nodes.error} onRetry={() => nodes.refetch()} />}
             {hasDomains && multipleEntries && !form.httpOnly && <p className="leading-5 text-warning-text">{m.entryDomainWarningShort}</p>}
           </Field>
-          {hasDomains && (
-            <Check checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
+          <Collapse open={hasDomains} gap={4}>
+            <Check className="justify-self-start" checked={form.httpOnly} onChange={(v) => setForm({ ...form, httpOnly: v })} help={m.httpOnlyHelp}>
               {m.httpOnly}
             </Check>
-          )}
-          {!isHTTP && (
-            <Check checked={form.proxyProtocol} onChange={(v) => setForm({ ...form, proxyProtocol: v })} help={m.proxyProtocolHelp}>
+          </Collapse>
+          <Collapse open={!isHTTP} gap={4}>
+            <Check className="justify-self-start" checked={form.proxyProtocol} onChange={(v) => setForm({ ...form, proxyProtocol: v })} help={m.proxyProtocolHelp}>
               {m.proxyProtocol}
             </Check>
-          )}
+          </Collapse>
           {formError && <Alert>{formError}</Alert>}
           <DialogActions>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -874,53 +874,59 @@ function Links({ project, services }: { project: Project; services: ServiceStatu
       title={m.title}
       help={<HelpParts parts={[m.intro(project.networkName), m.help, ...(addresses.length > 0 ? [`${m.addressesIntro} ${t.common.list(addresses.map((a) => `${a.name}.${project.networkName}`))}`] : [])]} />}
       actions={
-        !open && (
-          <Button variant="outline" onClick={() => setOpen(true)}>
-            <Plus />
-            {m.add}
-          </Button>
-        )
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <Plus />
+          {m.add}
+        </Button>
       }
     >
-      {open &&
-        (projects.isPending ? (
-          <Skeleton className="h-8 w-full" />
+      {/* 连接项目用对话框（ui.md：表单放进对话框），标题栏的按钮一直在。 */}
+      <Dialog open={open} onClose={cancel} title={m.add}>
+        {projects.isPending ? (
+          <RowsSkeleton count={1} />
         ) : projects.isError ? (
           <QueryError error={projects.error} onRetry={() => projects.refetch()} />
         ) : candidates.length === 0 ? (
-          <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <>
             <p className="text-muted-foreground">{m.noCandidates}</p>
-            <Button variant="ghost" onClick={cancel}>
-              {t.common.actions.cancel}
-            </Button>
-          </div>
+            <DialogActions>
+              <Button variant="outline" onClick={cancel}>
+                {t.common.actions.cancel}
+              </Button>
+              <ButtonLink to="/projects/new">{t.projects.newProject}</ButtonLink>
+            </DialogActions>
+          </>
         ) : (
           <form
-            className="flex flex-wrap items-center gap-2"
+            className="grid gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               connect();
             }}
           >
-            <div className="min-w-48 flex-1">
-              <Select aria-label={m.project} className="w-full" value={selected} onChange={(e) => setOther(e.target.value)}>
+            <Field label={m.project} htmlFor="link-project">
+              <Select id="link-project" value={selected} onChange={(e) => setOther(e.target.value)}>
                 {candidates.map((p) => (
                   <option key={p.id} value={p.id}>
                     {m.option(p.name, p.networkName)}
                   </option>
                 ))}
               </Select>
-            </div>
-            <Button type="submit" disabled={busy || !selected}>
-              {busy && <Spinner />}
-              {m.connect}
-            </Button>
-            <Button variant="ghost" onClick={cancel}>
-              {t.common.actions.cancel}
-            </Button>
+            </Field>
+            {error && <Alert>{error}</Alert>}
+            <DialogActions>
+              <Button variant="outline" onClick={cancel}>
+                {t.common.actions.cancel}
+              </Button>
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner />}
+                {m.connect}
+              </Button>
+            </DialogActions>
           </form>
-        ))}
-      {error && <Alert>{error}</Alert>}
+        )}
+      </Dialog>
+      {!open && error && <Alert>{error}</Alert>}
       {project.links.length === 0 ? (
         <EmptyRow>{m.empty}</EmptyRow>
       ) : (

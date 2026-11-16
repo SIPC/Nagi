@@ -9,7 +9,7 @@ import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { fmtBytes } from "@/components/metrics";
 import { TerminalSession } from "@/components/terminal";
-import { Alert, Button, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
+import { Alert, Button, Collapse, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
 import { useUnsaved } from "@/components/unsaved";
 import { MobileBar, mobileBarText } from "@/pages/layout";
 import { Crumbs } from "@/pages/volume-files";
@@ -318,6 +318,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       <ContainerHint n={node} />
       {readonly && <Notice title={m.readonlyDir}>{m.readonlyText}</Notice>}
 
+      <Collapse open={goto !== null} gap={4}>
       {goto !== null && (
         <form
           className="flex items-center gap-2"
@@ -337,7 +338,9 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           </Button>
         </form>
       )}
+      </Collapse>
 
+      <Collapse open={!!creating} gap={4}>
       {creating && (
         <form
           className="flex items-center gap-2"
@@ -373,6 +376,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
           </Button>
         </form>
       )}
+      </Collapse>
 
       {error && <Alert>{error}</Alert>}
 

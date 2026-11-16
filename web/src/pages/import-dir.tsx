@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Alert, Button, ButtonLink, Field, FormActions, FormRow, HelpTip, Input, KeyValue, Notice, Spinner } from "@/components/ui";
+import { Alert, Button, ButtonLink, Collapse, Field, FormActions, FormRow, HelpTip, Input, KeyValue, Notice, Spinner } from "@/components/ui";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { ComposeDirPreview } from "@/gen/nagi/v1/api_pb";
@@ -76,7 +76,7 @@ export function ImportDir({ project }: { project: Project }) {
 
   return (
     <form
-      className="grid gap-6 max-md:gap-4"
+      className="grid gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (preview) add(true);
@@ -111,7 +111,8 @@ export function ImportDir({ project }: { project: Project }) {
           </Field>
         )}
       </FormRow>
-      {preview && (
+      <Collapse open={!!preview} gap={4}>
+        {preview && (
         <div className="grid gap-4">
           <KeyValue
             items={[
@@ -131,7 +132,8 @@ export function ImportDir({ project }: { project: Project }) {
           {/* 和配置页的 Compose 预览同一种写法。 */}
           <pre className="m-0 max-h-72 overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5">{preview.compose}</pre>
         </div>
-      )}
+        )}
+      </Collapse>
       {error && <Alert>{error}</Alert>}
       <FormActions className="mt-2 max-md:grid max-md:[&>*]:w-full">
         {preview ? (
