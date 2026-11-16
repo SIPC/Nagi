@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -178,11 +179,24 @@ func S3Put(ctx context.Context, client *http.Client, sk Config, key string, body
 		return unreachable(u.Host)
 	}
 	defer res.Body.Close()
-	msg, _ := io.ReadAll(io.LimitReader(res.Body, 512))
+	msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 	if res.StatusCode/100 != 2 {
-		return i18n.Errorf("存储返回 HTTP %d，请检查存储桶、区域和密钥：%s", res.StatusCode, strings.TrimSpace(string(msg)))
+		// 只带 S3 的错误码（<Code>），不回显响应体：地址可能指向内网服务，响应体会经测试外送和失败原因被读出来。
+		if m := s3CodeRe.FindSubmatch(msg); m != nil {
+			return i18n.Errorf("存储返回 HTTP %d（%s），请检查存储桶、区域和密钥", res.StatusCode, string(m[1]))
+		}
+		return i18n.Errorf("存储返回 HTTP %d，请检查存储桶、区域和密钥", res.StatusCode)
 	}
 	return nil
+}
+
+// s3CodeRe 取 S3 错误响应里的错误码，例如 AccessDenied、NoSuchBucket。
+var s3CodeRe = regexp.MustCompile(`<Code>([A-Za-z0-9.]{1,64})</Code>`)
+
+// NewClient 返回外送用的 HTTP 客户端：不跟随重定向。接收端返回 3xx 时，跟随会把审计正文连同自定义请求头
+// 发到重定向的地址（跨域时 Go 只去掉 Authorization 和 Cookie）。
+func NewClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 func hmacSHA256(key []byte, s string) []byte {

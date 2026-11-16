@@ -90,7 +90,7 @@ func (s *Shipper) Configure(ctx context.Context, sinks []SinkConfig) {
 	defer s.mu.Unlock()
 	if s.status == nil {
 		s.status, s.alerted = map[string]*SinkStatus{}, map[string]bool{}
-		s.client = &http.Client{Timeout: 30 * time.Second}
+		s.client = auditsink.NewClient(30 * time.Second)
 	}
 	s.sinks = sinks
 	ctx, s.cancel = context.WithCancel(context.WithoutCancel(ctx))
@@ -413,7 +413,7 @@ func (s *Shipper) deliver(ctx context.Context, sk SinkConfig, events []Event, li
 // TestSink 发一条测试消息。
 func (s *Shipper) TestSink(ctx context.Context, sk SinkConfig) error {
 	line, _ := json.Marshal(map[string]any{"type": "test", "time": time.Now().UTC().Format(time.RFC3339Nano), "message": "Nagi audit sink test"})
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := auditsink.NewClient(15 * time.Second)
 	switch sk.Type {
 	case "http":
 		return auditsink.PostHTTP(ctx, client, sk, [][]byte{line})
