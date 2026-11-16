@@ -72,16 +72,17 @@ const (
 	replicaMassDeleteMin = 20
 )
 
-// claim 让 source 占用副本的同步：别的源节点在 replicaSyncIdle 内有过请求时拒绝。几个参与者都能同步同一个副本时
-// （设置了顶替），接收端同时只接受一个源的会话：否则两个源交替 Put 和 Commit，A 的 Commit 会删掉 B 刚写入的文件。
-func (r *replicas) claim(projectID, container string, source []byte, now time.Time) error {
+// claim 让 source 占用副本的同步。几个参与者都能同步同一个副本时（设置了顶替），接收端同时只接受一个源的会话：
+// 否则两个源交替 Put 和 Commit，A 的 Commit 会删掉 B 刚写入的文件。登记的源节点（容器所在的节点，primary）优先：
+// 它随时可以接手；另一方只在没有别的源在 replicaSyncIdle 内同步过时才能开始，被攻破的另一方挡不住正常同步。
+func (r *replicas) claim(projectID, container string, source []byte, primary bool, now time.Time) error {
 	id := projectID + "-" + container
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.syncing == nil {
 		r.syncing = map[string]replicaSync{}
 	}
-	if cur, ok := r.syncing[id]; ok && !slices.Equal(cur.source, source) && now.Sub(cur.at) < replicaSyncIdle {
+	if cur, ok := r.syncing[id]; ok && !primary && !slices.Equal(cur.source, source) && now.Sub(cur.at) < replicaSyncIdle {
 		return status.Error(codes.Aborted, "另一个节点正在同步这个副本，稍后重试")
 	}
 	r.syncing[id] = replicaSync{source: slices.Clone(source), at: now}
@@ -318,8 +319,9 @@ func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []str
 
 // ---- 目标节点：MeshService ----
 
-// authorizeReplica 校验调用方就是这个副本登记的源节点，返回副本的文件目录。
-func (s *meshService) authorizeReplica(ctx context.Context, projectID, container string) (string, error) {
+// authorizeReplica 校验调用方就是这个副本登记的源节点，返回副本的文件目录。write 表示要写入（Put、Commit），
+// 写入要占用这次同步（见 replicas.claim）；只读的请求（Manifest）不占用，也不续上占用。
+func (s *meshService) authorizeReplica(ctx context.Context, projectID, container string, write bool) (string, error) {
 	caller, ok := mesh.Caller(ctx, s.M)
 	if !ok {
 		return "", status.Error(codes.PermissionDenied, "无法确认调用方")
@@ -336,14 +338,16 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 		})
 		return "", status.Error(codes.PermissionDenied, "该容器的副本不接受来自此节点的同步")
 	}
-	if err := s.a.replicas.claim(projectID, container, caller[:], time.Now()); err != nil {
-		return "", err
+	if write {
+		if err := s.a.replicas.claim(projectID, container, caller[:], slices.Equal(m.SourceKey, caller[:]), time.Now()); err != nil {
+			return "", err
+		}
 	}
 	return filepath.Join(root, "files"), nil
 }
 
 func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaManifestRequest) (*nagiv1.ReplicaManifestResponse, error) {
-	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer())
+	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +452,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			return err
 		}
 		if files == "" {
-			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer()); err != nil {
+			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer(), true); err != nil {
 				return err
 			}
 			unlock = s.a.replicas.rlock(c.GetProjectId(), c.GetContainer())
@@ -480,7 +484,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 }
 
 func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {
-	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer())
+	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer(), true)
 	if err != nil {
 		return nil, err
 	}
