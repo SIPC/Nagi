@@ -722,6 +722,7 @@ var en = map[string]string{
 	"成员：%s；来源：%s。令牌可能已经泄露。":                        "Member: %s; source: %s. The token may have leaked.",
 	"访问令牌 %s 第一次从网段 %s 使用":                         "Access token %s was used from network %s for the first time",
 	"成员：%s；来源：%s；客户端：%s。这个令牌能执行命令。":                "Member: %s; source: %s; client: %s. This token can run commands.",
+	"上一条告警之后还有 %d 个新网段，见审计。":                       " %d more new networks since the last alert. See the audit log.",
 	"账号 %s 修改了管理员登录地址：%s":                          "Account %s changed the administrator sign-in addresses: %s",
 	"节点本地审计没有打开":                                   "Node-local audit isn't open",
 	"无法保存外送配置：%v":                                  "Can't save the log forwarding settings: %v",
