@@ -98,6 +98,9 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.SubnetPool = project.DefaultSubnetPool
 	}
 
+	// 先加载上次的出站限制规则：dockerd 可能已经拉起了容器，规则不能等到列完容器才生效（见 egress_linux.go）。
+	restoreEgress(cfg.DataDir, log)
+
 	// 刚升级时最先开始自检：后面任何一步出错、卡住，都能换回旧版本（见 upgrade_guard.go）。
 	confirmUpgrade := func() {}
 	if !cfg.Embedded {

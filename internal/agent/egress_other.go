@@ -2,12 +2,17 @@
 
 package agent
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // 出站限制只在 Linux 上有（nftables），别的系统上不限制（开发用）。
 type egress struct{ a *agent }
 
 func newEgress(a *agent) *egress { return &egress{a: a} }
+
+func restoreEgress(string, *slog.Logger) {}
 
 func (e *egress) Error() string { return "" }
 

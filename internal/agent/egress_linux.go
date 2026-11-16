@@ -2,8 +2,11 @@ package agent
 
 import (
 	"context"
+	"log/slog"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +33,29 @@ type egress struct {
 }
 
 func newEgress(a *agent) *egress { return &egress{a: a, kick: make(chan struct{}, 1)} }
+
+// egressCacheFile 是上次应用的规则（见 restoreEgress）。
+func egressCacheFile(dataDir string) string { return filepath.Join(dataDir, "egress.nft") }
+
+// restoreEgress 在节点启动时最先加载上次应用的规则（见 docs/agent.md#出站限制）：节点重启后 dockerd 先拉起容器，
+// nagi 起来、列完容器之前，容器的出站不受限制，恶意镜像在入口程序里立刻访问元数据就能成功。上次的规则里的地址
+// 可能已经变了，等第一次同步按现在的容器重新生成；在这之前宁可多拦。没有 nft 或没有缓存时什么也不做。
+func restoreEgress(dataDir string, log *slog.Logger) {
+	b, err := os.ReadFile(egressCacheFile(dataDir))
+	if err != nil || len(b) == 0 {
+		return
+	}
+	if _, err := exec.LookPath("nft"); err != nil {
+		return
+	}
+	cmd := exec.Command("nft", "-f", "-")
+	cmd.Stdin = strings.NewReader(string(b))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Warn("加载上次的出站限制规则失败", "err", err, "output", strings.TrimSpace(string(out)))
+		return
+	}
+	log.Info("已加载上次的出站限制规则，等列完容器后更新")
+}
 
 // Error 返回不能限制容器出站的原因，为空表示可以。
 func (e *egress) Error() string {
@@ -126,6 +152,10 @@ func (e *egress) sync(ctx context.Context) {
 	e.mu.Lock()
 	e.applied = rules
 	e.mu.Unlock()
+	// 存下来，下次启动时最先加载（见 restoreEgress）。
+	if err := writeFileAtomic(egressCacheFile(e.a.cfg.DataDir), []byte(rules), 0o600); err != nil {
+		e.a.log.Warn("无法保存出站限制规则", "err", err)
+	}
 	e.setErr("")
 	e.a.log.Info("已更新容器出站限制", "containers", len(st.containers))
 }
@@ -180,4 +210,13 @@ func (e *egress) hit(ctx context.Context, h egressHit) {
 	}
 	// 键是 egress:<项目>/<容器>/<目标>：面板按它把告警记到项目和容器上（见 nodes.alertContainer）。
 	e.a.alerts.NotifyKey(ctx, "egress:"+c.project+"/"+name+"/"+target, title, "", c.project)
+}
+
+// writeFileAtomic 先写临时文件再改名，写到一半断电也不会留下半份规则。
+func writeFileAtomic(path string, b []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
