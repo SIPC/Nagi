@@ -84,3 +84,42 @@ func IsNotFound(err error) bool {
 	var nf interface{ NotFound() }
 	return cerrdefs.IsNotFound(err) || errors.As(err, &nf)
 }
+
+// BridgeNetwork 是一个 bridge 网络：宿主机上的网桥接口名，和接在上面的所有容器（包括不归 Nagi 管的）的地址。
+type BridgeNetwork struct {
+	Name  string
+	Iface string
+	// Addrs 是容器 ID → 它在这个网络里的地址（IPv4 和 IPv6）。
+	Addrs map[string][]netip.Addr
+}
+
+// InspectBridge 读一个网络。不是 bridge 驱动的（host、none、macvlan 等）返回 ok=false。
+func (d *Client) InspectBridge(ctx context.Context, name string) (BridgeNetwork, bool, error) {
+	res, err := d.c.NetworkInspect(ctx, name, client.NetworkInspectOptions{})
+	if err != nil {
+		return BridgeNetwork{}, false, err
+	}
+	n := res.Network
+	if n.Driver != "bridge" {
+		return BridgeNetwork{}, false, nil
+	}
+	out := BridgeNetwork{Name: n.Name, Iface: n.Options["com.docker.network.bridge.name"], Addrs: map[string][]netip.Addr{}}
+	if out.Iface == "" {
+		switch {
+		case n.Name == "bridge":
+			out.Iface = "docker0"
+		case len(n.ID) >= 12:
+			out.Iface = "br-" + n.ID[:12]
+		default:
+			return BridgeNetwork{}, false, nil
+		}
+	}
+	for id, ep := range n.Containers {
+		for _, p := range []netip.Prefix{ep.IPv4Address, ep.IPv6Address} {
+			if p.IsValid() {
+				out.Addrs[id] = append(out.Addrs[id], p.Addr().Unmap())
+			}
+		}
+	}
+	return out, true, nil
+}

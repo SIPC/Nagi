@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,11 @@ type egressState struct {
 	projects   map[string]*nagiv1.Egress
 	// local 是节点本机的所有地址（包括 Docker 网关）。不用 nftables 的 fib：有的内核没有这个模块。
 	local []netip.Addr
+	// strict 是接着拦截模式的容器的网桥（docker0、br-<网络 ID>），known 是这些网桥上所有容器（包括不归 Nagi 管的）的地址。
+	// 从这些网桥进来、源地址不是任何容器的地址的连接一律丢弃：被攻破的容器带着 CAP_NET_RAW，能用同网段里没分配的地址
+	// 或者 IPv6 链路本地地址收发，按源地址匹配的项目规则管不到它们（见 docs/agent.md#出站限制）。
+	strict []string
+	known  []netip.Addr
 }
 
 // projectKey 是规则里用的项目短名：项目 ID 本来就是十六进制。
@@ -82,16 +88,33 @@ func buildRuleset(st egressState) string {
 		}
 		fmt.Fprintf(&b, "\tset hits%s {\n\t\ttype %s . %s . inet_service\n\t\tsize 65535\n\t\tflags dynamic,timeout\n\t\ttimeout 10m\n\t}\n", fam, typ, typ)
 	}
+	var k4, k6 []string
+	for _, a := range st.known {
+		if a.Is4() {
+			k4 = append(k4, a.String())
+		} else {
+			k6 = append(k6, a.String())
+		}
+	}
 	for _, fam := range []string{"4", "6"} {
-		typ, list := "ipv4_addr", l4
+		typ, list, known := "ipv4_addr", l4, k4
 		if fam == "6" {
-			typ, list = "ipv6_addr", l6
+			typ, list, known = "ipv6_addr", l6, k6
 		}
 		fmt.Fprintf(&b, "\tset local%s {\n\t\ttype %s\n", fam, typ)
 		if len(list) > 0 {
 			fmt.Fprintf(&b, "\t\telements = { %s }\n", strings.Join(list, ", "))
 		}
 		b.WriteString("\t}\n")
+		fmt.Fprintf(&b, "\tset known%s {\n\t\ttype %s\n", fam, typ)
+		if len(known) > 0 {
+			fmt.Fprintf(&b, "\t\telements = { %s }\n", strings.Join(known, ", "))
+		}
+		b.WriteString("\t}\n")
+	}
+	var ifaces []string
+	for _, i := range st.strict {
+		ifaces = append(ifaces, strconv.Quote(i))
 	}
 	// 每个项目一组集合：项目里容器的地址。
 	byProject := map[string][]egressContainer{}
@@ -135,6 +158,20 @@ func buildRuleset(st egressState) string {
 		if !local {
 			// 容器之间经 Docker 网桥的流量（项目内网）不管，网络之间的隔离由 Docker 负责。
 			b.WriteString("\t\toifname { \"docker0\", \"br-*\" } accept\n")
+		}
+		// 源地址不是任何容器的地址：伪造的，直接丢弃。只管 TCP、UDP，不影响 ARP、NDP 和 ICMP。
+		if len(ifaces) > 0 {
+			for _, fam := range []string{"4", "6"} {
+				ipk := "ip"
+				if fam == "6" {
+					ipk = "ip6"
+				}
+				dst := fmt.Sprintf("%s daddr @private%s", ipk, fam)
+				if local {
+					dst = fmt.Sprintf("%s daddr @local%s", ipk, fam)
+				}
+				fmt.Fprintf(&b, "\t\tiifname { %s } %s saddr != @known%s %s meta l4proto { tcp, udp } drop\n", strings.Join(ifaces, ", "), ipk, fam, dst)
+			}
 		}
 		for _, id := range ids {
 			e := st.projects[id]
@@ -182,14 +219,47 @@ func egressStateOf(ctx context.Context, dc *docker.Client, plan *nagiv1.LinkPlan
 	if err != nil {
 		return st, err
 	}
+	// 容器接着的 bridge 网络：IPv6 地址（容器列表里只有 IPv4）、网桥接口名、网桥上所有容器的地址。
+	bridges := map[string]docker.BridgeNetwork{}
+	for _, in := range list {
+		if in.Project == "" || in.State != "running" {
+			continue
+		}
+		for name := range in.IPs {
+			if _, seen := bridges[name]; seen {
+				continue
+			}
+			n, ok, err := dc.InspectBridge(ctx, name)
+			if err != nil {
+				return st, err
+			}
+			if ok {
+				bridges[name] = n
+			}
+		}
+	}
+	strict, known := map[string]bool{}, map[netip.Addr]bool{}
 	for _, in := range list {
 		if in.Project == "" || in.State != "running" {
 			continue
 		}
 		c := egressContainer{project: in.Project, name: in.Name, nagi: in.Container}
-		for _, a := range in.IPs {
-			if a.IsValid() {
+		seen := map[netip.Addr]bool{}
+		addr := func(a netip.Addr) {
+			if a = a.Unmap(); a.IsValid() && !seen[a] {
+				seen[a] = true
 				c.addrs = append(c.addrs, a)
+			}
+		}
+		for name, a := range in.IPs {
+			addr(a)
+			if n, ok := bridges[name]; ok {
+				for _, a := range n.Addrs[in.ID] {
+					addr(a)
+				}
+				if spec.EgressMode(st.projects[in.Project]) == spec.EgressBlock {
+					strict[name] = true
+				}
 			}
 		}
 		sort.Slice(c.addrs, func(i, j int) bool { return c.addrs[i].Less(c.addrs[j]) })
@@ -197,6 +267,21 @@ func egressStateOf(ctx context.Context, dc *docker.Client, plan *nagiv1.LinkPlan
 			st.containers = append(st.containers, c)
 		}
 	}
+	for name := range strict {
+		n := bridges[name]
+		st.strict = append(st.strict, n.Iface)
+		for _, list := range n.Addrs {
+			for _, a := range list {
+				known[a] = true
+			}
+		}
+	}
+	sort.Strings(st.strict)
+	st.strict = slices.Compact(st.strict)
+	for a := range known {
+		st.known = append(st.known, a)
+	}
+	sort.Slice(st.known, func(i, j int) bool { return st.known[i].Less(st.known[j]) })
 	sort.Slice(st.containers, func(i, j int) bool { return st.containers[i].name < st.containers[j].name })
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, a := range addrs {
