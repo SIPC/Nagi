@@ -353,6 +353,7 @@ func TestSessionDeviceChange(t *testing.T) {
 }
 
 // 手机在 Wi-Fi 和移动网络之间来回切换：只记审计，不要求重新验证、不告警。IPv4 和 IPv6 之间切换不算。
+// N2：两处同时用一个登录（请求交替从两个网段来），5 分钟内来回切换达到 6 次时告警，仍然不要求重新验证。
 func TestSessionNetworkFlip(t *testing.T) {
 	h := newSessionHarness(t)
 	wifi := RequestInfo{IP: "203.0.113.10", UserAgent: chromeUA}
@@ -373,6 +374,19 @@ func TestSessionNetworkFlip(t *testing.T) {
 	}
 	if len(h.alerts) != 0 {
 		t.Fatalf("不应告警：%v", h.alerts)
+	}
+	// 本人在 wifi，盗用者在 cell，同时使用：每个请求都切换一次。
+	for i := range 10 {
+		next := cell
+		if i%2 == 1 {
+			next = wifi
+		}
+		if _, err := h.check(token, next); err != nil {
+			t.Fatalf("同时使用时也不要求重新验证：%v", err)
+		}
+	}
+	if len(h.alerts) != 1 || !h.alerted("来回切换了 6 次") {
+		t.Fatalf("5 分钟内来回切换 6 次应告警一次：%v", h.alerts)
 	}
 }
 

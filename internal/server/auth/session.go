@@ -36,8 +36,11 @@ const (
 	challengeGrace = 2 * time.Minute
 	// keyWindow：登录或重新验证以后，这么久之内可以登记会话密钥。
 	keyWindow = 2 * time.Minute
-	// flipWindow：这么久之内在两个网段之间来回切换，要求重新验证。
+	// flipWindow：这么久之内在两个网段之间来回切换，记一条审计；达到 flipAlertAfter 次告警（见 docs/panel.md#会话）。
 	flipWindow = 5 * time.Minute
+	// flipAlertAfter：手机在 Wi-Fi 和移动数据之间来回切换，5 分钟里一般只有一两次；两处同时用一个登录时，
+	// 两边的请求交替到达，几乎每个请求都算一次。
+	flipAlertAfter = 6
 	// touchInterval：最近活动时间最多这么久写一次。
 	touchInterval = time.Minute
 	// reverifyLimit：重新验证连续失败这么多次，退出会话。
@@ -172,6 +175,9 @@ type famNets struct {
 	Cur  string `json:"c"`
 	Prev string `json:"p,omitempty"`
 	Left int64  `json:"l,omitempty"` // 离开 Prev 的时间
+	// Flips 是从 FlipAt 起 flipWindow 内来回切换的次数。
+	Flips  int   `json:"f,omitempty"`
+	FlipAt int64 `json:"fa,omitempty"`
 }
 
 // Network 返回 IP 所在的网段：IPv4 按 /24，IPv6 按 /48；fam 是 "4" 或 "6"。
@@ -267,10 +273,18 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 		}
 		if network != f.Cur {
 			// 只有同一种地址的网段之间来回切换才算：浏览器会在 IPv4 和 IPv6 之间自动切换。
-			// 只记审计，不要求重新验证、不告警：手机在 Wi-Fi 和移动数据之间来回切换很常见；
-			// 两台设备同时用一个登录，由令牌轮换的重用检测发现。
+			// 不要求重新验证：手机在 Wi-Fi 和移动数据之间来回切换很常见。5 分钟内达到 flipAlertAfter 次告警：
+			// 两处同时用一个登录时几乎每个请求都切换一次，不用等令牌轮换的重用检测（最长约 16 分钟）。
 			if network == f.Prev && now.Sub(time.Unix(f.Left, 0)) < flipWindow {
-				s.securityEvent(ctx, st, info, "session_network_flip", "", map[string]string{"from": f.Cur, "to": network})
+				if now.Sub(time.Unix(f.FlipAt, 0)) >= flipWindow {
+					f.Flips, f.FlipAt = 0, now.Unix()
+				}
+				f.Flips++
+				msg := ""
+				if f.Flips == flipAlertAfter {
+					msg = i18n.Errorf("账号 %s 的登录 5 分钟内在两个网段之间来回切换了 %d 次，可能有人同时在用", st.Username, f.Flips).Error()
+				}
+				s.securityEvent(ctx, st, info, "session_network_flip", msg, map[string]string{"from": f.Cur, "to": network})
 			}
 			f.Prev, f.Left, f.Cur = f.Cur, now.Unix(), network
 		}
