@@ -8,6 +8,27 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.28.1
+
+### Fixes
+
+- Fixes an issue where a compromised node could use a project restored from its cache to run a privileged configuration on another node. Failover settings and backup nodes restored from a node's cache now take effect only after an administrator confirms them on the container's "High availability" tab.
+- Fixes an issue where operators could run commands with privileges through compose lifecycle hooks.
+- Fixes an issue where the failure limits for sign-in, identity verification, password changes and turning off two-step verification could be bypassed.
+- Fixes an issue where the activity log could be pushed out by large numbers of invalid requests. Security-related entries are now kept separately.
+- Fixes an issue where partial file downloads weren't recorded in the activity log.
+- Fixes an issue where some addresses still revealed the panel when the security entrance was on.
+- Fixes an issue where overlapping syncs of the same container could corrupt the copy on a backup or standby node.
+- Fixes an issue where syncing from a newer node to an older node could fail.
+
+### Behavior changes
+
+- Sign-in from one IP is limited after 10 failures, and the count resets an hour after the last failure.
+
+### Upgrade notes
+
+- Nodes must be upgraded to v0.28.1 for the sync fixes to take effect.
+
 ## v0.28.0
 
 ### New features
