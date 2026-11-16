@@ -305,6 +305,35 @@ func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange fu
 	}
 }
 
+// WatchNetworkConnects 在任何容器接入网络时（包括启动、重启换了地址）调用 onConnect，直到 ctx 结束。
+// 不只是 Nagi 管理的容器：出站限制要知道网桥上所有容器的地址（见 agent/egress.go）。
+func (d *Client) WatchNetworkConnects(ctx context.Context, onConnect func()) {
+	for ctx.Err() == nil {
+		res := d.c.Events(ctx, client.EventsListOptions{
+			Filters: make(client.Filters).
+				Add("type", string(events.NetworkEventType)).
+				Add("event", string(events.ActionConnect)),
+		})
+		msgs, errs := res.Messages, res.Err
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-msgs:
+				onConnect()
+			case <-errs:
+				break loop
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
 // Exec 是容器里一个交互式终端会话。
 type Exec struct {
 	c    *client.Client

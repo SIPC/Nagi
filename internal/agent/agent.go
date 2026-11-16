@@ -239,6 +239,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	go a.intranet.run(ctx)
 	go a.egress.run(ctx)
+	// 任何容器（包括不是 Nagi 管理的）接入网络时都重新生成出站规则：拦截模式的网桥上，地址不在规则里的连接会被丢弃，
+	// 同一个网桥上新启动的其他容器不能等 30 秒的定时同步（见 docs/agent.md#出站限制）。
+	go dc.WatchNetworkConnects(ctx, a.egress.trigger)
 	go a.violations.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)
