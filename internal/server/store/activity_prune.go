@@ -15,6 +15,8 @@ var SensitiveActions = []string{
 	// 节点上的文件（等于节点的 root）、安全入口、节点加入和移交。
 	"DownloadNodeFile", "UploadNodeFile", "ReadNodeFile", "WriteNodeFile", "DeleteNodeFile", "CreateNodeDir", "RestoreNodeFileBackup",
 	"SetEntrance", "CreateEnrollCommand", "ApproveNode", "RemoveNode", "HandoverNodes",
+	// 分组和标签决定成员的访问范围。
+	"SetProjectGroup", "RenameProjectGroup", "SetNodeTags", "RenameNodeTag",
 }
 
 func sensitiveList() string {

@@ -610,6 +610,10 @@ var en = map[string]string{
 	"面板重启后版本还是 %s，没有更新到 %s":  "The panel is still on %s after restarting and couldn't update to %s",
 	"面板重启打断了升级，请重试":          "A panel restart interrupted the upgrade. Try again",
 	"面板重启打断了更新，请重试":          "A panel restart interrupted the update. Try again",
+	"分组和标签不能超过 %d 个字符":       "Groups and tags must be at most %d characters",
+	"分组和标签不能包含控制字符":          "Groups and tags can't contain control characters",
+	"最多 %d 个标签":              "Up to %d tags",
+	"分组或标签不存在":               "The group or tag doesn't exist",
 	"项目 ID 无效":               "The project ID isn't valid",
 	"项目根目录必须是绝对路径，且不能是 /":    "The projects root must be an absolute path other than /",
 }

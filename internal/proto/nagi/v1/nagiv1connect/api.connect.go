@@ -169,6 +169,11 @@ const (
 	// NodeServiceInspectComposeDirProcedure is the fully-qualified name of the NodeService's
 	// InspectComposeDir RPC.
 	NodeServiceInspectComposeDirProcedure = "/nagi.v1.NodeService/InspectComposeDir"
+	// NodeServiceSetNodeTagsProcedure is the fully-qualified name of the NodeService's SetNodeTags RPC.
+	NodeServiceSetNodeTagsProcedure = "/nagi.v1.NodeService/SetNodeTags"
+	// NodeServiceRenameNodeTagProcedure is the fully-qualified name of the NodeService's RenameNodeTag
+	// RPC.
+	NodeServiceRenameNodeTagProcedure = "/nagi.v1.NodeService/RenameNodeTag"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -277,6 +282,12 @@ const (
 	// ProjectServiceUpdateProjectSettingsProcedure is the fully-qualified name of the ProjectService's
 	// UpdateProjectSettings RPC.
 	ProjectServiceUpdateProjectSettingsProcedure = "/nagi.v1.ProjectService/UpdateProjectSettings"
+	// ProjectServiceSetProjectGroupProcedure is the fully-qualified name of the ProjectService's
+	// SetProjectGroup RPC.
+	ProjectServiceSetProjectGroupProcedure = "/nagi.v1.ProjectService/SetProjectGroup"
+	// ProjectServiceRenameProjectGroupProcedure is the fully-qualified name of the ProjectService's
+	// RenameProjectGroup RPC.
+	ProjectServiceRenameProjectGroupProcedure = "/nagi.v1.ProjectService/RenameProjectGroup"
 	// ProjectServiceSaveSharedEnvProcedure is the fully-qualified name of the ProjectService's
 	// SaveSharedEnv RPC.
 	ProjectServiceSaveSharedEnvProcedure = "/nagi.v1.ProjectService/SaveSharedEnv"
@@ -882,6 +893,10 @@ type NodeServiceClient interface {
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
+	// 替换节点的标签（见 docs/panel.md#分组和标签）。
+	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
+	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
+	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1111,6 +1126,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeTags: connect.NewClient[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeTagsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
+			connect.WithClientOptions(opts...),
+		),
+		renameNodeTag: connect.NewClient[v1.RenameLabelRequest, v1.RenameLabelResponse](
+			httpClient,
+			baseURL+NodeServiceRenameNodeTagProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1152,6 +1179,8 @@ type nodeServiceClient struct {
 	confirmPendingHA      *connect.Client[v1.ConfirmPendingHARequest, v1.ConfirmPendingHAResponse]
 	setNodeAlertRules     *connect.Client[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse]
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
+	setNodeTags           *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
+	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -1334,6 +1363,16 @@ func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, req *connect.
 	return c.inspectComposeDir.CallUnary(ctx, req)
 }
 
+// SetNodeTags calls nagi.v1.NodeService.SetNodeTags.
+func (c *nodeServiceClient) SetNodeTags(ctx context.Context, req *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error) {
+	return c.setNodeTags.CallUnary(ctx, req)
+}
+
+// RenameNodeTag calls nagi.v1.NodeService.RenameNodeTag.
+func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, req *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return c.renameNodeTag.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1401,6 +1440,10 @@ type NodeServiceHandler interface {
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
+	// 替换节点的标签（见 docs/panel.md#分组和标签）。
+	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
+	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
+	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1626,6 +1669,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeTagsHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeTagsProcedure,
+		svc.SetNodeTags,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRenameNodeTagHandler := connect.NewUnaryHandler(
+		NodeServiceRenameNodeTagProcedure,
+		svc.RenameNodeTag,
+		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -1700,6 +1755,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeAlertRulesHandler.ServeHTTP(w, r)
 		case NodeServiceInspectComposeDirProcedure:
 			nodeServiceInspectComposeDirHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeTagsProcedure:
+			nodeServiceSetNodeTagsHandler.ServeHTTP(w, r)
+		case NodeServiceRenameNodeTagProcedure:
+			nodeServiceRenameNodeTagHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1851,6 +1910,14 @@ func (UnimplementedNodeServiceHandler) SetNodeAlertRules(context.Context, *conne
 
 func (UnimplementedNodeServiceHandler) InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.InspectComposeDir is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeTags is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeTag is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.
@@ -2779,6 +2846,10 @@ type ProjectServiceClient interface {
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
 	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
 	UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.Project], error)
+	// 把项目放进分组（group 为空表示移出，见 docs/panel.md#分组和标签）。会改变成员的访问范围，只有管理员能用。
+	SetProjectGroup(context.Context, *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error)
+	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
+	RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
 	DiscardSharedEnv(context.Context, *connect.Request[v1.ProjectRevisionRef]) (*connect.Response[v1.Project], error)
@@ -2902,6 +2973,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceUpdateProjectSettingsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("UpdateProjectSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		setProjectGroup: connect.NewClient[v1.SetProjectGroupRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetProjectGroupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetProjectGroup")),
+			connect.WithClientOptions(opts...),
+		),
+		renameProjectGroup: connect.NewClient[v1.RenameLabelRequest, v1.RenameLabelResponse](
+			httpClient,
+			baseURL+ProjectServiceRenameProjectGroupProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RenameProjectGroup")),
 			connect.WithClientOptions(opts...),
 		),
 		saveSharedEnv: connect.NewClient[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse](
@@ -3213,6 +3296,8 @@ type projectServiceClient struct {
 	createProject                *connect.Client[v1.CreateProjectRequest, v1.Project]
 	getProject                   *connect.Client[v1.ProjectRef, v1.ProjectSummary]
 	updateProjectSettings        *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
+	setProjectGroup              *connect.Client[v1.SetProjectGroupRequest, v1.Project]
+	renameProjectGroup           *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	saveSharedEnv                *connect.Client[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse]
 	discardSharedEnv             *connect.Client[v1.ProjectRevisionRef, v1.Project]
 	deleteProject                *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
@@ -3283,6 +3368,16 @@ func (c *projectServiceClient) GetProject(ctx context.Context, req *connect.Requ
 // UpdateProjectSettings calls nagi.v1.ProjectService.UpdateProjectSettings.
 func (c *projectServiceClient) UpdateProjectSettings(ctx context.Context, req *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.Project], error) {
 	return c.updateProjectSettings.CallUnary(ctx, req)
+}
+
+// SetProjectGroup calls nagi.v1.ProjectService.SetProjectGroup.
+func (c *projectServiceClient) SetProjectGroup(ctx context.Context, req *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error) {
+	return c.setProjectGroup.CallUnary(ctx, req)
+}
+
+// RenameProjectGroup calls nagi.v1.ProjectService.RenameProjectGroup.
+func (c *projectServiceClient) RenameProjectGroup(ctx context.Context, req *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return c.renameProjectGroup.CallUnary(ctx, req)
 }
 
 // SaveSharedEnv calls nagi.v1.ProjectService.SaveSharedEnv.
@@ -3543,6 +3638,10 @@ type ProjectServiceHandler interface {
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
 	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
 	UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.Project], error)
+	// 把项目放进分组（group 为空表示移出，见 docs/panel.md#分组和标签）。会改变成员的访问范围，只有管理员能用。
+	SetProjectGroup(context.Context, *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error)
+	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
+	RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
 	DiscardSharedEnv(context.Context, *connect.Request[v1.ProjectRevisionRef]) (*connect.Response[v1.Project], error)
@@ -3662,6 +3761,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceUpdateProjectSettingsProcedure,
 		svc.UpdateProjectSettings,
 		connect.WithSchema(projectServiceMethods.ByName("UpdateProjectSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSetProjectGroupHandler := connect.NewUnaryHandler(
+		ProjectServiceSetProjectGroupProcedure,
+		svc.SetProjectGroup,
+		connect.WithSchema(projectServiceMethods.ByName("SetProjectGroup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRenameProjectGroupHandler := connect.NewUnaryHandler(
+		ProjectServiceRenameProjectGroupProcedure,
+		svc.RenameProjectGroup,
+		connect.WithSchema(projectServiceMethods.ByName("RenameProjectGroup")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSaveSharedEnvHandler := connect.NewUnaryHandler(
@@ -3974,6 +4085,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceGetProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceUpdateProjectSettingsProcedure:
 			projectServiceUpdateProjectSettingsHandler.ServeHTTP(w, r)
+		case ProjectServiceSetProjectGroupProcedure:
+			projectServiceSetProjectGroupHandler.ServeHTTP(w, r)
+		case ProjectServiceRenameProjectGroupProcedure:
+			projectServiceRenameProjectGroupHandler.ServeHTTP(w, r)
 		case ProjectServiceSaveSharedEnvProcedure:
 			projectServiceSaveSharedEnvHandler.ServeHTTP(w, r)
 		case ProjectServiceDiscardSharedEnvProcedure:
@@ -4097,6 +4212,14 @@ func (UnimplementedProjectServiceHandler) GetProject(context.Context, *connect.R
 
 func (UnimplementedProjectServiceHandler) UpdateProjectSettings(context.Context, *connect.Request[v1.UpdateProjectSettingsRequest]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.UpdateProjectSettings is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetProjectGroup(context.Context, *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetProjectGroup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RenameProjectGroup is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {

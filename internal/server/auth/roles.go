@@ -31,6 +31,11 @@ var adminReads = map[string]bool{
 	"GetNodeStorage": true,
 }
 
+// adminWrites 是项目接口里只有管理员能用的修改：项目分组决定成员的访问范围（见 docs/panel.md#分组和标签）。
+var adminWrites = map[string]bool{
+	"SetProjectGroup": true, "RenameProjectGroup": true,
+}
+
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。
 var operatorReads = map[string]bool{
 	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true,
@@ -73,7 +78,7 @@ func Allowed(role, procedure string) bool {
 	if service == "nagi.v1.AuthService" || selfMethods[method] {
 		return true
 	}
-	if adminReads[method] {
+	if adminReads[method] || adminWrites[method] {
 		return false
 	}
 	if isRead(method) {

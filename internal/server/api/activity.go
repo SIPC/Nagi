@@ -108,6 +108,17 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 	}
 	// 文件操作记下动的是哪个文件，失败的也记，这样能看出有人试过什么路径。
 	detail := failure
+	// 分组和标签改成了什么（它们决定成员的访问范围）。重命名为空表示删除。
+	if failure == "" {
+		switch m := req.(type) {
+		case *nagiv1.SetProjectGroupRequest:
+			detail = m.GetGroup()
+		case *nagiv1.SetNodeTagsRequest:
+			detail = strings.Join(m.GetTags(), ", ")
+		case *nagiv1.RenameLabelRequest:
+			detail = "→ " + m.GetNewName()
+		}
+	}
 	if path := activityField(req, "path"); path != "" {
 		detail = path
 		if failure != "" {

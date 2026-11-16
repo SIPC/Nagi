@@ -284,6 +284,9 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 	if p.RebuiltAt > 0 {
 		proj.RebuiltAt = timestamppb.New(time.Unix(p.RebuiltAt, 0))
 	}
+	if proj.Group, err = s.Q.ProjectGroup(ctx, p.ID); err != nil {
+		return nil, err
+	}
 	if d, ok, err := s.sharedEnvDraft(p); err != nil {
 		return nil, err
 	} else if ok {

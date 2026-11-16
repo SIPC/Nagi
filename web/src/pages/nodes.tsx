@@ -13,6 +13,7 @@ import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
+import { EditNodeTags, ManageLabels, TagChip, TagFilter, tagsOf } from "@/components/labels";
 import {
   Alert,
   Badge,
@@ -261,12 +262,26 @@ async function approve(n: Node) {
 
 export type NodesView = "cards" | MapLayer;
 
-export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesView; onView: (v: NodesView) => void; openAdd?: boolean; onAddOpened?: () => void }) {
+export function NodesPage({
+  view,
+  onView,
+  tags: tagFilter,
+  onTags,
+  openAdd,
+  onAddOpened,
+}: {
+  view: NodesView;
+  onView: (v: NodesView) => void;
+  tags: string[];
+  onTags: (v: string[]) => void;
+  openAdd?: boolean;
+  onAddOpened?: () => void;
+}) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
   const { isAdmin } = useRole();
   const status = useUpdateStatus(isAdmin);
-  const [dialog, setDialog] = useState<"add" | "handover" | null>(openAdd && isAdmin ? "add" : null);
+  const [dialog, setDialog] = useState<"add" | "handover" | "tags" | null>(openAdd && isAdmin ? "add" : null);
   useEffect(() => {
     if (openAdd) onAddOpened?.();
   }, [openAdd, onAddOpened]);
@@ -300,12 +315,19 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
       setStarting(false);
     }
   };
+  const tags = tagsOf(list);
+  // 筛选里已经没有的标签（例如被删除）不算。
+  const activeTags = tagFilter.filter((x) => tags.some((tag) => tag.name === x));
+  const shown = activeTags.length > 0 ? list.filter((n) => n.tags.some((x) => activeTags.includes(x))) : list;
   const cards = (
-    <NodeList>
-      {list.map((n) => (
-        <NodeRow key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
-      ))}
-    </NodeList>
+    <div className="grid gap-4">
+      {tags.length > 0 && <TagFilter tags={tags} value={activeTags} onChange={onTags} />}
+      <NodeList>
+        {shown.map((n) => (
+          <NodeRow key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
+        ))}
+      </NodeList>
+    </div>
   );
 
   return (
@@ -344,7 +366,14 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
               <Plus />
               {t.nodes.addNode}
             </Button>
-            {list.length > 0 && <Menu items={[{ label: t.nodes.handover, onSelect: () => setDialog("handover") }]} />}
+            {list.length > 0 && (
+              <Menu
+                items={[
+                  ...(isAdmin && tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setDialog("tags") }] : []),
+                  { label: t.nodes.handover, onSelect: () => setDialog("handover") },
+                ]}
+              />
+            )}
           </>
         }
       />
@@ -382,6 +411,9 @@ export function NodesPage({ view, onView, openAdd, onAddOpened }: { view: NodesV
       </AutoHeight>
       <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title={t.nodes.addNode} className="max-w-[520px]">
         <AddNode onClose={() => setDialog(null)} />
+      </Dialog>
+      <Dialog open={dialog === "tags"} onClose={() => setDialog(null)} title={t.labels.manageTags}>
+        <ManageLabels kind="tag" labels={tags} />
       </Dialog>
       <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} description={t.nodes.handoverDescription} className="max-w-[520px]">
         <HandOver nodes={list} onClose={() => setDialog(null)} />
@@ -435,7 +467,17 @@ function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: 
             </span>
           )}
         </div>
-        <div className="truncate font-mono text-[13px] leading-5 text-muted-foreground">{n.address || n.id}</div>
+        {/* 标签跟在地址后面，放不下的整个折到下一行藏起来，不截断半个。 */}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="max-w-full shrink-0 truncate font-mono text-[13px] leading-5 text-muted-foreground">{n.address || n.id}</span>
+          {n.tags.length > 0 && (
+            <span className="flex h-5 min-w-0 flex-1 flex-wrap gap-1 overflow-hidden" title={n.tags.join(", ")} aria-label={`${t.labels.tags}: ${n.tags.join(", ")}`}>
+              {n.tags.map((x) => (
+                <TagChip key={x} name={x} />
+              ))}
+            </span>
+          )}
+        </div>
         <div className="text-[13px] leading-5 text-muted-foreground tabular-nums lg:hidden">
           {/* 和 Row 在手机上合并灰色信息的写法相同，用 · 隔开。 */}
           {[...(usage ?? []).map((u) => `${u.label} ${u.label === "CPU" ? u.value : u.percent === undefined ? "—" : fmtCpuShort(u.percent)}`), t.nodes.containers(n.containers)].join(" · ")}
@@ -487,6 +529,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   const panelVersion = usePanelVersion();
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
+  const [editingTags, setEditingTags] = useState(false);
   if (nodes.isPending) return <RowsSkeleton />;
   if (nodes.error) return <QueryError error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />;
   const n = nodes.data.nodes.find((x) => x.id === nodeId);
@@ -550,12 +593,20 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
             {!n.online && !n.pending && <Roll value={lastSeenText(n)} />}
+            {n.tags.length > 0 && (
+              <span className="flex flex-wrap gap-1" aria-label={`${t.labels.tags}: ${n.tags.join(", ")}`}>
+                {n.tags.map((x) => (
+                  <TagChip key={x} name={x} />
+                ))}
+              </span>
+            )}
           </>
         }
         actions={
           <Menu
             items={[
               { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
+              ...(canSeeUpgrades ? [{ label: t.labels.editTags, onSelect: () => setEditingTags(true) }] : []),
               { label: t.nodes.removeNode, onSelect: remove, danger: true },
             ]}
           />
@@ -563,6 +614,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       />
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
         <RenameNode n={n} onDone={() => setRenaming(false)} />
+      </Dialog>
+      <Dialog open={editingTags} onClose={() => setEditingTags(false)} title={t.labels.editTags} description={t.labels.editTagsDescription}>
+        <EditNodeTags node={n} allTags={tagsOf(nodes.data.nodes).map((x) => x.name)} onDone={() => setEditingTags(false)} />
       </Dialog>
       {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending) && (
         <div className="mb-6 grid gap-2">

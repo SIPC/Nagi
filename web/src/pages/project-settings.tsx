@@ -16,6 +16,7 @@ import { EnvEditor } from "@/components/env-editor";
 import { AlertRulesForm, containerRules } from "@/components/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
+import { GroupSelect, groupsOf } from "@/components/labels";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
@@ -36,6 +37,11 @@ export function SettingsTab({ project }: { project: Project }) {
 function GeneralSettings({ project }: { project: Project }) {
   const m = t.projectSettings.general;
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
+  // 分组决定成员的访问范围，只有管理员能改（见 docs/panel.md#分组和标签）。
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: isAdmin });
+  const groups = groupsOf(projects.data?.projects).map((g) => g.name);
+  const [group, setGroup] = useState(project.group);
   const s = project.settings;
   const [name, setName] = useState(project.name);
   const [network, setNetwork] = useState(project.networkName);
@@ -50,11 +56,9 @@ function GeneralSettings({ project }: { project: Project }) {
   const networkError = checked && !network.trim() ? m.networkNameRequired : "";
   const limitError = checked ? numberError(limit) : "";
   // 和已保存的设置比较（不是和第一次渲染比）：保存后项目重新加载，就不再算未保存。
-  useUnsaved(
-    name !== project.name ||
-      network !== project.networkName ||
-      limit !== (s?.snapshotLimit ? String(s.snapshotLimit) : ""),
-  );
+  const settingsChanged = name !== project.name || network !== project.networkName || limit !== (s?.snapshotLimit ? String(s.snapshotLimit) : "");
+  const groupChanged = group.trim() !== project.group;
+  useUnsaved(settingsChanged || groupChanged);
 
   const save = async () => {
     setChecked(true);
@@ -65,17 +69,20 @@ function GeneralSettings({ project }: { project: Project }) {
     setBusy(true);
     setError("");
     try {
-      await projectClient.updateProjectSettings({
-        projectId: project.id,
-        baseRevision: project.revision,
-        name,
-        networkName: network,
-        settings: {
-          internalPorts: s?.internalPorts,
-          snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
-          snapshotLimit: Number(limit.trim() || 0),
-        },
-      });
+      if (settingsChanged) {
+        await projectClient.updateProjectSettings({
+          projectId: project.id,
+          baseRevision: project.revision,
+          name,
+          networkName: network,
+          settings: {
+            internalPorts: s?.internalPorts,
+            snapshotIntervalMinutes: s?.snapshotIntervalMinutes ?? 0,
+            snapshotLimit: Number(limit.trim() || 0),
+          },
+        });
+      }
+      if (isAdmin && groupChanged) await projectClient.setProjectGroup({ projectId: project.id, group: group.trim() });
       toast.success(t.common.feedback.saved);
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -105,6 +112,11 @@ function GeneralSettings({ project }: { project: Project }) {
             <Field label={m.snapshotLimit} htmlFor="p-limit" help={m.snapshotLimitHint} error={limitError}>
               <Input id="p-limit" value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" placeholder={String(defaultSnapshotLimit)} />
             </Field>
+            {isAdmin && (
+              <Field label={t.labels.group} htmlFor="p-group" help={t.labels.groupHint}>
+                <GroupSelect key={project.group} id="p-group" value={group} groups={groups} onChange={setGroup} />
+              </Field>
+            )}
           </FormRow>
           {error && <Alert>{error}</Alert>}
           <FormActions>

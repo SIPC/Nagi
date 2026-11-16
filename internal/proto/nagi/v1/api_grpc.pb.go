@@ -615,6 +615,8 @@ const (
 	NodeService_ConfirmPendingHA_FullMethodName      = "/nagi.v1.NodeService/ConfirmPendingHA"
 	NodeService_SetNodeAlertRules_FullMethodName     = "/nagi.v1.NodeService/SetNodeAlertRules"
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
+	NodeService_SetNodeTags_FullMethodName           = "/nagi.v1.NodeService/SetNodeTags"
+	NodeService_RenameNodeTag_FullMethodName         = "/nagi.v1.NodeService/RenameNodeTag"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -686,6 +688,10 @@ type NodeServiceClient interface {
 	SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error)
+	// 替换节点的标签（见 docs/panel.md#分组和标签）。
+	SetNodeTags(ctx context.Context, in *SetNodeTagsRequest, opts ...grpc.CallOption) (*SetNodeTagsResponse, error)
+	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
+	RenameNodeTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -1065,6 +1071,26 @@ func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, in *NodeFileR
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeTags(ctx context.Context, in *SetNodeTagsRequest, opts ...grpc.CallOption) (*SetNodeTagsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeTagsResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameLabelResponse)
+	err := c.cc.Invoke(ctx, NodeService_RenameNodeTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -1134,6 +1160,10 @@ type NodeServiceServer interface {
 	SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error)
+	// 替换节点的标签（见 docs/panel.md#分组和标签）。
+	SetNodeTags(context.Context, *SetNodeTagsRequest) (*SetNodeTagsResponse, error)
+	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
+	RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -1251,6 +1281,12 @@ func (UnimplementedNodeServiceServer) SetNodeAlertRules(context.Context, *SetNod
 }
 func (UnimplementedNodeServiceServer) InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeTags(context.Context, *SetNodeTagsRequest) (*SetNodeTagsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeTags not implemented")
+}
+func (UnimplementedNodeServiceServer) RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameNodeTag not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -1914,6 +1950,42 @@ func _NodeService_InspectComposeDir_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_SetNodeTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeTags(ctx, req.(*SetNodeTagsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RenameNodeTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RenameNodeTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RenameNodeTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RenameNodeTag(ctx, req.(*RenameLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2060,6 +2132,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InspectComposeDir",
 			Handler:    _NodeService_InspectComposeDir_Handler,
+		},
+		{
+			MethodName: "SetNodeTags",
+			Handler:    _NodeService_SetNodeTags_Handler,
+		},
+		{
+			MethodName: "RenameNodeTag",
+			Handler:    _NodeService_RenameNodeTag_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -3399,6 +3479,8 @@ const (
 	ProjectService_CreateProject_FullMethodName                = "/nagi.v1.ProjectService/CreateProject"
 	ProjectService_GetProject_FullMethodName                   = "/nagi.v1.ProjectService/GetProject"
 	ProjectService_UpdateProjectSettings_FullMethodName        = "/nagi.v1.ProjectService/UpdateProjectSettings"
+	ProjectService_SetProjectGroup_FullMethodName              = "/nagi.v1.ProjectService/SetProjectGroup"
+	ProjectService_RenameProjectGroup_FullMethodName           = "/nagi.v1.ProjectService/RenameProjectGroup"
 	ProjectService_SaveSharedEnv_FullMethodName                = "/nagi.v1.ProjectService/SaveSharedEnv"
 	ProjectService_DiscardSharedEnv_FullMethodName             = "/nagi.v1.ProjectService/DiscardSharedEnv"
 	ProjectService_DeleteProject_FullMethodName                = "/nagi.v1.ProjectService/DeleteProject"
@@ -3461,6 +3543,10 @@ type ProjectServiceClient interface {
 	GetProject(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ProjectSummary, error)
 	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
 	UpdateProjectSettings(ctx context.Context, in *UpdateProjectSettingsRequest, opts ...grpc.CallOption) (*Project, error)
+	// 把项目放进分组（group 为空表示移出，见 docs/panel.md#分组和标签）。会改变成员的访问范围，只有管理员能用。
+	SetProjectGroup(ctx context.Context, in *SetProjectGroupRequest, opts ...grpc.CallOption) (*Project, error)
+	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
+	RenameProjectGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error)
 	DiscardSharedEnv(ctx context.Context, in *ProjectRevisionRef, opts ...grpc.CallOption) (*Project, error)
@@ -3593,6 +3679,26 @@ func (c *projectServiceClient) UpdateProjectSettings(ctx context.Context, in *Up
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_UpdateProjectSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SetProjectGroup(ctx context.Context, in *SetProjectGroupRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetProjectGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RenameProjectGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameLabelResponse)
+	err := c.cc.Invoke(ctx, ProjectService_RenameProjectGroup_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4199,6 +4305,10 @@ type ProjectServiceServer interface {
 	GetProject(context.Context, *ProjectRef) (*ProjectSummary, error)
 	// 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
 	UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*Project, error)
+	// 把项目放进分组（group 为空表示移出，见 docs/panel.md#分组和标签）。会改变成员的访问范围，只有管理员能用。
+	SetProjectGroup(context.Context, *SetProjectGroupRequest) (*Project, error)
+	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
+	RenameProjectGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error)
 	DiscardSharedEnv(context.Context, *ProjectRevisionRef) (*Project, error)
@@ -4308,6 +4418,12 @@ func (UnimplementedProjectServiceServer) GetProject(context.Context, *ProjectRef
 }
 func (UnimplementedProjectServiceServer) UpdateProjectSettings(context.Context, *UpdateProjectSettingsRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateProjectSettings not implemented")
+}
+func (UnimplementedProjectServiceServer) SetProjectGroup(context.Context, *SetProjectGroupRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectGroup not implemented")
+}
+func (UnimplementedProjectServiceServer) RenameProjectGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameProjectGroup not implemented")
 }
 func (UnimplementedProjectServiceServer) SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveSharedEnv not implemented")
@@ -4548,6 +4664,42 @@ func _ProjectService_UpdateProjectSettings_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).UpdateProjectSettings(ctx, req.(*UpdateProjectSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_SetProjectGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProjectGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetProjectGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetProjectGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetProjectGroup(ctx, req.(*SetProjectGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RenameProjectGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).RenameProjectGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_RenameProjectGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).RenameProjectGroup(ctx, req.(*RenameLabelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5404,6 +5556,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateProjectSettings",
 			Handler:    _ProjectService_UpdateProjectSettings_Handler,
+		},
+		{
+			MethodName: "SetProjectGroup",
+			Handler:    _ProjectService_SetProjectGroup_Handler,
+		},
+		{
+			MethodName: "RenameProjectGroup",
+			Handler:    _ProjectService_RenameProjectGroup_Handler,
 		},
 		{
 			MethodName: "SaveSharedEnv",

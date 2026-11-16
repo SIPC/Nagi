@@ -7,6 +7,7 @@ import access from "./access";
 import account from "./account";
 import activity from "./activity";
 import members from "./members";
+import labels from "./labels";
 import alerts from "./alerts";
 import invite from "./invite";
 import mesh from "./mesh";
@@ -38,6 +39,7 @@ export default {
   account,
   activity,
   members,
+  labels,
   alerts,
   invite,
   mesh,

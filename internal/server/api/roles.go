@@ -124,17 +124,30 @@ func (s *settingsService) userScope(ctx context.Context, u store.User) (*nagiv1.
 		if sc.ProjectIds, err = s.Q.ListUserProjects(ctx, u.ID); err != nil {
 			return nil, err
 		}
+		if sc.ProjectGroups, err = s.Q.ListUserProjectGroups(ctx, u.ID); err != nil {
+			return nil, err
+		}
 	}
 	if !sc.AllNodes {
 		if sc.NodeIds, err = s.Q.ListUserNodes(ctx, u.ID); err != nil {
+			return nil, err
+		}
+		if sc.NodeTags, err = s.Q.ListUserNodeTags(ctx, u.ID); err != nil {
 			return nil, err
 		}
 	}
 	return sc, nil
 }
 
-// checkScope 检查指定的项目、节点都存在。
+// checkScope 检查指定的项目、节点都存在，并整理分组和标签。
 func (s *settingsService) checkScope(ctx context.Context, sc *nagiv1.UserScope) error {
+	var err error
+	if sc.ProjectGroups, err = cleanLabels(sc.GetProjectGroups(), maxScopeList); err != nil {
+		return err
+	}
+	if sc.NodeTags, err = cleanLabels(sc.GetNodeTags(), maxScopeList); err != nil {
+		return err
+	}
 	if !sc.GetAllProjects() {
 		for _, id := range sc.GetProjectIds() {
 			if _, err := s.Q.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
@@ -171,6 +184,19 @@ func (s *settingsService) saveScope(ctx context.Context, id int64, sc *nagiv1.Us
 		return err
 	}
 	if err := s.Q.ClearUserNodes(ctx, id); err != nil {
+		return err
+	}
+	var groups, tags []string
+	if !sc.GetAllProjects() {
+		groups = sc.GetProjectGroups()
+	}
+	if !sc.GetAllNodes() {
+		tags = sc.GetNodeTags()
+	}
+	if err := s.Q.SetUserProjectGroups(ctx, id, groups); err != nil {
+		return err
+	}
+	if err := s.Q.SetUserNodeTags(ctx, id, tags); err != nil {
 		return err
 	}
 	if !sc.GetAllProjects() {

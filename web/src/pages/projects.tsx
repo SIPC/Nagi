@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { CircleArrowUp, Plus } from "lucide-react";
+import { ChevronRight, CircleArrowUp, Plus } from "lucide-react";
 import { authClient, errorMessage, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
@@ -22,6 +22,7 @@ import {
   Field,
   HelpTip,
   Input,
+  Menu,
   Notice,
   QueryError,
   Roll,
@@ -35,6 +36,7 @@ import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { checkName } from "@/lib/config";
 import { useStandbys } from "@/pages/standby";
 import { useRole } from "@/components/role";
+import { GroupSelect, groupsOf, ManageLabels } from "@/components/labels";
 
 // Attention：需要处理的事聚合成一行：数量、名单和「查看」，点开后逐项显示（说明和操作）。
 // 顺序固定：节点离线、备用面板未连接、两步验证、主密钥。后两项可以「不再提醒」（只记在这个浏览器里）。
@@ -218,6 +220,47 @@ function CardsSkeleton() {
   );
 }
 
+// 收起的分组记在这个浏览器里。
+const collapsedKey = "nagi.projects.collapsed";
+
+function useCollapsed() {
+  const [collapsed, setCollapsed] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(collapsedKey) ?? "[]");
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggle = (key: string) => {
+    const next = collapsed.includes(key) ? collapsed.filter((k) => k !== key) : [...collapsed, key];
+    setCollapsed(next);
+    try {
+      localStorage.setItem(collapsedKey, JSON.stringify(next));
+    } catch {
+      // 存不了就只在这次有效。
+    }
+  };
+  return { collapsed, toggle };
+}
+
+// GroupHeader：分组的标题行，点击展开或收起。参考 Grafana 的文件夹行：箭头、名称、数量。
+function GroupHeader({ name, count, open, onToggle }: { name: string; count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
+      className="-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring"
+      onClick={onToggle}
+    >
+      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+      <span className="truncate font-medium">{name}</span>
+      <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{count}</span>
+    </button>
+  );
+}
+
 export function ProjectsPage({ creating }: { creating?: boolean }) {
   const projects = useQuery({
     queryKey: ["projects"],
@@ -229,7 +272,9 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const { isAdmin } = useRole();
   // 备用面板在设置里，只有管理员能处理。
   const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
-  const search = useSearch({ strict: false }) as { q?: string; sort?: "name" };
+  const search = useSearch({ strict: false }) as { q?: string; sort?: "name"; group?: string; ungrouped?: true };
+  const { collapsed, toggle } = useCollapsed();
+  const [managing, setManaging] = useState(false);
   const navigateList = useNavigate();
   const sort = search.sort ?? "created";
   // 输入框用本地状态，再同步到地址：直接绑地址会打断中文输入法。
@@ -239,9 +284,13 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
   const all = projects.data?.projects ?? [];
+  const groups = groupsOf(all);
+  // 筛选的分组已经没有了（例如被删除）时，当作全部。
+  const groupFilter = search.ungrouped ? "" : search.group && groups.some((g) => g.name === search.group) ? search.group : undefined;
   const q = query.trim().toLowerCase();
   const shownProjects = all
-    .filter(({ project: p }) => !q || [p?.name, p?.networkName, ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
+    .filter(({ project: p }) => groupFilter === undefined || (p?.group ?? "") === groupFilter)
+    .filter(({ project: p }) => !q || [p?.name, p?.networkName, p?.group, ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
     .slice()
     .sort((a, b) => (sort === "name" ? (a.project?.name ?? "").localeCompare(b.project?.name ?? "") : Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)));
 
@@ -253,10 +302,34 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
     </ButtonLink>
   );
 
+  const filterValue = groupFilter === undefined ? "*" : groupFilter === "" ? "-" : `g:${groupFilter}`;
+  // 有分组、没有筛选某个分组时按分组分段显示，未分组的放最后。
+  const sections =
+    groups.length > 0 && groupFilter === undefined
+      ? [
+          ...groups.map((g) => ({ key: `g:${g.name}`, name: g.name, items: shownProjects.filter((s) => s.project?.group === g.name) })),
+          { key: "-", name: t.labels.ungrouped, items: shownProjects.filter((s) => !s.project?.group) },
+        ].filter((s) => s.items.length > 0)
+      : undefined;
+  const cards = (list: ProjectSummary[]) => <CardGrid>{list.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}</CardGrid>;
+
   return (
     <>
-      <PageHeader className="max-md:flex-nowrap max-md:items-center max-md:[&_p]:hidden" title={t.projects.title} description={t.projects.description} actions={newButton} />
-      {creating && <NewProjectDialog />}
+      <PageHeader
+        className="max-md:flex-nowrap max-md:items-center max-md:[&_p]:hidden"
+        title={t.projects.title}
+        description={t.projects.description}
+        actions={
+          <>
+            {newButton}
+            {isAdmin && groups.length > 0 && <Menu items={[{ label: t.labels.manageGroups, onSelect: () => setManaging(true) }]} />}
+          </>
+        }
+      />
+      {creating && <NewProjectDialog groups={groups.map((g) => g.name)} initialGroup={groupFilter} />}
+      <Dialog open={managing} onClose={() => setManaging(false)} title={t.labels.manageGroups}>
+        <ManageLabels kind="group" labels={groups} />
+      </Dialog>
       <div className="grid grid-cols-1 gap-8 max-md:gap-6">
         <Attention offlineNodes={offlineNodes} offlineStandbys={offlineStandbys} />
         {projects.isPending ? (
@@ -269,20 +342,52 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
           </Empty>
         ) : (
           <div className="grid gap-4">
-            {/* 手机上筛选框和排序同一行，筛选框占剩下的宽度。 */}
-            <div className="flex items-center justify-between gap-2">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.label} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
+            {/* 手机上筛选框和排序同一行，筛选框占剩下的宽度；有分组筛选时放不下，筛选框单独一行，两个下拉平分下一行。 */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.label} autoComplete="off" className={cn("max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1", groups.length > 0 && "max-md:basis-full")} />
+              <div className={cn("flex min-w-0 shrink-0 items-center gap-2", groups.length > 0 && "max-md:w-full max-md:*:flex-1")}>
+              {groups.length > 0 && (
+                <Select
+                  value={filterValue}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    navigateList({ to: "/projects", search: (s) => ({ ...s, group: v.startsWith("g:") ? v.slice(2) : undefined, ungrouped: v === "-" ? true : undefined }), replace: true });
+                  }}
+                  aria-label={t.labels.group}
+                  className="w-auto max-w-40 shrink-0"
+                >
+                  <option value="*">{t.labels.allGroups}</option>
+                  {groups.map((g) => (
+                    <option key={g.name} value={`g:${g.name}`}>
+                      {g.name}
+                    </option>
+                  ))}
+                  <option value="-">{t.labels.ungrouped}</option>
+                </Select>
+              )}
               <Select value={sort} onChange={(e) => navigateList({ to: "/projects", search: (s) => ({ ...s, sort: e.target.value === "name" ? "name" : undefined }), replace: true })} aria-label={t.projects.filter.sort} className="w-auto shrink-0">
                 <option value="created">{t.projects.filter.byCreated}</option>
                 <option value="name">{t.projects.filter.byName}</option>
               </Select>
+              </div>
             </div>
             {shownProjects.length === 0 ? (
               <EmptyRow>{t.projects.filter.empty}</EmptyRow>
+            ) : sections ? (
+              // 分组之间比组内（标题到卡片 8）宽，看得出哪些卡片属于同一组。
+              <div className="grid gap-6">
+                {sections.map((s) => {
+                  const open = !collapsed.includes(s.key);
+                  return (
+                    <section key={s.key} className="grid gap-2">
+                      <GroupHeader name={s.name} count={s.items.length} open={open} onToggle={() => toggle(s.key)} />
+                      {open && cards(s.items)}
+                    </section>
+                  );
+                })}
+              </div>
             ) : (
-              <CardGrid>
-                {shownProjects.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}
-              </CardGrid>
+              cards(shownProjects)
             )}
           </div>
         )}
@@ -373,14 +478,21 @@ export function NewProjectPage() {
 }
 
 // NewProjectDialog：新建项目只填名称，网络名由名称生成，要改时点「修改」。创建后进入项目概览，第一个容器也要点添加。
-function NewProjectDialog() {
+function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialGroup?: string }) {
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const [name, setName] = useState("");
+  // 分组只有管理员能设；已经有分组时才显示，第一个分组在项目设置里建。
+  const [group, setGroup] = useState(initialGroup ?? "");
   const [network, setNetwork] = useState("");
   const [editNetwork, setEditNetwork] = useState(false);
   const generated = slugName(name, "");
   const create = useMutation({
-    mutationFn: () => projectClient.createProject({ name, networkName: network.trim() || generated }),
+    mutationFn: async () => {
+      const p = await projectClient.createProject({ name, networkName: network.trim() || generated });
+      if (isAdmin && group.trim()) await projectClient.setProjectGroup({ projectId: p.id, group: group.trim() });
+      return p;
+    },
     onSuccess: (p) => navigate({ to: "/projects/$projectId", params: { projectId: p.id } }),
   });
   const close = () => navigate({ to: "/projects" });
@@ -419,6 +531,11 @@ function NewProjectDialog() {
               {t.projects.create.editNetwork}
             </button>
           </div>
+        )}
+        {isAdmin && groups.length > 0 && (
+          <Field label={t.labels.group} htmlFor="new-project-group">
+            <GroupSelect id="new-project-group" value={group} groups={groups} onChange={setGroup} />
+          </Field>
         )}
         {create.error && <Alert>{errorMessage(create.error)}</Alert>}
         <DialogActions>

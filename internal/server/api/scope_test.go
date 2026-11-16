@@ -204,3 +204,85 @@ func TestScopeCleanup(t *testing.T) {
 		t.Errorf("节点移除后还在范围里：%v", ids)
 	}
 }
+
+// 访问范围里的分组和标签：分组里的项目、带标签的节点都在范围内；重命名跟着改，删除后不再算。
+func TestScopeGroupsAndTags(t *testing.T) {
+	a, q := scopeTestAPI(t,
+		`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p3', 'three', 'three', 1, 0, x'')`,
+		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n3', 'c', 0, x'03')`,
+	)
+	ctx := context.Background()
+	u := auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true}
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(q.SetProjectGroup(ctx, "p2", "web"))
+	must(q.SetProjectGroup(ctx, "p3", "db"))
+	must(q.SetNodeTags(ctx, "n2", []string{"hk", "edge"}))
+	must(q.SetNodeTags(ctx, "n3", []string{"us"}))
+	must(q.SetUserProjectGroups(ctx, 2, []string{"web"}))
+	must(q.SetUserNodeTags(ctx, 2, []string{"edge"}))
+
+	check := func(projects, nodes map[string]bool) {
+		t.Helper()
+		x, err := a.loadAccess(ctx, u)
+		must(err)
+		for id, want := range projects {
+			if x.project(id) != want {
+				t.Errorf("项目 %s 在范围内：%v，想要 %v", id, x.project(id), want)
+			}
+		}
+		for id, want := range nodes {
+			if x.node(id) != want {
+				t.Errorf("节点 %s 在范围内：%v，想要 %v", id, x.node(id), want)
+			}
+		}
+	}
+	check(map[string]bool{"p1": true, "p2": true, "p3": false}, map[string]bool{"n1": true, "n2": true, "n3": false})
+
+	// 以后放进分组、打上标签的也算。
+	must(q.SetProjectGroup(ctx, "p3", "web"))
+	must(q.SetNodeTags(ctx, "n3", []string{"edge"}))
+	check(map[string]bool{"p3": true}, map[string]bool{"n3": true})
+
+	// 重命名：范围跟着改，合并到已有的名称也一样。
+	must(q.RenameProjectGroup(ctx, "web", "apps"))
+	must(q.RenameNodeTag(ctx, "edge", "hk"))
+	check(map[string]bool{"p2": true, "p3": true}, map[string]bool{"n2": true, "n3": true})
+	if g, _ := q.ListUserProjectGroups(ctx, 2); len(g) != 1 || g[0] != "apps" {
+		t.Errorf("重命名后范围里的分组：%v", g)
+	}
+	if tags, _ := q.NodeTags(ctx, "n2"); len(tags) != 1 || tags[0] != "hk" {
+		t.Errorf("合并后节点的标签：%v", tags)
+	}
+	// 同名重命名不改变任何东西。
+	must(q.RenameNodeTag(ctx, "hk", "hk"))
+	check(nil, map[string]bool{"n2": true})
+
+	// 删除：项目变成未分组，节点去掉标签，都不在范围内了。
+	must(q.RenameProjectGroup(ctx, "apps", ""))
+	must(q.RenameNodeTag(ctx, "hk", ""))
+	check(map[string]bool{"p1": true, "p2": false, "p3": false}, map[string]bool{"n1": true, "n2": false, "n3": false})
+	if g, _ := q.ProjectGroup(ctx, "p2"); g != "" {
+		t.Errorf("删除分组后项目还在分组 %q 里", g)
+	}
+	if g, _ := q.ListUserProjectGroups(ctx, 2); len(g) != 0 {
+		t.Errorf("删除分组后还在范围里：%v", g)
+	}
+}
+
+// 分组只有管理员能改：它决定成员的访问范围。
+func TestGroupAdminOnly(t *testing.T) {
+	for _, p := range []string{"/nagi.v1.ProjectService/SetProjectGroup", "/nagi.v1.ProjectService/RenameProjectGroup",
+		"/nagi.v1.NodeService/SetNodeTags", "/nagi.v1.NodeService/RenameNodeTag"} {
+		if auth.Allowed(auth.RoleOperator, p) || auth.Allowed(auth.RoleViewer, p) {
+			t.Errorf("%s 只有管理员能用", p)
+		}
+		if !auth.Allowed(auth.RoleAdmin, p) {
+			t.Errorf("%s 管理员要能用", p)
+		}
+	}
+}

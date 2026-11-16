@@ -158,6 +158,52 @@ func toolDiscardSharedEnv(c *call, in ProjectRevisionArgs) (any, error) {
 	return map[string]string{"note": "draft discarded"}, nil
 }
 
+// ---- 分组和标签（见 docs/panel.md#分组和标签） ----
+
+type ProjectGroupArgs struct {
+	ProjectArg
+	Group string `json:"group" jsonschema:"group name, up to 32 characters; empty takes the project out of its group"`
+}
+
+func toolSetProjectGroup(c *call, in ProjectGroupArgs) (any, error) {
+	s, err := c.project(in.Project)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.h.clients.projects.SetProjectGroup(c.ctx, connect.NewRequest(&nagiv1.SetProjectGroupRequest{ProjectId: s.GetProject().GetId(), Group: in.Group}))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"project": res.Msg.GetName(), "group": res.Msg.GetGroup()}, nil
+}
+
+type NodeTagsArgs struct {
+	Node string   `json:"node" jsonschema:"node name or ID"`
+	Tags []string `json:"tags" jsonschema:"replaces the node's tags; empty removes them all"`
+}
+
+func toolSetNodeTags(c *call, in NodeTagsArgs) (any, error) {
+	nodes, err := c.nodes()
+	if err != nil {
+		return nil, err
+	}
+	n, err := findNode(nodes, in.Node)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.h.clients.nodes.SetNodeTags(c.ctx, connect.NewRequest(&nagiv1.SetNodeTagsRequest{NodeId: n.GetId(), Tags: in.Tags})); err != nil {
+		return nil, err
+	}
+	nodes, err = c.nodes()
+	if err != nil {
+		return nil, err
+	}
+	if n, err = findNode(nodes, n.GetId()); err != nil {
+		return nil, err
+	}
+	return map[string]any{"node": n.GetName(), "tags": n.GetTags()}, nil
+}
+
 // ---- 显示名称 ----
 
 type DisplayNameArgs struct {

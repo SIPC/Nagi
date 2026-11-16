@@ -214,7 +214,28 @@ service NodeService {
   rpc SetNodeAlertRules(SetNodeAlertRulesRequest) returns (SetNodeAlertRulesResponse);
   // 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
   rpc InspectComposeDir(NodeFileRef) returns (ComposeDirPreview);
+  // 替换节点的标签（见 docs/panel.md#分组和标签）。
+  rpc SetNodeTags(SetNodeTagsRequest) returns (SetNodeTagsResponse);
+  // 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
+  rpc RenameNodeTag(RenameLabelRequest) returns (RenameLabelResponse);
 }
+
+message SetNodeTagsRequest {
+  string node_id = 1;
+  // 每个最多 32 个字符，最多 10 个。
+  repeated string tags = 2;
+}
+
+message SetNodeTagsResponse {}
+
+// RenameLabelRequest 重命名项目分组或节点标签。new_name 已存在时合并；为空表示删除：项目变成未分组，节点去掉这个标签，
+// 成员的访问范围里也去掉。
+message RenameLabelRequest {
+  string name = 1;
+  string new_name = 2;
+}
+
+message RenameLabelResponse {}
 
 message NodeRef {
   string node_id = 1;
@@ -594,6 +615,8 @@ message Node {
   repeated StaleProject stale_projects = 12;
   // 节点的告警规则（内存、磁盘、离线、证书）。没有设置的阈值用默认值。
   AlertRules alert_rules = 13;
+  // 标签，按名称排序（见 docs/panel.md#分组和标签）。
+  repeated string tags = 14;
 }
 
 message SetNodeAlertRulesRequest {
@@ -654,6 +677,10 @@ service ProjectService {
   rpc GetProject(ProjectRef) returns (ProjectSummary);
   // 修改项目设置：名称、网络名、快照间隔、内部端口，立即生效。共享变量不在这里改。
   rpc UpdateProjectSettings(UpdateProjectSettingsRequest) returns (Project);
+  // 把项目放进分组（group 为空表示移出，见 docs/panel.md#分组和标签）。会改变成员的访问范围，只有管理员能用。
+  rpc SetProjectGroup(SetProjectGroupRequest) returns (Project);
+  // 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
+  rpc RenameProjectGroup(RenameLabelRequest) returns (RenameLabelResponse);
   // 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
   rpc SaveSharedEnv(SaveSharedEnvRequest) returns (SaveSharedEnvResponse);
   rpc DiscardSharedEnv(ProjectRevisionRef) returns (Project);
@@ -869,6 +896,9 @@ message UserScope {
   // all_projects、all_nodes 为 false 时才有用。
   repeated string project_ids = 3;
   repeated string node_ids = 4;
+  // 分组和标签（见 docs/panel.md#分组和标签）：分组里的项目、带其中任一标签的节点都在范围内，以后加进来的也算。
+  repeated string project_groups = 5;
+  repeated string node_tags = 6;
 }
 
 message ListUsersRequest {}
@@ -1075,6 +1105,12 @@ message UpdateProjectSettingsRequest {
   string network_name = 4;
   // shared_env 在这里不生效（共享变量走草稿）。
   ProjectSettings settings = 5;
+}
+
+message SetProjectGroupRequest {
+  string project_id = 1;
+  // 最多 32 个字符，为空表示移出分组。
+  string group = 2;
 }
 
 message SaveSharedEnvRequest {

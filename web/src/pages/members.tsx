@@ -11,6 +11,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { AccessTokenList } from "@/pages/tokens";
 import { formatClock, formatDateTime, formatMonthDay } from "@/lib/utils";
 import { t } from "@/i18n";
+import { groupsOf, tagsOf, type Label } from "@/components/labels";
 
 const roles = ["admin", "operator", "viewer"] as const;
 
@@ -31,11 +32,13 @@ const roleOptions = roles.map((r) => (
 ));
 
 // 访问范围（见 docs/panel.md#访问范围）。
-type Scope = { allProjects: boolean; allNodes: boolean; projectIds: string[]; nodeIds: string[] };
-const fullScope: Scope = { allProjects: true, allNodes: true, projectIds: [], nodeIds: [] };
+// 分组和标签（见 docs/panel.md#分组和标签）：分组里的项目、带其中任一标签的节点都在范围内，以后加进来的也算。
+type Scope = { allProjects: boolean; allNodes: boolean; projectIds: string[]; nodeIds: string[]; projectGroups: string[]; nodeTags: string[] };
+const fullScope: Scope = { allProjects: true, allNodes: true, projectIds: [], nodeIds: [], projectGroups: [], nodeTags: [] };
 
 function scopeOf(u: PanelUser): Scope {
-  return u.scope ? { allProjects: u.scope.allProjects, allNodes: u.scope.allNodes, projectIds: u.scope.projectIds, nodeIds: u.scope.nodeIds } : fullScope;
+  const s = u.scope;
+  return s ? { allProjects: s.allProjects, allNodes: s.allNodes, projectIds: s.projectIds, nodeIds: s.nodeIds, projectGroups: s.projectGroups, nodeTags: s.nodeTags } : fullScope;
 }
 
 // memberSummary：第二行灰字。用户名（设置了显示名称时）、角色，限定了范围时再写范围。
@@ -43,19 +46,24 @@ function memberSummary(u: PanelUser) {
   const s = scopeOf(u);
   const parts = [u.displayName ? u.username : "", t.members.roles[u.role as (typeof roles)[number]] ?? u.role];
   if (u.role !== "admin" && !(s.allProjects && s.allNodes)) {
-    parts.push(s.allProjects ? t.members.scope.allProjects : t.members.scope.projectCount(s.projectIds.length));
-    parts.push(s.allNodes ? t.members.scope.allNodes : t.members.scope.nodeCount(s.nodeIds.length));
+    parts.push(s.allProjects ? t.members.scope.allProjects : t.common.list([...s.projectGroups.map(t.members.scope.groupName), ...(s.projectIds.length > 0 || s.projectGroups.length === 0 ? [t.members.scope.projectCount(s.projectIds.length)] : [])]));
+    parts.push(s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
   }
   return parts.filter(Boolean).join(" · ");
 }
 
-// ScopePick：全部或指定的一组，指定时勾选。
+// ScopePick：全部或指定的一组，指定时勾选。有分组（标签）时先列分组，勾了分组的项目（节点）显示为已包含。
 function ScopePick({
   label,
   hint,
   all,
   ids,
   options,
+  labels,
+  pickedLabels,
+  labelTitle,
+  itemsTitle,
+  labelName,
   error,
   onRetry,
   empty,
@@ -65,14 +73,24 @@ function ScopePick({
   hint: string;
   all: boolean;
   ids: string[];
-  options: { id: string; name: React.ReactNode }[] | undefined;
+  // labels：分组或标签；options 里的 labels 是这个选项属于哪些分组或标签。
+  options: { id: string; name: React.ReactNode; labels: string[] }[] | undefined;
+  labels: Label[];
+  pickedLabels: string[];
+  labelTitle: string;
+  itemsTitle: string;
+  labelName: (l: Label) => React.ReactNode;
   // error：选项加载失败。
   error: unknown;
   onRetry: () => void;
   empty: string;
-  onChange: (all: boolean, ids: string[]) => void;
+  onChange: (all: boolean, ids: string[], labels: string[]) => void;
 }) {
   const picked = new Set(ids);
+  const covered = (o: { labels: string[] }) => o.labels.some((l) => pickedLabels.includes(l));
+  // 访问范围里还有、但已经没有项目（节点）用着的分组（标签），也列出来，才能取消。
+  const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
+  const heading = "pt-1 text-xs text-muted-foreground first:pt-0";
   return (
     <Field label={label} hint={hint}>
       <div className="grid">
@@ -80,7 +98,7 @@ function ScopePick({
           <Segmented
             label={label}
             value={all ? "all" : "some"}
-            onChange={(v) => onChange(v === "all", ids)}
+            onChange={(v) => onChange(v === "all", ids, pickedLabels)}
             items={[
               { value: "all", label: t.members.scope.all },
               { value: "some", label: t.members.scope.some },
@@ -98,12 +116,30 @@ function ScopePick({
               <p className="text-muted-foreground">{empty}</p>
             ) : (
               // 字段名没有对应的单个输入框：分段控件自带名称，勾选列表用 group 关联。
-              <div role="group" aria-label={label} className="grid max-h-44 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
-                {options.map((o) => (
-                  <Check key={o.id} checked={picked.has(o.id)} onChange={(v) => onChange(false, v ? [...ids, o.id] : ids.filter((x) => x !== o.id))}>
-                    {o.name}
-                  </Check>
-                ))}
+              <div role="group" aria-label={label} className="grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2.5">
+                {allLabels.length > 0 && (
+                  <>
+                    <div className={heading}>{labelTitle}</div>
+                    {allLabels.map((l) => (
+                      <Check key={`label:${l.name}`} checked={pickedLabels.includes(l.name)} onChange={(v) => onChange(false, ids, v ? [...pickedLabels, l.name] : pickedLabels.filter((x) => x !== l.name))}>
+                        {labelName(l)}
+                      </Check>
+                    ))}
+                    <div className={heading}>{itemsTitle}</div>
+                  </>
+                )}
+                {options.map((o) =>
+                  covered(o) ? (
+                    <Check key={o.id} checked disabled onChange={() => {}}>
+                      {o.name}
+                      <span className="text-[13px] text-muted-foreground">{t.members.scope.included}</span>
+                    </Check>
+                  ) : (
+                    <Check key={o.id} checked={picked.has(o.id)} onChange={(v) => onChange(false, v ? [...ids, o.id] : ids.filter((x) => x !== o.id), pickedLabels)}>
+                      {o.name}
+                    </Check>
+                  ),
+                )}
               </div>
             )}
           </div>
@@ -123,11 +159,22 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
         hint={t.members.scope.projectsHint}
         all={scope.allProjects}
         ids={scope.projectIds}
+        labels={groupsOf(projects.data?.projects)}
+        pickedLabels={scope.projectGroups}
+        labelTitle={t.labels.group}
+        itemsTitle={t.members.scope.projectItems}
+        labelName={(l) => (
+          <>
+            {l.name}
+            <span className="text-[13px] text-muted-foreground">{t.labels.projectCount(l.count)}</span>
+          </>
+        )}
         empty={t.members.scope.noProjects}
         error={projects.error}
         onRetry={() => projects.refetch()}
         options={projects.data?.projects.map((p) => ({
           id: p.project!.id,
+          labels: p.project!.group ? [p.project!.group] : [],
           name: (
             <>
               {p.project!.name}
@@ -135,18 +182,28 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
             </>
           ),
         }))}
-        onChange={(allProjects, projectIds) => onChange({ ...scope, allProjects, projectIds })}
+        onChange={(allProjects, projectIds, projectGroups) => onChange({ ...scope, allProjects, projectIds, projectGroups })}
       />
       <ScopePick
         label={t.members.scope.nodes}
         hint={t.members.scope.nodesHint}
         all={scope.allNodes}
         ids={scope.nodeIds}
+        labels={tagsOf(nodes.data?.nodes)}
+        pickedLabels={scope.nodeTags}
+        labelTitle={t.labels.tags}
+        itemsTitle={t.members.scope.nodeItems}
+        labelName={(l) => (
+          <>
+            {l.name}
+            <span className="text-[13px] text-muted-foreground">{t.labels.nodeCount(l.count)}</span>
+          </>
+        )}
         empty={t.members.scope.noNodes}
         error={nodes.error}
         onRetry={() => nodes.refetch()}
-        options={nodes.data?.nodes.filter((n) => !n.pending).map((n) => ({ id: n.id, name: n.name }))}
-        onChange={(allNodes, nodeIds) => onChange({ ...scope, allNodes, nodeIds })}
+        options={nodes.data?.nodes.filter((n) => !n.pending).map((n) => ({ id: n.id, name: n.name, labels: n.tags }))}
+        onChange={(allNodes, nodeIds, nodeTags) => onChange({ ...scope, allNodes, nodeIds, nodeTags })}
       />
     </>
   );

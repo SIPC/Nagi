@@ -94,14 +94,14 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `overview` | 节点在线数、容器运行数、需要处理的事（离线节点、没在运行的容器、可更新的镜像、从未部署的容器数） | `ListNodes`、`ListProjects` |
-| `list_projects` | 项目和每个容器的状态、所在节点 | `ListProjects` |
+| `list_projects` | 项目、所在分组和每个容器的状态、所在节点，可以只列一个分组的 | `ListProjects` |
 | `get_project` | 修订号、快照间隔和份数上限、内部端口、容器、端口映射、已连接项目、共享变量名（有草稿时另列草稿里的变量名） | `GetProject` |
 | `get_container` | 配置（compose、命令、健康检查按原样返回；变量只给名称，另列哪些是密钥；git 地址去掉账号和令牌）、草稿差异、最近 5 个版本、最近 20 条事件、运行状态 | `GetProject`、`ListVersions`、`ListContainerEvents` |
 | `list_deployments` | 项目的部署记录：时间、来源、涉及的容器和版本、是否成功 | `ListDeployments` |
 | `check_images` | 立即检查项目里的镜像有没有新版本 | `CheckImages` |
 | `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
 | `list_backup_snapshots` | 备份节点上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
-| `list_nodes` | 节点、在线、占用、容器数 | `ListNodes` |
+| `list_nodes` | 节点、标签、在线、占用、容器数，可以只列带某个标签的 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
 | `list_snapshots` | 容器的快照：ID、类型、时间、大小，标出能不能用 `restore_snapshot` 恢复、能不能删除，以及项目的份数上限 | `ListSnapshots` |
@@ -122,6 +122,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
 | `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项 | `SaveDraft` |
 | `set_display_name` | 修改容器的显示名称 | `SetContainerDisplayName` |
+| `set_project_group` | 只给管理员：把项目放进分组（新名称即新建），或移出分组。会改变成员的访问范围（见 [panel.md#分组和标签](panel.md#分组和标签)） | `SetProjectGroup` |
+| `set_node_tags` | 只给管理员：替换节点的标签（最多 10 个） | `SetNodeTags` |
 | `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的 | `SetContainerSnapshotSchedule` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |

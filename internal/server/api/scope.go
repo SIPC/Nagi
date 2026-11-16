@@ -49,14 +49,31 @@ func (a *API) loadAccess(ctx context.Context, u auth.User) (*access, error) {
 		if err != nil {
 			return nil, err
 		}
-		x.projects = toSet(ids)
+		// 范围里的分组：分组里的项目都算，以后放进来的也算。
+		groups, err := a.Q.ListUserProjectGroups(ctx, u.ID)
+		if err != nil {
+			return nil, err
+		}
+		more, err := a.Q.ProjectsInGroups(ctx, groups)
+		if err != nil {
+			return nil, err
+		}
+		x.projects = toSet(append(ids, more...))
 	}
 	if u.LimitNodes {
 		ids, err := a.Q.ListUserNodes(ctx, u.ID)
 		if err != nil {
 			return nil, err
 		}
-		x.nodes = toSet(ids)
+		tags, err := a.Q.ListUserNodeTags(ctx, u.ID)
+		if err != nil {
+			return nil, err
+		}
+		more, err := a.Q.NodesWithTags(ctx, tags)
+		if err != nil {
+			return nil, err
+		}
+		x.nodes = toSet(append(ids, more...))
 	}
 	return x, nil
 }

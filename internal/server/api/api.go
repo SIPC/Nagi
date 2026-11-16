@@ -256,6 +256,9 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
 		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
 		n.AlertRules = nodes.NodeAlertRules(row)
+		if n.Tags, err = s.Q.NodeTags(ctx, row.ID); err != nil {
+			return nil, err
+		}
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -373,6 +376,9 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 		return err
 	}
 	if err := s.Q.DeleteNodeFromScopes(ctx, id); err != nil {
+		return err
+	}
+	if err := s.Q.DeleteNodeTags(ctx, id); err != nil {
 		return err
 	}
 	s.Projects.ForgetEntryNode(ctx, id)

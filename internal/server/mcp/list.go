@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ var allTools = []tool{
 		procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.ProjectServiceListProjectsProcedure}},
 		toolOverview),
 	def(tool{name: "list_projects", title: "List projects", idempotent: true,
-		description: "Projects with each container's state and node.",
+		description: "Projects with their group and each container's state and node. Optionally only the projects in one group.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.NodeServiceListNodesProcedure}},
 		toolListProjects),
 	def(tool{name: "get_project", title: "Get project", idempotent: true,
@@ -38,7 +39,7 @@ var allTools = []tool{
 			nagiv1connect.ProjectServiceListVersionsProcedure, nagiv1connect.ProjectServiceListContainerEventsProcedure}},
 		toolGetContainer),
 	def(tool{name: "list_nodes", title: "List nodes", idempotent: true,
-		description: "Nodes with online state, address, version, CPU, memory and disk usage, and container count.",
+		description: "Nodes with tags, online state, address, version, CPU, memory and disk usage, and container count. Optionally only the nodes with a tag.",
 		procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure}},
 		toolListNodes),
 	def(tool{name: "query_metrics", title: "Query metrics", idempotent: true,
@@ -125,6 +126,14 @@ var allTools = []tool{
 		description: "Change a container's configuration and save it as a draft; nothing changes until deploy. Image-form containers: image, command, ports, volumes, env, working directory, memory and CPU limits, health check. Container groups: the whole compose file; env sets compose ${VARIABLES}, service_env sets one service's environment. Both: git source, preserved paths, stateful, depends_on, secret variables. Returns what changed.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSaveDraftProcedure}},
 		toolUpdateContainer),
+	def(tool{name: "set_project_group", title: "Set project group", write: true, idempotent: true, adminOnly: true,
+		description: "Administrators only. Put a project in a group, creating the group if it is new, or take it out with an empty group. Members whose access covers the group gain or lose the project.",
+		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSetProjectGroupProcedure}},
+		toolSetProjectGroup),
+	def(tool{name: "set_node_tags", title: "Set node tags", write: true, idempotent: true, adminOnly: true,
+		description: "Administrators only. Replace a node's tags (up to 10, each up to 32 characters). Members whose access covers a tag gain or lose the node.",
+		procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.NodeServiceSetNodeTagsProcedure}},
+		toolSetNodeTags),
 	def(tool{name: "set_display_name", title: "Set display name", write: true, idempotent: true,
 		description: "Change the name a container is shown with in the web UI. The container name itself cannot change.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSetContainerDisplayNameProcedure}},
@@ -494,10 +503,15 @@ type projectView struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	NetworkName string          `json:"network_name"`
+	Group       string          `json:"group,omitempty"`
 	Containers  []containerView `json:"containers"`
 }
 
-func toolListProjects(c *call, _ empty) (any, error) {
+type ListProjectsArgs struct {
+	Group string `json:"group,omitempty" jsonschema:"only the projects in this group"`
+}
+
+func toolListProjects(c *call, in ListProjectsArgs) (any, error) {
 	nodes, err := c.nodes()
 	if err != nil {
 		return nil, err
@@ -509,7 +523,10 @@ func toolListProjects(c *call, _ empty) (any, error) {
 	out := []projectView{}
 	for _, s := range projects {
 		p := s.GetProject()
-		v := projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Containers: []containerView{}}
+		if in.Group != "" && p.GetGroup() != in.Group {
+			continue
+		}
+		v := projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Containers: []containerView{}}
 		for _, m := range p.GetContainers() {
 			v.Containers = append(v.Containers, containerSummary(s, m, nodes))
 		}
@@ -573,7 +590,7 @@ func toolGetProject(c *call, in ProjectArg) (any, error) {
 		Revision         int64        `json:"revision"`
 		SnapshotSchedule scheduleView `json:"snapshot_schedule"`
 		SnapshotLimit    uint32       `json:"snapshot_limit"`
-	}{projectView: projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Containers: []containerView{}},
+	}{projectView: projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Containers: []containerView{}},
 		Routes: []routeView{}, Links: []link{}, SharedVariables: envNames(p.GetSettings().GetSharedEnv()), InternalPorts: p.GetSettings().GetInternalPorts(),
 		Revision: p.GetRevision(), SnapshotSchedule: scheduleOf(spec.ProjectSnapshotSchedule(p.GetSettings())),
 		SnapshotLimit: spec.SnapshotLimit(p.GetSettings().GetSnapshotLimit())}
@@ -772,33 +789,41 @@ type failoverView struct {
 	Error          string   `json:"error,omitempty"`
 }
 
-func toolListNodes(c *call, _ empty) (any, error) {
+type ListNodesArgs struct {
+	Tag string `json:"tag,omitempty" jsonschema:"only the nodes with this tag"`
+}
+
+func toolListNodes(c *call, in ListNodesArgs) (any, error) {
 	nodes, err := c.nodes()
 	if err != nil {
 		return nil, err
 	}
 	type nodeView struct {
-		ID         string  `json:"id"`
-		Name       string  `json:"name"`
-		Online     bool    `json:"online"`
-		Pending    bool    `json:"pending_approval,omitempty"`
-		Address    string  `json:"address,omitempty"`
-		Version    string  `json:"version,omitempty"`
-		CPUs       int32   `json:"cpus,omitempty"`
-		MemoryGB   float64 `json:"memory_gb,omitempty"`
-		DiskGB     float64 `json:"disk_gb,omitempty"`
-		CPU        float64 `json:"cpu_percent"`
-		Memory     float64 `json:"memory_percent"`
-		Disk       float64 `json:"disk_percent"`
-		Containers int32   `json:"containers"`
-		LastSeen   string  `json:"last_seen,omitempty"`
+		ID         string   `json:"id"`
+		Name       string   `json:"name"`
+		Tags       []string `json:"tags,omitempty"`
+		Online     bool     `json:"online"`
+		Pending    bool     `json:"pending_approval,omitempty"`
+		Address    string   `json:"address,omitempty"`
+		Version    string   `json:"version,omitempty"`
+		CPUs       int32    `json:"cpus,omitempty"`
+		MemoryGB   float64  `json:"memory_gb,omitempty"`
+		DiskGB     float64  `json:"disk_gb,omitempty"`
+		CPU        float64  `json:"cpu_percent"`
+		Memory     float64  `json:"memory_percent"`
+		Disk       float64  `json:"disk_percent"`
+		Containers int32    `json:"containers"`
+		LastSeen   string   `json:"last_seen,omitempty"`
 	}
 	gb := func(b uint64) float64 { return math.Round(float64(b)/(1<<30)*10) / 10 }
 	round := func(v float64) float64 { return math.Round(v*10) / 10 }
 	out := []nodeView{}
 	for _, n := range nodes.GetNodes() {
+		if in.Tag != "" && !slices.Contains(n.GetTags(), in.Tag) {
+			continue
+		}
 		i, u := n.GetInfo(), n.GetUsage()
-		out = append(out, nodeView{ID: n.GetId(), Name: n.GetName(), Online: n.GetOnline(), Pending: n.GetPending(), Address: n.GetAddress(),
+		out = append(out, nodeView{ID: n.GetId(), Name: n.GetName(), Tags: n.GetTags(), Online: n.GetOnline(), Pending: n.GetPending(), Address: n.GetAddress(),
 			Version: i.GetVersion(), CPUs: i.GetCpus(), MemoryGB: gb(i.GetMemoryBytes()), DiskGB: gb(i.GetDiskBytes()),
 			CPU: round(u.GetCpu()), Memory: round(u.GetMemory()), Disk: round(u.GetDisk()), Containers: n.GetContainers(), LastSeen: ts(n.GetLastSeen())})
 	}
