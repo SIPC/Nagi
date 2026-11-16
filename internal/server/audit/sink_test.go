@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/auditsink"
 )
 
 // HTTP 目标收到记录和锚点；目标恢复以后从游标处补发。
@@ -99,7 +101,7 @@ func TestShipperSyslog(t *testing.T) {
 		recv <- string(b)
 	}()
 	ca := string(certPEM(t, srv.Certificate()))
-	err = sendSyslog(context.Background(), SinkConfig{Type: "syslog", Address: ln.Addr().String(), CA: ca}, [][]byte{[]byte(`{"a":1}`)})
+	err = auditsink.SendSyslog(context.Background(), SinkConfig{Type: "syslog", Address: ln.Addr().String(), CA: ca}, [][]byte{[]byte(`{"a":1}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

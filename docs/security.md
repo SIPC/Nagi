@@ -96,19 +96,15 @@
 
 ### 节点本地审计
 
-面板被攻破时，面板上的记录不可信，所以节点自己也记一份：
-
-- 写在 `<数据目录>/audit/` 下，JSON Lines 格式，按 10 MB 轮换，保留 10 个文件。
-- 内容：节点终端的开始和结束（面板指纹、用户名、IP），`node_exec` 的命令和退出码，面板下发的修改类指令（部署、删除、升级、信任列表、告警配置、节点文件），被它拒绝的越权请求。
-- 节点也按面板下发的外送配置直接外送（和告警配置一样按面板指纹保存）。节点被攻破后可以删掉本地文件，但已经外送的记录还在。
+见 [audit.md](audit.md#节点本地审计)。和设计稿的差别：面板下发的修改类指令按方法名统一记录（查询以外的都记），不只是列出的几类。
 
 ### 存储、保留与同步、防篡改、外送
 
-见 [audit.md](audit.md#存储与保留)。还没实现的：面板把外送配置下发给节点（`AgentService.SetAuditSink`），节点外送自己的本地审计（见上一节）。
+见 [audit.md](audit.md#存储与保留)。
 
 ### 界面、权限、接口
 
-见 [audit.md](audit.md#界面)。以后加上：回放（管理员，先做高权限确认）、「设置 → 安全」里的终端录制、保留时间、日志外送、哈希链状态；接口 `GetRecording`、`GetAuditSettings`、`SetAuditSettings`、`TestAuditSink`、`VerifyAudit`、`IsolateNode`、`UnisolateNode`、`ReportViolations`、`SetAuditSink`。
+见 [audit.md](audit.md#界面)。
 
 ## 三、实施顺序
 

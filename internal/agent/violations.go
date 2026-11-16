@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -70,6 +72,8 @@ func (v *violations) add(caller mesh.Key, method, projectID, container string, p
 		return
 	}
 	v.inWindow++
+	v.a.audit.Record(auditlog.Event{Actor: "mesh:" + caller.String(), Action: "violation", Target: strings.Trim(projectID+"/"+container, "/"),
+		Detail: method + " " + detail, Result: "denied"})
 	v.pending = append(v.pending, &nagiv1.Violation{Caller: caller[:], Method: method, ProjectId: projectID, Container: container,
 		Port: uint32(port), Detail: detail, Time: timestamppb.New(now)})
 }

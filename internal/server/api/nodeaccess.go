@@ -274,7 +274,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		stream, err := conn.Agent.NodeShell(ctx)
 		if err == nil {
 			err = stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Start{Start: &nagiv1.NodeShellStart{
-				Size: &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)}, Cwd: q.Get("cwd"), Actor: u.Name,
+				Size: &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)}, Cwd: q.Get("cwd"), Actor: u.Name, Ip: ip,
 			}}})
 		}
 		if err != nil {

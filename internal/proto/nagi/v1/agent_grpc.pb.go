@@ -79,6 +79,7 @@ const (
 	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
+	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -200,6 +201,8 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(ctx context.Context, in *CancelUpgradeRequest, opts ...grpc.CallOption) (*CancelUpgradeResponse, error)
+	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error)
 }
 
 type agentServiceClient struct {
@@ -906,6 +909,16 @@ func (c *agentServiceClient) CancelUpgrade(ctx context.Context, in *CancelUpgrad
 	return out, nil
 }
 
+func (c *agentServiceClient) SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetAuditSinkResponse)
+	err := c.cc.Invoke(ctx, AgentService_SetAuditSink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -1025,6 +1038,8 @@ type AgentServiceServer interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error)
+	// 节点本地审计的外送目标（见 docs/audit.md#节点本地审计）：面板连上时和修改外送设置时下发，节点按面板指纹分别保存。
+	SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -1214,6 +1229,9 @@ func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest)
 }
 func (UnimplementedAgentServiceServer) CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelUpgrade not implemented")
+}
+func (UnimplementedAgentServiceServer) SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAuditSink not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -2224,6 +2242,24 @@ func _AgentService_CancelUpgrade_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SetAuditSink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAuditSinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetAuditSink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetAuditSink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetAuditSink(ctx, req.(*SetAuditSinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2422,6 +2458,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelUpgrade",
 			Handler:    _AgentService_CancelUpgrade_Handler,
+		},
+		{
+			MethodName: "SetAuditSink",
+			Handler:    _AgentService_SetAuditSink_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

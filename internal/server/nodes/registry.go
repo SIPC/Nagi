@@ -88,6 +88,8 @@ type Registry struct {
 	Self string
 	// ReadOnly：本面板是备用面板，不给节点下发任何东西（告警配置、面板域名），只查询。
 	ReadOnly bool
+	// AuditSinks 返回日志外送目标，随告警配置一起下发给节点，节点外送自己的本地审计（见 docs/audit.md#节点本地审计）。
+	AuditSinks func(ctx context.Context) []*nagiv1.NodeAuditSink
 	// Behind 检查节点上报里的任期：返回 true 表示本面板已经落后（有了新的主面板），不再处理这次上报。
 	Behind func(ctx context.Context, req *nagiv1.ReportRequest) bool
 }

@@ -3628,7 +3628,9 @@ type NodeExecRequest struct {
 	// 超时（秒），到时结束整个进程组。
 	TimeoutSeconds uint32 `protobuf:"varint,3,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	// 面板上的用户名和令牌名，只用于节点本地日志。
-	Actor         string `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
+	Actor string `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
+	// 发起人的来源地址，只用于节点本地审计。
+	Ip            string `protobuf:"bytes,5,opt,name=ip,proto3" json:"ip,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3691,13 +3693,22 @@ func (x *NodeExecRequest) GetActor() string {
 	return ""
 }
 
+func (x *NodeExecRequest) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
 type NodeShellStart struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Size  *TerminalSize          `protobuf:"bytes,1,opt,name=size,proto3" json:"size,omitempty"`
 	// 起始目录，不存在时用 root 的主目录。
 	Cwd string `protobuf:"bytes,2,opt,name=cwd,proto3" json:"cwd,omitempty"`
 	// 面板上的用户名，只用于节点本地日志。
-	Actor         string `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor,omitempty"`
+	Actor string `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor,omitempty"`
+	// 发起人的来源地址，只用于节点本地审计。
+	Ip            string `protobuf:"bytes,4,opt,name=ip,proto3" json:"ip,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3749,6 +3760,13 @@ func (x *NodeShellStart) GetCwd() string {
 func (x *NodeShellStart) GetActor() string {
 	if x != nil {
 		return x.Actor
+	}
+	return ""
+}
+
+func (x *NodeShellStart) GetIp() string {
+	if x != nil {
+		return x.Ip
 	}
 	return ""
 }
@@ -5194,6 +5212,228 @@ func (*SetMeshResponse) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{88}
 }
 
+// NodeAuditSink 是一个外送目标，字段同面板的 AuditSink（不含录制和状态）。
+type NodeAuditSink struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// syslog、http、s3。
+	Type          string            `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	Address       string            `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
+	Ca            string            `protobuf:"bytes,5,opt,name=ca,proto3" json:"ca,omitempty"`
+	Url           string            `protobuf:"bytes,6,opt,name=url,proto3" json:"url,omitempty"`
+	Headers       map[string]string `protobuf:"bytes,7,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Endpoint      string            `protobuf:"bytes,8,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Region        string            `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
+	Bucket        string            `protobuf:"bytes,10,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	Prefix        string            `protobuf:"bytes,11,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	AccessKey     string            `protobuf:"bytes,12,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	SecretKey     string            `protobuf:"bytes,13,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeAuditSink) Reset() {
+	*x = NodeAuditSink{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeAuditSink) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeAuditSink) ProtoMessage() {}
+
+func (x *NodeAuditSink) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeAuditSink.ProtoReflect.Descriptor instead.
+func (*NodeAuditSink) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *NodeAuditSink) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetCa() string {
+	if x != nil {
+		return x.Ca
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *NodeAuditSink) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetAccessKey() string {
+	if x != nil {
+		return x.AccessKey
+	}
+	return ""
+}
+
+func (x *NodeAuditSink) GetSecretKey() string {
+	if x != nil {
+		return x.SecretKey
+	}
+	return ""
+}
+
+type SetAuditSinkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sinks         []*NodeAuditSink       `protobuf:"bytes,1,rep,name=sinks,proto3" json:"sinks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAuditSinkRequest) Reset() {
+	*x = SetAuditSinkRequest{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAuditSinkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAuditSinkRequest) ProtoMessage() {}
+
+func (x *SetAuditSinkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAuditSinkRequest.ProtoReflect.Descriptor instead.
+func (*SetAuditSinkRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *SetAuditSinkRequest) GetSinks() []*NodeAuditSink {
+	if x != nil {
+		return x.Sinks
+	}
+	return nil
+}
+
+type SetAuditSinkResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAuditSinkResponse) Reset() {
+	*x = SetAuditSinkResponse{}
+	mi := &file_nagi_v1_agent_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAuditSinkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAuditSinkResponse) ProtoMessage() {}
+
+func (x *SetAuditSinkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_agent_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAuditSinkResponse.ProtoReflect.Descriptor instead.
+func (*SetAuditSinkResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_agent_proto_rawDescGZIP(), []int{91}
+}
+
 var File_nagi_v1_agent_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_agent_proto_rawDesc = "" +
@@ -5429,16 +5669,18 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x13ComposeDirContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\x12\x14\n" +
-	"\x05state\x18\x03 \x01(\tR\x05state\"|\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\"\x8c\x01\n" +
 	"\x0fNodeExecRequest\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x12\x10\n" +
 	"\x03cwd\x18\x02 \x01(\tR\x03cwd\x12'\n" +
 	"\x0ftimeout_seconds\x18\x03 \x01(\rR\x0etimeoutSeconds\x12\x14\n" +
-	"\x05actor\x18\x04 \x01(\tR\x05actor\"c\n" +
+	"\x05actor\x18\x04 \x01(\tR\x05actor\x12\x0e\n" +
+	"\x02ip\x18\x05 \x01(\tR\x02ip\"s\n" +
 	"\x0eNodeShellStart\x12)\n" +
 	"\x04size\x18\x01 \x01(\v2\x15.nagi.v1.TerminalSizeR\x04size\x12\x10\n" +
 	"\x03cwd\x18\x02 \x01(\tR\x03cwd\x12\x14\n" +
-	"\x05actor\x18\x03 \x01(\tR\x05actor\"j\n" +
+	"\x05actor\x18\x03 \x01(\tR\x05actor\x12\x0e\n" +
+	"\x02ip\x18\x04 \x01(\tR\x02ip\"j\n" +
 	"\vNodeFileRef\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
@@ -5547,12 +5789,35 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x0econtainer_dirs\x18\a \x03(\v2\x1a.nagi.v1.ContainerDirUsageR\rcontainerDirs\x12%\n" +
 	"\x0ereplicas_bytes\x18\b \x01(\x03R\rreplicasBytes\x12!\n" +
 	"\fdocker_error\x18\t \x01(\tR\vdockerError\"\x11\n" +
-	"\x0fSetMeshResponse*\x88\x01\n" +
+	"\x0fSetMeshResponse\"\xaf\x03\n" +
+	"\rNodeAuditSink\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x18\n" +
+	"\aaddress\x18\x04 \x01(\tR\aaddress\x12\x0e\n" +
+	"\x02ca\x18\x05 \x01(\tR\x02ca\x12\x10\n" +
+	"\x03url\x18\x06 \x01(\tR\x03url\x12B\n" +
+	"\aheaders\x18\a \x03(\v2#.nagi.v1.NodeAuditSink.HeadersEntryB\x03\x80\x01\x01R\aheaders\x12\x1a\n" +
+	"\bendpoint\x18\b \x01(\tR\bendpoint\x12\x16\n" +
+	"\x06region\x18\t \x01(\tR\x06region\x12\x16\n" +
+	"\x06bucket\x18\n" +
+	" \x01(\tR\x06bucket\x12\x16\n" +
+	"\x06prefix\x18\v \x01(\tR\x06prefix\x12\"\n" +
+	"\n" +
+	"access_key\x18\f \x01(\tB\x03\x80\x01\x01R\taccessKey\x12\"\n" +
+	"\n" +
+	"secret_key\x18\r \x01(\tB\x03\x80\x01\x01R\tsecretKey\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
+	"\x13SetAuditSinkRequest\x12,\n" +
+	"\x05sinks\x18\x01 \x03(\v2\x16.nagi.v1.NodeAuditSinkR\x05sinks\"\x16\n" +
+	"\x14SetAuditSinkResponse*\x88\x01\n" +
 	"\x0fContainerAction\x12 \n" +
 	"\x1cCONTAINER_ACTION_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16CONTAINER_ACTION_START\x10\x01\x12\x19\n" +
 	"\x15CONTAINER_ACTION_STOP\x10\x02\x12\x1c\n" +
-	"\x18CONTAINER_ACTION_RESTART\x10\x032\xdf!\n" +
+	"\x18CONTAINER_ACTION_RESTART\x10\x032\xac\"\n" +
 	"\fAgentService\x12K\n" +
 	"\fPutContainer\x12\x1c.nagi.v1.PutContainerRequest\x1a\x1d.nagi.v1.PutContainerResponse\x12J\n" +
 	"\x0fDeployContainer\x12\x1f.nagi.v1.DeployContainerRequest\x1a\x14.nagi.v1.DeployEvent0\x01\x12T\n" +
@@ -5622,7 +5887,8 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"SetMirrors\x12\x10.nagi.v1.Mirrors\x1a\x10.nagi.v1.Mirrors\x12Q\n" +
 	"\x0eSetPanelDomain\x12\x1e.nagi.v1.SetPanelDomainRequest\x1a\x1f.nagi.v1.SetPanelDomainResponse\x12<\n" +
 	"\aUpgrade\x12\x17.nagi.v1.UpgradeRequest\x1a\x18.nagi.v1.UpgradeResponse\x12N\n" +
-	"\rCancelUpgrade\x12\x1d.nagi.v1.CancelUpgradeRequest\x1a\x1e.nagi.v1.CancelUpgradeResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\rCancelUpgrade\x12\x1d.nagi.v1.CancelUpgradeRequest\x1a\x1e.nagi.v1.CancelUpgradeResponse\x12K\n" +
+	"\fSetAuditSink\x12\x1c.nagi.v1.SetAuditSinkRequest\x1a\x1d.nagi.v1.SetAuditSinkResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_agent_proto_rawDescOnce sync.Once
@@ -5637,7 +5903,7 @@ func file_nagi_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 90)
+var file_nagi_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
 var file_nagi_v1_agent_proto_goTypes = []any{
 	(ContainerAction)(0),                 // 0: nagi.v1.ContainerAction
 	(*SetLinksResponse)(nil),             // 1: nagi.v1.SetLinksResponse
@@ -5729,203 +5995,211 @@ var file_nagi_v1_agent_proto_goTypes = []any{
 	(*ContainerDirUsage)(nil),            // 87: nagi.v1.ContainerDirUsage
 	(*NodeStorage)(nil),                  // 88: nagi.v1.NodeStorage
 	(*SetMeshResponse)(nil),              // 89: nagi.v1.SetMeshResponse
-	nil,                                  // 90: nagi.v1.InspectComposeDirResponse.VolumesEntry
-	(*Exposure)(nil),                     // 91: nagi.v1.Exposure
-	(*ContainerSpec)(nil),                // 92: nagi.v1.ContainerSpec
-	(*FailoverStatus)(nil),               // 93: nagi.v1.FailoverStatus
-	(*LinkPlan)(nil),                     // 94: nagi.v1.LinkPlan
-	(*FailoverConfig)(nil),               // 95: nagi.v1.FailoverConfig
-	(*Replica)(nil),                      // 96: nagi.v1.Replica
-	(*BackupTarget)(nil),                 // 97: nagi.v1.BackupTarget
-	(*timestamppb.Timestamp)(nil),        // 98: google.protobuf.Timestamp
-	(*Snapshot)(nil),                     // 99: nagi.v1.Snapshot
-	(*ImageUpdate)(nil),                  // 100: nagi.v1.ImageUpdate
-	(*TrustedPanel)(nil),                 // 101: nagi.v1.TrustedPanel
-	(*AlertConfig)(nil),                  // 102: nagi.v1.AlertConfig
-	(*MetricSeries)(nil),                 // 103: nagi.v1.MetricSeries
-	(*DiskUsage)(nil),                    // 104: nagi.v1.DiskUsage
-	(*MeshPingRequest)(nil),              // 105: nagi.v1.MeshPingRequest
-	(*MeshOptions)(nil),                  // 106: nagi.v1.MeshOptions
-	(*MeshConfig)(nil),                   // 107: nagi.v1.MeshConfig
-	(*DeployEvent)(nil),                  // 108: nagi.v1.DeployEvent
-	(*LogLine)(nil),                      // 109: nagi.v1.LogLine
-	(*BackupStatus)(nil),                 // 110: nagi.v1.BackupStatus
-	(*MeshStatus)(nil),                   // 111: nagi.v1.MeshStatus
-	(*MeshPingResponse)(nil),             // 112: nagi.v1.MeshPingResponse
-	(*MeshSpeedResponse)(nil),            // 113: nagi.v1.MeshSpeedResponse
+	(*NodeAuditSink)(nil),                // 90: nagi.v1.NodeAuditSink
+	(*SetAuditSinkRequest)(nil),          // 91: nagi.v1.SetAuditSinkRequest
+	(*SetAuditSinkResponse)(nil),         // 92: nagi.v1.SetAuditSinkResponse
+	nil,                                  // 93: nagi.v1.InspectComposeDirResponse.VolumesEntry
+	nil,                                  // 94: nagi.v1.NodeAuditSink.HeadersEntry
+	(*Exposure)(nil),                     // 95: nagi.v1.Exposure
+	(*ContainerSpec)(nil),                // 96: nagi.v1.ContainerSpec
+	(*FailoverStatus)(nil),               // 97: nagi.v1.FailoverStatus
+	(*LinkPlan)(nil),                     // 98: nagi.v1.LinkPlan
+	(*FailoverConfig)(nil),               // 99: nagi.v1.FailoverConfig
+	(*Replica)(nil),                      // 100: nagi.v1.Replica
+	(*BackupTarget)(nil),                 // 101: nagi.v1.BackupTarget
+	(*timestamppb.Timestamp)(nil),        // 102: google.protobuf.Timestamp
+	(*Snapshot)(nil),                     // 103: nagi.v1.Snapshot
+	(*ImageUpdate)(nil),                  // 104: nagi.v1.ImageUpdate
+	(*TrustedPanel)(nil),                 // 105: nagi.v1.TrustedPanel
+	(*AlertConfig)(nil),                  // 106: nagi.v1.AlertConfig
+	(*MetricSeries)(nil),                 // 107: nagi.v1.MetricSeries
+	(*DiskUsage)(nil),                    // 108: nagi.v1.DiskUsage
+	(*MeshPingRequest)(nil),              // 109: nagi.v1.MeshPingRequest
+	(*MeshOptions)(nil),                  // 110: nagi.v1.MeshOptions
+	(*MeshConfig)(nil),                   // 111: nagi.v1.MeshConfig
+	(*DeployEvent)(nil),                  // 112: nagi.v1.DeployEvent
+	(*LogLine)(nil),                      // 113: nagi.v1.LogLine
+	(*BackupStatus)(nil),                 // 114: nagi.v1.BackupStatus
+	(*MeshStatus)(nil),                   // 115: nagi.v1.MeshStatus
+	(*MeshPingResponse)(nil),             // 116: nagi.v1.MeshPingResponse
+	(*MeshSpeedResponse)(nil),            // 117: nagi.v1.MeshSpeedResponse
 }
 var file_nagi_v1_agent_proto_depIdxs = []int32{
-	91,  // 0: nagi.v1.CheckPortsRequest.routes:type_name -> nagi.v1.Exposure
-	92,  // 1: nagi.v1.NodeCache.containers:type_name -> nagi.v1.ContainerSpec
-	93,  // 2: nagi.v1.NodeCache.failovers:type_name -> nagi.v1.FailoverStatus
-	94,  // 3: nagi.v1.NodeCache.links:type_name -> nagi.v1.LinkPlan
-	95,  // 4: nagi.v1.SetFailoverRequest.config:type_name -> nagi.v1.FailoverConfig
-	92,  // 5: nagi.v1.AcceptReplicaRequest.spec:type_name -> nagi.v1.ContainerSpec
-	96,  // 6: nagi.v1.ListReplicasResponse.replicas:type_name -> nagi.v1.Replica
-	92,  // 7: nagi.v1.RestoreReplicaRequest.spec:type_name -> nagi.v1.ContainerSpec
-	97,  // 8: nagi.v1.MigrateOutRequest.target:type_name -> nagi.v1.BackupTarget
-	92,  // 9: nagi.v1.PutContainerRequest.spec:type_name -> nagi.v1.ContainerSpec
-	92,  // 10: nagi.v1.DeployContainerRequest.spec:type_name -> nagi.v1.ContainerSpec
+	95,  // 0: nagi.v1.CheckPortsRequest.routes:type_name -> nagi.v1.Exposure
+	96,  // 1: nagi.v1.NodeCache.containers:type_name -> nagi.v1.ContainerSpec
+	97,  // 2: nagi.v1.NodeCache.failovers:type_name -> nagi.v1.FailoverStatus
+	98,  // 3: nagi.v1.NodeCache.links:type_name -> nagi.v1.LinkPlan
+	99,  // 4: nagi.v1.SetFailoverRequest.config:type_name -> nagi.v1.FailoverConfig
+	96,  // 5: nagi.v1.AcceptReplicaRequest.spec:type_name -> nagi.v1.ContainerSpec
+	100, // 6: nagi.v1.ListReplicasResponse.replicas:type_name -> nagi.v1.Replica
+	96,  // 7: nagi.v1.RestoreReplicaRequest.spec:type_name -> nagi.v1.ContainerSpec
+	101, // 8: nagi.v1.MigrateOutRequest.target:type_name -> nagi.v1.BackupTarget
+	96,  // 9: nagi.v1.PutContainerRequest.spec:type_name -> nagi.v1.ContainerSpec
+	96,  // 10: nagi.v1.DeployContainerRequest.spec:type_name -> nagi.v1.ContainerSpec
 	0,   // 11: nagi.v1.ControlContainerRequest.action:type_name -> nagi.v1.ContainerAction
-	98,  // 12: nagi.v1.VolumeInfo.modified:type_name -> google.protobuf.Timestamp
+	102, // 12: nagi.v1.VolumeInfo.modified:type_name -> google.protobuf.Timestamp
 	24,  // 13: nagi.v1.VolumeInfo.mounts:type_name -> nagi.v1.VolumeMount
 	25,  // 14: nagi.v1.ListVolumesResponse.volumes:type_name -> nagi.v1.VolumeInfo
-	98,  // 15: nagi.v1.VolumeFileEntry.modified:type_name -> google.protobuf.Timestamp
+	102, // 15: nagi.v1.VolumeFileEntry.modified:type_name -> google.protobuf.Timestamp
 	28,  // 16: nagi.v1.ListVolumeFilesResponse.entries:type_name -> nagi.v1.VolumeFileEntry
 	27,  // 17: nagi.v1.VolumeUploadChunk.ref:type_name -> nagi.v1.VolumeFileRef
-	99,  // 18: nagi.v1.ListSnapshotsResponse.snapshots:type_name -> nagi.v1.Snapshot
-	100, // 19: nagi.v1.CheckImagesResponse.updates:type_name -> nagi.v1.ImageUpdate
-	101, // 20: nagi.v1.ListPanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
+	103, // 18: nagi.v1.ListSnapshotsResponse.snapshots:type_name -> nagi.v1.Snapshot
+	104, // 19: nagi.v1.CheckImagesResponse.updates:type_name -> nagi.v1.ImageUpdate
+	105, // 20: nagi.v1.ListPanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
 	58,  // 21: nagi.v1.ExecInput.start:type_name -> nagi.v1.ExecStart
 	59,  // 22: nagi.v1.ExecInput.resize:type_name -> nagi.v1.TerminalSize
 	59,  // 23: nagi.v1.ExecStart.size:type_name -> nagi.v1.TerminalSize
 	67,  // 24: nagi.v1.NodeShellInput.start:type_name -> nagi.v1.NodeShellStart
 	59,  // 25: nagi.v1.NodeShellInput.resize:type_name -> nagi.v1.TerminalSize
 	65,  // 26: nagi.v1.InspectComposeDirResponse.containers:type_name -> nagi.v1.ComposeDirContainer
-	90,  // 27: nagi.v1.InspectComposeDirResponse.volumes:type_name -> nagi.v1.InspectComposeDirResponse.VolumesEntry
+	93,  // 27: nagi.v1.InspectComposeDirResponse.volumes:type_name -> nagi.v1.InspectComposeDirResponse.VolumesEntry
 	59,  // 28: nagi.v1.NodeShellStart.size:type_name -> nagi.v1.TerminalSize
-	98,  // 29: nagi.v1.NodeFileEntry.modified:type_name -> google.protobuf.Timestamp
+	102, // 29: nagi.v1.NodeFileEntry.modified:type_name -> google.protobuf.Timestamp
 	69,  // 30: nagi.v1.ListNodeDirResponse.entries:type_name -> nagi.v1.NodeFileEntry
-	98,  // 31: nagi.v1.ReadNodeFileResponse.modified:type_name -> google.protobuf.Timestamp
-	98,  // 32: nagi.v1.NodeFileBackup.time:type_name -> google.protobuf.Timestamp
+	102, // 31: nagi.v1.ReadNodeFileResponse.modified:type_name -> google.protobuf.Timestamp
+	102, // 32: nagi.v1.NodeFileBackup.time:type_name -> google.protobuf.Timestamp
 	76,  // 33: nagi.v1.ListNodeFileBackupsResponse.backups:type_name -> nagi.v1.NodeFileBackup
 	68,  // 34: nagi.v1.NodeFileUploadChunk.ref:type_name -> nagi.v1.NodeFileRef
-	102, // 35: nagi.v1.SetAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
-	98,  // 36: nagi.v1.QueryMetricsRequest.from:type_name -> google.protobuf.Timestamp
-	98,  // 37: nagi.v1.QueryMetricsRequest.to:type_name -> google.protobuf.Timestamp
-	103, // 38: nagi.v1.QueryMetricsResponse.series:type_name -> nagi.v1.MetricSeries
-	104, // 39: nagi.v1.NodeStorage.disks:type_name -> nagi.v1.DiskUsage
+	106, // 35: nagi.v1.SetAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
+	102, // 36: nagi.v1.QueryMetricsRequest.from:type_name -> google.protobuf.Timestamp
+	102, // 37: nagi.v1.QueryMetricsRequest.to:type_name -> google.protobuf.Timestamp
+	107, // 38: nagi.v1.QueryMetricsResponse.series:type_name -> nagi.v1.MetricSeries
+	108, // 39: nagi.v1.NodeStorage.disks:type_name -> nagi.v1.DiskUsage
 	85,  // 40: nagi.v1.NodeStorage.images:type_name -> nagi.v1.StorageTotal
 	85,  // 41: nagi.v1.NodeStorage.containers:type_name -> nagi.v1.StorageTotal
 	85,  // 42: nagi.v1.NodeStorage.volumes:type_name -> nagi.v1.StorageTotal
 	85,  // 43: nagi.v1.NodeStorage.build_cache:type_name -> nagi.v1.StorageTotal
 	86,  // 44: nagi.v1.NodeStorage.largest_images:type_name -> nagi.v1.StorageImage
 	87,  // 45: nagi.v1.NodeStorage.container_dirs:type_name -> nagi.v1.ContainerDirUsage
-	18,  // 46: nagi.v1.AgentService.PutContainer:input_type -> nagi.v1.PutContainerRequest
-	20,  // 47: nagi.v1.AgentService.DeployContainer:input_type -> nagi.v1.DeployContainerRequest
-	21,  // 48: nagi.v1.AgentService.DeleteContainer:input_type -> nagi.v1.DeleteContainerRequest
-	23,  // 49: nagi.v1.AgentService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
-	17,  // 50: nagi.v1.AgentService.ListVolumes:input_type -> nagi.v1.ContainerRef
-	27,  // 51: nagi.v1.AgentService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
-	27,  // 52: nagi.v1.AgentService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	27,  // 53: nagi.v1.AgentService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
-	27,  // 54: nagi.v1.AgentService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	17,  // 55: nagi.v1.AgentService.ListSnapshots:input_type -> nagi.v1.ContainerRef
-	17,  // 56: nagi.v1.AgentService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
-	34,  // 57: nagi.v1.AgentService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	34,  // 58: nagi.v1.AgentService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	36,  // 59: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
-	57,  // 60: nagi.v1.AgentService.Exec:input_type -> nagi.v1.ExecInput
-	61,  // 61: nagi.v1.AgentService.NodeShell:input_type -> nagi.v1.NodeShellInput
-	66,  // 62: nagi.v1.AgentService.NodeExec:input_type -> nagi.v1.NodeExecRequest
-	62,  // 63: nagi.v1.AgentService.ReclaimSnapshots:input_type -> nagi.v1.ReclaimSnapshotsRequest
-	63,  // 64: nagi.v1.AgentService.InspectComposeDir:input_type -> nagi.v1.InspectComposeDirRequest
-	68,  // 65: nagi.v1.AgentService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
-	68,  // 66: nagi.v1.AgentService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
-	72,  // 67: nagi.v1.AgentService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
-	74,  // 68: nagi.v1.AgentService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
-	68,  // 69: nagi.v1.AgentService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
-	68,  // 70: nagi.v1.AgentService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
-	78,  // 71: nagi.v1.AgentService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
-	17,  // 72: nagi.v1.AgentService.CheckImages:input_type -> nagi.v1.ContainerRef
-	38,  // 73: nagi.v1.AgentService.LoginRegistry:input_type -> nagi.v1.LoginRegistryRequest
-	17,  // 74: nagi.v1.AgentService.SyncBackup:input_type -> nagi.v1.ContainerRef
-	9,   // 75: nagi.v1.AgentService.AcceptReplica:input_type -> nagi.v1.AcceptReplicaRequest
-	11,  // 76: nagi.v1.AgentService.ListReplicas:input_type -> nagi.v1.ListReplicasRequest
-	17,  // 77: nagi.v1.AgentService.ListReplicaSnapshots:input_type -> nagi.v1.ContainerRef
-	18,  // 78: nagi.v1.AgentService.CheckContainer:input_type -> nagi.v1.PutContainerRequest
-	14,  // 79: nagi.v1.AgentService.RestoreReplica:input_type -> nagi.v1.RestoreReplicaRequest
-	17,  // 80: nagi.v1.AgentService.DeleteReplica:input_type -> nagi.v1.ContainerRef
-	16,  // 81: nagi.v1.AgentService.MigrateOut:input_type -> nagi.v1.MigrateOutRequest
-	17,  // 82: nagi.v1.AgentService.MigrateResume:input_type -> nagi.v1.ContainerRef
-	8,   // 83: nagi.v1.AgentService.SetFailover:input_type -> nagi.v1.SetFailoverRequest
-	17,  // 84: nagi.v1.AgentService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
-	6,   // 85: nagi.v1.AgentService.GetCache:input_type -> nagi.v1.GetCacheRequest
-	94,  // 86: nagi.v1.AgentService.SetLinks:input_type -> nagi.v1.LinkPlan
-	2,   // 87: nagi.v1.AgentService.CheckPorts:input_type -> nagi.v1.CheckPortsRequest
-	4,   // 88: nagi.v1.AgentService.RetryCerts:input_type -> nagi.v1.RetryCertsRequest
-	80,  // 89: nagi.v1.AgentService.SetAlertConfig:input_type -> nagi.v1.SetAlertConfigRequest
-	82,  // 90: nagi.v1.AgentService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
-	84,  // 91: nagi.v1.AgentService.GetStorage:input_type -> nagi.v1.GetStorageRequest
-	40,  // 92: nagi.v1.AgentService.SetProjectsRoot:input_type -> nagi.v1.SetProjectsRootRequest
-	51,  // 93: nagi.v1.AgentService.ListPanels:input_type -> nagi.v1.ListPanelsRequest
-	53,  // 94: nagi.v1.AgentService.AddPanel:input_type -> nagi.v1.AddPanelRequest
-	55,  // 95: nagi.v1.AgentService.RemovePanel:input_type -> nagi.v1.RemovePanelRequest
-	50,  // 96: nagi.v1.AgentService.GetMeshStatus:input_type -> nagi.v1.MeshStatusRequest
-	105, // 97: nagi.v1.AgentService.MeshPing:input_type -> nagi.v1.MeshPingRequest
-	105, // 98: nagi.v1.AgentService.MeshSpeedTest:input_type -> nagi.v1.MeshPingRequest
-	106, // 99: nagi.v1.AgentService.SetMeshOptions:input_type -> nagi.v1.MeshOptions
-	107, // 100: nagi.v1.AgentService.SetMesh:input_type -> nagi.v1.MeshConfig
-	48,  // 101: nagi.v1.AgentService.GetMirrors:input_type -> nagi.v1.GetMirrorsRequest
-	49,  // 102: nagi.v1.AgentService.SetMirrors:input_type -> nagi.v1.Mirrors
-	42,  // 103: nagi.v1.AgentService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainRequest
-	44,  // 104: nagi.v1.AgentService.Upgrade:input_type -> nagi.v1.UpgradeRequest
-	46,  // 105: nagi.v1.AgentService.CancelUpgrade:input_type -> nagi.v1.CancelUpgradeRequest
-	19,  // 106: nagi.v1.AgentService.PutContainer:output_type -> nagi.v1.PutContainerResponse
-	108, // 107: nagi.v1.AgentService.DeployContainer:output_type -> nagi.v1.DeployEvent
-	22,  // 108: nagi.v1.AgentService.DeleteContainer:output_type -> nagi.v1.DeleteContainerResponse
-	108, // 109: nagi.v1.AgentService.ControlContainer:output_type -> nagi.v1.DeployEvent
-	26,  // 110: nagi.v1.AgentService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
-	29,  // 111: nagi.v1.AgentService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
-	33,  // 112: nagi.v1.AgentService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	33,  // 113: nagi.v1.AgentService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
-	33,  // 114: nagi.v1.AgentService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	35,  // 115: nagi.v1.AgentService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	108, // 116: nagi.v1.AgentService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
-	108, // 117: nagi.v1.AgentService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
-	33,  // 118: nagi.v1.AgentService.DeleteSnapshot:output_type -> nagi.v1.VolumeFileOpResponse
-	109, // 119: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
-	60,  // 120: nagi.v1.AgentService.Exec:output_type -> nagi.v1.ExecOutput
-	60,  // 121: nagi.v1.AgentService.NodeShell:output_type -> nagi.v1.ExecOutput
-	60,  // 122: nagi.v1.AgentService.NodeExec:output_type -> nagi.v1.ExecOutput
-	108, // 123: nagi.v1.AgentService.ReclaimSnapshots:output_type -> nagi.v1.DeployEvent
-	64,  // 124: nagi.v1.AgentService.InspectComposeDir:output_type -> nagi.v1.InspectComposeDirResponse
-	70,  // 125: nagi.v1.AgentService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
-	71,  // 126: nagi.v1.AgentService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
-	73,  // 127: nagi.v1.AgentService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
-	75,  // 128: nagi.v1.AgentService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
-	75,  // 129: nagi.v1.AgentService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
-	77,  // 130: nagi.v1.AgentService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
-	73,  // 131: nagi.v1.AgentService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
-	37,  // 132: nagi.v1.AgentService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
-	39,  // 133: nagi.v1.AgentService.LoginRegistry:output_type -> nagi.v1.LoginRegistryResponse
-	110, // 134: nagi.v1.AgentService.SyncBackup:output_type -> nagi.v1.BackupStatus
-	10,  // 135: nagi.v1.AgentService.AcceptReplica:output_type -> nagi.v1.AcceptReplicaResponse
-	12,  // 136: nagi.v1.AgentService.ListReplicas:output_type -> nagi.v1.ListReplicasResponse
-	35,  // 137: nagi.v1.AgentService.ListReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	13,  // 138: nagi.v1.AgentService.CheckContainer:output_type -> nagi.v1.CheckContainerResponse
-	108, // 139: nagi.v1.AgentService.RestoreReplica:output_type -> nagi.v1.DeployEvent
-	15,  // 140: nagi.v1.AgentService.DeleteReplica:output_type -> nagi.v1.DeleteReplicaResponse
-	108, // 141: nagi.v1.AgentService.MigrateOut:output_type -> nagi.v1.DeployEvent
-	108, // 142: nagi.v1.AgentService.MigrateResume:output_type -> nagi.v1.DeployEvent
-	93,  // 143: nagi.v1.AgentService.SetFailover:output_type -> nagi.v1.FailoverStatus
-	93,  // 144: nagi.v1.AgentService.ConfirmTakeover:output_type -> nagi.v1.FailoverStatus
-	7,   // 145: nagi.v1.AgentService.GetCache:output_type -> nagi.v1.NodeCache
-	1,   // 146: nagi.v1.AgentService.SetLinks:output_type -> nagi.v1.SetLinksResponse
-	3,   // 147: nagi.v1.AgentService.CheckPorts:output_type -> nagi.v1.CheckPortsResponse
-	5,   // 148: nagi.v1.AgentService.RetryCerts:output_type -> nagi.v1.RetryCertsResponse
-	81,  // 149: nagi.v1.AgentService.SetAlertConfig:output_type -> nagi.v1.SetAlertConfigResponse
-	83,  // 150: nagi.v1.AgentService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	88,  // 151: nagi.v1.AgentService.GetStorage:output_type -> nagi.v1.NodeStorage
-	41,  // 152: nagi.v1.AgentService.SetProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
-	52,  // 153: nagi.v1.AgentService.ListPanels:output_type -> nagi.v1.ListPanelsResponse
-	54,  // 154: nagi.v1.AgentService.AddPanel:output_type -> nagi.v1.AddPanelResponse
-	56,  // 155: nagi.v1.AgentService.RemovePanel:output_type -> nagi.v1.RemovePanelResponse
-	111, // 156: nagi.v1.AgentService.GetMeshStatus:output_type -> nagi.v1.MeshStatus
-	112, // 157: nagi.v1.AgentService.MeshPing:output_type -> nagi.v1.MeshPingResponse
-	113, // 158: nagi.v1.AgentService.MeshSpeedTest:output_type -> nagi.v1.MeshSpeedResponse
-	106, // 159: nagi.v1.AgentService.SetMeshOptions:output_type -> nagi.v1.MeshOptions
-	89,  // 160: nagi.v1.AgentService.SetMesh:output_type -> nagi.v1.SetMeshResponse
-	49,  // 161: nagi.v1.AgentService.GetMirrors:output_type -> nagi.v1.Mirrors
-	49,  // 162: nagi.v1.AgentService.SetMirrors:output_type -> nagi.v1.Mirrors
-	43,  // 163: nagi.v1.AgentService.SetPanelDomain:output_type -> nagi.v1.SetPanelDomainResponse
-	45,  // 164: nagi.v1.AgentService.Upgrade:output_type -> nagi.v1.UpgradeResponse
-	47,  // 165: nagi.v1.AgentService.CancelUpgrade:output_type -> nagi.v1.CancelUpgradeResponse
-	106, // [106:166] is the sub-list for method output_type
-	46,  // [46:106] is the sub-list for method input_type
-	46,  // [46:46] is the sub-list for extension type_name
-	46,  // [46:46] is the sub-list for extension extendee
-	0,   // [0:46] is the sub-list for field type_name
+	94,  // 46: nagi.v1.NodeAuditSink.headers:type_name -> nagi.v1.NodeAuditSink.HeadersEntry
+	90,  // 47: nagi.v1.SetAuditSinkRequest.sinks:type_name -> nagi.v1.NodeAuditSink
+	18,  // 48: nagi.v1.AgentService.PutContainer:input_type -> nagi.v1.PutContainerRequest
+	20,  // 49: nagi.v1.AgentService.DeployContainer:input_type -> nagi.v1.DeployContainerRequest
+	21,  // 50: nagi.v1.AgentService.DeleteContainer:input_type -> nagi.v1.DeleteContainerRequest
+	23,  // 51: nagi.v1.AgentService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
+	17,  // 52: nagi.v1.AgentService.ListVolumes:input_type -> nagi.v1.ContainerRef
+	27,  // 53: nagi.v1.AgentService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
+	27,  // 54: nagi.v1.AgentService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	27,  // 55: nagi.v1.AgentService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
+	27,  // 56: nagi.v1.AgentService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	17,  // 57: nagi.v1.AgentService.ListSnapshots:input_type -> nagi.v1.ContainerRef
+	17,  // 58: nagi.v1.AgentService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
+	34,  // 59: nagi.v1.AgentService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	34,  // 60: nagi.v1.AgentService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	36,  // 61: nagi.v1.AgentService.StreamLogs:input_type -> nagi.v1.StreamLogsRequest
+	57,  // 62: nagi.v1.AgentService.Exec:input_type -> nagi.v1.ExecInput
+	61,  // 63: nagi.v1.AgentService.NodeShell:input_type -> nagi.v1.NodeShellInput
+	66,  // 64: nagi.v1.AgentService.NodeExec:input_type -> nagi.v1.NodeExecRequest
+	62,  // 65: nagi.v1.AgentService.ReclaimSnapshots:input_type -> nagi.v1.ReclaimSnapshotsRequest
+	63,  // 66: nagi.v1.AgentService.InspectComposeDir:input_type -> nagi.v1.InspectComposeDirRequest
+	68,  // 67: nagi.v1.AgentService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
+	68,  // 68: nagi.v1.AgentService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
+	72,  // 69: nagi.v1.AgentService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
+	74,  // 70: nagi.v1.AgentService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
+	68,  // 71: nagi.v1.AgentService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
+	68,  // 72: nagi.v1.AgentService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
+	78,  // 73: nagi.v1.AgentService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
+	17,  // 74: nagi.v1.AgentService.CheckImages:input_type -> nagi.v1.ContainerRef
+	38,  // 75: nagi.v1.AgentService.LoginRegistry:input_type -> nagi.v1.LoginRegistryRequest
+	17,  // 76: nagi.v1.AgentService.SyncBackup:input_type -> nagi.v1.ContainerRef
+	9,   // 77: nagi.v1.AgentService.AcceptReplica:input_type -> nagi.v1.AcceptReplicaRequest
+	11,  // 78: nagi.v1.AgentService.ListReplicas:input_type -> nagi.v1.ListReplicasRequest
+	17,  // 79: nagi.v1.AgentService.ListReplicaSnapshots:input_type -> nagi.v1.ContainerRef
+	18,  // 80: nagi.v1.AgentService.CheckContainer:input_type -> nagi.v1.PutContainerRequest
+	14,  // 81: nagi.v1.AgentService.RestoreReplica:input_type -> nagi.v1.RestoreReplicaRequest
+	17,  // 82: nagi.v1.AgentService.DeleteReplica:input_type -> nagi.v1.ContainerRef
+	16,  // 83: nagi.v1.AgentService.MigrateOut:input_type -> nagi.v1.MigrateOutRequest
+	17,  // 84: nagi.v1.AgentService.MigrateResume:input_type -> nagi.v1.ContainerRef
+	8,   // 85: nagi.v1.AgentService.SetFailover:input_type -> nagi.v1.SetFailoverRequest
+	17,  // 86: nagi.v1.AgentService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
+	6,   // 87: nagi.v1.AgentService.GetCache:input_type -> nagi.v1.GetCacheRequest
+	98,  // 88: nagi.v1.AgentService.SetLinks:input_type -> nagi.v1.LinkPlan
+	2,   // 89: nagi.v1.AgentService.CheckPorts:input_type -> nagi.v1.CheckPortsRequest
+	4,   // 90: nagi.v1.AgentService.RetryCerts:input_type -> nagi.v1.RetryCertsRequest
+	80,  // 91: nagi.v1.AgentService.SetAlertConfig:input_type -> nagi.v1.SetAlertConfigRequest
+	82,  // 92: nagi.v1.AgentService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
+	84,  // 93: nagi.v1.AgentService.GetStorage:input_type -> nagi.v1.GetStorageRequest
+	40,  // 94: nagi.v1.AgentService.SetProjectsRoot:input_type -> nagi.v1.SetProjectsRootRequest
+	51,  // 95: nagi.v1.AgentService.ListPanels:input_type -> nagi.v1.ListPanelsRequest
+	53,  // 96: nagi.v1.AgentService.AddPanel:input_type -> nagi.v1.AddPanelRequest
+	55,  // 97: nagi.v1.AgentService.RemovePanel:input_type -> nagi.v1.RemovePanelRequest
+	50,  // 98: nagi.v1.AgentService.GetMeshStatus:input_type -> nagi.v1.MeshStatusRequest
+	109, // 99: nagi.v1.AgentService.MeshPing:input_type -> nagi.v1.MeshPingRequest
+	109, // 100: nagi.v1.AgentService.MeshSpeedTest:input_type -> nagi.v1.MeshPingRequest
+	110, // 101: nagi.v1.AgentService.SetMeshOptions:input_type -> nagi.v1.MeshOptions
+	111, // 102: nagi.v1.AgentService.SetMesh:input_type -> nagi.v1.MeshConfig
+	48,  // 103: nagi.v1.AgentService.GetMirrors:input_type -> nagi.v1.GetMirrorsRequest
+	49,  // 104: nagi.v1.AgentService.SetMirrors:input_type -> nagi.v1.Mirrors
+	42,  // 105: nagi.v1.AgentService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainRequest
+	44,  // 106: nagi.v1.AgentService.Upgrade:input_type -> nagi.v1.UpgradeRequest
+	46,  // 107: nagi.v1.AgentService.CancelUpgrade:input_type -> nagi.v1.CancelUpgradeRequest
+	91,  // 108: nagi.v1.AgentService.SetAuditSink:input_type -> nagi.v1.SetAuditSinkRequest
+	19,  // 109: nagi.v1.AgentService.PutContainer:output_type -> nagi.v1.PutContainerResponse
+	112, // 110: nagi.v1.AgentService.DeployContainer:output_type -> nagi.v1.DeployEvent
+	22,  // 111: nagi.v1.AgentService.DeleteContainer:output_type -> nagi.v1.DeleteContainerResponse
+	112, // 112: nagi.v1.AgentService.ControlContainer:output_type -> nagi.v1.DeployEvent
+	26,  // 113: nagi.v1.AgentService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
+	29,  // 114: nagi.v1.AgentService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
+	33,  // 115: nagi.v1.AgentService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	33,  // 116: nagi.v1.AgentService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
+	33,  // 117: nagi.v1.AgentService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	35,  // 118: nagi.v1.AgentService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	112, // 119: nagi.v1.AgentService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
+	112, // 120: nagi.v1.AgentService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
+	33,  // 121: nagi.v1.AgentService.DeleteSnapshot:output_type -> nagi.v1.VolumeFileOpResponse
+	113, // 122: nagi.v1.AgentService.StreamLogs:output_type -> nagi.v1.LogLine
+	60,  // 123: nagi.v1.AgentService.Exec:output_type -> nagi.v1.ExecOutput
+	60,  // 124: nagi.v1.AgentService.NodeShell:output_type -> nagi.v1.ExecOutput
+	60,  // 125: nagi.v1.AgentService.NodeExec:output_type -> nagi.v1.ExecOutput
+	112, // 126: nagi.v1.AgentService.ReclaimSnapshots:output_type -> nagi.v1.DeployEvent
+	64,  // 127: nagi.v1.AgentService.InspectComposeDir:output_type -> nagi.v1.InspectComposeDirResponse
+	70,  // 128: nagi.v1.AgentService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
+	71,  // 129: nagi.v1.AgentService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
+	73,  // 130: nagi.v1.AgentService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
+	75,  // 131: nagi.v1.AgentService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
+	75,  // 132: nagi.v1.AgentService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
+	77,  // 133: nagi.v1.AgentService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
+	73,  // 134: nagi.v1.AgentService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
+	37,  // 135: nagi.v1.AgentService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
+	39,  // 136: nagi.v1.AgentService.LoginRegistry:output_type -> nagi.v1.LoginRegistryResponse
+	114, // 137: nagi.v1.AgentService.SyncBackup:output_type -> nagi.v1.BackupStatus
+	10,  // 138: nagi.v1.AgentService.AcceptReplica:output_type -> nagi.v1.AcceptReplicaResponse
+	12,  // 139: nagi.v1.AgentService.ListReplicas:output_type -> nagi.v1.ListReplicasResponse
+	35,  // 140: nagi.v1.AgentService.ListReplicaSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	13,  // 141: nagi.v1.AgentService.CheckContainer:output_type -> nagi.v1.CheckContainerResponse
+	112, // 142: nagi.v1.AgentService.RestoreReplica:output_type -> nagi.v1.DeployEvent
+	15,  // 143: nagi.v1.AgentService.DeleteReplica:output_type -> nagi.v1.DeleteReplicaResponse
+	112, // 144: nagi.v1.AgentService.MigrateOut:output_type -> nagi.v1.DeployEvent
+	112, // 145: nagi.v1.AgentService.MigrateResume:output_type -> nagi.v1.DeployEvent
+	97,  // 146: nagi.v1.AgentService.SetFailover:output_type -> nagi.v1.FailoverStatus
+	97,  // 147: nagi.v1.AgentService.ConfirmTakeover:output_type -> nagi.v1.FailoverStatus
+	7,   // 148: nagi.v1.AgentService.GetCache:output_type -> nagi.v1.NodeCache
+	1,   // 149: nagi.v1.AgentService.SetLinks:output_type -> nagi.v1.SetLinksResponse
+	3,   // 150: nagi.v1.AgentService.CheckPorts:output_type -> nagi.v1.CheckPortsResponse
+	5,   // 151: nagi.v1.AgentService.RetryCerts:output_type -> nagi.v1.RetryCertsResponse
+	81,  // 152: nagi.v1.AgentService.SetAlertConfig:output_type -> nagi.v1.SetAlertConfigResponse
+	83,  // 153: nagi.v1.AgentService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	88,  // 154: nagi.v1.AgentService.GetStorage:output_type -> nagi.v1.NodeStorage
+	41,  // 155: nagi.v1.AgentService.SetProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
+	52,  // 156: nagi.v1.AgentService.ListPanels:output_type -> nagi.v1.ListPanelsResponse
+	54,  // 157: nagi.v1.AgentService.AddPanel:output_type -> nagi.v1.AddPanelResponse
+	56,  // 158: nagi.v1.AgentService.RemovePanel:output_type -> nagi.v1.RemovePanelResponse
+	115, // 159: nagi.v1.AgentService.GetMeshStatus:output_type -> nagi.v1.MeshStatus
+	116, // 160: nagi.v1.AgentService.MeshPing:output_type -> nagi.v1.MeshPingResponse
+	117, // 161: nagi.v1.AgentService.MeshSpeedTest:output_type -> nagi.v1.MeshSpeedResponse
+	110, // 162: nagi.v1.AgentService.SetMeshOptions:output_type -> nagi.v1.MeshOptions
+	89,  // 163: nagi.v1.AgentService.SetMesh:output_type -> nagi.v1.SetMeshResponse
+	49,  // 164: nagi.v1.AgentService.GetMirrors:output_type -> nagi.v1.Mirrors
+	49,  // 165: nagi.v1.AgentService.SetMirrors:output_type -> nagi.v1.Mirrors
+	43,  // 166: nagi.v1.AgentService.SetPanelDomain:output_type -> nagi.v1.SetPanelDomainResponse
+	45,  // 167: nagi.v1.AgentService.Upgrade:output_type -> nagi.v1.UpgradeResponse
+	47,  // 168: nagi.v1.AgentService.CancelUpgrade:output_type -> nagi.v1.CancelUpgradeResponse
+	92,  // 169: nagi.v1.AgentService.SetAuditSink:output_type -> nagi.v1.SetAuditSinkResponse
+	109, // [109:170] is the sub-list for method output_type
+	48,  // [48:109] is the sub-list for method input_type
+	48,  // [48:48] is the sub-list for extension type_name
+	48,  // [48:48] is the sub-list for extension extendee
+	0,   // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_agent_proto_init() }
@@ -5955,7 +6229,7 @@ func file_nagi_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_agent_proto_rawDesc), len(file_nagi_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   90,
+			NumMessages:   94,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

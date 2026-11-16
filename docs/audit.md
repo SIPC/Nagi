@@ -133,6 +133,19 @@
 - 外送配置用主密钥加密后存在设置里（`audit_sinks`），返回界面时 Secret Key、Access Key 和请求头的值留空，保存时留空表示不变。
 - 修改外送配置是 `security` 事件（`audit_sinks_changed`）：先记下这条，等原来的目标都发到这一条（最多 15 秒），再换成新的配置，并发一条告警。攻击者拿到管理员后改外送，改之前的记录已经送出去了。
 - 「发送测试消息」发一条 `{"type":"test"}`，S3 写一个 `nagi-test.json`。
+- 传输（syslog、HTTP、S3 的 SigV4）在 `pkg/auditsink`，面板和节点共用。
+
+## 节点本地审计
+
+面板被攻破时，面板上的记录不可信，所以节点自己也记一份（`agent/auditlog`）。
+
+- **存储**：`<数据目录>/audit/audit.jsonl`，JSON Lines，每行一条：`seq`（递增的序号）、`time`、`panel`（发起的面板指纹，控制连接确认过的）、`actor`（面板说的成员和令牌）、`ip`（成员的来源地址，面板说的）、`action`、`target`、`detail`、`result`（`ok`、`failed`、`denied`）、`error`。单个字段最长 2000 字节。满 10 MB 改名为 `audit.<最后的序号>.jsonl`，连当前文件保留 10 个。
+- **记录范围**：
+  - 节点终端的打开和关闭（`node_shell_open`、`node_shell_close`，带时长），`node_exec` 的命令、工作目录和退出码。成员和来源地址由面板随请求带来（`NodeShellStart.actor`、`ip`，`NodeExecRequest.actor`、`ip`）。
+  - 面板下发的修改类指令：控制连接上 AgentService 的方法，除了名字以 Get、List、Query、Read、Check、Stream 开头的查询和心跳类的（`MeshPing`、`MeshSpeedTest`）。部署、删除、升级、信任列表、告警配置、节点文件、代理计划、外送配置都在里面；对象从请求里的项目、容器、路径等字段取（`agent/audit.go` 的拦截器）。被拒绝的（不是主面板、节点访问关着）也记，`result` 是 `denied`。
+  - 被本节点拒绝的越权请求（见 [mesh.md](mesh.md#越权识别)），`actor` 是 `mesh:<调用方公钥>`。和上报一样每 10 分钟最多 200 条。
+- **外送**：面板把「设置 → 安全 → 日志外送」的目标随告警配置一起下发（`AgentService.SetAuditSink`：连上、批准、改名、上报时，以及修改外送设置后立即推给所有在线节点）。节点按面板指纹分别保存在 `identity/auditsinks.json`（0600，里面有密钥），面板挂了照常外送；几个面板配了同一个目标（ID 相同）只发一份。每 5 秒发一次，每个目标一个游标（`audit/cursors.json`），失败时不动、恢复后补发；新目标从当时最新的记录开始。每行加上 `source: node`、`node_id`、`node`，接收端能和面板的记录分开。S3 每批一个对象。不发锚点、不上传录制（录制在面板上）。
+- **局限**：节点被拿到 root 以后可以删改本地文件和外送配置；已经外送的记录还在。旧版本的面板不下发外送配置，节点只写本地文件。
 
 ## 界面
 

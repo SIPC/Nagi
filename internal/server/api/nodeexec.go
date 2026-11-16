@@ -43,7 +43,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	ctx2, cancel := context.WithTimeout(ctx, timeout+10*time.Second)
 	defer cancel()
 	stream, err := conn.Agent.NodeExec(ctx2, &nagiv1.NodeExecRequest{
-		Command: command, Cwd: cwd, TimeoutSeconds: uint32(timeout / time.Second), Actor: u.Name + " (" + u.Via + ")",
+		Command: command, Cwd: cwd, TimeoutSeconds: uint32(timeout / time.Second), Actor: u.Name + " (" + u.Via + ")", Ip: auth.RequestMeta(ctx).IP,
 	})
 	if err != nil {
 		return fail(nodeExecError(err))

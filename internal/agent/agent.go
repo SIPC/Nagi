@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/alerts"
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
@@ -149,6 +150,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.intranet = newIntranet(a)
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
+	a.openAudit(ctx)
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {
@@ -280,12 +282,15 @@ type agent struct {
 	egress *egress
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
 	violations *violations
-	replicas   *replicas
-	backups    *backupStates
-	failovers  *failovers
-	votes      *voteBatcher
-	ctx        context.Context
-	startedAt  time.Time
+	// audit 是节点本地审计，auditShip 按面板下发的配置外送它（见 audit.go）。
+	audit     *auditlog.Log
+	auditShip *auditlog.Shipper
+	replicas  *replicas
+	backups   *backupStates
+	failovers *failovers
+	votes     *voteBatcher
+	ctx       context.Context
+	startedAt time.Time
 
 	mu       sync.Mutex
 	subs     []chan struct{}
@@ -545,7 +550,8 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	defer sess.Close()
 
 	guardUnary, guardStream := a.primaryGuard(p.Fingerprint)
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, guardUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, guardStream, detachStream),
+	auditUnary, auditStream := a.auditInterceptors(p.Fingerprint)
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(explainUnary, auditUnary, guardUnary, detachUnary), grpc.ChainStreamInterceptor(explainStream, auditStream, guardStream, detachStream),
 		grpc.MaxRecvMsgSize(64<<20))
 	nagiv1.RegisterAgentServiceServer(srv, &agentService{
 		node: a, projects: a.projects, metrics: a.metrics, alerts: a.alerts, panel: p.Fingerprint, changed: a.changed,

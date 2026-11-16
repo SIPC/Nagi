@@ -121,6 +121,29 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 	if _, err := c.Agent.SetAlertConfig(ctx, &nagiv1.SetAlertConfigRequest{Config: cfg}); err != nil {
 		r.log.Warn("下发告警配置失败", "node", c.NodeID, "err", err)
 	}
+	r.pushAuditSinks(ctx, c)
+}
+
+// pushAuditSinks 把日志外送目标下发给一个节点（见 docs/audit.md#节点本地审计）。旧版本的节点没有这个接口，不报错。
+func (r *Registry) pushAuditSinks(ctx context.Context, c *Conn) {
+	if r.ReadOnly || r.AuditSinks == nil {
+		return
+	}
+	_, err := c.Agent.SetAuditSink(ctx, &nagiv1.SetAuditSinkRequest{Sinks: r.AuditSinks(ctx)})
+	if err != nil && status.Code(err) != codes.Unimplemented {
+		r.log.Warn("下发日志外送配置失败", "node", c.NodeID, "err", err)
+	}
+}
+
+// PushAuditSinks 把日志外送目标下发给所有在线节点，外送设置修改后调用。
+func (r *Registry) PushAuditSinks() {
+	for _, c := range r.Conns() {
+		go func(c *Conn) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			r.pushAuditSinks(ctx, c)
+		}(c)
+	}
 }
 
 // SendAlert 把告警发到面板配置的渠道。channelIDs 为空时发到所有渠道。

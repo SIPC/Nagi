@@ -1,0 +1,194 @@
+package auditsink
+
+// 审计日志外送的传输（见 docs/audit.md#外送）：syslog（TCP + TLS）、HTTP（JSON Lines）、S3（SigV4）。
+// 面板外送审计库（server/audit）和节点外送本地审计（agent/auditlog）共用。
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"sort"
+	"strings"
+	"time"
+)
+
+// Config 是一个外送目标。
+type Config struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"` // syslog、http、s3
+	// syslog：RFC 5424，TCP + TLS。
+	Address string `json:"address,omitempty"`
+	CA      string `json:"ca,omitempty"` // 自签的日志服务器的 CA（PEM），为空时用系统的根证书
+	// http：每 2 秒批量 POST 一次 JSON Lines，可以带固定请求头。
+	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	// s3：每小时一个对象，可选同时上传录制。
+	Endpoint   string `json:"endpoint,omitempty"`
+	Region     string `json:"region,omitempty"`
+	Bucket     string `json:"bucket,omitempty"`
+	Prefix     string `json:"prefix,omitempty"`
+	AccessKey  string `json:"access_key,omitempty"`
+	SecretKey  string `json:"secret_key,omitempty"`
+	Recordings bool   `json:"recordings,omitempty"`
+}
+
+// PostHTTP 把若干行作为 JSON Lines POST 出去。
+func PostHTTP(ctx context.Context, client *http.Client, sk Config, lines [][]byte) error {
+	body := append(bytes.Join(lines, []byte("\n")), '\n')
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sk.URL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-ndjson")
+	req.Header.Set("User-Agent", "nagi-audit")
+	for k, v := range sk.Headers {
+		req.Header.Set(k, v)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<16))
+	if res.StatusCode/100 != 2 {
+		return fmt.Errorf("HTTP %d", res.StatusCode)
+	}
+	return nil
+}
+
+// SendSyslog 按 RFC 5424 发出（TCP + TLS，RFC 5425 的长度前缀分帧）。
+func SendSyslog(ctx context.Context, sk Config, lines [][]byte) error {
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if host, _, err := net.SplitHostPort(sk.Address); err == nil {
+		cfg.ServerName = host
+	}
+	if sk.CA != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(sk.CA)) {
+			return errors.New("CA 证书格式不正确")
+		}
+		cfg.RootCAs = pool
+	}
+	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}, Config: cfg}
+	conn, err := d.DialContext(ctx, "tcp", sk.Address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	host, _ := os.Hostname()
+	var buf bytes.Buffer
+	for _, l := range lines {
+		// PRI 110 = facility 13（log audit）× 8 + severity 6（informational）。
+		msg := fmt.Sprintf("<110>1 %s %s nagi - audit - %s", time.Now().UTC().Format(time.RFC3339Nano), host, l)
+		fmt.Fprintf(&buf, "%d %s", len(msg), msg)
+	}
+	_, err = conn.Write(buf.Bytes())
+	return err
+}
+
+// Send 把若干行发到目标。S3 每批一个对象，键带上 first（批里第一条的序号）免得重名。
+func Send(ctx context.Context, client *http.Client, sk Config, first int64, lines [][]byte) error {
+	switch sk.Type {
+	case "http":
+		return PostHTTP(ctx, client, sk, lines)
+	case "syslog":
+		return SendSyslog(ctx, sk, lines)
+	case "s3":
+		key := strings.Trim(sk.Prefix, "/")
+		if key != "" {
+			key += "/"
+		}
+		now := time.Now().UTC()
+		key += fmt.Sprintf("%s/%s-%d.jsonl", now.Format("2006/01/02"), now.Format("15"), first)
+		return S3Put(ctx, client, sk, key, bytes.Join(lines, []byte("\n")), "application/x-ndjson")
+	}
+	return fmt.Errorf("unknown sink type %q", sk.Type)
+}
+
+// S3Put 用 SigV4 签名 PUT 一个对象。
+func S3Put(ctx context.Context, client *http.Client, sk Config, key string, body []byte, contentType string) error {
+	endpoint := strings.TrimRight(sk.Endpoint, "/")
+	if !strings.Contains(endpoint, "://") {
+		endpoint = "https://" + endpoint
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return err
+	}
+	// 统一用路径风格（https://<endpoint>/<bucket>/<key>），兼容 MinIO、R2、各家的 S3 兼容存储。
+	u.Path = "/" + sk.Bucket + "/" + key
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentType)
+	region := sk.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+	signV4(req, body, sk.AccessKey, sk.SecretKey, region, time.Now().UTC())
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	msg, _ := io.ReadAll(io.LimitReader(res.Body, 512))
+	if res.StatusCode/100 != 2 {
+		return fmt.Errorf("S3 HTTP %d: %s", res.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	return nil
+}
+
+func hmacSHA256(key []byte, s string) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(s))
+	return h.Sum(nil)
+}
+
+func sha256Hex(b []byte) string {
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}
+
+// signV4 按 AWS Signature Version 4 签名请求。
+func signV4(req *http.Request, body []byte, accessKey, secretKey, region string, now time.Time) {
+	amzDate := now.Format("20060102T150405Z")
+	day := now.Format("20060102")
+	payload := sha256Hex(body)
+	req.Header.Set("X-Amz-Date", amzDate)
+	req.Header.Set("X-Amz-Content-Sha256", payload)
+	req.Header.Set("Host", req.URL.Host)
+	headers := map[string]string{"host": req.URL.Host, "x-amz-content-sha256": payload, "x-amz-date": amzDate, "content-type": req.Header.Get("Content-Type")}
+	var names []string
+	for k := range headers {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	var canonHeaders strings.Builder
+	for _, k := range names {
+		canonHeaders.WriteString(k + ":" + strings.TrimSpace(headers[k]) + "\n")
+	}
+	signed := strings.Join(names, ";")
+	canonical := strings.Join([]string{req.Method, req.URL.EscapedPath(), req.URL.RawQuery, canonHeaders.String(), signed, payload}, "\n")
+	scope := day + "/" + region + "/s3/aws4_request"
+	toSign := strings.Join([]string{"AWS4-HMAC-SHA256", amzDate, scope, sha256Hex([]byte(canonical))}, "\n")
+	k := hmacSHA256([]byte("AWS4"+secretKey), day)
+	k = hmacSHA256(k, region)
+	k = hmacSHA256(k, "s3")
+	k = hmacSHA256(k, "aws4_request")
+	sig := hex.EncodeToString(hmacSHA256(k, toSign))
+	req.Header.Set("Authorization", fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s", accessKey, scope, signed, sig))
+}

@@ -447,6 +447,8 @@ func (s *Server) Run(ctx context.Context) error {
 			}}
 		a.Shipper.Configure(ctx, a.Sinks(ctx))
 	}
+	// 节点外送自己的本地审计，用和面板相同的目标（见 docs/audit.md#节点本地审计）。
+	s.nodes.AuditSinks = func(ctx context.Context) []*nagiv1.NodeAuditSink { return api.NodeAuditSinks(a.Sinks(ctx)) }
 	a.Mount(mux)
 	// MCP 接入（见 docs/mcp.md）：工具在进程内调用上面挂好的接口。
 	mcp.Mount(mux, mcp.Options{
