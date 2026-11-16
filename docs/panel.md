@@ -111,7 +111,7 @@
 
 ## 会话
 
-会话 cookie 是 `__Host-nagi_session`（`HttpOnly`、`Secure`、`SameSite=Strict`），安全入口的 cookie 是 `__Host-nagi_entrance`：浏览器保证带这个前缀的 cookie 只能由面板自己的域名、通过 HTTPS 设置，同一主域名下兄弟子域名上的网站覆盖不了。旧名字的 cookie（`nagi_session`、`nagi_entrance`）在一个版本内仍然接受，收到时换发新名字。数据库里只存令牌的哈希。
+会话 cookie 是 `__Host-nagi_session`（`HttpOnly`、`Secure`、`SameSite=Strict`），安全入口的 cookie 是 `__Host-nagi_entrance`：浏览器保证带这个前缀的 cookie 只能由面板自己的域名、通过 HTTPS 设置，同一主域名下兄弟子域名上的网站覆盖不了。v0.29.0 以前的会话 cookie `nagi_session` 从 v0.29.1 起不再接受（收到时只让浏览器删掉）：它没有前缀，同一主域名下的其他子域名可以给它种一个自己的会话，受害者打开面板就进了别人的账号（登录 CSRF）；只有这个旧 cookie 的人要重新登录一次。安全入口的旧 cookie `nagi_entrance` 仍然接受、收到时换发新名字：它的值由入口路径算出，别的网站种不了，忘了入口路径的人也不会因此被挡在外面。数据库里只存令牌的哈希。
 
 每个会话有一个固定的 ID（`sessions.id`），令牌只用来找到会话。终端和日志流每 30 秒按会话 ID 重查，审计记录的 `session` 字段是会话 ID 的哈希前 12 位。
 

@@ -173,7 +173,7 @@ const SettingEntrance = "entrance"
 
 const entranceCookie = "__Host-nagi_entrance"
 
-// legacyEntranceCookie 是以前的名字，在一个版本内仍然接受，收到时换发新名字。
+// legacyEntranceCookie 是以前的名字，仍然接受，收到时换发新名字：它的值由入口路径算出，别的网站种不了（见 docs/panel.md#会话）。
 const legacyEntranceCookie = "nagi_entrance"
 
 // Entrance 返回安全入口路径（不含 /），没开启时为空。

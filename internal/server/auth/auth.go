@@ -32,7 +32,8 @@ import (
 // 兄弟子域名上的网站覆盖不了（见 docs/panel.md#会话）。
 const CookieName = "__Host-nagi_session"
 
-// legacyCookieName 是以前的名字，在一个版本内仍然接受，收到时换发新名字。
+// legacyCookieName 是 v0.29.0 以前的名字。v0.29.1 起不再接受（见 docs/panel.md#会话）：它没有 __Host- 前缀，
+// 同一个主域名下的其他子域名可以给它种一个自己的会话（登录 CSRF）。收到时只让浏览器删掉。
 const legacyCookieName = "nagi_session"
 
 const sessionTTL = 7 * 24 * time.Hour
@@ -464,10 +465,9 @@ func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.
 	}
 	var out checked
 	out.challenge = res.challenge
-	// 旧名字的 cookie：换发新名字，删掉旧的。
-	if legacyOnly(h) {
-		out.cookies = append(out.cookies, sessionCookie(token, time.Unix(res.state.ExpiresAt, 0)),
-			&http.Cookie{Name: legacyCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	// 还带着旧名字的 cookie：让浏览器删掉（不再使用它）。
+	if hasLegacyCookie(h) {
+		out.cookies = append(out.cookies, &http.Cookie{Name: legacyCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	}
 	return context.WithValue(ctx, userKey{}, res.user), out, nil
 }
@@ -512,37 +512,33 @@ func (i *interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 	}
 }
 
-// SessionToken 从请求头的 Cookie 里取出会话 token。
+// SessionToken 从请求头的 Cookie 里取出会话 token。只认带 __Host- 前缀的名字。
 func SessionToken(h http.Header) string {
-	legacy := ""
 	for _, line := range h.Values("Cookie") {
 		cookies, err := http.ParseCookie(line)
 		if err != nil {
 			continue
 		}
 		for _, c := range cookies {
-			switch c.Name {
-			case CookieName:
+			if c.Name == CookieName {
 				return c.Value
-			case legacyCookieName:
-				legacy = c.Value
 			}
 		}
 	}
-	return legacy
+	return ""
 }
 
-// legacyOnly 判断请求只带着旧名字的 cookie。
-func legacyOnly(h http.Header) bool {
-	has, legacy := false, false
+// hasLegacyCookie 判断请求带着旧名字的 cookie。
+func hasLegacyCookie(h http.Header) bool {
 	for _, line := range h.Values("Cookie") {
 		cookies, _ := http.ParseCookie(line)
 		for _, c := range cookies {
-			has = has || c.Name == CookieName
-			legacy = legacy || c.Name == legacyCookieName
+			if c.Name == legacyCookieName {
+				return true
+			}
 		}
 	}
-	return legacy && !has
+	return false
 }
 
 // fromLocalProxy 判断请求是不是面板自带节点的 Caddy 转发的：来自本机，并且带着正确的 X-Nagi-Proxy。

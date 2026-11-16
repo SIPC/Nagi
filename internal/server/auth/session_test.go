@@ -582,3 +582,21 @@ func TestSessionConcurrentRotate(t *testing.T) {
 		}
 	}
 }
+
+// L9：blog.example.com 上的人给 .example.com 种一个 nagi_session=<攻击者自己的会话>，受害者没有 __Host- cookie 时
+// 打开面板就进了攻击者的账号（登录 CSRF）。旧名字的 cookie 不再被接受。
+func TestLegacyCookieIgnored(t *testing.T) {
+	h := newSessionHarness(t)
+	attacker := h.login("op", home)
+	hdr := http.Header{"Cookie": {legacyCookieName + "=" + attacker}}
+	if got := SessionToken(hdr); got != "" {
+		t.Fatal("旧名字的 cookie 不应被当成会话")
+	}
+	if _, err := h.s.RequestUser(&http.Request{Header: hdr, RemoteAddr: home.IP + ":5000"}); err == nil {
+		t.Fatal("只带旧名字 cookie 的请求应要求登录")
+	}
+	hdr.Add("Cookie", CookieName+"=real")
+	if got := SessionToken(hdr); got != "real" {
+		t.Fatalf("新名字的 cookie 照常使用：%q", got)
+	}
+}
