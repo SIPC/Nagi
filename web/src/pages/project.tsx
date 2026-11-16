@@ -191,6 +191,12 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
             <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
+            {/* 和项目栏一样：镜像可更新时名称后面一个蓝色向上箭头。 */}
+            {(project.data.status?.imageUpdates ?? []).some((x) => x.container === m.name) && (
+              <span title={t.projects.card.imageUpdate} className="inline-flex shrink-0">
+                <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
+              </span>
+            )}
             <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
           </Link>
         );
@@ -294,8 +300,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
             </Link>
           );
         })}
-        <div className="h-1" />
-        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, !section("network") && idle)}>
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, "mt-2", !section("network") && idle)}>
           {t.project.sections.network}
           {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
         </Link>

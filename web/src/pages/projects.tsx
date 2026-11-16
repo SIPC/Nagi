@@ -24,7 +24,6 @@ import {
   Field,
   HelpTip,
   Input,
-  Menu,
   Notice,
   QueryError,
   Roll,
@@ -121,17 +120,26 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
     });
   }
   if (items.length === 0) return null;
+  // 只有一条时直接显示，不用再点「查看」。
+  if (items.length === 1)
+    return (
+      <Notice tone="warning" title={items[0].title} actions={items[0].action}>
+        {items[0].text}
+      </Notice>
+    );
   return (
     <div>
-      <div role="status" className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <span>
-          <span className="mr-2 mb-0.5 inline-block size-1.5 rounded-full bg-warning align-middle" />
-          <span className="font-medium">{m.title(items.length)}</span> <span className="text-muted-foreground max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
-        </span>
-        <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? m.collapse : m.view}
-        </Button>
-      </div>
+      <Notice
+        tone="warning"
+        title={m.title(items.length)}
+        actions={
+          <Button variant="ghost" className={edge} readOnlyOk aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? m.collapse : m.view}
+          </Button>
+        }
+      >
+        <span className="max-md:hidden">{t.common.list(items.map((it) => it.short))}</span>
+      </Notice>
       <Collapse open={open}>
         <div className="grid gap-2 pt-2">
           {items.map((it) => (
@@ -310,7 +318,7 @@ function GroupHeader({
       )}
       onClick={onToggle}
     >
-      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-240", open && "rotate-90")} />
       <span className="truncate font-medium">{name}</span>
       <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{count}</span>
     </button>
@@ -395,7 +403,12 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
         actions={
           <>
             {newButton}
-            {isAdmin && groups.length > 0 && <Menu items={[{ label: t.labels.manageGroups, onSelect: () => setManaging(true) }]} />}
+            {/* 只有一项操作，不放进 ⋯ 菜单。 */}
+            {isAdmin && groups.length > 0 && (
+              <Button variant="outline" onClick={() => setManaging(true)}>
+                {t.labels.manageGroups}
+              </Button>
+            )}
           </>
         }
       />
@@ -451,7 +464,21 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
               </div>
             </div>
             {shownProjects.length === 0 ? (
-              <EmptyRow>{t.projects.filter.empty}</EmptyRow>
+              <EmptyRow
+                action={
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("");
+                      navigateList({ to: "/projects", search: (s) => ({ ...s, q: undefined, group: undefined, ungrouped: undefined }), replace: true });
+                    }}
+                  >
+                    {t.audit.clearFilters}
+                  </Button>
+                }
+              >
+                {t.projects.filter.empty}
+              </EmptyRow>
             ) : sections ? (
               // 分组之间比组内（标题到卡片 8）宽，看得出哪些卡片属于同一组。
               <div className="grid gap-6">
@@ -561,7 +588,8 @@ export function NewProjectPage() {
   return <ProjectsPage creating />;
 }
 
-// NewProjectDialog：新建项目只填名称，网络名由名称生成，要改时点「修改」。创建后进入项目概览，第一个容器也要点添加。
+// NewProjectDialog：新建项目只填名称，网络名由名称生成，要改时点「编辑」。
+// 字段错误提交后才显示（不靠浏览器的必填气泡，也不边输入边报错）。创建后进入项目概览，第一个容器也要点添加。
 function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialGroup?: string }) {
   const navigate = useNavigate();
   const { isAdmin } = useRole();
@@ -570,7 +598,10 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
   const [group, setGroup] = useState(initialGroup ?? "");
   const [network, setNetwork] = useState("");
   const [editNetwork, setEditNetwork] = useState(false);
+  const [checked, setChecked] = useState(false);
   const generated = slugName(name, "");
+  const nameError = checked && !name.trim() ? t.projectSettings.general.nameRequired : "";
+  const networkError = checked ? checkName(network) : "";
   const create = useMutation({
     mutationFn: async () => {
       const p = await projectClient.createProject({ name, networkName: network.trim() || generated });
@@ -584,23 +615,23 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
     <Dialog open onClose={close} title={t.projects.newProject}>
       <form
         className="grid gap-4"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          setChecked(true);
+          if (!name.trim() || checkName(network)) return;
           create.mutate();
         }}
       >
-        <Field label={t.projects.create.name} htmlFor="name">
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} required maxLength={64} autoFocus />
+        <Field label={t.projects.create.name} htmlFor="name" error={nameError}>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.projects.create.namePlaceholder} maxLength={64} autoFocus />
         </Field>
         {editNetwork ? (
-          <Field label={t.projects.create.networkName} htmlFor="network" hint={t.projects.create.slugHint} help={t.projects.create.networkHelp} error={checkName(network)}>
+          <Field label={t.projects.create.networkName} htmlFor="network" hint={t.projects.create.slugHint} help={t.projects.create.networkHelp} error={networkError}>
             <Input
               id="network"
               value={network}
-              onChange={(e) => {
-                setNetwork(e.target.value);
-                e.target.setCustomValidity(checkName(e.target.value));
-              }}
+              onChange={(e) => setNetwork(e.target.value)}
               placeholder={slugName(name, "shop")}
               autoComplete="off"
               spellCheck={false}

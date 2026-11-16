@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
-import { Alert, Button, badgeVariants, DialogActions, EmptyRow, Field, Input, List, Row, RowMenu, Select, Spinner } from "@/components/ui";
+import { Alert, Button, badgeVariants, buttonVariants, DialogActions, EmptyRow, Field, Input, List, Row, RowMenu, Select, Spinner } from "@/components/ui";
 import type { Node, PanelUser } from "@/gen/nagi/v1/api_pb";
 import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient } from "@/lib/api";
@@ -42,6 +42,8 @@ const labelError = (s: string) => ([...tidy(s)].length > labelMax ? t.labels.too
 export function GroupSelect({ id, value, groups, onChange }: { id: string; value: string; groups: string[]; onChange: (v: string) => void }) {
   const newValue = "\u0000new";
   const [creating, setCreating] = useState(false);
+  // 新建分组前选的值：取消新建时恢复，不变成「无」。
+  const [before, setBefore] = useState(value);
   if (creating) {
     return (
       <div className="flex gap-2">
@@ -50,7 +52,7 @@ export function GroupSelect({ id, value, groups, onChange }: { id: string; value
           variant="ghost"
           onClick={() => {
             setCreating(false);
-            onChange("");
+            onChange(before);
           }}
         >
           {t.common.actions.cancel}
@@ -65,6 +67,7 @@ export function GroupSelect({ id, value, groups, onChange }: { id: string; value
       value={value}
       onChange={(e) => {
         if (e.target.value === newValue) {
+          setBefore(value);
           setCreating(true);
           onChange("");
         } else onChange(e.target.value);
@@ -97,7 +100,8 @@ export function TagChip({ name, onRemove, className }: { name: string; onRemove?
 }
 
 // TagEditor：编辑一组标签：输入后按回车（或逗号）添加，退格删掉最后一个。suggestions 是别的节点上已有的标签。
-export function TagEditor({ id, value, suggestions, onChange }: { id: string; value: string[]; suggestions: string[]; onChange: (v: string[]) => void }) {
+// 字段名、格式和错误都由这里的 Field 显示：出错时错误替换格式说明，不同时出现。
+export function TagEditor({ id, label, hint, value, suggestions, onChange }: { id: string; label: string; hint?: string; value: string[]; suggestions: string[]; onChange: (v: string[]) => void }) {
   const [text, setText] = useState("");
   const listId = `${id}-suggestions`;
   const add = () => {
@@ -108,7 +112,7 @@ export function TagEditor({ id, value, suggestions, onChange }: { id: string; va
   };
   const error = labelError(text) || (value.length >= maxNodeTags && tidy(text) ? t.labels.tooMany : "");
   return (
-    <div className="grid gap-2">
+    <Field label={label} htmlFor={id} hint={hint} error={error || undefined}>
       {/* 外框和 Input 一样：高 32（手机 40），1px 边框，聚焦时边框变 ring 色加 3px 光晕，出错时红框。 */}
       <div className={cn("flex min-h-8 flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 max-md:min-h-10", error && "border-destructive")}>
         {value.map((v) => (
@@ -141,12 +145,7 @@ export function TagEditor({ id, value, suggestions, onChange }: { id: string; va
             ))}
         </datalist>
       </div>
-      {error && (
-        <p role="alert" className="leading-5 text-destructive">
-          {error}
-        </p>
-      )}
-    </div>
+    </Field>
   );
 }
 
@@ -177,9 +176,7 @@ export function EditNodeTags({ node, allTags, onDone }: { node: Node; allTags: s
         save();
       }}
     >
-      <Field label={t.labels.tags} htmlFor="node-tags" hint={t.labels.tagsHint}>
-        <TagEditor id="node-tags" value={tags} suggestions={allTags} onChange={setTags} />
-      </Field>
+      <TagEditor id="node-tags" label={t.labels.tags} hint={t.labels.tagsHint} value={tags} suggestions={allTags} onChange={setTags} />
       {error && <Alert>{error}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onDone}>
@@ -196,9 +193,10 @@ export function EditNodeTags({ node, allTags, onDone }: { node: Node; allTags: s
 
 // TagFilter：按标签筛选，可以多选，带任一选中标签的节点都显示。
 export function TagFilter({ tags, value, onChange }: { tags: Label[]; value: string[]; onChange: (v: string[]) => void }) {
-  const chip = "inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border px-3 text-[13px] transition-colors outline-none focus-ring";
-  const on = "border-foreground bg-foreground text-background";
-  const off = "text-muted-foreground hover:bg-accent hover:text-foreground";
+  // 和其他按钮一样高 32、14 号的次要按钮；选中的用 accent 底色，不反白。
+  const chip = buttonVariants({ variant: "outline" });
+  const on = "bg-accent";
+  const off = "text-muted-foreground hover:text-foreground";
   return (
     <div role="group" aria-label={t.labels.filterByTag} className="flex flex-wrap gap-2">
       <button type="button" aria-pressed={value.length === 0} className={cn(chip, value.length === 0 ? on : off)} onClick={() => onChange([])}>
@@ -329,7 +327,7 @@ function RenameLabel({
         save();
       }}
     >
-      <Field label={kind === "group" ? m.renameGroup : m.renameTag} htmlFor="label-name" error={labelError(value)} hint={members.length > 0 ? m.renamedMembers(t.common.list(members)) : undefined}>
+      <Field label={m.newName} htmlFor="label-name" error={labelError(value)} help={members.length > 0 ? m.renamedMembers(t.common.list(members)) : undefined}>
         <Input id="label-name" value={value} onChange={(e) => setValue(e.target.value)} maxLength={labelMax} autoFocus required pattern=".*\S.*" autoComplete="off" />
       </Field>
       {error && <Alert>{error}</Alert>}
@@ -339,7 +337,7 @@ function RenameLabel({
         </Button>
         <Button type="submit" disabled={busy || !!labelError(value)}>
           {busy && <Spinner />}
-          {t.common.actions.save}
+          {m.rename}
         </Button>
       </DialogActions>
     </form>
