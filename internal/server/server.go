@@ -465,7 +465,7 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.audit.PruneLoop(ctx, a.Retention)
 	// 日志外送（见 docs/audit.md#外送）：只有主面板外送，备用面板只同步。
 	if s.standby == nil {
-		a.Shipper = &audit.Shipper{Log: s.audit, Recordings: a.Recordings, Nodes: s.auditNodes,
+		a.Shipper = &audit.Shipper{Log: s.audit, Recordings: a.Recordings, Nodes: s.auditNodes, Logger: s.log.With("component", "audit"),
 			OnFailure: func(ctx context.Context, sk audit.SinkConfig, failing bool, msg string) {
 				status := "resolved"
 				if failing {

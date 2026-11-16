@@ -143,3 +143,111 @@ func TestRelayNodeAuditS3Key(t *testing.T) {
 		t.Fatalf("puts = %v", puts)
 	}
 }
+
+// R2：被攻破的节点返回伪造的 first、last：之前面板用节点给的 first 拼 S3 的键（能覆盖这一小时早些时候的对象），
+// 游标不检查是否前进（每轮重复上传）；一个节点出错时排在后面的节点这一轮都代发不了，目标还被记成失败。
+func TestRelayNodeForgedBatches(t *testing.T) {
+	var mu sync.Mutex
+	puts := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		puts[r.URL.Path]++
+		// evil 的第一批被接收端拒收。
+		if strings.Contains(r.URL.Path, "/node/evil/") && puts[r.URL.Path] == 1 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+		}
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+	l := openTestLog(t)
+	good := &fakeNode{}
+	good.add("")
+	// evil 每次都说 first=1、last=1，并且接收端拒收它的内容。
+	evil := func(_ context.Context, after int64, _ int) ([][]byte, int64, int64, int64, error) {
+		if after < 0 {
+			return nil, 0, 0, 0, nil
+		}
+		return [][]byte{[]byte(`{"seq":1}`)}, 1, 1, 0, nil
+	}
+	nodes := []NodeSource{{ID: "evil", Name: "evil", Read: evil}, {ID: "good", Name: "good", Read: good.read}}
+	s := &Shipper{Log: l, Nodes: func() []NodeSource { return nodes }}
+	s.Configure(ctx, nil)
+	sk := SinkConfig{ID: "s", Type: "s3", Endpoint: srv.URL, Bucket: "b", Prefix: "nagi/", AccessKey: "a", SecretKey: "s"}
+	if err := s.relayNodes(ctx, sk); err != nil {
+		t.Fatalf("单个节点出错不应算目标失败：%v", err)
+	}
+	// 第二轮重试成功，游标到 1；第三轮 evil 再给 first=1，要丢弃。
+	for range 2 {
+		if err := s.relayNodes(ctx, sk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	var evilPuts, goodPuts int
+	for p, n := range puts {
+		if strings.Contains(p, "/node/evil/") {
+			evilPuts += n
+		}
+		if strings.Contains(p, "/node/good/") {
+			goodPuts += n
+		}
+	}
+	if goodPuts != 1 {
+		t.Fatalf("evil 出错时 good 照样要代发：%v", puts)
+	}
+	if evilPuts != 2 {
+		t.Fatalf("序号没有前进的批次应丢弃，不应重复上传：%v", puts)
+	}
+	if !validBatch([][]byte{[]byte("x")}, 5, 5, 4) || validBatch([][]byte{[]byte("x")}, 4, 5, 4) || validBatch([][]byte{[]byte("x")}, 6, 5, 4) {
+		t.Fatal("validBatch")
+	}
+	if validBatch([][]byte{make([]byte, nodeLineBytes+1)}, 5, 5, 4) {
+		t.Fatal("超长的行应丢弃")
+	}
+}
+
+// R2：S3 的键用面板自己的游标，节点给一个用过的 first 也写不到已有的键上。
+func TestRelayNodeKeyFromCursor(t *testing.T) {
+	var mu sync.Mutex
+	var puts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		puts = append(puts, r.URL.Path)
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+	l := openTestLog(t)
+	seq := int64(0)
+	// 节点每次都把 first 报成 1（想让面板覆盖第一个对象），last 照常前进。
+	read := func(_ context.Context, after int64, _ int) ([][]byte, int64, int64, int64, error) {
+		if after < 0 {
+			return nil, 0, 0, 0, nil
+		}
+		if after >= seq {
+			return nil, 0, 0, 0, nil
+		}
+		return [][]byte{[]byte(`{"seq":0}`)}, 1, seq, 0, nil
+	}
+	s := &Shipper{Log: l, Nodes: func() []NodeSource { return []NodeSource{{ID: "n1", Name: "a", Read: read}} }}
+	s.Configure(ctx, nil)
+	sk := SinkConfig{ID: "s", Type: "s3", Endpoint: srv.URL, Bucket: "b", Prefix: "nagi/", AccessKey: "a", SecretKey: "s"}
+	for range 3 {
+		seq += 2
+		_ = s.relayNodes(ctx, sk)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	seen := map[string]bool{}
+	for _, p := range puts {
+		if seen[p] {
+			t.Fatalf("同一个键写了两次：%v", puts)
+		}
+		seen[p] = true
+	}
+	if len(puts) == 0 {
+		t.Fatalf("puts = %v", puts)
+	}
+}

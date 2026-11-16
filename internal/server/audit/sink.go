@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,6 +67,8 @@ type Shipper struct {
 	Recordings *Recordings
 	// Nodes 返回可以代发本地审计的节点（已批准、认本面板是主面板、在线）。为 nil 时不代发。
 	Nodes func() []NodeSource
+	// Logger 记代发节点本地审计时的问题，可以为 nil。
+	Logger *slog.Logger
 	// OnFailure 在某个目标连续失败超过 10 分钟时调用（failing=true），恢复时再调用一次。
 	OnFailure func(ctx context.Context, sink SinkConfig, failing bool, err string)
 
@@ -302,12 +305,36 @@ func (s *Shipper) relayNodes(ctx context.Context, sk SinkConfig) error {
 	if s.Nodes == nil {
 		return nil
 	}
+	// 单个节点失败（发给目标的这一批被拒收，例如被攻破的节点塞了接收端不收的内容）不影响别的节点，也不算目标失败：
+	// 目标本身连不上时，面板自己的记录照样发不出去，由它算失败、告警。
 	for _, n := range s.Nodes() {
-		if err := s.relayNode(ctx, sk, n); err != nil {
-			return err
+		if err := s.relayNode(ctx, sk, n); err != nil && s.Logger != nil {
+			s.Logger.Warn("代发节点的本地审计失败，稍后重试", "sink", sk.Name, "node", n.Name, "err", err)
 		}
 	}
 	return nil
+}
+
+// nodeBatchBytes 是代发的一批的总大小上限，nodeLineBytes 是每行的上限：节点不一定可信，超过的这一批不发。
+const (
+	nodeBatchBytes = 2 << 20
+	nodeLineBytes  = 64 << 10
+)
+
+// validBatch 检查节点返回的一批：序号要在游标之后、不倒退，条数和大小不超过上限。被攻破的节点可以返回任意的
+// first、last，不检查的话能让面板重复上传同一批、或者游标倒退。
+func validBatch(lines [][]byte, first, last, cursor int64) bool {
+	if len(lines) == 0 || len(lines) > nodeBatch || first <= cursor || last < first {
+		return false
+	}
+	size := 0
+	for _, l := range lines {
+		if len(l) > nodeLineBytes {
+			return false
+		}
+		size += len(l)
+	}
+	return size <= nodeBatchBytes
 }
 
 func nodeCursorKey(sinkID, nodeID string) string {
@@ -335,8 +362,15 @@ func (s *Shipper) relayNode(ctx context.Context, sk SinkConfig, n NodeSource) er
 		if err != nil || len(lines) == 0 {
 			return nil
 		}
+		if !validBatch(lines, first, last, cursor) {
+			if s.Logger != nil {
+				s.Logger.Warn("节点返回的本地审计不对，丢弃这一批", "node", n.Name, "cursor", cursor, "first", first, "last", last, "lines", len(lines))
+			}
+			return nil
+		}
+		// S3 的键用面板自己的游标，不用节点给的 first：节点给一个用过的 first，就能让面板覆盖这一小时早些时候的对象。
 		if out := nodeLines(lines, n); len(out) > 0 {
-			if err := auditsink.Send(ctx, s.client, sk, auditsink.NodeScope(n.ID), first, out); err != nil {
+			if err := auditsink.Send(ctx, s.client, sk, auditsink.NodeScope(n.ID), cursor+1, out); err != nil {
 				return err
 			}
 		}
