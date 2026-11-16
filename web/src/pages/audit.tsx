@@ -4,12 +4,13 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { ChevronDown, ChevronRight, Download, Search } from "lucide-react";
-import { Button, Check, CodeBlock, EmptyRow, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
+import { ChevronDown, ChevronRight, Download, ListFilter, X } from "lucide-react";
+import { Badge, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PageHeader } from "@/pages/layout";
 import { useRole } from "@/components/role";
-import type { ActivityEntry, AuditEvent, AuditFilter } from "@/gen/nagi/v1/api_pb";
+import type { ActivityEntry, AuditEvent, AuditFilter, Node, PanelUser } from "@/gen/nagi/v1/api_pb";
+import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -132,6 +133,15 @@ export function AuditPage() {
   const events = list.data?.pages.flatMap((p) => p.events) ?? [];
   const filtered = filterKey.some((v) => v !== undefined && v !== "" && v !== false);
 
+  const [filtering, setFiltering] = useState(false);
+  const userName = (id: number) => users.data?.users.find((u) => Number(u.id) === id)?.username ?? String(id);
+  const chips: { key: string; label: string; clear: () => void }[] = [];
+  if (search.cat) chips.push({ key: "cat", label: (t.audit.categories as Record<string, string>)[search.cat], clear: () => set({ cat: undefined }) });
+  if (search.via) chips.push({ key: "via", label: (t.audit.via as Record<string, string>)[search.via], clear: () => set({ via: undefined }) });
+  if (search.member) chips.push({ key: "member", label: userName(search.member), clear: () => set({ member: undefined }) });
+  if (search.project) chips.push({ key: "project", label: projects.data?.projects.find((p) => p.project?.id === search.project)?.project?.name ?? search.project, clear: () => set({ project: undefined }) });
+  if (search.node) chips.push({ key: "node", label: nodes.data?.nodes.find((n) => n.id === search.node)?.name ?? search.node, clear: () => set({ node: undefined }) });
+  if (search.failed) chips.push({ key: "failed", label: t.audit.failedOnly, clear: () => set({ failed: undefined }) });
   const [exporting, setExporting] = useState(false);
   const exportJSONL = async () => {
     setExporting(true);
@@ -170,69 +180,43 @@ export function AuditPage() {
           )
         }
       />
+      {/* 筛选：常用的筛选框和时间范围在一行，其余条件收进「筛选」对话框，生效的条件列在下面，可以单独去掉。 */}
       <div className="mb-4 grid gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={t.audit.search} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 max-md:grid max-md:grid-cols-2">
-          <Select aria-label={t.audit.filters.range} className="w-36 max-md:w-full" value={search.range ?? ""} onChange={(e) => set({ range: (e.target.value || undefined) as AuditRange | undefined })}>
-            <option value="">{t.audit.ranges.all}</option>
-            {auditRanges.map((r) => (
-              <option key={r} value={r}>
-                {t.audit.ranges[r]}
-              </option>
-            ))}
-          </Select>
-          <Select aria-label={t.audit.filters.category} className="w-36 max-md:w-full" value={search.cat ?? ""} onChange={(e) => set({ cat: e.target.value || undefined })}>
-            <option value="">{t.audit.filters.allCategories}</option>
-            {auditCategories.map((c) => (
-              <option key={c} value={c}>
-                {t.audit.categories[c]}
-              </option>
-            ))}
-          </Select>
-          <Select aria-label={t.audit.filters.via} className="w-32 max-md:w-full" value={search.via ?? ""} onChange={(e) => set({ via: e.target.value || undefined })}>
-            <option value="">{t.audit.filters.allVia}</option>
-            {auditVias.map((v) => (
-              <option key={v} value={v}>
-                {t.audit.via[v]}
-              </option>
-            ))}
-          </Select>
-          {isAdmin && (
-            <Select aria-label={t.audit.filters.member} className="w-36 max-md:w-full" value={search.member ? String(search.member) : ""} onChange={(e) => set({ member: e.target.value ? Number(e.target.value) : undefined })}>
-              <option value="">{t.audit.filters.allMembers}</option>
-              {(users.data?.users ?? []).map((u) => (
-                <option key={String(u.id)} value={String(u.id)}>
-                  {u.displayName || u.username}
+        <div className="flex items-center justify-between gap-2">
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={t.audit.searchLabel} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Select aria-label={t.audit.filters.range} className="w-auto" value={search.range ?? ""} onChange={(e) => set({ range: (e.target.value || undefined) as AuditRange | undefined })}>
+              <option value="">{t.audit.ranges.all}</option>
+              {auditRanges.map((r) => (
+                <option key={r} value={r}>
+                  {t.audit.ranges[r]}
                 </option>
               ))}
             </Select>
-          )}
-          <Select aria-label={t.audit.filters.project} className="w-36 max-md:w-full" value={search.project ?? ""} onChange={(e) => set({ project: e.target.value || undefined })}>
-            <option value="">{t.audit.filters.allProjects}</option>
-            {(projects.data?.projects ?? []).map((p) => (
-              <option key={p.project?.id} value={p.project?.id ?? ""}>
-                {p.project?.name}
-              </option>
-            ))}
-          </Select>
-          {isAdmin && (
-            <Select aria-label={t.audit.filters.node} className="w-36 max-md:w-full" value={search.node ?? ""} onChange={(e) => set({ node: e.target.value || undefined })}>
-              <option value="">{t.audit.filters.allNodes}</option>
-              {(nodes.data?.nodes ?? []).map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name}
-                </option>
-              ))}
-            </Select>
-          )}
-          <Check className="ml-2 max-md:ml-0" checked={!!search.failed} onChange={(v) => set({ failed: v || undefined })}>
-            {t.audit.failedOnly}
-          </Check>
+            <Button readOnlyOk variant="outline" onClick={() => setFiltering(true)} aria-label={t.audit.filters.button}>
+              <ListFilter />
+              <span className="max-md:hidden">{t.audit.filters.button}</span>
+              {chips.length > 0 && <span className="text-muted-foreground tabular-nums">{chips.length}</span>}
+            </Button>
+          </div>
         </div>
+        {chips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {chips.map((c) => (
+              <Badge key={c.key} className="gap-1 pr-1 text-foreground">
+                {c.label}
+                <button type="button" className="rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t.audit.filters.remove(c.label)} onClick={c.clear}>
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ))}
+            <Button readOnlyOk variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => navigate({ search: { range: search.range, q: search.q }, replace: true })}>
+              {t.audit.clearFilters}
+            </Button>
+          </div>
+        )}
       </div>
+      <AuditFilterDialog open={filtering} onClose={() => setFiltering(false)} search={search} isAdmin={isAdmin} users={users.data?.users ?? []} projects={projects.data?.projects ?? []} nodes={nodes.data?.nodes ?? []} onApply={(v) => set(v)} />
       <div className="grid gap-4">
         {list.isPending ? (
           <RowsSkeleton count={5} />
@@ -416,5 +400,113 @@ function SheetLink({ e, onOpen }: { e: AuditEvent; onOpen: (id: bigint) => void 
     <button type="button" className="block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpen(e.id)}>
       <Row title={<span className="min-w-0 truncate">{title(e)}</span>} sub={formatDateTime(toDate(e.time))} cols={[{ content: <Status tone={resultTone(e)}>{resultLabel(e)}</Status>, phone: true }]} />
     </button>
+  );
+}
+
+// AuditFilterDialog：类别、来源、成员、项目、节点和只看失败。点「应用」才生效，一次只查一遍。
+function AuditFilterDialog({
+  open,
+  onClose,
+  search,
+  isAdmin,
+  users,
+  projects,
+  nodes,
+  onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  search: AuditSearch;
+  isAdmin: boolean;
+  users: PanelUser[];
+  projects: ProjectSummary[];
+  nodes: Node[];
+  onApply: (v: Partial<AuditSearch>) => void;
+}) {
+  const init = () => ({ cat: search.cat ?? "", via: search.via ?? "", member: search.member ? String(search.member) : "", project: search.project ?? "", node: search.node ?? "", failed: !!search.failed });
+  const [v, setV] = useState(init);
+  useEffect(() => {
+    if (open) setV(init());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const f = t.audit.filters;
+  return (
+    <Dialog open={open} onClose={onClose} title={f.title}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onApply({ cat: v.cat || undefined, via: v.via || undefined, member: v.member ? Number(v.member) : undefined, project: v.project || undefined, node: v.node || undefined, failed: v.failed || undefined });
+          onClose();
+        }}
+      >
+        <FormBody className="gap-4">
+          <Field label={f.category} htmlFor="audit-cat">
+            <Select id="audit-cat" value={v.cat} onChange={(e) => setV({ ...v, cat: e.target.value })}>
+              <option value="">{f.all}</option>
+              {auditCategories.map((c) => (
+                <option key={c} value={c}>
+                  {t.audit.categories[c]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={f.via} htmlFor="audit-via">
+            <Select id="audit-via" value={v.via} onChange={(e) => setV({ ...v, via: e.target.value })}>
+              <option value="">{f.all}</option>
+              {auditVias.map((x) => (
+                <option key={x} value={x}>
+                  {t.audit.via[x]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {isAdmin && (
+            <Field label={f.member} htmlFor="audit-member">
+              <Select id="audit-member" value={v.member} onChange={(e) => setV({ ...v, member: e.target.value })}>
+                <option value="">{f.all}</option>
+                {users.map((u) => (
+                  <option key={String(u.id)} value={String(u.id)}>
+                    {u.displayName || u.username}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label={f.project} htmlFor="audit-project">
+            <Select id="audit-project" value={v.project} onChange={(e) => setV({ ...v, project: e.target.value })}>
+              <option value="">{f.all}</option>
+              {projects.map((p) => (
+                <option key={p.project?.id} value={p.project?.id ?? ""}>
+                  {p.project?.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {isAdmin && (
+            <Field label={f.node} htmlFor="audit-node">
+              <Select id="audit-node" value={v.node} onChange={(e) => setV({ ...v, node: e.target.value })}>
+                <option value="">{f.all}</option>
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Check checked={v.failed} onChange={(x) => setV({ ...v, failed: x })}>
+            {t.audit.failedOnly}
+          </Check>
+        </FormBody>
+        <DialogActions>
+          <Button readOnlyOk type="button" variant="outline" onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button readOnlyOk type="submit">
+            {f.apply}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
