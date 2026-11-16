@@ -12,7 +12,6 @@ export default {
     byProjectHelp: "Selecting a project also selects the nodes running its containers, its backup nodes, failover nodes and witness nodes.",
     nodes: "Nodes",
     offline: " (offline)",
-    processing: "Processing…",
     submit: "Hand over nodes",
     handedOver: "Handed over",
     failed: "Failed",

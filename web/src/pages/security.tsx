@@ -13,7 +13,6 @@ import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Inpu
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
-import { CopyTextButton } from "@/pages/access";
 import { useRole } from "@/components/role";
 
 function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -68,7 +67,7 @@ function EnableTotpDialog({ setup, onClose, onDone }: { setup: { secret: string;
     },
   });
   return (
-    <Dialog open onClose={onClose} title={t.security.totp.enable} description={t.security.totp.scanHint}>
+    <Dialog open onClose={onClose} title={t.security.totp.enableTitle} description={t.security.totp.scanHint}>
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -108,7 +107,7 @@ function DisableTotpDialog({ onClose, onDone }: { onClose: () => void; onDone: (
     },
   });
   return (
-    <Dialog open onClose={onClose} title={t.security.totp.disable}>
+    <Dialog open onClose={onClose} title={t.security.totp.disableTitle}>
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -250,25 +249,24 @@ function PasskeySection({ sec, onChange }: { sec: Security; onChange: (sec: Secu
           })}
         </List>
       )}
+      {/* 已有通行密钥但在这里加不了时，写一行原因（标题栏没有「添加」）。 */}
+      {sec.passkeys.length > 0 && unavailable && <p className="leading-5 text-muted-foreground">{unavailable}</p>}
       {adding && <AddPasskeyDialog onClose={() => setAdding(false)} onDone={onChange} />}
     </Section>
   );
 }
 
-// 账号安全：登录密码、两步验证、安全入口（管理员）和登录设备。一项一行，表单放进对话框。
+// 账号安全：登录密码、两步验证、通行密钥、登录设备和访问令牌。一项一行，表单放进对话框。
+// 主密钥和安全入口是面板的设置，在「面板访问」（ui.md 设置页）。
 export function SecurityCard() {
   const queryClient = useQueryClient();
   const sec = useQuery({
     queryKey: ["security"],
     queryFn: () => settingsClient.getSecurity({}),
   });
-  const { isAdmin } = useRole();
-  // 主密钥的位置在面板设置里，只有管理员查得到。
-  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}), enabled: isAdmin });
-  const masterKeyPath = settings.data?.settings?.masterKeyPath;
-  const [dialog, setDialog] = useState<"password" | "disable-totp" | "entrance-on" | null>(null);
+  const [dialog, setDialog] = useState<"password" | "disable-totp" | null>(null);
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
-  const [busy, setBusy] = useState<"totp" | "entrance" | null>(null);
+  const [busy, setBusy] = useState<"totp" | null>(null);
   const [error, setError] = useState("");
 
   // 项目页的两步验证提醒读 me，登录设备会因为退出其他会话而变化。
@@ -296,24 +294,7 @@ export function SecurityCard() {
     }
   };
 
-  const setEntrance = async (enabled: boolean) => {
-    if (!enabled && !(await confirmAction(t.security.entrance.disableConfirm, { action: t.security.entrance.disable, danger: true }))) return;
-    setBusy("entrance");
-    setError("");
-    try {
-      await settingsClient.setEntrance({ enabled });
-      await sec.refetch();
-      // 开启后只能从入口地址打开登录页：马上显示地址，提示保存。
-      if (enabled) setDialog("entrance-on");
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const s = sec.data;
-  const entranceUrl = s?.entrance ? `${window.location.origin}/${s.entrance}` : "";
 
   return (
     <>
@@ -342,30 +323,6 @@ export function SecurityCard() {
                 </Button>
               )}
             </SettingRow>
-            {isAdmin && masterKeyPath && (
-              <SettingRow
-                label={t.security.masterKey.label}
-                help={t.security.masterKey.help}
-                description={<span className="break-all">{`${masterKeyPath} · ${t.security.masterKey.backup}`}</span>}
-              >
-                <CopyTextButton text={masterKeyPath} />
-              </SettingRow>
-            )}
-            {isAdmin && (
-              <SettingRow
-                label={t.security.entrance.label}
-                help={t.security.entrance.help}
-                description={<span className="break-all">{s.entrance ? `${entranceUrl} · ${t.security.entrance.onStatus}` : t.security.entrance.offStatus}</span>}
-              >
-                <span className="flex items-center gap-2">
-                  {s.entrance && <CopyTextButton text={entranceUrl} />}
-                  <Button variant="outline" onClick={() => setEntrance(!s.entrance)} disabled={busy !== null}>
-                    {busy === "entrance" && <Spinner />}
-                    {s.entrance ? t.security.entrance.actionOff : t.security.entrance.actionOn}
-                  </Button>
-                </span>
-              </SettingRow>
-            )}
           </SettingRows>
         )}
       </Section>
@@ -376,14 +333,6 @@ export function SecurityCard() {
       <AccessTokenSection />
       {dialog === "password" && <PasswordDialog onClose={() => setDialog(null)} onDone={refresh} />}
       {dialog === "disable-totp" && <DisableTotpDialog onClose={() => setDialog(null)} onDone={refresh} />}
-      {dialog === "entrance-on" && entranceUrl && (
-        <Dialog open dismissible={false} onClose={() => setDialog(null)} title={t.security.entrance.enabledTitle} description={t.security.entrance.enabledText}>
-          <CodeBlock copy>{entranceUrl}</CodeBlock>
-          <DialogActions>
-            <Button onClick={() => setDialog(null)}>{t.common.actions.done}</Button>
-          </DialogActions>
-        </Dialog>
-      )}
       {setup && <EnableTotpDialog setup={setup} onClose={() => setSetup(null)} onDone={refresh} />}
     </>
   );

@@ -9,6 +9,7 @@ import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertCon
 import { confirmAction } from "@/components/confirm";
 import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
+import { HelpParts } from "@/components/help-parts";
 
 // ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
 
@@ -223,8 +224,18 @@ function SecurityAlertRules() {
     onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
   });
   const m = t.alerts.security;
-  if (settings.isPending) return <RowsSkeleton count={3} />;
-  if (!settings.data) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
+  if (settings.isPending)
+    return (
+      <Section title={m.title}>
+        <RowsSkeleton count={3} />
+      </Section>
+    );
+  if (!settings.data)
+    return (
+      <Section title={m.title}>
+        <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />
+      </Section>
+    );
   const s = settings.data;
   const rows: [keyof typeof m.rules, boolean, Partial<AuditSettings>][] = [
     ["totp", s.alertTotpFailures, { alertTotpFailures: !s.alertTotpFailures }],
@@ -232,7 +243,7 @@ function SecurityAlertRules() {
     ["network", s.alertAdminNetwork, { alertAdminNetwork: !s.alertAdminNetwork }],
   ];
   return (
-    <Section title={m.title} description={m.description} help={m.help}>
+    <Section title={m.title} help={<HelpParts parts={[m.description, m.help]} />}>
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <SettingRows>
         {rows.map(([key, on, patch]) => (

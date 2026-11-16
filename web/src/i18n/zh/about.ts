@@ -2,7 +2,7 @@
 export default {
   tagline: "跨节点部署和管理容器的自托管面板。",
   links: {
-    title: "项目",
+    title: "链接",
     source: "源代码",
     changelog: "更新记录",
     issues: "反馈问题",

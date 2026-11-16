@@ -11,7 +11,6 @@ export default {
     byProjectHelp: "选中项目时，同时选中其容器所在节点、备份节点、顶替节点和见证人节点。",
     nodes: "节点",
     offline: "（离线）",
-    processing: "处理中…",
     submit: "移交节点",
     handedOver: "已移交",
     failed: "失败",

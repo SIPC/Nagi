@@ -1,7 +1,7 @@
 // 审计日志（见 docs/audit.md#界面）：谁在什么时候、从哪里、通过什么做了什么。
 // 管理员看全部；操作员和只读成员只看访问范围内项目的记录（面板按权限筛，IP 和浏览器不返回）。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
@@ -207,19 +207,21 @@ export function AuditPage() {
             {chips.map((c) => (
               <Badge key={c.key} className="gap-1 pr-1 text-foreground">
                 {c.label}
-                <button type="button" className="rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={t.audit.filters.remove(c.label)} onClick={c.clear}>
+                {/* 点击区域 24×24，比图标大，好点中。 */}
+                <button type="button" className="-my-1 -mr-1 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-ring" aria-label={t.audit.filters.remove(c.label)} onClick={c.clear}>
                   <X className="size-3" />
                 </button>
               </Badge>
             ))}
-            <Button readOnlyOk variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => navigate({ search: { range: search.range, q: search.q }, replace: true })}>
+            <Button readOnlyOk variant="ghost" className="text-muted-foreground" onClick={() => navigate({ search: { range: search.range, q: search.q }, replace: true })}>
               {t.audit.clearFilters}
             </Button>
           </div>
         )}
       </div>
       <AuditFilterDialog open={filtering} onClose={() => setFiltering(false)} search={search} isAdmin={isAdmin} users={users.data?.users ?? []} projects={projects.data?.projects ?? []} nodes={nodes.data?.nodes ?? []} onApply={(v) => set(v)} />
-      <div className="grid gap-4">
+      {/* 骨架换成列表时高度过渡，不直接跳（ui.md：骨架换成内容）。 */}
+      <AutoHeight className="grid gap-4">
         {list.isPending ? (
           <RowsSkeleton count={5} />
         ) : (
@@ -255,7 +257,7 @@ export function AuditPage() {
             </Button>
           </div>
         )}
-      </div>
+      </AutoHeight>
       <AuditSheet id={search.id} onOpen={(id) => set({ id: id ? Number(id) : undefined })} />
     </>
   );
@@ -271,11 +273,13 @@ function AuditRow({ e, onOpen, nested }: { e: AuditEvent; onOpen: (id: bigint) =
   const label = title(e);
   return (
     <div className={cn(nested && "pl-6")}>
-      <button type="button" className="block w-full rounded-md border border-transparent text-left outline-none focus-ring" onClick={() => onOpen(e.id)}>
+      {/* 记录行是真正的链接（地址里的 id 打开详情），能 Ctrl+点击在新标签打开。 */}
+      <Link to="/audit" search={((s: Record<string, unknown>) => ({ ...s, id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
         <Row
           title={
             <>
-              {e.category === "security" && <Status tone="danger">{t.audit.categories.security}</Status>}
+              {/* 类别不是状态，不用红点：用中性的小标记。 */}
+              {e.category === "security" && <Badge>{t.audit.categories.security}</Badge>}
               <span className="min-w-0 truncate" title={label}>
                 {label}
               </span>
@@ -288,10 +292,10 @@ function AuditRow({ e, onOpen, nested }: { e: AuditEvent; onOpen: (id: bigint) =
           }
           cols={[{ content: <Status tone={resultTone(e)}>{resultLabel(e)}</Status>, phone: true }]}
         />
-      </button>
+      </Link>
       {e.children > 0 && (
         <div className="pl-2">
-          <Button readOnlyOk variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[13px] text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Button readOnlyOk variant="ghost" className="gap-1 px-2 text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? <ChevronDown /> : <ChevronRight />}
             {open ? t.audit.collapse : t.audit.expand(e.children)}
           </Button>
@@ -388,7 +392,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
                   <div className="grid gap-2">
                     <h3 className="text-sm font-medium">{t.audit.detail.parent}</h3>
                     <List>
-                      <SheetLink e={detail.data.parent} onOpen={onOpen} />
+                      <SheetLink e={detail.data.parent} />
                     </List>
                   </div>
                 )}
@@ -397,7 +401,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
                     <h3 className="text-sm font-medium">{t.audit.detail.children}</h3>
                     <List>
                       {detail.data!.children.map((c) => (
-                        <SheetLink key={String(c.id)} e={c} onOpen={onOpen} />
+                        <SheetLink key={String(c.id)} e={c} />
                       ))}
                     </List>
                   </div>
@@ -411,11 +415,11 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
   );
 }
 
-function SheetLink({ e, onOpen }: { e: AuditEvent; onOpen: (id: bigint) => void }) {
+function SheetLink({ e }: { e: AuditEvent }) {
   return (
-    <button type="button" className="block w-full rounded-md border border-transparent text-left outline-none focus-ring" onClick={() => onOpen(e.id)}>
+    <Link to="/audit" search={((s: Record<string, unknown>) => ({ ...s, id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
       <Row title={<span className="min-w-0 truncate">{title(e)}</span>} sub={formatDateTime(toDate(e.time))} cols={[{ content: <Status tone={resultTone(e)}>{resultLabel(e)}</Status>, phone: true }]} />
-    </button>
+    </Link>
   );
 }
 

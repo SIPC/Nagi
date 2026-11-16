@@ -11,6 +11,8 @@ export default {
   passwordHint: "至少 8 个字符",
   role: "角色",
   roles: { admin: "管理员", operator: "操作员", viewer: "只读" },
+  demoteSelfConfirm: (role: string) => `将自己的角色改为${role}？保存后立即失去管理员权限，需要其他管理员才能改回。`,
+  demoteSelf: "更改角色",
   roleHelp: "管理员：全部权限，包括成员和面板设置。操作员：可以操作项目和容器，不能管理节点和面板。只读：只能查看，看不到配置和密钥，不能打开终端。",
   roleHints: {
     admin: "全部权限，包括成员和面板设置",

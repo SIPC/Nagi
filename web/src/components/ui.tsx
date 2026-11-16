@@ -271,6 +271,9 @@ export function Check({
   );
 }
 
+// checkListClass：表单里可勾选的一列（成员的访问范围、移交的项目和节点）：细边框、最高 224，多了在框里滚动。
+export const checkListClass = "grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2";
+
 // FormBody：区块里的表单，最宽 672，靠左，字段之间 16。
 export function FormBody({ className, ...props }: React.ComponentProps<"div">) {
   return <div className={cn("grid max-w-[672px] gap-4", className)} {...props} />;

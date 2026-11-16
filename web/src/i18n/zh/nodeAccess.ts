@@ -1,7 +1,7 @@
 // 节点访问：节点的终端和文件、身份验证。
 export default {
   elevate: {
-    title: "身份验证",
+    title: "验证身份",
     description: "此操作具有节点 root 权限。验证后 15 分钟内无需再次验证。",
     code: "两步验证码",
     password: "密码",

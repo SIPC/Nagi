@@ -11,7 +11,7 @@ export default {
     label: "Domain",
     bound: (domain) => `The panel is available at https://${domain}`,
     unbound: "Not bound. The panel is available at https://<public-address>:<port>",
-    help: "The domain must already resolve to this machine. Once bound, Caddy on this machine reverse-proxies the panel on ports 80/443 and obtains a certificate automatically. Nodes still connect via the public address and panel port.",
+    help: "The domain must already resolve to this machine. Once bound, Caddy on this machine reverse-proxies the panel on ports 80/443 and obtains a certificate automatically. Nodes still connect through the public address and panel port.",
     bind: "Bind",
     unbind: "Unbind",
     unbindConfirm: (domain) => `Unbind ${domain}? The panel will no longer be available at this domain, and pages opened through it will disconnect.`,

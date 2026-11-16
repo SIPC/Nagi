@@ -88,7 +88,7 @@ export function useUpdateStatus(enabled = true) {
 export function UpdateDot() {
   const q = usePanelUpdate();
   if (!q.data?.available) return null;
-  return <span role="img" aria-label={t.update.badge} title={t.update.badge} className="ml-auto size-1.5 shrink-0 rounded-full bg-primary" />;
+  return <span role="img" aria-label={t.update.badge} title={t.update.badge} className="ml-auto size-1.5 shrink-0 rounded-full bg-info" />;
 }
 
 // 关掉过的提示记在浏览器里，同一件事不再弹。隐私模式等情况下存不了，只是下次还会提示。
@@ -330,7 +330,8 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const update = async (version: string) => {
-    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel }))) return;
+    // 更新会重启面板：默认焦点给取消，免得回车直接开始更新。
+    if (!(await confirmAction(t.update.confirm(version), { action: t.update.updatePanel, focusCancel: true }))) return;
     setStarting(true);
     setError("");
     try {

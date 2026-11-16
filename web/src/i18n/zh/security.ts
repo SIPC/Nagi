@@ -1,4 +1,4 @@
-// 设置页「账号安全」：主密钥、登录密码、两步验证、安全入口。
+// 设置页「账号安全」：登录密码、两步验证、通行密钥。主密钥和安全入口的文案也在这里，显示在「面板访问」。
 export default {
   sessions: { label: "登录设备", help: "当前账号已登录的设备，可将其他设备退出登录。" },
   masterKey: {
@@ -24,6 +24,7 @@ export default {
     actionOff: "关闭",
     help: "丢失验证器时，在面板所在机器上执行 nagi reset 2fa。",
     enable: "开启两步验证",
+    enableTitle: "开启两步验证",
     elevate: "开启两步验证前需验证身份。验证后 15 分钟内无需再次验证。",
     qrCode: "两步验证二维码",
     scanHint: "使用验证器应用（如 Google Authenticator、1Password）扫描二维码；无法扫码时可手动输入密钥。",
@@ -33,6 +34,7 @@ export default {
     disableHelp: "关闭两步验证前需验证身份：输入验证器应用当前的 6 位验证码；验证器丢失时输入登录密码。",
     disablePlaceholder: "000000 或密码",
     disable: "关闭两步验证",
+    disableTitle: "关闭两步验证",
   },
   passkeys: {
     label: "通行密钥",

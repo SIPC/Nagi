@@ -3,7 +3,7 @@ import type zh from "../zh/about";
 export default {
   tagline: "A self-hosted panel for deploying and managing containers across nodes.",
   links: {
-    title: "Project",
+    title: "Links",
     source: "Source code",
     changelog: "Changelog",
     issues: "Report an issue",

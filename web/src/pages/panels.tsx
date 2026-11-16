@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage, nodeClient, projectClient } from "@/lib/api";
 import type { Project } from "@/gen/nagi/v1/common_pb";
-import { Alert, Button, Check, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
+import { Alert, Button, Check, checkListClass, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import { t } from "@/i18n";
 import { confirmAction } from "@/components/confirm";
 
@@ -68,7 +68,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
         {projectList.length > 0 && (
           <Field label={t.panels.handover.byProject} help={t.panels.handover.byProjectHelp}>
             {/* 字段名是一组复选框的名称，没有对应的单个输入框，所以用 group 关联。 */}
-            <div role="group" aria-label={t.panels.handover.byProject} className="flex flex-wrap gap-x-4 gap-y-2">
+            <div role="group" aria-label={t.panels.handover.byProject} className={checkListClass}>
               {projectList.map((p) => (
                 <Check key={p.id} checked={projectSelected(p)} onChange={(v) => toggleProject(p, v)}>
                   {p.name}
@@ -78,7 +78,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
           </Field>
         )}
         <Field label={t.panels.handover.nodes} error={missing.nodes && selected.length === 0 ? t.panels.handover.nodesRequired : undefined}>
-          <div role="group" aria-label={t.panels.handover.nodes} className="flex flex-wrap gap-x-4 gap-y-2">
+          <div role="group" aria-label={t.panels.handover.nodes} className={checkListClass}>
             {nodes.map((n) => (
               <Check
                 key={n.id}
@@ -118,7 +118,8 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
             </Button>
             <Button variant="destructive" disabled={busy} onClick={run}>
               {busy && <Spinner />}
-              {busy ? t.panels.handover.processing : t.panels.handover.submit}
+              {/* 进行中只加转圈，文字不变（按钮不加省略号）。 */}
+              {t.panels.handover.submit}
             </Button>
           </>
         )}

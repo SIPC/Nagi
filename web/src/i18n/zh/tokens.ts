@@ -39,7 +39,8 @@ export default {
   lastUsed: (time: string) => `最后使用 ${time}`,
   forUser: (name: string) => `${name} 的访问令牌。管理员可以吊销，看不到令牌本身。`,
   networks: "允许的地址",
-  networksHint: "可选。IP 或网段，多个用逗号分隔",
+  networksHint: "可选。IP 或网段，一行一个",
+  permissions: "权限",
   networksHelp: "从其他地址使用这个令牌时拒绝，并发送告警。",
   networksLimited: (list: string) => `限 ${list}`,
   oauth: {

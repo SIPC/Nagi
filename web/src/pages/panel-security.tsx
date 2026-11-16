@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, SettingSwitch, Skeleton, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, FormRow, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, SettingSwitch, Skeleton, Spinner, Status, Textarea } from "@/components/ui";
 import { create } from "@bufbuild/protobuf";
 import { AuditSinkHeaderSchema, AuditSinkSchema, type AuditSettings, type AuditSink, type SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
@@ -12,6 +12,7 @@ import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { confirmAction } from "@/components/confirm";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
+import { HelpParts } from "@/components/help-parts";
 
 const idleOptions = [30, 60, 240, 480, 1440];
 const maxOptions = [24, 72, 168];
@@ -44,8 +45,20 @@ function AuditSections() {
     },
     onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
   });
-  if (settings.isPending) return <RowsSkeleton count={4} />;
-  if (!settings.data) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
+  // 加载和失败也放在带标题的区块里，标题就是子页名（ui.md 设置页）。
+  const heading = t.settings.tabs.panelSecurity.label;
+  if (settings.isPending)
+    return (
+      <Section title={heading}>
+        <RowsSkeleton count={4} />
+      </Section>
+    );
+  if (!settings.data)
+    return (
+      <Section title={heading}>
+        <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />
+      </Section>
+    );
   const s = settings.data;
   const r = t.panelSecurity.recording;
   const ret = t.panelSecurity.retention;
@@ -57,15 +70,12 @@ function AuditSections() {
   };
   return (
     <>
-      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
-      <Section title={r.title} description={r.description} help={r.help}>
+      {/* 第一个区块的标题是子页名；终端录制和审计记录保留是这里的两组设置，说明都在问号里。保存出错显示在这一块里。 */}
+      <Section title={heading}>
+        {save.error && <Alert>{errorMessage(save.error)}</Alert>}
         <SettingRows>
-          <SettingSwitch label={r.label} on={s.recording} busy={save.isPending && save.variables?.recording !== undefined} onChange={(v) => save.mutate({ recording: v })} />
-        </SettingRows>
-      </Section>
-      <Section title={ret.title} description={ret.description} help={ret.help}>
-        <SettingRows>
-          <SettingRow label={ret.normal}>
+          <SettingSwitch label={r.title} help={<HelpParts parts={[r.description, r.help]} />} on={s.recording} busy={save.isPending && save.variables?.recording !== undefined} onChange={(v) => save.mutate({ recording: v })} />
+          <SettingRow label={ret.normalRow} help={<HelpParts parts={[ret.description, ret.help]} />}>
             <Select aria-label={ret.normal} className="w-36" value={String(s.retentionDays)} onChange={(e) => setRetention("normal", Number(e.target.value))}>
               {withOption(retentionOptions, s.retentionDays).map((v) => (
                 <option key={v} value={String(v)}>
@@ -74,7 +84,7 @@ function AuditSections() {
               ))}
             </Select>
           </SettingRow>
-          <SettingRow label={ret.long} description={ret.longDescription}>
+          <SettingRow label={ret.longRow} description={ret.longDescription}>
             <Select aria-label={ret.long} className="w-36" value={String(s.longRetentionDays)} onChange={(e) => setRetention("long", Number(e.target.value))}>
               {withOption(longRetentionOptions, s.longRetentionDays)
                 .filter((v) => v >= s.retentionDays)
@@ -125,7 +135,7 @@ function SinkSection({ settings, onSave }: { settings: AuditSettings; onSave: (s
     </Button>
   );
   return (
-    <Section title={m.title} description={m.description} help={m.help} actions={settings.sinks.length > 0 ? addButton : undefined}>
+    <Section title={m.title} help={<HelpParts parts={[m.description, m.help]} />} actions={settings.sinks.length > 0 ? addButton : undefined}>
       {settings.sinks.length === 0 ? (
         <EmptyRow action={addButton}>{m.empty}</EmptyRow>
       ) : (
@@ -262,25 +272,25 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
               <Field label={m.endpoint} htmlFor="sink-endpoint">
                 <Input id="sink-endpoint" value={k.endpoint} onChange={(e) => set({ endpoint: e.target.value })} placeholder="https://s3.example.com" required />
               </Field>
-              <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+              <FormRow>
                 <Field label={m.bucket} htmlFor="sink-bucket">
                   <Input id="sink-bucket" value={k.bucket} onChange={(e) => set({ bucket: e.target.value })} required />
                 </Field>
                 <Field label={m.region} htmlFor="sink-region">
                   <Input id="sink-region" value={k.region} onChange={(e) => set({ region: e.target.value })} placeholder="us-east-1" />
                 </Field>
-              </div>
+              </FormRow>
               <Field label={m.prefix} htmlFor="sink-prefix">
                 <Input id="sink-prefix" value={k.prefix} onChange={(e) => set({ prefix: e.target.value })} placeholder="nagi/audit" />
               </Field>
-              <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-                <Field label="Access Key" htmlFor="sink-ak">
+              <FormRow>
+                <Field label={m.accessKey} htmlFor="sink-ak">
                   <Input id="sink-ak" value={k.accessKey} onChange={(e) => set({ accessKey: e.target.value })} required autoComplete="off" />
                 </Field>
-                <Field label="Secret Key" htmlFor="sink-sk" hint={sink?.hasSecret ? m.secretKeep : undefined}>
+                <Field label={m.secretKey} htmlFor="sink-sk" hint={sink?.hasSecret ? m.secretKeep : undefined}>
                   <Input id="sink-sk" type="password" value={k.secretKey} onChange={(e) => set({ secretKey: e.target.value })} required={!sink?.hasSecret} autoComplete="new-password" />
                 </Field>
-              </div>
+              </FormRow>
               <Check checked={k.recordings} onChange={(v) => set({ recordings: v })} help={m.recordingsHelp}>
                 {m.recordings}
               </Check>
@@ -315,7 +325,7 @@ function ChainSection({ settings }: { settings: AuditSettings }) {
   });
   const c = settings.chain;
   return (
-    <Section title={m.title} description={m.description} help={m.help}>
+    <Section title={m.title} help={<HelpParts parts={[m.description, m.help]} />}>
       {verify.error && <Alert>{errorMessage(verify.error)}</Alert>}
       <SettingRows>
         <SettingRow
@@ -358,11 +368,21 @@ function SessionSection() {
     onSuccess: (p) => queryClient.setQueryData(["session-policy"], p),
   });
   const m = t.panelSecurity.session;
-  if (policy.isPending) return <RowsSkeleton count={4} />;
-  if (!policy.data) return <QueryError error={errorMessage(policy.error)} onRetry={() => policy.refetch()} />;
+  if (policy.isPending)
+    return (
+      <Section title={m.title}>
+        <RowsSkeleton count={4} />
+      </Section>
+    );
+  if (!policy.data)
+    return (
+      <Section title={m.title}>
+        <QueryError error={errorMessage(policy.error)} onRetry={() => policy.refetch()} />
+      </Section>
+    );
   const p = policy.data;
   return (
-    <Section title={m.title} description={m.description} help={m.help}>
+    <Section title={m.title} help={<HelpParts parts={[m.description, m.help]} />}>
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <SettingRows>
         <SettingRow label={m.idle} description={m.idleDescription}>

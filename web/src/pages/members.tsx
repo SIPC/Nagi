@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { avatarSrc, UserAvatar } from "@/components/account";
-import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
+import { Alert, Button, Check, checkListClass, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { AccessTokenList } from "@/pages/tokens";
@@ -49,7 +49,7 @@ function memberSummary(u: PanelUser) {
     parts.push(s.allProjects ? t.members.scope.allProjects : t.common.list([...s.projectGroups.map(t.members.scope.groupName), ...(s.projectIds.length > 0 || s.projectGroups.length === 0 ? [t.members.scope.projectCount(s.projectIds.length)] : [])]));
     parts.push(s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
   }
-  if (u.passkeys.length > 0) parts.push(t.members.passkeyCount(u.passkeys.length));
+  // 一行只放身份（ui.md 成员列表），通行密钥的个数不写在这里。
   return parts.filter(Boolean).join(" · ");
 }
 
@@ -117,7 +117,7 @@ function ScopePick({
               <p className="text-muted-foreground">{empty}</p>
             ) : (
               // 字段名没有对应的单个输入框：分段控件自带名称，勾选列表用 group 关联。
-              <div role="group" aria-label={label} className="grid max-h-56 gap-2 overflow-y-auto rounded-md border px-3 py-2">
+              <div role="group" aria-label={label} className={checkListClass}>
                 {allLabels.length > 0 && (
                   <>
                     <div className={heading}>{labelTitle}</div>
@@ -221,8 +221,10 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   return (
     <form
       className="grid gap-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
+        // 把自己从管理员改成别的角色：保存后马上失去管理员权限（面板只拦最后一个管理员），先确认。
+        if (user.isSelf && user.role === "admin" && role !== "admin" && !(await confirmAction(t.members.demoteSelfConfirm(t.members.roles[role as (typeof roles)[number]] ?? role), { action: t.members.demoteSelf, danger: true }))) return;
         save.mutate();
       }}
     >
@@ -371,7 +373,7 @@ export function MembersCard() {
               center
               title={
                 <>
-                  <span className="truncate font-medium">{u.displayName || u.username}</span>
+                  <span className="truncate">{u.displayName || u.username}</span>
                   {u.isSelf && <span className="shrink-0 text-muted-foreground">{t.members.you}</span>}
                 </>
               }
@@ -521,10 +523,10 @@ export function SessionList() {
           />
         ))}
       </List>
-      {!all && list.length > sessionsShown && (
+      {list.length > sessionsShown && (
         <div>
-          <Button readOnlyOk variant="ghost" className="-ml-3" onClick={() => setAll(true)}>
-            {t.members.showAllSessions(list.length)}
+          <Button readOnlyOk variant="ghost" className="-ml-3" aria-expanded={all} onClick={() => setAll(!all)}>
+            {all ? t.common.feedback.hideNotes : t.members.showAllSessions(list.length)}
           </Button>
         </div>
       )}

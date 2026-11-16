@@ -2,11 +2,7 @@ import type zh from "../zh/standby";
 
 export default {
   promote: {
-    confirm:
-      "Promote this panel to primary?\n\n" +
-      "· Don't promote while the primary panel is still running, or the two panels may make conflicting changes.\n" +
-      "· After promotion, nodes only accept changes from this panel, and other standby panels sync from this panel instead.\n" +
-      "· When the old primary panel recovers, it automatically becomes a standby panel. Changes from its last few seconds that weren't synced are lost.",
+    confirm: "Promote this panel to primary? Nodes will only accept changes from this panel. Don't promote while the primary panel is still running, or the two panels' changes will conflict.",
     done: "Promoted to primary panel. The panel is restarting and this page will reload automatically.",
     button: "Promote to primary",
   },
@@ -14,7 +10,7 @@ export default {
   disconnected: "Not connected",
   lastSync: "Last synced",
   status: {
-    help: "This is a standby panel that syncs data from the primary panel in real time.",
+    help: "This is a standby panel that syncs data from the primary panel in real time. After promotion, other standby panels sync from this panel instead. When the old primary panel recovers, it becomes a standby panel automatically, and changes from its last few seconds that weren't synced are lost.",
     primary: "Primary panel",
     connection: "Connection",
     neverSynced: "Not synced yet",
