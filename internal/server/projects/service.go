@@ -49,10 +49,12 @@ const (
 
 // Service 是面板上的项目和容器。
 type Service struct {
-	Q      *store.Queries
-	Sealer *sealer.Sealer
-	Nodes  *nodes.Registry
-	Log    *slog.Logger
+	// onHolderChanged 换掉 holderChanged 的默认做法，测试用。
+	onHolderChanged func(pid, name string, moved bool)
+	Q               *store.Queries
+	Sealer          *sealer.Sealer
+	Nodes           *nodes.Registry
+	Log             *slog.Logger
 	// Fingerprint 返回本面板的公钥指纹，写在下发的配置里（ContainerSpec.panel）。
 	Fingerprint func() string
 	// ReservedDomain 返回 true 的域名已经绑定给面板，项目不能再用。

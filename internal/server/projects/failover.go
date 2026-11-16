@@ -465,13 +465,31 @@ func (s *Service) syncFailover(ctx context.Context, conn *nodes.Conn, st *nagiv1
 			s.Log.Warn("容器已由另一个节点运行（顶替或切回）", "project", pid, "container", name, "from", c.NodeID, "to", conn.NodeID, "epoch", st.GetEpoch())
 		}
 		if err := s.Q.SetContainerHolder(ctx, store.SetContainerHolderParams{NodeID: conn.NodeID, Dir: dir, FailoverEpoch: int64(st.GetEpoch()), ProjectID: pid, Name: name}); err == nil {
-			s.refreshLinks()
+			s.holderChanged(pid, name, c.NodeID != conn.NodeID)
 		}
 	case st.GetRole() == "standby" && c.NodeID != conn.NodeID && st.GetSpecRevision() > 0 &&
 		(st.GetSpecRevision() != c.Revision || st.GetSpecProjectRevision() != s.projectRevision(ctx, pid)):
 		s.refreshStandby(ctx, c, cur, conn)
 	}
 	return &witnessAdopt{c, cur}
+}
+
+// holderChanged 在顶替换了持有方（或者轮次变了）以后调用：更新各节点的代理名单；持有方换了节点时，
+// 更新备份节点上的副本登记，改为只认新的持有方（见 docs/snapshot.md#备份节点的实现）。否则备份节点还认原来的
+// 源节点：被换下的一方被攻破时仍能大批删除副本，真正运行容器的一方大批清理时反而被拒绝。
+func (s *Service) holderChanged(pid, name string, moved bool) {
+	if s.onHolderChanged != nil {
+		s.onHolderChanged(pid, name, moved)
+		return
+	}
+	s.refreshLinks()
+	if moved {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			s.registerBackups(ctx, pid, name)
+		}()
+	}
 }
 
 func (s *Service) projectRevision(ctx context.Context, id string) int64 {
