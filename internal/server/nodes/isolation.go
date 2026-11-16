@@ -63,6 +63,13 @@ func (r *Registry) reloadIsolation(ctx context.Context) {
 	r.iso.mu.Unlock()
 }
 
+// ReloadIsolation 从数据库重新加载隔离状态，并更新 mesh 成员。备用面板每次同步主面板的数据以后调用
+// （见 docs/mesh.md#隔离）：否则主面板隔离或解除隔离的节点，备用面板这边一直不知道。
+func (r *Registry) ReloadIsolation(ctx context.Context) {
+	r.reloadIsolation(ctx)
+	r.updateMesh()
+}
+
 // Isolated 判断节点有没有被隔离。
 func (r *Registry) Isolated(ctx context.Context, nodeID string) bool {
 	_, ok := r.isolatedNodes(ctx)[nodeID]

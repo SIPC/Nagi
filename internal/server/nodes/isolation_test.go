@@ -156,3 +156,39 @@ func TestReportViolationsForgedAndFlood(t *testing.T) {
 		t.Errorf("告警窗口 %d 个，随机公钥不应各开一个", n)
 	}
 }
+
+// M11：备用面板的隔离状态经数据库同步过来（不经 SetIsolated），同步以后要重新加载，否则一直按旧的状态放行。
+func TestStandbyReloadsIsolation(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	d, err := db.OpenMigrated(ctx, filepath.Join(dir, "panel.db"), store.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	key, _ := sealer.Load(filepath.Join(dir, "master.key"))
+	q := store.New(d)
+	r := NewRegistry(q, slog.New(slog.DiscardHandler), key, nil)
+	r.ReadOnly = true
+	k := make([]byte, 32)
+	k[0] = 5
+	if err := q.CreateNode(ctx, store.CreateNodeParams{ID: "x", Name: "x", MeshKey: k}); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Isolated(ctx, "x")
+	// 同步来的主面板数据：x 被隔离了。
+	if err := q.SetNodeIsolated(ctx, "x", true); err != nil {
+		t.Fatal(err)
+	}
+	r.ReloadIsolation(ctx)
+	if !r.Isolated(ctx, "x") || len(r.isolatedKeys()) != 1 {
+		t.Fatal("同步以后应该知道 x 被隔离了")
+	}
+	if err := q.SetNodeIsolated(ctx, "x", false); err != nil {
+		t.Fatal(err)
+	}
+	r.ReloadIsolation(ctx)
+	if r.Isolated(ctx, "x") {
+		t.Fatal("主面板解除隔离以后，备用面板也应该知道")
+	}
+}

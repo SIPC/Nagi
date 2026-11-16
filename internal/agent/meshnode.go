@@ -64,6 +64,9 @@ type savedPanel struct {
 	Key     []byte            `json:"key"`
 	Address string            `json:"address"`
 	Peers   []json.RawMessage `json:"peers"`
+	// Isolated 是这个面板隔离的节点的公钥，和成员列表一起写盘：节点重启以后主面板不在，
+	// 只剩备用面板（可能还不知道隔离）的成员列表时，被隔离的节点也不能回到 mesh。
+	Isolated [][]byte `json:"isolated,omitempty"`
 }
 
 // save 把各面板告诉我们的成员列表写盘。调用方持有 n.mu。
@@ -71,7 +74,7 @@ func (n *meshNode) save() {
 	out := map[string]savedPanel{}
 	for fp, peers := range n.panelPeers {
 		k := n.panelKeys[fp]
-		sp := savedPanel{Key: k[:], Address: n.panelAddr[fp]}
+		sp := savedPanel{Key: k[:], Address: n.panelAddr[fp], Isolated: n.isolated[fp]}
 		for _, p := range peers {
 			if b, err := protojson.Marshal(p); err == nil {
 				sp.Peers = append(sp.Peers, b)
@@ -110,6 +113,12 @@ func (n *meshNode) load() {
 			}
 		}
 		n.panelPeers[fp], n.panelKeys[fp], n.panelAddr[fp] = peers, k, sp.Address
+		if len(sp.Isolated) > 0 {
+			if n.isolated == nil {
+				n.isolated = map[string][][]byte{}
+			}
+			n.isolated[fp] = sp.Isolated
+		}
 	}
 	n.mu.Unlock()
 	n.apply()

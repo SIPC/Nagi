@@ -414,6 +414,8 @@ type Client struct {
 	DataDir string
 	DB      *sql.DB
 	Log     *slog.Logger
+	// OnApply 在每次应用主面板的数据以后调用：缓存了数据库内容的地方（例如节点的隔离状态）要重新加载。
+	OnApply func()
 
 	mu        sync.Mutex
 	connected bool
@@ -583,6 +585,9 @@ func (c *Client) syncOnce(ctx context.Context) error {
 		c.mu.Lock()
 		c.lastSync = time.Now()
 		c.mu.Unlock()
+		if c.OnApply != nil {
+			c.OnApply()
+		}
 	}
 }
 

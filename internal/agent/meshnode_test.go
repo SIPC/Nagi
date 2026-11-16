@@ -197,3 +197,44 @@ func TestAuthorizePanel(t *testing.T) {
 		t.Fatalf("记下 %d 条越权，应为 3 条", n)
 	}
 }
+
+// M11：主面板隔离了 X，备用面板给的旧列表里还有 X。节点重启后只加载保存的成员列表（主面板不在），
+// X 也不能回到 mesh：隔离列表随成员列表一起写盘。
+func TestMeshIsolationSurvivesRestart(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "mesh-peers.json")
+	newNode := func() (*meshNode, *mesh.Mesh) {
+		m, err := mesh.New(mesh.Config{PrivateKey: randKey(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &meshNode{m: m, log: slog.New(slog.NewTextHandler(io.Discard, nil)), panelPeers: map[string][]*nagiv1.MeshPeer{},
+			panelKeys: map[string]mesh.Key{}, panelAddr: map[string]string{}, names: map[mesh.Key]string{}, file: file}, m
+	}
+	primary, standby := mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
+	x, y := mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
+	peer := func(k mesh.Key) *nagiv1.MeshPeer { return &nagiv1.MeshPeer{PublicKey: k[:], Endpoints: []string{"127.0.0.1:1"}} }
+	has := func(m *mesh.Mesh, k mesh.Key) bool {
+		for _, s := range m.Status() {
+			if s.Key == k {
+				return true
+			}
+		}
+		return false
+	}
+	n, m := newNode()
+	n.update("primary", "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: primary[:], Peers: []*nagiv1.MeshPeer{peer(y)}, Isolated: [][]byte{x[:]}})
+	n.update("standby", "127.0.0.1:3", &nagiv1.MeshConfig{PanelKey: standby[:], Peers: []*nagiv1.MeshPeer{peer(x), peer(y)}})
+	if has(m, x) || !has(m, y) {
+		t.Fatal("被隔离的 x 不应在 mesh 里")
+	}
+	m.Close()
+	n2, m2 := newNode()
+	defer m2.Close()
+	n2.load()
+	if has(m2, x) {
+		t.Fatal("重启以后被隔离的 x 回到了 mesh")
+	}
+	if !has(m2, y) {
+		t.Fatal("重启以后 y 应该照常在 mesh 里")
+	}
+}
