@@ -69,7 +69,7 @@ export function InviteCard() {
       {code && (
         <div className="grid gap-2">
           <CodeBlock copy nowrap>{code}</CodeBlock>
-          <p className="text-[13px] leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
+          <p className="leading-5 text-muted-foreground">{t.invite.pasteHint(t.invite.command)}</p>
         </div>
       )}
       {invites.isPending ? (

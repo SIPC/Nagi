@@ -99,7 +99,7 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                     >
                       <Boxes />
                       {s.project!.name}
-                      <span className="ml-auto font-mono text-xs text-muted-foreground">{s.project!.networkName}</span>
+                      <span className="ml-auto text-[13px] text-muted-foreground">{s.project!.networkName}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -116,7 +116,7 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                       >
                         <Box />
                         {c.displayName || c.name}
-                        <span className="ml-auto text-xs text-muted-foreground">{s.project!.name}</span>
+                        <span className="ml-auto text-[13px] text-muted-foreground">{s.project!.name}</span>
                       </CommandItem>
                     )),
                   )}
@@ -128,7 +128,7 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                     <CommandItem key={n.id} value={`node ${n.id}`} keywords={[n.name, n.address]} onSelect={() => go(() => navigate({ to: "/nodes/$nodeId", params: { nodeId: n.id } }))}>
                       <Server />
                       {n.name}
-                      <span className="ml-auto font-mono text-xs text-muted-foreground">{n.address}</span>
+                      <span className="ml-auto font-mono text-[13px] text-muted-foreground">{n.address}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

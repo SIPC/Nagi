@@ -210,9 +210,9 @@ function PanelGlyph({ at, dim, onActive }: { at: Pt; dim: boolean; onActive?: (o
       onMouseEnter={() => onActive?.(true)}
       onMouseLeave={() => onActive?.(false)}
     >
-      <rect x={-24} y={-24} width={48} height={48} rx={12} className="fill-card stroke-border" strokeWidth={1} />
+      <rect x={-24} y={-24} width={48} height={48} rx={8} className="fill-card stroke-border" strokeWidth={1} />
       <Waves x={-13} y={-13} width={26} height={26} className="text-wave" />
-      <text y={-34} textAnchor="middle" fontSize={13} {...halo} className="fill-foreground font-medium">
+      <text y={-34} textAnchor="middle" fontSize={14} {...halo} className="fill-foreground font-medium">
         {t.nodes.map.panel}
       </text>
     </g>
@@ -268,7 +268,7 @@ function NodeGlyph({
     .filter(Boolean)
     .join("\n");
   // 放不下时截短：名字和说明各自截，警告的那段跟在说明后面一起算宽度。
-  const name = clip(n.name, 13, maxWidth, 500);
+  const name = clip(n.name, 14, maxWidth, 500);
   const fullSub = warn ? `${sub} · ${warn}` : sub;
   const shownSub = clip(fullSub, 12, maxWidth);
   const subHead = shownSub.slice(0, sub.length);
@@ -312,7 +312,7 @@ function NodeGlyph({
             failed ? "fill-destructive" : n.pending ? "fill-warning" : n.online ? "fill-success" : "fill-muted-foreground/60",
           )}
         />
-        <text x={textX} y={nameY} textAnchor={anchor} fontSize={13} {...halo} className="fill-foreground font-medium group-hover:underline">
+        <text x={textX} y={nameY} textAnchor={anchor} fontSize={14} {...halo} className="fill-foreground font-medium group-hover:underline">
           {name !== n.name && <title>{n.name}</title>}
           {name}
         </text>
@@ -684,7 +684,7 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
       {selected ? (
         <LatencyHistory a={nodes.find((n) => n.id === selected[0])!} b={nodes.find((n) => n.id === selected[1])!} statuses={statuses} />
       ) : (
-        <p className="text-[13px] text-muted-foreground">{k.hint}</p>
+        <p className="text-muted-foreground">{k.hint}</p>
       )}
     </Section>
   );
@@ -919,7 +919,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
         ) : failedNode ? (
           <FailureReport node={failedNode} nodes={nodes} items={items} />
         ) : (
-          <p className="text-center text-[13px] text-muted-foreground">{t.nodes.ha.hint}</p>
+          <p className="text-center text-muted-foreground">{t.nodes.ha.hint}</p>
         )}
       </div>
     </div>
@@ -953,7 +953,7 @@ function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; item
         </Link>
       </div>
       {list.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">{t.nodes.ha.empty}</p>
+        <p className="text-muted-foreground">{t.nodes.ha.empty}</p>
       ) : (
         <ul className="grid gap-3">
           {list.map((g) => (

@@ -345,7 +345,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
     if (e.client) rows.push([d.client, e.client]);
     if (e.session) rows.push([d.session, <span className="font-mono text-[13px]">{e.session}</span>]);
     if (e.ip) rows.push([d.ip, <span className="font-mono text-[13px]">{e.ip}</span>]);
-    if (e.userAgent) rows.push([d.userAgent, <span className="text-[13px] text-muted-foreground">{e.userAgent}</span>]);
+    if (e.userAgent) rows.push([d.userAgent, <span className="text-muted-foreground">{e.userAgent}</span>]);
     if (e.projectId) rows.push([d.project, e.projectName || e.projectId]);
     if (e.targetName || e.targetId) rows.push([d.target, e.targetName || e.targetId]);
     if (e.durationMs > 0n) rows.push([d.duration, formatDuration(Number(e.durationMs))]);

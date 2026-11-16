@@ -190,7 +190,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
             <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
-            <span aria-hidden className="ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+            <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
           </Link>
         );
       })}
@@ -241,7 +241,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
           <span className="contents [&_span]:text-[13px] [&_span]:leading-5">
           <ProjectState services={services} deployed={p.containers.some((m) => m.deployedVersion > 0n)} offline={offlineNodeNames(p.containers, knownNodes(nodes.data))} />
           </span>
-          <span className="font-mono text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
+          <span className="text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
         </div>
       </div>
       <nav ref={ref} className="relative grid gap-1" aria-label={p.name}>
@@ -274,19 +274,19 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
             >
               <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
-                <span className={cn("truncate", active && "font-medium")}>{containerLabel(m)}</span>
+                <span className="truncate">{containerLabel(m)}</span>
                 <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
-                {m.kind === "group" && <span className="shrink-0 text-xs text-muted-foreground">{containerKind(m)}</span>}
+                {m.kind === "group" && <span className="shrink-0 text-[13px] text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
                 {imageUpdates.some((x) => x.container === m.name) && (
                   <span title={t.projects.card.imageUpdate} className="inline-flex shrink-0">
                     <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
                   </span>
                 )}
-                <span aria-hidden className={cn("ml-auto shrink-0 font-mono text-xs leading-5 text-muted-foreground", active && "font-medium")}>{node?.name ?? m.nodeId}</span>
+                <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
               </span>
               {node?.online === false ? (
-                <span className="pl-3.5 text-xs text-warning-text">{t.common.status.nodesOffline([node.name])}</span>
+                <span className="pl-3.5 text-[13px] leading-5 text-warning-text">{t.common.status.nodesOffline([node.name])}</span>
               ) : (
                 <UsageRings usage={u} memFallback={memFallback} className="pl-3.5" />
               )}

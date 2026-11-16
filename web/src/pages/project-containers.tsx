@@ -603,7 +603,7 @@ function ContainerDetail({
         title={
           <>
             {containerLabel(container)}
-            {container.displayName && <span className="font-mono text-sm font-normal text-muted-foreground">{container.name}</span>}
+            {container.displayName && <span className="font-mono text-[13px] font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
             {node && !nodeOnline ? <Status tone="warning">{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
@@ -906,7 +906,7 @@ function Overview({ project, container, services }: { project: Project; containe
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
           {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
           {!isGroup && <KvItem mono k={pc.columns.image} v={<span title={image}>{displayImage(image)}</span>} />}
-          <KvItem mono k={pc.columns.node} v={node?.name ?? container.nodeId} />
+          <KvItem k={pc.columns.node} v={node?.name ?? container.nodeId} />
           <KvItem mono k={o.currentVersion} v={version} />
           <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
           {isGroup && (

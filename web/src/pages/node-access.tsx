@@ -53,7 +53,7 @@ export function NodeTerminal({ node, cwd }: { node: Node; cwd?: string }) {
   return (
     <div className="grid gap-4">
       <ContainerHint n={node} />
-      {connected && cwd && cwd !== opened && <p className="text-[13px] leading-5 text-muted-foreground">{m.otherCwd(cwd)}</p>}
+      {connected && cwd && cwd !== opened && <p className="leading-5 text-muted-foreground">{m.otherCwd(cwd)}</p>}
       <TerminalSession
         url={() => `/ws/node-shell?${new URLSearchParams({ node: node.id, cwd: cwdRef.current ?? "" })}`}
         beforeConnect={requireElevation}
@@ -525,7 +525,7 @@ function EditNodeFile({ node, file, initial, onClose, onPath, onExpired, onSaved
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:hidden">
         <Crumbs parts={[{ label: m.root, path: "/" }, ...segments].map((c) => ({ label: c.label, onClick: () => guard(() => onPath(c.path)) }))} current={name} />
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[13px] text-muted-foreground">{[file.owner, file.mode].filter(Boolean).join(" · ")}</span>
+          <span className="text-muted-foreground">{[file.owner, file.mode].filter(Boolean).join(" · ")}</span>
           {!readonly && <Menu items={[{ label: m.history, onSelect: () => setHistory(true) }]} />}
           <Button variant="outline" readOnlyOk onClick={() => guard(onClose)}>
             {readonly ? t.common.actions.close : t.common.actions.cancel}

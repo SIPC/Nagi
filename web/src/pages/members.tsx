@@ -91,7 +91,7 @@ function ScopePick({
   const covered = (o: { labels: string[] }) => o.labels.some((l) => pickedLabels.includes(l));
   // 访问范围里还有、但已经没有项目（节点）用着的分组（标签），也列出来，才能取消。
   const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
-  const heading = "pt-1 text-xs text-muted-foreground first:pt-0";
+  const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
   return (
     <Field label={label} hint={hint}>
       <div className="grid">
@@ -372,7 +372,7 @@ export function MembersCard() {
               title={
                 <>
                   <span className="truncate font-medium">{u.displayName || u.username}</span>
-                  {u.isSelf && <span className="shrink-0 text-[13px] text-muted-foreground">{t.members.you}</span>}
+                  {u.isSelf && <span className="shrink-0 text-muted-foreground">{t.members.you}</span>}
                 </>
               }
               sub={<span className="block truncate">{memberSummary(u)}</span>}

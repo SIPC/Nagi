@@ -213,7 +213,7 @@ export function UserMenu({
             {!compact && (
               <>
                 <span className="min-w-0 flex-1 truncate">{name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{role}</span>
+                <span className="shrink-0 text-[13px] text-muted-foreground">{role}</span>
               </>
             )}
           </button>

@@ -166,7 +166,7 @@ export function StandbyCard() {
         {code && (
           <>
             <CodeBlock copy nowrap>{`nagi server --standby ${code.code}`}</CodeBlock>
-            <p className="text-[13px] leading-5 text-muted-foreground">{t.standby.dialog.notice}</p>
+            <p className="leading-5 text-muted-foreground">{t.standby.dialog.notice}</p>
             <DialogActions>
               <Button readOnlyOk onClick={() => setCode(null)}>
                 {t.standby.dialog.done}

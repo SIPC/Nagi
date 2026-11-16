@@ -888,7 +888,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
       {command && (
         <>
           <CodeBlock copy nowrap>{command}</CodeBlock>
-          <p className="flex items-center gap-1 text-[13px] leading-5 text-muted-foreground">
+          <p className="flex items-center gap-1 leading-5 text-muted-foreground">
             {t.nodes.add.commandHint}
             <HelpTip>{t.nodes.add.commandHelp}</HelpTip>
           </p>

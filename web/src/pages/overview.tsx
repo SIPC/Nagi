@@ -846,7 +846,7 @@ export function OverviewPage() {
         title={o.title}
         description={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {nodes.isSuccess && <span className="flex [&>span]:text-[13px] [&>span]:leading-5">{health}</span>}
+            {nodes.isSuccess && <span className="flex [&>span]:leading-5">{health}</span>}
             <span>{o.updates}</span>
           </span>
         }

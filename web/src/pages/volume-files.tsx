@@ -498,11 +498,11 @@ function EditFile({
           </Button>
         }
       />
-      <p className="text-[13px] leading-5 text-muted-foreground md:hidden">{m.editHint}</p>
+      <p className="leading-5 text-muted-foreground md:hidden">{m.editHint}</p>
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2 max-md:hidden">
         <Crumbs parts={trail(guard, segments)} current={name} />
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[13px] text-muted-foreground max-md:hidden">{m.editHint}</span>
+          <span className="text-muted-foreground max-md:hidden">{m.editHint}</span>
           <Button variant="outline" onClick={() => guard(onCancel)}>
             {t.common.actions.cancel}
           </Button>

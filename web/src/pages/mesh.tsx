@@ -308,7 +308,7 @@ function SpeedDialog({ nodeId, port, peer: p, run, onRetry, onClose }: { nodeId:
           ))}
         </tbody>
       </Table>
-      <p className="text-[13px] text-muted-foreground">{facts}</p>
+      <p className="text-muted-foreground">{facts}</p>
       {errors.map((s) => (
         <Alert key={s.via}>{s.error}</Alert>
       ))}

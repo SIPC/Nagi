@@ -192,9 +192,9 @@ function CreatedToken({ secret, url, onDone }: { secret: string; url: string; on
       <CodeBlock copy>{secret}</CodeBlock>
       {url && (
         <div className="grid gap-2">
-          <span className="text-[13px] text-muted-foreground">{t.tokens.setupClaudeCode}</span>
+          <span className="text-sm font-medium">{t.tokens.setupClaudeCode}</span>
           <CodeBlock copy>{`claude mcp add --transport http nagi ${url} --header "Authorization: Bearer ${secret}"`}</CodeBlock>
-          <span className="text-[13px] text-muted-foreground">{t.tokens.setupOther}</span>
+          <span className="text-sm font-medium">{t.tokens.setupOther}</span>
           <CodeBlock copy>{url}</CodeBlock>
           <CodeBlock copy>{`Authorization: Bearer ${secret}`}</CodeBlock>
         </div>

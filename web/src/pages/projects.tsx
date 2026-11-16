@@ -166,7 +166,7 @@ function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; n
         {/* 没有容器时不写状态，下面的内容区已经写了「暂无容器」。 */}
         {p.containers.length > 0 && <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}
       </div>
-      <div className="-mt-2 truncate font-mono text-xs leading-5 text-muted-foreground">{p.networkName}</div>
+      <div className="-mt-2 truncate text-[13px] leading-5 text-muted-foreground">{p.networkName}</div>
       <div className="grid gap-1 max-md:hidden">
         {p.containers.length === 0 ? (
           <div className="text-[13px] text-muted-foreground">{t.projects.card.noContainers}</div>
@@ -192,14 +192,14 @@ function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; n
                   )}
                 </span>
                 {c.failover ? <Badge tone={tookOver ? "warning" : "neutral"}>{tookOver ? t.projects.card.tookOver : t.projects.card.failover}</Badge> : c.stateful && <Badge>{t.projects.card.stateful}</Badge>}
-                <span className="max-w-[40%] min-w-6 shrink-0 truncate text-right font-mono text-xs leading-5 text-muted-foreground">{nodeName(c.nodeId)}</span>
+                <span className="max-w-[40%] min-w-6 shrink-0 truncate text-right text-[13px] leading-5 text-muted-foreground">{nodeName(c.nodeId)}</span>
               </div>
             );
           })
         )}
         {shown.length < p.containers.length && <div className="text-[13px] text-muted-foreground">{t.projects.card.moreContainers(p.containers.length - shown.length)}</div>}
       </div>
-      <div className="mt-auto flex justify-between gap-3 text-xs leading-4 text-muted-foreground">
+      <div className="mt-auto flex justify-between gap-3 text-[13px] leading-5 text-muted-foreground">
         <Roll value={p.routes.length > 0 ? `${t.projects.card.containers(p.containers.length)} · ${t.projects.card.portMappings(p.routes.length)}` : t.projects.card.containers(p.containers.length)} />
         <span
           className="shrink-0 tabular-nums"

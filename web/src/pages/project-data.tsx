@@ -859,7 +859,7 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
               title={
                 <>
                   <span className="truncate">{nodes.name(id)}</span>
-                  {!nodes.online(id) && <span className="shrink-0 text-[13px] text-muted-foreground">{t.common.status.offline}</span>}
+                  {!nodes.online(id) && <span className="shrink-0 text-muted-foreground">{t.common.status.offline}</span>}
                 </>
               }
               sub={

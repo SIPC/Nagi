@@ -258,7 +258,7 @@ function NotesBody({ body }: { body: string }) {
     if (!line) continue;
     if (line.startsWith("#")) {
       blocks.push(
-        <h4 key={blocks.length} className="pt-1 text-xs leading-5 text-muted-foreground">
+        <h4 key={blocks.length} className="pt-1 text-[13px] leading-5 text-muted-foreground">
           {line.replace(/^#+\s*/, "")}
         </h4>,
       );
@@ -409,14 +409,14 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
             {releases.map((r) => (
               <section key={r.version} className="grid gap-1">
                 {/* 版本号用等宽字体。 */}
-                <h3 className="font-mono text-xs leading-5 text-foreground">{r.version}</h3>
+                <h3 className="font-mono text-[13px] leading-5 text-foreground">{r.version}</h3>
                 <NotesBody body={r.body} />
               </section>
             ))}
           </div>
         ) : (
           <div className="grid gap-1">
-            <p className="text-xs leading-5">
+            <p className="text-[13px] leading-5">
               <span className="font-mono text-foreground">{latest.version}</span>
               {preview.group && ` · ${preview.group}`}
             </p>
