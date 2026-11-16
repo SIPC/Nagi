@@ -9,6 +9,8 @@ export default {
   exported: "已导出",
   search: "筛选记录…",
   searchLabel: "按动作、对象、IP 或参数筛选",
+  searchLabelOperator: "按动作、对象或参数筛选",
+  searchLabelViewer: "按动作或对象筛选",
   failedOnly: "只看失败",
   viaToken: (via: string, token: string) => `${via}（${token}）`,
   filters: {

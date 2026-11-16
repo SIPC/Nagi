@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -306,13 +307,23 @@ type Filter struct {
 	TargetMatch string
 	FailedOnly  bool
 	Search      string
-	ParentID    int64
+	// SearchFields 是 Search 匹配的列，按查看者能看到的字段定（见 SearchViewer 等）。为空时匹配全部列（管理员）。
+	// 搜索不能匹配查看者看不到的列，否则按有没有结果就能逐字猜出隐藏的内容。
+	SearchFields []string
+	ParentID     int64
 	// Before 只返回 ID 比它小的（翻页）。
 	Before int64
 	Limit  int
 	// TopLevel 不返回有上级的记录（界面上收在上级下面）。
 	TopLevel bool
 }
+
+// 搜索匹配的列：管理员全部；操作员看不到 IP 和浏览器；只读成员还看不到参数和失败详情（见 docs/audit.md#权限）。
+var (
+	SearchAll      = []string{"action", "actor_name", "target_name", "client", "params", "error", "ip"}
+	SearchOperator = []string{"action", "actor_name", "target_name", "client", "params", "error"}
+	SearchViewer   = []string{"action", "actor_name", "target_name", "client"}
+)
 
 func (f Filter) where() (string, []any) {
 	var conds []string
@@ -366,8 +377,23 @@ func (f Filter) where() (string, []any) {
 	}
 	if s := strings.TrimSpace(f.Search); s != "" {
 		like := "%" + escapeLike(s) + "%"
-		add(`(action LIKE ? ESCAPE '\' OR actor_name LIKE ? ESCAPE '\' OR target_name LIKE ? ESCAPE '\' OR ip LIKE ? ESCAPE '\'
-			OR params LIKE ? ESCAPE '\' OR error LIKE ? ESCAPE '\' OR client LIKE ? ESCAPE '\')`, like, like, like, like, like, like, like)
+		cols := f.SearchFields
+		if cols == nil {
+			cols = SearchAll
+		}
+		var or []string
+		var a []any
+		for _, c := range cols {
+			if slices.Contains(SearchAll, c) {
+				or = append(or, c+` LIKE ? ESCAPE '\'`)
+				a = append(a, like)
+			}
+		}
+		if len(or) == 0 {
+			add("0")
+		} else {
+			add("("+strings.Join(or, " OR ")+")", a...)
+		}
 	}
 	if f.ParentID != 0 {
 		add("parent_id = ?", f.ParentID)

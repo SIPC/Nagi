@@ -122,7 +122,9 @@ func (s *Shipper) Flush(id int64, timeout time.Duration) bool { return s.flush(i
 
 // FlushHealthy 同 Flush，但不等正在失败的目标：反正发不出去，等满 timeout 只会让操作卡住。
 // 修改外送配置前用它把这条变更发往旧目标。
-func (s *Shipper) FlushHealthy(id int64, timeout time.Duration) bool { return s.flush(id, timeout, true) }
+func (s *Shipper) FlushHealthy(id int64, timeout time.Duration) bool {
+	return s.flush(id, timeout, true)
+}
 
 func (s *Shipper) flush(id int64, timeout time.Duration, skipFailing bool) bool {
 	deadline := time.Now().Add(timeout)

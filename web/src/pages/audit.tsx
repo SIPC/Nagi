@@ -108,7 +108,7 @@ function toFilter(s: AuditSearch): AuditFilter {
 export function AuditPage() {
   const search = useSearch({ from: "/app/audit" });
   const navigate = useNavigate({ from: "/audit" });
-  const { isAdmin } = useRole();
+  const { isAdmin, isViewer } = useRole();
   const set = (patch: Partial<AuditSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
 
   // 搜索框输入时稍等再写进地址，免得每个字都查一次。
@@ -185,7 +185,7 @@ export function AuditPage() {
       {/* 筛选：常用的筛选框和时间范围在一行，其余条件收进「筛选」对话框，生效的条件列在下面，可以单独去掉。 */}
       <div className="mb-4 grid gap-2">
         <div className="flex items-center justify-between gap-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={t.audit.searchLabel} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={isAdmin ? t.audit.searchLabel : isViewer ? t.audit.searchLabelViewer : t.audit.searchLabelOperator} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
           <div className="flex shrink-0 items-center gap-2">
             <Select aria-label={t.audit.filters.range} className="w-auto" value={search.range ?? ""} onChange={(e) => set({ range: (e.target.value || undefined) as AuditRange | undefined })}>
               <option value="">{t.audit.ranges.all}</option>

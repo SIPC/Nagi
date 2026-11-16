@@ -61,10 +61,14 @@ func (v auditViewer) filter(f *nagiv1.AuditFilter) audit.Filter {
 	return out
 }
 
-// restrict 让非管理员只能查到访问范围内项目的记录。
+// restrict 让非管理员只能查到访问范围内项目的记录，搜索只匹配他看得到的字段。
 func (v auditViewer) restrict(f *audit.Filter) {
 	if v.admin {
 		return
+	}
+	f.SearchFields = audit.SearchOperator
+	if v.viewer {
+		f.SearchFields = audit.SearchViewer
 	}
 	if v.projects != nil {
 		f.Projects = v.projects
