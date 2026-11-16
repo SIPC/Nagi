@@ -177,6 +177,11 @@ const (
 	// NodeServiceInspectComposeDirProcedure is the fully-qualified name of the NodeService's
 	// InspectComposeDir RPC.
 	NodeServiceInspectComposeDirProcedure = "/nagi.v1.NodeService/InspectComposeDir"
+	// NodeServiceIsolateNodeProcedure is the fully-qualified name of the NodeService's IsolateNode RPC.
+	NodeServiceIsolateNodeProcedure = "/nagi.v1.NodeService/IsolateNode"
+	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
+	// RPC.
+	NodeServiceUnisolateNodeProcedure = "/nagi.v1.NodeService/UnisolateNode"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -1002,6 +1007,10 @@ type NodeServiceClient interface {
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1231,6 +1240,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
 			connect.WithClientOptions(opts...),
 		),
+		isolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
+			httpClient,
+			baseURL+NodeServiceIsolateNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("IsolateNode")),
+			connect.WithClientOptions(opts...),
+		),
+		unisolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
+			httpClient,
+			baseURL+NodeServiceUnisolateNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1272,6 +1293,8 @@ type nodeServiceClient struct {
 	confirmPendingHA      *connect.Client[v1.ConfirmPendingHARequest, v1.ConfirmPendingHAResponse]
 	setNodeAlertRules     *connect.Client[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse]
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
+	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
+	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -1454,6 +1477,16 @@ func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, req *connect.
 	return c.inspectComposeDir.CallUnary(ctx, req)
 }
 
+// IsolateNode calls nagi.v1.NodeService.IsolateNode.
+func (c *nodeServiceClient) IsolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return c.isolateNode.CallUnary(ctx, req)
+}
+
+// UnisolateNode calls nagi.v1.NodeService.UnisolateNode.
+func (c *nodeServiceClient) UnisolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return c.unisolateNode.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1521,6 +1554,10 @@ type NodeServiceHandler interface {
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1746,6 +1783,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("InspectComposeDir")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceIsolateNodeHandler := connect.NewUnaryHandler(
+		NodeServiceIsolateNodeProcedure,
+		svc.IsolateNode,
+		connect.WithSchema(nodeServiceMethods.ByName("IsolateNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceUnisolateNodeHandler := connect.NewUnaryHandler(
+		NodeServiceUnisolateNodeProcedure,
+		svc.UnisolateNode,
+		connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -1820,6 +1869,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeAlertRulesHandler.ServeHTTP(w, r)
 		case NodeServiceInspectComposeDirProcedure:
 			nodeServiceInspectComposeDirHandler.ServeHTTP(w, r)
+		case NodeServiceIsolateNodeProcedure:
+			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
+		case NodeServiceUnisolateNodeProcedure:
+			nodeServiceUnisolateNodeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1971,6 +2024,14 @@ func (UnimplementedNodeServiceHandler) SetNodeAlertRules(context.Context, *conne
 
 func (UnimplementedNodeServiceHandler) InspectComposeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ComposeDirPreview], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.InspectComposeDir is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.IsolateNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UnisolateNode is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.

@@ -206,3 +206,39 @@ func (q *Queries) SeenNetwork(ctx context.Context, userID int64, network string,
 		ON CONFLICT (user_id, network) DO UPDATE SET last_seen = excluded.last_seen`, userID, network, now)
 	return seen, n > 0, err
 }
+
+// IsolatedNodes 返回被隔离的节点和它们的 mesh 公钥。
+func (q *Queries) IsolatedNodes(ctx context.Context) ([]string, [][]byte, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT id, mesh_key FROM nodes WHERE isolated = 1`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	var keys [][]byte
+	for rows.Next() {
+		var id string
+		var k []byte
+		if err := rows.Scan(&id, &k); err != nil {
+			return nil, nil, err
+		}
+		ids, keys = append(ids, id), append(keys, k)
+	}
+	return ids, keys, rows.Err()
+}
+
+// SetNodeIsolated 设置节点的隔离状态。
+func (q *Queries) SetNodeIsolated(ctx context.Context, id string, on bool) error {
+	v := 0
+	if on {
+		v = 1
+	}
+	res, err := q.db.ExecContext(ctx, `UPDATE nodes SET isolated = ? WHERE id = ?`, v, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}

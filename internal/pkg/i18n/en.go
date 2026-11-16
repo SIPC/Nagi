@@ -682,4 +682,11 @@ var en = map[string]string{
 	"放行的地址最多 100 条":                                "You can allow at most 100 addresses",
 	"无法应用出站限制的规则：%s":                               "Couldn't apply the egress rules: %s",
 	"这台机器没有 nftables（nft 命令），无法限制容器出站":             "This machine doesn't have nftables (the nft command), so container egress can't be restricted",
+	"另有 %d 条未逐条上报":                                 "%d more weren't reported individually",
+	"节点 %s 已被隔离":                                   "Node %s was isolated",
+	"节点 %s 已解除隔离":                                  "Isolation of node %s ended",
+	"节点 %s 报告":                                     "Reported by node %s",
+	"节点 %s 疑似被攻破":                                  "Node %s may be compromised",
+	"节点已被隔离":                                       "The node is isolated",
+	"面板发现":                                         "Detected by the panel",
 }

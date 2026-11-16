@@ -173,6 +173,7 @@ func TestAuthorizePanel(t *testing.T) {
 	ka, kb, kold := mesh.PublicKey(randKey()), mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
 	a := &agent{id: id, log: slog.Default(), reload: make(chan struct{}, 1),
 		mesh: &meshNode{panelKeys: map[string]mesh.Key{"fp-a": ka, "fp-b": kb, "fp-old": kold}}}
+	a.violations = newViolations(a)
 	a.applyCluster(primary, &nagiv1.PanelCluster{Term: 1, Primary: "fp-a", Panels: []*nagiv1.ClusterPanel{
 		{Address: "a:1", Fingerprint: "fp-a"}, {Address: "b:1", Fingerprint: "fp-b"}}})
 
@@ -190,5 +191,9 @@ func TestAuthorizePanel(t *testing.T) {
 		if c := code(mesh.PublicKey(randKey()), m); c != codes.PermissionDenied {
 			t.Fatalf("%s: 不是面板的公钥不能调用，得到 %v", m, c)
 		}
+	}
+	// 节点（不是面板的公钥）调用只给面板的接口记为越权；移除的面板不算（它在保留期里本来就会出现）。
+	if n := len(a.violations.pending); n != 3 {
+		t.Fatalf("记下 %d 条越权，应为 3 条", n)
 	}
 }

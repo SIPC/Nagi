@@ -733,6 +733,8 @@ const (
 	NodeService_ConfirmPendingHA_FullMethodName      = "/nagi.v1.NodeService/ConfirmPendingHA"
 	NodeService_SetNodeAlertRules_FullMethodName     = "/nagi.v1.NodeService/SetNodeAlertRules"
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
+	NodeService_IsolateNode_FullMethodName           = "/nagi.v1.NodeService/IsolateNode"
+	NodeService_UnisolateNode_FullMethodName         = "/nagi.v1.NodeService/UnisolateNode"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -804,6 +806,10 @@ type NodeServiceClient interface {
 	SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ComposeDirPreview, error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
+	UnisolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
 }
 
 type nodeServiceClient struct {
@@ -1183,6 +1189,26 @@ func (c *nodeServiceClient) InspectComposeDir(ctx context.Context, in *NodeFileR
 	return out, nil
 }
 
+func (c *nodeServiceClient) IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsolateNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_IsolateNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) UnisolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsolateNodeResponse)
+	err := c.cc.Invoke(ctx, NodeService_UnisolateNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -1252,6 +1278,10 @@ type NodeServiceServer interface {
 	SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
 	InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error)
+	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+	// 只有管理员能用，要先做高权限确认并输入节点名。
+	IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
+	UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -1369,6 +1399,12 @@ func (UnimplementedNodeServiceServer) SetNodeAlertRules(context.Context, *SetNod
 }
 func (UnimplementedNodeServiceServer) InspectComposeDir(context.Context, *NodeFileRef) (*ComposeDirPreview, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectComposeDir not implemented")
+}
+func (UnimplementedNodeServiceServer) IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IsolateNode not implemented")
+}
+func (UnimplementedNodeServiceServer) UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnisolateNode not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -2032,6 +2068,42 @@ func _NodeService_InspectComposeDir_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_IsolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsolateNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).IsolateNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_IsolateNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).IsolateNode(ctx, req.(*IsolateNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_UnisolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsolateNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).UnisolateNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_UnisolateNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).UnisolateNode(ctx, req.(*IsolateNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2178,6 +2250,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InspectComposeDir",
 			Handler:    _NodeService_InspectComposeDir_Handler,
+		},
+		{
+			MethodName: "IsolateNode",
+			Handler:    _NodeService_IsolateNode_Handler,
+		},
+		{
+			MethodName: "UnisolateNode",
+			Handler:    _NodeService_UnisolateNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

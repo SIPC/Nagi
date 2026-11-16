@@ -58,6 +58,9 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure: true,
 	// 回放终端录制：输出里可能有密钥（见 docs/audit.md#终端与命令录制）。
 	nagiv1connect.SettingsServiceGetRecordingProcedure: true,
+	// 隔离和解除隔离节点（见 docs/mesh.md#隔离）。
+	nagiv1connect.NodeServiceIsolateNodeProcedure:   true,
+	nagiv1connect.NodeServiceUnisolateNodeProcedure: true,
 }
 
 func elevationError() error {

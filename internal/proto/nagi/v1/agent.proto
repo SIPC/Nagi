@@ -4,6 +4,7 @@ package nagi.v1;
 
 import "google/protobuf/timestamp.proto";
 import "nagi/v1/common.proto";
+import "nagi/v1/panel.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
@@ -116,6 +117,8 @@ service AgentService {
   rpc MeshSpeedTest(MeshPingRequest) returns (MeshSpeedResponse);
   // 修改组网设置，返回修改后的设置。
   rpc SetMeshOptions(MeshOptions) returns (MeshOptions);
+  // 立即更新 mesh 成员列表（隔离节点时用，见 docs/mesh.md#隔离），平时随上报的回复下发。
+  rpc SetMesh(MeshConfig) returns (SetMeshResponse);
   // 节点的镜像加速地址（写在 /etc/docker/daemon.json，重启 Docker 后生效）。
   rpc GetMirrors(GetMirrorsRequest) returns (Mirrors);
   rpc SetMirrors(Mirrors) returns (Mirrors);
@@ -678,3 +681,5 @@ message NodeStorage {
   // 取 Docker 的统计失败时的原因，其余部分照常返回。
   string docker_error = 9;
 }
+
+message SetMeshResponse {}

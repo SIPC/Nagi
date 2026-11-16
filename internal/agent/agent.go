@@ -148,6 +148,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
 	a.egress = newEgress(a)
+	a.violations = newViolations(a)
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {
@@ -225,6 +226,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	go a.intranet.run(ctx)
 	go a.egress.run(ctx)
+	go a.violations.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)
 	}
@@ -275,13 +277,15 @@ type agent struct {
 	mesh      *meshNode
 	intranet  *intranet
 	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
-	egress    *egress
-	replicas  *replicas
-	backups   *backupStates
-	failovers *failovers
-	votes     *voteBatcher
-	ctx       context.Context
-	startedAt time.Time
+	egress *egress
+	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
+	violations *violations
+	replicas   *replicas
+	backups    *backupStates
+	failovers  *failovers
+	votes      *voteBatcher
+	ctx        context.Context
+	startedAt  time.Time
 
 	mu       sync.Mutex
 	subs     []chan struct{}

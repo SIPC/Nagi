@@ -85,7 +85,12 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 
 	var peers []mesh.Peer
 	var list []*nagiv1.MeshPeer
+	iso := r.isolatedNodes(context.Background())
 	for _, c := range conns {
+		// 被隔离的节点不在任何人的成员列表里（见 docs/mesh.md#隔离）。
+		if _, bad := iso[c.NodeID]; bad {
+			continue
+		}
 		c.mu.RLock()
 		info, name, remote := c.mesh, c.name, c.remote
 		c.mu.RUnlock()
@@ -151,6 +156,7 @@ func (r *Registry) meshConfig(to *Conn) *nagiv1.MeshConfig {
 	return &nagiv1.MeshConfig{
 		PanelKey: self[:],
 		Peers:    append([]*nagiv1.MeshPeer{{PublicKey: self[:], Name: name, IsPanel: true}}, list...),
+		Isolated: r.isolatedKeys(),
 	}
 }
 
@@ -301,6 +307,10 @@ func (p *panelService) MeshRelay(stream nagiv1.PanelService_MeshRelayServer) err
 	k, err := mesh.ParseKey(info.GetPublicKey())
 	if err != nil {
 		return status.Error(codes.FailedPrecondition, "请先上报节点网络信息")
+	}
+	// 被隔离的节点不再经面板中转。
+	if p.r.Isolated(stream.Context(), p.conn.NodeID) {
+		return status.Error(codes.PermissionDenied, "节点已被隔离")
 	}
 	var mu sync.Mutex
 	detach := m.AttachLink(k, func(src, dst mesh.Key, payload []byte) error {

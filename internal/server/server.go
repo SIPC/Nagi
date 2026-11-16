@@ -257,6 +257,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.Audit = s.audit
+	s.nodes.OnIsolate = func(context.Context) { s.projects.RefreshLinks() }
 	// 会话被盗用这类安全告警由面板发出（备用面板不发告警）。
 	if s.standby == nil {
 		s.auth.Alert = func(ctx context.Context, key, title, message string) {

@@ -33,10 +33,12 @@ type meshNode struct {
 
 	mu         sync.Mutex
 	panelPeers map[string][]*nagiv1.MeshPeer // 面板指纹 → 这个面板告诉我们的成员
-	panelKeys  map[string]mesh.Key           // 面板指纹 → 面板的 WireGuard 公钥
-	panelAddr  map[string]string             // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
-	names      map[mesh.Key]string
-	file       string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
+	// isolated 是面板隔离的节点（面板指纹 → mesh 公钥）：立即去掉，不走保留期（见 docs/mesh.md#隔离）。
+	isolated  map[string][][]byte
+	panelKeys map[string]mesh.Key // 面板指纹 → 面板的 WireGuard 公钥
+	panelAddr map[string]string   // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
+	names     map[mesh.Key]string
+	file      string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
 	// trusted 是现在信任的面板。移除的面板告诉我们的成员先留着，直到某个信任的面板给了成员列表：
 	// 移交时新面板批准本节点之前不给成员列表，这期间节点之间照常经 mesh 联系（顶替续约、项目内网）。
 	trusted []string
@@ -198,6 +200,10 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 		return mesh.Key{}, false
 	}
 	n.mu.Lock()
+	if n.isolated == nil {
+		n.isolated = map[string][][]byte{}
+	}
+	n.isolated[fingerprint] = cfg.GetIsolated()
 	n.panelPeers[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
@@ -335,6 +341,18 @@ func (n *meshNode) apply() {
 	now := time.Now()
 	if n.recent == nil {
 		n.recent = map[mesh.Key]recentPeer{}
+	}
+	// 被隔离的节点：从这次的成员和保留期里一起去掉。
+	for _, list := range n.isolated {
+		for _, raw := range list {
+			if k, err := mesh.ParseKey(raw); err == nil {
+				delete(n.recent, k)
+				if merged[k] != nil {
+					delete(merged, k)
+					order = slices.DeleteFunc(order, func(x mesh.Key) bool { return x == k })
+				}
+			}
+		}
 	}
 	for k, p := range merged {
 		n.recent[k] = recentPeer{peer: *p, at: now}
@@ -578,4 +596,17 @@ func meshRates(prev map[mesh.Key]meshCounter, peers []mesh.Status, elapsed float
 		}
 	}
 	return out
+}
+
+// SetMesh 立即更新面板告诉我们的成员列表（面板隔离节点时推过来，见 docs/mesh.md#隔离）。
+func (s *agentService) SetMesh(_ context.Context, req *nagiv1.MeshConfig) (*nagiv1.SetMeshResponse, error) {
+	n := s.node.mesh
+	if n == nil {
+		return &nagiv1.SetMeshResponse{}, nil
+	}
+	n.mu.Lock()
+	addr := n.panelAddr[s.panel]
+	n.mu.Unlock()
+	n.update(s.panel, addr, req)
+	return &nagiv1.SetMeshResponse{}, nil
 }

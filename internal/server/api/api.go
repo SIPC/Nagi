@@ -272,6 +272,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
 		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
 		n.AlertRules = nodes.NodeAlertRules(row)
+		n.Isolated = s.Nodes.Isolated(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -532,4 +533,35 @@ func (s *nodeService) SetNodeAlertRules(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	return connect.NewResponse(&nagiv1.SetNodeAlertRulesResponse{}), nil
+}
+
+// IsolateNode 隔离节点（见 docs/mesh.md#隔离）：只有管理员（角色检查）、先做高权限确认、输入节点名。
+func (s *nodeService) IsolateNode(ctx context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	return s.setIsolated(ctx, req.Msg, true)
+}
+
+// UnisolateNode 解除隔离，同样要高权限确认。
+func (s *nodeService) UnisolateNode(ctx context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	return s.setIsolated(ctx, req.Msg, false)
+}
+
+func (s *nodeService) setIsolated(ctx context.Context, m *nagiv1.IsolateNodeRequest, on bool) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+	n, err := s.Q.GetNode(ctx, m.GetNodeId())
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, i18n.New("节点不存在"))
+	} else if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(m.GetConfirmName()) != n.Name {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("需输入名称确认"))
+	}
+	if err := s.Nodes.SetIsolated(ctx, n.ID, on); err != nil {
+		return nil, err
+	}
+	title := i18n.Errorf("节点 %s 已被隔离", n.Name).Error()
+	if !on {
+		title = i18n.Errorf("节点 %s 已解除隔离", n.Name).Error()
+	}
+	s.notify(ctx, "isolate", title, "")
+	return connect.NewResponse(&nagiv1.IsolateNodeResponse{}), nil
 }

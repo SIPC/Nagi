@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package nagi.v1;
 
+import "google/protobuf/timestamp.proto";
 import "nagi/v1/common.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
@@ -18,6 +19,8 @@ service PanelService {
   rpc ReportAlert(ReportAlertRequest) returns (ReportAlertResponse);
   // mesh 的 TLS 中转：UDP 不通时，WireGuard 包经控制连接收发。
   rpc MeshRelay(stream MeshPacket) returns (stream MeshPacket);
+  // 节点上报被它拒绝的越权请求（见 docs/mesh.md#越权识别）：每 10 秒一批，每 10 分钟最多 200 条。
+  rpc ReportViolations(ReportViolationsRequest) returns (ReportViolationsResponse);
 }
 
 message MeshPacket {
@@ -47,6 +50,8 @@ message MeshDirect {
 message MeshConfig {
   bytes panel_key = 1;
   repeated MeshPeer peers = 2;
+  // 被隔离的节点的 mesh 公钥：立即从成员里去掉，不走保留期（见 docs/mesh.md#隔离）。
+  repeated bytes isolated = 3;
 }
 
 message RelayAlertRequest {
@@ -111,3 +116,24 @@ message ClusterPanel {
   string address = 1;
   string fingerprint = 2;
 }
+
+// Violation 是一次被拒绝的越权请求。
+message Violation {
+  // 调用方的 mesh 公钥（WireGuard 认证过，伪造不了）。
+  bytes caller = 1;
+  // 被拒绝的操作，例如 meshservice:ReadVolumeFile、intranet:connect、replica:sync、lease:vote。
+  string method = 2;
+  string project_id = 3;
+  string container = 4;
+  uint32 port = 5;
+  string detail = 6;
+  google.protobuf.Timestamp time = 7;
+}
+
+message ReportViolationsRequest {
+  repeated Violation violations = 1;
+  // 超出上限、没有逐条上报的条数。
+  uint32 dropped = 2;
+}
+
+message ReportViolationsResponse {}

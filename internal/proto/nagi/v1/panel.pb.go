@@ -9,6 +9,7 @@ package nagiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -215,9 +216,11 @@ func (x *MeshDirect) GetRttMs() float64 {
 
 // MeshConfig 是面板告诉节点的 mesh 成员（面板自己和它管理的在线节点）。
 type MeshConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PanelKey      []byte                 `protobuf:"bytes,1,opt,name=panel_key,json=panelKey,proto3" json:"panel_key,omitempty"`
-	Peers         []*MeshPeer            `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PanelKey []byte                 `protobuf:"bytes,1,opt,name=panel_key,json=panelKey,proto3" json:"panel_key,omitempty"`
+	Peers    []*MeshPeer            `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
+	// 被隔离的节点的 mesh 公钥：立即从成员里去掉，不走保留期（见 docs/mesh.md#隔离）。
+	Isolated      [][]byte `protobuf:"bytes,3,rep,name=isolated,proto3" json:"isolated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -262,6 +265,13 @@ func (x *MeshConfig) GetPanelKey() []byte {
 func (x *MeshConfig) GetPeers() []*MeshPeer {
 	if x != nil {
 		return x.Peers
+	}
+	return nil
+}
+
+func (x *MeshConfig) GetIsolated() [][]byte {
+	if x != nil {
+		return x.Isolated
 	}
 	return nil
 }
@@ -822,11 +832,195 @@ func (x *ClusterPanel) GetFingerprint() string {
 	return ""
 }
 
+// Violation 是一次被拒绝的越权请求。
+type Violation struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 调用方的 mesh 公钥（WireGuard 认证过，伪造不了）。
+	Caller []byte `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	// 被拒绝的操作，例如 meshservice:ReadVolumeFile、intranet:connect、replica:sync、lease:vote。
+	Method        string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container     string                 `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
+	Port          uint32                 `protobuf:"varint,5,opt,name=port,proto3" json:"port,omitempty"`
+	Detail        string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	Time          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=time,proto3" json:"time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Violation) Reset() {
+	*x = Violation{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Violation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Violation) ProtoMessage() {}
+
+func (x *Violation) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Violation.ProtoReflect.Descriptor instead.
+func (*Violation) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *Violation) GetCaller() []byte {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *Violation) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *Violation) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *Violation) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
+func (x *Violation) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *Violation) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *Violation) GetTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Time
+	}
+	return nil
+}
+
+type ReportViolationsRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Violations []*Violation           `protobuf:"bytes,1,rep,name=violations,proto3" json:"violations,omitempty"`
+	// 超出上限、没有逐条上报的条数。
+	Dropped       uint32 `protobuf:"varint,2,opt,name=dropped,proto3" json:"dropped,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportViolationsRequest) Reset() {
+	*x = ReportViolationsRequest{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportViolationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportViolationsRequest) ProtoMessage() {}
+
+func (x *ReportViolationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportViolationsRequest.ProtoReflect.Descriptor instead.
+func (*ReportViolationsRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ReportViolationsRequest) GetViolations() []*Violation {
+	if x != nil {
+		return x.Violations
+	}
+	return nil
+}
+
+func (x *ReportViolationsRequest) GetDropped() uint32 {
+	if x != nil {
+		return x.Dropped
+	}
+	return 0
+}
+
+type ReportViolationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportViolationsResponse) Reset() {
+	*x = ReportViolationsResponse{}
+	mi := &file_nagi_v1_panel_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportViolationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportViolationsResponse) ProtoMessage() {}
+
+func (x *ReportViolationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_panel_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportViolationsResponse.ProtoReflect.Descriptor instead.
+func (*ReportViolationsResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_panel_proto_rawDescGZIP(), []int{16}
+}
+
 var File_nagi_v1_panel_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\n" +
-	"\x13nagi/v1/panel.proto\x12\anagi.v1\x1a\x14nagi/v1/common.proto\"J\n" +
+	"\x13nagi/v1/panel.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x14nagi/v1/common.proto\"J\n" +
 	"\n" +
 	"MeshPacket\x12\x10\n" +
 	"\x03src\x18\x01 \x01(\fR\x03src\x12\x10\n" +
@@ -843,11 +1037,12 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"MeshDirect\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x15\n" +
-	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\"R\n" +
+	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\"n\n" +
 	"\n" +
 	"MeshConfig\x12\x1b\n" +
 	"\tpanel_key\x18\x01 \x01(\fR\bpanelKey\x12'\n" +
-	"\x05peers\x18\x02 \x03(\v2\x11.nagi.v1.MeshPeerR\x05peers\"Z\n" +
+	"\x05peers\x18\x02 \x03(\v2\x11.nagi.v1.MeshPeerR\x05peers\x12\x1a\n" +
+	"\bisolated\x18\x03 \x03(\fR\bisolated\"Z\n" +
 	"\x11RelayAlertRequest\x12$\n" +
 	"\x05alert\x18\x01 \x01(\v2\x0e.nagi.v1.AlertR\x05alert\x12\x1f\n" +
 	"\vchannel_ids\x18\x02 \x03(\tR\n" +
@@ -884,14 +1079,30 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\aremoved\x18\x04 \x03(\tR\aremoved\"J\n" +
 	"\fClusterPanel\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
-	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint2\xee\x02\n" +
+	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\"\xd4\x01\n" +
+	"\tViolation\x12\x16\n" +
+	"\x06caller\x18\x01 \x01(\fR\x06caller\x12\x16\n" +
+	"\x06method\x18\x02 \x01(\tR\x06method\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\x12\x12\n" +
+	"\x04port\x18\x05 \x01(\rR\x04port\x12\x16\n" +
+	"\x06detail\x18\x06 \x01(\tR\x06detail\x12.\n" +
+	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"g\n" +
+	"\x17ReportViolationsRequest\x122\n" +
+	"\n" +
+	"violations\x18\x01 \x03(\v2\x12.nagi.v1.ViolationR\n" +
+	"violations\x12\x18\n" +
+	"\adropped\x18\x02 \x01(\rR\adropped\"\x1a\n" +
+	"\x18ReportViolationsResponse2\xc7\x03\n" +
 	"\fPanelService\x129\n" +
 	"\x06Report\x12\x16.nagi.v1.ReportRequest\x1a\x17.nagi.v1.ReportResponse\x12W\n" +
 	"\x10RenewCertificate\x12 .nagi.v1.RenewCertificateRequest\x1a!.nagi.v1.RenewCertificateResponse\x12E\n" +
 	"\n" +
 	"RelayAlert\x12\x1a.nagi.v1.RelayAlertRequest\x1a\x1b.nagi.v1.RelayAlertResponse\x12H\n" +
 	"\vReportAlert\x12\x1b.nagi.v1.ReportAlertRequest\x1a\x1c.nagi.v1.ReportAlertResponse\x129\n" +
-	"\tMeshRelay\x12\x13.nagi.v1.MeshPacket\x1a\x13.nagi.v1.MeshPacket(\x010\x01B4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\tMeshRelay\x12\x13.nagi.v1.MeshPacket\x1a\x13.nagi.v1.MeshPacket(\x010\x01\x12W\n" +
+	"\x10ReportViolations\x12 .nagi.v1.ReportViolationsRequest\x1a!.nagi.v1.ReportViolationsResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_panel_proto_rawDescOnce sync.Once
@@ -905,7 +1116,7 @@ func file_nagi_v1_panel_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_panel_proto_rawDescData
 }
 
-var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_nagi_v1_panel_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_nagi_v1_panel_proto_goTypes = []any{
 	(*MeshPacket)(nil),               // 0: nagi.v1.MeshPacket
 	(*MeshInfo)(nil),                 // 1: nagi.v1.MeshInfo
@@ -921,43 +1132,51 @@ var file_nagi_v1_panel_proto_goTypes = []any{
 	(*ReportResponse)(nil),           // 11: nagi.v1.ReportResponse
 	(*PanelCluster)(nil),             // 12: nagi.v1.PanelCluster
 	(*ClusterPanel)(nil),             // 13: nagi.v1.ClusterPanel
-	(*MeshPeer)(nil),                 // 14: nagi.v1.MeshPeer
-	(*Alert)(nil),                    // 15: nagi.v1.Alert
-	(*NodeInfo)(nil),                 // 16: nagi.v1.NodeInfo
-	(*ContainerStatus)(nil),          // 17: nagi.v1.ContainerStatus
-	(*FailoverStatus)(nil),           // 18: nagi.v1.FailoverStatus
-	(*NodeUsage)(nil),                // 19: nagi.v1.NodeUsage
-	(*DomainCert)(nil),               // 20: nagi.v1.DomainCert
+	(*Violation)(nil),                // 14: nagi.v1.Violation
+	(*ReportViolationsRequest)(nil),  // 15: nagi.v1.ReportViolationsRequest
+	(*ReportViolationsResponse)(nil), // 16: nagi.v1.ReportViolationsResponse
+	(*MeshPeer)(nil),                 // 17: nagi.v1.MeshPeer
+	(*Alert)(nil),                    // 18: nagi.v1.Alert
+	(*NodeInfo)(nil),                 // 19: nagi.v1.NodeInfo
+	(*ContainerStatus)(nil),          // 20: nagi.v1.ContainerStatus
+	(*FailoverStatus)(nil),           // 21: nagi.v1.FailoverStatus
+	(*NodeUsage)(nil),                // 22: nagi.v1.NodeUsage
+	(*DomainCert)(nil),               // 23: nagi.v1.DomainCert
+	(*timestamppb.Timestamp)(nil),    // 24: google.protobuf.Timestamp
 }
 var file_nagi_v1_panel_proto_depIdxs = []int32{
 	2,  // 0: nagi.v1.MeshInfo.directs:type_name -> nagi.v1.MeshDirect
-	14, // 1: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
-	15, // 2: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
-	15, // 3: nagi.v1.ReportAlertRequest.alert:type_name -> nagi.v1.Alert
-	16, // 4: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
+	17, // 1: nagi.v1.MeshConfig.peers:type_name -> nagi.v1.MeshPeer
+	18, // 2: nagi.v1.RelayAlertRequest.alert:type_name -> nagi.v1.Alert
+	18, // 3: nagi.v1.ReportAlertRequest.alert:type_name -> nagi.v1.Alert
+	19, // 4: nagi.v1.ReportRequest.node:type_name -> nagi.v1.NodeInfo
 	1,  // 5: nagi.v1.ReportRequest.mesh:type_name -> nagi.v1.MeshInfo
-	17, // 6: nagi.v1.ReportRequest.containers:type_name -> nagi.v1.ContainerStatus
-	18, // 7: nagi.v1.ReportRequest.failovers:type_name -> nagi.v1.FailoverStatus
-	19, // 8: nagi.v1.ReportRequest.usage:type_name -> nagi.v1.NodeUsage
-	20, // 9: nagi.v1.ReportRequest.certs:type_name -> nagi.v1.DomainCert
+	20, // 6: nagi.v1.ReportRequest.containers:type_name -> nagi.v1.ContainerStatus
+	21, // 7: nagi.v1.ReportRequest.failovers:type_name -> nagi.v1.FailoverStatus
+	22, // 8: nagi.v1.ReportRequest.usage:type_name -> nagi.v1.NodeUsage
+	23, // 9: nagi.v1.ReportRequest.certs:type_name -> nagi.v1.DomainCert
 	3,  // 10: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
 	12, // 11: nagi.v1.ReportResponse.cluster:type_name -> nagi.v1.PanelCluster
 	13, // 12: nagi.v1.PanelCluster.panels:type_name -> nagi.v1.ClusterPanel
-	10, // 13: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
-	8,  // 14: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
-	4,  // 15: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
-	6,  // 16: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
-	0,  // 17: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
-	11, // 18: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
-	9,  // 19: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
-	5,  // 20: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
-	7,  // 21: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
-	0,  // 22: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
-	18, // [18:23] is the sub-list for method output_type
-	13, // [13:18] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	24, // 13: nagi.v1.Violation.time:type_name -> google.protobuf.Timestamp
+	14, // 14: nagi.v1.ReportViolationsRequest.violations:type_name -> nagi.v1.Violation
+	10, // 15: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
+	8,  // 16: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
+	4,  // 17: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
+	6,  // 18: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
+	0,  // 19: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
+	15, // 20: nagi.v1.PanelService.ReportViolations:input_type -> nagi.v1.ReportViolationsRequest
+	11, // 21: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
+	9,  // 22: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
+	5,  // 23: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
+	7,  // 24: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
+	0,  // 25: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
+	16, // 26: nagi.v1.PanelService.ReportViolations:output_type -> nagi.v1.ReportViolationsResponse
+	21, // [21:27] is the sub-list for method output_type
+	15, // [15:21] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_panel_proto_init() }
@@ -972,7 +1191,7 @@ func file_nagi_v1_panel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_panel_proto_rawDesc), len(file_nagi_v1_panel_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

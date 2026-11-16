@@ -133,6 +133,11 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		return nil, err
 	}
 	for _, n := range nodes {
+		// 被隔离的节点不放行任何项目（见 docs/mesh.md#隔离）：不给它公钥，计划里就没有它。
+		if s.Nodes.Isolated(ctx, n.ID) {
+			names[n.ID] = n.Name
+			continue
+		}
 		keys[n.ID], names[n.ID] = n.MeshKey, n.Name
 		m := map[string]*nagiv1.ContainerStatus{}
 		if conn, err := s.Nodes.Peek(n.ID); err == nil {
@@ -368,6 +373,9 @@ func (s *Service) pushAllLinks(ctx context.Context) {
 		}
 	}
 }
+
+// RefreshLinks 在后台给所有在线节点重新算代理计划（节点被隔离以后）。
+func (s *Service) RefreshLinks() { s.refreshLinks() }
 
 // refreshLinks 在后台给所有在线节点重新算代理计划（项目连接、容器增删、网络名改了以后），不等节点下次上报。
 func (s *Service) refreshLinks() {

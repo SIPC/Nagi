@@ -219,6 +219,10 @@ service NodeService {
   rpc SetNodeAlertRules(SetNodeAlertRulesRequest) returns (SetNodeAlertRulesResponse);
   // 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
   rpc InspectComposeDir(NodeFileRef) returns (ComposeDirPreview);
+  // 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
+  // 只有管理员能用，要先做高权限确认并输入节点名。
+  rpc IsolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
+  rpc UnisolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
 }
 
 message NodeRef {
@@ -617,6 +621,8 @@ message Node {
   repeated StaleProject stale_projects = 12;
   // 节点的告警规则（内存、磁盘、离线、证书）。没有设置的阈值用默认值。
   AlertRules alert_rules = 13;
+  // 已被隔离（见 docs/mesh.md#隔离）。
+  bool isolated = 14;
 }
 
 message SetNodeAlertRulesRequest {
@@ -1517,3 +1523,11 @@ message AuditChainStatus {
   int64 anchor_id = 6;
   string anchor_hash = 7;
 }
+
+message IsolateNodeRequest {
+  string node_id = 1;
+  // 输入的节点名，和节点名一致才执行。
+  string confirm_name = 2;
+}
+
+message IsolateNodeResponse {}
