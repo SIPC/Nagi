@@ -29,6 +29,12 @@ func TestPrivilegeReasons(t *testing.T) {
 		{"并列的挂载", svc("    volumes:\n      - ./a:/a\n      - ./ab:/ab\n") + "  db:\n    image: postgres\n    volumes:\n      - ./a:/a\n", "", false},
 
 		{"privileged", svc("    privileged: true\n"), "web: privileged", false},
+		{"钩子不带 privileged", svc("    post_start:\n      - command: echo hi\n        user: root\n"), "", false},
+		{"post_start 特权", svc("    post_start:\n      - command: id\n        privileged: true\n"), "web: post_start.privileged", false},
+		{"pre_stop 特权", svc("    pre_stop:\n      - command: id\n        privileged: true\n"), "web: pre_stop.privileged", false},
+		{"钩子特权用变量", svc("    post_start:\n      - command: id\n        privileged: ${P}\n"), "web: post_start.privileged", true},
+		{"钩子写法读不懂", svc("    post_start: id\n"), "web: post_start", false},
+		{"provider", svc("    provider:\n      type: model\n      options:\n        model: x\n"), "web: provider", false},
 		{"privileged 变量", svc("    privileged: ${P}\n"), "web: privileged", true},
 		{"cap_add", svc("    cap_add: [SYS_ADMIN]\n"), "web: cap_add", false},
 		{"devices", svc("    devices:\n      - /dev/sda:/dev/sda\n"), "web: devices", false},

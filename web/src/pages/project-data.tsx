@@ -37,6 +37,7 @@ import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { confirmAction } from "@/components/confirm";
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRole } from "@/components/role";
 import { snapshotTime, VolumeFiles } from "@/pages/volume-files";
@@ -146,6 +147,7 @@ export function ContainerHA({
   return (
     <div className="grid grid-cols-1 gap-8">
       {run.output && <div className="empty:hidden">{run.output}</div>}
+      {container.pendingHa && <PendingHANotice project={project} container={container} nodes={nodes} />}
       {container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
       {restorable && <RestoreNotice project={project} container={container} nodes={nodes} run={run} />}
       <div className="min-w-0">
@@ -1199,6 +1201,60 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
 }
 
 // TakeoverNotice：有状态容器等待确认顶替，放在页面最上面。
+// PendingHANotice：从节点缓存恢复、等管理员确认的顶替设置或备份节点（见 docs/panel.md#项目数据）。
+// 确认会让别的节点接收并运行这个容器的配置，所以要高权限确认。
+function PendingHANotice({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+  const f = t.projectData.failover;
+  const { isAdmin } = useRole();
+  const { busy, error, call } = useCall(project.id);
+  const p = container.pendingHa!;
+  const ref = { projectId: project.id, container: container.name };
+  const elevated = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (err) {
+      if (!isElevationRequired(err) || !(await requireElevation(f.restoredElevate))) throw err;
+      await fn();
+    }
+  };
+  const items = [
+    p.failover ? f.restoredFailover(nodes.name(p.failover.a?.nodeId ?? "", p.failover.a?.name), nodes.name(p.failover.b?.nodeId ?? "", p.failover.b?.name)) : "",
+    p.backupNodeId ? f.restoredBackup(nodes.name(p.backupNodeId)) : "",
+  ].filter(Boolean);
+  return (
+    <div className="grid gap-2">
+      <Notice
+        tone="warning"
+        title={f.restoredTitle}
+        actions={
+          isAdmin && (
+            <>
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={async () =>
+                  (await confirmAction(f.restoredDiscardPrompt, { action: f.restoredDiscard, danger: true })) &&
+                  call(() => elevated(() => nodeClient.confirmPendingHA({ ...ref, discard: true })))
+                }
+              >
+                {f.restoredDiscard}
+              </Button>
+              <Button disabled={busy} onClick={() => call(() => elevated(() => nodeClient.confirmPendingHA(ref)))}>
+                {busy && <Spinner />}
+                {f.restoredConfirm}
+              </Button>
+            </>
+          )
+        }
+      >
+        {f.restoredBody(t.common.list(items))}
+        {!isAdmin && ` ${f.restoredAdminOnly}`}
+      </Notice>
+      {error && <Alert>{error}</Alert>}
+    </div>
+  );
+}
+
 function TakeoverNotice({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const f = t.projectData.failover;
   const { busy, error, call } = useCall(project.id);

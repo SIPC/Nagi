@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/netip"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -139,11 +140,11 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		}
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("登录失败次数过多，请 1 秒后重试"))
 	}
-	failed := true
-	defer func() { done(failed) }()
+	result := outcomeFailure
+	defer func() { done(result) }()
 	user, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		failed = false // 数据库出错不算登录失败
+		result = outcomeNeutral // 数据库出错不算登录失败
 		return nil, err
 	}
 	hash := user.PasswordHash
@@ -153,7 +154,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 	}
 	ok, verr := verifyLimited(ctx, password, hash)
 	if verr != nil {
-		failed = false
+		result = outcomeNeutral
 		return nil, verr
 	}
 	if err != nil || !ok {
@@ -161,14 +162,15 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 	}
 	if user.TotpSecret != "" {
 		if strings.TrimSpace(code) == "" {
-			failed = false
+			// 密码对了、还没填验证码：不算失败，也不能当成功清零（否则可以借它无限次猜验证码）。
+			result = outcomeNeutral
 			return nil, connect.NewError(connect.CodeFailedPrecondition, ErrTOTPRequired)
 		}
 		if err := s.useTOTP(ctx, user, code); err != nil {
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
 	}
-	failed = false
+	result = outcomeSuccess
 	return s.NewSession(ctx, user.ID, ip)
 }
 
@@ -461,7 +463,11 @@ func HashToken(token string) string {
 // ---- 登录限速 ----
 
 // limiter：同一来源连续失败 5 次以后，每次失败等待时间翻倍，最长 15 分钟。
-// 同一来源同时只处理一个登录请求：否则并发的请求都能在失败次数增加之前通过检查，限速就没用了。
+// 同一来源同时只处理一个请求：否则并发的请求都能在失败次数增加之前通过检查，限速就没用了。
+//
+// 来源有两种：按 IP（LimitKey）和按账号（userLimitKey）。成功只清零账号的计数：按 IP 的计数要是也清零，
+// 同一 IP 上的人用自己的账号成功登录一次，就能清掉猜别人密码的失败次数。按 IP 的失败在最后一次失败
+// failureMemory 以后淡出。
 type limiter struct {
 	mu    sync.Mutex
 	state map[string]*attempts
@@ -473,7 +479,21 @@ type attempts struct {
 	until    time.Time
 	busy     bool
 	last     time.Time
+	lastFail time.Time
 }
+
+// failureMemory 是失败次数记多久：最后一次失败之后这么久没有再失败，计数清零。
+const failureMemory = time.Hour
+
+// outcome 是一次尝试的结果。
+type outcome int
+
+const (
+	// outcomeNeutral：不算失败也不算成功，例如密码正确但还没填验证码、数据库出错。
+	outcomeNeutral outcome = iota
+	outcomeFailure
+	outcomeSuccess
+)
 
 func newLimiter() *limiter { return &limiter{state: map[string]*attempts{}} }
 
@@ -486,9 +506,12 @@ func LimitKey(ip string) string {
 	return ip
 }
 
-// begin 开始一次登录尝试。被锁定时返回等待时间；同一来源有请求正在处理时 done 为 nil、等待时间为 0；
-// 否则返回 done，登录结束时调用，参数表示这次是否算失败。
-func (l *limiter) begin(key string) (done func(failed bool), wait time.Duration) {
+// userLimitKey 是按账号限速的来源：高权限确认、改密码、关闭两步验证都猜同一个账号的密码或验证码，共用一份计数。
+func userLimitKey(userID int64) string { return "user:" + strconv.FormatInt(userID, 10) }
+
+// begin 开始一次尝试。任一来源被锁定时返回等待时间（最长的那个）；任一来源有请求正在处理时 done 为 nil、
+// 等待时间为 0；否则返回 done，结束时调用，参数是这次的结果。
+func (l *limiter) begin(keys ...string) (done func(outcome), wait time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := time.Now()
@@ -500,29 +523,46 @@ func (l *limiter) begin(key string) (done func(failed bool), wait time.Duration)
 			}
 		}
 	}
-	a, ok := l.state[key]
-	if !ok {
-		a = &attempts{}
-		l.state[key] = a
+	list := make([]*attempts, 0, len(keys))
+	for _, key := range keys {
+		a, ok := l.state[key]
+		if !ok {
+			a = &attempts{}
+			l.state[key] = a
+		}
+		if a.failures > 0 && now.Sub(a.lastFail) > failureMemory && !now.Before(a.until) {
+			a.failures, a.until = 0, time.Time{}
+		}
+		if a.busy {
+			return nil, 0
+		}
+		wait = max(wait, a.until.Sub(now))
+		list = append(list, a)
 	}
-	if a.busy {
-		return nil, 0
+	if wait > 0 {
+		return nil, wait
 	}
-	if w := a.until.Sub(now); w > 0 {
-		return nil, w
+	for _, a := range list {
+		a.busy, a.last = true, now
 	}
-	a.busy, a.last = true, now
-	return func(failed bool) {
+	return func(o outcome) {
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		a.busy, a.last = false, time.Now()
-		if !failed {
-			a.failures, a.until = 0, time.Time{}
-			return
-		}
-		a.failures++
-		if a.failures >= 5 {
-			a.until = time.Now().Add(min(time.Second<<min(a.failures-5, 10), 15*time.Minute))
+		now := time.Now()
+		for i, a := range list {
+			a.busy, a.last = false, now
+			switch o {
+			case outcomeSuccess:
+				if strings.HasPrefix(keys[i], "user:") {
+					a.failures, a.until = 0, time.Time{}
+				}
+			case outcomeFailure:
+				a.failures++
+				a.lastFail = now
+				if a.failures >= 5 {
+					a.until = now.Add(min(time.Second<<min(a.failures-5, 10), 15*time.Minute))
+				}
+			}
 		}
 	}, 0
 }

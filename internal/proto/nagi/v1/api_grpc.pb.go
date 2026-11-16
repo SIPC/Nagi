@@ -612,6 +612,7 @@ const (
 	NodeService_RenameNode_FullMethodName            = "/nagi.v1.NodeService/RenameNode"
 	NodeService_AdoptNodeContainer_FullMethodName    = "/nagi.v1.NodeService/AdoptNodeContainer"
 	NodeService_AdoptStaleProject_FullMethodName     = "/nagi.v1.NodeService/AdoptStaleProject"
+	NodeService_ConfirmPendingHA_FullMethodName      = "/nagi.v1.NodeService/ConfirmPendingHA"
 	NodeService_SetNodeAlertRules_FullMethodName     = "/nagi.v1.NodeService/SetNodeAlertRules"
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 )
@@ -679,6 +680,8 @@ type NodeServiceClient interface {
 	AdoptNodeContainer(ctx context.Context, in *AdoptNodeContainerRequest, opts ...grpc.CallOption) (*AdoptNodeContainerResponse, error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(ctx context.Context, in *AdoptStaleProjectRequest, opts ...grpc.CallOption) (*AdoptStaleProjectResponse, error)
+	// 确认（或放弃）从节点缓存拼回的顶替设置和备份节点（见 Container.pending_ha）。
+	ConfirmPendingHA(ctx context.Context, in *ConfirmPendingHARequest, opts ...grpc.CallOption) (*ConfirmPendingHAResponse, error)
 	// 修改节点的告警规则（内存、磁盘、离线、证书）。
 	SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
@@ -1032,6 +1035,16 @@ func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, in *AdoptStal
 	return out, nil
 }
 
+func (c *nodeServiceClient) ConfirmPendingHA(ctx context.Context, in *ConfirmPendingHARequest, opts ...grpc.CallOption) (*ConfirmPendingHAResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmPendingHAResponse)
+	err := c.cc.Invoke(ctx, NodeService_ConfirmPendingHA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) SetNodeAlertRules(ctx context.Context, in *SetNodeAlertRulesRequest, opts ...grpc.CallOption) (*SetNodeAlertRulesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetNodeAlertRulesResponse)
@@ -1115,6 +1128,8 @@ type NodeServiceServer interface {
 	AdoptNodeContainer(context.Context, *AdoptNodeContainerRequest) (*AdoptNodeContainerResponse, error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error)
+	// 确认（或放弃）从节点缓存拼回的顶替设置和备份节点（见 Container.pending_ha）。
+	ConfirmPendingHA(context.Context, *ConfirmPendingHARequest) (*ConfirmPendingHAResponse, error)
 	// 修改节点的告警规则（内存、磁盘、离线、证书）。
 	SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
@@ -1227,6 +1242,9 @@ func (UnimplementedNodeServiceServer) AdoptNodeContainer(context.Context, *Adopt
 }
 func (UnimplementedNodeServiceServer) AdoptStaleProject(context.Context, *AdoptStaleProjectRequest) (*AdoptStaleProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdoptStaleProject not implemented")
+}
+func (UnimplementedNodeServiceServer) ConfirmPendingHA(context.Context, *ConfirmPendingHARequest) (*ConfirmPendingHAResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmPendingHA not implemented")
 }
 func (UnimplementedNodeServiceServer) SetNodeAlertRules(context.Context, *SetNodeAlertRulesRequest) (*SetNodeAlertRulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeAlertRules not implemented")
@@ -1842,6 +1860,24 @@ func _NodeService_AdoptStaleProject_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_ConfirmPendingHA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmPendingHARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ConfirmPendingHA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ConfirmPendingHA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ConfirmPendingHA(ctx, req.(*ConfirmPendingHARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_SetNodeAlertRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetNodeAlertRulesRequest)
 	if err := dec(in); err != nil {
@@ -2012,6 +2048,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdoptStaleProject",
 			Handler:    _NodeService_AdoptStaleProject_Handler,
+		},
+		{
+			MethodName: "ConfirmPendingHA",
+			Handler:    _NodeService_ConfirmPendingHA_Handler,
 		},
 		{
 			MethodName: "SetNodeAlertRules",

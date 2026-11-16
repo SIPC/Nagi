@@ -485,6 +485,13 @@ func (s *nodeService) AdoptNodeContainer(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(&nagiv1.AdoptNodeContainerResponse{}), nil
 }
 
+func (s *nodeService) ConfirmPendingHA(ctx context.Context, req *connect.Request[nagiv1.ConfirmPendingHARequest]) (*connect.Response[nagiv1.ConfirmPendingHAResponse], error) {
+	if err := s.Projects.ConfirmPendingHA(ctx, req.Msg.GetProjectId(), req.Msg.GetContainer(), req.Msg.GetDiscard()); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.ConfirmPendingHAResponse{}), nil
+}
+
 func (s *nodeService) AdoptStaleProject(ctx context.Context, req *connect.Request[nagiv1.AdoptStaleProjectRequest]) (*connect.Response[nagiv1.AdoptStaleProjectResponse], error) {
 	if err := s.Projects.AdoptStaleProject(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId()); err != nil {
 		return nil, toConnect(err)

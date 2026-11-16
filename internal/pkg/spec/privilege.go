@@ -18,7 +18,12 @@ import (
 var privilegedFields = []string{
 	"privileged", "cap_add", "devices", "device_cgroup_rules", "security_opt", "cgroup_parent", "credential_spec",
 	"runtime", "volumes_from", "build", "extends",
+	// provider：compose 在节点上以 root 运行一个现有的程序来提供这个服务。
+	"provider",
 }
+
+// hookFields 是容器的生命周期钩子：在容器里执行命令，可以单独设 privileged，以特权执行。
+var hookFields = []string{"post_start", "pre_stop"}
 
 // hostModeFields 是能和别处共用命名空间的服务字段：设为 host 时和节点共用，设为 container:<名字> 时和节点上任意一个容器共用
 // （包括别的项目的容器，能进它的网络、看它的进程），network_mode 写网络名时直接接进那个网络。
@@ -78,6 +83,28 @@ func checkService(name string, svc map[string]any, services map[string]any, add 
 			continue
 		}
 		add(hasVar(v), "%s: %s", name, field)
+	}
+	// 钩子带了 privileged 就以特权执行；写法读不懂（不是列表、元素不是对象）时按有特权算。
+	for _, field := range hookFields {
+		v, ok := svc[field]
+		if !ok || v == nil {
+			continue
+		}
+		list, isList := v.([]any)
+		if !isList {
+			add(hasVar(v), "%s: %s", name, field)
+			continue
+		}
+		for _, h := range list {
+			hook, isMap := h.(map[string]any)
+			if !isMap {
+				add(hasVar(h), "%s: %s", name, field)
+				continue
+			}
+			if p, has := hook["privileged"]; has && p != nil && p != false {
+				add(hasVar(p), "%s: %s.privileged", name, field)
+			}
+		}
 	}
 	for _, field := range hostModeFields {
 		v, ok := svc[field]

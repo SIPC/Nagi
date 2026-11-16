@@ -208,6 +208,8 @@ service NodeService {
   rpc AdoptNodeContainer(AdoptNodeContainerRequest) returns (AdoptNodeContainerResponse);
   // 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
   rpc AdoptStaleProject(AdoptStaleProjectRequest) returns (AdoptStaleProjectResponse);
+  // 确认（或放弃）从节点缓存拼回的顶替设置和备份节点（见 Container.pending_ha）。
+  rpc ConfirmPendingHA(ConfirmPendingHARequest) returns (ConfirmPendingHAResponse);
   // 修改节点的告警规则（内存、磁盘、离线、证书）。
   rpc SetNodeAlertRules(SetNodeAlertRulesRequest) returns (SetNodeAlertRulesResponse);
   // 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
@@ -612,6 +614,15 @@ message AdoptStaleProjectRequest {
 }
 
 message AdoptStaleProjectResponse {}
+
+message ConfirmPendingHARequest {
+  string project_id = 1;
+  string container = 2;
+  // 放弃：不恢复这些设置，需要时重新设置。
+  bool discard = 3;
+}
+
+message ConfirmPendingHAResponse {}
 
 message UnknownContainer {
   string project_id = 1;

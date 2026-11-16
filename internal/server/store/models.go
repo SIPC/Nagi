@@ -43,6 +43,7 @@ type Container struct {
 	DisplayName      string
 	AlertRules       []byte
 	SnapshotSchedule []byte
+	PendingHa        []byte
 }
 
 type Deployment struct {

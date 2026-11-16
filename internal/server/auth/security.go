@@ -51,7 +51,14 @@ func (s *Service) TOTPEnabled(ctx context.Context, userID int64) bool {
 }
 
 // ChangePassword 修改密码。成功后其他地方的登录全部失效，当前会话保留。
+// 当前密码猜错按账号计入限速（和高权限确认共用）。
 func (s *Service) ChangePassword(ctx context.Context, userID int64, token, current, next string) error {
+	done, err := s.beginVerify(userLimitKey(userID))
+	if err != nil {
+		return err
+	}
+	result := outcomeNeutral
+	defer func() { done(result) }()
 	u, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
@@ -61,8 +68,10 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, token, curre
 		return err
 	}
 	if !ok {
+		result = outcomeFailure
 		return connect.NewError(connect.CodePermissionDenied, i18n.New("当前密码不正确"))
 	}
+	result = outcomeSuccess
 	if len([]rune(next)) < 8 {
 		return connect.NewError(connect.CodeInvalidArgument, i18n.New("新密码至少 8 个字符"))
 	}
@@ -116,8 +125,14 @@ func (s *Service) EnableTOTP(ctx context.Context, userID int64, token, code stri
 	return s.q.DeleteOtherSessions(ctx, store.DeleteOtherSessionsParams{UserID: userID, TokenHash: HashToken(token)})
 }
 
-// DisableTOTP 关闭两步验证，需要当前的验证码或者密码。
+// DisableTOTP 关闭两步验证，需要当前的验证码或者密码。猜错按账号计入限速（和高权限确认共用）。
 func (s *Service) DisableTOTP(ctx context.Context, userID int64, code, password string) error {
+	done, err := s.beginVerify(userLimitKey(userID))
+	if err != nil {
+		return err
+	}
+	result := outcomeNeutral
+	defer func() { done(result) }()
 	u, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
@@ -135,8 +150,10 @@ func (s *Service) DisableTOTP(ctx context.Context, userID int64, code, password 
 		ok = s.useTOTP(ctx, u, code) == nil
 	}
 	if !ok {
+		result = outcomeFailure
 		return connect.NewError(connect.CodePermissionDenied, i18n.New("验证码或密码不正确"))
 	}
+	result = outcomeSuccess
 	return s.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: "", ID: userID})
 }
 

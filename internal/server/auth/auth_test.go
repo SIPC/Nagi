@@ -21,19 +21,19 @@ func TestPasswordHash(t *testing.T) {
 
 func TestLimiter(t *testing.T) {
 	l := newLimiter()
-	attempt := func(failed bool) time.Duration {
+	attempt := func(o outcome) time.Duration {
 		done, wait := l.begin("1.2.3.4")
 		if done != nil {
-			done(failed)
+			done(o)
 		}
 		return wait
 	}
 	for i := 0; i < 5; i++ {
-		if w := attempt(true); w > 0 {
+		if w := attempt(outcomeFailure); w > 0 {
 			t.Fatalf("第 %d 次就要等待", i+1)
 		}
 	}
-	if attempt(true) <= 0 {
+	if attempt(outcomeFailure) <= 0 {
 		t.Fatal("失败 5 次以后应该等待")
 	}
 	// 同一来源同时只处理一个请求。
@@ -42,7 +42,7 @@ func TestLimiter(t *testing.T) {
 	if d, w := l2.begin("5.6.7.8"); d != nil || w != 0 {
 		t.Fatal("同一来源的并发请求应该被拒绝")
 	}
-	done(false)
+	done(outcomeNeutral)
 	if d, _ := l2.begin("5.6.7.8"); d == nil {
 		t.Fatal("上一个请求结束后应该可以继续")
 	}
@@ -68,5 +68,52 @@ func TestSessionToken(t *testing.T) {
 	h.Add("Cookie", "a=1; "+CookieName+"=tok")
 	if got := SessionToken(h); got != "tok" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// 用自己的账号成功一次、或者发一次「缺少验证码」的请求，都清不掉同一 IP 上猜错的次数；
+// 按账号的计数成功后清零；按 IP 的失败过了 failureMemory 才淡出。
+func TestLimiterNoResetAbuse(t *testing.T) {
+	l := newLimiter()
+	try := func(o outcome, keys ...string) time.Duration {
+		done, wait := l.begin(keys...)
+		if done != nil {
+			done(o)
+		}
+		return wait
+	}
+	ip := "9.9.9.9"
+	for round := 0; round < 3; round++ {
+		for i := 0; i < 2; i++ {
+			try(outcomeFailure, ip)
+		}
+		try(outcomeSuccess, ip) // 自己的账号登录成功
+		try(outcomeNeutral, ip) // 密码对了、没带验证码
+	}
+	if try(outcomeFailure, ip) <= 0 && try(outcomeFailure, ip) <= 0 {
+		t.Fatal("成功和不计的请求不应该清掉按 IP 的失败次数")
+	}
+	// 按账号的计数：成功后清零。
+	user := userLimitKey(7)
+	for i := 0; i < 4; i++ {
+		try(outcomeFailure, user)
+	}
+	try(outcomeSuccess, user)
+	if try(outcomeFailure, user) > 0 {
+		t.Fatal("账号成功验证后应该清零")
+	}
+	// 两个来源一起计：任一被锁定就要等。
+	locked := userLimitKey(8)
+	for i := 0; i < 6; i++ {
+		try(outcomeFailure, "8.8.8.8", locked)
+	}
+	if try(outcomeFailure, "7.7.7.7", locked) <= 0 {
+		t.Fatal("账号被锁定时换 IP 也要等")
+	}
+	// 淡出：最后一次失败已经过了 failureMemory，而且不在等待中。
+	a := l.state[ip]
+	a.lastFail, a.until = time.Now().Add(-2*failureMemory), time.Time{}
+	if try(outcomeFailure, ip) > 0 {
+		t.Fatal("过了 failureMemory 以后应该从头算")
 	}
 }

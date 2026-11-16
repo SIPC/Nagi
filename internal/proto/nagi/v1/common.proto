@@ -125,6 +125,16 @@ message Container {
   AlertRules alert_rules = 26;
   // 容器单独设置的定时快照计划，为空时用项目的（ProjectSettings.snapshot_schedule）。
   SnapshotSchedule snapshot_schedule = 27;
+  // 从节点缓存拼回、等管理员确认的顶替设置和备份节点（见 docs/panel.md#项目数据）。确认之前不生效。
+  PendingHA pending_ha = 28;
+}
+
+// PendingHA 是从节点缓存拼回的顶替设置和备份节点。它们会让别的节点接收这个容器的副本、在顶替时运行它的配置，
+// 只凭一个节点的缓存就生效的话，被攻破的节点能借此在别的节点上运行任意配置，所以要管理员确认。
+message PendingHA {
+  FailoverConfig failover = 1;
+  uint64 failover_epoch = 2;
+  string backup_node_id = 3;
 }
 
 // ContainerConfig 是容器一个版本的完整配置。

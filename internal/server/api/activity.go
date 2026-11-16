@@ -34,6 +34,21 @@ var activitySkipped = map[string]bool{
 	nagiv1connect.EnrollServiceEnrollProcedure:       true,
 }
 
+// unauthenticatedNoise：不用登录就能调的接口里，不值得记、又能被拿来刷掉记录的失败：初始化以后的 Setup 一律失败；
+// 登录被限速拒绝（猜密码的人每次都会碰到）。登录失败本身照常记录，次数受限速约束。
+func unauthenticatedNoise(procedure string, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch procedure {
+	case nagiv1connect.SetupServiceSetupProcedure:
+		return true
+	case nagiv1connect.AuthServiceLoginProcedure:
+		return connect.CodeOf(err) == connect.CodeResourceExhausted
+	}
+	return false
+}
+
 func activityRecorded(procedure string) bool {
 	if activitySkipped[procedure] {
 		return false
@@ -114,7 +129,7 @@ func (a *API) recordOperation(ctx context.Context, procedure string, req proto.M
 		a.Log.Warn("写入活动记录失败", "err", err)
 		return
 	}
-	_ = a.Q.PruneActivity(context.WithoutCancel(ctx), activityKeep)
+	_ = a.Q.PruneActivityKeepSensitive(context.WithoutCancel(ctx), activityKeep)
 }
 
 // activityFailure 取错误本身的说明，去掉 RPC 错误码的前缀。
@@ -151,7 +166,7 @@ type activityLog struct{ a *API }
 func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		res, err := next(ctx, req)
-		if procedure := req.Spec().Procedure; activityRecorded(procedure) {
+		if procedure := req.Spec().Procedure; activityRecorded(procedure) && !unauthenticatedNoise(procedure, err) {
 			msg, _ := req.Any().(proto.Message)
 			failure := ""
 			if err != nil {

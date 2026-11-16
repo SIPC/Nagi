@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -97,6 +98,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 				record: func(failure string) { a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure) },
 				fail:   fail,
 				check:  q.Get("check") == "1",
+				key:    fmt.Sprintf("%d|%s|%s|%s|%s|%s", u.ID, ref.GetProjectId(), ref.GetContainer(), ref.GetVolume(), ref.GetSnapshotId(), ref.GetPath()),
 			}.serve(w, r)
 			return
 		}

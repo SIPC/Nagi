@@ -32,11 +32,8 @@ type webhooks struct {
 func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 	// 调用方是 git 托管平台，一般不带 Accept-Language，这时是中文。
 	lang := requestLang(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, i18n.Sprintf(lang, "只接受 POST"), http.StatusMethodNotAllowed)
-		return
-	}
 	io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
+	// 先认令牌再看请求方法：不认识的地址一律 404，扫描的人从这里看不出是面板（安全入口放行了 /hooks/）。
 	token := strings.TrimPrefix(r.URL.Path, "/hooks/")
 	if token == "" || strings.Contains(token, "/") {
 		http.NotFound(w, r)
@@ -45,6 +42,10 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 	projectID, container, err := h.api.Projects.ContainerByWebhook(r.Context(), token)
 	if errors.Is(err, projects.ErrNotFound) {
 		http.NotFound(w, r)
+		return
+	}
+	if err == nil && r.Method != http.MethodPost {
+		http.Error(w, i18n.Sprintf(lang, "只接受 POST"), http.StatusMethodNotAllowed)
 		return
 	}
 	if err != nil {

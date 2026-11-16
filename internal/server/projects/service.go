@@ -334,7 +334,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
 		NodeId: c.NodeID, Dir: c.Dir, BackupNodeId: c.BackupNodeID, DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
-		SnapshotSchedule: containerSnapshotSchedule(c),
+		SnapshotSchedule: containerSnapshotSchedule(c), PendingHa: pendingHAOf(c),
 	}
 	if cfg := failoverOf(c); cfg != nil {
 		mem.Failover = cfg

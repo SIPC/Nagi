@@ -24,6 +24,7 @@ import (
 //   - 容器：所在节点和目录、当前部署的版本（配置、共享变量、镜像摘要）、端口映射、deploy key、快照仓库密码、备份节点、顶替设置；
 //   - 项目连接：两边的项目都拼回来以后，按节点代理计划里"容器.网络名"的代理连上。
 // 拼不回来的：草稿、旧版本和部署记录、webhook 令牌（重新生成，git 那边的 webhook 地址要更新）。
+// 备份节点和顶替设置牵涉别的节点，拼回后等管理员确认才生效（见 pendingha.go）。
 
 // rebuildWindow：项目从节点缓存拼回后多久内，别的节点缓存里这个项目的容器还能自动加回来。
 const rebuildWindow = 24 * time.Hour
@@ -445,14 +446,12 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 		raw, _ := json.Marshal(keys)
 		_ = s.Q.SetContainerImportedPorts(ctx, store.SetContainerImportedPortsParams{ImportedPorts: string(raw), ProjectID: pid, Name: name})
 	}
-	if t := sp.GetBackup(); t != nil {
-		if _, err := s.Q.GetNode(ctx, t.GetNodeId()); err == nil {
-			_ = s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: t.GetNodeId(), ProjectID: pid, Name: name})
+	// 备份节点和顶替设置会牵涉别的节点，不直接生效：记成待确认，管理员确认后才恢复（见 pendingha.go）。
+	if p := s.rebuiltHA(ctx, nodeID, sp, fo); p != nil {
+		if raw, err := proto.Marshal(p); err == nil {
+			_ = s.Q.SetContainerPendingHA(ctx, store.SetContainerPendingHAParams{PendingHa: raw, ProjectID: pid, Name: name})
 		}
-	}
-	if fo != nil && fo.GetConfig() != nil {
-		raw, _ := proto.Marshal(fo.GetConfig())
-		_ = s.Q.SetContainerFailover(ctx, store.SetContainerFailoverParams{Failover: raw, FailoverEpoch: int64(fo.GetEpoch()), ProjectID: pid, Name: name})
+		s.Log.Warn("从节点缓存拼回了顶替或备份设置，等管理员确认后生效", "project", pid, "container", name, "node", nodeID)
 	}
 	return nil
 }

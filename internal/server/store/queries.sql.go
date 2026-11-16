@@ -452,7 +452,7 @@ func (q *Queries) DeleteVersionsBefore(ctx context.Context, arg DeleteVersionsBe
 }
 
 const getContainer = `-- name: GetContainer :one
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule FROM containers WHERE project_id = ? AND name = ?
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule, pending_ha FROM containers WHERE project_id = ? AND name = ?
 `
 
 type GetContainerParams struct {
@@ -485,6 +485,7 @@ func (q *Queries) GetContainer(ctx context.Context, arg GetContainerParams) (Con
 		&i.DisplayName,
 		&i.AlertRules,
 		&i.SnapshotSchedule,
+		&i.PendingHa,
 	)
 	return i, err
 }
@@ -1142,7 +1143,7 @@ func (q *Queries) LatestVersion(ctx context.Context, arg LatestVersionParams) (V
 }
 
 const listAllContainers = `-- name: ListAllContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule FROM containers ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule, pending_ha FROM containers ORDER BY project_id, position
 `
 
 func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
@@ -1176,6 +1177,7 @@ func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
 			&i.DisplayName,
 			&i.AlertRules,
 			&i.SnapshotSchedule,
+			&i.PendingHa,
 		); err != nil {
 			return nil, err
 		}
@@ -1231,7 +1233,7 @@ func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
 }
 
 const listContainers = `-- name: ListContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule FROM containers WHERE project_id = ? ORDER BY position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule, pending_ha FROM containers WHERE project_id = ? ORDER BY position
 `
 
 func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Container, error) {
@@ -1265,6 +1267,7 @@ func (q *Queries) ListContainers(ctx context.Context, projectID string) ([]Conta
 			&i.DisplayName,
 			&i.AlertRules,
 			&i.SnapshotSchedule,
+			&i.PendingHa,
 		); err != nil {
 			return nil, err
 		}
@@ -1362,7 +1365,7 @@ func (q *Queries) ListInvites(ctx context.Context, expiresAt int64) ([]ListInvit
 }
 
 const listNodeContainers = `-- name: ListNodeContainers :many
-SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule FROM containers WHERE node_id = ? ORDER BY project_id, position
+SELECT project_id, name, position, node_id, dir, revision, created_at, deployed_version, draft, webhook_hash, secrets, deploy_key_pub, imported_ports, last_commit, backup_node_id, failover, failover_epoch, declared_ports, display_name, alert_rules, snapshot_schedule, pending_ha FROM containers WHERE node_id = ? ORDER BY project_id, position
 `
 
 func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Container, error) {
@@ -1396,6 +1399,7 @@ func (q *Queries) ListNodeContainers(ctx context.Context, nodeID string) ([]Cont
 			&i.DisplayName,
 			&i.AlertRules,
 			&i.SnapshotSchedule,
+			&i.PendingHa,
 		); err != nil {
 			return nil, err
 		}
@@ -1923,6 +1927,21 @@ type SetContainerAlertRulesParams struct {
 
 func (q *Queries) SetContainerAlertRules(ctx context.Context, arg SetContainerAlertRulesParams) error {
 	_, err := q.db.ExecContext(ctx, setContainerAlertRules, arg.AlertRules, arg.ProjectID, arg.Name)
+	return err
+}
+
+const setContainerPendingHA = `-- name: SetContainerPendingHA :exec
+UPDATE containers SET pending_ha = ?, revision = revision + 1 WHERE project_id = ? AND name = ?
+`
+
+type SetContainerPendingHAParams struct {
+	PendingHa []byte
+	ProjectID string
+	Name      string
+}
+
+func (q *Queries) SetContainerPendingHA(ctx context.Context, arg SetContainerPendingHAParams) error {
+	_, err := q.db.ExecContext(ctx, setContainerPendingHA, arg.PendingHa, arg.ProjectID, arg.Name)
 	return err
 }
 

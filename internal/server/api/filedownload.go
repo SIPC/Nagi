@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/byterange"
@@ -28,11 +29,41 @@ type fileDownload struct {
 	fail   func(code int, err error)
 	// check：只确认能下载（界面先问一次），不发内容、不记录。
 	check bool
+	// key 标识谁在下载哪个文件（用户、项目或节点、路径），分段请求按它去重。
+	key string
+}
+
+// rangeRecordTTL：同一个人下载同一个文件（同一个 ETag）的分段请求，这么久内只记一次。
+// 多线程下载工具会发很多次分段请求，一一记下会把活动记录刷满；一次都不记又能绕过审计（取从第二个字节开始的部分）。
+const rangeRecordTTL = 10 * time.Minute
+
+var recentRanges = struct {
+	sync.Mutex
+	m map[string]time.Time
+}{m: map[string]time.Time{}}
+
+// firstRange 判断这是不是 key 在 rangeRecordTTL 内的第一次分段请求，并记下这次。
+func firstRange(key string) bool {
+	recentRanges.Lock()
+	defer recentRanges.Unlock()
+	now := time.Now()
+	if len(recentRanges.m) > 10000 {
+		for k, at := range recentRanges.m {
+			if now.Sub(at) > rangeRecordTTL {
+				delete(recentRanges.m, k)
+			}
+		}
+	}
+	if at, ok := recentRanges.m[key]; ok && now.Sub(at) < rangeRecordTTL {
+		return false
+	}
+	recentRanges.m[key] = now
+	return true
 }
 
 // serve 把节点发来的文件写给浏览器，一律作为附件下载。普通文件支持单段的 Range 请求（断点续传、多线程下载工具），
 // 用 ETag 核对续传期间文件没有变；节点版本旧不支持时照常发整个文件。目录打包成 tar.gz，不支持 Range。
-// 多线程下载工具会对同一个文件发很多次分段请求，只有从头开始的那次记进活动记录。
+// 整个文件的下载每次都记进活动记录；分段请求同一个人、同一个文件在 rangeRecordTTL 内只记一次。
 func (d fileDownload) serve(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -91,7 +122,7 @@ func (d fileDownload) serve(w http.ResponseWriter, r *http.Request) {
 		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, start+n-1, head.GetSize()))
 		h.Set("Content-Length", strconv.FormatInt(n, 10))
 		code = http.StatusPartialContent
-		if start == 0 {
+		if firstRange(d.key + "|" + etag) {
 			d.record("")
 		}
 	} else {

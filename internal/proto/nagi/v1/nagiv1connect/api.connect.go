@@ -160,6 +160,9 @@ const (
 	// NodeServiceAdoptStaleProjectProcedure is the fully-qualified name of the NodeService's
 	// AdoptStaleProject RPC.
 	NodeServiceAdoptStaleProjectProcedure = "/nagi.v1.NodeService/AdoptStaleProject"
+	// NodeServiceConfirmPendingHAProcedure is the fully-qualified name of the NodeService's
+	// ConfirmPendingHA RPC.
+	NodeServiceConfirmPendingHAProcedure = "/nagi.v1.NodeService/ConfirmPendingHA"
 	// NodeServiceSetNodeAlertRulesProcedure is the fully-qualified name of the NodeService's
 	// SetNodeAlertRules RPC.
 	NodeServiceSetNodeAlertRulesProcedure = "/nagi.v1.NodeService/SetNodeAlertRules"
@@ -873,6 +876,8 @@ type NodeServiceClient interface {
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
+	// 确认（或放弃）从节点缓存拼回的顶替设置和备份节点（见 Container.pending_ha）。
+	ConfirmPendingHA(context.Context, *connect.Request[v1.ConfirmPendingHARequest]) (*connect.Response[v1.ConfirmPendingHAResponse], error)
 	// 修改节点的告警规则（内存、磁盘、离线、证书）。
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
@@ -1088,6 +1093,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
 			connect.WithClientOptions(opts...),
 		),
+		confirmPendingHA: connect.NewClient[v1.ConfirmPendingHARequest, v1.ConfirmPendingHAResponse](
+			httpClient,
+			baseURL+NodeServiceConfirmPendingHAProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ConfirmPendingHA")),
+			connect.WithClientOptions(opts...),
+		),
 		setNodeAlertRules: connect.NewClient[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse](
 			httpClient,
 			baseURL+NodeServiceSetNodeAlertRulesProcedure,
@@ -1138,6 +1149,7 @@ type nodeServiceClient struct {
 	renameNode            *connect.Client[v1.RenameNodeRequest, v1.RenameNodeResponse]
 	adoptNodeContainer    *connect.Client[v1.AdoptNodeContainerRequest, v1.AdoptNodeContainerResponse]
 	adoptStaleProject     *connect.Client[v1.AdoptStaleProjectRequest, v1.AdoptStaleProjectResponse]
+	confirmPendingHA      *connect.Client[v1.ConfirmPendingHARequest, v1.ConfirmPendingHAResponse]
 	setNodeAlertRules     *connect.Client[v1.SetNodeAlertRulesRequest, v1.SetNodeAlertRulesResponse]
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 }
@@ -1307,6 +1319,11 @@ func (c *nodeServiceClient) AdoptStaleProject(ctx context.Context, req *connect.
 	return c.adoptStaleProject.CallUnary(ctx, req)
 }
 
+// ConfirmPendingHA calls nagi.v1.NodeService.ConfirmPendingHA.
+func (c *nodeServiceClient) ConfirmPendingHA(ctx context.Context, req *connect.Request[v1.ConfirmPendingHARequest]) (*connect.Response[v1.ConfirmPendingHAResponse], error) {
+	return c.confirmPendingHA.CallUnary(ctx, req)
+}
+
 // SetNodeAlertRules calls nagi.v1.NodeService.SetNodeAlertRules.
 func (c *nodeServiceClient) SetNodeAlertRules(ctx context.Context, req *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error) {
 	return c.setNodeAlertRules.CallUnary(ctx, req)
@@ -1378,6 +1395,8 @@ type NodeServiceHandler interface {
 	AdoptNodeContainer(context.Context, *connect.Request[v1.AdoptNodeContainerRequest]) (*connect.Response[v1.AdoptNodeContainerResponse], error)
 	// 以节点为准重建项目（见 Node.stale_projects）：删掉面板上的记录，按节点缓存拼回。
 	AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error)
+	// 确认（或放弃）从节点缓存拼回的顶替设置和备份节点（见 Container.pending_ha）。
+	ConfirmPendingHA(context.Context, *connect.Request[v1.ConfirmPendingHARequest]) (*connect.Response[v1.ConfirmPendingHAResponse], error)
 	// 修改节点的告警规则（内存、磁盘、离线、证书）。
 	SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error)
 	// 预览节点上一个现有的 compose 目录能不能导入（见 docs/agent.md#现有目录）。只有管理员能用，要先确认身份。
@@ -1589,6 +1608,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("AdoptStaleProject")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceConfirmPendingHAHandler := connect.NewUnaryHandler(
+		NodeServiceConfirmPendingHAProcedure,
+		svc.ConfirmPendingHA,
+		connect.WithSchema(nodeServiceMethods.ByName("ConfirmPendingHA")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceSetNodeAlertRulesHandler := connect.NewUnaryHandler(
 		NodeServiceSetNodeAlertRulesProcedure,
 		svc.SetNodeAlertRules,
@@ -1669,6 +1694,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceAdoptNodeContainerHandler.ServeHTTP(w, r)
 		case NodeServiceAdoptStaleProjectProcedure:
 			nodeServiceAdoptStaleProjectHandler.ServeHTTP(w, r)
+		case NodeServiceConfirmPendingHAProcedure:
+			nodeServiceConfirmPendingHAHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeAlertRulesProcedure:
 			nodeServiceSetNodeAlertRulesHandler.ServeHTTP(w, r)
 		case NodeServiceInspectComposeDirProcedure:
@@ -1812,6 +1839,10 @@ func (UnimplementedNodeServiceHandler) AdoptNodeContainer(context.Context, *conn
 
 func (UnimplementedNodeServiceHandler) AdoptStaleProject(context.Context, *connect.Request[v1.AdoptStaleProjectRequest]) (*connect.Response[v1.AdoptStaleProjectResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.AdoptStaleProject is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ConfirmPendingHA(context.Context, *connect.Request[v1.ConfirmPendingHARequest]) (*connect.Response[v1.ConfirmPendingHAResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ConfirmPendingHA is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) SetNodeAlertRules(context.Context, *connect.Request[v1.SetNodeAlertRulesRequest]) (*connect.Response[v1.SetNodeAlertRulesResponse], error) {

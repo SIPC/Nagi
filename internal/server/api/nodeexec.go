@@ -111,7 +111,7 @@ func (a *API) recordNodeExec(ctx context.Context, nodeID, command, failure strin
 		a.Log.Warn("写入活动记录失败", "err", err)
 		return
 	}
-	_ = a.Q.PruneActivity(ctx, activityKeep)
+	_ = a.Q.PruneActivityKeepSensitive(ctx, activityKeep)
 }
 
 // alertNodeExec 在节点上执行命令时发一条通知，和打开节点终端一样，令牌被盗用时用户能马上知道。命令本身不发出去（可能带密钥）。

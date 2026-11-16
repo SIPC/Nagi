@@ -353,6 +353,9 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 	if s.primary != nil {
 		mux.HandleFunc("/api/standby/pair", s.primary.HandlePair)
+	} else {
+		// 备用面板不接受配对：明确返回 404，不落到前端页面（开了安全入口时，前端页面会暴露这是面板）。
+		mux.Handle("/api/standby/pair", http.NotFoundHandler())
 	}
 	mux.HandleFunc("GET /api/standby/status", s.handleStatus)
 	mux.Handle("/", web.Handler())

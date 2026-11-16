@@ -245,6 +245,9 @@ UPDATE containers SET alert_rules = ?, revision = revision + 1 WHERE project_id 
 -- name: SetContainerSnapshotSchedule :exec
 UPDATE containers SET snapshot_schedule = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
 
+-- name: SetContainerPendingHA :exec
+UPDATE containers SET pending_ha = ?, revision = revision + 1 WHERE project_id = ? AND name = ?;
+
 -- name: SetNodeAlertRules :exec
 UPDATE nodes SET alert_rules = ? WHERE id = ? AND revoked = 0;
 

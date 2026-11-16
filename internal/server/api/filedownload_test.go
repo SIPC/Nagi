@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/byterange"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -58,8 +59,8 @@ func TestFileDownloadRanges(t *testing.T) {
 		recorded                   int
 	}{
 		{"整个文件", "", "", true, 200, string(data), "", 1},
-		{"中间一段", "bytes=10-15", "", true, 206, "abcdef", "bytes 10-15/36", 0},
-		{"从头开始的一段也记录", "bytes=0-3", "", true, 206, "0123", "bytes 0-3/36", 1},
+		{"第一次分段请求记录（从中间开始也记）", "bytes=10-15", "", true, 206, "abcdef", "bytes 10-15/36", 1},
+		{"之后的分段请求不重复记", "bytes=0-3", "", true, 206, "0123", "bytes 0-3/36", 0},
 		{"最后几个字节", "bytes=-4", "", true, 206, "wxyz", "bytes 32-35/36", 0},
 		{"超出文件", "bytes=100-", "", true, 416, "", "bytes */36", 0},
 		{"If-Range 对得上", "bytes=30-", etag, true, 206, "uvwxyz", "bytes 30-35/36", 0},
@@ -67,6 +68,9 @@ func TestFileDownloadRanges(t *testing.T) {
 		{"旧版本节点忽略范围", "bytes=10-15", "", false, 200, string(data), "", 1},
 		{"多段请求按整个文件", "bytes=0-1,5-6", "", true, 200, string(data), "", 1},
 	}
+	recentRanges.Lock()
+	recentRanges.m = map[string]time.Time{}
+	recentRanges.Unlock()
 	for _, c := range cases {
 		recorded := 0
 		req := httptest.NewRequest(http.MethodGet, "/api/volume-file", nil)
@@ -81,6 +85,7 @@ func TestFileDownloadRanges(t *testing.T) {
 			open:   fakeNode(data, c.supportsRange),
 			record: func(string) { recorded++ },
 			fail:   func(code int, err error) { t.Fatalf("%s：fail(%d, %v)", c.desc, code, err) },
+			key:    "u1|a.bin",
 		}.serve(rec, req)
 		if rec.Code != c.code || rec.Body.String() != c.body || rec.Header().Get("Content-Range") != c.contentRange || recorded != c.recorded {
 			t.Errorf("%s：得到 %d %q Content-Range=%q 记录 %d 次", c.desc, rec.Code, rec.Body.String(), rec.Header().Get("Content-Range"), recorded)
@@ -96,5 +101,22 @@ func TestFileDownloadRanges(t *testing.T) {
 				t.Errorf("%s：Content-Length=%s，应为 %d", c.desc, got, len(c.body))
 			}
 		}
+	}
+}
+
+// 别人（或别的文件）的分段请求单独记。
+func TestFileDownloadRangeRecordPerKey(t *testing.T) {
+	data := []byte("0123456789")
+	count := 0
+	get := func(key string) {
+		req := httptest.NewRequest(http.MethodGet, "/api/volume-file", nil)
+		req.Header.Set("Range", "bytes=5-")
+		fileDownload{open: fakeNode(data, true), record: func(string) { count++ }, fail: func(int, error) {}, key: key}.serve(httptest.NewRecorder(), req)
+	}
+	get("other-user|b.bin")
+	get("other-user|b.bin")
+	get("third-user|b.bin")
+	if count != 2 {
+		t.Fatalf("记了 %d 次，应为 2 次", count)
 	}
 }
