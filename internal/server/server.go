@@ -133,6 +133,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("打开面板数据库: %w", err)
 	}
+	// 旧版本给 v0.1.0 的节点升级时缓存的 nagi（release/<版本>/），v0.28.0 起不再提供，删掉。
+	_ = os.RemoveAll(filepath.Join(cfg.DataDir, "release"))
 	s := &Server{cfg: cfg, log: log, db: d, q: store.New(d), domainCh: make(chan string, 1), role: role{ch: make(chan struct{})}}
 
 	s.publicAddress, err = s.setting(ctx, api.SettingPublicAddress, detectAddress)
