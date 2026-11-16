@@ -212,7 +212,9 @@ func TestMeshIsolationSurvivesRestart(t *testing.T) {
 	}
 	primary, standby := mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
 	x, y := mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
-	peer := func(k mesh.Key) *nagiv1.MeshPeer { return &nagiv1.MeshPeer{PublicKey: k[:], Endpoints: []string{"127.0.0.1:1"}} }
+	peer := func(k mesh.Key) *nagiv1.MeshPeer {
+		return &nagiv1.MeshPeer{PublicKey: k[:], Endpoints: []string{"127.0.0.1:1"}}
+	}
 	has := func(m *mesh.Mesh, k mesh.Key) bool {
 		for _, s := range m.Status() {
 			if s.Key == k {
