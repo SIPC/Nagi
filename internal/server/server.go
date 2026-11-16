@@ -418,6 +418,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// 终端和命令的录制（见 docs/audit.md#终端与命令录制）：用主密钥加密，保留 90 天、总量不超过 10 GB。
 	s.recordings.Enabled = a.RecordingEnabled
 	a.Recordings = s.recordings
+	go a.OriginDenialsLoop(ctx)
 	a.AuditView = s.auditReplica
 	go func() {
 		t := time.NewTicker(time.Hour)

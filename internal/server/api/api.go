@@ -69,6 +69,7 @@ type API struct {
 
 	updates panelUpdates
 	reads   readDedup
+	origins originDenials
 }
 
 // Mount 把所有接口挂到 mux 上。

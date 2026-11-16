@@ -11,7 +11,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
 )
@@ -119,9 +118,9 @@ func (a *API) OriginCheck(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ctx := auth.WithMeta(r.Context(), auth.Meta{IP: auth.RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent")})
-		a.Record(ctx, audit.Event{Category: audit.Security, Action: "cross_origin_request", Result: audit.ResultDenied,
-			Params: `{"path":` + strconv.Quote(r.URL.Path) + `,"origin":` + strconv.Quote(r.Header.Get("Origin")) + `,"site":` + strconv.Quote(r.Header.Get("Sec-Fetch-Site")) + `}`})
+		ip := auth.RequestIP(r.RemoteAddr, r.Header)
+		ctx := auth.WithMeta(r.Context(), auth.Meta{IP: ip, UserAgent: r.Header.Get("User-Agent")})
+		a.denyOrigin(ctx, ip, r.URL.Path, r.Header.Get("Origin"), r.Header.Get("Sec-Fetch-Site"))
 		http.Error(w, i18n.Sprintf(requestLang(r), "请求来源不是面板，已拒绝"), http.StatusForbidden)
 	})
 }

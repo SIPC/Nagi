@@ -128,6 +128,7 @@ export default {
     session_network_flip: "网段来回切换",
     session_network_changed: "网段变化",
     cross_origin_request: "拒绝跨站请求",
+    cross_origin_summary: "跨站请求汇总",
     RegisterSessionKey: "登记会话密钥",
     RotateSession: "更换会话令牌",
     Reverify: "重新验证身份",

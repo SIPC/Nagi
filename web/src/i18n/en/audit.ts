@@ -128,6 +128,7 @@ export default {
     session_network_flip: "Network switched back and forth",
     session_network_changed: "Network changed",
     cross_origin_request: "Cross-site request rejected",
+    cross_origin_summary: "Cross-site requests rejected",
     RegisterSessionKey: "Register session key",
     RotateSession: "Rotate session token",
     Reverify: "Verify identity again",
