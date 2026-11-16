@@ -783,8 +783,9 @@ function ContainerAlerts({ project, container }: { project: Project; container: 
     await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
   };
   const toggle = async (v: boolean) => {
+    // 改回用项目的规则时立即保存（没有别的要填），单独设置的规则会被清掉，先确认。
+    if (!v && container.alertRules && !(await confirmAction(t.alerts.useProjectConfirm(containerLabel(container)), { action: t.alerts.useProject, danger: true }))) return;
     setOwn(v);
-    // 改回用项目的规则时立即保存：没有别的要填。
     if (!v && container.alertRules) {
       try {
         await save(undefined);

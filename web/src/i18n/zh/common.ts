@@ -41,6 +41,7 @@ export default {
     retry: "重试",
     more: "更多操作",
     back: "返回",
+    done: "完成",
   },
   feedback: {
     loading: "加载中",

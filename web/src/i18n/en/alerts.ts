@@ -36,6 +36,8 @@ export default {
   containerRulesHelp: "Without its own rules, the container uses the project's alert rules.",
   containerOwn: "Use own rules",
   containerOwnHelp: "Use this container's own alert rules instead of the project's.",
+  useProjectConfirm: (name) => `Use the project's alert rules for ${name}? The rules set for this container will be cleared.`,
+  useProject: "Use project rules",
   summary: { defaults: "Default", custom: "Customized", someOff: (n) => `${n} off`, allOff: "All off" },
   rule: {
     mem: "High memory usage",

@@ -65,5 +65,7 @@ export default {
     disableConfirm: "Disable secure entry? Anyone will be able to open the sign-in page.",
     help: "If you forget the entry URL, run nagi reset entrance on the panel machine.",
     disable: "Disable secure entry",
+    enabledTitle: "Secure entry is on",
+    enabledText: "From now on, only this URL opens the sign-in page. Keep it somewhere safe. If you forget it, run nagi reset entrance on the panel machine.",
   },
 } satisfies typeof zh;

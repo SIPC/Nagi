@@ -15,6 +15,8 @@ export default {
     long: "安全记录",
     longDescription: "安全事件、终端、登录和 MCP 调用。",
     days: (n: number) => `${n} 天`,
+    shortenConfirm: (kind: string, n: number) => `将${kind}的保留时间缩短为 ${n} 天？${n} 天以前的${kind}将被删除，无法恢复。外送到别处的记录不受影响。`,
+    shorten: "缩短保留时间",
   },
   sinks: {
     title: "日志外送",

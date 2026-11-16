@@ -49,6 +49,12 @@ function AuditSections() {
   const s = settings.data;
   const r = t.panelSecurity.recording;
   const ret = t.panelSecurity.retention;
+  // 缩短保留时间会马上删掉超期的记录，先确认。
+  const setRetention = async (kind: "normal" | "long", days: number) => {
+    const cur = kind === "normal" ? s.retentionDays : s.longRetentionDays;
+    if (days < cur && !(await confirmAction(ret.shortenConfirm(kind === "normal" ? ret.normal : ret.long, days), { action: ret.shorten, danger: true }))) return;
+    save.mutate(kind === "normal" ? { retentionDays: days, longRetentionDays: Math.max(s.longRetentionDays, days) } : { longRetentionDays: days });
+  };
   return (
     <>
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
@@ -64,7 +70,7 @@ function AuditSections() {
       <Section title={ret.title} description={ret.description} help={ret.help}>
         <SettingRows>
           <SettingRow label={ret.normal}>
-            <Select aria-label={ret.normal} className="w-36" value={String(s.retentionDays)} onChange={(e) => save.mutate({ retentionDays: Number(e.target.value), longRetentionDays: Math.max(s.longRetentionDays, Number(e.target.value)) })}>
+            <Select aria-label={ret.normal} className="w-36" value={String(s.retentionDays)} onChange={(e) => setRetention("normal", Number(e.target.value))}>
               {withOption(retentionOptions, s.retentionDays).map((v) => (
                 <option key={v} value={String(v)}>
                   {ret.days(v)}
@@ -73,7 +79,7 @@ function AuditSections() {
             </Select>
           </SettingRow>
           <SettingRow label={ret.long} description={ret.longDescription}>
-            <Select aria-label={ret.long} className="w-36" value={String(s.longRetentionDays)} onChange={(e) => save.mutate({ longRetentionDays: Number(e.target.value) })}>
+            <Select aria-label={ret.long} className="w-36" value={String(s.longRetentionDays)} onChange={(e) => setRetention("long", Number(e.target.value))}>
               {withOption(longRetentionOptions, s.longRetentionDays)
                 .filter((v) => v >= s.retentionDays)
                 .map((v) => (

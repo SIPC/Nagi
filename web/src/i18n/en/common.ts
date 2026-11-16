@@ -43,6 +43,7 @@ export default {
     retry: "Retry",
     more: "More actions",
     back: "Back",
+    done: "Done",
   },
   feedback: {
     loading: "Loading",

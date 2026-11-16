@@ -63,5 +63,7 @@ export default {
     disableConfirm: "关闭安全入口？任何人都能打开登录页。",
     help: "忘记入口地址时，在面板所在机器上执行 nagi reset entrance。",
     disable: "关闭安全入口",
+    enabledTitle: "已开启安全入口",
+    enabledText: "之后只能从这个地址打开登录页，保存好这个地址。忘记时在面板所在机器上执行 nagi reset entrance。",
   },
 };

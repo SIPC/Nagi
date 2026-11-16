@@ -16,6 +16,8 @@ export default {
     long: "Security records",
     longDescription: "Security events, terminals, sign-ins, and MCP calls.",
     days: (n) => `${n} days`,
+    shortenConfirm: (kind, n) => `Shorten ${kind.toLowerCase()} retention to ${n} days? ${kind} older than ${n} days will be deleted and can't be recovered. Records sent elsewhere aren't affected.`,
+    shorten: "Shorten retention",
   },
   sinks: {
     title: "Log forwarding",

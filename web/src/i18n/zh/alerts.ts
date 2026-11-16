@@ -36,6 +36,8 @@ export default {
   containerRulesHelp: "未单独设置时使用项目的告警规则。",
   containerOwn: "单独设置",
   containerOwnHelp: "使用本容器自己的告警规则，不再跟随项目的设置。",
+  useProjectConfirm: (name: string) => `${name} 改用项目的告警规则？这个容器单独设置的规则将被清除。`,
+  useProject: "改用项目规则",
   summary: { defaults: "默认", custom: "已自定义", someOff: (n: number) => `已关闭 ${n} 项`, allOff: "已全部关闭" },
   rule: {
     mem: "内存占用过高",

@@ -266,7 +266,7 @@ export function SecurityCard() {
   // 主密钥的位置在面板设置里，只有管理员查得到。
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}), enabled: isAdmin });
   const masterKeyPath = settings.data?.settings?.masterKeyPath;
-  const [dialog, setDialog] = useState<"password" | "disable-totp" | null>(null);
+  const [dialog, setDialog] = useState<"password" | "disable-totp" | "entrance-on" | null>(null);
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
   const [busy, setBusy] = useState<"totp" | "entrance" | null>(null);
   const [error, setError] = useState("");
@@ -303,6 +303,8 @@ export function SecurityCard() {
     try {
       await settingsClient.setEntrance({ enabled });
       await sec.refetch();
+      // 开启后只能从入口地址打开登录页：马上显示地址，提示保存。
+      if (enabled) setDialog("entrance-on");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -374,6 +376,14 @@ export function SecurityCard() {
       <AccessTokenSection />
       {dialog === "password" && <PasswordDialog onClose={() => setDialog(null)} onDone={refresh} />}
       {dialog === "disable-totp" && <DisableTotpDialog onClose={() => setDialog(null)} onDone={refresh} />}
+      {dialog === "entrance-on" && entranceUrl && (
+        <Dialog open dismissible={false} onClose={() => setDialog(null)} title={t.security.entrance.enabledTitle} description={t.security.entrance.enabledText}>
+          <CodeBlock copy>{entranceUrl}</CodeBlock>
+          <DialogActions>
+            <Button onClick={() => setDialog(null)}>{t.common.actions.done}</Button>
+          </DialogActions>
+        </Dialog>
+      )}
       {setup && <EnableTotpDialog setup={setup} onClose={() => setSetup(null)} onDone={refresh} />}
     </>
   );
