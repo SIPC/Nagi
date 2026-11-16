@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AuditSettings } from "@/gen/nagi/v1/api_pb";
 import { create } from "@bufbuild/protobuf";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 
 // ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
@@ -207,5 +208,43 @@ export function AlertSettings() {
         <QueryError error={errorMessage(cfg.error)} onRetry={() => cfg.refetch()} />
       </Section>
     );
-  return <AlertForm config={cfg.data.config} lost={cfg.data.lost} />;
+  return (
+    <>
+      <AlertForm config={cfg.data.config} lost={cfg.data.lost} />
+      <SecurityAlertRules />
+    </>
+  );
+}
+
+// 登录安全告警（见 docs/audit.md#安全告警）：三条可以关；账号、凭据和集群变更的通知不能关，这里只说明。
+function SecurityAlertRules() {
+  const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: ["audit-settings"], queryFn: () => settingsClient.getAuditSettings({}) });
+  const save = useMutation({
+    mutationFn: (patch: Partial<AuditSettings>) => settingsClient.setAuditSettings({ ...settings.data!, ...patch }),
+    onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
+  });
+  const m = t.alerts.security;
+  if (settings.isPending) return <RowsSkeleton count={3} />;
+  if (!settings.data) return <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />;
+  const s = settings.data;
+  const rows: [keyof typeof m.rules, boolean, Partial<AuditSettings>][] = [
+    ["totp", s.alertTotpFailures, { alertTotpFailures: !s.alertTotpFailures }],
+    ["ratelimit", s.alertLoginRatelimit, { alertLoginRatelimit: !s.alertLoginRatelimit }],
+    ["network", s.alertAdminNetwork, { alertAdminNetwork: !s.alertAdminNetwork }],
+  ];
+  return (
+    <Section title={m.title} description={m.description} help={m.help}>
+      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+      <SettingRows>
+        {rows.map(([key, on, patch]) => (
+          <SettingRow key={key} label={m.rules[key].label} description={m.rules[key].description}>
+            <Check checked={on} disabled={save.isPending} onChange={() => save.mutate(patch)}>
+              <span className="sr-only">{m.rules[key].label}</span>
+            </Check>
+          </SettingRow>
+        ))}
+      </SettingRows>
+    </Section>
+  );
 }

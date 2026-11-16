@@ -45,6 +45,8 @@ type failureSummary struct {
 	mu   sync.Mutex
 	hour int64
 	ips  map[string]*ipFailures
+	// limited 是这个小时里碰到登录限速的 IP（见 alerts.go）。
+	limited map[string]bool
 }
 
 type ipFailures struct {
@@ -58,10 +60,11 @@ func (s *Service) recordLoginFailure(ctx context.Context, ip, username string) {
 	f := &s.failures
 	f.mu.Lock()
 	if h := now.Unix() / 3600; h != f.hour {
-		pending := f.ips
-		f.hour, f.ips = h, map[string]*ipFailures{}
+		pending, limited := f.ips, f.limited
+		f.hour, f.ips, f.limited = h, map[string]*ipFailures{}, nil
 		f.mu.Unlock()
 		s.flushFailures(ctx, pending)
+		s.alertRateLimited(ctx, limited, pending)
 		f.mu.Lock()
 	}
 	x, ok := f.ips[ip]
@@ -92,10 +95,11 @@ func (s *Service) FlushLoginFailures(ctx context.Context) {
 		f.mu.Unlock()
 		return
 	}
-	pending := f.ips
-	f.hour, f.ips = time.Now().Unix()/3600, map[string]*ipFailures{}
+	pending, limited := f.ips, f.limited
+	f.hour, f.ips, f.limited = time.Now().Unix()/3600, map[string]*ipFailures{}, nil
 	f.mu.Unlock()
 	s.flushFailures(ctx, pending)
+	s.alertRateLimited(ctx, limited, pending)
 }
 
 func (s *Service) flushFailures(ctx context.Context, pending map[string]*ipFailures) {

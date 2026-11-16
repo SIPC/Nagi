@@ -211,6 +211,9 @@ func (a *API) recordCall(ctx context.Context, procedure string, req proto.Messag
 		}
 	}
 	a.Audit.Record(ctx, e)
+	if result == audit.ResultOK {
+		a.notifyChanges(ctx, method, req)
+	}
 }
 
 // errorResult 把错误分成被拒绝（没登录、没权限）和失败。

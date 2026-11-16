@@ -11003,9 +11003,14 @@ type AuditSettings struct {
 	// 日志外送的目标（见 docs/audit.md#外送）。返回时密钥和请求头的值留空，保存时留空表示不变。
 	Sinks []*AuditSink `protobuf:"bytes,4,rep,name=sinks,proto3" json:"sinks,omitempty"`
 	// 只读：哈希链的状态。
-	Chain         *AuditChainStatus `protobuf:"bytes,5,opt,name=chain,proto3" json:"chain,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Chain *AuditChainStatus `protobuf:"bytes,5,opt,name=chain,proto3" json:"chain,omitempty"`
+	// 登录安全告警的开关（「设置 → 告警」，见 docs/audit.md#安全告警），默认开启：密码正确但验证码连续错误 5 次、
+	// 按 IP 的登录限速（每小时汇总）、管理员从新的网段登录。
+	AlertTotpFailures   bool `protobuf:"varint,6,opt,name=alert_totp_failures,json=alertTotpFailures,proto3" json:"alert_totp_failures,omitempty"`
+	AlertLoginRatelimit bool `protobuf:"varint,7,opt,name=alert_login_ratelimit,json=alertLoginRatelimit,proto3" json:"alert_login_ratelimit,omitempty"`
+	AlertAdminNetwork   bool `protobuf:"varint,8,opt,name=alert_admin_network,json=alertAdminNetwork,proto3" json:"alert_admin_network,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *AuditSettings) Reset() {
@@ -11071,6 +11076,27 @@ func (x *AuditSettings) GetChain() *AuditChainStatus {
 		return x.Chain
 	}
 	return nil
+}
+
+func (x *AuditSettings) GetAlertTotpFailures() bool {
+	if x != nil {
+		return x.AlertTotpFailures
+	}
+	return false
+}
+
+func (x *AuditSettings) GetAlertLoginRatelimit() bool {
+	if x != nil {
+		return x.AlertLoginRatelimit
+	}
+	return false
+}
+
+func (x *AuditSettings) GetAlertAdminNetwork() bool {
+	if x != nil {
+		return x.AlertAdminNetwork
+	}
+	return false
 }
 
 type AuditSink struct {
@@ -12241,13 +12267,16 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"$\n" +
 	"\x0eRecordingChunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"\x19\n" +
-	"\x17GetAuditSettingsRequest\"\xdf\x01\n" +
+	"\x17GetAuditSettingsRequest\"\xf3\x02\n" +
 	"\rAuditSettings\x12\x1c\n" +
 	"\trecording\x18\x01 \x01(\bR\trecording\x12%\n" +
 	"\x0eretention_days\x18\x02 \x01(\x05R\rretentionDays\x12.\n" +
 	"\x13long_retention_days\x18\x03 \x01(\x05R\x11longRetentionDays\x12(\n" +
 	"\x05sinks\x18\x04 \x03(\v2\x12.nagi.v1.AuditSinkR\x05sinks\x12/\n" +
-	"\x05chain\x18\x05 \x01(\v2\x19.nagi.v1.AuditChainStatusR\x05chain\"\x96\x04\n" +
+	"\x05chain\x18\x05 \x01(\v2\x19.nagi.v1.AuditChainStatusR\x05chain\x12.\n" +
+	"\x13alert_totp_failures\x18\x06 \x01(\bR\x11alertTotpFailures\x122\n" +
+	"\x15alert_login_ratelimit\x18\a \x01(\bR\x13alertLoginRatelimit\x12.\n" +
+	"\x13alert_admin_network\x18\b \x01(\bR\x11alertAdminNetwork\"\x96\x04\n" +
 	"\tAuditSink\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +

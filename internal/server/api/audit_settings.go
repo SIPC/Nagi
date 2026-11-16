@@ -81,7 +81,8 @@ func (a *API) auditSettings(ctx context.Context) *nagiv1.AuditSettings {
 	r := a.Retention(ctx)
 	out := &nagiv1.AuditSettings{
 		Recording: a.RecordingEnabled(ctx), RetentionDays: int32(r.Normal / (24 * time.Hour)), LongRetentionDays: int32(r.Long / (24 * time.Hour)),
-		Chain: a.chainStatus(ctx),
+		Chain: a.chainStatus(ctx), AlertTotpFailures: a.Auth.AlertEnabled(ctx, auth.SettingAlertTOTP),
+		AlertLoginRatelimit: a.Auth.AlertEnabled(ctx, auth.SettingAlertRateLimit), AlertAdminNetwork: a.Auth.AlertEnabled(ctx, auth.SettingAlertNewNetwork),
 	}
 	var status map[string]audit.SinkStatus
 	if a.Shipper != nil {
@@ -214,7 +215,17 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 		}
 		s.securityAlert(ctx, "audit-sinks", "日志外送已修改")
 	}
-	for k, v := range map[string]string{settingRetention: strconv.Itoa(int(m.GetRetentionDays())), settingLongRetention: strconv.Itoa(int(m.GetLongRetentionDays()))} {
+	onOff := func(b bool) string {
+		if b {
+			return "1"
+		}
+		return "0"
+	}
+	for k, v := range map[string]string{
+		settingRetention: strconv.Itoa(int(m.GetRetentionDays())), settingLongRetention: strconv.Itoa(int(m.GetLongRetentionDays())),
+		auth.SettingAlertTOTP: onOff(m.GetAlertTotpFailures()), auth.SettingAlertRateLimit: onOff(m.GetAlertLoginRatelimit()),
+		auth.SettingAlertNewNetwork: onOff(m.GetAlertAdminNetwork()),
+	} {
 		if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: k, Value: v}); err != nil {
 			return nil, err
 		}

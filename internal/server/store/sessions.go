@@ -191,3 +191,18 @@ func (q *Queries) DeleteUserSessionByPrefix(ctx context.Context, userID int64, p
 	}
 	return 1, q.DeleteSessionByID(ctx, id)
 }
+
+// SeenNetwork 记下成员从这个网段登录，返回之前是否在 since 以后登录过这个网段，以及这个成员有没有任何登录记录。
+func (q *Queries) SeenNetwork(ctx context.Context, userID int64, network string, now, since int64) (seen, any bool, err error) {
+	var last int64
+	err = q.db.QueryRowContext(ctx, `SELECT last_seen FROM login_networks WHERE user_id = ? AND network = ?`, userID, network).Scan(&last)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, false, err
+	}
+	seen = err == nil && last >= since
+	var n int64
+	_ = q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM login_networks WHERE user_id = ? AND last_seen >= ?`, userID, since).Scan(&n)
+	_, err = q.db.ExecContext(ctx, `INSERT INTO login_networks (user_id, network, last_seen) VALUES (?, ?, ?)
+		ON CONFLICT (user_id, network) DO UPDATE SET last_seen = excluded.last_seen`, userID, network, now)
+	return seen, n > 0, err
+}

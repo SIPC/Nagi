@@ -371,11 +371,10 @@ func (s *settingsService) GetRecording(ctx context.Context, req *connect.Request
 
 // securityAlert 发一条面板的安全通知（操作人和来源写在消息里），发送在后台进行。
 func (a *API) securityAlert(ctx context.Context, key, title string) {
-	u := auth.CurrentUser(ctx)
-	m := auth.RequestMeta(ctx)
-	msg := i18n.Errorf("成员：%s；来源：%s", u.Name, m.IP).Error()
-	ctx = context.WithoutCancel(ctx)
-	go a.Nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "security:" + key, Title: i18n.New(title).Error(), Message: msg})
+	if a.Nodes == nil || a.Panel != nil && a.Panel.Standby != nil {
+		return
+	}
+	a.notify(ctx, key, i18n.New(title).Error(), "")
 }
 
 // view 返回界面上查看的审计库（备用面板上是同步来的那份）。

@@ -51,6 +51,7 @@ type Service struct {
 
 	audit    *audit.Log
 	failures failureSummary
+	streaks  totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
 	Alert func(ctx context.Context, key, title, message string)
@@ -146,6 +147,7 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("上一次登录仍在处理，请稍后重试"))
 	}
 	if wait > 0 {
+		s.rateLimited(ip)
 		if n := int(wait.Seconds()) + 1; n > 1 {
 			return nil, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("登录失败次数过多，请 %d 秒后重试", n))
 		}
@@ -190,16 +192,20 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 			at, aid, an := userActor(user.ID, user.Username)
 			s.loginEvent(ctx, audit.Event{Action: "totp_failed", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
 				Result: audit.ResultFailed, Error: err.Error()})
+			s.totpFailed(ctx, user.ID, user.Username, ip)
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
 		userDone(outcomeSuccess)
+		s.totpOK(user.ID)
 	}
 	result = outcomeSuccess
 	cookie, err := s.NewSession(ctx, user.ID, ip)
 	if err == nil {
 		at, aid, an := userActor(user.ID, user.Username)
+		st, _, _, _ := s.q.SessionByToken(ctx, HashToken(cookie.Value))
 		s.loginEvent(ctx, audit.Event{Action: "Login", ActorType: at, ActorID: aid, ActorName: an, IP: ip,
-			Session: audit.SessionTag(HashToken(cookie.Value))})
+			Session: audit.SessionTag(st.ID)})
+		s.checkNewNetwork(ctx, user.ID, user.Username, user.Role, ip, RequestMeta(ctx).UserAgent)
 	}
 	return cookie, err
 }

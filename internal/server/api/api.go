@@ -459,6 +459,18 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	s.Log.Info("节点已加入", "node", nodeID, "hostname", req.Msg.GetHostname())
+	// 节点加入记进审计并通知（见 docs/audit.md#安全告警）。加入命令是管理员生成的，加入本身由节点发起，没有登录的成员。
+	ip := auth.RequestIP(req.Peer().Addr, req.Header())
+	s.Audit.Record(ctx, audit.Event{Category: audit.Operation, Action: "Enroll", ActorType: audit.ActorNode, ActorID: nodeID,
+		ActorName: req.Msg.GetHostname(), Via: audit.ViaNode, IP: ip, TargetType: "node", TargetID: nodeID, TargetName: s.nodeName(ctx, nodeID)})
+	if s.Panel != nil && s.Panel.Standby == nil {
+		title := i18n.Errorf("节点 %s 已加入", s.nodeName(ctx, nodeID)).Error()
+		if pending != 0 {
+			title = i18n.Errorf("节点 %s 用接入码加入，等待批准", s.nodeName(ctx, nodeID)).Error()
+		}
+		go s.Nodes.PanelAlert(context.WithoutCancel(ctx), &nagiv1.Alert{Key: "security:enroll:" + nodeID, Title: title,
+			Message: i18n.Errorf("地址：%s", ip).Error(), Time: timestamppb.Now()})
+	}
 	return connect.NewResponse(&nagiv1.EnrollResponse{
 		NodeId: nodeID, Certificate: cert.Raw, CaCertificate: s.CA.Cert.Raw,
 	}), nil

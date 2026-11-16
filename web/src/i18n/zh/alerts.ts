@@ -1,5 +1,16 @@
 // 设置页「告警」：通知渠道和触发规则。
 export default {
+  // 安全告警（见 docs/audit.md#安全告警）。
+  security: {
+    title: "安全告警",
+    description: "登录异常时通知，发往上面的告警渠道。",
+    help: "关闭两步验证、修改或重置密码、新增管理员、生成访问令牌、OAuth 授权、修改安全入口、告警配置、终端录制和日志外送、节点加入和移交、备用面板、保存或部署带特权内容的配置，这些操作总是会通知，不能关闭。修改告警配置时，通知先发往原来的渠道。",
+    rules: {
+      totp: { label: "验证码连续错误", description: "密码正确，但两步验证码连续错误 5 次，密码可能已泄露。" },
+      ratelimit: { label: "登录被限速", description: "有 IP 因登录失败次数过多被限速，每小时汇总一条。" },
+      network: { label: "管理员新网段登录", description: "管理员从最近 90 天没有登录过的网段登录。" },
+    },
+  },
   savedAndPushed: "已保存并下发至在线节点",
   testSent: (name: string) => `已发送测试消息至 ${name}`,
   channelsHelp: "节点和容器异常时，告警发送到以下通知渠道。",

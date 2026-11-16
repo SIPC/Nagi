@@ -76,15 +76,15 @@ type Server struct {
 	publicAddress string
 	listener      net.Listener
 
-	auth     *auth.Service
-	audit    *audit.Log
+	auth  *auth.Service
+	audit *audit.Log
 	// auditReplica 是备用面板从主面板同步来的审计库（界面上看的是它），主面板上为 nil。
 	auditReplica *audit.Log
 	recordings   *audit.Recordings
-	nodes    *nodes.Registry
-	projects *projects.Service
-	sealer   *sealer.Sealer
-	domainCh chan string
+	nodes        *nodes.Registry
+	projects     *projects.Service
+	sealer       *sealer.Sealer
+	domainCh     chan string
 
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
 	primary *standby.Primary
