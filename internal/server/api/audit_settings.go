@@ -184,7 +184,7 @@ func sameDestination(a, b audit.SinkConfig) bool {
 	return a.Type == b.Type && a.URL == b.URL && a.Address == b.Address && a.Endpoint == b.Endpoint && a.Bucket == b.Bucket && a.Region == b.Region
 }
 
-// SetAuditSettings 保存审计设置。关闭录制、修改外送目标要先做高权限确认；修改外送目标是安全事件：先把这条记录发往原来的目标，再生效。
+// SetAuditSettings 保存审计设置。关闭录制、修改外送目标、缩短保留时间要先做高权限确认；修改外送目标是安全事件：先把这条记录发往原来的目标，再生效。
 func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Request[nagiv1.AuditSettings]) (*connect.Response[nagiv1.AuditSettings], error) {
 	m := req.Msg
 	was := s.RecordingEnabled(ctx)
@@ -196,6 +196,13 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 	}
 	if d := m.GetLongRetentionDays(); d < m.GetRetentionDays() || d > 3650 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("安全记录的保留时间不能短于普通记录，且不超过 3650 天"))
+	}
+	// 缩短保留时间会在下一次清理时删掉更早的记录（见 docs/audit.md#存储与保留）：和关闭录制一样要先确认身份，记安全事件并告警。
+	oldRet := s.Retention(ctx)
+	oldNormal, oldLong := int32(oldRet.Normal/(24*time.Hour)), int32(oldRet.Long/(24*time.Hour))
+	shortened := m.GetRetentionDays() < oldNormal || m.GetLongRetentionDays() < oldLong
+	if shortened && !auth.CurrentUser(ctx).Elevated() {
+		return nil, elevationError()
 	}
 	oldSinks := s.Sinks(ctx)
 	old := map[string]audit.SinkConfig{}
@@ -248,6 +255,11 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 		if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: k, Value: v}); err != nil {
 			return nil, err
 		}
+	}
+	if shortened {
+		b, _ := json.Marshal(map[string]any{"retention_days": [2]int32{oldNormal, m.GetRetentionDays()}, "long_retention_days": [2]int32{oldLong, m.GetLongRetentionDays()}})
+		s.Record(ctx, audit.Event{Category: audit.Security, Action: "audit_retention_shortened", Params: string(b)})
+		s.securityAlert(ctx, "audit-retention", "审计记录的保留时间已缩短")
 	}
 	if was != m.GetRecording() {
 		v, title := "1", "终端录制已开启"

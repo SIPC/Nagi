@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -148,5 +149,38 @@ func TestAuditSinkNeedsElevation(t *testing.T) {
 	mu.Lock()
 	if err != nil || got["/legit"] != "Bearer saved-token" {
 		t.Fatalf("地址没变时应沿用保存的请求头：%v %v", err, got)
+	}
+}
+
+// L3：偷到管理员会话的人把保留时间缩到 7 天，一小时内的清理就删掉更早的安全和登录记录。缩短要先确认身份，
+// 记安全事件并告警；延长不受影响。
+func TestAuditRetentionShortenNeedsElevation(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := context.Background()
+	_, sc := h.adminWithElevation(t)
+	if _, err := h.db.ExecContext(ctx, `UPDATE sessions SET elevated_until = 0`); err != nil {
+		t.Fatal(err)
+	}
+	m := &nagiv1.AuditSettings{Recording: true, RetentionDays: 120, LongRetentionDays: 400}
+	if _, err := sc.SetAuditSettings(ctx, connect.NewRequest(m)); err != nil {
+		t.Fatalf("延长保留时间不要求确认：%v", err)
+	}
+	m = &nagiv1.AuditSettings{Recording: true, RetentionDays: 7, LongRetentionDays: 7}
+	if _, err := sc.SetAuditSettings(ctx, connect.NewRequest(m)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("没有确认身份时缩短保留时间应被拒绝：%v", err)
+	}
+	if r := h.a.Retention(ctx); r.Normal != 120*24*time.Hour {
+		t.Fatalf("被拒绝时不应保存：%v", r)
+	}
+	if _, err := h.db.ExecContext(ctx, `UPDATE sessions SET elevated_until = ?`, time.Now().Add(time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sc.SetAuditSettings(ctx, connect.NewRequest(m)); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	_ = h.a.Audit.DB().QueryRow(`SELECT COUNT(*) FROM events WHERE action = 'audit_retention_shortened' AND category = 'security'`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("缩短保留时间应记一条安全事件，实际 %d 条", n)
 	}
 }

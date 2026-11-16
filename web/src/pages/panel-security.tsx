@@ -51,8 +51,9 @@ function AuditSections() {
       const cur = settings.data!;
       // 关闭录制要先验证身份（见 docs/audit.md#终端与命令录制）。
       if (patch.recording === false && cur.recording && !(await requireElevation(t.panelSecurity.recording.elevate, { suggestTotp: false }))) return cur;
-      // 修改外送目标要验证身份（见 docs/audit.md#外送）：面板要求时再问。
-      return withElevation(() => settingsClient.setAuditSettings({ ...cur, ...patch }), t.panelSecurity.sinks.elevate);
+      // 修改外送目标、缩短保留时间要验证身份（见 docs/audit.md）：面板要求时再问。
+      const elevate = patch.sinks ? t.panelSecurity.sinks.elevate : t.panelSecurity.retention.elevate;
+      return withElevation(() => settingsClient.setAuditSettings({ ...cur, ...patch }), elevate);
     },
     onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
   });

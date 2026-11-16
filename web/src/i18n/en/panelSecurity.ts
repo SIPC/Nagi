@@ -11,7 +11,7 @@ export default {
   retention: {
     title: "Audit record retention",
     description: "Expired records are deleted automatically. The hash chain can still be verified afterward.",
-    help: "If the database grows beyond 2 GB, the oldest regular records are deleted first. Records already forwarded elsewhere aren't affected.",
+    help: "If the database grows beyond 2 GB, the oldest regular records are deleted first. Records already forwarded elsewhere aren't affected. Shortening retention requires verifying your identity and sends an alert.",
     normal: "Regular records",
     normalRow: "Regular record retention",
     longRow: "Security record retention",
@@ -20,6 +20,7 @@ export default {
     days: (n) => `${n} days`,
     shortenConfirm: (kind, n) => `Shorten ${kind.toLowerCase()} retention to ${n} days? ${kind} older than ${n} days will be deleted and can't be recovered. Records sent elsewhere aren't affected.`,
     shorten: "Shorten retention",
+    elevate: "Verify your identity before shortening retention.",
   },
   sinks: {
     title: "Log forwarding",

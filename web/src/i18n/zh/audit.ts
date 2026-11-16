@@ -141,6 +141,7 @@ export default {
     IsolateNode: "隔离节点",
     UnisolateNode: "解除节点隔离",
     Enroll: "节点加入",
+    audit_retention_shortened: "缩短审计保留时间",
     audit_sinks_changed: "编辑日志外送",
     audit_pruned: "清理过期记录",
     violation: "上报节点越权",

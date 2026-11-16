@@ -655,6 +655,7 @@ var en = map[string]string{
 	"无法发送到这个目标，请检查地址和凭据":                    "Couldn't send to this destination. Check the address and credentials",
 	"日志外送到 %s 失败超过 10 分钟":                   "Sending audit logs to %s has failed for more than 10 minutes",
 	"普通记录的保留时间须在 7 到 3650 天之间":              "Records must be kept between 7 and 3,650 days",
+	"审计记录的保留时间已缩短":                          "Audit record retention shortened",
 	"日志外送已修改":                               "Audit log forwarding changed",
 	"上一小时 %d 个 IP 因登录失败次数过多被限速，共失败 %d 次":    "In the last hour, %d IPs were rate-limited after too many failed sign-ins (%d failures)",
 	"保存了带特权内容的配置：%s / %s":                   "A privileged configuration was saved: %s / %s",

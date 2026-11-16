@@ -141,6 +141,7 @@ export default {
     IsolateNode: "Isolate node",
     UnisolateNode: "End node isolation",
     Enroll: "Node enrolled",
+    audit_retention_shortened: "Shorten audit retention",
     audit_sinks_changed: "Edit log forwarding",
     audit_pruned: "Expired records removed",
     violation: "Node violation reported",

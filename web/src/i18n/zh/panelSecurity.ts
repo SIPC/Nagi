@@ -10,7 +10,7 @@ export default {
   retention: {
     title: "审计记录保留",
     description: "到期的记录自动删除，删除后哈希链仍能校验。",
-    help: "数据库超过 2 GB 时从最旧的普通记录删起。外送到别处的记录不受影响。",
+    help: "数据库超过 2 GB 时从最旧的普通记录删起。外送到别处的记录不受影响。缩短保留时间需要验证身份，并会发送告警。",
     normal: "普通记录",
     normalRow: "普通记录保留",
     longRow: "安全记录保留",
@@ -19,6 +19,7 @@ export default {
     days: (n: number) => `${n} 天`,
     shortenConfirm: (kind: string, n: number) => `将${kind}的保留时间缩短为 ${n} 天？${n} 天以前的${kind}将被删除，无法恢复。外送到别处的记录不受影响。`,
     shorten: "缩短保留时间",
+    elevate: "缩短保留时间前需验证身份。",
   },
   sinks: {
     title: "日志外送",
