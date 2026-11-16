@@ -87,6 +87,37 @@
 
   默认数据目录 `/var/lib/nagi`，和 `nagi server` 一样用 `--data-dir` 指定。
 
+## 会话
+
+会话 cookie 是 `__Host-nagi_session`（`HttpOnly`、`Secure`、`SameSite=Strict`），安全入口的 cookie 是 `__Host-nagi_entrance`：浏览器保证带这个前缀的 cookie 只能由面板自己的域名、通过 HTTPS 设置，同一主域名下兄弟子域名上的网站覆盖不了。旧名字的 cookie（`nagi_session`、`nagi_entrance`）在一个版本内仍然接受，收到时换发新名字。数据库里只存令牌的哈希。
+
+每个会话有一个固定的 ID（`sessions.id`），令牌只用来找到会话。终端和日志流每 30 秒按会话 ID 重查，审计记录的 `session` 字段是会话 ID 的哈希前 12 位。
+
+**处置分两级**：信号明确时直接退出会话；信号可能来自正常使用时，要求重新验证。要求重新验证时，这个会话的所有请求返回 `unauthenticated`，响应头 `Nagi-Reverify` 写原因、`Nagi-Reverify-Method` 写验证方式，界面弹出「验证身份」（开了两步验证的输验证码，没开的输密码，`AuthService.Reverify`）。验证成功后会话继续；失败计入账号的失败次数，连续 3 次失败退出这个会话。
+
+| 信号 | 处置 | 告警 |
+| --- | --- | --- |
+| 已经换掉的令牌在作废 60 秒后又被使用 | 退出 | 是 |
+| 轮换时拿不出会话密钥的签名（签名不对，或发出挑战 2 分钟内没有签名） | 重新验证 | 是 |
+| 浏览器标识是浏览器，TLS 握手却来自脚本工具 | 退出 | 是 |
+| 浏览器标识没变，TLS 指纹变了 | 重新验证 | 否，只记入审计 |
+| 浏览器类型或操作系统变了 | 退出 | 是 |
+| 5 分钟内在两个网段之间来回切换 | 重新验证 | 是 |
+| 管理员的网段变了 | 重新验证 | 否，只记入审计 |
+| 高权限确认之后 IP 变了 | 重新做高权限确认 | 否 |
+| 空闲超过 24 小时，或从登录起超过 7 天 | 退出 | 否 |
+
+这些事件记为审计的 `security` 类（`session_reuse`、`session_key_missing`、`session_signature_invalid`、`session_tls_tool`、`session_tls_changed`、`session_device_changed`、`session_network_flip`、`session_network_changed`），告警由面板发出（`Service.Alert` → 告警渠道），备用面板不发。
+
+- **令牌轮换**：每 15 分钟换一次。到时间后的请求，面板在响应头 `Nagi-Session-Challenge` 里给一个随机挑战；页面用会话私钥签名后调用 `AuthService.RotateSession`，面板核对签名，设置新令牌的 cookie。新令牌处于待确认状态（`session_tokens` 里的 `pending`），浏览器带着它来请求以后才转正，旧令牌记为 `retired`；转正之前旧令牌照常可用，响应在网络上丢失时不会误判。主人和盗用者都在用这个会话时，最迟 15 分钟被发现。换下来的令牌保留一周用来发现重用。
+- **会话密钥**：登录（和初始化）成功后，页面用 WebCrypto 生成 ECDSA P-256 密钥（私钥不可导出），存进 IndexedDB，公钥用 `AuthService.RegisterSessionKey` 记在会话上（`lib/session.ts`）。同一个浏览器的多个标签页、多次登录共用一份密钥。只能在登录或重新验证后的 2 分钟内、会话还没有公钥时登记，盗用者不能换上自己的密钥。拿不出签名时只要求重新验证，不退出：无痕窗口、清除过网站数据的浏览器验证后重新登记。私钥没有绑定硬件，复制整个浏览器用户目录的木马能连私钥一起偷走。
+- **TLS 指纹**：面板在 `GetConfigForClient` 里按 JA4 的规则算出 ClientHello 的指纹（`tlsutil.JA4`），经 `http.Server.ConnContext` 放进请求。经本机 Caddy 转发时，由 Caddy 里 Nagi 自己的模块（握手匹配器和处理器 `nagi_ja4`，见 `agent/proxy/ja4.go`）算好放在请求头 `X-Nagi-Ja4`，和 `X-Forwarded-For` 一样凭 `X-Nagi-Proxy` 核对后才采用。浏览器的 ClientHello 都声明 h2、扩展在 14 个以上；Go、Python、curl 的 HTTP 客户端扩展少，Python 和 curl（Windows 的 Schannel）不声明 h2。实测：Chromium `t13d1516h2_…`，curl `t13d2012h1_…`，Python `t13d181100_…`。请求带着 CDN 的请求头（`Cf-Ray`、`Cdn-Loop` 等）、或者从本机直接连面板（开发时的本地代理）时不做这项检查。
+- **浏览器标识**：会话记下 `User-Agent`，只比较浏览器类型和操作系统，不比较版本号，浏览器自动更新时版本号和 TLS 指纹一起变，不受影响。窃密木马可以伪造这个标识，所以它只是辅助手段。不用页面采集的浏览器指纹（canvas、字体等）：能和 cookie 一起被偷走、误报多。
+- **网络**：网段按 IPv4 /24、IPv6 /48 计算，只有同一种地址的网段之间来回切换才算，浏览器在 IPv4 和 IPv6 之间切换不算。管理员的网络绑定默认是「网段变化时」，可以改为「IP 变化时」或关闭，也可以用于所有成员；每种地址第一次出现的网段直接记为已验证的，重新验证后记下当前的网段。高权限确认只对做确认时的 IP 有效（`sessions.elevated_ip`）。
+- **有效期**：空闲超过 24 小时退出，从登录起最长 7 天，两个时长可以在「设置 → 安全 → 会话」中改短。最近活动时间和 IP 最多每分钟写一次，「已登录的设备」里显示浏览器和系统、最近的 IP、最近活动时间。
+- **请求来源**：修改类请求带 `Sec-Fetch-Site` 时必须是 `same-origin`，没有时核对 `Origin` 和 `Host`（经本机 Caddy 时用 `X-Forwarded-Host`），对不上的返回 403 并记一条安全事件。都没带的（命令行工具）放行，它们不会自动带上浏览器的 cookie。项目 webhook、`/mcp`、OAuth、节点安装脚本、备用面板的地址不检查。
+- **以后再做**：浏览器的设备绑定会话（Device Bound Session Credentials），等主流浏览器普遍支持后接入。页面被注入脚本（XSS）时攻击者直接在主人的浏览器里操作，上面的绑定都不起作用，只能靠 CSP 和代码本身防。
+
 ## 成员和角色
 
 面板可以有多个账号，在「设置 → 成员」管理。角色由面板按接口方法判断（`internal/server/auth/roles.go`），界面隐藏入口只是为了好用：

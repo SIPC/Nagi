@@ -8,6 +8,7 @@ import { StandbyCard } from "@/pages/standby";
 import { PanelAccessCard } from "@/pages/access";
 import { UpdateDot } from "@/pages/update";
 import { AboutCard } from "@/pages/about";
+import { PanelSecurityCard } from "@/pages/panel-security";
 import { Link, useSearch } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { ActiveBox, Slide, useActiveBox } from "@/components/ui";
@@ -22,6 +23,7 @@ import { useRole } from "@/components/role";
 export const settingsTabs = [
   { value: "security", label: t.settings.tabs.security.label },
   { value: "access", label: t.settings.tabs.access.label },
+  { value: "panel-security", label: t.settings.tabs.panelSecurity.label },
   { value: "profile", label: t.settings.tabs.profile.label },
   { value: "members", label: t.settings.tabs.members.label },
   { value: "standby", label: t.settings.tabs.standby.label },
@@ -40,7 +42,7 @@ const aboutGroup = { label: "", tabs: ["about"] as SettingsTab[] };
 
 const menuGroups = [
   accountGroup,
-  { label: t.settings.groups.panel, tabs: ["access", "members", "alerts", "standby"] as SettingsTab[] },
+  { label: t.settings.groups.panel, tabs: ["access", "panel-security", "members", "alerts", "standby"] as SettingsTab[] },
   { label: t.settings.groups.nodes, tabs: ["invite", "mesh"] as SettingsTab[] },
   aboutGroup,
 ];
@@ -108,6 +110,7 @@ export function SettingsPage() {
           {cur === "profile" && <ProfileCard />}
           {cur === "access" && <PanelAccessCard />}
           {cur === "security" && <SecurityCard />}
+          {cur === "panel-security" && <PanelSecurityCard />}
           {cur === "members" && <MembersCard />}
           {cur === "alerts" && <AlertSettings />}
           {cur === "standby" && <StandbyCard />}

@@ -208,6 +208,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.Audit = s.audit
+	// 会话被盗用这类安全告警由面板发出（备用面板不发告警）。
+	if s.standby == nil {
+		s.auth.Alert = func(ctx context.Context, key, title, message string) {
+			s.nodes.PanelAlert(ctx, &nagiv1.Alert{Key: key, Title: title, Message: message})
+		}
+	}
 	s.nodes.SetWitnessDir(filepath.Join(cfg.DataDir, "witness"))
 	s.projects = &projects.Service{Q: s.q, Sealer: s.sealer, Nodes: s.nodes, Log: log, Fingerprint: s.Fingerprint,
 		ReservedDomain: func(d string) bool {
@@ -377,7 +383,14 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler:           securityHeaders(s.auth.EntranceMiddleware(mux), false),
+		Handler: securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false),
+		// TLS 指纹（见 docs/panel.md#会话）：握手时按底层连接记下，这里放进请求的 ctx。
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			if tc, ok := c.(*tls.Conn); ok {
+				return auth.WithFingerprint(ctx, auth.TakeFingerprint(tc.NetConn()))
+			}
+			return ctx
+		},
 		TLSConfig:         s.tlsConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -487,6 +500,7 @@ func (s *Server) tlsConfig() *tls.Config {
 		NextProtos:   []string{"h2", "http/1.1"},
 		// 按客户端声明的 ALPN 选择配置：只向节点和备用面板索要客户端证书，浏览器不会弹出证书选择框。
 		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+			auth.RecordFingerprint(hello)
 			for _, p := range hello.SupportedProtos {
 				if p == tunnel.ALPN {
 					return agent, nil

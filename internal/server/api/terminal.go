@@ -28,7 +28,7 @@ func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		token := auth.SessionToken(r.Header)
-		u, err := a.Auth.SessionUser(r.Context(), token)
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
@@ -137,7 +137,8 @@ func (a *API) watchSession(ctx context.Context, token string, u auth.User, check
 			return
 		case <-t.C:
 		}
-		cur, err := a.Auth.SessionUser(ctx, token)
+		// 按会话 ID 重查：令牌每 15 分钟轮换一次，按令牌查会在轮换以后断开（见 docs/panel.md#会话）。
+		cur, err := a.Auth.SessionByID(ctx, u.SessionID)
 		switch {
 		case ctx.Err() != nil:
 			return

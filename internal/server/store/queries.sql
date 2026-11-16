@@ -43,7 +43,7 @@ DELETE FROM users WHERE id = ?;
 SELECT count(*) FROM users WHERE role = 'admin';
 
 -- name: ListUserSessions :many
-SELECT token_hash, created_at, expires_at, ip FROM sessions WHERE user_id = ? ORDER BY created_at DESC;
+SELECT token_hash, created_at, expires_at, ip, id, user_agent, last_ip, last_seen FROM sessions WHERE user_id = ? ORDER BY created_at DESC;
 
 -- name: DeleteUserSession :execrows
 DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?;
@@ -55,7 +55,8 @@ UPDATE users SET totp_secret = '', totp_last_step = 0 WHERE id = ?;
 SELECT * FROM users WHERE username = ?;
 
 -- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?);
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip, id, rotated_at, user_agent, last_ip, last_seen, tls_fp, key_until)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetSession :one
 SELECT s.user_id, s.expires_at, s.elevated_until, u.username, u.role, u.all_projects, u.all_nodes

@@ -235,6 +235,8 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 			"routes":          httpsRoutes,
 			"automatic_https": obj{"disable_redirects": true},
 			"logs":            obj{},
+			// 握手时记下 TLS 指纹，反代面板时转给面板（见 ja4.go）。
+			"tls_connection_policies": []obj{{"match": obj{"nagi_ja4": obj{}}}},
 		}
 	}
 	// 80 端口：只开 HTTP 的域名、还没拿到证书的域名直接转发；已有证书的域名跳转到 HTTPS；
@@ -272,10 +274,12 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 
 // handlers 返回一条 http 规则的处理器：先在访问日志里标上规则，再反向代理。
 func handlers(r Route) []obj {
-	return []obj{
-		{"handler": "log_append", "key": logRouteKey, "value": r.Project + "/" + r.Name},
-		withHeaders(reverseProxyTLS(r.Upstreams, r.UpstreamTLS), r.RequestHeaders),
+	h := []obj{{"handler": "log_append", "key": logRouteKey, "value": r.Project + "/" + r.Name}}
+	// 反代面板（UpstreamTLS）时带上客户端的 TLS 指纹。
+	if r.UpstreamTLS != nil {
+		h = append(h, obj{"handler": "nagi_ja4"})
 	}
+	return append(h, withHeaders(reverseProxyTLS(r.Upstreams, r.UpstreamTLS), r.RequestHeaders))
 }
 
 // withHeaders 让反向代理转发时设置这些请求头。

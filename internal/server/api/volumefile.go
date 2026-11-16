@@ -40,7 +40,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 			w.WriteHeader(code)
 			_ = json.NewEncoder(w).Encode(map[string]string{"message": msg})
 		}
-		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return

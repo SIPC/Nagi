@@ -31,6 +31,7 @@ export default {
   unknownAddress: "未知地址",
   signedInAt: (date: string) => `登录于 ${date}`,
   thisDevice: "当前设备",
+  lastActive: (ago: string) => `最近活动 ${ago}`,
   signOutDevice: "退出",
   scope: {
     projects: "可访问的项目",

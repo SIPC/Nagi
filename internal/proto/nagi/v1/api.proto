@@ -47,6 +47,11 @@ service AuthService {
   rpc GetOAuthRequest(OAuthRequest) returns (GetOAuthRequestResponse);
   // 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
   rpc ApproveOAuth(ApproveOAuthRequest) returns (ApproveOAuthResponse);
+  // 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+  rpc RegisterSessionKey(RegisterSessionKeyRequest) returns (RegisterSessionKeyResponse);
+  rpc RotateSession(RotateSessionRequest) returns (RotateSessionResponse);
+  // 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+  rpc Reverify(ReverifyRequest) returns (ReverifyResponse);
 }
 
 // OAuthRequest 是客户端打开授权页时带的参数（/oauth/authorize 的查询参数）。
@@ -413,6 +418,9 @@ service SettingsService {
   rpc GetAuditEvent(GetAuditEventRequest) returns (GetAuditEventResponse);
   // 按筛选条件导出 JSON Lines，只有管理员能用。
   rpc ExportAuditEvents(ExportAuditEventsRequest) returns (stream ExportAuditEventsChunk);
+  // 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+  rpc GetSessionPolicy(GetSessionPolicyRequest) returns (SessionPolicy);
+  rpc SetSessionPolicy(SessionPolicy) returns (SessionPolicy);
 }
 
 message AccessToken {
@@ -917,6 +925,11 @@ message LoginSession {
   bool current = 3;
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp expires_at = 5;
+  // 浏览器和系统，例如「Chrome · Windows」。
+  string agent = 6;
+  // 最近一次请求的 IP 和时间。
+  string last_ip = 7;
+  google.protobuf.Timestamp last_seen = 8;
 }
 
 message ListSessionsRequest {}
@@ -1381,4 +1394,40 @@ message ExportAuditEventsRequest {
 message ExportAuditEventsChunk {
   // 若干行 JSON Lines。
   bytes data = 1;
+}
+
+// ---- 会话加固（见 docs/panel.md#会话） ----
+
+message RegisterSessionKeyRequest {
+  // ECDSA P-256 公钥，SPKI 格式。
+  bytes public_key = 1;
+}
+
+message RegisterSessionKeyResponse {}
+
+message RotateSessionRequest {
+  // 用会话私钥对响应头 Nagi-Session-Challenge 的签名（WebCrypto 的 r‖s 格式）。
+  bytes signature = 1;
+}
+
+message RotateSessionResponse {}
+
+message ReverifyRequest {
+  string password = 1 [debug_redact = true];
+  string totp_code = 2 [debug_redact = true];
+}
+
+message ReverifyResponse {}
+
+message GetSessionPolicyRequest {}
+
+message SessionPolicy {
+  // 空闲多久退出（分钟），不超过 1440。
+  int32 idle_minutes = 1;
+  // 从登录起最长多久（小时），不超过 168。
+  int32 max_hours = 2;
+  // 管理员的网络绑定：subnet（网段变了要重新验证）、ip（IP 变了就要）、off。
+  string bind = 3;
+  // 把网络绑定用到所有角色。
+  bool bind_all = 4;
 }

@@ -73,7 +73,6 @@ func (h *auditHarness) login(username, password string) (nagiv1connect.AuthServi
 	h.t.Helper()
 	ac, sc := h.client()
 	req := connect.NewRequest(&nagiv1.LoginRequest{Username: username, Password: password})
-	req.Header().Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36")
 	if _, err := ac.Login(context.Background(), req); err != nil {
 		h.t.Fatal(err)
 	}

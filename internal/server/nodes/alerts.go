@@ -442,3 +442,14 @@ func (r *Registry) MigrateAlertRules(ctx context.Context, setProjects func(*nagi
 	r.log.Info("已把全局告警规则搬到各个节点和项目上")
 	return r.SetAlertConfig(ctx, cfg)
 }
+
+// PanelAlert 发一条面板自己的告警（安全事件等）：记进审计日志，发往告警渠道。
+func (r *Registry) PanelAlert(ctx context.Context, a *nagiv1.Alert) {
+	if a.GetTime() == nil {
+		a.Time = timestamppb.Now()
+	}
+	if a.GetStatus() == "" {
+		a.Status = "firing"
+	}
+	r.sendLogged(ctx, a)
+}

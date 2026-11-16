@@ -12,4 +12,19 @@ export default {
   displayName: "Display name",
   displayNameHint: (username) => `Shows ${username} when empty. You still sign in with your username.`,
   saved: "Profile saved",
+  reverify: {
+    title: "Verify your identity",
+    description: "Confirm it's you to continue.",
+    reasons: {
+      session_key: "This device couldn't be confirmed. Verify your identity to continue.",
+      signature_invalid: "This device couldn't be confirmed. Verify your identity to continue.",
+      tls_changed: "Your browser's connection characteristics changed. Verify your identity to continue.",
+      network_flip: "Your network switched back and forth in a short time. Verify your identity to continue.",
+      network_changed: "The network you signed in from changed. Verify your identity to continue.",
+    },
+    password: "Password",
+    code: "2FA code",
+    submit: "Verify",
+    logout: "Sign out",
+  },
 } satisfies typeof zh;

@@ -242,7 +242,8 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) error {
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip) VALUES (?, ?, ?, ?, ?)
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ip, id, rotated_at, user_agent, last_ip, last_seen, tls_fp, key_until)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateSessionParams struct {
@@ -251,6 +252,13 @@ type CreateSessionParams struct {
 	CreatedAt int64
 	ExpiresAt int64
 	Ip        string
+	ID        string
+	RotatedAt int64
+	UserAgent string
+	LastIp    string
+	LastSeen  int64
+	TlsFp     string
+	KeyUntil  int64
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -260,6 +268,13 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.CreatedAt,
 		arg.ExpiresAt,
 		arg.Ip,
+		arg.ID,
+		arg.RotatedAt,
+		arg.UserAgent,
+		arg.LastIp,
+		arg.LastSeen,
+		arg.TlsFp,
+		arg.KeyUntil,
 	)
 	return err
 }
@@ -625,7 +640,7 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT token_hash, created_at, expires_at, ip FROM sessions WHERE user_id = ? ORDER BY created_at DESC
+SELECT token_hash, created_at, expires_at, ip, id, user_agent, last_ip, last_seen FROM sessions WHERE user_id = ? ORDER BY created_at DESC
 `
 
 type ListUserSessionsRow struct {
@@ -633,6 +648,10 @@ type ListUserSessionsRow struct {
 	CreatedAt int64
 	ExpiresAt int64
 	Ip        string
+	ID        string
+	UserAgent string
+	LastIp    string
+	LastSeen  int64
 }
 
 func (q *Queries) ListUserSessions(ctx context.Context, userID int64) ([]ListUserSessionsRow, error) {
@@ -649,6 +668,10 @@ func (q *Queries) ListUserSessions(ctx context.Context, userID int64) ([]ListUse
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.Ip,
+			&i.ID,
+			&i.UserAgent,
+			&i.LastIp,
+			&i.LastSeen,
 		); err != nil {
 			return nil, err
 		}

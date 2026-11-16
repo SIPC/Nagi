@@ -8,6 +8,7 @@ import access from "./access";
 import account from "./account";
 import activity from "./activity";
 import audit from "./audit";
+import panelSecurity from "./panelSecurity";
 import members from "./members";
 import alerts from "./alerts";
 import invite from "./invite";
@@ -40,6 +41,7 @@ export default {
   account,
   activity,
   audit,
+  panelSecurity,
   members,
   alerts,
   invite,

@@ -6,6 +6,7 @@ export default {
   tabs: {
     profile: { label: "Profile" },
     access: { label: "Panel access", description: "Addresses nodes and browsers use to reach this panel." },
+    panelSecurity: { label: "Security" },
     security: { label: "Account security" },
     members: { label: "Members" },
     alerts: { label: "Alerts" },

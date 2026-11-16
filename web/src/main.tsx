@@ -10,7 +10,8 @@ import {
   RouterProvider,
   useMatch,
 } from "@tanstack/react-router";
-import { authClient, isNotFound, isUnauthenticated, setupClient } from "@/lib/api";
+import { authClient, isNotFound, isUnauthenticated, reverifyReason, setupClient } from "@/lib/api";
+import { ReverifyHost, waitReverify } from "@/components/reverify";
 import { LoginPage, SetupPage } from "@/pages/auth";
 import { OAuthAuthorizePage } from "@/pages/tokens";
 import { AppLayout, NotFound } from "@/pages/layout";
@@ -40,7 +41,7 @@ const onError = (err: unknown) => {
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (err, query) => query.queryKey[0] !== "me" && onError(err) }),
   mutationCache: new MutationCache({ onError }),
-  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !isNotFound(err) && count < 2 } },
+  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !reverifyReason(err) && !isNotFound(err) && count < 2 } },
 });
 
 // 确认框、身份验证框和 Toast 挂在根路由里：其中的链接要用到路由。
@@ -84,10 +85,18 @@ const appRoute = createRoute({
   id: "app",
   beforeLoad: async ({ context }) => {
     try {
-      const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: () => authClient.me({}), staleTime: 60_000 });
+      const fetchMe = () => context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: () => authClient.me({}), staleTime: 60_000 });
+      let me;
+      try {
+        me = await fetchMe();
+      } catch (err) {
+        // 会话要求重新验证（见 components/reverify）：等验证完再进入页面。
+        if (!reverifyReason(err) || !(await waitReverify())) throw err;
+        me = await fetchMe();
+      }
       adoptAccountLocale(me.language);
     } catch (err) {
-      if (!isUnauthenticated(err)) throw err;
+      if (!isUnauthenticated(err) && !reverifyReason(err)) throw err;
       const state = await setupClient.getSetupState({});
       throw redirect({ to: state.initialized ? "/login" : "/setup", search: state.initialized ? undefined : { token: "" } });
     }
@@ -310,6 +319,8 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      {/* 重新验证框不放在路由里：进入页面前的登录检查（appRoute.beforeLoad）就可能要等它，那时路由还没渲染。 */}
+      <ReverifyHost />
     </QueryClientProvider>
   </StrictMode>,
 );

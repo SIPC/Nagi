@@ -9,7 +9,7 @@ import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field,
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { AccessTokenList } from "@/pages/tokens";
-import { formatClock, formatDateTime, formatMonthDay } from "@/lib/utils";
+import { formatClock, formatDateTime, formatMonthDay, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 
 const roles = ["admin", "operator", "viewer"] as const;
@@ -412,11 +412,16 @@ export function SessionList() {
             key={s.id}
             title={
               <>
-                <span className="truncate">{s.ip || t.members.unknownAddress}</span>
+                <span className="truncate">{s.agent || s.lastIp || s.ip || t.members.unknownAddress}</span>
                 {s.current && <span className="shrink-0 text-muted-foreground">{t.members.thisDevice}</span>}
               </>
             }
-            sub={<span title={formatDateTime(toDate(s.createdAt))}>{t.members.signedInAt(shortDate(toDate(s.createdAt)))}</span>}
+            // 第二行：最近的 IP · 最近活动 · 登录时间（见 docs/panel.md#会话）。
+            sub={
+              <span title={formatDateTime(toDate(s.createdAt))}>
+                {[s.agent && (s.lastIp || s.ip), s.lastSeen && t.members.lastActive(timeAgo(toDate(s.lastSeen))), t.members.signedInAt(shortDate(toDate(s.createdAt)))].filter(Boolean).join(" · ")}
+              </span>
+            }
             actions={
               s.current ? null : (
                 <Button

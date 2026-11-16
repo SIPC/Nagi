@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { authClient, errorMessage, setupClient } from "@/lib/api";
+import { ensureSessionKey } from "@/lib/session";
 import { Alert, Button, Field, Input, Notice, QueryError, Slide, Spinner, Waves } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { LanguageButton } from "@/components/language";
@@ -54,6 +55,7 @@ export function SetupPage({ token }: { token: string }) {
   const setup = useMutation({
     mutationFn: () => setupClient.setup({ token, username, password }),
     onSuccess: async () => {
+      await ensureSessionKey();
       await queryClient.invalidateQueries();
       navigate({ to: "/" });
     },
@@ -130,6 +132,7 @@ export function LoginPage() {
       if (err instanceof ConnectError && err.code === Code.FailedPrecondition) setNeedCode(true);
     },
     onSuccess: async () => {
+      await ensureSessionKey();
       await queryClient.invalidateQueries();
       // 从 OAuth 授权页过来的，登录后回去（见 pages/tokens.tsx）。
       let back = "";

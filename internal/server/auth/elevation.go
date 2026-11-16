@@ -7,7 +7,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
-	"github.com/SIPC/nagi/internal/server/store"
 )
 
 // ElevationTTL 是高权限确认的有效期（见 docs/node-access.md#权限）。
@@ -20,10 +19,11 @@ func (u User) Elevated() bool { return u.ElevatedUntil > time.Now().Unix() }
 // 按账号和改密码、关闭两步验证共用（拿到会话的人不能借这几个接口无限次地猜）。
 // 记在会话上，只在服务端，客户端伪造不了。
 func (s *Service) Elevate(ctx context.Context, ip, token, password, code string) (time.Time, error) {
-	cur, err := s.session(ctx, token)
+	st, _, err := s.liveSession(ctx, token)
 	if err != nil {
 		return time.Time{}, connect.NewError(connect.CodeUnauthenticated, err)
 	}
+	cur := userOf(st)
 	done, err := s.beginVerify(LimitKey(ip), userLimitKey(cur.ID))
 	if err != nil {
 		return time.Time{}, err
@@ -55,7 +55,8 @@ func (s *Service) Elevate(ctx context.Context, ip, token, password, code string)
 	}
 	result = outcomeSuccess
 	until := time.Now().Add(ElevationTTL)
-	if err := s.q.SetSessionElevated(ctx, store.SetSessionElevatedParams{ElevatedUntil: until.Unix(), TokenHash: HashToken(token)}); err != nil {
+	// 只对做确认时的 IP 有效：15 分钟内 IP 变了要重新确认（见 docs/panel.md#会话）。
+	if err := s.q.UpdateSession(ctx, st.ID, map[string]any{"elevated_until": until.Unix(), "elevated_ip": ip}); err != nil {
 		return time.Time{}, err
 	}
 	return until, nil

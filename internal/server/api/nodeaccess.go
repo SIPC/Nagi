@@ -217,7 +217,7 @@ func (a *API) NodeShellHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
 		token := auth.SessionToken(r.Header)
-		u, err := a.Auth.SessionUser(r.Context(), token)
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
@@ -342,7 +342,7 @@ func (a *API) NodeFileHandler() http.Handler {
 			w.WriteHeader(code)
 			_ = json.NewEncoder(w).Encode(map[string]string{"message": msg})
 		}
-		u, err := a.Auth.SessionUser(r.Context(), auth.SessionToken(r.Header))
+		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return

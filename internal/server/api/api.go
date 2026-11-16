@@ -72,6 +72,8 @@ func (a *API) Mount(mux *http.ServeMux) {
 		nagiv1connect.SetupServiceSetupProcedure,
 		nagiv1connect.AuthServiceLoginProcedure,
 		nagiv1connect.AuthServiceLogoutProcedure,
+		// 要求重新验证的会话，其他接口都被拒绝，只有这个能用（处理函数自己找会话）。
+		nagiv1connect.AuthServiceReverifyProcedure,
 		nagiv1connect.EnrollServiceEnrollProcedure,
 	)}
 	if a.Panel.Standby != nil {

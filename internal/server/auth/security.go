@@ -82,7 +82,16 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, token, curre
 	if err := s.q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: userID}); err != nil {
 		return err
 	}
-	return s.q.DeleteOtherSessions(ctx, store.DeleteOtherSessionsParams{UserID: userID, TokenHash: HashToken(token)})
+	return s.deleteOtherSessions(ctx, userID, token)
+}
+
+// deleteOtherSessions 让成员除当前会话以外的登录全部失效。
+func (s *Service) deleteOtherSessions(ctx context.Context, userID int64, token string) error {
+	keep := ""
+	if st, _, err := s.liveSession(ctx, token); err == nil && st.UserID == userID {
+		keep = st.ID
+	}
+	return s.q.DeleteOtherSessionsByID(ctx, userID, keep)
 }
 
 // BeginTOTP 生成一个新的两步验证密钥，用户在验证器 App 里添加后用 EnableTOTP 确认。10 分钟内有效。
@@ -122,7 +131,7 @@ func (s *Service) EnableTOTP(ctx context.Context, userID int64, token, code stri
 	s.mu.Lock()
 	delete(s.pending, userID)
 	s.mu.Unlock()
-	return s.q.DeleteOtherSessions(ctx, store.DeleteOtherSessionsParams{UserID: userID, TokenHash: HashToken(token)})
+	return s.deleteOtherSessions(ctx, userID, token)
 }
 
 // DisableTOTP 关闭两步验证，需要当前的验证码或者密码。猜错按账号计入限速（和高权限确认共用）。
@@ -162,7 +171,10 @@ func (s *Service) DisableTOTP(ctx context.Context, userID int64, code, password 
 // SettingEntrance 是安全入口路径在 settings 表里的键，没有这一项表示没开启。
 const SettingEntrance = "entrance"
 
-const entranceCookie = "nagi_entrance"
+const entranceCookie = "__Host-nagi_entrance"
+
+// legacyEntranceCookie 是以前的名字，在一个版本内仍然接受，收到时换发新名字。
+const legacyEntranceCookie = "nagi_entrance"
 
 // Entrance 返回安全入口路径（不含 /），没开启时为空。
 func (s *Service) Entrance(ctx context.Context) string {
@@ -230,6 +242,12 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if c, err := r.Cookie(entranceCookie); err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(entranceToken(path))) == 1 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if c, err := r.Cookie(legacyEntranceCookie); err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(entranceToken(path))) == 1 {
+			setEntranceCookie(w, path)
+			http.SetCookie(w, &http.Cookie{Name: legacyEntranceCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
 			next.ServeHTTP(w, r)
 			return
 		}

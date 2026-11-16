@@ -68,6 +68,14 @@ const (
 	// AuthServiceApproveOAuthProcedure is the fully-qualified name of the AuthService's ApproveOAuth
 	// RPC.
 	AuthServiceApproveOAuthProcedure = "/nagi.v1.AuthService/ApproveOAuth"
+	// AuthServiceRegisterSessionKeyProcedure is the fully-qualified name of the AuthService's
+	// RegisterSessionKey RPC.
+	AuthServiceRegisterSessionKeyProcedure = "/nagi.v1.AuthService/RegisterSessionKey"
+	// AuthServiceRotateSessionProcedure is the fully-qualified name of the AuthService's RotateSession
+	// RPC.
+	AuthServiceRotateSessionProcedure = "/nagi.v1.AuthService/RotateSession"
+	// AuthServiceReverifyProcedure is the fully-qualified name of the AuthService's Reverify RPC.
+	AuthServiceReverifyProcedure = "/nagi.v1.AuthService/Reverify"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
@@ -274,6 +282,12 @@ const (
 	// SettingsServiceExportAuditEventsProcedure is the fully-qualified name of the SettingsService's
 	// ExportAuditEvents RPC.
 	SettingsServiceExportAuditEventsProcedure = "/nagi.v1.SettingsService/ExportAuditEvents"
+	// SettingsServiceGetSessionPolicyProcedure is the fully-qualified name of the SettingsService's
+	// GetSessionPolicy RPC.
+	SettingsServiceGetSessionPolicyProcedure = "/nagi.v1.SettingsService/GetSessionPolicy"
+	// SettingsServiceSetSessionPolicyProcedure is the fully-qualified name of the SettingsService's
+	// SetSessionPolicy RPC.
+	SettingsServiceSetSessionPolicyProcedure = "/nagi.v1.SettingsService/SetSessionPolicy"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -550,6 +564,11 @@ type AuthServiceClient interface {
 	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error)
+	RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -617,20 +636,41 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
 			connect.WithClientOptions(opts...),
 		),
+		registerSessionKey: connect.NewClient[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse](
+			httpClient,
+			baseURL+AuthServiceRegisterSessionKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RegisterSessionKey")),
+			connect.WithClientOptions(opts...),
+		),
+		rotateSession: connect.NewClient[v1.RotateSessionRequest, v1.RotateSessionResponse](
+			httpClient,
+			baseURL+AuthServiceRotateSessionProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RotateSession")),
+			connect.WithClientOptions(opts...),
+		),
+		reverify: connect.NewClient[v1.ReverifyRequest, v1.ReverifyResponse](
+			httpClient,
+			baseURL+AuthServiceReverifyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("Reverify")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login           *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout          *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	me              *connect.Client[v1.MeRequest, v1.MeResponse]
-	elevate         *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
-	changePassword  *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
-	setLanguage     *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
-	updateProfile   *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
-	getOAuthRequest *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
-	approveOAuth    *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
+	login              *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	me                 *connect.Client[v1.MeRequest, v1.MeResponse]
+	elevate            *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
+	changePassword     *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	setLanguage        *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
+	updateProfile      *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	getOAuthRequest    *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
+	approveOAuth       *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
+	registerSessionKey *connect.Client[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse]
+	rotateSession      *connect.Client[v1.RotateSessionRequest, v1.RotateSessionResponse]
+	reverify           *connect.Client[v1.ReverifyRequest, v1.ReverifyResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -678,6 +718,21 @@ func (c *authServiceClient) ApproveOAuth(ctx context.Context, req *connect.Reque
 	return c.approveOAuth.CallUnary(ctx, req)
 }
 
+// RegisterSessionKey calls nagi.v1.AuthService.RegisterSessionKey.
+func (c *authServiceClient) RegisterSessionKey(ctx context.Context, req *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error) {
+	return c.registerSessionKey.CallUnary(ctx, req)
+}
+
+// RotateSession calls nagi.v1.AuthService.RotateSession.
+func (c *authServiceClient) RotateSession(ctx context.Context, req *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error) {
+	return c.rotateSession.CallUnary(ctx, req)
+}
+
+// Reverify calls nagi.v1.AuthService.Reverify.
+func (c *authServiceClient) Reverify(ctx context.Context, req *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error) {
+	return c.reverify.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -696,6 +751,11 @@ type AuthServiceHandler interface {
 	GetOAuthRequest(context.Context, *connect.Request[v1.OAuthRequest]) (*connect.Response[v1.GetOAuthRequestResponse], error)
 	// 成员在授权页上允许或拒绝，返回浏览器要转去的回调地址（带授权码或者错误）。
 	ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error)
+	// 会话加固（见 docs/panel.md#会话）：登录后登记会话密钥的公钥；响应头里出现挑战时用私钥签名，换发新令牌。
+	RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error)
+	RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error)
+	// 会话被要求重新验证时：开了两步验证的输验证码，没开的输密码。连续 3 次失败退出这个会话。
+	Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -759,6 +819,24 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ApproveOAuth")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceRegisterSessionKeyHandler := connect.NewUnaryHandler(
+		AuthServiceRegisterSessionKeyProcedure,
+		svc.RegisterSessionKey,
+		connect.WithSchema(authServiceMethods.ByName("RegisterSessionKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceRotateSessionHandler := connect.NewUnaryHandler(
+		AuthServiceRotateSessionProcedure,
+		svc.RotateSession,
+		connect.WithSchema(authServiceMethods.ByName("RotateSession")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceReverifyHandler := connect.NewUnaryHandler(
+		AuthServiceReverifyProcedure,
+		svc.Reverify,
+		connect.WithSchema(authServiceMethods.ByName("Reverify")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -779,6 +857,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetOAuthRequestHandler.ServeHTTP(w, r)
 		case AuthServiceApproveOAuthProcedure:
 			authServiceApproveOAuthHandler.ServeHTTP(w, r)
+		case AuthServiceRegisterSessionKeyProcedure:
+			authServiceRegisterSessionKeyHandler.ServeHTTP(w, r)
+		case AuthServiceRotateSessionProcedure:
+			authServiceRotateSessionHandler.ServeHTTP(w, r)
+		case AuthServiceReverifyProcedure:
+			authServiceReverifyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -822,6 +906,18 @@ func (UnimplementedAuthServiceHandler) GetOAuthRequest(context.Context, *connect
 
 func (UnimplementedAuthServiceHandler) ApproveOAuth(context.Context, *connect.Request[v1.ApproveOAuthRequest]) (*connect.Response[v1.ApproveOAuthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.ApproveOAuth is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RegisterSessionKey(context.Context, *connect.Request[v1.RegisterSessionKeyRequest]) (*connect.Response[v1.RegisterSessionKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.RegisterSessionKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RotateSession(context.Context, *connect.Request[v1.RotateSessionRequest]) (*connect.Response[v1.RotateSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.RotateSession is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) Reverify(context.Context, *connect.Request[v1.ReverifyRequest]) (*connect.Response[v1.ReverifyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Reverify is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
@@ -1923,6 +2019,9 @@ type SettingsServiceClient interface {
 	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
 	// 按筛选条件导出 JSON Lines，只有管理员能用。
 	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest]) (*connect.ServerStreamForClient[v1.ExportAuditEventsChunk], error)
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
+	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2146,6 +2245,18 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		getSessionPolicy: connect.NewClient[v1.GetSessionPolicyRequest, v1.SessionPolicy](
+			httpClient,
+			baseURL+SettingsServiceGetSessionPolicyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("GetSessionPolicy")),
+			connect.WithClientOptions(opts...),
+		),
+		setSessionPolicy: connect.NewClient[v1.SessionPolicy, v1.SessionPolicy](
+			httpClient,
+			baseURL+SettingsServiceSetSessionPolicyProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -2186,6 +2297,8 @@ type settingsServiceClient struct {
 	listAuditEvents      *connect.Client[v1.ListAuditEventsRequest, v1.ListAuditEventsResponse]
 	getAuditEvent        *connect.Client[v1.GetAuditEventRequest, v1.GetAuditEventResponse]
 	exportAuditEvents    *connect.Client[v1.ExportAuditEventsRequest, v1.ExportAuditEventsChunk]
+	getSessionPolicy     *connect.Client[v1.GetSessionPolicyRequest, v1.SessionPolicy]
+	setSessionPolicy     *connect.Client[v1.SessionPolicy, v1.SessionPolicy]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2363,6 +2476,16 @@ func (c *settingsServiceClient) ExportAuditEvents(ctx context.Context, req *conn
 	return c.exportAuditEvents.CallServerStream(ctx, req)
 }
 
+// GetSessionPolicy calls nagi.v1.SettingsService.GetSessionPolicy.
+func (c *settingsServiceClient) GetSessionPolicy(ctx context.Context, req *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error) {
+	return c.getSessionPolicy.CallUnary(ctx, req)
+}
+
+// SetSessionPolicy calls nagi.v1.SettingsService.SetSessionPolicy.
+func (c *settingsServiceClient) SetSessionPolicy(ctx context.Context, req *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error) {
+	return c.setSessionPolicy.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2424,6 +2547,9 @@ type SettingsServiceHandler interface {
 	GetAuditEvent(context.Context, *connect.Request[v1.GetAuditEventRequest]) (*connect.Response[v1.GetAuditEventResponse], error)
 	// 按筛选条件导出 JSON Lines，只有管理员能用。
 	ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error
+	// 会话设置（「设置 → 安全 → 会话」，见 docs/panel.md#会话），只有管理员能改。
+	GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error)
+	SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2643,6 +2769,18 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("ExportAuditEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceGetSessionPolicyHandler := connect.NewUnaryHandler(
+		SettingsServiceGetSessionPolicyProcedure,
+		svc.GetSessionPolicy,
+		connect.WithSchema(settingsServiceMethods.ByName("GetSessionPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetSessionPolicyHandler := connect.NewUnaryHandler(
+		SettingsServiceSetSessionPolicyProcedure,
+		svc.SetSessionPolicy,
+		connect.WithSchema(settingsServiceMethods.ByName("SetSessionPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2715,6 +2853,10 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceGetAuditEventHandler.ServeHTTP(w, r)
 		case SettingsServiceExportAuditEventsProcedure:
 			settingsServiceExportAuditEventsHandler.ServeHTTP(w, r)
+		case SettingsServiceGetSessionPolicyProcedure:
+			settingsServiceGetSessionPolicyHandler.ServeHTTP(w, r)
+		case SettingsServiceSetSessionPolicyProcedure:
+			settingsServiceSetSessionPolicyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2862,6 +3004,14 @@ func (UnimplementedSettingsServiceHandler) GetAuditEvent(context.Context, *conne
 
 func (UnimplementedSettingsServiceHandler) ExportAuditEvents(context.Context, *connect.Request[v1.ExportAuditEventsRequest], *connect.ServerStream[v1.ExportAuditEventsChunk]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ExportAuditEvents is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) GetSessionPolicy(context.Context, *connect.Request[v1.GetSessionPolicyRequest]) (*connect.Response[v1.SessionPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.GetSessionPolicy is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetSessionPolicy(context.Context, *connect.Request[v1.SessionPolicy]) (*connect.Response[v1.SessionPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetSessionPolicy is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

@@ -33,7 +33,7 @@ func TestApplySessionsAndTOTP(t *testing.T) {
 	dir := t.TempDir()
 	local := openTestDB(t, filepath.Join(dir, "panel.db"))
 	mustExec(t, local, `INSERT INTO users (id, username, password_hash, created_at, totp_last_step) VALUES (1, 'admin', 'old', 0, 500), (2, 'ops', 'same', 0, 0)`)
-	mustExec(t, local, `INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ('s1', 1, 0, 9999999999), ('s2', 2, 0, 9999999999)`)
+	mustExec(t, local, `INSERT INTO sessions (token_hash, user_id, created_at, expires_at, id) VALUES ('s1', 1, 0, 9999999999, 'i1'), ('s2', 2, 0, 9999999999, 'i2')`)
 
 	primary := openTestDB(t, filepath.Join(t.TempDir(), "primary.db"))
 	mustExec(t, primary, `INSERT INTO users (id, username, password_hash, created_at, totp_last_step) VALUES (1, 'admin', 'new', 0, 400), (2, 'ops', 'same', 0, 0)`)

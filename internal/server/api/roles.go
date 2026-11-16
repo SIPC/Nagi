@@ -330,19 +330,24 @@ func (s *settingsService) ListSessions(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, err
 	}
-	current := auth.HashToken(auth.SessionToken(req.Header()))
+	current := auth.CurrentUser(ctx).SessionID
 	out := &nagiv1.ListSessionsResponse{}
 	for _, r := range rows {
-		out.Sessions = append(out.Sessions, &nagiv1.LoginSession{
-			Id: r.TokenHash[:sessionIDLen], Ip: r.Ip, Current: r.TokenHash == current,
+		s := &nagiv1.LoginSession{
+			Id: r.ID[:min(sessionIDLen, len(r.ID))], Ip: r.Ip, Current: r.ID == current,
 			CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0)), ExpiresAt: timestamppb.New(time.Unix(r.ExpiresAt, 0)),
-		})
+			Agent: auth.ParseAgent(r.UserAgent).String(), LastIp: r.LastIp,
+		}
+		if r.LastSeen > 0 {
+			s.LastSeen = timestamppb.New(time.Unix(r.LastSeen, 0))
+		}
+		out.Sessions = append(out.Sessions, s)
 	}
 	return connect.NewResponse(out), nil
 }
 
 func (s *settingsService) RevokeSession(ctx context.Context, req *connect.Request[nagiv1.RevokeSessionRequest]) (*connect.Response[nagiv1.RevokeSessionResponse], error) {
-	n, err := s.Q.DeleteUserSession(ctx, store.DeleteUserSessionParams{UserID: auth.CurrentUser(ctx).ID, Substr: req.Msg.GetId()})
+	n, err := s.Q.DeleteUserSessionByPrefix(ctx, auth.CurrentUser(ctx).ID, req.Msg.GetId())
 	if err != nil {
 		return nil, err
 	}
