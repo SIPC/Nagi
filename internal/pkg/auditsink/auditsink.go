@@ -105,23 +105,50 @@ func SendSyslog(ctx context.Context, sk Config, lines [][]byte) error {
 	return err
 }
 
-// Send 把若干行发到目标。S3 每批一个对象，键带上 first（批里第一条的序号）免得重名。
-func Send(ctx context.Context, client *http.Client, sk Config, first int64, lines [][]byte) error {
+// Send 把若干行发到目标。S3 每批一个对象，键见 ObjectKey。scope 是 PanelScope 或 NodeScope(节点 ID)。
+func Send(ctx context.Context, client *http.Client, sk Config, scope string, first int64, lines [][]byte) error {
 	switch sk.Type {
 	case "http":
 		return PostHTTP(ctx, client, sk, lines)
 	case "syslog":
 		return SendSyslog(ctx, sk, lines)
 	case "s3":
-		key := strings.Trim(sk.Prefix, "/")
-		if key != "" {
-			key += "/"
-		}
-		now := time.Now().UTC()
-		key += fmt.Sprintf("%s/%s-%d.jsonl", now.Format("2006/01/02"), now.Format("15"), first)
-		return S3Put(ctx, client, sk, key, bytes.Join(lines, []byte("\n")), "application/x-ndjson")
+		return S3Put(ctx, client, sk, ObjectKey(sk.Prefix, scope, first, time.Now()), bytes.Join(lines, []byte("\n")), "application/x-ndjson")
 	}
 	return fmt.Errorf("unknown sink type %q", sk.Type)
+}
+
+// PanelScope 是面板自己的记录在 S3 里的目录。
+const PanelScope = "panel"
+
+// NodeScope 是节点本地审计在 S3 里的目录：node/<节点 ID>。面板和各节点的键分开，
+// 同一小时、序号相同的批次不会互相覆盖（见 docs/audit.md#外送）。ID 里只留字母、数字、- 和 _，不能借它跳到别的目录。
+func NodeScope(nodeID string) string {
+	id := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			return r
+		}
+		return -1
+	}, nodeID)
+	if id == "" {
+		id = "unknown"
+	}
+	return "node/" + id
+}
+
+// ObjectKey 是一批记录的对象键：<前缀>/<scope>/<年>/<月>/<日>/<时>-<first>.jsonl，first 是批里第一条的序号。
+func ObjectKey(prefix, scope string, first int64, now time.Time) string {
+	now = now.UTC()
+	return ScopedKey(prefix, scope, fmt.Sprintf("%s/%s-%d.jsonl", now.Format("2006/01/02"), now.Format("15"), first))
+}
+
+// ScopedKey 拼出 <前缀>/<scope>/<name>。
+func ScopedKey(prefix, scope, name string) string {
+	key := strings.Trim(prefix, "/")
+	if key != "" {
+		key += "/"
+	}
+	return key + scope + "/" + name
 }
 
 // S3Put 用 SigV4 签名 PUT 一个对象。

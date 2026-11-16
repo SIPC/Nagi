@@ -148,7 +148,7 @@ func (s *Shipper) ShipOnce(ctx context.Context) {
 			if len(lines) == 0 {
 				break
 			}
-			if err := auditsink.Send(ctx, s.client, sk, first, s.decorate(lines)); err != nil {
+			if err := auditsink.Send(ctx, s.client, sk, auditsink.NodeScope(s.nodeID()), first, s.decorate(lines)); err != nil {
 				s.mu.Lock()
 				was := s.failing[sk.ID]
 				s.failing[sk.ID] = err.Error()
@@ -173,14 +173,18 @@ func (s *Shipper) ShipOnce(ctx context.Context) {
 	}
 }
 
+func (s *Shipper) nodeID() string {
+	if s.NodeID != nil {
+		return s.NodeID()
+	}
+	return ""
+}
+
 // decorate 给每一行加上来源（source: node）和节点，接收端能和面板的记录分开。
 func (s *Shipper) decorate(lines [][]byte) [][]byte {
-	name, id := "", ""
+	name, id := "", s.nodeID()
 	if s.Node != nil {
 		name = s.Node()
-	}
-	if s.NodeID != nil {
-		id = s.NodeID()
 	}
 	out := make([][]byte, 0, len(lines))
 	for _, l := range lines {

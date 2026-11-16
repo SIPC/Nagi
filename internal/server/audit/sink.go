@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -301,12 +300,7 @@ func (s *Shipper) deliver(ctx context.Context, sk SinkConfig, events []Event, li
 		if len(events) > 0 {
 			first = events[0].ID
 		}
-		key := strings.Trim(sk.Prefix, "/")
-		if key != "" {
-			key += "/"
-		}
-		now := time.Now().UTC()
-		key += fmt.Sprintf("%s/%s-%d.jsonl", now.Format("2006/01/02"), now.Format("15"), first)
+		key := auditsink.ObjectKey(sk.Prefix, auditsink.PanelScope, first, time.Now())
 		if err := auditsink.S3Put(ctx, s.client, sk, key, bytes.Join(lines, []byte("\n")), "application/x-ndjson"); err != nil {
 			return err
 		}
@@ -334,7 +328,7 @@ func (s *Shipper) TestSink(ctx context.Context, sk SinkConfig) error {
 	case "syslog":
 		return auditsink.SendSyslog(ctx, sk, [][]byte{line})
 	case "s3":
-		return auditsink.S3Put(ctx, client, sk, strings.Trim(sk.Prefix+"/nagi-test.json", "/"), line, "application/json")
+		return auditsink.S3Put(ctx, client, sk, auditsink.ScopedKey(sk.Prefix, auditsink.PanelScope, "nagi-test.json"), line, "application/json")
 	}
 	return fmt.Errorf("unknown sink type %q", sk.Type)
 }
@@ -359,11 +353,7 @@ func (s *Shipper) uploadRecording(ctx context.Context, sk SinkConfig, id string)
 		if err != nil {
 			continue
 		}
-		key := strings.Trim(sk.Prefix, "/")
-		if key != "" {
-			key += "/"
-		}
-		key += "recordings/" + id + "/" + e.Name()
+		key := auditsink.ScopedKey(sk.Prefix, auditsink.PanelScope, "recordings/"+id+"/"+e.Name())
 		if err := auditsink.S3Put(ctx, s.client, sk, key, b, "application/octet-stream"); err != nil {
 			return err
 		}
