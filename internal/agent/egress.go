@@ -50,9 +50,29 @@ type egressState struct {
 	// 或者 IPv6 链路本地地址收发，按源地址匹配的项目规则管不到它们（见 docs/agent.md#出站限制）。
 	strict []string
 	known  []netip.Addr
-	// public 是节点对外开放的端口（Caddy 的 80、443 和 TCP/UDP 转发）。发往节点本机这些端口的连接放行：
-	// 它们本来就对公网开放，容器访问自己或别的项目的域名时会连到节点自己的地址。
+	// public 是节点对外开放的端口（Caddy 实际监听的 80、443 和有上游的 TCP/UDP 转发）。发往节点本机公网地址
+	// （local 里不是私有、共享、链路本地、回环的地址）这些端口的连接放行：它们本来就对公网开放，容器访问自己或别的项目的
+	// 域名时会连到节点自己的公网地址。发往局域网 IP、mesh IP、Docker 网关的照样拦截：Caddy 转给后端时 X-Forwarded-For
+	// 写的是容器的网桥地址，按私有网段信任来源的后端（包括管理员登录地址）会把它当成内网访问。
 	public []spec.PortKey
+}
+
+// publicAddr 判断节点本机的地址是不是公网地址：不在 privateV4、privateV6 里，也不是回环、组播、未指定地址。
+func publicAddr(a netip.Addr) bool {
+	a = a.Unmap()
+	if !a.IsGlobalUnicast() || a.IsPrivate() {
+		return false
+	}
+	list := privateV4
+	if a.Is6() {
+		list = privateV6
+	}
+	for _, p := range list {
+		if netip.MustParsePrefix(p).Contains(a) {
+			return false
+		}
+	}
+	return true
 }
 
 // projectKey 是规则里用的项目短名：项目 ID 本来就是十六进制。
@@ -76,12 +96,19 @@ func buildRuleset(st egressState) string {
 	b.WriteString("table inet nagi\ndelete table inet nagi\ntable inet nagi {\n")
 	fmt.Fprintf(&b, "\tset private4 {\n\t\ttype ipv4_addr\n\t\tflags interval\n\t\telements = { %s }\n\t}\n", strings.Join(privateV4, ", "))
 	fmt.Fprintf(&b, "\tset private6 {\n\t\ttype ipv6_addr\n\t\tflags interval\n\t\telements = { %s }\n\t}\n", strings.Join(privateV6, ", "))
-	var l4, l6 []string
+	var l4, l6, pub4, pub6 []string
 	for _, a := range st.local {
 		if a.Is4() {
 			l4 = append(l4, a.String())
 		} else {
 			l6 = append(l6, a.String())
+		}
+		if publicAddr(a) {
+			if a.Is4() {
+				pub4 = append(pub4, a.String())
+			} else {
+				pub6 = append(pub6, a.String())
+			}
 		}
 	}
 	for _, fam := range []string{"4", "6"} {
@@ -184,8 +211,13 @@ func buildRuleset(st egressState) string {
 						ports = append(ports, strconv.FormatUint(uint64(p.Port), 10))
 					}
 				}
-				if len(ports) > 0 {
-					fmt.Fprintf(&b, "\t\tmeta l4proto %s th dport { %s } accept\n", proto, strings.Join(ports, ", "))
+				if len(ports) == 0 {
+					continue
+				}
+				for _, fam := range []struct{ ipk, addrs string }{{"ip", strings.Join(pub4, ", ")}, {"ip6", strings.Join(pub6, ", ")}} {
+					if fam.addrs != "" {
+						fmt.Fprintf(&b, "\t\t%s daddr { %s } meta l4proto %s th dport { %s } accept\n", fam.ipk, fam.addrs, proto, strings.Join(ports, ", "))
+					}
 				}
 			}
 		}

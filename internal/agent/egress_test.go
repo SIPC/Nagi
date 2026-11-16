@@ -97,20 +97,40 @@ func TestBuildRulesetUnknownSource(t *testing.T) {
 }
 
 // 容器连节点自己的公网地址上对外开放的端口（访问自己或别的项目的域名）放行，只在 input 链、在项目规则之前；
-// 本机的其他端口照样拦截。
+// 本机的其他端口照样拦截。N1：只放行发往公网地址的，发往局域网 IP、mesh IP、Docker 网关的照样拦截——
+// Caddy 转给后端时 X-Forwarded-For 是容器的网桥地址，按私有网段信任来源的后端会把它当成内网访问。
 func TestBuildRulesetPublicPorts(t *testing.T) {
 	st := egressState{
 		containers: []egressContainer{{project: "aaaa", name: "web", addrs: []netip.Addr{netip.MustParseAddr("172.20.0.2")}}},
 		projects:   map[string]*nagiv1.Egress{"aaaa": {Mode: "block"}},
+		local: []netip.Addr{
+			netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("172.17.0.1"), netip.MustParseAddr("100.64.0.9"),
+			netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("fd4e::1"), netip.MustParseAddr("fe80::1"),
+			netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("2001:db8::7"),
+		},
 		public: []spec.PortKey{
 			{Proto: spec.ProtoTCP, Port: 80}, {Proto: spec.ProtoTCP, Port: 443}, {Proto: spec.ProtoTCP, Port: 2222}, {Proto: spec.ProtoUDP, Port: 443},
 		},
 	}
 	r := buildRuleset(st)
 	input := r[strings.Index(r, "chain input"):]
-	for _, want := range []string{"meta l4proto tcp th dport { 80, 443, 2222 } accept", "meta l4proto udp th dport { 443 } accept"} {
+	for _, want := range []string{
+		"ip daddr { 203.0.113.7 } meta l4proto tcp th dport { 80, 443, 2222 } accept",
+		"ip6 daddr { 2001:db8::7 } meta l4proto tcp th dport { 80, 443, 2222 } accept",
+		"ip daddr { 203.0.113.7 } meta l4proto udp th dport { 443 } accept",
+	} {
 		if !strings.Contains(input, want) {
 			t.Errorf("input 链缺少 %q：\n%s", want, input)
+		}
+	}
+	for _, line := range strings.Split(input, "\n") {
+		if strings.Contains(line, "dport { 80") && !strings.Contains(line, "daddr { 203.0.113.7 }") && !strings.Contains(line, "daddr { 2001:db8::7 }") {
+			t.Errorf("放行规则必须限定公网地址：%s", line)
+		}
+		for _, private := range []string{"192.168.1.5", "172.17.0.1", "100.64.0.9", "fd4e::1", "fe80::1"} {
+			if strings.Contains(line, "accept") && strings.Contains(line, private) {
+				t.Errorf("发往私有地址 %s 的连接不应放行：%s", private, line)
+			}
 		}
 	}
 	if strings.Index(input, "th dport { 80, 443, 2222 } accept") > strings.Index(input, "@paaaa_4 ip daddr @local4 drop") {
@@ -119,5 +139,10 @@ func TestBuildRulesetPublicPorts(t *testing.T) {
 	forward := r[strings.Index(r, "chain forward"):strings.Index(r, "chain input")]
 	if strings.Contains(forward, "dport { 80, 443") {
 		t.Error("forward 链不应放行：私有网段里的其他机器不是本机")
+	}
+	// 节点没有公网地址（在 NAT 后面）：不放行任何本机端口。
+	st.local = st.local[:6]
+	if r := buildRuleset(st); strings.Contains(r, "dport { 80") {
+		t.Errorf("没有公网地址时不应有放行规则：\n%s", r)
 	}
 }

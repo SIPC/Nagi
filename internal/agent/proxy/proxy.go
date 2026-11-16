@@ -127,7 +127,7 @@ func (p *Proxy) DomainPorts() []spec.PortKey {
 	return slices.Clone(p.ports)
 }
 
-// PublicPorts 返回现在对外开放的所有端口。容器出站限制放行发往节点本机这些端口的连接：
+// PublicPorts 返回 Caddy 现在实际监听着的对外端口。容器出站限制放行发往节点本机公网地址这些端口的连接：
 // 它们本来就对公网开放，容器访问自己或别的项目的域名时会连到节点自己的地址。
 func (p *Proxy) PublicPorts() []spec.PortKey {
 	p.mu.Lock()
@@ -141,7 +141,8 @@ func publicPorts(routes []Route) []spec.PortKey {
 		out = append(out, spec.PortKey{Proto: spec.ProtoUDP, Port: 443})
 	}
 	for _, r := range routes {
-		if (r.Protocol == spec.ProtoTCP || r.Protocol == spec.ProtoUDP) && r.Published > 0 {
+		// 没有上游的 TCP/UDP 规则 Caddy 不监听（见 build）：放行它们的话，之后占用这个端口的别的程序也能被容器连到。
+		if (r.Protocol == spec.ProtoTCP || r.Protocol == spec.ProtoUDP) && r.Published > 0 && len(r.Upstreams) > 0 {
 			if k := (spec.PortKey{Proto: r.Protocol, Port: r.Published}); !slices.Contains(out, k) {
 				out = append(out, k)
 			}
