@@ -8,9 +8,15 @@ import (
 )
 
 // 录制输入（见 docs/audit.md#终端与命令录制）：浏览器发来的按键记成 asciicast 的 "i" 事件。
-// 面板看不到终端的回显状态（容器终端的 pty 在容器里），所以按回显判断：敲的字符紧接着出现在输出里，
-// 说明终端在回显，照录；echoWait 内没有回显（输密码时），只记「未回显的 N 个字符」（一串 •），不留内容。
-// 回车、退格、方向键、Ctrl 组合这类控制键不含内容，照录成名称。
+// 面板看不到终端的回显状态（容器终端的 pty 在容器里），所以按回显判断，而且判断得很严：宁可把有回显的
+// 当成没有回显（只记个数），也不能把密码当成回显录下来。
+//   - 回车之前：敲的字符要由紧接着的输出原样开头（去掉颜色等控制序列以后）才算回显。
+//     中间有别的输出、或者输出开头对不上，就算没有回显。
+//   - 按回车时：还在等回显的字符合成一整串，要由回车之后的输出原样开头、并且紧跟着换行（回车本身的回显）
+//     才算回显（粘贴一条命令再回车就是这样）。输密码时回显关着，回车后的输出是程序自己打印的换行、
+//     「Sorry, try again」或新的提示符，开头对不上，整串记成未回显。
+//   - 超时（回车前 echoWait、回车后 enterWait）还没有输出，也算没有回显。
+// 没有回显的只记「未回显的 N 个字符」（一串 •），不留内容。回车、退格、方向键、Ctrl 组合这类控制键照录成名称。
 
 const (
 	echoWait = 2 * time.Second
@@ -26,6 +32,10 @@ type typedRun struct {
 	text     string
 	at       time.Time
 	deadline time.Time
+	// entered：按过回车的一整串，要在回车后的输出开头、并且紧跟着换行才算回显。
+	entered bool
+	// needNewline：这一串已经在上一段输出的末尾对上了，还要下一段输出以换行开头。
+	needNewline bool
 }
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[@-Z\\-_]`)
@@ -118,9 +128,7 @@ func (rec *Recorder) Input(b []byte) {
 	for i, tok := range tokens {
 		if !printable[i] {
 			if tok == "⏎" {
-				for j := range rec.typed {
-					rec.typed[j].deadline = minTime(rec.typed[j].deadline, now.Add(enterWait))
-				}
+				rec.enterLocked(now)
 			}
 			rec.inputEventAt(now, tok)
 			continue
@@ -129,36 +137,106 @@ func (rec *Recorder) Input(b []byte) {
 	}
 }
 
-// matchEchoLocked 在记下一段输出前调用：等着回显的字符出现在输出里，就照录。
+// enterLocked 在按回车时调用：还在等回显、没按过回车的字符合成一整串（见文件开头）。
+func (rec *Recorder) enterLocked(now time.Time) {
+	var open []typedRun
+	keep := rec.typed[:0]
+	for _, t := range rec.typed {
+		if t.entered {
+			keep = append(keep, t)
+		} else {
+			open = append(open, t)
+		}
+	}
+	rec.typed = keep
+	if len(open) == 0 {
+		return
+	}
+	var b strings.Builder
+	for _, t := range open {
+		b.WriteString(t.text)
+	}
+	rec.typed = append(rec.typed, typedRun{text: truncRunes(b.String(), maxTypedRun), at: open[0].at, deadline: now.Add(enterWait), entered: true})
+}
+
+// matchEchoLocked 在记下一段输出前调用：按文件开头的规则，对上的照录，对不上的记成未回显。
 func (rec *Recorder) matchEchoLocked(out string, now time.Time) {
 	if len(rec.typed) == 0 {
 		return
 	}
 	rec.resolveStaleLocked(now)
-	plain := ansiRe.ReplaceAllString(out, "")
-	// 按顺序找：前面没回显的（正在输密码）不挡住后面的回显。
-	pos := 0
-	keep := rec.typed[:0]
-	for _, t := range rec.typed {
-		i := strings.Index(plain[pos:], t.text)
-		if i < 0 {
-			keep = append(keep, t)
-			continue
-		}
-		pos += i + len(t.text)
-		rec.inputEventAt(t.at, t.text)
+	rest := ansiRe.ReplaceAllString(out, "")
+	if rest == "" {
+		// 只有光标移动、颜色这类控制序列：还没有回显，接着等。
+		return
 	}
-	rec.typed = keep
+	for len(rec.typed) > 0 && rest != "" {
+		t := &rec.typed[0]
+		switch {
+		case t.needNewline:
+			if !startsWithNewline(rest) {
+				rec.hideLocked(rec.typed[:1])
+				rec.typed = rec.typed[1:]
+				continue
+			}
+			rec.inputEventAt(t.at, t.text)
+			rec.typed = rec.typed[1:]
+		case t.entered:
+			after, ok := strings.CutPrefix(rest, t.text)
+			switch {
+			case !ok:
+				rec.hideLocked(rec.typed[:1])
+				rec.typed = rec.typed[1:]
+			case after == "":
+				// 换行可能在下一段输出里。
+				t.needNewline = true
+				return
+			case startsWithNewline(after):
+				rec.inputEventAt(t.at, t.text)
+				rec.typed = rec.typed[1:]
+				rest = after
+			default:
+				rec.hideLocked(rec.typed[:1])
+				rec.typed = rec.typed[1:]
+			}
+		default:
+			if after, ok := strings.CutPrefix(rest, t.text); ok {
+				rec.inputEventAt(t.at, t.text)
+				rec.typed = rec.typed[1:]
+				rest = after
+				continue
+			}
+			if strings.HasPrefix(t.text, rest) {
+				// 回显被拆成了几段输出（粘贴的长命令）：先录对上的部分，剩下的接着等。
+				rec.inputEventAt(t.at, rest)
+				t.text = t.text[len(rest):]
+				return
+			}
+			// 输出开头对不上：这个和后面还在等的都算没有回显。
+			rec.hideLocked(rec.typed)
+			rec.typed = nil
+			return
+		}
+	}
+}
+
+func startsWithNewline(s string) bool {
+	return strings.HasPrefix(s, "\r") || strings.HasPrefix(s, "\n")
 }
 
 // resolveStaleLocked 把等回显超时的字符记成未回显。
 func (rec *Recorder) resolveStaleLocked(now time.Time) {
-	n := 0
-	for n < len(rec.typed) && now.After(rec.typed[n].deadline) {
-		n++
+	keep := rec.typed[:0]
+	var stale []typedRun
+	for _, t := range rec.typed {
+		if now.After(t.deadline) {
+			stale = append(stale, t)
+		} else {
+			keep = append(keep, t)
+		}
 	}
-	rec.hideLocked(rec.typed[:n])
-	rec.typed = rec.typed[n:]
+	rec.hideLocked(stale)
+	rec.typed = keep
 }
 
 func (rec *Recorder) hideAllLocked() {
@@ -180,13 +258,6 @@ func (rec *Recorder) hideLocked(runs []typedRun) {
 
 func (rec *Recorder) inputEventAt(at time.Time, data string) {
 	rec.eventAt(at, "i", data)
-}
-
-func minTime(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-	return a
 }
 
 func truncRunes(s string, n int) string {

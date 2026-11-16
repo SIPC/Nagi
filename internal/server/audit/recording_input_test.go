@@ -116,3 +116,47 @@ func TestRecordingInputAfterEnter(t *testing.T) {
 		t.Fatalf("密码应记成未回显，后面的 q 照录：%q", got)
 	}
 }
+
+// R1：一个个敲的密码，回车后的输出里有同样的字母（新的提示符、「Sorry, try again」、命令输出），
+// 也不能被当成回显录下来。
+func TestRecordingInputPasswordNotLeaked(t *testing.T) {
+	cases := []struct{ password, after string }{
+		{"hunter2", "\r\nroot@hunter-web2:~# "},
+		{"hunter2", "\r\nSorry, try again.\r\n[sudo] password for root: "},
+		{"root", "root@host:~# "},
+		{"secret", "secret\x1b[0m"},
+		{"pass", ""},
+	}
+	for _, c := range cases {
+		r := testRecordings(t)
+		rec := r.Start(context.Background(), 80, 24)
+		rec.Output([]byte("[sudo] password for root: "))
+		for _, ch := range c.password {
+			rec.Input([]byte(string(ch)))
+		}
+		rec.Input([]byte("\r"))
+		if c.after != "" {
+			rec.Output([]byte(c.after))
+		}
+		rec.Output([]byte("more output with " + c.password + " in it\r\n"))
+		cast := readAll(t, r, rec.Close().ID)
+		for _, ev := range inputEvents(t, cast) {
+			if ev != "⏎" && strings.Trim(ev, "•") != "" {
+				t.Fatalf("%q 后跟 %q：密码被录下来了：%q", c.password, c.after, inputEvents(t, cast))
+			}
+		}
+	}
+}
+
+// 粘贴的命令和回车分两段回显（命令一段，换行一段）：照录。
+func TestRecordingInputPasteSplitNewline(t *testing.T) {
+	r := testRecordings(t)
+	rec := r.Start(context.Background(), 80, 24)
+	rec.Input([]byte("uptime\r"))
+	rec.Output([]byte("uptime"))
+	rec.Output([]byte("\r\n 12:00:00 up 1 day\r\n"))
+	got := inputEvents(t, readAll(t, r, rec.Close().ID))
+	if strings.Join(got, "|") != "⏎|uptime" && strings.Join(got, "|") != "uptime|⏎" {
+		t.Fatalf("应照录：%q", got)
+	}
+}
