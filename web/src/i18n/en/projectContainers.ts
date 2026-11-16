@@ -1,7 +1,7 @@
 import type zh from "../zh/projectContainers";
 
 export default {
-  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View activity", empty: "No events" },
+  events: { title: "Recent events", files: (n) => (n === 1 ? "1 file" : `${n} files`), times: (n) => (n === 1 ? "once" : `${n} times`), viewAll: "View audit log", empty: "No events" },
   terminal: { connected: "Connected" },
   imageTip: {
     label: "Image update available",

@@ -8,13 +8,13 @@ export default {
   },
   password: {
     label: "登录密码",
-    description: "修改后其他设备将退出登录",
+    description: "更改后其他设备将退出登录",
     help: "忘记密码时，在面板所在机器上执行 nagi reset password。",
     current: "当前密码",
     newPassword: "新密码",
     hint: "至少 8 个字符",
-    changed: "已修改密码，其他设备已退出登录",
-    submit: "修改密码",
+    changed: "已更改密码，其他设备已退出登录",
+    submit: "更改密码",
   },
   totp: {
     label: "两步验证",

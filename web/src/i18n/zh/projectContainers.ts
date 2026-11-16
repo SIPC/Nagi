@@ -1,6 +1,6 @@
 // 项目概览的容器列表、批量部署、添加容器，以及容器页（概览、配置、版本、日志）。
 export default {
-  events: { title: "最近事件", files: (n: number) => `${n} 个文件`, times: (n: number) => `${n} 次`, viewAll: "查看活动", empty: "暂无事件" },
+  events: { title: "最近事件", files: (n: number) => `${n} 个文件`, times: (n: number) => `${n} 次`, viewAll: "查看审计", empty: "暂无事件" },
   terminal: { connected: "已连接" },
   imageTip: {
     label: "镜像可更新",
@@ -147,9 +147,9 @@ export default {
     empty: "暂无日志",
   },
   config: {
-    notice: "修改保存为草稿，部署后生效。",
+    notice: "改动保存为草稿，部署后生效。",
     portsLink: "在「网络」标签页配置端口映射",
-    composeHelp: "ports 仅在首次出现时导入为端口映射；已有的端口映射和域名在「网络」标签页编辑，此处修改 ports 不生效。",
+    composeHelp: "ports 仅在首次出现时导入为端口映射；已有的端口映射和域名在「网络」标签页编辑，此处编辑 ports 不生效。",
     git: "Git 仓库",
     gitHelp: "SSH 地址使用部署密钥拉取；HTTPS 仅支持公开仓库。留空则由上传的文件提供 data/ 目录。",
     ref: "分支或标签",
@@ -167,9 +167,9 @@ export default {
     serviceEnv: (service: string) => `环境变量：${service}`,
     serviceEnvHelp: "仅注入此容器。",
     savedDraft: "已保存为草稿",
-    noChanges: "和当前版本相同，没有要部署的修改",
+    noChanges: "和当前版本相同，没有要部署的改动",
     saveAndDeploy: "保存并部署",
-    diffTitle: (v: string) => (v ? `相对 v${v} 的改动` : "未部署的修改"),
+    diffTitle: (v: string) => (v ? `相对 v${v} 的改动` : "未部署的改动"),
     groupImage: "镜像和启动",
     modeForm: "表单",
     modeCompose: "Compose",
@@ -177,9 +177,9 @@ export default {
     groupStorage: "目录和端口",
     groupSource: "文件来源和依赖",
     groupLimits: "资源限制和健康检查",
-    unsaved: "有未保存的修改",
+    unsaved: "有未保存的改动",
     diffNone: "草稿和当前版本没有差异。",
-    discardConfirm: (name: string) => `放弃 ${name} 的草稿？未部署的修改将丢失。`,
+    discardConfirm: (name: string) => `放弃 ${name} 的草稿？未部署的改动将丢失。`,
     discardDraft: "放弃草稿",
     saveDraft: "保存草稿",
   },

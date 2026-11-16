@@ -29,7 +29,7 @@ export function useRun(projectId: string) {
       setResult(r);
       if (inView(boxRef.current)) return;
       if (r.success) toast.success(t.common.feedback.done);
-      // 失败的详情记在活动里（只有管理员能看）。
+      // 失败的详情记在审计里（只有管理员能看）。
       else toast.error(r.error || t.common.feedback.failed, isAdmin ? { action: { label: t.common.feedback.viewActivity, onClick: () => navigate({ to: "/audit", search: { failed: true } }) } } : undefined);
     };
     try {

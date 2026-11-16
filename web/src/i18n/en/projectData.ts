@@ -103,7 +103,7 @@ export default {
     saved: "Saved and sent to the node",
   },
   snapshots: {
-    scheduleLink: "Settings",
+    scheduleLink: "Edit",
     limitShort: (n) => `, keeps ${n}`,
     today: (time) => `Today ${time}`,
     viaVersion: "Used by rollback",

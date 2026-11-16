@@ -2,7 +2,7 @@
 export default {
   files: {
     storage: "存储",
-    description: "容器正在使用这些文件，修改会立即生效。",
+    description: "容器正在使用这些文件，改动会立即生效。",
     snapshotMode: "恢复只覆盖选中的文件或目录。",
     source: "来源",
     live: "当前文件",
@@ -60,7 +60,7 @@ export default {
     addLabel: "容器内路径",
     addPlaceholder: "/data",
     savedDraft: "已保存为草稿，部署后生效",
-    noChanges: "和当前版本相同，没有要部署的修改",
+    noChanges: "和当前版本相同，没有要部署的改动",
   },
   notDeployed: "容器未部署",
   deploy: "部署",
@@ -102,7 +102,7 @@ export default {
     saved: "已保存并下发到节点",
   },
   snapshots: {
-    scheduleLink: "设置",
+    scheduleLink: "编辑",
     limitShort: (n: number) => `，保留 ${n} 份`,
     today: (time: string) => `今天 ${time}`,
     viaVersion: "随版本回滚",

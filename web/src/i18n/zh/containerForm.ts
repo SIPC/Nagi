@@ -25,8 +25,8 @@ export default {
   moreImage: (deps: boolean) => `更多设置：启动命令、目录、${deps ? "依赖、" : ""}资源限制、健康检查`,
   moreCompose: (deps: boolean): string => (deps ? "更多设置：容器目录、依赖" : "更多设置：容器目录"),
   // 后面接着项目内网的说明，句末不加标点。
-  nameHelpImage: "小写字母、数字和 -，创建后不可修改。留空时取镜像名",
-  groupNameHelp: "小写字母、数字和 -，创建后不可修改。容器组内的容器名称为「容器.容器组名」。",
+  nameHelpImage: "小写字母、数字和 -，创建后不可更改。留空时取镜像名",
+  groupNameHelp: "小写字母、数字和 -，创建后不可更改。容器组内的容器名称为「容器.容器组名」。",
   memory: "内存上限（MB）",
   noLimitHint: "不限制",
   cpus: "CPU 上限（核）",

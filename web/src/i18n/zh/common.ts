@@ -49,7 +49,7 @@ export default {
     copyFailed: "无法复制，手动选中后复制",
     done: "已完成",
     // 接口没有返回原因时的兜底。
-    failed: "面板未返回原因，可在「活动」中查看",
+    failed: "面板未返回原因，可在「审计」中查看",
     viewActivity: "查看审计",
     // 操作输出里需要注意的几行合并成一条提示。
     notes: (n: number) => `需要注意 ${n} 项`,
@@ -61,7 +61,7 @@ export default {
     unreachable: "无法连接面板，检查网络或面板是否在运行",
   },
   unsaved: {
-    confirm: "离开此页？未保存的修改将丢失。",
+    confirm: "离开此页？未保存的改动将丢失。",
     leave: "离开",
   },
   time: {
@@ -75,7 +75,7 @@ export default {
     days: (n: number) => `${n} 天`,
   },
   readOnly: {
-    standby: "备用面板只能查看，修改请到主面板",
+    standby: "备用面板只能查看，编辑请到主面板",
     role: "当前角色只能查看",
   },
   language: "语言",

@@ -50,7 +50,7 @@ export default {
     copied: "Copied",
     copyFailed: "Couldn't copy. Select the text and copy it manually",
     done: "Done",
-    failed: "The panel returned no reason. Check Activity for details",
+    failed: "The panel returned no reason. Check Audit for details",
     viewActivity: "View audit log",
     notes: (n) => `${n} items need attention`,
     showNotes: "Show",
