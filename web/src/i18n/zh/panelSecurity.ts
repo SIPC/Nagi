@@ -57,6 +57,7 @@ export default {
     failing: "发送失败",
     waiting: "等待发送",
     sentAgo: (ago: string) => `${ago}发送`,
+    elevate: "编辑或测试日志外送前需验证身份。",
   },
   chain: {
     title: "哈希链",

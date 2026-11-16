@@ -28,6 +28,16 @@ export function PanelSecurityCard() {
   );
 }
 
+// withElevation 调用接口；面板要求先验证身份时弹框，验证后重试一次。
+async function withElevation<T>(call: () => Promise<T>, description: string): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (!isElevationRequired(err) || !(await requireElevation(description))) throw err;
+    return call();
+  }
+}
+
 // withOption：设置里存的值不在选项里时（例如以后改过选项）也显示出来。
 function withOption(options: number[], v: number) {
   return options.includes(v) ? options : [...options, v].sort((a, b) => a - b);
@@ -41,7 +51,8 @@ function AuditSections() {
       const cur = settings.data!;
       // 关闭录制要先验证身份（见 docs/audit.md#终端与命令录制）。
       if (patch.recording === false && cur.recording && !(await requireElevation(t.panelSecurity.recording.elevate, { suggestTotp: false }))) return cur;
-      return settingsClient.setAuditSettings({ ...cur, ...patch });
+      // 修改外送目标要验证身份（见 docs/audit.md#外送）：面板要求时再问。
+      return withElevation(() => settingsClient.setAuditSettings({ ...cur, ...patch }), t.panelSecurity.sinks.elevate);
     },
     onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
   });
@@ -72,7 +83,7 @@ function AuditSections() {
     <>
       {/* 第一个区块的标题是子页名；终端录制和审计记录保留是这里的两组设置，说明都在问号里。保存出错显示在这一块里。 */}
       <Section title={heading}>
-        {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+        {save.error && !save.variables?.sinks && <Alert>{errorMessage(save.error)}</Alert>}
         <SettingRows>
           <SettingSwitch label={r.title} help={<HelpParts parts={[r.description, r.help]} />} on={s.recording} busy={save.isPending && save.variables?.recording !== undefined} onChange={(v) => save.mutate({ recording: v })} />
           <SettingRow label={ret.normalRow} help={<HelpParts parts={[ret.description, ret.help]} />}>
@@ -122,7 +133,7 @@ function SinkSection({ settings, onSave }: { settings: AuditSettings; onSave: (s
   };
   const test = async (k: AuditSink) => {
     try {
-      await settingsClient.testAuditSink(k);
+      await withElevation(() => settingsClient.testAuditSink(k), m.elevate);
       toast.success(m.tested);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -200,6 +211,8 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"" | "save" | "test">("");
   const set = (patch: Partial<AuditSink>) => setK((cur) => ({ ...cur, ...patch }) as AuditSink);
+  // 类型和地址都没变时，留空的密钥和请求头的值沿用已保存的；变了要重新填写（见 docs/audit.md#外送）。
+  const keep = !!sink && k.type === sink.type && k.url === sink.url && k.address === sink.address && k.endpoint === sink.endpoint && k.bucket === sink.bucket && k.region === sink.region;
   // 请求头一行一个「名称: 值」；值留空表示沿用已保存的。
   const build = () => {
     const headers = headerText
@@ -217,7 +230,8 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
     setError("");
     try {
       if (what === "test") {
-        await settingsClient.testAuditSink(build());
+        const k = build();
+        await withElevation(() => settingsClient.testAuditSink(k), m.elevate);
         toast.success(m.tested);
       } else {
         await onSave(build());
@@ -252,7 +266,7 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
               <Field label={m.url} htmlFor="sink-url" hint={m.urlHint}>
                 <Input id="sink-url" value={k.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://logs.example.com/ingest" required />
               </Field>
-              <Field label={m.headers} htmlFor="sink-headers" hint={sink ? m.headersKeep : m.headersHint}>
+              <Field label={m.headers} htmlFor="sink-headers" hint={keep ? m.headersKeep : m.headersHint}>
                 <Textarea id="sink-headers" rows={3} className="font-mono text-[13px]" value={headerText} onChange={(e) => setHeaderText(e.target.value)} placeholder={m.headersPlaceholder} />
               </Field>
             </>
@@ -284,11 +298,11 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
                 <Input id="sink-prefix" value={k.prefix} onChange={(e) => set({ prefix: e.target.value })} placeholder="nagi/audit" />
               </Field>
               <FormRow>
-                <Field label={m.accessKey} htmlFor="sink-ak" hint={sink?.hasSecret ? m.secretKeep : undefined}>
-                  <Input id="sink-ak" value={k.accessKey} onChange={(e) => set({ accessKey: e.target.value })} required={!sink?.hasSecret} autoComplete="off" />
+                <Field label={m.accessKey} htmlFor="sink-ak" hint={keep && sink?.hasSecret ? m.secretKeep : undefined}>
+                  <Input id="sink-ak" value={k.accessKey} onChange={(e) => set({ accessKey: e.target.value })} required={!(keep && sink?.hasSecret)} autoComplete="off" />
                 </Field>
-                <Field label={m.secretKey} htmlFor="sink-sk" hint={sink?.hasSecret ? m.secretKeep : undefined}>
-                  <Input id="sink-sk" type="password" value={k.secretKey} onChange={(e) => set({ secretKey: e.target.value })} required={!sink?.hasSecret} autoComplete="new-password" />
+                <Field label={m.secretKey} htmlFor="sink-sk" hint={keep && sink?.hasSecret ? m.secretKeep : undefined}>
+                  <Input id="sink-sk" type="password" value={k.secretKey} onChange={(e) => set({ secretKey: e.target.value })} required={!(keep && sink?.hasSecret)} autoComplete="new-password" />
                 </Field>
               </FormRow>
               <Check checked={k.recordings} onChange={(v) => set({ recordings: v })} help={m.recordingsHelp}>

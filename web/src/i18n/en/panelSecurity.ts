@@ -58,6 +58,7 @@ export default {
     failing: "Failing",
     waiting: "Waiting",
     sentAgo: (ago) => `Sent ${ago}`,
+    elevate: "Verify your identity before editing or testing log forwarding.",
   },
   chain: {
     title: "Hash chain",

@@ -118,7 +118,8 @@ func (a *API) chainStatus(ctx context.Context) *nagiv1.AuditChainStatus {
 	return c
 }
 
-// sinkFrom 把界面的目标转成配置。密钥和请求头的值留空时沿用已保存的。
+// sinkFrom 把界面的目标转成配置。密钥和请求头的值留空时沿用已保存的，但目标的类型或地址变了时不沿用：
+// 否则偷到管理员会话的人把已有目标改到自己的地址，面板就把保存的令牌发过去。
 func sinkFrom(p *nagiv1.AuditSink, old map[string]audit.SinkConfig) (audit.SinkConfig, error) {
 	sk := audit.SinkConfig{
 		ID: p.GetId(), Name: strings.TrimSpace(p.GetName()), Type: p.GetType(), Address: strings.TrimSpace(p.GetAddress()), CA: strings.TrimSpace(p.GetCa()),
@@ -130,7 +131,10 @@ func sinkFrom(p *nagiv1.AuditSink, old map[string]audit.SinkConfig) (audit.SinkC
 		id, _ := auth.RandomToken()
 		sk.ID = id[:12]
 	}
-	prev := old[sk.ID]
+	prev, ok := old[sk.ID]
+	if ok && !sameDestination(prev, sk) {
+		prev = audit.SinkConfig{}
+	}
 	if sk.SecretKey == "" {
 		sk.SecretKey = prev.SecretKey
 	}
@@ -146,7 +150,9 @@ func sinkFrom(p *nagiv1.AuditSink, old map[string]audit.SinkConfig) (audit.SinkC
 			}
 			v := h.GetValue()
 			if v == "" {
-				v = prev.Headers[name]
+				if v = prev.Headers[name]; v == "" {
+					return sk, i18n.Errorf("请填写请求头 %s 的值（接收地址变了时要重新填写）", name)
+				}
 			}
 			sk.Headers[name] = v
 		}
@@ -173,7 +179,12 @@ func sinkFrom(p *nagiv1.AuditSink, old map[string]audit.SinkConfig) (audit.SinkC
 	return sk, nil
 }
 
-// SetAuditSettings 保存审计设置。关闭录制要先做高权限确认；修改外送目标是安全事件：先把这条记录发往原来的目标，再生效。
+// sameDestination 判断两个配置是不是发往同一个地方：类型和地址都没变。
+func sameDestination(a, b audit.SinkConfig) bool {
+	return a.Type == b.Type && a.URL == b.URL && a.Address == b.Address && a.Endpoint == b.Endpoint && a.Bucket == b.Bucket && a.Region == b.Region
+}
+
+// SetAuditSettings 保存审计设置。关闭录制、修改外送目标要先做高权限确认；修改外送目标是安全事件：先把这条记录发往原来的目标，再生效。
 func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Request[nagiv1.AuditSettings]) (*connect.Response[nagiv1.AuditSettings], error) {
 	m := req.Msg
 	was := s.RecordingEnabled(ctx)
@@ -199,7 +210,12 @@ func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Req
 		}
 		sinks = append(sinks, sk)
 	}
-	if len(sinks)+len(oldSinks) > 0 && !reflect.DeepEqual(sinks, oldSinks) {
+	sinksChanged := len(sinks)+len(oldSinks) > 0 && !reflect.DeepEqual(sinks, oldSinks)
+	// 外送目标决定审计记录发到哪里：偷到会话、做不了高权限确认的人不能改（见 docs/audit.md#外送）。
+	if sinksChanged && !auth.CurrentUser(ctx).Elevated() {
+		return nil, elevationError()
+	}
+	if sinksChanged {
 		// 先记一条安全事件、发往原来的目标，再换成新的：攻击者拿到管理员后改外送，改之前的记录已经送出去了。
 		var names []string
 		for _, sk := range sinks {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
@@ -29,6 +30,7 @@ type auditHarness struct {
 	srv      *httptest.Server
 	settings nagiv1connect.SettingsServiceClient
 	authc    nagiv1connect.AuthServiceClient
+	db       *sql.DB
 }
 
 func newAuditHarness(t *testing.T) *auditHarness {
@@ -57,7 +59,7 @@ func newAuditHarness(t *testing.T) *auditHarness {
 	a.Mount(mux)
 	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
-	return &auditHarness{t: t, a: a, srv: srv}
+	return &auditHarness{t: t, a: a, srv: srv, db: d}
 }
 
 // client 返回带着 cookie 的客户端，模拟一个浏览器。
