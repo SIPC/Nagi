@@ -446,7 +446,8 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
               <span className="font-mono text-foreground">{d?.current || status.data?.version || "—"}</span>
             </span>
             {d?.unsupported && <span>{d.unsupported}</span>}
-            {!d && q.error && <span>{errorMessage(q.error)}</span>}
+            {/* 检查失败：红字写原因，下面的「检查更新」兼作重试。 */}
+            {!d && q.error && <span className="text-destructive">{errorMessage(q.error)}</span>}
             {state && <span>{state}</span>}
             {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
             {canUpdate && scopeHint && (

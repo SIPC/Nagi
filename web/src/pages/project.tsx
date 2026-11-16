@@ -43,7 +43,8 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
     );
   }
   const p = project.data.project;
-  if (!p) return null;
+  // 面板没有返回项目（例如刚被删除）：写明原因，不留空白。
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   return <ProjectBody p={p} services={project.data.status?.services ?? []} imageUpdates={project.data.status?.imageUpdates ?? []} tab={tab} onTab={onTab} />;
 }
 
@@ -160,7 +161,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
   if (project.isPending) return <Loading />;
   if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
-  if (!p) return null;
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   const parts = location.pathname.split("/").filter(Boolean);
   const search = location.search as { tab?: ProjectTab; view?: DetailView };
   const container = parts[2] === "c" ? decodeURIComponent(parts[3] ?? "") : "";
@@ -223,7 +224,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
   if (project.isPending) return <Loading />;
   if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
-  if (!p) return null;
+  if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   const services = project.data.status?.services ?? [];
   const imageUpdates = project.data.status?.imageUpdates ?? [];
   const section = (t: ProjectTab) => !container && !adding && tab === t;

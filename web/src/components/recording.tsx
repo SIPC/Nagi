@@ -45,6 +45,8 @@ function clock(s: number) {
 export function RecordingDialog({ id, open, onClose }: { id: string; open: boolean; onClose: () => void }) {
   const [cast, setCast] = useState<string>();
   const [error, setError] = useState<unknown>();
+  // attempt：点「重试」时加一，重新下载录制。
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
   // 验证身份通过后才打开对话框：不让两个对话框叠在一起。
   const [allowed, setAllowed] = useState(false);
@@ -77,7 +79,7 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, id]);
+  }, [open, id, attempt]);
 
   useEffect(() => {
     if (!cast || !box.current) return;
@@ -95,7 +97,7 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
     <Dialog open={open && allowed} onClose={onClose} title={m.title} description={m.description} className="max-w-[960px]">
       <div className="grid gap-4">
         {error ? (
-          <QueryError error={errorMessage(error)} />
+          <QueryError error={errorMessage(error)} onRetry={() => setAttempt((n) => n + 1)} />
         ) : !cast ? (
           <RowsSkeleton count={4} />
         ) : (

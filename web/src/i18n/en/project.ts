@@ -7,6 +7,7 @@ export default {
     settings: "Settings",
   },
   breadcrumb: "Projects",
+  notFound: "The project doesn't exist. It may have been deleted",
   nodes: (n, names) => (n === 1 ? `Node ${names}` : `Nodes ${names}`),
   noContainers: "No containers",
   rebuiltHint:

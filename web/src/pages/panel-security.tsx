@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, Skeleton, Spinner, Status, Textarea } from "@/components/ui";
 import { create } from "@bufbuild/protobuf";
 import { AuditSinkHeaderSchema, AuditSinkSchema, type AuditSettings, type AuditSink, type SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
@@ -411,11 +411,19 @@ function AdminNetworksRow() {
   const nets = useQuery({ queryKey: ["admin-networks"], queryFn: () => settingsClient.getAdminNetworks({}) });
   const [editing, setEditing] = useState(false);
   const list = nets.data?.networks ?? [];
+  // 加载中不能写「不限制」：可能其实有限制。失败时红字写原因，按钮换成重试。
+  const description = nets.isPending ? <Skeleton className="my-1 h-3 w-40" /> : nets.isError ? <span className="text-destructive">{errorMessage(nets.error)}</span> : <span className="break-all">{list.length ? t.common.list(list) : m.adminNetworksOff}</span>;
   return (
-    <SettingRow label={m.adminNetworks} help={m.adminNetworksHelp} description={<span className="break-all">{list.length ? t.common.list(list) : m.adminNetworksOff}</span>}>
-      <Button variant="outline" disabled={!nets.data} onClick={() => setEditing(true)}>
-        {m.edit}
-      </Button>
+    <SettingRow label={m.adminNetworks} help={m.adminNetworksHelp} description={description}>
+      {nets.isError ? (
+        <Button variant="outline" readOnlyOk onClick={() => nets.refetch()}>
+          {t.common.actions.retry}
+        </Button>
+      ) : (
+        <Button variant="outline" disabled={!nets.data} onClick={() => setEditing(true)}>
+          {m.edit}
+        </Button>
+      )}
       {editing && nets.data && <AdminNetworksDialog networks={list} currentIp={nets.data.currentIp} onClose={() => setEditing(false)} />}
     </SettingRow>
   );

@@ -55,7 +55,12 @@ export function PanelAccessCard() {
       </Section>
     );
   const s = q.data.settings;
-  if (!s) return null;
+  if (!s)
+    return (
+      <Section title={heading} help={help}>
+        <QueryError error={t.common.feedback.failed} onRetry={() => q.refetch()} />
+      </Section>
+    );
 
   const open = (what: Editing) => {
     setEditing(what);
