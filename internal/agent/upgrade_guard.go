@@ -13,8 +13,10 @@ import (
 
 // 升级后的自检（见 docs/control-plane.md#接口设计）：新版本试运行 version 通过，正式启动时却可能起不来（迁移节点数据出错、
 // 启动时崩溃、连不上面板）。替换前旧版本留成 nagi.old（release.Prepared.Commit），并记下 upgrade-pending.json；
-// 新版本连上面板才算升级完成，删掉这条记录。连续启动 upgradeMaxStarts 次都没连上（反复崩溃、systemd 一直在拉起），
-// 或者这次启动 upgradeConfirmWindow 内没连上，就换回旧版本重启。面板看到节点用旧版本回来，记为升级失败。
+// 新版本连上面板才算升级完成，删掉这条记录。连续启动 upgradeMaxStarts 次都在 upgradeConfirmWindow 内退出、没连上
+// （反复崩溃、systemd 一直在拉起），就换回旧版本重启。面板看到节点用旧版本回来，记为升级失败。
+// 连不上面板不回滚，只记日志、继续重试：能挡住节点和面板之间连接的人，不能借此让节点退回有漏洞的旧版本。
+// 这次启动撑过了 upgradeConfirmWindow 就不算崩溃，启动次数清零，之后连上面板时照常删掉记录。
 const (
 	upgradeConfirmWindow = 2 * time.Minute
 	upgradeMaxStarts     = 3
@@ -65,21 +67,31 @@ func guardUpgradeWith(identityDir, version string, log *slog.Logger, window time
 	if b, err := json.Marshal(p); err == nil {
 		_ = os.WriteFile(file, b, 0o600)
 	}
-	var once sync.Once
-	done := make(chan struct{})
+	var mu sync.Mutex
+	confirmed := false
 	go func() {
-		select {
-		case <-done:
-		case <-time.After(window):
-			rollback(file, p, log, "启动后 2 分钟内没有连上面板")
+		time.Sleep(window)
+		mu.Lock()
+		defer mu.Unlock()
+		if confirmed {
+			return
+		}
+		// 没有崩溃，只是还没连上面板：清零启动次数，等连上再算升级完成。
+		log.Warn("新版本启动后 2 分钟内没有连上面板，继续重试", "version", version)
+		p.Starts = 0
+		if b, err := json.Marshal(p); err == nil {
+			_ = os.WriteFile(file, b, 0o600)
 		}
 	}()
 	return func() {
-		once.Do(func() {
-			close(done)
-			_ = os.Remove(file)
-			log.Info("新版本已连上面板，升级完成", "version", version)
-		})
+		mu.Lock()
+		defer mu.Unlock()
+		if confirmed {
+			return
+		}
+		confirmed = true
+		_ = os.Remove(file)
+		log.Info("新版本已连上面板，升级完成", "version", version)
 	}
 }
 
