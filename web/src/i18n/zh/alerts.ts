@@ -60,5 +60,6 @@ export default {
     containerCpu: "容器 CPU 持续过高",
     traffic: "请求量突增",
     clientErrors: "4xx 比例过高",
+    egress: "出站连接被拦截",
   },
 };

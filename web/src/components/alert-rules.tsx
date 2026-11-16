@@ -50,6 +50,7 @@ export const containerRules: RuleDef[] = [
   { key: "container_cpu", title: r.containerCpu, fields: [] },
   { key: "traffic", title: r.traffic, fields: [] },
   { key: "4xx", title: r.clientErrors, fields: [] },
+  { key: "egress", title: r.egress, fields: [] },
 ];
 
 export const ruleOn = (rules: AlertRules | undefined, key: string) => rules?.enabled[key] !== false;

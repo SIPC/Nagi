@@ -24,11 +24,13 @@ const (
 	RuleContainerCPU = "container_cpu"
 	RuleTraffic      = "traffic"
 	RuleClientErrors = "4xx"
+	// RuleEgress 是容器出站被拦截（见 docs/agent.md#出站限制）。
+	RuleEgress = "egress"
 )
 
 var (
 	NodeRules      = []string{RuleMem, RuleDisk, RuleOffline, RuleCert, RuleCPU}
-	ContainerRules = []string{RuleRestart, RuleErrors, RuleHealth, RuleSnapshot, RuleBackup, RuleContainerCPU, RuleTraffic, RuleClientErrors}
+	ContainerRules = []string{RuleRestart, RuleErrors, RuleHealth, RuleSnapshot, RuleBackup, RuleContainerCPU, RuleTraffic, RuleClientErrors, RuleEgress}
 )
 
 // Enabled 判断规则开着没有：没有写的规则开着。

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 )
@@ -166,6 +167,10 @@ func (e *egress) hit(ctx context.Context, h egressHit) {
 		title = i18n.Errorf("容器 %s 尝试连接 %s，未拦截", name, target).Error()
 	}
 	e.a.log.Warn("容器出站", "container", c.name, "target", target, "mode", mode)
+	// 告警可以在项目或容器的告警规则里关掉（规则 egress），关掉后照常拦截，只记日志。
+	if !e.a.alerts.ContainerEnabled(c.project, name, alert.RuleEgress) {
+		return
+	}
 	// 键是 egress:<项目>/<容器>/<目标>：面板按它把告警记到项目和容器上（见 nodes.alertContainer）。
 	e.a.alerts.NotifyKey(ctx, "egress:"+c.project+"/"+name+"/"+target, title, "", c.project)
 }

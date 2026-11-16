@@ -60,5 +60,6 @@ export default {
     containerCpu: "Sustained high container CPU",
     traffic: "Request surge",
     clientErrors: "High 4xx rate",
+    egress: "Outbound connection blocked",
   },
 } satisfies typeof zh;
