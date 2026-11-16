@@ -1248,7 +1248,7 @@ function PendingHANotice({ project, container, nodes }: { project: Project; cont
                     !(await ask(f.restoredPrivilegedConfirm(container.name), {
                       action: f.restoredConfirm,
                       danger: true,
-                      check: f.restoredPrivilegedCheck,
+                      // 不显示复选框、默认勾选：一定要输入容器名，不能取消勾选跳过。
                       checkDefault: true,
                       typeToConfirm: { label: f.restoredTypeName(container.name), value: container.name },
                     }))

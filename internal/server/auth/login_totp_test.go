@@ -53,3 +53,16 @@ func TestLoginTOTPLimitedPerAccount(t *testing.T) {
 		t.Fatalf("密码猜错不应该锁住账号：%v", err)
 	}
 }
+
+// 拿到会话的人反复做错高权限确认，锁不住账号主人的登录。
+func TestElevationFailuresDontLockLogin(t *testing.T) {
+	l := newLimiter()
+	for range userFreeFailures + 2 {
+		if done, _ := l.begin(userLimitKey(1)); done != nil {
+			done(outcomeFailure)
+		}
+	}
+	if _, wait := l.begin(loginLimitKey(1)); wait > 0 {
+		t.Fatal("高权限确认的失败不应该锁住登录")
+	}
+}

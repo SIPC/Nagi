@@ -166,9 +166,9 @@ func (s *Service) Login(ctx context.Context, ip, username, password, code string
 			result = outcomeNeutral
 			return nil, connect.NewError(connect.CodeFailedPrecondition, ErrTOTPRequired)
 		}
-		// 验证码另外按账号计数（和高权限确认共用）：知道密码的人换 IP 也不能一直猜。只有密码对了才走到这里，
+		// 验证码另外按账号计数：知道密码的人换 IP 也不能一直猜。只有密码对了才走到这里，
 		// 不知道密码的人锁不住别人的账号。
-		userDone, err := s.beginVerify(userLimitKey(user.ID))
+		userDone, err := s.beginVerify(loginLimitKey(user.ID))
 		if err != nil {
 			result = outcomeNeutral
 			return nil, err
@@ -523,6 +523,10 @@ func LimitKey(ip string) string {
 
 // userLimitKey 是按账号限速的来源：高权限确认、改密码、关闭两步验证都猜同一个账号的密码或验证码，共用一份计数。
 func userLimitKey(userID int64) string { return "user:" + strconv.FormatInt(userID, 10) }
+
+// loginLimitKey 是登录时验证码按账号限速的来源，和 userLimitKey 分开：拿到会话的人反复做错高权限确认，
+// 不能借此锁住账号主人的登录（让他没法登录进来撤销会话）。
+func loginLimitKey(userID int64) string { return "user:login:" + strconv.FormatInt(userID, 10) }
 
 // begin 开始一次尝试。任一来源被锁定时返回等待时间（最长的那个）；任一来源有请求正在处理时 done 为 nil、
 // 等待时间为 0；否则返回 done，结束时调用，参数是这次的结果。
