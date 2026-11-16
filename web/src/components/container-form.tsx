@@ -23,8 +23,27 @@ export type ImageFormInit = MessageInitShape<typeof ImageFormSchema>;
 
 // MoreSettings：折叠的「更多设置」，没有框。有值时默认展开。高度用 Collapse 过渡，内容从上方滑入，箭头旋转 240ms。
 // 按钮和内容包在一层里：收起时不在父级的网格里多留一道间距。
-export function MoreSettings({ label, labelOpen, labelPhone, defaultOpen, children }: { label: string; labelOpen: string; labelPhone?: string; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(!!defaultOpen);
+// open、onOpenChange：由外面控制展开（例如提交时里面的字段有错，自动展开）。
+export function MoreSettings({
+  label,
+  labelOpen,
+  labelPhone,
+  defaultOpen,
+  open: controlled,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  labelOpen: string;
+  labelPhone?: string;
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const [own, setOwn] = useState(!!defaultOpen);
+  const open = controlled ?? own;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOwn(v));
   return (
     <div className="grid">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-1 inline-flex cursor-pointer items-start gap-1 justify-self-start rounded-sm text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring">

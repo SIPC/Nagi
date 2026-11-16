@@ -907,9 +907,10 @@ export function CodeBlock({ children, copy, nowrap, className }: { children: str
   );
 }
 
-// LogBox：日志和命令输出的深色区域。
+// LogBox：日志和命令输出的深色区域。里面要放块级元素（每行一个 div）时用 logBoxClass 写在 div 上。
+export const logBoxClass = "overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground";
 export function LogBox({ className, ...props }: React.ComponentProps<"pre">) {
-  return <pre className={cn("overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground", className)} {...props} />;
+  return <pre className={cn(logBoxClass, className)} {...props} />;
 }
 
 // ---- 标签页 ----

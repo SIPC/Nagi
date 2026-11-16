@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { MoreSettings } from "@/components/container-form";
 import { toast } from "sonner";
 import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
@@ -1268,29 +1269,17 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
             </Check>
           )}
         </div>
-        {/* 高级设置：和添加容器的「更多设置」一样，展开时内容从上方滑入，箭头旋转。 */}
-        <button
-          type="button"
-          aria-expanded={advanced}
-          aria-controls="fo-advanced"
-          onClick={() => setAdvanced(!advanced)}
-          className="inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-ring"
-        >
-          <ChevronRight strokeWidth={2.25} className={advanced ? "size-4 rotate-90 transition-transform" : "size-4 transition-transform"} />
-          {advanced ? f.advanced : f.advancedHint}
-        </button>
-        {advanced && (
-          <div id="fo-advanced" className="animate-slide-from-above">
-            <FormRow>
-              <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
-                <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} autoComplete="off" spellCheck={false} />
-              </Field>
-              <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp} error={leaseError}>
-                <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
-              </Field>
-            </FormRow>
-          </div>
-        )}
+        {/* 高级设置：和添加容器的「更多设置」同一个组件。租约时长填错时自动展开。 */}
+        <MoreSettings label={f.advancedHint} labelOpen={f.advanced} open={advanced} onOpenChange={setAdvanced}>
+          <FormRow>
+            <Field label={f.standbyDir} htmlFor="fo-dir" help={t.projectData.dirHelp}>
+              <Input id="fo-dir" value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })} placeholder={def} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={f.leaseSeconds} htmlFor="fo-lease" help={f.leaseHelp} error={leaseError}>
+              <Input id="fo-lease" value={form.lease} onChange={(e) => setForm({ ...form, lease: e.target.value })} placeholder="30" inputMode="numeric" />
+            </Field>
+          </FormRow>
+        </MoreSettings>
         {error && <Alert>{error}</Alert>}
         <DialogActions>
           <Button variant="outline" readOnlyOk onClick={onClose}>

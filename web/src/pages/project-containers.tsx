@@ -34,6 +34,8 @@ import {
   EmptyRow,
   Field,
   FormActions,
+  FormBody,
+  logBoxClass,
   FormRow,
   HelpTip,
   Input,
@@ -1193,7 +1195,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         }}
         // 日志框在浅色主题下也是深色底。底色取页面主题的 --log，和其他日志框一致；
         // 里面的每一行加 dark，灰字、红字、蓝字取深色主题的值，才对得上深底。
-        className="h-[560px] overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground max-md:h-[calc(100dvh-20rem)]"
+        className={cn(logBoxClass, "h-[560px] max-md:h-[calc(100dvh-20rem)]")}
       >
         {visible.length === 0 ? (
           <span className="opacity-50">{lines.length > 0 ? l_.noMatch : connecting && !error ? t.app.terminal.connecting : l_.empty}</span>
@@ -1655,7 +1657,7 @@ function AddContainer({ project }: { project: Project }) {
 
   // 类型切换在外面，下面三种内容（镜像表单、compose、现有目录）放进同一个 Slide，切换时横移。
   return (
-    <div className="grid max-w-[672px] gap-4">
+    <FormBody>
       {form.switcher}
       <Slide id={form.mode} index={["image", "compose", "dir"].indexOf(form.mode)} inner="grid gap-4">
         {form.mode === "dir" ? (
@@ -1686,6 +1688,6 @@ function AddContainer({ project }: { project: Project }) {
           </form>
         )}
       </Slide>
-    </div>
+    </FormBody>
   );
 }

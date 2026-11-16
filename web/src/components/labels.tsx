@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
-import { Alert, Button, DialogActions, EmptyRow, Field, Input, List, Row, RowMenu, Select, Spinner } from "@/components/ui";
+import { Alert, Button, badgeVariants, DialogActions, EmptyRow, Field, Input, List, Row, RowMenu, Select, Spinner } from "@/components/ui";
 import type { Node, PanelUser } from "@/gen/nagi/v1/api_pb";
 import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient } from "@/lib/api";
@@ -84,10 +84,11 @@ export function GroupSelect({ id, value, groups, onChange }: { id: string; value
 // TagChip：一个标签。onRemove 给了时带移除按钮。
 export function TagChip({ name, onRemove, className }: { name: string; onRemove?: () => void; className?: string }) {
   return (
-    <span className={cn("inline-flex h-5 max-w-full items-center gap-0.5 rounded-sm bg-muted px-1.5 text-xs leading-5 text-muted-foreground", onRemove && "pr-0.5", className)}>
+    // 外观同 Badge：全圆、px-2、12 号。
+    <span className={cn(badgeVariants(), "max-w-full gap-0.5", onRemove && "pr-0.5", className)}>
       <span className="truncate">{name}</span>
       {onRemove && (
-        <button type="button" aria-label={t.labels.removeTag(name)} className="inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm outline-none hover:bg-background hover:text-foreground focus-ring" onClick={onRemove}>
+        <button type="button" aria-label={t.labels.removeTag(name)} className="inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full outline-none hover:bg-accent hover:text-foreground focus-ring" onClick={onRemove}>
           <X className="size-3" />
         </button>
       )}
@@ -108,7 +109,8 @@ export function TagEditor({ id, value, suggestions, onChange }: { id: string; va
   const error = labelError(text) || (value.length >= maxNodeTags && tidy(text) ? t.labels.tooMany : "");
   return (
     <div className="grid gap-2">
-      <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring/40">
+      {/* 外框和 Input 一样：高 32（手机 40），1px 边框，聚焦时边框变 ring 色加 3px 光晕，出错时红框。 */}
+      <div className={cn("flex min-h-8 flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 max-md:min-h-10", error && "border-destructive")}>
         {value.map((v) => (
           <TagChip key={v} name={v} onRemove={() => onChange(value.filter((x) => x !== v))} />
         ))}
@@ -129,7 +131,7 @@ export function TagEditor({ id, value, suggestions, onChange }: { id: string; va
           placeholder={value.length < maxNodeTags ? t.labels.tagPlaceholder : ""}
           aria-invalid={!!error || undefined}
           autoComplete="off"
-          className="h-6 min-w-24 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="h-6 min-w-24 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground max-md:text-base"
         />
         <datalist id={listId}>
           {suggestions

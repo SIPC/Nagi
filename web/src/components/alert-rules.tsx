@@ -138,7 +138,7 @@ export function AlertRulesForm({ id, defs, initial, inherited, onSave, onCancel,
                 {t.common.actions.cancel}
               </Button>
             )}
-            <Button type="submit" disabled={busy || (!dirty && !onCancel)}>
+            <Button type="submit" variant="outline" disabled={busy || (!dirty && !onCancel)}>
               {busy && <Spinner />}
               {t.common.actions.save}
             </Button>

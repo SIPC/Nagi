@@ -271,7 +271,7 @@ function AuditRow({ e, onOpen, nested }: { e: AuditEvent; onOpen: (id: bigint) =
   const label = title(e);
   return (
     <div className={cn(nested && "pl-6")}>
-      <button type="button" className="block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpen(e.id)}>
+      <button type="button" className="block w-full rounded-md border border-transparent text-left outline-none focus-ring" onClick={() => onOpen(e.id)}>
         <Row
           title={
             <>
@@ -413,7 +413,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
 
 function SheetLink({ e, onOpen }: { e: AuditEvent; onOpen: (id: bigint) => void }) {
   return (
-    <button type="button" className="block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpen(e.id)}>
+    <button type="button" className="block w-full rounded-md border border-transparent text-left outline-none focus-ring" onClick={() => onOpen(e.id)}>
       <Row title={<span className="min-w-0 truncate">{title(e)}</span>} sub={formatDateTime(toDate(e.time))} cols={[{ content: <Status tone={resultTone(e)}>{resultLabel(e)}</Status>, phone: true }]} />
     </button>
   );
