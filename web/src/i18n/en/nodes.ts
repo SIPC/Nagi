@@ -1,6 +1,7 @@
 import type zh from "../zh/nodes";
 
 export default {
+  egressUnavailable: "Can't restrict container egress",
   tabs: {
     terminal: "Terminal",
     files: "Files",

@@ -459,6 +459,9 @@ func cleanSettings(in *nagiv1.ProjectSettings) (*nagiv1.ProjectSettings, error) 
 			out.AlertRules = r
 		}
 	}
+	if out.Egress, err = spec.CleanEgress(in.GetEgress()); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -493,6 +496,10 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*nagiv1.Projec
 		return nil, err
 	}
 	settings.SharedEnv = req.Settings.GetSharedEnv()
+	// 新项目默认拦截容器访问节点本机和内网（见 docs/agent.md#出站限制）；升级前创建的项目没有这一项，按仅记录。
+	if settings.Egress == nil {
+		settings.Egress = &nagiv1.Egress{Mode: spec.EgressBlock}
+	}
 	id, err := spec.RandomHex(8)
 	if err != nil {
 		return nil, err
@@ -568,6 +575,10 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 		next.AlertRules = old.GetAlertRules()
 	}
 	mergeSnapshotSchedule(next, old)
+	// 没带出站限制（只改别的设置）时保留原来的。
+	if in.GetEgress() == nil {
+		next.Egress = old.GetEgress()
+	}
 	sealed, err := s.seal(next, settingsCtx(id))
 	if err != nil {
 		return nil, err

@@ -1,5 +1,6 @@
 // 节点列表、节点详情、添加节点、节点设置、副本和未识别的容器。
 export default {
+  egressUnavailable: "无法限制容器出站",
   tabs: {
     containers: "容器",
     metrics: "监控",

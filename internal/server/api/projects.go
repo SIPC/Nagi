@@ -102,6 +102,20 @@ func (s *projectService) GetProject(ctx context.Context, req *connect.Request[na
 
 func (s *projectService) UpdateProjectSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateProjectSettingsRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
+	// 出站限制（见 docs/agent.md#出站限制）：放行等于扩大权限，和特权配置一样只有管理员能改。
+	if e := m.GetSettings().GetEgress(); e != nil && auth.CurrentUser(ctx).Role != auth.RoleAdmin {
+		cur, err := s.Projects.Get(ctx, m.GetProjectId())
+		if err != nil {
+			return nil, toConnect(err)
+		}
+		clean, err := spec.CleanEgress(e)
+		if err != nil {
+			return nil, toConnect(err)
+		}
+		if !spec.EgressEqual(clean, cur.GetProject().GetSettings().GetEgress()) {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能修改出站限制"))
+		}
+	}
 	p, err := s.Projects.UpdateSettings(ctx, m.GetProjectId(), m.GetBaseRevision(), m.GetName(), m.GetNetworkName(), m.GetSettings())
 	if err != nil {
 		return nil, toConnect(err)

@@ -16,6 +16,7 @@ import { EnvEditor } from "@/components/env-editor";
 import { AlertRulesForm, containerRules } from "@/components/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
+import { EgressSection } from "@/pages/project-egress";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
@@ -25,6 +26,7 @@ export function SettingsTab({ project }: { project: Project }) {
       <GeneralSettings project={project} />
       <SnapshotScheduleSection project={project} />
       <AlertRulesSection project={project} />
+      <EgressSection key={project.revision} project={project} />
       <SharedEnv project={project} />
       <Deployments project={project} />
       <DeleteProject project={project} />

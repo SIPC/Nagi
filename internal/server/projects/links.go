@@ -189,6 +189,7 @@ func (s *Service) plan(ctx context.Context, nodeID string) (*nagiv1.LinkPlan, er
 		if self == nil {
 			continue
 		}
+		plan.Egress = append(plan.Egress, &nagiv1.ProjectEgress{ProjectId: id, Egress: self.settings.GetEgress()})
 		allow := &nagiv1.LinkAllow{ProjectId: id, InternalPorts: self.settings.GetInternalPorts()}
 		addCallers := func(rows []store.Container) {
 			for _, c := range rows {

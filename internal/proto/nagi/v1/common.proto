@@ -57,6 +57,22 @@ message ProjectSettings {
   AlertRules alert_rules = 5;
   // 定时快照的计划，容器可以单独设置（Container.snapshot_schedule）。为空时按 snapshot_interval_minutes 的间隔。
   SnapshotSchedule snapshot_schedule = 6;
+  // 容器出站限制（见 docs/agent.md#出站限制）。只有管理员能改。
+  Egress egress = 7;
+}
+
+// Egress 是一个项目的容器出站限制：容器能不能访问节点本机、私有网段和链路本地地址。
+message Egress {
+  // block（拦截）、log（仅记录）、off（关闭）。为空按 log：升级前创建的项目，避免正在访问局域网服务的应用突然断开。
+  string mode = 1;
+  // 允许访问的内网地址：<地址或网段>:<端口>，例如 192.168.1.20:5432、10.0.0.0/8:443。
+  repeated string allow = 2;
+}
+
+// ProjectEgress 是代理计划里一个项目的出站限制。
+message ProjectEgress {
+  string project_id = 1;
+  Egress egress = 2;
 }
 
 // SnapshotSchedule 是定时快照的计划（见 docs/snapshot.md#定时快照）。
@@ -461,6 +477,8 @@ message NodeInfo {
   bool in_container = 17;
   // 节点支持 PROXY protocol，作为入口节点时也能开同时开 TCP 和 UDP 的映射（旧版本的节点不报）。
   bool proxy_protocol = 18;
+  // 不能限制容器出站时的原因（例如没有 nftables），为空表示可以（见 docs/agent.md#出站限制）。
+  string egress_error = 19;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -770,6 +788,8 @@ message LinkPlan {
   repeated LinkEntry entries = 3;
   // 哪些入口节点可以访问本节点上容器的哪个端口。
   repeated LinkEntryAllow entry_allows = 4;
+  // 本节点上有容器的项目的出站限制（见 docs/agent.md#出站限制）。
+  repeated ProjectEgress egress = 5;
 }
 
 // LinkEntry 是入口节点上的一条映射：Caddy 收到的流量经 mesh 转给 target_name 的 target_port。

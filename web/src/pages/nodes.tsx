@@ -564,11 +564,17 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
         <RenameNode n={n} onDone={() => setRenaming(false)} />
       </Dialog>
-      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending) && (
+      {(target || upgradeState || n.unknownContainers.length > 0 || n.staleProjects.length > 0 || n.pending || n.info?.egressError) && (
         <div className="mb-6 grid gap-2">
           {(target || upgradeState) && <NodeUpgrade key={target} n={n} target={target} state={upgradeState} onDone={() => status.refetch()} />}
           {n.staleProjects.length > 0 && <StaleProjects nodeId={n.id} list={n.staleProjects} onDone={() => nodes.refetch()} />}
           {n.unknownContainers.length > 0 && <UnknownContainers nodeId={n.id} list={n.unknownContainers} onDone={() => nodes.refetch()} />}
+          {/* 不能限制容器出站时（例如没有 nftables），这台节点上的项目按「关闭」处理（见 docs/agent.md#出站限制）。 */}
+          {n.info?.egressError && (
+            <Notice tone="warning" title={t.nodes.egressUnavailable}>
+              {n.info.egressError}
+            </Notice>
+          )}
           {n.pending && (
             <Notice
               tone="warning"

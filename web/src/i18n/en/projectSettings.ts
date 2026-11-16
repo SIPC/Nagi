@@ -1,6 +1,22 @@
 import type zh from "../zh/projectSettings";
 
 export default {
+  egress: {
+    title: "Egress restriction",
+    description: "Whether containers can reach the node itself, the local network, and cloud metadata addresses.",
+    help: "Restricted destinations are every address of the node (including the Docker gateway), private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, fc00::/7), and link-local addresses (including the cloud metadata address 169.254.169.254). The project network, cross-node proxies, and the internet aren't affected. Blocked or logged connections send an alert, once per container and destination every 10 minutes. Containers with network_mode: host aren't restricted. Only administrators can change this.",
+    mode: "Mode",
+    modes: { block: "Block", log: "Log only", off: "Off" },
+    modeHints: { block: "Block these connections and send an alert.", log: "Don't block, only send an alert.", off: "Don't restrict or alert." },
+    logOnly: "Logging only, not blocking",
+    logOnlyHint: "Switch to Block after checking that no internal service below is needed, or after allowing it.",
+    switchToBlock: "Switch to Block",
+    allow: "Allowed internal addresses",
+    allowHint: "One per line: address or range:port",
+    recent: "Destinations recorded in the last 7 days",
+    noRecent: "None",
+    allowTarget: "Allow",
+  },
   general: {
     title: "General",
     name: "Project name",

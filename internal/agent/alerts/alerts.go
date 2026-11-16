@@ -514,6 +514,18 @@ func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
 	e.dispatch(ctx, a)
 }
 
+// NotifyKey 和 Notify 一样发一条一次性的通知，带上 key（面板据此归类，例如出站限制的 egress:<容器>:<目标>）。
+func (e *Engine) NotifyKey(ctx context.Context, key, title, message, projectID string) {
+	e.mu.Lock()
+	node := e.nodeName()
+	e.mu.Unlock()
+	a := &nagiv1.Alert{Key: key, Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
+	if projectID != "" {
+		a.Project = e.projectName(projectID)
+	}
+	e.dispatch(ctx, a)
+}
+
 // Resolve 报告事件类告警已恢复。
 func (e *Engine) Resolve(ctx context.Context, key string) {
 	e.mu.Lock()

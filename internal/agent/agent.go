@@ -147,6 +147,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.files = a.newNodeFiles()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
+	a.egress = newEgress(a)
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {
@@ -171,6 +172,7 @@ func Run(ctx context.Context, cfg Config) error {
 	netSync := make(chan struct{}, 1)
 	go dc.WatchProjects(ctx, project.LabelProject, func() {
 		a.changed()
+		a.egress.trigger()
 		select {
 		case netSync <- struct{}{}:
 		default:
@@ -222,6 +224,7 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
 	go a.intranet.run(ctx)
+	go a.egress.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)
 	}
@@ -271,6 +274,8 @@ type agent struct {
 	alerts    *alerts.Engine
 	mesh      *meshNode
 	intranet  *intranet
+	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
+	egress    *egress
 	replicas  *replicas
 	backups   *backupStates
 	failovers *failovers
@@ -466,6 +471,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		CrossNodeEntry: true,
 		ProxyProtocol:  true,
 		ProxyDisabled:  a.cfg.DisableProxy,
+		EgressError:    a.egress.Error(),
 		ReportsCerts:   true,
 
 		NodeAccess:         nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir),
