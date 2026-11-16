@@ -19,11 +19,16 @@ const (
 	RuleHealth   = "health"
 	RuleSnapshot = "snapshot"
 	RuleBackup   = "backup"
+	// CPU 和流量规则（见 docs/monitoring.md#告警）。
+	RuleCPU          = "cpu"
+	RuleContainerCPU = "container_cpu"
+	RuleTraffic      = "traffic"
+	RuleClientErrors = "4xx"
 )
 
 var (
-	NodeRules      = []string{RuleMem, RuleDisk, RuleOffline, RuleCert}
-	ContainerRules = []string{RuleRestart, RuleErrors, RuleHealth, RuleSnapshot, RuleBackup}
+	NodeRules      = []string{RuleMem, RuleDisk, RuleOffline, RuleCert, RuleCPU}
+	ContainerRules = []string{RuleRestart, RuleErrors, RuleHealth, RuleSnapshot, RuleBackup, RuleContainerCPU, RuleTraffic, RuleClientErrors}
 )
 
 // Enabled 判断规则开着没有：没有写的规则开着。

@@ -56,5 +56,9 @@ export default {
     offlineSeconds: "节点离线超过（秒）",
     errorPercent: "5xx 错误率超过（%）",
     errorPercentHelp: "按每条端口映射最近 5 分钟的请求计算，至少 20 个请求才判断。",
+    cpu: "CPU 持续过高",
+    containerCpu: "容器 CPU 持续过高",
+    traffic: "请求量突增",
+    clientErrors: "4xx 比例过高",
   },
 };

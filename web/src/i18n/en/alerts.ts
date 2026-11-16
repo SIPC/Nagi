@@ -56,5 +56,9 @@ export default {
     offlineSeconds: "Node offline for (seconds)",
     errorPercent: "5xx error rate above (%)",
     errorPercentHelp: "Calculated per port mapping over the last 5 minutes, with at least 20 requests.",
+    cpu: "Sustained high CPU",
+    containerCpu: "Sustained high container CPU",
+    traffic: "Request surge",
+    clientErrors: "High 4xx rate",
   },
 } satisfies typeof zh;

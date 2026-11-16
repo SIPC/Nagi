@@ -52,6 +52,7 @@ type Engine struct {
 	states   map[string]*state
 	restarts map[string][]restartSample
 	memSince time.Time
+	load     loadState
 	queue    []queued
 }
 
@@ -352,6 +353,9 @@ func (e *Engine) evaluate(ctx context.Context) {
 			}
 		}
 	}
+
+	// CPU 和流量。
+	e.evaluateLoad(ctx, now, latest, node, enabled, active)
 
 	// 健康检查失败。
 	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
